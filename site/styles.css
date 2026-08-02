@@ -244,6 +244,9 @@ a { color: var(--blue); }
 /* The brand and action cluster flex equally so the tab group stays optically
    centred. min-width: max-content is the stopping condition — sides never
    crush under the tabs; when the row can't fit, tabs wrap (see below). */
+.page-tabs-clip {
+  display: contents;
+}
 .page-tabs {
   display: flex;
   align-items: stretch;
@@ -256,11 +259,62 @@ a { color: var(--blue); }
   padding-bottom: 12px;
 }
 @media (max-width: 1100px) {
-  .page-tabs {
+  .page-tabs-clip {
+    display: block;
     order: 3;
     flex: 1 0 100%;
     min-width: 0;
+    position: relative;
+    margin-bottom: -12px;
+  }
+  .page-tabs-clip::before,
+  .page-tabs-clip::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 12px;
+    width: 28px;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .page-tabs-clip::before {
+    left: 0;
+    background: linear-gradient(
+      to right,
+      hsl(var(--card)) 18%,
+      hsl(var(--card) / 0)
+    );
+  }
+  .page-tabs-clip::after {
+    right: 0;
+    background: linear-gradient(
+      to left,
+      hsl(var(--card)) 18%,
+      hsl(var(--card) / 0)
+    );
+  }
+  .page-tabs-clip.has-more-left::before,
+  .page-tabs-clip.has-more-right::after {
+    opacity: 1;
+  }
+  .page-tabs {
+    order: unset;
+    flex: none;
+    width: 100%;
+    min-width: 0;
     justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin-bottom: 0;
+    padding-bottom: 12px;
+  }
+  .page-tabs::-webkit-scrollbar {
+    display: none;
   }
   /* Tabs wrap under brand — sticky chrome must clear both rows. */
   .topbar {
@@ -270,21 +324,13 @@ a { color: var(--blue); }
 
 @media (max-width: 560px) {
   .page-tabs {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
     gap: 4px;
-    scrollbar-width: none;
   }
   /* Let the Expected Data category menu escape the scroll clip when using
      absolute positioning. Fixed-position menus (.is-fixed) don't need this. */
-  .page-tabs:has(.page-tab-dropdown.open):not(:has(.page-tab-menu.is-fixed)),
-  .page-tabs:has(.page-tab-dropdown:hover):not(:has(.page-tab-menu.is-fixed)) {
+  .page-tabs-clip:has(.page-tab-dropdown.open):not(:has(.page-tab-menu.is-fixed)) .page-tabs,
+  .page-tabs-clip:has(.page-tab-dropdown:hover):not(:has(.page-tab-menu.is-fixed)) .page-tabs {
     overflow: visible;
-  }
-  .page-tabs::-webkit-scrollbar {
-    display: none;
   }
   .page-tab-btn {
     flex: none;
@@ -1947,14 +1993,19 @@ a { color: var(--blue); }
   background: hsl(var(--card));
   max-height: calc(100vh - 220px);
   box-shadow: var(--shadow-sm);
+  /* Keep sticky header/name edges planted; still allow pan scroll. */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+.table-wrap img,
+.table-wrap svg {
+  -webkit-user-drag: none;
 }
 
 @media (max-width: 720px) {
   .table-wrap {
     max-height: calc(100vh - 200px);
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    touch-action: pan-x pan-y;
   }
   .table-wrap > table > thead tr:not(.section-row) th,
   .table-wrap > table > tbody td {
@@ -3174,8 +3225,13 @@ tbody tr.row-selected td:first-child {
   overflow: auto;
   max-height: calc(100vh - 320px);
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
   scrollbar-width: thin;
+}
+.barbell-scroll img,
+.barbell-scroll svg {
+  -webkit-user-drag: none;
 }
 /* Head + scale stick together so rows can't peek through a gap between them. */
 .barbell-sticky {

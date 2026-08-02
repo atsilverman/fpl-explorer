@@ -483,6 +483,8 @@
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
     pageExpected: $("#page-expected"),
+    pageTabs: $("#page-tabs"),
+    pageTabsClip: $("#page-tabs-clip"),
     expectedTabWrap: $("#expected-tab-wrap"),
     expectedCatMenu: $("#expected-cat-menu"),
     expectedCatToolbar: $("#expected-cat-toolbar"),
@@ -5795,6 +5797,7 @@ python3 site/annotate_social.py</pre>
     if (!el.expectedTabWrap.contains(e.target)) setExpectedCatMenuOpen(false);
   });
   window.addEventListener("resize", () => {
+    syncPageTabsScrollHints();
     syncExpectedCatToolbar();
     if (preferMobileSheet()) {
       setExpectedCatMenuOpen(false);
@@ -5817,6 +5820,29 @@ python3 site/annotate_social.py</pre>
     },
     true
   );
+
+  function syncPageTabsScrollHints() {
+    const tabs = el.pageTabs;
+    const clip = el.pageTabsClip;
+    if (!tabs || !clip) return;
+    const maxScroll = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+    if (maxScroll < 2) {
+      clip.classList.remove("has-more-left", "has-more-right");
+      return;
+    }
+    const left = tabs.scrollLeft;
+    clip.classList.toggle("has-more-left", left > 1);
+    clip.classList.toggle("has-more-right", left < maxScroll - 1);
+  }
+
+  if (el.pageTabs) {
+    el.pageTabs.addEventListener("scroll", syncPageTabsScrollHints, { passive: true });
+    if (typeof ResizeObserver !== "undefined") {
+      const tabsRo = new ResizeObserver(() => syncPageTabsScrollHints());
+      tabsRo.observe(el.pageTabs);
+      if (el.pageTabsClip) tabsRo.observe(el.pageTabsClip);
+    }
+  }
 
   // Brand mark always returns to OPTA (home) with a full refresh so filters
   // and ephemeral UI state reset alongside the page switch.
@@ -7257,7 +7283,11 @@ python3 site/annotate_social.py</pre>
     // Position sliding thumbs after layout (sidebar/page visibility settled).
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
-      requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+      syncPageTabsScrollHints();
+      requestAnimationFrame(() => {
+        syncAllSegThumbs({ animate: false });
+        syncPageTabsScrollHints();
+      });
     });
     if (typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(() => syncAllSegThumbs({ animate: false }));
@@ -7266,6 +7296,7 @@ python3 site/annotate_social.py</pre>
     window.addEventListener("resize", () => {
       syncAllSegThumbs({ animate: false });
       syncFeedSearchLayout();
+      syncPageTabsScrollHints();
     });
     if (typeof NARROW_MQ.addEventListener === "function") {
       NARROW_MQ.addEventListener("change", syncFeedSearchLayout);
