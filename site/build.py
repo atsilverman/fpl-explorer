@@ -49,8 +49,7 @@ TEAM_CODES = [c for c in ALL_TEAM_CODES if c not in EXCLUDED_TEAMS]
 
 # FPL "club code" per team (stable badge/shirt identifier, distinct from the
 # season's numeric team `id`) — verified against a bootstrap-static snapshot.
-# Badge SVGs (named "<club_code>.svg") live in the project root; badges/
-# holds the ones we have, renamed to the 3-letter short code.
+# Badge SVGs live in site/badges/, named by 3-letter short code (ARS.svg, …).
 TEAM_CLUB_CODE = {
     "ARS": 3, "AVL": 7, "BHA": 36, "BOU": 91, "BRE": 94, "BUR": 90,
     "CHE": 8, "CRY": 31, "EVE": 11, "FUL": 54, "LEE": 2, "LIV": 14,
