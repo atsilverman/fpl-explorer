@@ -334,8 +334,9 @@ a { color: var(--blue); }
   .page-tabs {
     gap: 4px;
   }
-  /* Let the Expected Data category menu escape the scroll clip when using
-     absolute positioning. Fixed-position menus (.is-fixed) don't need this. */
+  /* Let absolute category menus escape the scroll clip only when they are
+     not fixed — fixed menus are used whenever the tab strip scrolls so
+     overflow:visible never resets scrollLeft (Markets is rightmost). */
   .page-tabs-clip:has(.page-tab-dropdown.open):not(:has(.page-tab-menu.is-fixed)) .page-tabs,
   .page-tabs-clip:has(.page-tab-dropdown:hover):not(:has(.page-tab-menu.is-fixed)) .page-tabs {
     overflow: visible;
@@ -6408,17 +6409,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 .markets-scoreline-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
   padding: 0 10px 4px;
-}
-.markets-scoreline-fixture {
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  white-space: nowrap;
 }
 .markets-card-scoreline .markets-scores-matrix-wrap {
   border-left: none;
@@ -6711,7 +6702,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 /* A/B: score probability matrix (one matchup). Axes = home / away goals. */
 .markets-score-matrix {
   --msm-y: 12px;
-  --msm-badge: 34px;
+  --msm-badge: 44px;
   --msm-gap: 2px;
   --msm-row: 30px;
   display: flex;
@@ -6735,7 +6726,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 1px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
@@ -6743,11 +6734,11 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 .markets-score-matrix-x-badge {
-  height: 16px;
+  min-height: 22px;
   /* Align over the five score columns (skip the y-number gutter). */
   margin-left: calc(var(--msm-y) + var(--msm-gap));
 }
@@ -6766,19 +6757,19 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 }
 .markets-score-matrix-y-badge {
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   width: var(--msm-badge);
   flex: none;
 }
 .markets-score-matrix-badge {
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
   flex: none;
 }
 .markets-score-matrix-team,
 .markets-score-matrix-code {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--text-faint);

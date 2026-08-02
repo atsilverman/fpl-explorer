@@ -3625,8 +3625,7 @@
     el.expectedTabWrap.classList.toggle("open", open);
     el.pageExpected.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
-      // Escape overflow clipping on the horizontal tab strip (mobile).
-      if (!hasFineHover() || window.matchMedia("(max-width: 720px)").matches) {
+      if (tabMenuNeedsFixedPosition()) {
         requestAnimationFrame(() => {
           positionExpectedCatMenuFixed();
           requestAnimationFrame(positionExpectedCatMenuFixed);
@@ -5561,20 +5560,20 @@
     if (el.marketsViewToolbar) {
       el.marketsViewToolbar.hidden = !marketsMobile;
     }
-    // Sliders: desktop header; mobile toolbar immediately right of the view dropdown.
-    if (el.marketsSlidersToggle) {
+    // Sliders live under Markets only: header on desktop, right of the
+    // mobile view dropdown. Always park back in the Markets header when
+    // leaving the page so it cannot leak into xData / other toolbars.
+    if (el.marketsSlidersToggle && el.marketsHeaderActions) {
       if (marketsMobile && el.marketsViewToolbar) {
         if (el.marketsSlidersToggle.previousElementSibling !== el.marketsViewToolbar) {
           el.marketsViewToolbar.after(el.marketsSlidersToggle);
         }
         el.marketsSlidersToggle.hidden = false;
-      } else if (marketsDesktop && el.marketsHeaderActions) {
+      } else {
         if (el.marketsSlidersToggle.parentElement !== el.marketsHeaderActions) {
           el.marketsHeaderActions.appendChild(el.marketsSlidersToggle);
         }
-        el.marketsSlidersToggle.hidden = false;
-      } else {
-        el.marketsSlidersToggle.hidden = true;
+        el.marketsSlidersToggle.hidden = !marketsDesktop;
       }
     }
     // Keep Markets mobile chrome in sync on resize / pointer changes.
@@ -5613,7 +5612,7 @@
     el.marketsTabWrap.classList.toggle("open", open);
     el.pageMarkets.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
-      if (!hasFineHover() || window.matchMedia("(max-width: 720px)").matches) {
+      if (tabMenuNeedsFixedPosition()) {
         requestAnimationFrame(() => {
           positionMarketsViewMenuFixed();
           requestAnimationFrame(positionMarketsViewMenuFixed);
@@ -5641,7 +5640,8 @@
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         setMarketsViewMenuOpen(false);
-        setMarketsCardView(v.key);
+        setMarketsCardView(v.key, { rerender: false });
+        setPage("markets");
       });
       el.marketsViewMenu.appendChild(btn);
     });
@@ -5696,12 +5696,10 @@
         : topScores.length
           ? topScores.map((s) => marketsScoreRowHTML(s.score, s.prob, homeCode, awayCode)).join("")
           : `<div class="markets-scores-empty">—</div>`;
-      const fixtureLabel = `${marketsTeamLabel(fx.home)} vs ${marketsTeamLabel(fx.away)}`;
       return `<article class="markets-card markets-card-scoreline${hasMatrix ? " markets-card-matrix" : ""}${compareCls}">
         <div class="markets-body markets-body-scoreline">
           <div class="markets-scoreline-head">
             <span class="markets-col-head markets-col-head-team markets-kickoff"${kickLabel ? ` title="${escapeHtml(kickLabel)}"` : ""}>${escapeHtml(when.time || "")}</span>
-            <span class="markets-scoreline-fixture" title="${escapeHtml(fixtureLabel)}">${escapeHtml(homeCode || "H")} vs ${escapeHtml(awayCode || "A")}</span>
           </div>
           <div class="${hasMatrix ? "markets-scores-matrix-wrap" : "markets-scores-list markets-scores-list-solo"}" aria-label="${hasMatrix ? "Score matrix" : "Most likely scores"}">${scoresHTML}</div>
         </div>
@@ -6174,7 +6172,10 @@ python3 site/annotate_social.py</pre>
     }
     // Enter after content is in the DOM so the animation covers real layout.
     playPageEnter(pagePaneFor(page));
-    requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+    requestAnimationFrame(() => {
+      syncAllSegThumbs({ animate: false });
+      scrollActivePageTabIntoView();
+    });
     syncExpectedCatToolbar();
     syncMarketsViewControls();
   }
@@ -6212,6 +6213,19 @@ python3 site/annotate_social.py</pre>
   }
   el.pageSchedule.addEventListener("click", () => setPage("schedule"));
   if (el.pageFeed) el.pageFeed.addEventListener("click", () => setPage("feed"));
+  let marketsMenuCloseTimer = 0;
+  function cancelMarketsMenuClose() {
+    window.clearTimeout(marketsMenuCloseTimer);
+  }
+  function armMarketsMenuClose() {
+    cancelMarketsMenuClose();
+    marketsMenuCloseTimer = window.setTimeout(() => {
+      if (el.marketsTabWrap?.matches(":hover")) return;
+      if (el.marketsViewMenu?.matches(":hover")) return;
+      setMarketsViewMenuOpen(false);
+    }, 180);
+  }
+
   if (el.pageMarkets) {
     el.pageMarkets.addEventListener("click", (e) => {
       e.preventDefault();
@@ -6222,6 +6236,8 @@ python3 site/annotate_social.py</pre>
         setPage("markets");
         return;
       }
+      // Desktop: same as xData — toggle the view menu and land on Markets.
+      cancelMarketsMenuClose();
       buildMarketsViewMenu();
       const willOpen = !el.marketsTabWrap?.classList.contains("open");
       setMarketsViewMenuOpen(willOpen);
@@ -6232,13 +6248,26 @@ python3 site/annotate_social.py</pre>
     el.marketsTabWrap.addEventListener("mouseenter", () => {
       if (preferMobileSheet()) return;
       if (!hasFineHover()) return;
+      cancelMarketsMenuClose();
       buildMarketsViewMenu();
       setMarketsViewMenuOpen(true);
     });
     el.marketsTabWrap.addEventListener("mouseleave", () => {
       if (preferMobileSheet()) return;
       if (!hasFineHover()) return;
-      setMarketsViewMenuOpen(false);
+      armMarketsMenuClose();
+    });
+  }
+  if (el.marketsViewMenu) {
+    el.marketsViewMenu.addEventListener("mouseenter", () => {
+      if (preferMobileSheet()) return;
+      if (!hasFineHover()) return;
+      cancelMarketsMenuClose();
+    });
+    el.marketsViewMenu.addEventListener("mouseleave", () => {
+      if (preferMobileSheet()) return;
+      if (!hasFineHover()) return;
+      armMarketsMenuClose();
     });
   }
   if (el.expectedTabWrap) {
@@ -6278,14 +6307,14 @@ python3 site/annotate_social.py</pre>
     }
     if (!hasFineHover()) return;
     if (el.expectedTabWrap?.classList.contains("open")) {
-      if (window.matchMedia("(max-width: 720px)").matches) {
+      if (tabMenuNeedsFixedPosition()) {
         positionExpectedCatMenuFixed();
       } else {
         clearExpectedCatMenuPosition();
       }
     }
     if (el.marketsTabWrap?.classList.contains("open")) {
-      if (window.matchMedia("(max-width: 720px)").matches) {
+      if (tabMenuNeedsFixedPosition()) {
         positionMarketsViewMenuFixed();
       } else {
         clearMarketsViewMenuPosition();
@@ -6300,6 +6329,39 @@ python3 site/annotate_social.py</pre>
     },
     true
   );
+
+  function pageTabsAreScrollable() {
+    const tabs = el.pageTabs;
+    if (!tabs) return false;
+    return tabs.scrollWidth > tabs.clientWidth + 2;
+  }
+
+  function scrollActivePageTabIntoView() {
+    const tabs = el.pageTabs;
+    if (!tabs || !pageTabsAreScrollable()) return;
+    const activeBtn = tabs.querySelector(".page-tab-btn.active");
+    if (!activeBtn) return;
+    const target = activeBtn.closest(".page-tab-dropdown") || activeBtn;
+    const tabsRect = tabs.getBoundingClientRect();
+    const tabRect = target.getBoundingClientRect();
+    const pad = 12;
+    if (tabRect.left < tabsRect.left + pad) {
+      tabs.scrollLeft -= tabsRect.left + pad - tabRect.left;
+    } else if (tabRect.right > tabsRect.right - pad) {
+      tabs.scrollLeft += tabRect.right - (tabsRect.right - pad);
+    }
+    syncPageTabsScrollHints();
+  }
+
+  function tabMenuNeedsFixedPosition() {
+    // Absolute menus under a scrollable tab strip force overflow:visible,
+    // which resets scrollLeft and makes the rightmost tab (Markets) jump away.
+    return (
+      !hasFineHover() ||
+      pageTabsAreScrollable() ||
+      window.matchMedia("(max-width: 1100px)").matches
+    );
+  }
 
   function syncPageTabsScrollHints() {
     const tabs = el.pageTabs;
