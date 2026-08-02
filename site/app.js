@@ -1,0 +1,5931 @@
+/* FPL Data Explorer — client-side filter/sort/group/aggregate over the
+   embedded season data in data.js. No build step needed to browse; run
+   build.py again if the source CSVs change. */
+
+(function () {
+  "use strict";
+
+  const DATA = window.FPL_DATA;
+  const SOCIAL = window.FPL_SOCIAL || { generatedAt: null, accounts: [], posts: [] };
+  const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
+  const TEAM_NAMES = { ...DATA.teamNames, ...(DATA.fixtureTeamNames || {}) };
+  const TEAM_BADGES = DATA.teamBadges || {}; // short code -> "badges/XXX.svg" (only where art exists)
+  // Soft dark-mode scatter disc tint — club primary mixed toward white in CSS.
+  const TEAM_SCATTER_ACCENT = {
+    ARS: "#ef0107",
+    AVL: "#670e36",
+    BHA: "#0057b8",
+    BOU: "#da291c",
+    BRE: "#e30613",
+    CHE: "#034694",
+    COV: "#69b3e7",
+    CRY: "#1b458f",
+    EVE: "#003399",
+    FUL: "#000000",
+    HUL: "#f18a01",
+    IPS: "#3a64a3",
+    LEE: "#1d428a",
+    LIV: "#c8102e",
+    MCI: "#6cabdd",
+    MUN: "#da291c",
+    NEW: "#241f20",
+    NFO: "#dd0000",
+    SUN: "#eb172b",
+    TOT: "#132257",
+  };
+  const LEAGUE_POSITIONS = DATA.leaguePositions || {}; // short code -> 1..20
+  const LEAGUE_POSITIONS_META = DATA.leaguePositionsMeta || {};
+  const FIXTURES_BY_TEAM = DATA.fixturesByTeam || {};
+  const POSITIONS = DATA.positions; // ["GK","DEF","MID","FWD"]
+  // Filter chips for 2025/26 list clubs present in the OPTA export (relegated
+  // already dropped at build). 2026/27 uses the full bootstrap 20.
+  const TEAM_CODES = Object.keys(DATA.teamNames).sort((a, b) =>
+    DATA.teamNames[a].localeCompare(DATA.teamNames[b])
+  );
+  const NEXT_SEASON_TEAM_NAMES = DATA.nextSeasonTeamNames || {};
+  const NEXT_SEASON_TEAM_CODES = Object.keys(NEXT_SEASON_TEAM_NAMES).sort((a, b) =>
+    NEXT_SEASON_TEAM_NAMES[a].localeCompare(NEXT_SEASON_TEAM_NAMES[b])
+  );
+  // Fallback if the build hasn't shipped nextSeason* yet.
+  const ALL_TEAM_CODES = (NEXT_SEASON_TEAM_CODES.length
+    ? NEXT_SEASON_TEAM_CODES
+    : Object.keys(TEAM_NAMES)
+  ).slice().sort((a, b) => TEAM_NAMES[a].localeCompare(TEAM_NAMES[b]));
+  // Venue-split team stats for fixture tooltips (opponent home/away profile).
+  const TEAM_STATS = {
+    home: Object.fromEntries((DATA.teams.home || []).map((t) => [t.team, t])),
+    away: Object.fromEntries((DATA.teams.away || []).map((t) => [t.team, t])),
+    combined: Object.fromEntries((DATA.teams.combined || []).map((t) => [t.team, t])),
+  };
+  const FIXTURE_TT_DELAY_KEY = "fpl-explorer-fixture-tt-delay";
+  const CLOCK_FORMAT_KEY = "fpl-explorer-clock-format";
+  const FIXTURE_TT_DELAY_SEC_MIN = 0.5;
+  const FIXTURE_TT_DELAY_SEC_MAX = 5;
+  const FIXTURE_TT_DELAY_SEC_DEFAULT = 1;
+  const FIXTURE_TT_COUNT = 7;
+  // Statistics-page fixture tooltip shading — wider than the players Enhance
+  // default (10%) so tough/soft opponents read clearly in fixture tips.
+  const FIXTURE_TT_ENHANCE_PCT = 30;
+  const FIXTURE_GAMEWEEKS = Object.values(FIXTURES_BY_TEAM)
+    .flat()
+    .map((fixture) => Number(fixture.gw))
+    .filter(Number.isFinite);
+  const SCHEDULE_GW_MIN = FIXTURE_GAMEWEEKS.length ? Math.min(...FIXTURE_GAMEWEEKS) : 1;
+  const SCHEDULE_GW_MAX = FIXTURE_GAMEWEEKS.length ? Math.max(...FIXTURE_GAMEWEEKS) : 38;
+  // Whether build.py's 2026/27 price match ran at all — gates the "Include
+  // departed players" filter, since without it price2627 is undefined for
+  // everyone and there'd be nothing to distinguish "departed" from "just
+  // not matched yet".
+  const HAS_PRICE_DATA = !!(DATA.newSeasonPriceMeta && DATA.newSeasonPriceMeta.source);
+
+  function badgeHTML(teamCode, className) {
+    const src = TEAM_BADGES[teamCode];
+    if (!src) return "";
+    const cls = className ? `badge-img ${className}` : "badge-img";
+    return `<img class="${cls}" src="${src}" alt="" />`;
+  }
+
+  function iconHTML(name, className) {
+    const cls = className ? ` class="icon ${className}"` : ` class="icon"`;
+    return `<svg${cls} aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+  }
+
+  function positiveFill(alpha) {
+    return `hsl(var(--positive) / ${alpha})`;
+  }
+
+  function negativeFill(alpha) {
+    return `hsl(var(--negative) / ${alpha})`;
+  }
+
+  // Soft green/red cell tint for Enhance highlights. Intensity 1 → strongest
+  // in the band, 0 → weakest; still tapers, but stays light enough that the
+  // cell text remains readable over long tables.
+  function enhanceFillAlpha(intensity) {
+    return (0.08 + intensity * 0.4).toFixed(3);
+  }
+
+  // ---------------------------------------------------------------------
+  // Column definitions
+  // ---------------------------------------------------------------------
+  const PLAYER_COLS = [
+    { key: "player", label: "Player", type: "player", pin: true },
+    { key: "price", label: "£m", decimals: 1, group: "Core", title: "Price (£m)" },
+    { key: "apps", label: "Apps", decimals: 0, group: "Core", title: "Appearances" },
+    { key: "mins", label: "Mins", decimals: 0, group: "Core", title: "Minutes played" },
+    { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
+    { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
+    { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
+    { key: "bigChances", label: "BC", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Big chances" },
+    { key: "xg", label: "xG", decimals: 1, group: "Attack", section: "Goal Threat", rate: true, title: "Expected goals" },
+    { key: "goals", label: "G", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Goals" },
+    { key: "keyPasses", label: "KP", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Key passes" },
+    { key: "bigChancesCreated", label: "BCC", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Big chances created" },
+    { key: "xa", label: "xA", decimals: 1, group: "Creativity", section: "Creativity", rate: true, title: "Expected assists" },
+    { key: "assists", label: "A", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Assists" },
+    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets (FPL API, 2025/26 combined only)" },
+    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded while on the pitch — recorded for every position, though only keepers and defenders are docked points for them (FPL API, 2025/26 combined only)" },
+    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded while on the pitch — recorded for every position (FPL API, 2025/26 combined only)" },
+    { key: "saves", label: "Saves", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Saves — goalkeepers (FPL API, 2025/26 combined only)" },
+    { key: "__cbitr", label: "CBIT/R", decimals: 0, group: "Defence", section: "Defensive", rate: true, derived: true, title: "Clearances, blocks, interceptions & tackles (+ recoveries for MID/FWD). Combined view only." },
+    { key: "xPts", label: "xPts", decimals: 1, group: "Points", section: "FPL", rate: true, title: "Expected FPL points" },
+    { key: "bps", label: "BPS", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points system score" },
+    { key: "bonus", label: "B", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points" },
+    { key: "defCon", label: "DC", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Defensive contribution points earned (2 per match at the position's action threshold)" },
+    { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points", strong: true },
+    { key: "__gi", label: "G+A", decimals: 0, group: "Combined", section: "Combined", derived: true, rate: true, title: "Goals + assists" },
+    { key: "xgi", label: "xGI", decimals: 1, group: "Combined", section: "Combined", rate: true, title: "Expected goal involvements (FPL API, 2025/26 combined only)" },
+    { key: "penaltiesOrder", label: "PK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice penalty taker" },
+    { key: "directFreekicksOrder", label: "FK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice direct free kick taker" },
+    { key: "cornersOrder", label: "CK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice corners & indirect free kick taker" },
+  ];
+
+  const TEAM_COLS = [
+    { key: "name", label: "Team", type: "name", pin: true },
+    { key: "gp", label: "GP", decimals: 0, group: "Core", title: "Gameweeks played" },
+    { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
+    { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
+    { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
+    { key: "bigChances", label: "BC", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Big chances" },
+    { key: "xg", label: "xG", decimals: 1, group: "Attack", section: "Goal Threat", rate: true, title: "Expected goals" },
+    { key: "goals", label: "G", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Goals" },
+    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded" },
+    { key: "xcs", label: "xCS", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected clean sheets" },
+    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded" },
+    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets" },
+    { key: "xgd", label: "xGD", decimals: 1, group: "Overall", section: "Overall", rate: true, title: "Expected goal difference (xG − xGC)" },
+    { key: "gd", label: "GD", decimals: 0, group: "Overall", section: "Overall", title: "Goal difference (goals − conceded)" },
+    { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points scored by the squad", strong: true },
+    { key: "__ppg", label: "Pts/GP", decimals: 1, group: "Derived", section: "Derived", derived: true, title: "Points per gameweek played" },
+    { key: "__gpg", label: "G/GP", decimals: 1, group: "Derived", section: "Derived", derived: true, title: "Goals per gameweek played" },
+  ];
+
+  // Concise display titles shared by Rankings cards and the Columns settings
+  // panel. Keep OPTA table header tooltips on col.title — these overrides only
+  // change the friendlier labels shown in those surfaces.
+  const METRIC_TITLE_OVERRIDES = {
+    players: {
+      cleanSheets: "Clean sheets",
+      saves: "Saves",
+      __cbitr: "Clearances, blocks, interceptions, tackles",
+      defCon: "Defensive Contribution Points",
+      bps: "Bonus Points System",
+      xgi: "Expected goal involvements",
+    },
+    teams: {
+      pts: "Total FPL Points",
+      gd: "Goal difference",
+      xgd: "Expected goal difference",
+      __ppg: "Points per GW",
+    },
+  };
+
+  function metricDisplayTitle(col) {
+    return METRIC_TITLE_OVERRIDES[state.view]?.[col.key] || col.title || col.label;
+  }
+
+  // Columns where a lower value is the better outcome (conceding stats) —
+  // "Enhance" ranks these ascending instead of descending.
+  const LOWER_BETTER = new Set(["xgc", "goalsConceded"]);
+  // These player fields come from FPL's season-total history. The API does
+  // not provide a home/away breakdown, so split cells must not imply one.
+  const FPL_SEASON_TOTAL_ONLY = new Set([
+    "cleanSheets", "goalsConceded", "xgc", "saves", "__cbitr", "xgi",
+  ]);
+  // Columns exempt from Enhance ranking even though they're numeric.
+  const ENHANCE_EXCLUDE = new Set(["price", "apps", "gp"]);
+  const ENHANCE_PCT_MIN = 2;
+  const ENHANCE_PCT_MAX = 40;
+  const ENHANCE_PCT_PLAYERS = 10;
+  const ENHANCE_PCT_TEAMS = 30;
+  // Matchups highlight band as absolute ranks (always a ~20-team view).
+  const SCHEDULE_ENHANCE_TOP_MIN = 1;
+  const SCHEDULE_ENHANCE_TOP_MAX = 10;
+  const SCHEDULE_ENHANCE_TOP_DEFAULT = 6;
+  // Matchup finder: expected weight (0 = all actual, 100 = all expected)
+  // and the minimum rank gap that qualifies as "favorable".
+  const SCHEDULE_EXPECTED_WEIGHT_DEFAULT = 50;
+  const SCHEDULE_EDGE_MIN = 2;
+  const SCHEDULE_EDGE_MAX = 10;
+  const SCHEDULE_EDGE_DEFAULT = 4;
+  // Markets Goals/CS heat: 0 = only extremes colored, 100 = most cells colored.
+  const MARKETS_HEAT_MIN = 0;
+  const MARKETS_HEAT_MAX = 100;
+  const MARKETS_HEAT_DEFAULT = 50;
+  const MARKETS_HEAT_GOALS_KEY = "fpl-explorer-markets-heat-goals";
+  const MARKETS_HEAT_CS_KEY = "fpl-explorer-markets-heat-cs";
+  // The promoted clubs have no prior-season OPTA row. Give them explicit
+  // provisional bottom-three ranks instead of inventing raw stat values.
+  // Existing clubs keep their natural rank among the 17 measured teams.
+  const PROVISIONAL_TEAM_RANKS = new Map([
+    ["COV", 18],
+    ["IPS", 19],
+    ["HUL", 20],
+  ]);
+
+  // FPL's defensive-contribution rule scores a different action set per
+  // position: defenders bank 2 points for 10 CBIT (clearances, blocks,
+  // interceptions, tackles) in a match, midfielders and forwards need 12 CBIRT
+  // — the same actions plus ball recoveries. Keepers are ineligible entirely.
+  // build.py ships both season totals so the threshold basis can follow the
+  // position a player is listed at now rather than the one they held when the
+  // actions were recorded.
+  const DEFCON_RULES = {
+    DEF: { threshold: 10, field: "cbit", actions: "clearances, blocks, interceptions and tackles" },
+    MID: { threshold: 12, field: "cbitr", actions: "clearances, blocks, interceptions, tackles and recoveries" },
+    FWD: { threshold: 12, field: "cbitr", actions: "clearances, blocks, interceptions, tackles and recoveries" },
+  };
+
+  function defconPosition(row) {
+    return row.newPosition || row.position;
+  }
+
+  function deriveExtra(row, isTeam) {
+    if (isTeam) {
+      row.__ppg = row.gp ? row.pts / row.gp : 0;
+      row.__gpg = row.gp ? row.goals / row.gp : 0;
+    } else {
+      row.__gi = (row.goals || 0) + (row.assists || 0);
+      // Collapse the two raw action totals into the one this player is
+      // actually judged on. Null (not 0) where the rule can't produce a
+      // figure, so the column shows a dash instead of a misleading zero.
+      const rule = DEFCON_RULES[defconPosition(row)];
+      row.__cbitr = rule && row[rule.field] != null ? row[rule.field] : null;
+    }
+  }
+
+  ["home", "away", "combined"].forEach((split) => {
+    DATA.players[split].forEach((r) => deriveExtra(r, false));
+    DATA.teams[split].forEach((r) => deriveExtra(r, true));
+  });
+
+  // Zero-stat 2026/27 view: full FPL bootstrap squad (promoted clubs included;
+  // relegated clubs absent). Built lazily once from DATA.nextSeasonPlayers.
+  const PLAYER_ZERO_KEYS = [
+    "apps", "mins", "shots", "shotsOnTarget", "touchesBox", "bigChances",
+    "xg", "goals", "keyPasses", "bigChancesCreated", "xa", "assists",
+    "xPts", "bps", "bonus", "defCon", "pts",
+    "cleanSheets", "goalsConceded", "xgc", "saves", "xgi", "cbit", "cbitr",
+  ];
+  const TEAM_ZERO_KEYS = [
+    "gp", "shots", "shotsOnTarget", "touchesBox", "bigChances", "xg",
+    "goals", "xgc", "xcs", "goalsConceded", "cleanSheets", "xgd", "gd", "pts",
+  ];
+  let season2627Cache = null;
+
+  function teamNameForSeason(code) {
+    if (isNextSeason()) {
+      return NEXT_SEASON_TEAM_NAMES[code] || TEAM_NAMES[code] || code;
+    }
+    return TEAM_NAMES[code] || code;
+  }
+
+  function buildSeason2627Data() {
+    const roster = DATA.nextSeasonPlayers || [];
+    const players = { home: [], away: [], combined: [] };
+    roster.forEach((src) => {
+      const row = {
+        id: src.id,
+        name: src.name,
+        team: src.team,
+        position: src.position,
+        price: src.price,
+        price2627: src.price,
+        priceDelta: 0,
+        newTeam: src.team,
+        newPosition: src.position,
+        status: "ok",
+        code: src.code,
+        penaltiesOrder: src.penaltiesOrder ?? null,
+        directFreekicksOrder: src.directFreekicksOrder ?? null,
+        cornersOrder: src.cornersOrder ?? null,
+      };
+      PLAYER_ZERO_KEYS.forEach((k) => {
+        row[k] = 0;
+      });
+      deriveExtra(row, false);
+      // No H/A splits yet — same zero row for every fixture-location view.
+      ["home", "away", "combined"].forEach((split) => {
+        players[split].push({ ...row });
+      });
+    });
+
+    const teamCodes = NEXT_SEASON_TEAM_CODES.length ? NEXT_SEASON_TEAM_CODES : ALL_TEAM_CODES;
+    const teams = { home: [], away: [], combined: [] };
+    teamCodes.forEach((code) => {
+      const base = {
+        team: code,
+        name: NEXT_SEASON_TEAM_NAMES[code] || TEAM_NAMES[code] || code,
+      };
+      TEAM_ZERO_KEYS.forEach((k) => {
+        base[k] = 0;
+      });
+      deriveExtra(base, true);
+      ["home", "away", "combined"].forEach((split) => {
+        teams[split].push({ ...base });
+      });
+    });
+    return { players, teams };
+  }
+
+  function season2627Data() {
+    if (!season2627Cache) season2627Cache = buildSeason2627Data();
+    return season2627Cache;
+  }
+
+  // ---------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------
+  const state = {
+    page: "opta", // opta | rankings | expected | schedule | feed
+    season: "2025-26", // 2025-26 | 2026-27
+    view: "players", // players | teams
+    split: "combined", // combined | home | away
+    search: "",
+    posFilter: new Set(),
+    teamFilter: new Set(),
+    priceMin: null,
+    priceMax: null,
+    minsMin: null,
+    minsMax: null,
+    valueMode: "total", // total | per90 | perM
+    showNewPrice: false,
+    hideDeparted: true,
+    // Always-on top/bottom % cell tint (raw values stay in the cells).
+    // Preserve the existing behavior by default: filter changes redefine the
+    // highlight population. Turn this off to band against the full view instead.
+    recalculateRanks: true,
+    enhancePct: ENHANCE_PCT_PLAYERS,
+    scheduleEnhanceTopN: SCHEDULE_ENHANCE_TOP_DEFAULT,
+    compareMode: false,
+    compareSelection: { players: new Set(), teams: new Set() },
+    sortKey: "pts",
+    sortDir: "desc",
+    hiddenCols: new Set(),
+    rankingsPins: [],
+    // Rankings defaults the other way to the OPTA table: a search or filter
+    // there is usually "where does this player actually place", so ranks stay
+    // measured against the whole view until the user asks to recalculate.
+    rankingsRecalculate: false,
+    // Divide every ranking card by gameweeks played (teams) or appearances
+    // (players) so games-in-hand don't distort early-season leaderboards.
+    rankingsPerGw: false,
+    expectedCat: "goals", // goals | assists | gi | conceded | cs
+    expectedSortKey: "actual", // diff | expected | actual | name
+    expectedSortDir: "desc",
+    expectedSplit: "combined", // combined | home | away | compare
+    scheduleGwMin: SCHEDULE_GW_MIN,
+    scheduleGwMax: Math.min(SCHEDULE_GW_MIN + FIXTURE_TT_COUNT - 1, SCHEDULE_GW_MAX),
+    scheduleMatchups: true,
+    scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
+    scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
+    feedSort: "volume", // volume | recent
+    // Markets Goals/CS heat fills — 0 = stricter (less color), 100 = looser (more).
+    marketsHeatGoals: MARKETS_HEAT_DEFAULT,
+    marketsHeatCs: MARKETS_HEAT_DEFAULT,
+  };
+
+  const MAX_COMPARE = 5;
+
+  function compareSet() {
+    return state.compareSelection[state.view];
+  }
+
+  function isNextSeason() {
+    return state.season === "2026-27";
+  }
+
+  // Updates chrome (arrows / ± / sticky notes) only on 2025/26 data.
+  function updatesOverlayOn() {
+    return !isNextSeason() && state.showNewPrice;
+  }
+
+  function computeBounds(season = state.season) {
+    if (season === "2026-27") {
+      const players = season2627Data().players.combined;
+      const price = players.map((p) => p.price);
+      return {
+        price: {
+          min: price.length ? Math.min(...price) : 4,
+          max: price.length ? Math.max(...price) : 15,
+        },
+        // Stats are zero until the season starts; keep a full-season ceiling
+        // so the minutes slider stays usable once values land.
+        mins: { min: 0, max: 38 * 90 },
+      };
+    }
+    const players = DATA.players.combined;
+    const price = players.map((p) => p.price);
+    const mins = players.map((p) => p.mins);
+    return {
+      price: { min: Math.min(...price), max: Math.max(...price) },
+      mins: { min: 0, max: Math.max(...mins) },
+    };
+  }
+
+  // Mutable range used by the price/mins dual sliders (updated on season switch).
+  const bounds = computeBounds("2025-26");
+  function defaultMinPrice() {
+    return Math.min(Math.max(4.5, bounds.price.min), bounds.price.max);
+  }
+  function defaultMinMinutes() {
+    return isNextSeason() ? 0 : Math.min(1000, bounds.mins.max);
+  }
+  state.priceMin = defaultMinPrice();
+  state.priceMax = bounds.price.max;
+  state.minsMin = defaultMinMinutes();
+  state.minsMax = bounds.mins.max;
+
+  function cols() {
+    return state.view === "players" ? PLAYER_COLS : TEAM_COLS;
+  }
+
+  // ---------------------------------------------------------------------
+  // DOM refs
+  // ---------------------------------------------------------------------
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  const el = {
+    pageOpta: $("#page-opta"),
+    pageRankings: $("#page-rankings"),
+    pageExpected: $("#page-expected"),
+    expectedTabWrap: $("#expected-tab-wrap"),
+    expectedCatMenu: $("#expected-cat-menu"),
+    pageSchedule: $("#page-schedule"),
+    pageFeed: $("#page-feed"),
+    pageMarkets: $("#page-markets"),
+    subtoolbar: $("#subtoolbar"),
+    optaPage: $("#opta-page"),
+    rankingsPage: $("#rankings-page"),
+    rankingsPinBar: $("#rankings-pin-bar"),
+    rankingsGrid: $("#rankings-grid"),
+    rankingsCountLabel: $("#rankings-count-label"),
+    expectedPage: $("#expected-page"),
+    schedulePage: $("#schedule-page"),
+    scheduleGrid: $("#schedule-grid"),
+    feedPage: $("#feed-page"),
+    feedList: $("#feed-list"),
+    feedTrending: $("#feed-trending"),
+    feedSortSeg: $("#feed-sort-seg"),
+    feedSearch: $("#feed-search-input"),
+    marketsPage: $("#markets-page"),
+    marketsGrid: $("#markets-grid"),
+    marketsUpdated: $("#markets-updated"),
+    marketsControls: $("#markets-controls"),
+    marketsSlidersToggle: $("#markets-sliders-toggle"),
+    marketsHeatGoals: $("#markets-heat-goals"),
+    marketsHeatGoalsFill: $("#markets-heat-goals-fill"),
+    marketsHeatGoalsLabel: $("#markets-heat-goals-label"),
+    marketsHeatCs: $("#markets-heat-cs"),
+    marketsHeatCsFill: $("#markets-heat-cs-fill"),
+    marketsHeatCsLabel: $("#markets-heat-cs-label"),
+    scheduleScatter: $("#schedule-scatter"),
+    scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
+    uiTooltip: $("#ui-tooltip"),
+    scheduleRangeLabel: $("#schedule-range-label"),
+    scheduleGwMin: $("#schedule-gw-min"),
+    scheduleGwMax: $("#schedule-gw-max"),
+    scheduleGwMinLabel: $("#schedule-gw-min-label"),
+    scheduleGwMaxLabel: $("#schedule-gw-max-label"),
+    scheduleGwFill: $("#schedule-gw-fill"),
+    scheduleEnhancePct: $("#schedule-enhance-pct"),
+    scheduleEnhancePctLabel: $("#schedule-enhance-pct-label"),
+    scheduleEnhancePctFill: $("#schedule-enhance-pct-fill"),
+    scheduleExpectedWeightGroup: $("#schedule-expected-weight-group"),
+    scheduleExpectedWeight: $("#schedule-expected-weight"),
+    scheduleExpectedWeightLabel: $("#schedule-expected-weight-label"),
+    scheduleExpectedWeightFill: $("#schedule-expected-weight-fill"),
+    scheduleEdgeMinGroup: $("#schedule-edge-min-group"),
+    scheduleEdgeMin: $("#schedule-edge-min"),
+    scheduleEdgeMinLabel: $("#schedule-edge-min-label"),
+    scheduleEdgeMinFill: $("#schedule-edge-min-fill"),
+    scheduleControls: $("#schedule-controls"),
+    scheduleSlidersToggle: $("#schedule-sliders-toggle"),
+    expectedTitle: $("#expected-title"),
+    expectedSub: $("#expected-sub"),
+    expectedSplitGroup: $("#expected-split-group"),
+    expectedSplitSeg: $("#expected-split-seg"),
+    expectedLegend: $("#expected-legend"),
+    barbellWrap: $("#barbell-wrap"),
+    barbellHead: $("#barbell-head"),
+    barbellScale: $("#barbell-scale"),
+    barbellBody: $("#barbell-body"),
+    expectedTooltip: $("#expected-tooltip"),
+    seasonSelect: $("#season-select"),
+    tableOnlyToggles: $("#table-only-toggles"),
+    columnsWrap: $("#columns-wrap"),
+    columnsHeading: $("#columns-heading"),
+    tabPlayers: $("#tab-players"),
+    tabTeams: $("#tab-teams"),
+    splitGroup: $("#split-group"),
+    splitSeg: $("#split-seg"),
+    search: $("#search-input"),
+    sidebar: $("#sidebar"),
+    sidebarToggle: $("#sidebar-toggle"),
+    pageInfoBtn: $("#page-info-btn"),
+    pageInfoTooltip: $("#page-info-tooltip"),
+    themeCycleBtn: $("#theme-cycle-btn"),
+    prefsBtn: $("#prefs-btn"),
+    prefsPanel: $("#prefs-panel"),
+    fplIdInput: $("#fpl-id-input"),
+    fplIdSave: $("#fpl-id-save"),
+    fplIdClear: $("#fpl-id-clear"),
+    fplIdStatus: $("#fpl-id-status"),
+    fontPairSelect: $("#font-pair-select"),
+    clockFormatSelect: $("#clock-format-select"),
+    fixtureTtDelay: $("#fixture-tt-delay"),
+    fixtureTtDelayFill: $("#fixture-tt-delay-fill"),
+    fixtureTtDelayLabel: $("#fixture-tt-delay-label"),
+    posFilters: $("#pos-filters"),
+    teamFilters: $("#team-filters"),
+    priceMin: $("#price-min"),
+    priceMax: $("#price-max"),
+    priceMinLabel: $("#price-min-label"),
+    priceMaxLabel: $("#price-max-label"),
+    priceFill: $("#price-fill"),
+    minsMin: $("#mins-min"),
+    minsMax: $("#mins-max"),
+    minsMinLabel: $("#mins-min-label"),
+    minsMaxLabel: $("#mins-max-label"),
+    minsFill: $("#mins-fill"),
+    resetFilters: $("#reset-filters"),
+    enhancePctGroup: $("#enhance-pct-group"),
+    enhancePct: $("#enhance-pct"),
+    enhancePctLabel: $("#enhance-pct-label"),
+    enhancePctHint: $("#enhance-pct-hint"),
+    enhancePctFill: $("#enhance-pct-fill"),
+    valueModeGroup: $("#value-mode-group"),
+    valueModeSeg: $("#value-mode-seg"),
+    newpriceWrap: $("#newprice-wrap"),
+    newpriceToggle: $("#newprice-toggle"),
+    newpriceIssuesBadge: $("#newprice-issues-badge"),
+    newpriceIssuesPanel: $("#newprice-issues-panel"),
+    rankRecalculateWrap: $("#rank-recalculate-wrap"),
+    rankRecalculateToggle: $("#rank-recalculate-toggle"),
+    rankingsPerGwWrap: $("#rankings-per-gw-wrap"),
+    rankingsPerGwToggle: $("#rankings-per-gw-toggle"),
+    compareToggle: $("#compare-toggle"),
+    compareWrap: $("#compare-wrap"),
+    compareTitle: $("#compare-title"),
+    compareClear: $("#compare-clear"),
+    compareHead: $("#compare-head"),
+    compareBody: $("#compare-body"),
+    toastRoot: $("#toast-root"),
+    xSearchConfirm: $("#x-search-confirm"),
+    columnsBtn: $("#columns-btn"),
+    columnsPanel: $("#columns-panel"),
+    columnsList: $("#columns-list"),
+    countLabel: $("#count-label"),
+    tableHead: $("#table-head"),
+    tableBody: $("#table-body"),
+    fixtureTooltip: $("#fixture-tooltip"),
+    teamRankTooltip: $("#team-rank-tooltip"),
+    matchupEdgeTooltip: $("#matchup-edge-tooltip"),
+    positionFilterGroup: $("#position-filter-group"),
+    minutesFilterGroup: $("#minutes-filter-group"),
+    priceFilterGroup: $("#price-filter-group"),
+    inactiveFilterGroup: $("#inactive-filter-group"),
+    showDepartedCheck: $("#show-departed-check"),
+  };
+
+  // ---------------------------------------------------------------------
+  // Build static filter UI (positions / teams)
+  // ---------------------------------------------------------------------
+  function teamCodesForSeason() {
+    return isNextSeason() ? ALL_TEAM_CODES : TEAM_CODES;
+  }
+
+  function buildTeamFilterChips() {
+    el.teamFilters.innerHTML = "";
+    teamCodesForSeason().forEach((code) => {
+      const chip = document.createElement("div");
+      chip.className = "chip team-chip";
+      chip.innerHTML = `${badgeHTML(code)}${code}`;
+      setTip(chip, teamNameForSeason(code));
+      chip.dataset.team = code;
+      if (state.teamFilter.has(code)) chip.classList.add("active");
+      chip.addEventListener("click", () => {
+        toggleSetValue(state.teamFilter, code);
+        chip.classList.toggle("active");
+        renderTable();
+      });
+      el.teamFilters.appendChild(chip);
+    });
+  }
+
+  function buildStaticFilters() {
+    el.posFilters.innerHTML = "";
+    POSITIONS.forEach((p) => {
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      chip.textContent = p;
+      chip.dataset.pos = p;
+      chip.addEventListener("click", () => {
+        toggleSetValue(state.posFilter, p);
+        chip.classList.toggle("active");
+        renderTable();
+      });
+      el.posFilters.appendChild(chip);
+    });
+    buildTeamFilterChips();
+  }
+
+  function toggleSetValue(set, val) {
+    if (set.has(val)) set.delete(val);
+    else set.add(val);
+  }
+
+  function syncFilterChipUI() {
+    $$("#pos-filters .chip").forEach((c) => c.classList.toggle("active", state.posFilter.has(c.dataset.pos)));
+    $$("#team-filters .chip").forEach((c) => c.classList.toggle("active", state.teamFilter.has(c.dataset.team)));
+  }
+
+  // ---------------------------------------------------------------------
+  // Filtering / sorting / grouping
+  // ---------------------------------------------------------------------
+  function getRows() {
+    if (isNextSeason()) {
+      const next = season2627Data();
+      return state.view === "players" ? next.players[state.split] : next.teams[state.split];
+    }
+    return state.view === "players" ? DATA.players[state.split] : DATA.teams[state.split];
+  }
+
+  function applyFilters(rows) {
+    const q = state.search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (state.view === "players") {
+        if (!isNextSeason() && HAS_PRICE_DATA && state.hideDeparted && r.price2627 == null) return false;
+        if (state.posFilter.size && !state.posFilter.has(r.position)) return false;
+        if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
+        if (r.price < state.priceMin || r.price > state.priceMax) return false;
+        if (r.mins < state.minsMin || r.mins > state.minsMax) return false;
+        if (q) {
+          const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+      } else {
+        if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
+        if (q) {
+          const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  function per90Value(row, col) {
+    const mins = row.mins || 0;
+    if (!mins) return 0;
+    // Derived rate columns (e.g. G+A) still live on the row as a precomputed
+    // season total — scale that total the same way as any other counting stat.
+    return ((row[col.key] || 0) / mins) * 90;
+  }
+
+  // Active price for display / Per £m: next-season price while Updates is on
+  // (when matched). In 2026/27 mode the row price is already remapped.
+  function effectivePrice(row) {
+    if (updatesOverlayOn() && row.price2627 != null) return row.price2627;
+    return row.price || 0;
+  }
+
+  function perMillionValue(row, col) {
+    const price = effectivePrice(row);
+    if (!price) return 0;
+    return (row[col.key] || 0) / price;
+  }
+
+  function displayValue(row, col) {
+    // Already-normalised derived rates (Pts/GP, G/GP) must not be rescaled.
+    if (col.derived && !col.rate) return row[col.key];
+    if (col.key === "price") return effectivePrice(row) || row.price;
+    if (state.view === "players" && col.rate) {
+      if (state.valueMode === "per90") return per90Value(row, col);
+      if (state.valueMode === "perM") return perMillionValue(row, col);
+    }
+    return row[col.key];
+  }
+
+  // Season totals keep their column precision. Per 90 / Per £m values use at
+  // least 1dp, with small nonzero values rendered as "<0.1" rather than "0.0".
+  function displayDecimals(col) {
+    if (state.view === "players" && col.rate && (state.valueMode === "per90" || state.valueMode === "perM")) {
+      return Math.max(col.decimals, 1);
+    }
+    return col.decimals;
+  }
+
+  function fmtDisplayValue(value, col) {
+    const isRateMode =
+      state.view === "players" &&
+      col.rate &&
+      (state.valueMode === "per90" || state.valueMode === "perM");
+    if (isRateMode && value > 0 && value < 0.1) return "<0.1";
+    return fmtNum(value, displayDecimals(col));
+  }
+
+  // Position-gated FPL stats: show "–" (still demoted) instead of a
+  // misleading 0 when the category can't apply to that role.
+  function isStatApplicable(row, col) {
+    if (state.view !== "players" || !row || !col) return true;
+    const pos = row.position;
+    if (!pos) return true;
+    switch (col.key) {
+      case "saves":
+        return pos === "GK";
+      case "cleanSheets":
+        return pos === "GK" || pos === "DEF" || pos === "MID";
+      // Goals conceded and xGC are recorded for every outfield position, not
+      // just the two that lose points for them — a forward's xGC still says
+      // something about the game state they play in, so the number is shown
+      // wherever the API reports it.
+      case "defCon":
+        // Keepers can't earn contribution points, but the CSV carries the
+        // points themselves on every split.
+        return defconPosition(row) !== "GK";
+      case "__cbitr":
+        return defconPosition(row) !== "GK";
+      default:
+        return true;
+    }
+  }
+
+  function notApplicableReason(row, col) {
+    return `Not applicable for ${row.position || "this position"}`;
+  }
+
+  function sourceUnsupportedReason(row, col) {
+    // 2026/27 preview rows are intentionally zeroed — don't flag missing H/A.
+    if (isNextSeason()) return null;
+    if (state.view !== "players" || !FPL_SEASON_TOTAL_ONLY.has(col.key)) return null;
+    if (!isStatApplicable(row, col)) return null;
+    if (state.split !== "combined") {
+      return "FPL API data source does not support home/away splits for 2025/26 season";
+    }
+    // cleanSheets is present (including a valid zero) on every successfully
+    // matched history_past row, so it is also our provenance marker for xGI,
+    // whose FFH fallback would otherwise conceal a missing FPL match.
+    if (!Object.prototype.hasOwnProperty.call(row, "cleanSheets")) {
+      const label = col.title || col.label || col.key;
+      return `${label} is unavailable — this player could not be matched to an FPL season-total record`;
+    }
+    return null;
+  }
+
+  function isStatAvailable(row, col) {
+    return isStatApplicable(row, col) && !sourceUnsupportedReason(row, col);
+  }
+
+  function sourceUnsupportedHTML(reason) {
+    return `<span class="source-unsupported" role="img" aria-label="${escapeHtml(reason)}"${tipAttr(reason)}>${iconHTML("triangle-alert")}</span>`;
+  }
+
+  // Per-90 defensive-action rate against that position's threshold. Null when
+  // the player is ineligible or the raw counts are missing (home/away splits
+  // carry no API data, and unmatched players have none at all).
+  function defconStatus(row) {
+    const pos = defconPosition(row);
+    const rule = DEFCON_RULES[pos];
+    if (!rule || row.__cbitr == null || !row.mins) return null;
+    const per90 = (row.__cbitr / row.mins) * 90;
+    return { pos, per90, actions: row.__cbitr, rule, threshold: rule.threshold, meets: per90 >= rule.threshold };
+  }
+
+  // Filled blue check beside CBIT/R for players clearing their threshold on a
+  // per-90 basis — a quick read on who is a repeatable defensive-contribution
+  // source rather than someone who banked points in heavy-minute games.
+  // Uses the same circle-check mark as set-pieces (not the home-fixture star).
+  function defconDotHTML(row) {
+    const status = defconStatus(row);
+    if (!status || !status.meets) return "";
+    const title = `${status.per90.toFixed(1)} per 90 — clears the ${status.threshold} ${status.pos} threshold`;
+    return `<span class="threshold-dot"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+  }
+
+  // Filled squad pin used in row chrome and page-info keys.
+  function ownedPinSVG(className = "owned-flag-icon") {
+    return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0Z"/><path d="m9 10 2 2 4-4"/></svg>`;
+  }
+
+  // Filled Lucide sticky-note — marks players with a 2026/27 price/team/pos change.
+  function stickyNoteSVG(className = "player-update-note-icon") {
+    return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="m16 3 5 5h-3a2 2 0 0 1-2-2Z"/></svg>`;
+  }
+
+  // Sticky-note affordance: team / position moves only (price-only changes
+  // are common and would mark nearly every row).
+  function playerHasSeasonUpdate(row) {
+    // Sticky-note only makes sense on 2025/26 rows (previewing next season).
+    if (isNextSeason() || !HAS_PRICE_DATA || !row || state.view !== "players") return false;
+    const teamChanged = !!(row.newTeam && row.newTeam !== row.team);
+    const posChanged = !!(row.newPosition && row.newPosition !== row.position);
+    return teamChanged || posChanged;
+  }
+
+  function playerUpdateSummary(row) {
+    const parts = [];
+    if (row.newTeam && row.newTeam !== row.team) {
+      parts.push(`${row.team} → ${row.newTeam}`);
+    }
+    if (row.newPosition && row.newPosition !== row.position) {
+      parts.push(`${row.position} → ${row.newPosition}`);
+    }
+    return parts.length ? `2026/27: ${parts.join(" · ")}` : "2026/27 update";
+  }
+
+  function playerUpdateNoteHTML(row) {
+    if (!playerHasSeasonUpdate(row)) return "";
+    const summary = playerUpdateSummary(row);
+    return `<span class="player-update-note" onclick="event.stopPropagation()"${tipAttr(summary)} aria-label="${escapeHtml(summary)}">${stickyNoteSVG()}</span>`;
+  }
+
+  function spitOwnedPinHTML() {
+    return ownedPinSVG("spit-owned-pin");
+  }
+
+  function spitCheckMarkHTML(className = "spit-check-mark") {
+    return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`;
+  }
+
+  function sortRows(rows) {
+    const col = cols().find((c) => c.key === state.sortKey);
+    const dir = state.sortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      let va, vb;
+      if (!col || col.type === "pos" || col.type === "name" || col.type === "team" || col.type === "player") {
+        const field = col && col.type === "player" ? "name" : col ? col.key : "";
+        va = a[field] || "";
+        vb = b[field] || "";
+        return dir * String(va).localeCompare(String(vb));
+      }
+      if (col.type === "check") {
+        va = a[col.key] === 1 ? 1 : 0;
+        vb = b[col.key] === 1 ? 1 : 0;
+        return dir * (va - vb);
+      }
+      const aNA = !isStatAvailable(a, col);
+      const bNA = !isStatAvailable(b, col);
+      if (aNA !== bNA) return aNA ? 1 : -1;
+      va = displayValue(a, col) || 0;
+      vb = displayValue(b, col) || 0;
+      return dir * (va - vb);
+    });
+  }
+
+  function rowKey(row) {
+    return state.view === "players" ? row.id : row.team;
+  }
+
+  // ---------------------------------------------------------------------
+  // Viewer-owned squad (FPL manager ID → owned player codes)
+  // ---------------------------------------------------------------------
+  const FPL_ID_KEY = "fpl-explorer-manager-id";
+  // Screenshot squad for manager 296817 — FPL picks API isn't updated for
+  // 2026/27 yet, so we resolve these names to stable `code` values locally.
+  const MOCK_OWNED_NAMES = [
+    "Darlow",
+    "O'Reilly",
+    "Struijk",
+    "Senesi",
+    "Palmer",
+    "Semenyo",
+    "B.Fernandes",
+    "Tavernier",
+    "Calvert-Lewin",
+    "Haaland",
+    "João Pedro",
+    "Verbruggen",
+    "Hill",
+    "Groß",
+    "Van Hecke",
+  ];
+  let ownedCodes = new Set();
+  let savedManagerId = null;
+
+  function resolveMockOwnedCodes() {
+    const byName = new Map();
+    (DATA.players.combined || []).forEach((p) => {
+      if (p && p.name && p.code != null) byName.set(p.name, p.code);
+    });
+    const codes = new Set();
+    MOCK_OWNED_NAMES.forEach((name) => {
+      const code = byName.get(name);
+      if (code != null) codes.add(code);
+    });
+    return codes;
+  }
+
+  // Real path later: GET /api/entry/{id}/event/{gw}/picks/ → picks[].element
+  // mapped through bootstrap-static elements[].code. Until FPL publishes
+  // 2026/27 picks, always return the screenshot mock for any saved ID.
+  async function loadOwnedSquad(_managerId) {
+    return resolveMockOwnedCodes();
+  }
+
+  function isOwnedRow(row) {
+    return state.view === "players" && row && row.code != null && ownedCodes.has(row.code);
+  }
+
+  function ownedFlagHTML(row) {
+    if (!isOwnedRow(row)) return "";
+    return `<span class="owned-flag"${tipAttr("In your squad")} aria-label="In your squad">${ownedPinSVG()}</span>`;
+  }
+
+  function xSearchURL(name) {
+    return `https://x.com/search?q=${encodeURIComponent(`${name} fpl`)}&src=typed_query&f=live`;
+  }
+
+  function playerNameLinkHTML(name, className = "player-name") {
+    const label = `${name} fpl`;
+    return `<a class="${className} player-x-search" href="${escapeHtml(xSearchURL(name))}" target="_blank" rel="noopener noreferrer" data-x-name="${escapeHtml(name)}"${tipAttr(`Search X for “${label}”`)}>${escapeHtml(name)}</a>`;
+  }
+
+  let xSearchConfirmAnchor = null;
+
+  function hideXSearchConfirm() {
+    if (!el.xSearchConfirm) return;
+    el.xSearchConfirm.style.display = "none";
+    el.xSearchConfirm.innerHTML = "";
+    xSearchConfirmAnchor = null;
+  }
+
+  function positionXSearchConfirm(anchor) {
+    const tip = el.xSearchConfirm;
+    if (!tip || !anchor) return;
+    tip.style.display = "block";
+    tip.style.visibility = "hidden";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+    const rect = anchor.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.bottom + 8;
+    if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+    if (left < 8) left = 8;
+    if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 8;
+    if (top < 8) top = 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function showXSearchConfirm(anchor) {
+    const name = (anchor.dataset.xName || anchor.textContent || "").trim();
+    if (!name || !el.xSearchConfirm) return;
+    hideUiTooltip();
+    hideFixtureTooltip();
+    xSearchConfirmAnchor = anchor;
+    const label = `${name} fpl`;
+    const url = xSearchURL(name);
+    el.xSearchConfirm.innerHTML = `
+      <div class="x-search-confirm-msg">Search X for <strong>“${escapeHtml(label)}”</strong>?</div>
+      <div class="x-search-confirm-actions">
+        <button type="button" class="ghost-btn x-search-confirm-cancel">Cancel</button>
+        <a class="icon-btn x-search-confirm-go" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Search</a>
+      </div>`;
+    positionXSearchConfirm(anchor);
+    const goBtn = el.xSearchConfirm.querySelector(".x-search-confirm-go");
+    if (goBtn) {
+      goBtn.addEventListener("click", () => {
+        hideXSearchConfirm();
+      });
+      goBtn.focus();
+    }
+  }
+
+  function playerNameHTML(row) {
+    return `<div class="player-name-line">${playerNameLinkHTML(row.name)}${ownedFlagHTML(row)}${playerUpdateNoteHTML(row)}</div>`;
+  }
+
+  function syncFplIdStatus() {
+    if (!el.fplIdStatus) return;
+    if (!savedManagerId) {
+      el.fplIdStatus.textContent = "No manager ID saved.";
+      return;
+    }
+    const n = ownedCodes.size;
+    el.fplIdStatus.textContent =
+      n > 0
+        ? `ID ${savedManagerId} · ${n} owned player${n === 1 ? "" : "s"} (mock).`
+        : `ID ${savedManagerId} · no owned players matched.`;
+  }
+
+  async function applyManagerId(rawId, { quiet = false, render = true } = {}) {
+    const id = String(rawId || "").trim();
+    if (!/^\d+$/.test(id) || Number(id) <= 0) {
+      if (!quiet) {
+        showToast({ title: "Invalid FPL ID", message: "Enter a positive numeric manager ID.", icon: "triangle-alert" });
+      }
+      return false;
+    }
+    savedManagerId = id;
+    try {
+      localStorage.setItem(FPL_ID_KEY, id);
+    } catch {
+      /* private browsing */
+    }
+    if (el.fplIdInput) el.fplIdInput.value = id;
+    ownedCodes = await loadOwnedSquad(id);
+    syncFplIdStatus();
+    if (!quiet) {
+      showToast({
+        title: "FPL ID saved",
+        message: `Loaded ${ownedCodes.size} owned players (mock data).`,
+        icon: "circle-check",
+      });
+    }
+    if (render) renderTable();
+    return true;
+  }
+
+  function clearManagerId({ quiet = false, render = true } = {}) {
+    savedManagerId = null;
+    ownedCodes = new Set();
+    try {
+      localStorage.removeItem(FPL_ID_KEY);
+    } catch {
+      /* private browsing */
+    }
+    if (el.fplIdInput) el.fplIdInput.value = "";
+    syncFplIdStatus();
+    if (!quiet) {
+      showToast({ title: "FPL ID cleared", message: "Owned-player markers removed.", icon: "info" });
+    }
+    if (render) renderTable();
+  }
+
+  async function restoreManagerId() {
+    let saved = "";
+    try {
+      saved = localStorage.getItem(FPL_ID_KEY) || "";
+    } catch {
+      saved = "";
+    }
+    if (el.fplIdInput && saved) el.fplIdInput.value = saved;
+    if (saved) await applyManagerId(saved, { quiet: true, render: false });
+    else syncFplIdStatus();
+  }
+
+  function isNumericCol(col) {
+    return (
+      col.type !== "pos" &&
+      col.type !== "name" &&
+      col.type !== "team" &&
+      col.type !== "check" &&
+      col.type !== "player"
+    );
+  }
+
+  // Builds { colKey: { top: Map(rowKey -> intensity), bottom: Map(...) } }
+  // for the columns visible in the current view. The caller supplies either
+  // the filtered rows or the full player/team population depending on the
+  // Recalculate switch. topN is state.enhancePct of that population. Players rank only
+  // the best values (green). Teams — a much smaller population — rank
+  // both the best and worst (green "target" / red "avoid"), with the
+  // bottom set drawn only from values outside the top set so the two never
+  // overlap. Zero-valued cells are excluded from ranking (they're always
+  // visually demoted instead). Ties share the same intensity.
+  function buildHighlightMaps(rows) {
+    const maps = {};
+    const isTeams = state.view === "teams";
+    const topN = Math.max(1, Math.round((rows.length * state.enhancePct) / 100));
+    visibleColumns().forEach((col) => {
+      if (!isNumericCol(col) || ENHANCE_EXCLUDE.has(col.key)) return;
+      const lowerBetter = LOWER_BETTER.has(col.key);
+      const withVals = rows
+        .filter((r) => isStatAvailable(r, col))
+        .map((r) => ({ key: rowKey(r), val: displayValue(r, col) || 0 }))
+        .filter((x) => Math.abs(x.val) > 1e-9);
+      if (withVals.length < 2) return;
+      const minV = Math.min(...withVals.map((x) => x.val));
+      const maxV = Math.max(...withVals.map((x) => x.val));
+      if (maxV === minV) return; // no variance, nothing meaningful to rank
+
+      // Rank individual rows, not distinct values — a value shared by 5
+      // players fills 5 rank slots, not one, so ties don't compress the
+      // effective top-N down to fewer highlighted rows than intended.
+      withVals.sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
+
+      const topSlice = withVals.slice(0, topN);
+      const top = new Map(topSlice.map((x, i) => [x.key, 1 - i / topSlice.length]));
+
+      const bottom = new Map();
+      if (isTeams) {
+        const remaining = withVals.slice(topSlice.length);
+        const bottomSlice = remaining.slice(-topN).reverse();
+        bottomSlice.forEach((x, i) => bottom.set(x.key, 1 - i / bottomSlice.length));
+      }
+
+      maps[col.key] = { top, bottom };
+    });
+    return maps;
+  }
+
+  // Price is excluded from the top/bottom% Enhance system (it's a level, not
+  // a rate stat — tinting "top 10% most expensive" isn't useful).
+
+  // ---------------------------------------------------------------------
+  // Rendering
+  // ---------------------------------------------------------------------
+  function visibleColumns() {
+    return cols().filter((c) => c.pin || !state.hiddenCols.has(c.key));
+  }
+
+  function fmtNum(v, decimals) {
+    if (v === undefined || v === null || Number.isNaN(v)) return "–";
+    const n = Number(v);
+    if (decimals === 0) return Math.round(n).toLocaleString();
+    return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  // Whether column i starts a new section group (e.g. "Goal Threat" ->
+  // "Creativity") — used to draw a subtle vertical divider at that boundary
+  // in both header rows and every body row, so the section groupings read
+  // as columns even once you're deep in a long scrolled table.
+  function isSectionBoundary(vcols, i) {
+    if (i === 0) return false;
+    return (vcols[i].section || null) !== (vcols[i - 1].section || null);
+  }
+
+  function buildSectionRow(vcols) {
+    const tr = document.createElement("tr");
+    tr.className = "section-row";
+    // Sticky opaque filler above the frozen name column so scrolling
+    // section labels (e.g. Goal Threat) never show through.
+    let i = 0;
+    if (vcols.length && vcols[0].pin) {
+      const lead = document.createElement("th");
+      lead.className = "sec-sticky-lead";
+      tr.appendChild(lead);
+      i = 1;
+    }
+    while (i < vcols.length) {
+      const section = vcols[i].section || null;
+      let span = 1;
+      while (i + span < vcols.length && (vcols[i + span].section || null) === section) span++;
+      const th = document.createElement("th");
+      th.colSpan = span;
+      th.textContent = section || "";
+      if (i > 0) th.classList.add("sec-divider");
+      tr.appendChild(th);
+      i += span;
+    }
+    return tr;
+  }
+
+  // FPL's preseason corners order isn't 1-based yet, so the CK column is
+  // flagged until a real 1st-choice taker appears in the data.
+  const COLUMN_CAVEATS = {
+    cornersOrder:
+      "FPL hasn't published 1st-choice corner takers for 2026/27 yet.",
+  };
+
+  function columnCaveat(col) {
+    const note = COLUMN_CAVEATS[col.key];
+    if (!note) return null;
+    return DATA.players.combined.some((p) => p[col.key] === 1) ? null : note;
+  }
+
+  function buildColumnHeaderRow(vcols) {
+    const tr = document.createElement("tr");
+    vcols.forEach((c, i) => {
+      const th = document.createElement("th");
+      th.textContent = c.label;
+      const caveat = columnCaveat(c);
+      setTip(th, caveat ? `${c.title || c.label} — ${caveat}` : c.title || c.label);
+      if (caveat) {
+        const star = document.createElement("span");
+        star.className = "col-caveat";
+        star.textContent = "*";
+        th.appendChild(star);
+      }
+      th.classList.add("col-" + (c.type || "num"));
+      if (isSectionBoundary(vcols, i)) th.classList.add("sec-divider");
+      if (state.sortKey === c.key) {
+        th.classList.add("sorted");
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.innerHTML = iconHTML(state.sortDir === "asc" ? "chevron-up" : "chevron-down");
+        th.appendChild(arrow);
+      } else {
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.innerHTML = iconHTML("chevrons-up-down");
+        th.appendChild(arrow);
+      }
+      th.addEventListener("click", () => {
+        if (state.sortKey === c.key) {
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortKey = c.key;
+          state.sortDir = c.type && c.type !== "check" ? "asc" : "desc";
+        }
+        renderTable();
+      });
+      tr.appendChild(th);
+    });
+    return tr;
+  }
+
+  function renderHead() {
+    const vcols = visibleColumns();
+    el.tableHead.innerHTML = "";
+    el.tableHead.appendChild(buildSectionRow(vcols));
+    el.tableHead.appendChild(buildColumnHeaderRow(vcols));
+  }
+
+  function cellHTML(row, col) {
+    if (col.key === "player") {
+      const teamCode = updatesOverlayOn() && row.newTeam ? row.newTeam : row.team;
+      const position = updatesOverlayOn() && row.newPosition ? row.newPosition : row.position;
+      const teamChanged = updatesOverlayOn() && row.newTeam && row.newTeam !== row.team;
+      const posChanged = updatesOverlayOn() && row.newPosition && row.newPosition !== row.position;
+      const crest = teamChanged
+        ? `<span${tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`)}>${badgeHTML(teamCode, "player-cell-badge")}</span>`
+        : badgeHTML(teamCode, "player-cell-badge");
+      const posTip = posChanged ? tipAttr(`Was ${row.position}`) : "";
+      return `<div class="player-cell">
+        ${crest}
+        <div class="player-cell-copy">
+          ${playerNameHTML(row)}
+          <div class="player-cell-sub">
+            <span class="pos-badge pos-${position}"${posTip}>${position}</span>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (col.key === "name") {
+      const pos = LEAGUE_POSITIONS[row.team];
+      const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
+      const posHTML = pos != null
+        ? `<span class="team-league-pos"${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`
+        : "";
+      return `<div class="player-cell">
+        ${badgeHTML(row.team, "player-cell-badge")}
+        <div class="player-cell-copy">
+          <div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>
+          ${posHTML ? `<div class="player-cell-sub">${posHTML}</div>` : ""}
+        </div>
+      </div>`;
+    }
+    if (col.key === "price") {
+      const val = fmtDisplayValue(displayValue(row, col), col);
+      const delta = priceDeltaHTML(row);
+      return delta ? `<span class="cell-inline align-end">${val}${delta}</span>` : val;
+    }
+    if (col.type === "check") {
+      const order = row[col.key];
+      const title = order === 1 ? "1st choice" : order ? `${order}${ordinalSuffix(order)} choice` : "Not on the list";
+      return `<span class="check-mark"${tipAttr(title)}>${order === 1 ? `<svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>` : ""}</span>`;
+    }
+    if (!isStatApplicable(row, col)) {
+      return `<span${tipAttr(notApplicableReason(row, col))}>–</span>`;
+    }
+    const unsupportedReason = sourceUnsupportedReason(row, col);
+    if (unsupportedReason) return sourceUnsupportedHTML(unsupportedReason);
+    const val = displayValue(row, col);
+    const defconDot = col.key === "__cbitr" ? defconDotHTML(row) : "";
+    const text = fmtDisplayValue(val, col);
+    return defconDot ? `<span class="cell-inline align-end">${text}${defconDot}</span>` : text;
+  }
+
+  // Green/red ± beside the replacement price while Updates is on (2025/26 only).
+  // Matched at build time in site/build.py (match_new_season_prices).
+  function priceDeltaHTML(row) {
+    if (!updatesOverlayOn() || row.price2627 == null) return "";
+    const delta = row.priceDelta || 0;
+    if (Math.abs(delta) < 1e-9) return "";
+    const cls = delta > 0 ? "price-up" : "price-down";
+    const deltaText = delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1);
+    const title = `Was £${row.price.toFixed(1)}m`;
+    return `<span class="price-arrow-delta ${cls}"${tipAttr(title)}>${deltaText}</span>`;
+  }
+
+  function ordinalSuffix(n) {
+    const rem100 = n % 100;
+    if (rem100 >= 11 && rem100 <= 13) return "th";
+    switch (n % 10) {
+      case 1: return "st";
+      case 2: return "nd";
+      case 3: return "rd";
+      default: return "th";
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // Desktop-like hover vs touch-first. Desktop UX stays on the fine path;
+  // coarse remaps tips / rankings cross-highlight to taps.
+  const FINE_HOVER_MQ = window.matchMedia("(hover: hover) and (pointer: fine)");
+  function hasFineHover() {
+    return FINE_HOVER_MQ.matches;
+  }
+  function syncPointerMode() {
+    document.documentElement.dataset.pointer = hasFineHover() ? "fine" : "coarse";
+  }
+  syncPointerMode();
+  if (typeof FINE_HOVER_MQ.addEventListener === "function") {
+    FINE_HOVER_MQ.addEventListener("change", syncPointerMode);
+  } else if (typeof FINE_HOVER_MQ.addListener === "function") {
+    FINE_HOVER_MQ.addListener(syncPointerMode);
+  }
+
+  // Themed replacement for native title tooltips. Prefer setTip / tipAttr over
+  // element.title so short labels (column headers, toolbar buttons) use the
+  // same popover chrome as the rest of the UI.
+  function tipAttr(text) {
+    if (text == null || text === "") return "";
+    return ` data-tip="${escapeHtml(String(text))}"`;
+  }
+
+  function setTip(node, text) {
+    if (!node) return;
+    if (text == null || text === "") {
+      node.removeAttribute("data-tip");
+      node.removeAttribute("title");
+      return;
+    }
+    node.setAttribute("data-tip", String(text));
+    node.removeAttribute("title");
+  }
+
+  function upgradeNativeTitles(root = document) {
+    root.querySelectorAll("[title]").forEach((node) => {
+      // Page-info already has a rich custom tooltip; leave it alone.
+      if (node === el.pageInfoBtn) return;
+      if (node.closest(".fixture-tooltip, .chart-tooltip, .ui-tooltip")) return;
+      const text = node.getAttribute("title");
+      if (!text) return;
+      setTip(node, text);
+    });
+  }
+
+  const UI_TIP_DELAY_MS = 280;
+  let uiTipTimer = null;
+  let uiTipAnchor = null;
+  let uiTipHideTimer = null;
+
+  function hideUiTooltip() {
+    clearTimeout(uiTipTimer);
+    uiTipTimer = null;
+    uiTipAnchor = null;
+    const tip = el.uiTooltip;
+    if (!tip) return;
+    tip.classList.remove("visible");
+    clearTimeout(uiTipHideTimer);
+    uiTipHideTimer = setTimeout(() => {
+      if (!tip.classList.contains("visible")) {
+        tip.style.display = "none";
+        tip.textContent = "";
+        tip.innerHTML = "";
+      }
+    }, 140);
+  }
+
+  function positionUiTooltip(anchor) {
+    const tip = el.uiTooltip;
+    if (!tip || !anchor) return;
+    tip.style.display = "block";
+    tip.style.visibility = "hidden";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+    const rect = anchor.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - tipW / 2;
+    let top = rect.bottom + 8;
+    if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 8;
+    if (left < 8) left = 8;
+    if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function showUiTooltip(anchor) {
+    const tip = el.uiTooltip;
+    if (!tip || !anchor) return;
+    const html = anchor.getAttribute("data-tip-html");
+    const text = anchor.getAttribute("data-tip");
+    if (!html && !text) return;
+    clearTimeout(uiTipHideTimer);
+    if (html) tip.innerHTML = html;
+    else tip.textContent = text;
+    tip.classList.remove("visible");
+    positionUiTooltip(anchor);
+    // Next frame so the opacity/transform transition actually plays.
+    requestAnimationFrame(() => tip.classList.add("visible"));
+  }
+
+  function tipTargetFrom(node) {
+    if (!node || !node.closest) return null;
+    return node.closest("[data-tip], [data-tip-html]");
+  }
+
+  document.addEventListener("mouseover", (event) => {
+    if (!hasFineHover()) return;
+    const target = tipTargetFrom(event.target);
+    if (!target) return;
+    if (target === uiTipAnchor) return;
+    clearTimeout(uiTipTimer);
+    uiTipAnchor = target;
+    uiTipTimer = setTimeout(() => {
+      if (uiTipAnchor === target) showUiTooltip(target);
+    }, UI_TIP_DELAY_MS);
+  });
+
+  document.addEventListener("mouseout", (event) => {
+    if (!hasFineHover()) return;
+    const target = tipTargetFrom(event.target);
+    if (!target || target !== uiTipAnchor) return;
+    const next = tipTargetFrom(event.relatedTarget);
+    if (next === target) return;
+    hideUiTooltip();
+  });
+
+  // Touch: tap non-conflicting [data-tip] targets to toggle tips. Skip
+  // buttons/links/rows that already own the tap for another action.
+  document.addEventListener("click", (event) => {
+    if (hasFineHover()) return;
+    const target = tipTargetFrom(event.target);
+    if (!target) {
+      hideUiTooltip();
+      return;
+    }
+    if (
+      !target.classList.contains("player-update-note") &&
+      target.closest(
+        "a, button, input, select, textarea, summary, .rankings-row, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team]"
+      )
+    ) {
+      return;
+    }
+    if (uiTipAnchor === target && el.uiTooltip && el.uiTooltip.classList.contains("visible")) {
+      hideUiTooltip();
+      return;
+    }
+    clearTimeout(uiTipTimer);
+    uiTipAnchor = target;
+    showUiTooltip(target);
+  });
+
+  document.addEventListener("focusin", (event) => {
+    const target = tipTargetFrom(event.target);
+    if (!target) return;
+    clearTimeout(uiTipTimer);
+    uiTipAnchor = target;
+    showUiTooltip(target);
+  });
+
+  document.addEventListener("focusout", (event) => {
+    const target = tipTargetFrom(event.target);
+    if (!target || target !== uiTipAnchor) return;
+    hideUiTooltip();
+  });
+
+  window.addEventListener("scroll", () => {
+    hideUiTooltip();
+    hideXSearchConfirm();
+  }, true);
+  window.addEventListener("resize", () => {
+    hideUiTooltip();
+    hideXSearchConfirm();
+  });
+
+  document.addEventListener("click", (event) => {
+    const tip = el.xSearchConfirm;
+    const link = event.target.closest("a.player-x-search");
+    if (link) {
+      // Allow modified / non-primary clicks to use the real href.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (xSearchConfirmAnchor === link && tip && tip.style.display !== "none") {
+        hideXSearchConfirm();
+        return;
+      }
+      showXSearchConfirm(link);
+      return;
+    }
+    if (tip && tip.style.display !== "none") {
+      if (event.target.closest("#x-search-confirm")) {
+        if (event.target.closest(".x-search-confirm-cancel")) {
+          event.preventDefault();
+          hideXSearchConfirm();
+        }
+        return;
+      }
+      hideXSearchConfirm();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideXSearchConfirm();
+  });
+
+  function rankReferenceRows(filteredRows) {
+    return state.recalculateRanks ? filteredRows : getRows();
+  }
+
+  function renderBody(rows) {
+    const vcols = visibleColumns();
+    el.tableBody.innerHTML = "";
+
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = vcols.length;
+      td.className = "empty-state";
+      td.textContent = "No rows match the current filters.";
+      tr.appendChild(td);
+      el.tableBody.appendChild(tr);
+      return;
+    }
+
+    const referenceRows = rankReferenceRows(rows);
+    const highlightMaps = buildHighlightMaps(referenceRows);
+    rows.forEach((r) =>
+      el.tableBody.appendChild(buildDataRow(r, vcols, highlightMaps))
+    );
+  }
+
+  function buildDataRow(r, vcols, highlightMaps) {
+    const tr = document.createElement("tr");
+    const key = rowKey(r);
+    const teamCode = currentTeamCode(r);
+    if (teamCode) tr.dataset.team = teamCode;
+    tr.dataset.rowName = r.name || "";
+    if (state.compareMode) {
+      const selected = compareSet().has(key);
+      tr.classList.add("row-selectable");
+      if (selected) tr.classList.add("row-selected");
+      tr.setAttribute("aria-selected", selected ? "true" : "false");
+      tr.addEventListener("click", () => toggleCompareRow(key));
+    }
+    vcols.forEach((c, i) => {
+      const td = document.createElement("td");
+      td.classList.add("col-" + (c.type || "num"));
+      if (isSectionBoundary(vcols, i)) td.classList.add("sec-divider");
+      if (
+        c.key === "player" &&
+        updatesOverlayOn() &&
+        playerHasSeasonUpdate(r)
+      ) {
+        td.classList.add("has-update-change");
+      }
+      td.innerHTML = cellHTML(r, c);
+      if (isNumericCol(c)) {
+        if (!isStatApplicable(r, c)) {
+          td.classList.add("zero-val");
+        } else if (sourceUnsupportedReason(r, c)) {
+          td.classList.add("has-source-warning");
+        } else {
+          const val = displayValue(r, c) || 0;
+          if (Math.abs(val) < 1e-9) {
+            td.classList.add("zero-val");
+          } else if (highlightMaps && highlightMaps[c.key]) {
+            const key = rowKey(r);
+            const topIntensity = highlightMaps[c.key].top.get(key);
+            const bottomIntensity = highlightMaps[c.key].bottom.get(key);
+            if (topIntensity !== undefined) {
+              td.classList.add("highlight-top");
+              td.style.backgroundColor = positiveFill(enhanceFillAlpha(topIntensity));
+            } else if (bottomIntensity !== undefined) {
+              td.classList.add("highlight-bottom");
+              td.style.backgroundColor = negativeFill(enhanceFillAlpha(bottomIntensity));
+            }
+          }
+        }
+      }
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function renderTable() {
+    clearTimeout(fixtureTtTimer);
+    hideFixtureTooltip();
+    const filtered = applyFilters(getRows());
+    const sorted = sortRows(filtered);
+    renderHead();
+    renderBody(sorted);
+    el.countLabel.textContent = `${filtered.length.toLocaleString()} of ${getRows().length.toLocaleString()} shown`;
+    renderCompareTable();
+    if (state.page === "expected") renderExpected();
+    if (state.page === "rankings") renderRankings();
+  }
+
+  // ---------------------------------------------------------------------
+  // Fixture hover tooltip (upcoming 7, opponent season stats)
+  // ---------------------------------------------------------------------
+  // Player rows use the matched 2026/27 FPL team when available (transfers
+  // already applied in build.py via bootstrap-static); otherwise fall back
+  // to last season's club. Team rows always use their own code.
+  function currentTeamCode(row) {
+    if (state.view === "teams") return row.team;
+    // 2026/27 rows already use next-season team; on 2025/26 prefer the match.
+    return row.newTeam || row.team || null;
+  }
+
+  function opponentStatsForFixture(fx) {
+    // Opponent's venue-split profile: if we are home they are away, and vice versa.
+    const split = fx.ha === "H" ? "away" : "home";
+    return TEAM_STATS[split][fx.opp] || TEAM_STATS.combined[fx.opp] || null;
+  }
+
+  function fmtTtStat(v, decimals) {
+    if (v == null || Number.isNaN(v)) return "—";
+    return fmtNum(v, decimals);
+  }
+
+  const FIXTURE_TT_STATS = [
+    { key: "xg", decimals: 1 },
+    { key: "goals", decimals: 0 },
+    { key: "xgc", decimals: 1 },
+    { key: "goalsConceded", decimals: 0 },
+    { key: "cleanSheets", decimals: 0 },
+  ];
+
+  // Rank tooltip opponents against every team in the matching venue split,
+  // never just the seven opponents shown. Highlighting follows the complete
+  // 20-team rank maps, including provisional ranks for promoted clubs.
+  // topN is absolute (top & bottom N ranks), not a percentage.
+  function fixtureHighlightMaps(topN = state.scheduleEnhanceTopN) {
+    const maps = { home: {}, away: {} };
+    const rankMaps = fixtureRankMaps();
+    const band = Math.max(1, Math.round(topN));
+    ["home", "away"].forEach((split) => {
+      FIXTURE_TT_STATS.forEach(({ key }) => {
+        const rankMap = rankMaps[split][key];
+        if (!rankMap || rankMap.size < 2) return;
+        const ranked = Array.from(rankMap, ([teamCode, rank]) => ({ key: teamCode, rank }))
+          .sort((a, b) => a.rank - b.rank);
+        const n = Math.max(1, Math.min(band, ranked.length));
+        const topSlice = ranked.slice(0, n);
+        const bottomSlice = ranked.slice(-n).reverse();
+        maps[split][key] = {
+          top: new Map(topSlice.map((x, i) => [x.key, 1 - i / topSlice.length])),
+          bottom: new Map(bottomSlice.map((x, i) => [x.key, 1 - i / bottomSlice.length])),
+        };
+      });
+    });
+    return maps;
+  }
+
+  // Competition ranks for measured clubs, plus explicit provisional ranks for
+  // the promoted clubs. No synthetic raw values are introduced.
+  function fixtureRankMaps() {
+    const maps = { home: {}, away: {} };
+    ["home", "away"].forEach((split) => {
+      const teams = Object.values(TEAM_STATS[split]);
+      FIXTURE_TT_STATS.forEach(({ key }) => {
+        const lowerBetter = LOWER_BETTER.has(key);
+        const ranked = teams
+          .map((team) => ({ key: team.team, val: team[key] || 0 }))
+          .filter((x) => Math.abs(x.val) > 1e-9)
+          .sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
+        if (!ranked.length) return;
+
+        const rankByKey = new Map();
+        let i = 0;
+        while (i < ranked.length) {
+          let j = i + 1;
+          while (j < ranked.length && ranked[j].val === ranked[i].val) j++;
+          const denseRank = i + 1;
+          for (let k = i; k < j; k++) rankByKey.set(ranked[k].key, denseRank);
+          i = j;
+        }
+        PROVISIONAL_TEAM_RANKS.forEach((rank, code) => {
+          rankByKey.set(code, rank);
+        });
+        maps[split][key] = rankByKey;
+      });
+    });
+    return maps;
+  }
+
+  function fixtureStatCell(teamCode, split, key, value, decimals, highlightMaps, rankMaps) {
+    // Tooltip always shows ranks + enhance-style highlighting. Colours are
+    // inverted relative to the main table: these are the *opponent's*
+    // figures, so being top of a category (rank 1) is a hard fixture and
+    // reads red, bottom reads green.
+    let style = "";
+    const ranks = highlightMaps[split] && highlightMaps[split][key];
+    const topIntensity = ranks && ranks.top.get(teamCode);
+    const bottomIntensity = ranks && ranks.bottom.get(teamCode);
+    if (topIntensity !== undefined) {
+      style = ` style="background-color:${negativeFill(enhanceFillAlpha(topIntensity))}"`;
+    } else if (bottomIntensity !== undefined) {
+      style = ` style="background-color:${positiveFill(enhanceFillAlpha(bottomIntensity))}"`;
+    }
+    const rank = rankMaps[split] && rankMaps[split][key] && rankMaps[split][key].get(teamCode);
+    const text = rank == null ? "—" : String(rank);
+    const provisionalRank = PROVISIONAL_TEAM_RANKS.has(teamCode);
+    const title = rank == null
+      ? ""
+      : provisionalRank
+        ? ` title="Provisional rank — no prior-season OPTA data"`
+        : ` title="${escapeHtml(fmtTtStat(value, decimals))}"`;
+    // First defending column (xGC) gets a left rule to split attack from defence.
+    const cls = key === "xgc" ? ` class="ftt-def-start"` : "";
+    return `<td${cls}${style}${title}>${text}</td>`;
+  }
+
+  function rankOf(rankMaps, split, key, teamCode) {
+    const map = rankMaps[split] && rankMaps[split][key];
+    if (!map) return null;
+    const rank = map.get(teamCode);
+    return rank == null ? null : rank;
+  }
+
+  // Blend expected and actual ranks for a side of the ball. Every component
+  // must be present — promoted clubs with no OPTA row return null so the
+  // matchup finder leaves those fixtures unmarked.
+  function compositeAttackRank(rankMaps, split, teamCode) {
+    const xg = rankOf(rankMaps, split, "xg", teamCode);
+    const goals = rankOf(rankMaps, split, "goals", teamCode);
+    if (xg == null || goals == null) return null;
+    const w = state.scheduleExpectedWeight / 100;
+    return w * xg + (1 - w) * goals;
+  }
+
+  function compositeDefenceRank(rankMaps, split, teamCode) {
+    const xgc = rankOf(rankMaps, split, "xgc", teamCode);
+    const gc = rankOf(rankMaps, split, "goalsConceded", teamCode);
+    const cs = rankOf(rankMaps, split, "cleanSheets", teamCode);
+    if (xgc == null || gc == null || cs == null) return null;
+    const w = state.scheduleExpectedWeight / 100;
+    return w * xgc + (1 - w) * ((gc + cs) / 2);
+  }
+
+  // Positive advantage = favorable for the card team. Attack compares our
+  // attack to their defence; defence compares our defence to their attack.
+  // Ranks are already 1 = strongest on every key, so no sign flip is needed.
+  function matchupEdges(teamCode, fx, rankMaps) {
+    const tSplit = fx.ha === "H" ? "home" : "away";
+    const oSplit = fx.ha === "H" ? "away" : "home";
+    const ourAttack = compositeAttackRank(rankMaps, tSplit, teamCode);
+    const ourDefence = compositeDefenceRank(rankMaps, tSplit, teamCode);
+    const theirAttack = compositeAttackRank(rankMaps, oSplit, fx.opp);
+    const theirDefence = compositeDefenceRank(rankMaps, oSplit, fx.opp);
+
+    const attackEdge =
+      ourAttack == null || theirDefence == null ? null : theirDefence - ourAttack;
+    const defenceEdge =
+      ourDefence == null || theirAttack == null ? null : theirAttack - ourDefence;
+
+    return {
+      attackEdge,
+      defenceEdge,
+      ourAttack,
+      ourDefence,
+      theirAttack,
+      theirDefence,
+      attackOn: attackEdge != null && attackEdge >= state.scheduleEdgeMin,
+      defenceOn: defenceEdge != null && defenceEdge >= state.scheduleEdgeMin,
+    };
+  }
+
+  function fmtEdge(n) {
+    if (n == null || Number.isNaN(n)) return "—";
+    const rounded = Math.round(n * 10) / 10;
+    return (rounded > 0 ? "+" : "") + String(rounded);
+  }
+
+  function fmtComposite(n) {
+    if (n == null || Number.isNaN(n)) return "—";
+    return (Math.round(n * 10) / 10).toFixed(1);
+  }
+
+  function fmtMatchupScore(n) {
+    if (n == null || Number.isNaN(n)) return "0";
+    return String(Math.round(n * 10) / 10);
+  }
+
+  function matchupEdgeTooltipHTML(edges) {
+    const blocks = [];
+    if (edges.attackOn) {
+      blocks.push(`<div class="met-block met-attack">
+        <div class="met-head">${iconHTML("swords", "ftt-attack-icon")}<span>Favorable attack</span></div>
+        <div class="met-edge">Advantage <strong>${escapeHtml(fmtEdge(edges.attackEdge))}</strong></div>
+        <div class="met-compare">
+          <div class="met-row"><span>Your attack</span><span class="met-val">${escapeHtml(fmtComposite(edges.ourAttack))}</span></div>
+          <div class="met-row"><span>Their defence</span><span class="met-val">${escapeHtml(fmtComposite(edges.theirDefence))}</span></div>
+        </div>
+      </div>`);
+    }
+    if (edges.defenceOn) {
+      blocks.push(`<div class="met-block met-defence">
+        <div class="met-head">${iconHTML("shield-half", "ftt-defence-icon")}<span>Favorable defence</span></div>
+        <div class="met-edge">Advantage <strong>${escapeHtml(fmtEdge(edges.defenceEdge))}</strong></div>
+        <div class="met-compare">
+          <div class="met-row"><span>Your defence</span><span class="met-val">${escapeHtml(fmtComposite(edges.ourDefence))}</span></div>
+          <div class="met-row"><span>Their attack</span><span class="met-val">${escapeHtml(fmtComposite(edges.theirAttack))}</span></div>
+        </div>
+      </div>`);
+    }
+    if (!blocks.length) return "";
+    return `${blocks.join('<div class="met-divider"></div>')}
+      <div class="met-foot">Ranks · 1 is strongest · advantage = how many places better you are</div>`;
+  }
+
+  function matchupVerdictCell(teamCode, fx, rankMaps) {
+    const edges = matchupEdges(teamCode, fx, rankMaps);
+    const icons = [];
+    const attrs = [];
+    if (edges.attackOn) {
+      icons.push(iconHTML("swords", "ftt-attack-icon"));
+      attrs.push(`data-attack-edge="${edges.attackEdge}"`);
+      attrs.push(`data-our-attack="${edges.ourAttack}"`);
+      attrs.push(`data-their-defence="${edges.theirDefence}"`);
+    }
+    if (edges.defenceOn) {
+      icons.push(iconHTML("shield-half", "ftt-defence-icon"));
+      attrs.push(`data-defence-edge="${edges.defenceEdge}"`);
+      attrs.push(`data-our-defence="${edges.ourDefence}"`);
+      attrs.push(`data-their-attack="${edges.theirAttack}"`);
+    }
+    const body = icons.length ? icons.join("") : "";
+    const attrStr = attrs.length ? ` ${attrs.join(" ")}` : "";
+    return {
+      html: `<td class="ftt-verdict${icons.length ? " ftt-verdict-tip" : ""}"${attrStr}>${body}</td>`,
+      attackOn: edges.attackOn,
+      defenceOn: edges.defenceOn,
+    };
+  }
+
+  function teamRankTooltipHTML(teamCode) {
+    const highlightMaps = fixtureHighlightMaps();
+    const rankMaps = fixtureRankMaps();
+    const teamLabel = TEAM_NAMES[teamCode] || teamCode;
+    const rows = ["home", "away"].map((split) => {
+      const stats = TEAM_STATS[split][teamCode] || null;
+      return `<tr>
+        <td class="team-rank-venue">${split === "home" ? "Home" : "Away"}</td>
+        ${FIXTURE_TT_STATS.map(({ key, decimals }) =>
+          fixtureStatCell(teamCode, split, key, stats && stats[key], decimals, highlightMaps, rankMaps)
+        ).join("")}
+      </tr>`;
+    }).join("");
+    return `<div class="ftt-head">${badgeHTML(teamCode)}<span>${escapeHtml(teamLabel)}</span></div>
+      <table class="ftt-table team-rank-table">
+        <thead><tr>
+          <th>Split</th>
+          <th title="Expected goals rank">xG</th>
+          <th title="Goals rank">G</th>
+          <th class="ftt-def-start" title="Expected goals conceded rank">xGC</th>
+          <th title="Goals conceded rank">GC</th>
+          <th title="Clean sheets rank">CS</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="ftt-note">Team ranks vs all clubs by venue (1 = strongest, 20 = weakest). Promoted-club ranks are provisional.</div>`;
+  }
+
+  function fixtureCardHTML(teamCode, highlightMaps, rankMaps, options = {}) {
+    const fixtures = options.fixtures ||
+      (FIXTURES_BY_TEAM[teamCode] || []).slice(0, FIXTURE_TT_COUNT);
+    const showMeta = options.showMeta !== false;
+    const showTeamInfo = options.showTeamInfo === true;
+    const showMatchups = options.showMatchups === true;
+    const matchupProfile = options.matchupProfile || null;
+    const teamLabel = TEAM_NAMES[teamCode] || teamCode;
+    const scoreSummary = matchupProfile
+      ? `<div class="matchup-score-summary" aria-label="Attack advantage ${fmtMatchupScore(matchupProfile.attackScore)} across ${matchupProfile.attackCount} fixtures; defence advantage ${fmtMatchupScore(matchupProfile.defenceScore)} across ${matchupProfile.defenceCount} fixtures">
+          <span class="matchup-score matchup-score-attack" aria-label="Attack advantage ${fmtMatchupScore(matchupProfile.attackScore)}, ${matchupProfile.attackCount} favorable fixture${matchupProfile.attackCount === 1 ? "" : "s"}">
+            ${iconHTML("swords", "ftt-attack-icon")}<strong>${fmtMatchupScore(matchupProfile.attackScore)}</strong><small>· ${matchupProfile.attackCount}</small>
+          </span>
+          <span class="matchup-score matchup-score-defence" aria-label="Defence advantage ${fmtMatchupScore(matchupProfile.defenceScore)}, ${matchupProfile.defenceCount} favorable fixture${matchupProfile.defenceCount === 1 ? "" : "s"}">
+            ${iconHTML("shield-half", "ftt-defence-icon")}<strong>${fmtMatchupScore(matchupProfile.defenceScore)}</strong><small>· ${matchupProfile.defenceCount}</small>
+          </span>
+        </div>`
+      : "";
+    const infoButton = showTeamInfo
+      ? `<button type="button" class="team-rank-info" data-team="${escapeHtml(teamCode)}"
+          aria-label="Show ${escapeHtml(teamLabel)} home and away ranks">${iconHTML("info")}</button>`
+      : "";
+    const headActions = scoreSummary || infoButton
+      ? `<div class="ftt-head-actions">${scoreSummary}${infoButton}</div>`
+      : "";
+    const header = `<div class="ftt-head">${badgeHTML(teamCode)}<span>${escapeHtml(teamLabel)}</span>
+      ${showMeta ? `<span class="ftt-sub">next ${fixtures.length}</span>` : ""}
+      ${headActions}
+      </div>`;
+    if (!fixtures.length) {
+      return `${header}<div class="ftt-empty">${showMeta ? "No upcoming fixtures" : "No fixtures in this range"}</div>`;
+    }
+    const rows = fixtures.map((fx) => {
+      const stats = opponentStatsForFixture(fx);
+      const split = fx.ha === "H" ? "away" : "home";
+      const verdict = showMatchups ? matchupVerdictCell(teamCode, fx, rankMaps) : null;
+      return `<tr>
+        <td class="ftt-gw">${fx.gw}</td>
+        <td class="ftt-opp"><span>${badgeHTML(fx.opp)}${escapeHtml(fx.opp)}</span></td>
+        <td class="ftt-ha">${fx.ha}${fx.ha === "H" ? iconHTML("star", "ftt-home-star") : ""}</td>
+        ${fixtureStatCell(fx.opp, split, "xg", stats && stats.xg, 1, highlightMaps, rankMaps)}
+        ${fixtureStatCell(fx.opp, split, "goals", stats && stats.goals, 0, highlightMaps, rankMaps)}
+        ${fixtureStatCell(fx.opp, split, "xgc", stats && stats.xgc, 1, highlightMaps, rankMaps)}
+        ${fixtureStatCell(fx.opp, split, "goalsConceded", stats && stats.goalsConceded, 0, highlightMaps, rankMaps)}
+        ${fixtureStatCell(fx.opp, split, "cleanSheets", stats && stats.cleanSheets, 0, highlightMaps, rankMaps)}
+        ${verdict ? verdict.html : ""}
+      </tr>`;
+    }).join("");
+    return `${header}<table class="ftt-table${showMatchups ? " ftt-table-matchups" : ""}">
+        <thead>
+          <tr>
+            <th>GW</th>
+            <th>Opp</th>
+            <th></th>
+            <th title="Opponent expected goals rank (venue split)">xG</th>
+            <th title="Opponent goals rank (venue split)">G</th>
+            <th class="ftt-def-start" title="Opponent expected goals conceded rank (venue split)">xGC</th>
+            <th title="Opponent goals conceded rank (venue split)">GC</th>
+            <th title="Opponent clean sheets rank (venue split)">CS</th>
+            ${showMatchups ? `<th class="ftt-verdict" title="Favorable matchups for ${escapeHtml(teamLabel)}">${badgeHTML(teamCode)}</th>` : ""}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · red = tough matchup</div>` : ""}`;
+  }
+
+  function fixtureTooltipHTML(teamCode) {
+    const population = Math.max(
+      Object.keys(TEAM_STATS.home || {}).length,
+      Object.keys(TEAM_STATS.away || {}).length,
+      20
+    );
+    const tipTopN = Math.max(1, Math.round((population * FIXTURE_TT_ENHANCE_PCT) / 100));
+    return fixtureCardHTML(
+      teamCode,
+      fixtureHighlightMaps(tipTopN),
+      fixtureRankMaps()
+    );
+  }
+
+  function syncScheduleMatchupControls() {
+    // Analyze output is always on for Matchups.
+    if (el.scheduleScatter) el.scheduleScatter.style.display = "";
+    el.scheduleGrid.classList.add("schedule-grid-matchups", "schedule-grid-analyze");
+  }
+
+  // Aggregate qualifying fixture edges into attack and defence scores for the
+  // current GW range. Counts explain how many fixtures contributed to each sum.
+  function teamMatchupProfile(teamCode, fixtures, rankMaps) {
+    let attackCount = 0;
+    let defenceCount = 0;
+    let attackScore = 0;
+    let defenceScore = 0;
+    let signedAttackTotal = 0;
+    let signedDefenceTotal = 0;
+    let signedAttackCount = 0;
+    let signedDefenceCount = 0;
+    fixtures.forEach((fx) => {
+      const edges = matchupEdges(teamCode, fx, rankMaps);
+      if (edges.attackEdge != null) {
+        signedAttackTotal += edges.attackEdge;
+        signedAttackCount += 1;
+      }
+      if (edges.defenceEdge != null) {
+        signedDefenceTotal += edges.defenceEdge;
+        signedDefenceCount += 1;
+      }
+      if (edges.attackOn) {
+        attackCount += 1;
+        attackScore += edges.attackEdge;
+      }
+      if (edges.defenceOn) {
+        defenceCount += 1;
+        defenceScore += edges.defenceEdge;
+      }
+    });
+    return {
+      teamCode,
+      fixtures,
+      attackCount,
+      defenceCount,
+      attackScore,
+      defenceScore,
+      totalScore: attackScore + defenceScore,
+      edgeCount: attackCount + defenceCount,
+      signedAttackAvg: signedAttackCount ? signedAttackTotal / signedAttackCount : 0,
+      signedDefenceAvg: signedDefenceCount ? signedDefenceTotal / signedDefenceCount : 0,
+      signedAttackCount,
+      signedDefenceCount,
+    };
+  }
+
+  function scheduleQuadrantLabel(attackScore, defenceScore) {
+    if (attackScore >= 0 && defenceScore >= 0) return "Favorable attack + defence";
+    if (attackScore >= 0) return "Favorable attack";
+    if (defenceScore >= 0) return "Favorable defence";
+    return "Tough attack + defence";
+  }
+
+  function matchupPageInfoHTML() {
+    // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
+    return `<div class="spit-head">${iconHTML("calendar-days")}<span>How Matchups works</span></div>
+      <p class="spit-intro">How to read a fixture card — numbers mark each part of the example below.</p>
+      <div class="spit-annotate">
+        <div class="spit-annotate-figure" aria-hidden="true">
+          <img class="spit-annotate-img spit-annotate-img-dark" src="img/matchup-card-guide-dark.png" width="888" height="670" alt="" decoding="async" />
+          <img class="spit-annotate-img spit-annotate-img-light" src="img/matchup-card-guide-light.png" width="888" height="670" alt="" decoding="async" />
+          <ol class="spit-pins">
+            <li class="spit-pin" style="--x:74%;--y:6.5%">1</li>
+            <li class="spit-pin" style="--x:95.5%;--y:6.5%">2</li>
+            <li class="spit-pin" style="--x:21%;--y:20%">3</li>
+            <li class="spit-pin" style="--x:41%;--y:20%">4</li>
+            <li class="spit-pin" style="--x:93%;--y:20%">5</li>
+          </ol>
+        </div>
+        <ol class="spit-annotate-key">
+          <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then how many fixtures contributed.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s own home/away attack &amp; defence ranks.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — fixture is at home for the team on the card.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Red tint = tougher, green = softer.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — attack or defence edge when Advantage ≥ Flag threshold.</span></li>
+        </ol>
+      </div>
+      <div class="spit-note">Highlight Ranks controls cell tint · Expected/Actual blends ranks compared · Scatter averages every fixture (not only flagged). Promoted clubs use provisional ranks 18–20.</div>`;
+  }
+
+  function pageInfoTooltipHTML() {
+    if (state.page === "rankings") {
+      return `<div class="spit-head">${iconHTML("podium")}<span>How Rankings works</span></div>
+        <p class="spit-intro">Top 10 leaderboards for OPTA and FPL metrics, grouped into Key Stats, Attacking, and Defending.</p>
+        <div class="spit-section">
+          <h4>Cards</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">1–10</span><span>Each card lists leaders for one metric. Tied values share a place; the next place skips ahead.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-medals" aria-hidden="true"><i class="spit-medal gold"></i><i class="spit-medal silver"></i><i class="spit-medal bronze"></i></span><span>Gold, silver, and bronze mark places 1–3 on each card.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Recalc</span><span>Defaults off: places are vs the full Players or Teams list, so a search still shows true overall rank. On: renumber within the filtered set.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Per GP</span><span>Divides every card by gameweeks played (teams) or appearances (players) — useful when some teams have games in hand. Card abbreviations show “/ GW”.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Hover</span><span>Highlights the same player or team across every visible card.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Pin</span><span>Click to pin up to five names, each in its own colour. The bar above the cards is the colour key — clear pins there. Pins clear when switching Players / Teams.</span></div>
+            <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad (when an ID is saved in Preferences).</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90, or Per £m — same scaling as Statistics. Per GP always divides season totals first.</span></div>
+          </div>
+        </div>
+        <div class="spit-note">Fixture Location, filters, and search refresh every card. Some FPL defensive totals are season-only and drop on Home or Away.</div>`;
+    }
+    if (state.page === "expected") {
+      return `<div class="spit-head">${iconHTML("chart-gantt")}<span>How Expected Data works</span></div>
+        <p class="spit-intro">Compare expected (x) stats with what actually happened — who overperformed or underperformed.</p>
+        <div class="spit-section">
+          <h4>Chart</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">•</span><span>Each row is a barbell from expected to actual for the selected category. A moving dash (“ants”) along the bar shows the direction of the gap.</span></div>
+            <div class="spit-row"><span class="spit-symbol"><i class="spit-easy"></i></span><span>Green = Outperforming (more goals/assists than xG/xA, or fewer goals conceded than xGC).</span></div>
+            <div class="spit-row"><span class="spit-symbol"><i class="spit-tough"></i></span><span>Red = Underperforming expectation.</span></div>
+            <div class="spit-row"><span class="spit-symbol"><i class="spit-even"></i></span><span>Blue = Even — actual is essentially level with expected.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Diff</span><span>Actual − expected. Pill colour intensity scales with the size of the gap. For xGC, a negative Diff can still be green (conceded less than expected). Default sort is Actual.</span></div>
+            <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad.</span></div>
+          </div>
+        </div>
+        <div class="spit-section">
+          <h4>Controls</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">Cats</span><span>Pick a category from the xData tab menu. Players: xG vs Goals, xA vs Assists, xGI vs G+A, xGC vs Conceded. Teams: xG vs Goals, xGC vs Conceded, xCS vs Clean Sheets.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">H/A</span><span>Fixture Location: Total, Home, Away, or Compare (home and away stacked). Player xGI and xGC are season-total only.</span></div>
+          </div>
+        </div>
+        <div class="spit-note">Sidebar filters and Players / Teams still apply. Green/red here means over/under vs expectation — not fixture difficulty (see Matchups).</div>`;
+    }
+    if (state.page === "feed") {
+      return `<div class="spit-head">${iconHTML("rss")}<span>How Social Media Feed works</span></div>
+        <p class="spit-intro">Player-mention cards from curated X accounts — who got talked about in the last 48 hours, with quotes underneath.</p>
+        <div class="spit-section">
+          <h4>Cards</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">Who</span><span>Each card is one <strong>resolved player</strong> (FPL code). Ambiguous surnames need team/position context from the annotator.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Stats</span><span>Position-flavored season stats from the explorer catalog (GK / DEF / MID / FWD). Missing values show as —.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Quotes</span><span>Original posts mentioning that player, newest first. Use the X icon to open the post.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Sort</span><span><strong>Volume</strong>: most mentions, then newest. <strong>Recent</strong>: newest mention first; if one post names several players (same timestamp), higher volume wins, then name.</span></div>
+          </div>
+        </div>
+        <div class="spit-section">
+          <h4>Pipeline</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">Cache</span><span>Refreshing this page never calls X and never spends credits.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Fetch</span><span><code>python3 site/fetch_social.py</code> then <code>python3 site/annotate_social.py</code>.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Handles</span><span>Add accounts in <code>site/social_accounts.json</code>.</span></div>
+          </div>
+        </div>
+        <div class="spit-note">Mentions come from a slim LLM (or heuristic fallback) — not stance or topic labels.</div>`;
+    }
+    if (state.page === "markets") {
+      return `<div class="spit-head">${iconHTML("candlestick")}<span>How Markets works</span></div>
+        <p class="spit-intro">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
+        <div class="spit-section">
+          <h4>Numbers</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">Goals</span><span>Independent Poisson λ fitted to de-vigged 1X2 and the match totals line — projected goals for each side.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">CS</span><span>Clean sheet % = P(opponent scores 0) under that Poisson model (not a native book market).</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Scores</span><span>Top three most likely exact scores from the same model, with club badges on each side.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Color</span><span>Green / red fills mark strong or weak Goals and CS%. Deeper fills kick in for values well past the threshold. Separate sliders tighten or widen each band.</span></div>
+          </div>
+        </div>
+        <div class="spit-section">
+          <h4>Pipeline</h4>
+          <div class="spit-list">
+            <div class="spit-row"><span class="spit-symbol spit-rank">API</span><span>Odds from <strong>The Odds API</strong> (<code>soccer_epl</code>, UK/EU). Key stays in <code>.env</code> — never in the browser.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Odds</span><span>Primary lines prefer <strong>Pinnacle</strong>, then Betfair exchanges; other books are fallbacks.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Cache</span><span>This page only reads <code>markets_data.js</code>.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Fetch</span><span><code>ODDS_API_KEY=…</code> in <code>.env</code>, then <code>python3 site/fetch_markets.py</code>.</span></div>
+          </div>
+        </div>
+        <div class="spit-note">Header shows last pull time, API, and the primary odds book used for these fixtures.</div>`;
+    }
+    if (state.page === "schedule") {
+      return matchupPageInfoHTML();
+    }
+    return `<div class="spit-head">${iconHTML("table")}<span>How Statistics works</span></div>
+      <p class="spit-intro">Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.</p>
+      <div class="spit-section">
+        <h4>Table</h4>
+        <div class="spit-list">
+          <div class="spit-row"><span class="spit-symbol spit-rank">H/A</span><span>Fixture Location: Total, Home, or Away.</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90 ((stat ÷ mins) × 90), or Per £m (stat ÷ price). One decimal; tiny rates show as &lt;0.1.</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">Tint</span><span>Always-on green/red Highlight Top/Bottom shading on raw values (players: top %; teams: top and bottom). Recalculate defaults on (filtered set); off = full view.</span></div>
+          <div class="spit-row"><span class="spit-symbol">${iconHTML("scale")}</span><span>Compare: click up to five rows to highlight and compare side by side; best value in each column is marked. Click again to remove.</span></div>
+          <div class="spit-row"><span class="spit-symbol">${iconHTML("columns")}</span><span>Columns: show or hide metric columns from the Columns control.</span></div>
+        </div>
+      </div>
+      <div class="spit-section">
+        <h4>Row details</h4>
+        <div class="spit-list">
+          <div class="spit-row"><span class="spit-symbol spit-rank">Tip</span><span>Hover a row (not the Player/Team name column) for upcoming fixtures and opponent ranks by venue.</span></div>
+          <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad (save an ID in Preferences).</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">Name</span><span>Player names open a live X search for that player.</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">Updates</span><span>On 2025/26: swap in matched 2026/27 price, club, and position (price shows green/red ±). Use the season menu for a full 2026/27 zero-stat squad view.</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">CBIT/R</span><span>Clearances, blocks, interceptions &amp; tackles — plus recoveries for MID/FWD. DC is the FPL points from those actions.</span></div>
+          <div class="spit-row"><span class="spit-symbol">${spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold")}</span><span>Blue check beside CBIT/R: enough actions per 90 for the DC threshold (10 DEF / 12 MID·FWD).</span></div>
+          <div class="spit-row"><span class="spit-symbol">${spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece")}</span><span>Green check in PK / FK / CK: 1st-choice set-piece taker.</span></div>
+          <div class="spit-row"><span class="spit-symbol">${iconHTML("triangle-alert", "source-unsupported")}</span><span>Source can’t fill this cell — e.g. FPL season totals have no Home/Away. Hover for the reason.</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">–</span><span>Stat doesn’t apply (e.g. saves for an outfielder).</span></div>
+        </div>
+      </div>
+      <div class="spit-note">Green/red cell shading on this page is top/bottom % highlighting on raw values — not Matchups fixture difficulty or Expected Data over/under.</div>`;
+  }
+
+  function shuffleCopy(items) {
+    const out = items.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = out[i];
+      out[i] = out[j];
+      out[j] = tmp;
+    }
+    return out;
+  }
+
+  function renderScheduleScatter(profiles) {
+    if (!el.scheduleScatter) return;
+    const maxAttack = Math.max(1, ...profiles.map((p) => Math.abs(p.signedAttackAvg)));
+    const maxDefence = Math.max(1, ...profiles.map((p) => Math.abs(p.signedDefenceAvg)));
+    // Random DOM order so overlapping badges don't always stack the same way.
+    const points = shuffleCopy(profiles).map((profile) => {
+      const left = 50 + (profile.signedAttackAvg / maxAttack) * 43;
+      const top = 50 - (profile.signedDefenceAvg / maxDefence) * 43;
+      const teamLabel = TEAM_NAMES[profile.teamCode] || profile.teamCode;
+      const quadrant = scheduleQuadrantLabel(profile.signedAttackAvg, profile.signedDefenceAvg);
+      const accent = TEAM_SCATTER_ACCENT[profile.teamCode];
+      const accentStyle = accent ? `;--scatter-accent:${accent}` : "";
+      return `<button type="button" class="schedule-scatter-point"
+        style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%${accentStyle}"
+        data-team="${escapeHtml(profile.teamCode)}"
+        data-attack="${profile.signedAttackAvg}"
+        data-defence="${profile.signedDefenceAvg}"
+        data-attack-favorable="${profile.attackCount}"
+        data-defence-favorable="${profile.defenceCount}"
+        data-attack-included="${profile.signedAttackCount}"
+        data-defence-included="${profile.signedDefenceCount}"
+        aria-label="${escapeHtml(`${teamLabel}: attack advantage ${fmtEdge(profile.signedAttackAvg)}, defence advantage ${fmtEdge(profile.signedDefenceAvg)}; ${quadrant}. Click to jump to card.`)}">
+        ${badgeHTML(profile.teamCode) || `<span class="schedule-scatter-code">${escapeHtml(profile.teamCode)}</span>`}
+      </button>`;
+    }).join("");
+    el.scheduleScatter.innerHTML = `
+      <div class="schedule-scatter-head">
+        <div>
+          <h3>Schedule balance</h3>
+          <p>Average fixture advantage across the selected gameweeks. Right = easier to attack; up = easier to defend.</p>
+        </div>
+        <div class="schedule-scatter-key">
+          <span>${iconHTML("swords", "ftt-attack-icon")} Better attack →</span>
+          <span>${iconHTML("shield-half", "ftt-defence-icon")} Better defence ↑</span>
+        </div>
+      </div>
+      <div class="schedule-scatter-plot">
+        <div class="schedule-quadrant schedule-quadrant-defence"><span>Defence</span></div>
+        <div class="schedule-quadrant schedule-quadrant-both"><span>Attack + defence</span></div>
+        <div class="schedule-quadrant schedule-quadrant-tough"><span>Tougher</span></div>
+        <div class="schedule-quadrant schedule-quadrant-attack"><span>Attack</span></div>
+        <div class="schedule-scatter-axis schedule-scatter-axis-x"></div>
+        <div class="schedule-scatter-axis schedule-scatter-axis-y"></div>
+        <span class="schedule-axis-label schedule-axis-x-bad">Worse attacking schedule</span>
+        <span class="schedule-axis-label schedule-axis-x-good">Better attacking schedule</span>
+        <span class="schedule-axis-label schedule-axis-y-good">Better defensive schedule</span>
+        <span class="schedule-axis-label schedule-axis-y-bad">Worse defensive schedule</span>
+        <div class="schedule-scatter-points">${points}</div>
+      </div>`;
+  }
+
+  function scheduleCardHTML(profile, highlightMaps, rankMaps) {
+    const noEdges = state.scheduleMatchups && profile.edgeCount === 0;
+    return `<article class="schedule-card${noEdges ? " schedule-card-no-edges" : ""}"
+      id="schedule-card-${escapeHtml(profile.teamCode)}"
+      data-team="${escapeHtml(profile.teamCode)}">${fixtureCardHTML(
+      profile.teamCode,
+      highlightMaps,
+      rankMaps,
+      {
+        fixtures: profile.fixtures,
+        showMeta: false,
+        showTeamInfo: true,
+        showMatchups: state.scheduleMatchups,
+        matchupProfile: state.scheduleMatchups ? profile : null,
+      }
+    )}</article>`;
+  }
+
+  let scheduleCardFlashTimer = null;
+
+  function focusScheduleCard(teamCode) {
+    if (!teamCode || !el.scheduleGrid) return;
+    const card = el.scheduleGrid.querySelector(`.schedule-card[data-team="${CSS.escape(teamCode)}"]`);
+    if (!card) return;
+    hideScheduleScatterTooltip();
+    $$(".schedule-card.schedule-card-flash").forEach((elCard) => {
+      elCard.classList.remove("schedule-card-flash");
+    });
+    if (scheduleCardFlashTimer) {
+      clearTimeout(scheduleCardFlashTimer);
+      scheduleCardFlashTimer = null;
+    }
+    // Force a reflow so re-clicking the same badge restarts the pulse.
+    void card.offsetWidth;
+    card.classList.add("schedule-card-flash");
+    card.scrollIntoView({ behavior: "auto", block: "center", inline: "nearest" });
+    scheduleCardFlashTimer = setTimeout(() => {
+      card.classList.remove("schedule-card-flash");
+      scheduleCardFlashTimer = null;
+    }, 2400);
+  }
+
+  function renderSchedule() {
+    hideTeamRankTooltip();
+    hideMatchupEdgeTooltip();
+    hideScheduleScatterTooltip();
+    hidePageInfoTooltip();
+    syncScheduleMatchupControls();
+    const teamCodes = Object.keys(FIXTURES_BY_TEAM).sort((a, b) =>
+      (TEAM_NAMES[a] || a).localeCompare(TEAM_NAMES[b] || b)
+    );
+    const highlightMaps = fixtureHighlightMaps();
+    const rankMaps = fixtureRankMaps();
+    const profiles = teamCodes.map((teamCode) => {
+      const fixtures = (FIXTURES_BY_TEAM[teamCode] || []).filter((fixture) =>
+        fixture.gw >= state.scheduleGwMin && fixture.gw <= state.scheduleGwMax
+      );
+      return teamMatchupProfile(teamCode, fixtures, rankMaps);
+    });
+
+    renderScheduleScatter(profiles);
+    el.scheduleGrid.innerHTML = profiles.map((profile) =>
+      scheduleCardHTML(profile, highlightMaps, rankMaps)
+    ).join("");
+
+    el.scheduleRangeLabel.textContent =
+      state.scheduleGwMin === state.scheduleGwMax
+        ? `GW${state.scheduleGwMin}`
+        : `GW${state.scheduleGwMin}–GW${state.scheduleGwMax}`;
+  }
+
+  function clampFixtureTtDelaySec(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return FIXTURE_TT_DELAY_SEC_DEFAULT;
+    return Math.min(
+      FIXTURE_TT_DELAY_SEC_MAX,
+      Math.max(FIXTURE_TT_DELAY_SEC_MIN, Math.round(n * 10) / 10)
+    );
+  }
+
+  function loadFixtureTtDelaySec() {
+    try {
+      const raw = localStorage.getItem(FIXTURE_TT_DELAY_KEY);
+      if (raw == null || raw === "") return FIXTURE_TT_DELAY_SEC_DEFAULT;
+      return clampFixtureTtDelaySec(raw);
+    } catch {
+      return FIXTURE_TT_DELAY_SEC_DEFAULT;
+    }
+  }
+
+  let fixtureTtDelaySec = loadFixtureTtDelaySec();
+  let fixtureTtTimer = null;
+  let fixtureTtActiveTeam = null;
+  let fixtureTtPendingTeam = null;
+  let fixtureTtPendingTr = null;
+  let fixtureTtPointer = { x: 0, y: 0 };
+  let fixtureTtActiveTr = null;
+
+  function hideFixtureTooltip() {
+    if (!el.fixtureTooltip) return;
+    el.fixtureTooltip.style.display = "none";
+    el.fixtureTooltip.innerHTML = "";
+    fixtureTtActiveTeam = null;
+    fixtureTtActiveTr = null;
+    fixtureTtPendingTeam = null;
+    fixtureTtPendingTr = null;
+  }
+
+  function positionFixtureTooltip() {
+    const tip = el.fixtureTooltip;
+    tip.style.display = "block";
+    tip.style.visibility = "hidden";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+
+    let left = fixtureTtPointer.x + 16;
+    let top = fixtureTtPointer.y + 16;
+    if (left + tipW > window.innerWidth - 8) left = fixtureTtPointer.x - tipW - 16;
+    if (top + tipH > window.innerHeight - 8) top = fixtureTtPointer.y - tipH - 16;
+    if (left < 8) left = 8;
+    if (top < 8) top = 8;
+
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function showFixtureTooltip(tr) {
+    const teamCode = tr.dataset.team;
+    if (!teamCode || !el.fixtureTooltip) return;
+    // Row may have been re-rendered while the delay was pending.
+    if (!tr.isConnected) return;
+    hideUiTooltip();
+    fixtureTtActiveTeam = teamCode;
+    fixtureTtActiveTr = tr;
+    fixtureTtPendingTeam = null;
+    el.fixtureTooltip.innerHTML = fixtureTooltipHTML(teamCode);
+    positionFixtureTooltip();
+  }
+
+  function scheduleFixtureTooltip(tr, event) {
+    fixtureTtPointer = { x: event.clientX, y: event.clientY };
+    const teamCode = tr && tr.dataset.team;
+    if (!teamCode) {
+      clearTimeout(fixtureTtTimer);
+      hideFixtureTooltip();
+      return;
+    }
+    // Already showing for this row — follow the pointer only.
+    if (
+      fixtureTtActiveTr === tr &&
+      fixtureTtActiveTeam === teamCode &&
+      el.fixtureTooltip.style.display !== "none"
+    ) {
+      positionFixtureTooltip();
+      return;
+    }
+    // Same row still pending — don't restart the delay when moving between cells.
+    if (fixtureTtPendingTr === tr) return;
+
+    clearTimeout(fixtureTtTimer);
+    fixtureTtPendingTeam = teamCode;
+    fixtureTtPendingTr = tr;
+    fixtureTtTimer = setTimeout(() => {
+      showFixtureTooltip(fixtureTtPendingTr);
+    }, Math.round(fixtureTtDelaySec * 1000));
+  }
+
+  function isSourceWarningTarget(target) {
+    return target instanceof Element && !!target.closest(".source-unsupported");
+  }
+
+  function isFixtureTtNameColumnTarget(node) {
+    return !!(node && node.closest && node.closest("td.col-player, td.col-name"));
+  }
+
+  function bindFixtureTooltipSurface(tbody, scrollRoot) {
+    if (!tbody) return;
+    tbody.addEventListener("mouseover", (e) => {
+      if (!hasFineHover()) return;
+      if (state.page !== "opta") return;
+      if (isSourceWarningTarget(e.target) || isFixtureTtNameColumnTarget(e.target)) {
+        clearTimeout(fixtureTtTimer);
+        hideFixtureTooltip();
+        return;
+      }
+      const tr = e.target.closest("tbody tr[data-team]");
+      if (!tr) return;
+      scheduleFixtureTooltip(tr, e);
+    });
+    tbody.addEventListener("mousemove", (e) => {
+      if (!hasFineHover()) return;
+      if (isSourceWarningTarget(e.target) || isFixtureTtNameColumnTarget(e.target)) {
+        clearTimeout(fixtureTtTimer);
+        hideFixtureTooltip();
+        return;
+      }
+      fixtureTtPointer = { x: e.clientX, y: e.clientY };
+      if (fixtureTtActiveTeam && el.fixtureTooltip.style.display !== "none") {
+        positionFixtureTooltip();
+      }
+    });
+    tbody.addEventListener("mouseout", (e) => {
+      if (!hasFineHover()) return;
+      const tr = e.target.closest("tbody tr[data-team]");
+      if (!tr) return;
+      const next = e.relatedTarget && e.relatedTarget.closest("tbody tr[data-team]");
+      // Still inside the same row (cell → cell) — keep tip / pending delay,
+      // unless the next cell is the sticky Player/Team name column.
+      if (next === tr && !isFixtureTtNameColumnTarget(e.relatedTarget)) return;
+      clearTimeout(fixtureTtTimer);
+      hideFixtureTooltip();
+    });
+    tbody.addEventListener("click", (e) => {
+      if (hasFineHover()) return;
+      if (state.page !== "opta") return;
+      if (state.compareMode) return; // row click selects for compare
+      if (e.target.closest("a, button")) return;
+      if (isFixtureTtNameColumnTarget(e.target)) {
+        hideFixtureTooltip();
+        return;
+      }
+      const tr = e.target.closest("tbody tr[data-team]");
+      if (!tr || !tbody.contains(tr)) {
+        hideFixtureTooltip();
+        return;
+      }
+      const team = tr.dataset.team;
+      if (fixtureTtActiveTeam === team && el.fixtureTooltip.style.display !== "none") {
+        hideFixtureTooltip();
+        return;
+      }
+      clearTimeout(fixtureTtTimer);
+      const rect = tr.getBoundingClientRect();
+      fixtureTtPointer = { x: rect.left + Math.min(120, rect.width / 2), y: rect.top + 8 };
+      showFixtureTooltip(tr);
+    });
+    if (scrollRoot) {
+      scrollRoot.addEventListener("scroll", () => {
+        clearTimeout(fixtureTtTimer);
+        hideFixtureTooltip();
+      }, { passive: true });
+    }
+  }
+
+  bindFixtureTooltipSurface(el.tableBody, el.tableBody && el.tableBody.closest(".table-wrap"));
+  bindFixtureTooltipSurface(el.compareBody, el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap"));
+
+  let teamRankPointer = { x: 0, y: 0 };
+
+  function hideTeamRankTooltip() {
+    if (!el.teamRankTooltip) return;
+    el.teamRankTooltip.style.display = "none";
+    el.teamRankTooltip.innerHTML = "";
+    $$(".team-rank-info[aria-expanded='true']").forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function positionTeamRankTooltip() {
+    const tip = el.teamRankTooltip;
+    if (!tip) return;
+    tip.style.display = "block";
+    tip.style.visibility = "hidden";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+    let left = teamRankPointer.x + 12;
+    let top = teamRankPointer.y + 12;
+    if (left + tipW > window.innerWidth - 8) left = teamRankPointer.x - tipW - 12;
+    if (top + tipH > window.innerHeight - 8) top = teamRankPointer.y - tipH - 12;
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function showTeamRankTooltip(button, event) {
+    if (!button || !el.teamRankTooltip) return;
+    const teamCode = button.dataset.team;
+    if (!teamCode) return;
+    hideUiTooltip();
+    if (event) {
+      teamRankPointer = { x: event.clientX, y: event.clientY };
+    } else {
+      const rect = button.getBoundingClientRect();
+      teamRankPointer = { x: rect.right, y: rect.bottom };
+    }
+    button.setAttribute("aria-expanded", "true");
+    el.teamRankTooltip.innerHTML = teamRankTooltipHTML(teamCode);
+    positionTeamRankTooltip();
+  }
+
+  let matchupEdgePointer = { x: 0, y: 0 };
+  let matchupEdgeActiveCell = null;
+
+  function hideMatchupEdgeTooltip() {
+    if (!el.matchupEdgeTooltip) return;
+    el.matchupEdgeTooltip.style.display = "none";
+    el.matchupEdgeTooltip.innerHTML = "";
+    matchupEdgeActiveCell = null;
+  }
+
+  function positionMatchupEdgeTooltip() {
+    const tip = el.matchupEdgeTooltip;
+    if (!tip) return;
+    tip.style.display = "block";
+    tip.style.visibility = "hidden";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+    let left = matchupEdgePointer.x + 14;
+    let top = matchupEdgePointer.y + 14;
+    if (left + tipW > window.innerWidth - 8) left = matchupEdgePointer.x - tipW - 14;
+    if (top + tipH > window.innerHeight - 8) top = matchupEdgePointer.y - tipH - 14;
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function edgesFromVerdictCell(cell) {
+    const num = (key) => {
+      const raw = cell.dataset[key];
+      if (raw == null || raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    };
+    const attackEdge = num("attackEdge");
+    const defenceEdge = num("defenceEdge");
+    return {
+      attackEdge,
+      defenceEdge,
+      ourAttack: num("ourAttack"),
+      ourDefence: num("ourDefence"),
+      theirAttack: num("theirAttack"),
+      theirDefence: num("theirDefence"),
+      attackOn: attackEdge != null,
+      defenceOn: defenceEdge != null,
+    };
+  }
+
+  function showMatchupEdgeTooltip(cell, event) {
+    if (!cell || !el.matchupEdgeTooltip || !cell.classList.contains("ftt-verdict-tip")) return;
+    hideUiTooltip();
+    if (event) {
+      matchupEdgePointer = { x: event.clientX, y: event.clientY };
+    } else {
+      const rect = cell.getBoundingClientRect();
+      matchupEdgePointer = { x: rect.right, y: rect.bottom };
+    }
+    matchupEdgeActiveCell = cell;
+    el.matchupEdgeTooltip.innerHTML = matchupEdgeTooltipHTML(edgesFromVerdictCell(cell));
+    positionMatchupEdgeTooltip();
+  }
+
+  el.scheduleGrid.addEventListener("mouseover", (event) => {
+    if (!hasFineHover()) return;
+    const button = event.target.closest(".team-rank-info");
+    if (button) {
+      hideMatchupEdgeTooltip();
+      showTeamRankTooltip(button, event);
+      return;
+    }
+    const verdict = event.target.closest(".ftt-verdict-tip");
+    if (verdict) {
+      hideTeamRankTooltip();
+      showMatchupEdgeTooltip(verdict, event);
+    }
+  });
+  el.scheduleGrid.addEventListener("mousemove", (event) => {
+    if (!hasFineHover()) return;
+    const button = event.target.closest(".team-rank-info");
+    if (button && el.teamRankTooltip && el.teamRankTooltip.style.display !== "none") {
+      teamRankPointer = { x: event.clientX, y: event.clientY };
+      positionTeamRankTooltip();
+      return;
+    }
+    const verdict = event.target.closest(".ftt-verdict-tip");
+    if (verdict && el.matchupEdgeTooltip && el.matchupEdgeTooltip.style.display !== "none") {
+      matchupEdgePointer = { x: event.clientX, y: event.clientY };
+      positionMatchupEdgeTooltip();
+    }
+  });
+  el.scheduleGrid.addEventListener("mouseout", (event) => {
+    if (!hasFineHover()) return;
+    const button = event.target.closest(".team-rank-info");
+    if (button && !(event.relatedTarget && button.contains(event.relatedTarget))) {
+      hideTeamRankTooltip();
+    }
+    const verdict = event.target.closest(".ftt-verdict-tip");
+    if (verdict && !(event.relatedTarget && verdict.contains(event.relatedTarget))) {
+      hideMatchupEdgeTooltip();
+    }
+  });
+  el.scheduleGrid.addEventListener("click", (event) => {
+    if (hasFineHover()) return;
+    const button = event.target.closest(".team-rank-info");
+    if (button) {
+      event.preventDefault();
+      event.stopPropagation();
+      hideMatchupEdgeTooltip();
+      if (button.getAttribute("aria-expanded") === "true") {
+        hideTeamRankTooltip();
+      } else {
+        showTeamRankTooltip(button, event);
+      }
+      return;
+    }
+    const verdict = event.target.closest(".ftt-verdict-tip");
+    if (verdict) {
+      event.preventDefault();
+      event.stopPropagation();
+      hideTeamRankTooltip();
+      if (matchupEdgeActiveCell === verdict) {
+        hideMatchupEdgeTooltip();
+      } else {
+        showMatchupEdgeTooltip(verdict, event);
+      }
+      return;
+    }
+    hideTeamRankTooltip();
+    hideMatchupEdgeTooltip();
+  });
+  el.scheduleGrid.addEventListener("focusin", (event) => {
+    const button = event.target.closest(".team-rank-info");
+    if (button) showTeamRankTooltip(button);
+  });
+  el.scheduleGrid.addEventListener("focusout", (event) => {
+    if (event.target.closest(".team-rank-info")) hideTeamRankTooltip();
+  });
+
+  function hidePageInfoTooltip() {
+    if (!el.pageInfoTooltip) return;
+    el.pageInfoTooltip.style.display = "none";
+    el.pageInfoTooltip.innerHTML = "";
+    el.pageInfoTooltip.classList.remove("page-info-annotate");
+    if (el.pageInfoBtn) el.pageInfoBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function positionPageInfoTooltip() {
+    const tip = el.pageInfoTooltip;
+    if (!tip || !el.pageInfoBtn) return;
+    // Size class before measuring so annotate width/height are correct on first paint.
+    tip.classList.toggle("page-info-annotate", !!tip.querySelector(".spit-annotate"));
+    tip.style.visibility = "hidden";
+    tip.style.display = "block";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+    const rect = el.pageInfoBtn.getBoundingClientRect();
+    let left = Math.min(rect.left, window.innerWidth - tipW - 8);
+    let top = rect.bottom + 10;
+    if (top + tipH > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - tipH - 10);
+    }
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.top = `${top}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function syncPageInfoButton() {
+    if (!el.pageInfoBtn) return;
+    const labels = {
+      opta: "How Statistics works",
+      rankings: "How Rankings works",
+      expected: "How Expected Data works",
+      schedule: "How Matchups works",
+      feed: "How Social Media Feed works",
+      markets: "How Markets works",
+    };
+    const label = labels[state.page] || "How this page works";
+    el.pageInfoBtn.removeAttribute("title");
+    el.pageInfoBtn.removeAttribute("data-tip");
+    el.pageInfoBtn.setAttribute("aria-label", label);
+  }
+
+  function showPageInfoTooltip() {
+    if (!el.pageInfoBtn || !el.pageInfoTooltip) return;
+    hideUiTooltip();
+    hideTeamRankTooltip();
+    hideMatchupEdgeTooltip();
+    hideScheduleScatterTooltip();
+    el.pageInfoBtn.setAttribute("aria-expanded", "true");
+    el.pageInfoTooltip.innerHTML = pageInfoTooltipHTML();
+    positionPageInfoTooltip();
+  }
+
+  if (el.pageInfoBtn) {
+    el.pageInfoBtn.addEventListener("mouseover", () => {
+      if (!hasFineHover()) return;
+      showPageInfoTooltip();
+    });
+    el.pageInfoBtn.addEventListener("mouseout", (event) => {
+      if (!hasFineHover()) return;
+      if (event.relatedTarget && el.pageInfoBtn.contains(event.relatedTarget)) return;
+      hidePageInfoTooltip();
+    });
+    el.pageInfoBtn.addEventListener("click", (event) => {
+      if (hasFineHover()) return;
+      event.preventDefault();
+      if (el.pageInfoBtn.getAttribute("aria-expanded") === "true") {
+        hidePageInfoTooltip();
+      } else {
+        showPageInfoTooltip();
+      }
+    });
+    el.pageInfoBtn.addEventListener("focus", () => showPageInfoTooltip());
+    el.pageInfoBtn.addEventListener("blur", hidePageInfoTooltip);
+  }
+
+  let scheduleScatterPointer = { x: 0, y: 0 };
+
+  function hideScheduleScatterTooltip() {
+    if (!el.scheduleScatterTooltip) return;
+    el.scheduleScatterTooltip.style.display = "none";
+    el.scheduleScatterTooltip.innerHTML = "";
+  }
+
+  function positionScheduleScatterTooltip() {
+    const tip = el.scheduleScatterTooltip;
+    if (!tip) return;
+    tip.style.display = "block";
+    tip.style.visibility = "hidden";
+    const tipW = tip.offsetWidth;
+    const tipH = tip.offsetHeight;
+    let left = scheduleScatterPointer.x + 14;
+    let top = scheduleScatterPointer.y + 14;
+    if (left + tipW > window.innerWidth - 8) left = scheduleScatterPointer.x - tipW - 14;
+    if (top + tipH > window.innerHeight - 8) top = scheduleScatterPointer.y - tipH - 14;
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+    tip.style.visibility = "visible";
+  }
+
+  function scatterScoreTone(score) {
+    if (score > 0.05) return { label: "Favorable", cls: "positive" };
+    if (score < -0.05) return { label: "Tough", cls: "negative" };
+    return { label: "Neutral", cls: "neutral" };
+  }
+
+  function scheduleScatterTooltipHTML(point) {
+    const number = (key) => {
+      const value = Number(point.dataset[key]);
+      return Number.isFinite(value) ? value : 0;
+    };
+    const teamCode = point.dataset.team;
+    const teamLabel = TEAM_NAMES[teamCode] || teamCode;
+    const attack = number("attack");
+    const defence = number("defence");
+    const attackFavorable = number("attackFavorable");
+    const defenceFavorable = number("defenceFavorable");
+    const attackIncluded = number("attackIncluded");
+    const defenceIncluded = number("defenceIncluded");
+    const attackTone = scatterScoreTone(attack);
+    const defenceTone = scatterScoreTone(defence);
+    const range = state.scheduleGwMin === state.scheduleGwMax
+      ? `GW${state.scheduleGwMin}`
+      : `GW${state.scheduleGwMin}–GW${state.scheduleGwMax}`;
+    return `<div class="sst-head">${badgeHTML(teamCode)}<span>${escapeHtml(teamLabel)}</span></div>
+      <div class="sst-quadrant">${escapeHtml(scheduleQuadrantLabel(attack, defence))}</div>
+      <div class="sst-metrics">
+        <div class="sst-metric sst-attack">
+          <div class="sst-metric-head">${iconHTML("swords", "ftt-attack-icon")}<span>Attacking schedule</span><strong class="${attackTone.cls}">${escapeHtml(fmtEdge(attack))}</strong></div>
+          <div class="sst-metric-sub">${attackTone.label} · ${attackFavorable} of ${attackIncluded} fixtures flagged (≥${state.scheduleEdgeMin} ranks better)</div>
+        </div>
+        <div class="sst-metric sst-defence">
+          <div class="sst-metric-head">${iconHTML("shield-half", "ftt-defence-icon")}<span>Defensive schedule</span><strong class="${defenceTone.cls}">${escapeHtml(fmtEdge(defence))}</strong></div>
+          <div class="sst-metric-sub">${defenceTone.label} · ${defenceFavorable} of ${defenceIncluded} fixtures flagged (≥${state.scheduleEdgeMin} ranks better)</div>
+        </div>
+      </div>
+      <div class="sst-context">
+        <span>${range}</span><span>${state.scheduleExpectedWeight}% expected / ${100 - state.scheduleExpectedWeight}% actual</span>
+      </div>
+      <div class="sst-note">Position uses the average advantage across every fixture — tough games pull a team left or down. Flag threshold only affects icons and counts, not badge placement.</div>`;
+  }
+
+  function showScheduleScatterTooltip(point, event) {
+    if (!point || !el.scheduleScatterTooltip) return;
+    hideUiTooltip();
+    if (event) {
+      scheduleScatterPointer = { x: event.clientX, y: event.clientY };
+    } else {
+      const rect = point.getBoundingClientRect();
+      scheduleScatterPointer = { x: rect.right, y: rect.bottom };
+    }
+    el.scheduleScatterTooltip.innerHTML = scheduleScatterTooltipHTML(point);
+    positionScheduleScatterTooltip();
+  }
+
+  if (el.scheduleScatter) {
+    el.scheduleScatter.addEventListener("mouseover", (event) => {
+      if (!hasFineHover()) return;
+      const point = event.target.closest(".schedule-scatter-point");
+      if (point) showScheduleScatterTooltip(point, event);
+    });
+    el.scheduleScatter.addEventListener("mousemove", (event) => {
+      if (!hasFineHover()) return;
+      const point = event.target.closest(".schedule-scatter-point");
+      if (!point || !el.scheduleScatterTooltip || el.scheduleScatterTooltip.style.display === "none") return;
+      scheduleScatterPointer = { x: event.clientX, y: event.clientY };
+      positionScheduleScatterTooltip();
+    });
+    el.scheduleScatter.addEventListener("mouseout", (event) => {
+      if (!hasFineHover()) return;
+      const point = event.target.closest(".schedule-scatter-point");
+      if (!point || (event.relatedTarget && point.contains(event.relatedTarget))) return;
+      hideScheduleScatterTooltip();
+    });
+    el.scheduleScatter.addEventListener("focusin", (event) => {
+      const point = event.target.closest(".schedule-scatter-point");
+      if (point) showScheduleScatterTooltip(point);
+    });
+    el.scheduleScatter.addEventListener("focusout", (event) => {
+      if (event.target.closest(".schedule-scatter-point")) hideScheduleScatterTooltip();
+    });
+    el.scheduleScatter.addEventListener("click", (event) => {
+      const point = event.target.closest(".schedule-scatter-point");
+      if (!point) return;
+      // Touch: show the tip, then jump — desktop click just jumps (hover already informed).
+      if (!hasFineHover()) showScheduleScatterTooltip(point, event);
+      focusScheduleCard(point.dataset.team);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Toast notifications
+  // ---------------------------------------------------------------------
+  let toastTimer = null;
+  let toastEl = null;
+
+  function hideToast() {
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    if (!toastEl) return;
+    const node = toastEl;
+    toastEl = null;
+    node.classList.remove("visible");
+    node.classList.add("leaving");
+    window.setTimeout(() => node.remove(), 200);
+  }
+
+  function showToast({ title, message, icon = "info", duration = 4200 } = {}) {
+    hideToast();
+    if (!el.toastRoot) return;
+    const node = document.createElement("div");
+    node.className = "toast";
+    node.setAttribute("role", "status");
+    node.innerHTML = `
+      <span class="toast-icon">${iconHTML(icon)}</span>
+      <div class="toast-body">
+        ${title ? `<div class="toast-title">${title}</div>` : ""}
+        ${message ? `<div class="toast-msg">${message}</div>` : ""}
+      </div>`;
+    el.toastRoot.appendChild(node);
+    toastEl = node;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => node.classList.add("visible"));
+    });
+    toastTimer = window.setTimeout(hideToast, duration);
+  }
+
+  // ---------------------------------------------------------------------
+  // Compare mode
+  // ---------------------------------------------------------------------
+  function toggleCompareRow(key) {
+    const set = compareSet();
+    if (set.has(key)) {
+      set.delete(key);
+    } else if (set.size < MAX_COMPARE) {
+      set.add(key);
+      hideToast();
+    }
+    renderTable();
+  }
+
+  function compareHighlightMap(selectedRows) {
+    const maps = {};
+    visibleColumns().forEach((col) => {
+      if (!isNumericCol(col) || ENHANCE_EXCLUDE.has(col.key)) return;
+      const lowerBetter = LOWER_BETTER.has(col.key);
+      const withVals = selectedRows
+        .filter((r) => isStatAvailable(r, col))
+        .map((r) => ({ key: rowKey(r), val: displayValue(r, col) || 0 }))
+        .filter((x) => Math.abs(x.val) > 1e-9);
+      if (withVals.length < 2) return;
+      const best = lowerBetter
+        ? Math.min(...withVals.map((x) => x.val))
+        : Math.max(...withVals.map((x) => x.val));
+      const winners = new Set(withVals.filter((x) => x.val === best).map((x) => x.key));
+      if (winners.size < withVals.length) maps[col.key] = winners;
+    });
+    return maps;
+  }
+
+  function renderCompareTable() {
+    const set = compareSet();
+    if (!state.compareMode || set.size < 2) {
+      el.compareWrap.style.display = "none";
+      return;
+    }
+    el.compareWrap.style.display = "";
+
+    const vcols = visibleColumns();
+    const allRows = getRows();
+    const selectedRows = Array.from(set)
+      .map((key) => allRows.find((r) => rowKey(r) === key))
+      .filter(Boolean);
+
+    el.compareTitle.textContent = `Comparing ${selectedRows.length} ${state.view}`;
+
+    el.compareHead.innerHTML = "";
+    el.compareHead.appendChild(buildSectionRow(vcols));
+    el.compareHead.appendChild(buildColumnHeaderRow(vcols));
+
+    const winnerMap = compareHighlightMap(selectedRows);
+
+    el.compareBody.innerHTML = "";
+    selectedRows.forEach((r) => {
+      const tr = document.createElement("tr");
+      const key = rowKey(r);
+      const teamCode = currentTeamCode(r);
+      if (teamCode) tr.dataset.team = teamCode;
+      tr.dataset.rowName = r.name || "";
+      tr.classList.add("row-selectable");
+      tr.addEventListener("click", () => toggleCompareRow(key));
+      vcols.forEach((c, i) => {
+        const td = document.createElement("td");
+        td.classList.add("col-" + (c.type || "num"));
+        if (isSectionBoundary(vcols, i)) td.classList.add("sec-divider");
+        if (
+          c.key === "player" &&
+          updatesOverlayOn() &&
+          playerHasSeasonUpdate(r)
+        ) {
+          td.classList.add("has-update-change");
+        }
+        td.innerHTML = cellHTML(r, c);
+        if (isNumericCol(c)) {
+          if (!isStatApplicable(r, c)) {
+            td.classList.add("zero-val");
+          } else if (sourceUnsupportedReason(r, c)) {
+            td.classList.add("has-source-warning");
+          } else {
+            const val = displayValue(r, c) || 0;
+            if (Math.abs(val) < 1e-9) {
+              td.classList.add("zero-val");
+            } else if (winnerMap[c.key] && winnerMap[c.key].has(key)) {
+              td.classList.add("highlight-top");
+              td.style.backgroundColor = positiveFill(0.24);
+            }
+          }
+        }
+        tr.appendChild(td);
+      });
+      el.compareBody.appendChild(tr);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Columns settings panel
+  // ---------------------------------------------------------------------
+  function renderColumnsPanel() {
+    const groupOrder = [];
+    const groups = new Map();
+    cols().forEach((c) => {
+      if (c.pin) return;
+      const g = c.group || "Other";
+      if (!groups.has(g)) {
+        groups.set(g, []);
+        groupOrder.push(g);
+      }
+      groups.get(g).push(c);
+    });
+    el.columnsList.innerHTML = "";
+    groupOrder.forEach((g) => {
+      const section = document.createElement("section");
+      section.className = "settings-section";
+      const heading = document.createElement("div");
+      heading.className = "settings-section-label";
+      heading.textContent = g;
+      section.appendChild(heading);
+      groups.get(g).forEach((c) => {
+        const row = document.createElement("label");
+        row.className = "settings-switch-row";
+        const title = metricDisplayTitle(c);
+        const text = document.createElement("span");
+        text.className = "settings-switch-text";
+        text.innerHTML = `<span class="settings-switch-label">${escapeHtml(title)}</span><span class="settings-switch-meta">${escapeHtml(c.label)}</span>`;
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !state.hiddenCols.has(c.key);
+        input.setAttribute("aria-label", `Show ${title}`);
+        input.addEventListener("change", () => {
+          if (input.checked) state.hiddenCols.delete(c.key);
+          else state.hiddenCols.add(c.key);
+          renderTable();
+        });
+        const track = document.createElement("span");
+        track.className = "switch-track";
+        track.setAttribute("aria-hidden", "true");
+        track.innerHTML = `<span class="switch-thumb"></span>`;
+        row.appendChild(text);
+        row.appendChild(input);
+        row.appendChild(track);
+        section.appendChild(row);
+      });
+      el.columnsList.appendChild(section);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Expected vs. actual page — barbell (dumbbell) chart
+  // ---------------------------------------------------------------------
+  // Every expected/actual pair we actually have data for. "gi" (xGI vs
+  // G+A) and "conceded" (xGC vs GC) apply to players too now; "cs" stays
+  // team-only since there's no player-level "expected clean sheets" stat
+  // anywhere in the FPL API to pair against actual clean sheets — see
+  // expectedCats(). lowerBetter flips the over/underperform color so that,
+  // e.g., conceding fewer goals than xGC reads as green even though
+  // actual < expected.
+  //
+  // combinedOnly marks categories whose fields only exist on the combined
+  // (season-total) view — the FPL API data backing them (xgc, goalsConceded)
+  // has no home/away split. See updateExpectedSplitAvailability().
+  const PLAYER_EXPECTED_CATS = [
+    { key: "goals", label: "xG vs Goals", expectedKey: "xg", actualKey: "goals", expectedLabel: "xG", actualLabel: "Goals", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false },
+    { key: "assists", label: "xA vs Assists", expectedKey: "xa", actualKey: "assists", expectedLabel: "xA", actualLabel: "Assists", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false },
+    { key: "gi", label: "xGI vs G+A", expectedKey: "xgi", actualKey: "__gi", expectedLabel: "xGI", actualLabel: "G+A", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false, combinedOnly: true },
+    { key: "conceded", label: "xGC vs Conceded", expectedKey: "xgc", actualKey: "goalsConceded", expectedLabel: "xGC", actualLabel: "GC", expectedDecimals: 1, actualDecimals: 0, lowerBetter: true, combinedOnly: true },
+  ];
+  const TEAM_EXPECTED_CATS = [
+    { key: "goals", label: "xG vs Goals", expectedKey: "xg", actualKey: "goals", expectedLabel: "xG", actualLabel: "Goals", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false },
+    { key: "conceded", label: "xGC vs Conceded", expectedKey: "xgc", actualKey: "goalsConceded", expectedLabel: "xGC", actualLabel: "GC", expectedDecimals: 1, actualDecimals: 0, lowerBetter: true },
+    { key: "cs", label: "xCS vs Clean Sheets", expectedKey: "xcs", actualKey: "cleanSheets", expectedLabel: "xCS", actualLabel: "CS", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false },
+  ];
+  const EXPECTED_DIFF_EPSILON = 0.05;
+
+  function expectedCats() {
+    return state.view === "players" ? PLAYER_EXPECTED_CATS : TEAM_EXPECTED_CATS;
+  }
+
+  function currentExpectedCat() {
+    const cats = expectedCats();
+    return cats.find((c) => c.key === state.expectedCat) || cats[0];
+  }
+
+  // score is sign-adjusted so positive always means "outperforming
+  // expectation" and negative always means "underperforming" — for
+  // lowerBetter categories (xGC) that means actual < expected scores
+  // positive, since conceding less than expected is the good outcome.
+  function expectedRowValues(row, cat) {
+    const expected = row[cat.expectedKey] || 0;
+    const actual = row[cat.actualKey] || 0;
+    const score = cat.lowerBetter ? expected - actual : actual - expected;
+    return { expected, actual, score };
+  }
+
+  function expectedPerfClass(score) {
+    if (score > EXPECTED_DIFF_EPSILON) return "over";
+    if (score < -EXPECTED_DIFF_EPSILON) return "under";
+    return "even";
+  }
+
+  function sortExpectedRows(rows, cat) {
+    const dir = state.expectedSortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      if (state.expectedSortKey === "name") return dir * a.name.localeCompare(b.name);
+      const va = expectedRowValues(a, cat);
+      const vb = expectedRowValues(b, cat);
+      if (state.expectedSortKey === "expected") return dir * (va.expected - vb.expected);
+      if (state.expectedSortKey === "actual") return dir * (va.actual - vb.actual);
+      return dir * (va.score - vb.score); // diff — over/underperformance
+    });
+  }
+
+  function setExpectedCatMenuOpen(open) {
+    if (!el.expectedTabWrap || !el.pageExpected) return;
+    el.expectedTabWrap.classList.toggle("open", open);
+    el.pageExpected.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function buildExpectedCatMenu() {
+    if (!el.expectedCatMenu) return;
+    const cats = expectedCats();
+    const active = currentExpectedCat();
+    el.expectedCatMenu.innerHTML = "";
+    cats.forEach((c) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "menuitem");
+      btn.className = "page-tab-menu-item";
+      btn.textContent = c.label;
+      btn.classList.toggle("active", c.key === active.key);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        state.expectedCat = c.key;
+        setExpectedCatMenuOpen(false);
+        setPage("expected");
+      });
+      el.expectedCatMenu.appendChild(btn);
+    });
+  }
+
+  // Split rows for this page are read independently of the shared
+  // Total/Home/Away control (state.split) used by the OPTA table, since only
+  // this page supports a 4th "Compare" mode that shows a Home row and an Away
+  // row per player/team — a shape the other pages' rendering doesn't understand.
+  function expectedSplitRows(split) {
+    return state.view === "players" ? DATA.players[split] : DATA.teams[split];
+  }
+
+  function buildSplitMap(split) {
+    const map = new Map();
+    expectedSplitRows(split).forEach((r) => map.set(rowKey(r), r));
+    return map;
+  }
+
+  function renderExpectedLegend() {
+    el.expectedLegend.innerHTML = `
+      <span class="legend-item"><span class="legend-dot" style="background:var(--text-faint)"></span>Expected</span>
+      <span class="legend-item"><span class="legend-dot" style="background:hsl(var(--positive))"></span>Outperforming</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--blue)"></span>Even</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Underperforming</span>
+    `;
+  }
+
+  function buildExpectedHead(cat) {
+    el.barbellHead.innerHTML = "";
+    const compareMode = state.expectedSplit === "compare";
+    el.barbellHead.classList.toggle("is-compare", compareMode);
+    const specs = [
+      { key: "name", label: state.view === "players" ? "Player" : "Team", cls: "" },
+      ...(compareMode ? [{ key: null, label: "", cls: "bh-loc" }] : []),
+      { key: null, label: "", cls: "bh-track" },
+      { key: "expected", label: cat.expectedLabel, cls: "" },
+      { key: "actual", label: cat.actualLabel, cls: "" },
+      { key: "diff", label: "Diff", cls: "" },
+    ];
+    specs.forEach((s) => {
+      const div = document.createElement("div");
+      div.className = ("barbell-head-cell " + s.cls).trim();
+      div.textContent = s.label;
+      if (s.key) {
+        if (state.expectedSortKey === s.key) {
+          div.classList.add("sorted");
+          div.innerHTML = `${escapeHtml(s.label)} ${iconHTML(state.expectedSortDir === "asc" ? "chevron-up" : "chevron-down")}`;
+        } else {
+          div.textContent = s.label;
+        }
+        div.addEventListener("click", () => {
+          if (state.expectedSortKey === s.key) {
+            state.expectedSortDir = state.expectedSortDir === "asc" ? "desc" : "asc";
+          } else {
+            state.expectedSortKey = s.key;
+            state.expectedSortDir = s.key === "name" ? "asc" : "desc";
+          }
+          renderExpected();
+        });
+      }
+      el.barbellHead.appendChild(div);
+    });
+  }
+
+  // Floating hover tooltip for barbell dots, positioned against barbell-wrap
+  // and scoped to this page's own element.
+  function expectedDotTooltipHTML(row, statLabel, value, decimals, locSuffix) {
+    const meta = state.view === "players" ? `${row.team} · ${row.position}` : row.team;
+    const name = locSuffix ? `${row.name} (${locSuffix})` : row.name;
+    return `
+      <div class="tt-name">${badgeHTML(row.team)}${escapeHtml(name)}</div>
+      <div class="tt-meta">${meta}</div>
+      <div class="tt-row"><span>${statLabel}</span><b>${fmtNum(value, decimals)}</b></div>
+    `;
+  }
+
+  function showExpectedTooltip(evt, html) {
+    el.expectedTooltip.innerHTML = html;
+    el.expectedTooltip.style.display = "block";
+    positionExpectedTooltip(evt);
+  }
+
+  function positionExpectedTooltip(evt) {
+    const wrapRect = el.barbellWrap.getBoundingClientRect();
+    let left = evt.clientX - wrapRect.left + 14;
+    let top = evt.clientY - wrapRect.top + 14;
+    const ttRect = el.expectedTooltip.getBoundingClientRect();
+    if (left + ttRect.width > wrapRect.width) left = evt.clientX - wrapRect.left - ttRect.width - 14;
+    if (top + ttRect.height > wrapRect.height) top = evt.clientY - wrapRect.top - ttRect.height - 14;
+    el.expectedTooltip.style.left = Math.max(4, left) + "px";
+    el.expectedTooltip.style.top = Math.max(4, top) + "px";
+  }
+
+  function hideExpectedTooltip() {
+    if (!el.expectedTooltip) return;
+    el.expectedTooltip.style.display = "none";
+    delete el.expectedTooltip.dataset.dot;
+  }
+
+  // locSuffix is "Home"/"Away" in Compare mode, null otherwise.
+  // maxVal scales the track dots; maxAbsDiff scales Diff pill intensity so
+  // near-zero gaps stay faint and the biggest swings in the current list
+  // read strongest (gradient-centric around 0).
+  // omitIdentity: Compare-mode split rows — H/A tag only; name lives on the group.
+  function buildBarbellRow(row, cat, maxVal, maxAbsDiff, locSuffix, { omitIdentity = false } = {}) {
+    const { expected, actual, score } = expectedRowValues(row, cat);
+    const perf = expectedPerfClass(score);
+    const pctExpected = Math.max(0, Math.min(100, (expected / maxVal) * 100));
+    const pctActual = Math.max(0, Math.min(100, (actual / maxVal) * 100));
+    const lo = Math.min(pctExpected, pctActual);
+    const hi = Math.max(pctExpected, pctActual);
+
+    const div = document.createElement("div");
+    div.className = "barbell-row";
+    if (locSuffix) div.classList.add(locSuffix === "Home" ? "loc-home" : "loc-away");
+    if (omitIdentity) div.classList.add("is-split");
+
+    if (omitIdentity) {
+      const loc = document.createElement("div");
+      loc.className = "barbell-loc";
+      loc.innerHTML = `<span class="loc-tag">${locSuffix === "Home" ? "Home" : "Away"}</span>`;
+      div.appendChild(loc);
+    } else {
+      const label = document.createElement("div");
+      label.className = "barbell-label";
+      const tagHTML = locSuffix
+        ? `<span class="loc-tag">${locSuffix === "Home" ? "H" : "A"}</span>`
+        : "";
+      let subHTML = "";
+      if (state.view === "players" && row.position) {
+        subHTML = `<div class="player-cell-sub"><span class="pos-badge pos-${escapeHtml(row.position)}">${escapeHtml(row.position)}</span>${tagHTML}</div>`;
+      } else if (state.view === "teams") {
+        const leaguePos = LEAGUE_POSITIONS[row.team];
+        const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
+        const leagueHTML =
+          leaguePos != null
+            ? `<span class="team-league-pos"${tipAttr(`${leaguePos}${ordinalSuffix(leaguePos)} in the ${seasonLabel}`)}>${leaguePos}${ordinalSuffix(leaguePos)}</span>`
+            : "";
+        if (leagueHTML || tagHTML) {
+          subHTML = `<div class="player-cell-sub">${leagueHTML}${tagHTML}</div>`;
+        }
+      } else if (tagHTML) {
+        subHTML = `<div class="player-cell-sub">${tagHTML}</div>`;
+      }
+      label.innerHTML = `<div class="player-cell">
+        ${badgeHTML(row.team, "player-cell-badge")}
+        <div class="player-cell-copy">
+          ${playerNameHTML(row)}
+          ${subHTML}
+        </div>
+      </div>`;
+      setTip(label, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
+      div.appendChild(label);
+    }
+
+    const track = document.createElement("div");
+    track.className = "barbell-track";
+    const flowDir =
+      perf === "even" || Math.abs(pctActual - pctExpected) < 0.4
+        ? ""
+        : pctActual > pctExpected
+          ? "flow-right"
+          : "flow-left";
+    const antsHTML = flowDir
+      ? `<div class="barbell-ants-clip"><div class="barbell-ants" aria-hidden="true"></div></div>`
+      : "";
+    track.innerHTML = `
+      <div class="barbell-connector ${perf}${flowDir ? ` ${flowDir}` : ""}" style="left:${lo}%; width:${Math.max(0, hi - lo)}%">${antsHTML}</div>
+      <div class="barbell-dot expected" style="left:${pctExpected}%"></div>
+      <div class="barbell-dot actual ${perf}" style="left:${pctActual}%"></div>
+    `;
+    const expDot = track.querySelector(".barbell-dot.expected");
+    const actDot = track.querySelector(".barbell-dot.actual");
+    [
+      [expDot, cat.expectedLabel, expected, cat.expectedDecimals],
+      [actDot, cat.actualLabel, actual, cat.actualDecimals],
+    ].forEach(([dot, statLabel, value, decimals]) => {
+      const tipHTML = () => expectedDotTooltipHTML(row, statLabel, value, decimals, locSuffix);
+      dot.addEventListener("mouseenter", (evt) => {
+        if (!hasFineHover()) return;
+        showExpectedTooltip(evt, tipHTML());
+      });
+      dot.addEventListener("mousemove", (evt) => {
+        if (!hasFineHover()) return;
+        positionExpectedTooltip(evt);
+      });
+      dot.addEventListener("mouseleave", () => {
+        if (!hasFineHover()) return;
+        hideExpectedTooltip();
+      });
+      dot.addEventListener("click", (evt) => {
+        if (hasFineHover()) return;
+        evt.stopPropagation();
+        if (el.expectedTooltip && el.expectedTooltip.style.display !== "none" && el.expectedTooltip.dataset.dot === String(statLabel)) {
+          hideExpectedTooltip();
+          delete el.expectedTooltip.dataset.dot;
+          return;
+        }
+        showExpectedTooltip(evt, tipHTML());
+        if (el.expectedTooltip) el.expectedTooltip.dataset.dot = String(statLabel);
+      });
+    });
+    div.appendChild(track);
+
+    const expEl = document.createElement("div");
+    expEl.className = "barbell-value";
+    expEl.textContent = fmtNum(expected, cat.expectedDecimals);
+    div.appendChild(expEl);
+
+    const actEl = document.createElement("div");
+    actEl.className = "barbell-value";
+    actEl.textContent = fmtNum(actual, cat.actualDecimals);
+    div.appendChild(actEl);
+
+    const diffEl = document.createElement("div");
+    diffEl.className = "barbell-value";
+    const diffRaw = actual - expected;
+    const diffText = (diffRaw > 0 ? "+" : "") + fmtNum(diffRaw, cat.expectedDecimals);
+    const intensity = maxAbsDiff > 0 ? Math.min(1, Math.abs(diffRaw) / maxAbsDiff) : 0;
+    // Sqrt softens mid-range so values near zero stay clearly faint.
+    const t = Math.sqrt(intensity);
+    const bgA = (0.04 + t * 0.22).toFixed(3);
+    const fgA = (0.4 + t * 0.6).toFixed(3);
+    const pill = document.createElement("span");
+    pill.className = `diff-pill ${perf}`;
+    pill.textContent = diffText;
+    if (perf !== "even") {
+      pill.style.setProperty("--diff-a", bgA);
+      pill.style.setProperty("--diff-c", fgA);
+    }
+    diffEl.appendChild(pill);
+    div.appendChild(diffEl);
+
+    return div;
+  }
+
+  function buildBarbellCompareIdentity(row) {
+    const identity = document.createElement("div");
+    identity.className = "barbell-group-identity";
+    let subHTML = "";
+    if (state.view === "players" && row.position) {
+      subHTML = `<div class="player-cell-sub"><span class="pos-badge pos-${escapeHtml(row.position)}">${escapeHtml(row.position)}</span></div>`;
+    } else if (state.view === "teams") {
+      const leaguePos = LEAGUE_POSITIONS[row.team];
+      const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
+      if (leaguePos != null) {
+        subHTML = `<div class="player-cell-sub"><span class="team-league-pos"${tipAttr(`${leaguePos}${ordinalSuffix(leaguePos)} in the ${seasonLabel}`)}>${leaguePos}${ordinalSuffix(leaguePos)}</span></div>`;
+      }
+    }
+    identity.innerHTML = `<div class="player-cell">
+      ${badgeHTML(row.team, "player-cell-badge")}
+      <div class="player-cell-copy">
+        ${playerNameHTML(row)}
+        ${subHTML}
+      </div>
+    </div>`;
+    setTip(identity, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
+    return identity;
+  }
+
+  function buildBarbellCompareGroup(baseRow, homeRow, awayRow, cat, maxVal, maxAbsDiff) {
+    const group = document.createElement("div");
+    group.className = "barbell-group is-compare";
+    group.appendChild(buildBarbellCompareIdentity(baseRow));
+    const splits = document.createElement("div");
+    splits.className = "barbell-group-splits";
+    splits.appendChild(buildBarbellRow(homeRow || baseRow, cat, maxVal, maxAbsDiff, "Home", { omitIdentity: true }));
+    splits.appendChild(buildBarbellRow(awayRow || baseRow, cat, maxVal, maxAbsDiff, "Away", { omitIdentity: true }));
+    group.appendChild(splits);
+    return group;
+  }
+
+  // Round a positive value up to a clean 1/1.2/1.5/2/2.5/3/4/5/6/8/10 × 10^n.
+  function niceCeil(value) {
+    if (!(value > 0) || !Number.isFinite(value)) return 1;
+    const exp = Math.floor(Math.log10(value));
+    const pow = 10 ** exp;
+    const frac = value / pow;
+    const candidates = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+    const niceFrac = candidates.find((c) => frac <= c + 1e-12) ?? 10;
+    return niceFrac * pow;
+  }
+
+  // Even ticks from min..max using a 1/2/2.5/5 × 10^n step. Returns
+  // { ticks, niceMax } so the plot domain can snap to the last label.
+  function niceTicks(min, max, count) {
+    const range = Math.max(max - min, Number.EPSILON);
+    const rough = range / Math.max(count, 1);
+    const exp = Math.floor(Math.log10(rough));
+    const pow = 10 ** exp;
+    const frac = rough / pow;
+    let step;
+    if (frac <= 1) step = 1 * pow;
+    else if (frac <= 2) step = 2 * pow;
+    else if (frac <= 2.5) step = 2.5 * pow;
+    else if (frac <= 5) step = 5 * pow;
+    else step = 10 * pow;
+
+    const niceMax = Math.ceil(max / step - 1e-9) * step;
+    const ticks = [];
+    for (let t = min; t <= niceMax + step * 1e-9; t += step) {
+      ticks.push(Number((Math.round(t / step) * step).toPrecision(12)));
+    }
+    return { ticks, niceMax, step };
+  }
+
+  function formatScaleTick(t, step, fallbackDecimals) {
+    if (step >= 1) return fmtNum(t, 0);
+    if (step >= 0.1) return fmtNum(t, 1);
+    if (step >= 0.01) return fmtNum(t, 2);
+    return fmtNum(t, fallbackDecimals);
+  }
+
+  // Scale domain for the barbell chart + Diff pills. Always from the full
+  // (unfiltered) universe for the current view/split/category so search and
+  // sidebar filters only change which rows appear — not how long a bar looks.
+  function expectedScaleDomain(cat, compareMode, baseSplit) {
+    let universe = expectedSplitRows(baseSplit).filter((r) =>
+      state.view === "players" ? r.mins > 0 : r.gp > 0
+    );
+    universe = universe.filter((r) => {
+      const { expected, actual } = expectedRowValues(r, cat);
+      return Math.abs(expected) > 1e-9 || Math.abs(actual) > 1e-9;
+    });
+    const homeMap = compareMode ? buildSplitMap("home") : null;
+    const awayMap = compareMode ? buildSplitMap("away") : null;
+    let maxVal = 0;
+    let maxAbsDiff = 0;
+    universe.forEach((r) => {
+      const pool = compareMode
+        ? [homeMap.get(rowKey(r)), awayMap.get(rowKey(r))].filter(Boolean)
+        : [r];
+      pool.forEach((pr) => {
+        const { expected, actual } = expectedRowValues(pr, cat);
+        maxVal = Math.max(maxVal, expected, actual);
+        maxAbsDiff = Math.max(maxAbsDiff, Math.abs(actual - expected));
+      });
+    });
+    maxVal = niceCeil(maxVal * 1.08 || 1);
+    const tickInfo = niceTicks(0, maxVal, 4);
+    maxVal = tickInfo.niceMax || maxVal;
+    return { maxVal, maxAbsDiff, tickInfo };
+  }
+
+  // Subtle x-axis ruler, shares the barbell grid so ticks land under the
+  // same 0..maxVal scale the dots use.
+  function buildExpectedScale(maxVal, cat, tickInfo) {
+    const compareMode = state.expectedSplit === "compare";
+    el.barbellScale.innerHTML = "";
+    el.barbellScale.classList.toggle("is-compare", compareMode);
+    el.barbellScale.appendChild(document.createElement("div"));
+    if (compareMode) el.barbellScale.appendChild(document.createElement("div"));
+
+    const { ticks, step } = tickInfo || niceTicks(0, maxVal, 4);
+    const trackCell = document.createElement("div");
+    trackCell.className = "barbell-scale-track";
+    ticks.forEach((t) => {
+      const pct = Math.max(0, Math.min(100, (t / maxVal) * 100));
+      const tick = document.createElement("div");
+      tick.className = "barbell-scale-tick";
+      tick.style.left = pct + "%";
+      const label = document.createElement("span");
+      label.textContent = formatScaleTick(t, step, cat.expectedDecimals);
+      tick.appendChild(label);
+      trackCell.appendChild(tick);
+    });
+    el.barbellScale.appendChild(trackCell);
+
+    for (let i = 0; i < 3; i++) el.barbellScale.appendChild(document.createElement("div"));
+  }
+
+  // Disables Home/Away/Compare on the split segment for combinedOnly
+  // categories (no per-split data to show), bouncing the user back to
+  // Total if they were sitting on a split that just became unavailable —
+  // e.g. switching from "xG vs Goals" to "xGC vs Conceded" while on Home.
+  function updateExpectedSplitAvailability(cat) {
+    const restricted = !!cat.combinedOnly;
+    if (restricted && state.expectedSplit !== "combined") state.expectedSplit = "combined";
+    $$("#expected-split-seg button").forEach((b) => {
+      const isCombined = b.dataset.split === "combined";
+      const disabled = restricted && !isCombined;
+      b.disabled = disabled;
+      b.classList.toggle("disabled", disabled);
+      b.classList.toggle("active", b.dataset.split === state.expectedSplit);
+      setTip(b, disabled ? "Combined view only — this stat has no home/away split in the FPL API" : "");
+    });
+    syncSegThumb(el.expectedSplitSeg);
+  }
+
+  function renderExpected() {
+    const cat = currentExpectedCat();
+    updateExpectedSplitAvailability(cat);
+    const compareMode = state.expectedSplit === "compare";
+    buildExpectedCatMenu();
+    hideExpectedTooltip();
+
+    el.expectedTitle.querySelector(".page-title-text").textContent = "Expected Data";
+
+    if (isNextSeason()) {
+      el.expectedSub.textContent = "Expected vs actual isn’t available for 2026/27 yet.";
+      el.barbellHead.innerHTML = "";
+      el.barbellScale.innerHTML = "";
+      el.barbellBody.innerHTML = "";
+      if (el.expectedLegend) el.expectedLegend.innerHTML = "";
+      const empty = document.createElement("div");
+      empty.className = "empty-state expected-empty";
+      empty.innerHTML = `
+        <p>No expected data for 2026/27.</p>
+        <p class="expected-empty-hint">xG, xA, and other expected stats aren’t published for the new season yet. Switch the data season to <strong>2025/26</strong> to browse last year’s expected vs actual.</p>`;
+      el.barbellBody.appendChild(empty);
+      return;
+    }
+
+    renderExpectedLegend();
+    el.expectedSub.textContent = compareMode
+      ? "Home and away side by side for the same players or teams."
+      : "Expected versus actual season totals for the selected category.";
+
+    // Compare mode always groups by the combined (whole-season) totals —
+    // the Home/Away rows within a group come from their own splits, but
+    // which players/teams make the list, and the default sort order, are
+    // anchored to the season-wide picture rather than either single split.
+    const baseSplit = compareMode ? "combined" : state.expectedSplit;
+    let rows = applyFilters(expectedSplitRows(baseSplit)).filter((r) => (state.view === "players" ? r.mins > 0 : r.gp > 0));
+    rows = rows.filter((r) => {
+      const { expected, actual } = expectedRowValues(r, cat);
+      return Math.abs(expected) > 1e-9 || Math.abs(actual) > 1e-9;
+    });
+
+    buildExpectedHead(cat);
+    el.barbellBody.innerHTML = "";
+
+    if (!rows.length) {
+      el.barbellScale.innerHTML = "";
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "No rows match the current filters.";
+      el.barbellBody.appendChild(empty);
+      return;
+    }
+
+    const sorted = sortExpectedRows(rows, cat);
+    const homeMap = compareMode ? buildSplitMap("home") : null;
+    const awayMap = compareMode ? buildSplitMap("away") : null;
+    const { maxVal, maxAbsDiff, tickInfo } = expectedScaleDomain(cat, compareMode, baseSplit);
+    buildExpectedScale(maxVal, cat, tickInfo);
+
+    if (!compareMode) {
+      sorted.forEach((r) => el.barbellBody.appendChild(buildBarbellRow(r, cat, maxVal, maxAbsDiff, null)));
+    } else {
+      sorted.forEach((r) => {
+        const key = rowKey(r);
+        el.barbellBody.appendChild(
+          buildBarbellCompareGroup(r, homeMap.get(key), awayMap.get(key), cat, maxVal, maxAbsDiff)
+        );
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Rankings page — top-10 metric cards by category section
+  // ---------------------------------------------------------------------
+  const RANKINGS_TOP_N = 10;
+
+  // Rankings groups metrics by how people actually shop for them, which is a
+  // coarser split than the OPTA table's column sections — headline outcomes
+  // first, then the volume stats that drive them. Deliberately independent of
+  // col.section so re-grouping here never disturbs the table's header bands.
+  // Order within each list is the card order on screen.
+  const RANKINGS_SECTIONS = {
+    players: [
+      { label: "Key Stats", keys: ["pts", "goals", "assists", "__gi", "xg", "xa", "xgi", "xPts", "bonus"] },
+      { label: "Attacking", keys: ["shots", "shotsOnTarget", "touchesBox", "bigChances", "keyPasses", "bigChancesCreated", "bps"] },
+      { label: "Defending", keys: ["cleanSheets", "saves", "__cbitr", "defCon"] },
+    ],
+    teams: [
+      { label: "Key Stats", keys: ["pts", "goals", "xg", "gd", "xgd"] },
+      { label: "Attacking", keys: ["shots", "shotsOnTarget", "touchesBox", "bigChances"] },
+      { label: "Defending", keys: ["cleanSheets", "xcs", "goalsConceded", "xgc"] },
+    ],
+  };
+
+  // Card titles intentionally differ from the OPTA table's detailed tooltips.
+  // metricDisplayTitle() / METRIC_TITLE_OVERRIDES keep Rankings concise without
+  // changing any existing table labels or explanatory hover text.
+
+  // Click-to-pin: up to five subjects stay highlighted across every card, each
+  // holding its own colour slot until it's unpinned. Slots are reused lowest
+  // first so removing the 2nd pin frees colour 2 for the next click.
+  const RANKINGS_MAX_PINS = 5;
+
+  function isRankingsMetricCol(col) {
+    return isNumericCol(col) && !ENHANCE_EXCLUDE.has(col.key);
+  }
+
+  function rankingsColumnsForSection(section) {
+    const spec = (RANKINGS_SECTIONS[state.view] || []).find((s) => s.label === section);
+    if (!spec) return [];
+    const byKey = new Map(cols().map((col) => [col.key, col]));
+    return spec.keys
+      .map((key) => byKey.get(key))
+      .filter((col) => {
+        if (!col || !isRankingsMetricCol(col)) return false;
+        // FPL season totals have no home/away breakdown — omit those cards.
+        if (
+          state.view === "players" &&
+          FPL_SEASON_TOTAL_ONLY.has(col.key) &&
+          state.split !== "combined"
+        ) {
+          return false;
+        }
+        return true;
+      });
+  }
+
+  // A section only earns a divider once it has at least one card to show, so
+  // the combined-only groups drop out on Home/Away rather than leaving a
+  // heading above an empty stretch of grid.
+  function rankingsSections() {
+    return (RANKINGS_SECTIONS[state.view] || [])
+      .map((s) => ({ label: s.label, metricCols: rankingsColumnsForSection(s.label) }))
+      .filter((s) => s.metricCols.length > 0);
+  }
+
+  function rankableEntries(rows, col) {
+    const lowerBetter = LOWER_BETTER.has(col.key);
+    return rows
+      .filter((r) => isStatAvailable(r, col))
+      .map((r) => ({ row: r, key: String(rowKey(r)), val: rankingsValue(r, col) || 0 }))
+      .filter((x) => Math.abs(x.val) > 1e-9)
+      .sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
+  }
+
+  // Games played for Per GP: team GP, or player appearances.
+  function rankingsGamesPlayed(row) {
+    return state.view === "teams" ? row.gp || 0 : row.apps || 0;
+  }
+
+  // Rankings can scale every card by games played without touching Statistics.
+  // When Per GP is on, divide season totals (not already-scaled Per 90 / Per £m
+  // values) so the toggle stays honest about games in hand.
+  function rankingsValue(row, col) {
+    if (!state.rankingsPerGw) return displayValue(row, col);
+    if (col.derived && !col.rate) return row[col.key];
+    const gp = rankingsGamesPlayed(row);
+    if (!gp) return 0;
+    const total = row[col.key];
+    if (total == null) return 0;
+    return total / gp;
+  }
+
+  function rankingsDisplayDecimals(col) {
+    if (state.rankingsPerGw) return Math.max(col.decimals || 0, 1);
+    return displayDecimals(col);
+  }
+
+  function fmtRankingsValue(value, col) {
+    if (state.rankingsPerGw && value > 0 && value < 0.1) return "<0.1";
+    if (!state.rankingsPerGw) return fmtDisplayValue(value, col);
+    return fmtNum(value, rankingsDisplayDecimals(col));
+  }
+
+  // Competition ranks over a sorted entry list: tied values share a rank and
+  // the next distinct value skips ahead.
+  function denseRankMap(entries) {
+    const map = new Map();
+    let i = 0;
+    while (i < entries.length) {
+      let j = i + 1;
+      while (j < entries.length && entries[j].val === entries[i].val) j++;
+      for (let k = i; k < j; k++) map.set(entries[k].key, i + 1);
+      i = j;
+    }
+    return map;
+  }
+
+  // The card always lists the best filtered rows, but the number beside each
+  // one comes from referenceRows — the full view unless the user turns
+  // Recalculate on — so a search shows a player's real placing instead of
+  // renumbering the handful of matches 1, 2, 3.
+  function topRankedForCol(rows, col, referenceRows) {
+    const entries = rankableEntries(rows, col);
+    const ranks = denseRankMap(referenceRows ? rankableEntries(referenceRows, col) : entries);
+    return entries.slice(0, RANKINGS_TOP_N).map((e) => ({
+      row: e.row,
+      val: e.val,
+      rank: ranks.get(e.key) ?? null,
+    }));
+  }
+
+  function rankingsIdentityHTML(row) {
+    let meta = "";
+    if (state.view === "players") {
+      meta = `${escapeHtml(row.team)} · ${escapeHtml(row.position)}`;
+    } else {
+      const pos = LEAGUE_POSITIONS[row.team];
+      if (pos != null) {
+        const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
+        meta = `<span${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`;
+      }
+    }
+    const nameHTML = state.view === "players"
+      ? playerNameLinkHTML(row.name, "rankings-name")
+      : `<span class="rankings-name">${escapeHtml(row.name)}</span>`;
+    const metaHTML = meta ? `<span class="rankings-meta">${meta}</span>` : "";
+    return `${badgeHTML(row.team)}<span class="rankings-identity-text"><span class="rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>${metaHTML}</span>`;
+  }
+
+  function rankingsCardHTML(col, rows, referenceRows) {
+    const leaders = topRankedForCol(rows, col, referenceRows);
+    const title = metricDisplayTitle(col);
+    const keyLabel = state.rankingsPerGw ? `${col.label} / GW` : col.label;
+    const body = leaders.length
+      ? `<ol class="rankings-list">${leaders
+          .map((entry) => {
+            const medal =
+              entry.rank === 1 ? "gold" : entry.rank === 2 ? "silver" : entry.rank === 3 ? "bronze" : "";
+            const key = String(rowKey(entry.row));
+            const pin = state.rankingsPins.indexOf(key);
+            const pinCls = pin >= 0 ? ` is-pinned pin-${pin + 1}` : "";
+            return `<li class="rankings-row${medal ? ` medal-${medal}` : ""}${pinCls}"
+              data-row-key="${escapeHtml(key)}" role="button" tabindex="0"
+              aria-pressed="${pin >= 0 ? "true" : "false"}">
+              <span class="rankings-rank">${entry.rank == null ? "–" : entry.rank}</span>
+              <span class="rankings-identity">${rankingsIdentityHTML(entry.row)}</span>
+              <span class="rankings-value">${fmtRankingsValue(entry.val, col)}</span>
+            </li>`;
+          })
+          .join("")}</ol>`
+      : `<div class="rankings-empty">No ranked values for the current filters.</div>`;
+    return `<article class="rankings-card">
+      <div class="rankings-card-head">
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          <span class="rankings-card-key">${escapeHtml(keyLabel)}</span>
+        </div>
+      </div>
+      ${body}
+    </article>`;
+  }
+
+  // Pinned subjects survive filter changes and view switches, so the label
+  // shown in the legend is resolved from the current population where
+  // possible and falls back to the raw key for anyone filtered out.
+  function rankingsPinLabel(key) {
+    const match = getRows().find((r) => String(rowKey(r)) === key);
+    if (!match) return key;
+    return state.view === "players" ? `${match.name} · ${match.team}` : match.name;
+  }
+
+  function renderRankingsPinBar() {
+    if (!el.rankingsPinBar) return;
+    const pins = state.rankingsPins;
+    if (!pins.length) {
+      el.rankingsPinBar.innerHTML = "";
+      el.rankingsPinBar.style.display = "none";
+      return;
+    }
+    el.rankingsPinBar.style.display = "";
+    const chips = pins
+      .map((key, i) => {
+        const label = rankingsPinLabel(key);
+        return `<button type="button" class="rankings-pin-chip pin-${i + 1}" data-pin-key="${escapeHtml(key)}"
+          aria-label="Unpin ${escapeHtml(label)}"${tipAttr(`Unpin ${label}`)}>
+          <span class="rankings-pin-dot" aria-hidden="true"></span>${escapeHtml(label)}
+          ${iconHTML("x", "rankings-pin-x")}
+        </button>`;
+      })
+      .join("");
+    const full = pins.length >= RANKINGS_MAX_PINS
+      ? `<span class="rankings-pin-hint">Max ${RANKINGS_MAX_PINS} — unpin one to add another</span>`
+      : "";
+    el.rankingsPinBar.innerHTML = `
+      <span class="rankings-pin-label">Pinned</span>
+      ${chips}
+      ${full}
+      <button type="button" class="ghost-btn rankings-pin-clear" id="rankings-pin-clear">Clear</button>`;
+  }
+
+  function syncRankingsPinClasses() {
+    if (!el.rankingsGrid) return;
+    el.rankingsGrid.querySelectorAll(".rankings-row").forEach((row) => {
+      const pin = state.rankingsPins.indexOf(row.dataset.rowKey);
+      row.classList.toggle("is-pinned", pin >= 0);
+      for (let i = 1; i <= RANKINGS_MAX_PINS; i++) row.classList.toggle(`pin-${i}`, pin === i - 1);
+      row.setAttribute("aria-pressed", pin >= 0 ? "true" : "false");
+    });
+    renderRankingsPinBar();
+  }
+
+  function toggleRankingsPin(key) {
+    if (!key) return;
+    const pins = state.rankingsPins;
+    const at = pins.indexOf(key);
+    if (at >= 0) {
+      pins.splice(at, 1);
+    } else {
+      if (pins.length >= RANKINGS_MAX_PINS) return;
+      pins.push(key);
+    }
+    syncRankingsPinClasses();
+  }
+
+  function clearRankingsCrossHover() {
+    if (!el.rankingsGrid) return;
+    el.rankingsGrid.querySelectorAll(".rankings-row.is-cross-hover").forEach((row) => {
+      row.classList.remove("is-cross-hover");
+    });
+    delete el.rankingsGrid.dataset.hoverKey;
+  }
+
+  function setRankingsCrossHover(key) {
+    if (!el.rankingsGrid || key == null || key === "") {
+      clearRankingsCrossHover();
+      return;
+    }
+    const next = String(key);
+    if (el.rankingsGrid.dataset.hoverKey === next) return;
+    clearRankingsCrossHover();
+    el.rankingsGrid.dataset.hoverKey = next;
+    el.rankingsGrid.querySelectorAll(".rankings-row").forEach((row) => {
+      if (row.dataset.rowKey === next) row.classList.add("is-cross-hover");
+    });
+  }
+
+  function renderRankings() {
+    if (!el.rankingsGrid) return;
+    clearRankingsCrossHover();
+    const filtered = applyFilters(getRows());
+    const total = getRows().length;
+    el.rankingsCountLabel.textContent = `${filtered.length.toLocaleString()} of ${total.toLocaleString()} ${state.view} ranked`;
+
+    const sections = rankingsSections();
+    if (!sections.length) {
+      el.rankingsGrid.innerHTML = `<div class="empty-state">No ranking metrics are available for this view and venue split.</div>`;
+      renderRankingsPinBar();
+      return;
+    }
+
+    const referenceRows = state.rankingsRecalculate ? null : getRows();
+    el.rankingsGrid.innerHTML = sections
+      .map((section) => {
+        const cards = section.metricCols
+          .map((col) => rankingsCardHTML(col, filtered, referenceRows))
+          .join("");
+        return `<div class="rankings-divider"><span>${escapeHtml(section.label)}</span></div>${cards}`;
+      })
+      .join("");
+    renderRankingsPinBar();
+  }
+
+  if (el.rankingsGrid) {
+    el.rankingsGrid.addEventListener("pointerover", (e) => {
+      if (!hasFineHover()) return;
+      const row = e.target.closest(".rankings-row");
+      if (!row || !el.rankingsGrid.contains(row)) return;
+      setRankingsCrossHover(row.dataset.rowKey);
+    });
+    el.rankingsGrid.addEventListener("pointerout", (e) => {
+      if (!hasFineHover()) return;
+      const row = e.target.closest(".rankings-row");
+      if (!row) return;
+      const next =
+        e.relatedTarget && typeof e.relatedTarget.closest === "function"
+          ? e.relatedTarget.closest(".rankings-row")
+          : null;
+      if (next && el.rankingsGrid.contains(next)) return;
+      clearRankingsCrossHover();
+    });
+    el.rankingsGrid.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
+      const row = e.target.closest(".rankings-row");
+      if (!row || !el.rankingsGrid.contains(row)) return;
+      const key = row.dataset.rowKey;
+      // Touch: first tap sticky-highlights across cards; second tap pins.
+      if (!hasFineHover()) {
+        if (el.rankingsGrid.dataset.hoverKey === key) {
+          toggleRankingsPin(key);
+        } else {
+          setRankingsCrossHover(key);
+        }
+        return;
+      }
+      toggleRankingsPin(key);
+    });
+    el.rankingsGrid.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target.closest(".rankings-row");
+      if (!row || !el.rankingsGrid.contains(row)) return;
+      e.preventDefault();
+      toggleRankingsPin(row.dataset.rowKey);
+    });
+  }
+
+  // Touch: dismiss sticky rankings highlight / xData tips when tapping away.
+  document.addEventListener("click", (e) => {
+    if (hasFineHover()) return;
+    if (el.rankingsGrid && el.rankingsGrid.dataset.hoverKey && !e.target.closest(".rankings-row")) {
+      clearRankingsCrossHover();
+    }
+    if (
+      el.expectedTooltip &&
+      el.expectedTooltip.style.display !== "none" &&
+      !e.target.closest(".barbell-dot")
+    ) {
+      hideExpectedTooltip();
+    }
+  });
+
+  if (el.rankingsPinBar) {
+    el.rankingsPinBar.addEventListener("click", (e) => {
+      if (e.target.closest("#rankings-pin-clear")) {
+        state.rankingsPins.length = 0;
+        syncRankingsPinClasses();
+        return;
+      }
+      const chip = e.target.closest("[data-pin-key]");
+      if (chip) toggleRankingsPin(chip.dataset.pinKey);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Feed page — player-mention cards from annotated social_data.js
+  // ---------------------------------------------------------------------
+  const FEED_WINDOW_HOURS = 48;
+
+  const INDEXABLE_FEED_BASES = new Set([
+    "unique_full_alias",
+    "unique_lastname",
+    "team_context",
+    "team_position_context",
+    "team_alias",
+    "popularity_default",
+  ]);
+
+  let feedPlayerByCodeCache = null;
+
+  function feedPlayerPhotoUrl(code) {
+    if (code == null || code === "") return "";
+    // FPL bootstrap `photo` is "{code}.jpg"; current PL CDN path (25/26) is
+    // premierleague25/…/{code}.png (no "p" prefix). Older p{code} 250x250
+    // URLs 403 for many new/promoted players (e.g. Igor Jesus).
+    return `https://resources.premierleague.com/premierleague25/photos/players/110x140/${code}.png`;
+  }
+
+  function feedPlayerCatalog() {
+    if (feedPlayerByCodeCache) return feedPlayerByCodeCache;
+    const map = new Map();
+    const combined = (DATA.players && DATA.players.combined) || [];
+    for (const row of combined) {
+      if (row && row.code != null) map.set(Number(row.code), { ...row });
+    }
+    for (const row of DATA.nextSeasonPlayers || []) {
+      if (!row || row.code == null) continue;
+      const key = Number(row.code);
+      const prev = map.get(key);
+      if (prev) {
+        // Prefer 2025/26 stats; overlay current squad identity when present.
+        if (row.team) prev.team = row.team;
+        if (row.position) prev.position = row.position;
+        if (row.price != null) prev.price = row.price;
+        if (row.name) prev.name = row.name;
+      } else {
+        map.set(key, { ...row });
+      }
+    }
+    feedPlayerByCodeCache = map;
+    return map;
+  }
+
+  function feedLookupPlayer(code) {
+    if (code == null) return null;
+    return feedPlayerCatalog().get(Number(code)) || null;
+  }
+
+  function detectLocaleClockFormat() {
+    try {
+      const parts = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).formatToParts(
+        new Date(2024, 0, 1, 15, 0, 0)
+      );
+      return parts.some((p) => p.type === "dayPeriod") ? "12" : "24";
+    } catch {
+      return "12";
+    }
+  }
+
+  function loadClockFormat() {
+    try {
+      const raw = localStorage.getItem(CLOCK_FORMAT_KEY);
+      if (raw === "12" || raw === "24") return raw;
+    } catch {
+      /* private browsing */
+    }
+    return detectLocaleClockFormat();
+  }
+
+  let clockFormat = loadClockFormat();
+
+  function localeTimeOptions() {
+    if (clockFormat === "24") {
+      return { hour: "2-digit", minute: "2-digit", hour12: false };
+    }
+    return { hour: "numeric", minute: "2-digit", hour12: true };
+  }
+
+  function formatFeedTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return escapeHtml(String(iso));
+    const diffSec = Math.round((Date.now() - d.getTime()) / 1000);
+    if (diffSec < 60) return "just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
+    if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)}d`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function formatFeedAbsolute(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      ...localeTimeOptions(),
+    });
+  }
+
+  function feedStatDisplay(value, decimals) {
+    if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+    const n = Number(value);
+    if (decimals === 0) return String(Math.round(n));
+    return n.toFixed(decimals);
+  }
+
+  function feedPosStatSpecs(position) {
+    const pos = String(position || "").toUpperCase();
+    if (pos === "GK") {
+      return [
+        { key: "saves", label: "Saves", decimals: 0 },
+        { key: "cleanSheets", label: "CS", decimals: 0 },
+        { key: "goalsConceded", label: "GC", decimals: 0 },
+      ];
+    }
+    if (pos === "DEF") {
+      return [
+        { key: "cleanSheets", label: "CS", decimals: 0 },
+        { key: "goalsConceded", label: "GC", decimals: 0 },
+        { key: "defCon", label: "DC", decimals: 0 },
+        { key: "__gi", label: "G+A", decimals: 0 },
+      ];
+    }
+    if (pos === "MID") {
+      return [
+        { key: "goals", label: "G", decimals: 0 },
+        { key: "assists", label: "A", decimals: 0 },
+        { key: "xgi", label: "xGI", decimals: 1 },
+        { key: "defCon", label: "DC", decimals: 0 },
+      ];
+    }
+    // FWD (default)
+    return [
+      { key: "goals", label: "G", decimals: 0 },
+      { key: "assists", label: "A", decimals: 0 },
+      { key: "xg", label: "xG", decimals: 1 },
+      { key: "xa", label: "xA", decimals: 1 },
+    ];
+  }
+
+  function feedRowStatValue(row, key) {
+    if (!row) return null;
+    if (key === "__gi") return (Number(row.goals) || 0) + (Number(row.assists) || 0);
+    const v = row[key];
+    return v == null ? null : v;
+  }
+
+  // Competition ranks among same-position players (2025/26 combined). Cached
+  // per position for the Feed stat chips.
+  let feedStatRankCache = null;
+
+  function feedStatRankMaps(position) {
+    const pos = String(position || "").toUpperCase();
+    if (!pos) return {};
+    if (!feedStatRankCache) feedStatRankCache = new Map();
+    if (feedStatRankCache.has(pos)) return feedStatRankCache.get(pos);
+
+    const pool = ((DATA.players && DATA.players.combined) || []).filter(
+      (r) => String(r.position || "").toUpperCase() === pos
+    );
+    const maps = {};
+    for (const spec of feedPosStatSpecs(pos)) {
+      const lowerBetter = LOWER_BETTER.has(spec.key);
+      const entries = pool
+        .map((r) => {
+          if (r.code == null) return null;
+          const val = feedRowStatValue(r, spec.key);
+          if (val == null || Number.isNaN(Number(val))) return null;
+          return { key: String(r.code), val: Number(val) };
+        })
+        .filter(Boolean)
+        .sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
+      const ranks = new Map();
+      let i = 0;
+      while (i < entries.length) {
+        let j = i + 1;
+        while (j < entries.length && entries[j].val === entries[i].val) j += 1;
+        for (let k = i; k < j; k += 1) ranks.set(entries[k].key, i + 1);
+        i = j;
+      }
+      maps[spec.key] = { ranks, n: entries.length };
+    }
+    feedStatRankCache.set(pos, maps);
+    return maps;
+  }
+
+  function linkifyFeedText(text) {
+    const raw = String(text || "");
+    let html = escapeHtml(raw);
+    html = html.replace(/https?:\/\/[^\s<]+/g, (url) => {
+      const href = escapeHtml(url);
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
+    });
+    html = html.replace(
+      /(^|[\s(])@([A-Za-z0-9_]{1,15})\b/g,
+      (_, pre, handle) =>
+        `${pre}<a href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>`
+    );
+    return html;
+  }
+
+  function feedPostsInWindow(posts, windowHours = FEED_WINDOW_HOURS) {
+    const now = Date.now();
+    const winMs = windowHours * 3600 * 1000;
+    return (posts || []).filter((post) => {
+      const created = post.createdAt ? new Date(post.createdAt).getTime() : NaN;
+      if (Number.isNaN(created)) return false;
+      const ageMs = now - created;
+      return ageMs >= -3600 * 1000 && ageMs <= winMs;
+    });
+  }
+
+  function computeFeedMentionCards(posts) {
+    const windowPosts = feedPostsInWindow(posts);
+    const byCode = new Map();
+
+    for (const post of windowPosts) {
+      const analysis = post.analysis || {};
+      for (const e of analysis.entities || []) {
+        if (!e || e.type !== "player" || !e.resolved || e.code == null) continue;
+        const basis = e.matchBasis || "";
+        if (basis && !INDEXABLE_FEED_BASES.has(basis)) continue;
+        const key = String(e.code);
+        let bucket = byCode.get(key);
+        if (!bucket) {
+          bucket = {
+            code: e.code,
+            name: e.name || e.mention,
+            team: e.team,
+            position: e.position,
+            postIds: new Set(),
+            latestAt: "",
+          };
+          byCode.set(key, bucket);
+        }
+        bucket.name = e.name || bucket.name;
+        bucket.team = e.team || bucket.team;
+        bucket.position = e.position || bucket.position;
+        bucket.postIds.add(String(post.id));
+        if (String(post.createdAt || "") > bucket.latestAt) {
+          bucket.latestAt = post.createdAt || "";
+        }
+      }
+    }
+
+    const cards = [...byCode.values()]
+      .map((bucket) => {
+        const row = feedLookupPlayer(bucket.code);
+        const name = (row && row.name) || bucket.name;
+        const team = (row && (row.newTeam || row.team)) || bucket.team || "";
+        const position =
+          (row && (row.newPosition || row.position)) || bucket.position || "";
+        const price =
+          row && row.price2627 != null
+            ? row.price2627
+            : row && row.price != null
+              ? row.price
+              : null;
+        const pts = row && row.pts != null ? row.pts : null;
+        return {
+          code: bucket.code,
+          name,
+          team,
+          position,
+          price,
+          pts,
+          row,
+          posts: bucket.postIds.size,
+          postIds: [...bucket.postIds],
+          latestAt: bucket.latestAt,
+        };
+      })
+      .sort((a, b) => sortFeedCards(a, b, state.feedSort));
+
+    return {
+      windowHours: FEED_WINDOW_HOURS,
+      windowPostCount: windowPosts.length,
+      cards,
+    };
+  }
+
+  function sortFeedCards(a, b, mode) {
+    const byRecent = () =>
+      String(b.latestAt || "").localeCompare(String(a.latestAt || ""));
+    const byVolume = () => b.posts - a.posts;
+    const byName = () => String(a.name || "").localeCompare(String(b.name || ""));
+    if (mode === "recent") {
+      // Same post can tag several players → identical latestAt; break ties by
+      // volume (who else is getting talked about), then name.
+      return byRecent() || byVolume() || byName();
+    }
+    // Volume (default): most mentions, then most recent, then name.
+    return byVolume() || byRecent() || byName();
+  }
+
+  function feedQuoteRowsHTML(postIds, postsById) {
+    const rows = (postIds || [])
+      .map((id) => postsById.get(String(id)))
+      .filter(Boolean)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    if (!rows.length) {
+      return `<p class="feed-trend-empty">No linked posts in the current window.</p>`;
+    }
+    return rows
+      .map((post, i) => {
+        const handle = post.handle || "";
+        const name = post.authorName || handle;
+        const url = post.url || `https://x.com/${handle}/status/${post.id}`;
+        const body = linkifyFeedText(post.text || "");
+        const avatar = post.authorAvatarUrl
+          ? `<img class="feed-source-avatar" src="${escapeHtml(post.authorAvatarUrl)}" alt="" width="32" height="32" loading="lazy" />`
+          : `<span class="feed-source-avatar feed-source-avatar-fallback" aria-hidden="true">${escapeHtml((handle || "?").slice(0, 1).toUpperCase())}</span>`;
+        return `<article class="feed-source-row" style="--enter-i:${i}">
+          <header class="feed-source-head">
+            ${avatar}
+            <div class="feed-source-identity">
+              <div class="feed-source-name-line">
+                <span class="feed-source-author">${escapeHtml(name)}</span>
+              </div>
+              <div class="feed-source-meta-line">
+                <a class="feed-handle" href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>
+                <span class="feed-meta-dot" aria-hidden="true">·</span>
+                <time class="feed-time" datetime="${escapeHtml(post.createdAt || "")}"${tipAttr(formatFeedAbsolute(post.createdAt))}>${formatFeedTime(post.createdAt)}</time>
+              </div>
+            </div>
+            <a class="feed-source-open icon-only-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open on X"${tipAttr("Open on X")}>${iconHTML("x-logo")}</a>
+          </header>
+          <div class="feed-source-text">${body || "<span class='feed-trend-empty'>No text</span>"}</div>
+        </article>`;
+      })
+      .join("");
+  }
+
+  function feedPlayerCardHTML(card, postsById, enterIndex) {
+    const initials = String(card.name || "?")
+      .split(/[\s.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase() || "?";
+    const photo = feedPlayerPhotoUrl(card.code);
+    const badge = card.team ? badgeHTML(card.team, "feed-player-team-badge") : "";
+    const metaBits = [];
+    if (card.team) metaBits.push(card.team);
+    if (card.position) metaBits.push(card.position);
+    if (card.price != null) metaBits.push(`£${Number(card.price).toFixed(1)}m`);
+    if (card.pts != null) metaBits.push(`${Number(card.pts)} Pts`);
+    const rankMaps = feedStatRankMaps(card.position);
+    const posLabel = String(card.position || "").toUpperCase();
+    const stats = feedPosStatSpecs(card.position)
+      .map((spec) => {
+        const raw = feedRowStatValue(card.row, spec.key);
+        const shown = feedStatDisplay(raw, spec.decimals);
+        const rankInfo = rankMaps[spec.key];
+        const rank =
+          card.code != null && rankInfo
+            ? rankInfo.ranks.get(String(card.code))
+            : null;
+        const rankHtml =
+          rank != null
+            ? `<span class="feed-player-stat-rank" title="Rank among ${escapeHtml(posLabel)}s (${rank} of ${rankInfo.n})">#${rank}</span>`
+            : "";
+        return `<div class="feed-player-stat">
+          <span class="feed-player-stat-label">${escapeHtml(spec.label)}</span>
+          <span class="feed-player-stat-value">${escapeHtml(shown)}</span>
+          ${rankHtml}
+        </div>`;
+      })
+      .join("");
+    const photoBlock = photo
+      ? `<img class="feed-player-photo" src="${escapeHtml(photo)}" alt="" width="72" height="72" loading="lazy" data-initials="${escapeHtml(initials)}" />`
+      : `<span class="feed-player-photo feed-player-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+
+    return `<article class="rankings-card feed-player-card" style="--enter-i:${enterIndex}">
+      <div class="feed-player-card-top">
+        <div class="feed-player-identity">
+          <div class="feed-player-photo-wrap">
+            ${photoBlock}
+            ${badge}
+          </div>
+          <div class="feed-player-title">
+            <h3 class="feed-player-name">${escapeHtml(card.name)}</h3>
+            <p class="feed-player-meta">${escapeHtml(metaBits.join(" · "))}</p>
+          </div>
+        </div>
+        <div class="feed-player-stats">${stats}</div>
+      </div>
+      <div class="feed-source-list feed-player-quotes">${feedQuoteRowsHTML(card.postIds, postsById)}</div>
+    </article>`;
+  }
+
+  function fmtMarketsKickoffParts(iso) {
+    if (!iso) return { day: "", date: "", time: "" };
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return { day: "", date: "", time: "" };
+    try {
+      const day = d.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
+      const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const time = d.toLocaleTimeString(undefined, localeTimeOptions());
+      return { day, date, time };
+    } catch {
+      return { day: "", date: "", time: iso };
+    }
+  }
+
+  function fmtMarketsUpdated(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    try {
+      return d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        ...localeTimeOptions(),
+      });
+    } catch {
+      return iso;
+    }
+  }
+
+  function marketsBookLabel(key) {
+    if (!key) return "";
+    const labels = {
+      pinnacle: "Pinnacle",
+      betfair_ex_uk: "Betfair EX",
+      betfair_ex_eu: "Betfair EX",
+      williamhill: "William Hill",
+      unibet_uk: "Unibet",
+      ladbrokes_uk: "Ladbrokes",
+      paddypower: "Paddy Power",
+      skybet: "Sky Bet",
+    };
+    if (labels[key]) return labels[key];
+    return String(key)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function marketsApiLabel() {
+    const source = (MARKETS.meta || {}).source;
+    if (!source) return "";
+    if (source === "the-odds-api") return "The Odds API";
+    return String(source);
+  }
+
+  function marketsPrimaryBookKey() {
+    const counts = new Map();
+    for (const fx of MARKETS.fixtures || []) {
+      const key = fx.books && fx.books.primary;
+      if (!key) continue;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    let best = "";
+    let bestN = -1;
+    for (const [key, n] of counts) {
+      if (n > bestN) {
+        best = key;
+        bestN = n;
+      }
+    }
+    return best;
+  }
+
+  function marketsAttributionText() {
+    const parts = [];
+    if (MARKETS.generatedAt) {
+      const when = fmtMarketsUpdated(MARKETS.generatedAt);
+      if (when) parts.push(`Updated ${when}`);
+    }
+    const api = marketsApiLabel();
+    if (api) parts.push(api);
+    const book = marketsBookLabel(marketsPrimaryBookKey());
+    if (book) parts.push(`Odds: ${book}`);
+    return parts.join(" · ");
+  }
+
+  function marketsTeamLabel(side) {
+    if (!side) return "—";
+    return TEAM_NAMES[side.code] || side.code || side.name || "—";
+  }
+
+  /** Heat band for goals / CS cells — high = strong, low = weak. */
+  function clampMarketsHeat(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return MARKETS_HEAT_DEFAULT;
+    return Math.min(MARKETS_HEAT_MAX, Math.max(MARKETS_HEAT_MIN, Math.round(n / 5) * 5));
+  }
+
+  function loadMarketsHeat(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw == null || raw === "") return MARKETS_HEAT_DEFAULT;
+      return clampMarketsHeat(raw);
+    } catch {
+      return MARKETS_HEAT_DEFAULT;
+    }
+  }
+
+  function saveMarketsHeat(key, value) {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      /* private browsing */
+    }
+  }
+
+  state.marketsHeatGoals = loadMarketsHeat(MARKETS_HEAT_GOALS_KEY);
+  state.marketsHeatCs = loadMarketsHeat(MARKETS_HEAT_CS_KEY);
+
+  /** Map a 0–100 strength → high/low cutoffs for one metric. Default 50 = original bands. */
+  function marketsMetricThresholds(kind, strength) {
+    const t = (clampMarketsHeat(strength) - 50) / 50; // -1 … +1
+    if (kind === "goals") {
+      return {
+        high: 1.85 - t * 0.35, // 2.20 → 1.50
+        low: 1.0 + t * 0.25, // 0.75 → 1.25
+      };
+    }
+    return {
+      high: 38 - t * 10, // 48 → 28
+      low: 18 + t * 7, // 11 → 25
+    };
+  }
+
+  function marketsHeatTone(kind, value) {
+    const v = Number(value);
+    if (!Number.isFinite(v)) return "mid";
+    const strength = kind === "goals" ? state.marketsHeatGoals : state.marketsHeatCs;
+    const th = marketsMetricThresholds(kind, strength);
+    const span = Math.max(th.high - th.low, kind === "goals" ? 0.4 : 8);
+    const veryHigh = th.high + span * 0.5;
+    const veryLow = th.low - span * 0.5;
+    if (v >= veryHigh) return "very-high";
+    if (v < veryLow) return "very-low";
+    if (v >= th.high) return "high";
+    if (v < th.low) return "low";
+    return "mid";
+  }
+
+  function formatMarketsGoalsHeatLabel(strength) {
+    const th = marketsMetricThresholds("goals", strength);
+    return `≥${th.high.toFixed(2)} / <${th.low.toFixed(2)}`;
+  }
+
+  function formatMarketsCsHeatLabel(strength) {
+    const th = marketsMetricThresholds("cs", strength);
+    return `≥${Math.round(th.high)}% / <${Math.round(th.low)}%`;
+  }
+
+  function marketsScoreRowHTML(score, prob, homeCode, awayCode) {
+    const parts = String(score || "").split("-");
+    const hs = parts[0] != null ? parts[0].trim() : "—";
+    const as = parts[1] != null ? parts[1].trim() : "—";
+    return `<div class="markets-score-row">
+      ${badgeHTML(homeCode, "markets-score-badge")}
+      <span class="markets-score-pill">${escapeHtml(hs)}&nbsp;-&nbsp;${escapeHtml(as)}</span>
+      ${badgeHTML(awayCode, "markets-score-badge")}
+      <span class="markets-score-pct">${Number(prob).toFixed(0)}%</span>
+    </div>`;
+  }
+
+  function marketsTeamRowHTML(side, goals, cs, role) {
+    const code = side?.code || "";
+    const label = marketsTeamLabel(side);
+    const gTone = marketsHeatTone("goals", goals);
+    const cTone = marketsHeatTone("cs", cs);
+    const sideMark =
+      role === "home"
+        ? `<span class="markets-side-mark" title="Home" aria-label="Home">H</span>`
+        : `<span class="markets-side-mark" title="Away" aria-label="Away">A</span>`;
+    return `<div class="markets-team-row markets-team-row-${role}">
+      <div class="markets-team-cell">
+        ${badgeHTML(code, "markets-badge")}
+        <span class="markets-side-name">${escapeHtml(label)}</span>
+        ${sideMark}
+      </div>
+      <div class="markets-stat markets-stat-${gTone}" title="Projected goals">
+        <span class="markets-stat-value" data-count-to="${Number(goals)}" data-count-decimals="2">${Number(goals).toFixed(2)}</span>
+      </div>
+      <div class="markets-stat markets-stat-${cTone}" title="Clean sheet %">
+        <span class="markets-stat-value" data-count-to="${Math.round(Number(cs))}" data-count-decimals="0" data-count-suffix="%">${Math.round(Number(cs))}%</span>
+      </div>
+    </div>`;
+  }
+
+  function marketsLocalDateKey(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function marketsDateDividerHTML(iso) {
+    const when = fmtMarketsKickoffParts(iso);
+    const label = [when.day, when.date].filter(Boolean).join(" · ") || "Upcoming";
+    return `<div class="markets-divider" role="heading" aria-level="3"><span>${escapeHtml(label)}</span></div>`;
+  }
+
+  function marketsCardHTML(fx) {
+    const homeCode = fx.home?.code || "";
+    const awayCode = fx.away?.code || "";
+    const goalsH = Number(fx.goals?.home);
+    const goalsA = Number(fx.goals?.away);
+    const csH = Number(fx.cleanSheet?.home);
+    const csA = Number(fx.cleanSheet?.away);
+    const when = fmtMarketsKickoffParts(fx.commenceTime);
+    const topScores = (fx.topScores || []).slice(0, 3);
+    const scoresHTML = topScores.length
+      ? topScores.map((s) => marketsScoreRowHTML(s.score, s.prob, homeCode, awayCode)).join("")
+      : `<div class="markets-scores-empty">—</div>`;
+    const kickLabel = [when.day, when.date, when.time].filter(Boolean).join(" ");
+
+    return `<article class="markets-card">
+      <div class="markets-body">
+        <div class="markets-body-heads">
+          <div class="markets-col-heads">
+            <span class="markets-col-head markets-col-head-team markets-kickoff"${kickLabel ? ` title="${escapeHtml(kickLabel)}"` : ""}>${escapeHtml(when.time || "")}</span>
+            <span class="markets-col-head">Goals</span>
+            <span class="markets-col-head">CS%</span>
+          </div>
+          <span class="markets-col-head markets-col-head-scores">Scores</span>
+        </div>
+        <div class="markets-body-rows">
+          <div class="markets-teams">
+            ${marketsTeamRowHTML(fx.home, goalsH, csH, "home")}
+            ${marketsTeamRowHTML(fx.away, goalsA, csA, "away")}
+          </div>
+          <div class="markets-scores-list" aria-label="Most likely scores">${scoresHTML}</div>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  function renderMarkets() {
+    const root = el.marketsGrid;
+    if (!root) return;
+    const fixtures = MARKETS.fixtures || [];
+    if (el.marketsUpdated) {
+      el.marketsUpdated.textContent = marketsAttributionText();
+    }
+    if (!fixtures.length) {
+      root.innerHTML = `<div class="empty-state markets-empty">
+        <p>No market odds loaded yet.</p>
+        <p class="markets-empty-hint">Add <code>ODDS_API_KEY</code> to the project <code>.env</code>, then run:</p>
+        <pre class="markets-empty-cmd">python3 site/fetch_markets.py</pre>
+      </div>`;
+      return;
+    }
+
+    const groups = new Map();
+    for (const fx of fixtures) {
+      const key = marketsLocalDateKey(fx.commenceTime) || "_";
+      let group = groups.get(key);
+      if (!group) {
+        group = { sampleIso: fx.commenceTime, fixtures: [] };
+        groups.set(key, group);
+      }
+      group.fixtures.push(fx);
+    }
+
+    const parts = [];
+    for (const group of groups.values()) {
+      parts.push(marketsDateDividerHTML(group.sampleIso));
+      for (const fx of group.fixtures) parts.push(marketsCardHTML(fx));
+    }
+    root.innerHTML = parts.join("");
+  }
+
+  function feedCardMatchesQuery(card, query) {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q) return true;
+    const hay = [card.name, card.team, card.position]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  }
+
+  function renderFeed() {
+    const root = el.feedTrending || el.feedList;
+    if (!root) return;
+    const posts = SOCIAL.posts || [];
+    const accounts = SOCIAL.accounts || [];
+    const meta = SOCIAL.meta || {};
+    const postsById = new Map(posts.map((p) => [String(p.id), p]));
+    const mention = computeFeedMentionCards(posts);
+    const windowHours = meta.windowHours || mention.windowHours || FEED_WINDOW_HOURS;
+    const query = el.feedSearch ? el.feedSearch.value : "";
+
+    if (!posts.length) {
+      const handles = accounts.map((a) => `@${a.handle}`).filter(Boolean).join(", ") || "@LetsTalk_FPL";
+      root.innerHTML = `<div class="empty-state feed-empty">
+        <p>No posts loaded yet — player cards need a fetched corpus.</p>
+        <p class="feed-empty-hint">Watching ${escapeHtml(handles)}. Add more handles in <code>site/social_accounts.json</code>, then:</p>
+        <pre class="feed-empty-cmd">python3 site/fetch_social.py
+python3 site/annotate_social.py</pre>
+      </div>`;
+      return;
+    }
+
+    if (!mention.cards.length) {
+      root.innerHTML = `<div class="empty-state feed-empty">
+        <p>No player mentions in the last ${windowHours}h.</p>
+        <p class="feed-empty-hint">Pull fresher posts or re-annotate with the mention pipeline.</p>
+      </div>`;
+      return;
+    }
+
+    const filtered = mention.cards.filter((card) => feedCardMatchesQuery(card, query));
+    const trimmed = String(query || "").trim();
+    if (!filtered.length) {
+      root.innerHTML = `<div class="empty-state feed-empty" role="status">
+        <p>No players found${trimmed ? ` for “${escapeHtml(trimmed)}”` : ""}.</p>
+        <p class="feed-empty-hint">Try another name, or clear the search to see all mentions.</p>
+      </div>`;
+      return;
+    }
+
+    const cards = filtered
+      .map((card, i) => feedPlayerCardHTML(card, postsById, i))
+      .join("");
+
+    root.innerHTML = `<div class="rankings-grid feed-player-grid">${cards}</div>`;
+
+    root.querySelectorAll("img.feed-player-photo").forEach((img) => {
+      img.addEventListener("error", () => {
+        const fallback = document.createElement("span");
+        fallback.className = "feed-player-photo feed-player-photo-fallback";
+        fallback.setAttribute("aria-hidden", "true");
+        fallback.textContent = img.getAttribute("data-initials") || "?";
+        img.replaceWith(fallback);
+      });
+    });
+  }
+
+
+  const PAGE_KEY = "fpl-explorer-page";
+  const PAGES = ["opta", "rankings", "expected", "schedule", "feed", "markets"];
+
+  function storedPage() {
+    try {
+      const saved = localStorage.getItem(PAGE_KEY);
+      return PAGES.includes(saved) ? saved : "opta";
+    } catch {
+      return "opta";
+    }
+  }
+
+  function pagePaneFor(page) {
+    if (page === "opta") return el.optaPage;
+    if (page === "rankings") return el.rankingsPage;
+    if (page === "expected") return el.expectedPage;
+    if (page === "schedule") return el.schedulePage;
+    if (page === "feed") return el.feedPage;
+    if (page === "markets") return el.marketsPage;
+    return null;
+  }
+
+  function playPageEnter(pane) {
+    if (!pane) return;
+    pane.classList.remove("is-entering", "is-enter-pending");
+    clearTimeout(pane._enterClear);
+    if (pane._countUpRaf) {
+      cancelAnimationFrame(pane._countUpRaf);
+      pane._countUpRaf = 0;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const slowEnter = pane.id === "schedule-page";
+    const rankingsEnter = pane.id === "rankings-page";
+    const expectedEnter = pane.id === "expected-page";
+    const marketsEnter = pane.id === "markets-page";
+    const optaEnter = pane.id === "opta-page";
+
+    // Stamp stagger indices before the class is applied so delayed rows /
+    // cards / badges all share one wave. Cap is enforced in CSS too.
+    const staggerSel = [
+      ".table-wrap > table > tbody > tr",
+      ".barbell-body > .barbell-row",
+      ".barbell-body > .barbell-group",
+      ".schedule-grid > .schedule-card",
+      ".schedule-scatter-head",
+      ".schedule-scatter-point",
+      ".feed-trending .feed-player-card",
+      ".feed-trending .feed-source-row",
+    ].join(", ");
+    pane.querySelectorAll(staggerSel).forEach((node, i) => {
+      node.style.setProperty("--enter-i", String(i));
+      node.querySelectorAll(".barbell-track").forEach((track) => {
+        track.style.setProperty("--enter-i", String(i));
+      });
+    });
+    // Matchups: cards get their own 0-based index so the post-scatter
+    // cascade doesn't inherit the scatter-point indices.
+    if (slowEnter) {
+      pane.querySelectorAll(".schedule-scatter-point").forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+      pane.querySelectorAll(".schedule-grid > .schedule-card").forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+    }
+    // Rankings rows: same index within every card so all lists cascade together.
+    pane.querySelectorAll(".rankings-list").forEach((list) => {
+      list.querySelectorAll(":scope > .rankings-row").forEach((row, i) => {
+        row.style.setProperty("--enter-i", String(i));
+      });
+    });
+    if (marketsEnter) {
+      pane.querySelectorAll(".markets-divider").forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+      pane.querySelectorAll(".markets-grid > .markets-card").forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+    }
+
+    // Hide settled content immediately so display:none → visible never
+    // flashes the finished layout before the enter animation starts.
+    pane.classList.add("is-enter-pending");
+
+    // Wait two frames so the pending hide has painted, then start enter
+    // (avoids browsers skipping the animation on the same frame as show).
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (pane.style.display === "none") {
+          pane.classList.remove("is-enter-pending");
+          return;
+        }
+        void pane.offsetWidth;
+        pane.classList.remove("is-enter-pending");
+        pane.classList.add("is-entering");
+        if (marketsEnter) startMarketsStatCountUp(pane);
+        // Matchups cards cascade with scatter (no wait for scatter to finish).
+        const clearMs = expectedEnter
+          ? 2400
+          : rankingsEnter
+            ? 1400
+            : slowEnter
+              ? 1800
+              : marketsEnter
+                ? 3200
+                : optaEnter
+                  ? 1600
+                  : 1500;
+        pane._enterClear = setTimeout(() => pane.classList.remove("is-entering"), clearMs);
+      });
+    });
+  }
+
+  function startMarketsStatCountUp(pane) {
+    const nodes = [...pane.querySelectorAll(".markets-stat-value[data-count-to]")];
+    if (!nodes.length) return;
+    const duration = 2000;
+    const easeOut = (t) => 1 - (1 - t) ** 3;
+    nodes.forEach((node) => {
+      const target = Number(node.dataset.countTo);
+      const decimals = Number(node.dataset.countDecimals);
+      const suffix = node.dataset.countSuffix || "";
+      if (!Number.isFinite(target)) return;
+      const dec = Number.isFinite(decimals) ? decimals : 0;
+      node.textContent = `${(0).toFixed(dec)}${suffix}`;
+      node._countTarget = target;
+      node._countDecimals = dec;
+      node._countSuffix = suffix;
+    });
+
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const p = easeOut(t);
+      nodes.forEach((node) => {
+        const target = node._countTarget;
+        if (!Number.isFinite(target)) return;
+        const value = target * p;
+        node.textContent = `${value.toFixed(node._countDecimals)}${node._countSuffix || ""}`;
+      });
+      if (t < 1) {
+        pane._countUpRaf = requestAnimationFrame(tick);
+      } else {
+        nodes.forEach((node) => {
+          if (!Number.isFinite(node._countTarget)) return;
+          node.textContent = `${Number(node._countTarget).toFixed(node._countDecimals)}${node._countSuffix || ""}`;
+        });
+        pane._countUpRaf = 0;
+      }
+    };
+    pane._countUpRaf = requestAnimationFrame(tick);
+  }
+
+  function setPage(page) {
+    state.page = page;
+    try {
+      localStorage.setItem(PAGE_KEY, page);
+    } catch {
+      // Private browsing or a full quota — the page just won't persist.
+    }
+    clearTimeout(fixtureTtTimer);
+    hideFixtureTooltip();
+    hidePageInfoTooltip();
+    syncPageInfoButton();
+    el.pageOpta.classList.toggle("active", page === "opta");
+    el.pageRankings.classList.toggle("active", page === "rankings");
+    el.pageExpected.classList.toggle("active", page === "expected");
+    el.pageSchedule.classList.toggle("active", page === "schedule");
+    if (el.pageFeed) el.pageFeed.classList.toggle("active", page === "feed");
+    if (el.pageMarkets) el.pageMarkets.classList.toggle("active", page === "markets");
+    el.optaPage.style.display = page === "opta" ? "" : "none";
+    el.rankingsPage.style.display = page === "rankings" ? "" : "none";
+    el.expectedPage.style.display = page === "expected" ? "" : "none";
+    el.schedulePage.style.display = page === "schedule" ? "" : "none";
+    if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
+    if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
+    const hideChrome = page === "schedule" || page === "feed" || page === "markets";
+    el.subtoolbar.style.display = hideChrome ? "none" : "";
+    el.sidebar.style.display = hideChrome ? "none" : "";
+    el.tableOnlyToggles.style.display = page === "opta" ? "" : "none";
+    if (el.compareToggle) el.compareToggle.style.display = page === "opta" ? "" : "none";
+    syncHighlightUI();
+    syncRankingsPerGwUI();
+    if (page !== "opta") {
+      setColumnsOpen(false);
+    }
+    // Expected Data keeps its own Fixture Location control (adds Compare),
+    // swapped into the same sidebar slot as the shared Total/Home/Away group.
+    el.splitGroup.style.display = page === "expected" ? "none" : "";
+    if (el.expectedSplitGroup) {
+      el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
+    }
+    if (page !== "expected") setExpectedCatMenuOpen(false);
+    if (page === "rankings") {
+      renderRankings();
+    } else if (page === "expected") {
+      renderExpected();
+    } else if (page === "schedule") {
+      renderSchedule();
+    } else if (page === "feed") {
+      renderFeed();
+    } else if (page === "markets") {
+      renderMarkets();
+    }
+    // Enter after content is in the DOM so the animation covers real layout.
+    playPageEnter(pagePaneFor(page));
+    requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+  }
+
+  el.pageOpta.addEventListener("click", () => setPage("opta"));
+  el.pageRankings.addEventListener("click", () => setPage("rankings"));
+  el.pageExpected.addEventListener("click", (e) => {
+    // Touch / click: toggle the category menu. Hover still opens it via CSS.
+    e.stopPropagation();
+    const willOpen = !el.expectedTabWrap.classList.contains("open");
+    setExpectedCatMenuOpen(willOpen);
+    setPage("expected");
+  });
+  el.pageSchedule.addEventListener("click", () => setPage("schedule"));
+  if (el.pageFeed) el.pageFeed.addEventListener("click", () => setPage("feed"));
+  if (el.pageMarkets) el.pageMarkets.addEventListener("click", () => setPage("markets"));
+  if (el.expectedTabWrap) {
+    el.expectedTabWrap.addEventListener("mouseenter", () => {
+      buildExpectedCatMenu();
+      setExpectedCatMenuOpen(true);
+    });
+    el.expectedTabWrap.addEventListener("mouseleave", () => setExpectedCatMenuOpen(false));
+  }
+  document.addEventListener("click", (e) => {
+    if (!el.expectedTabWrap || !el.expectedTabWrap.classList.contains("open")) return;
+    if (!el.expectedTabWrap.contains(e.target)) setExpectedCatMenuOpen(false);
+  });
+
+  // Brand mark always returns to OPTA (home) with a full refresh so filters
+  // and ephemeral UI state reset alongside the page switch.
+  const brandHome = document.querySelector("#brand-home");
+  if (brandHome) {
+    brandHome.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        localStorage.setItem(PAGE_KEY, "opta");
+      } catch {
+        // Private browsing — reload still lands on the default page.
+      }
+      location.reload();
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Wire up controls
+  // ---------------------------------------------------------------------
+  function setView(view) {
+    state.view = view;
+    state.sortKey = view === "players" && isNextSeason() ? "price" : "pts";
+    state.sortDir = "desc";
+    state.hiddenCols = new Set();
+    state.compareMode = false;
+    state.compareSelection.players.clear();
+    state.compareSelection.teams.clear();
+    // Player ids and team codes share the same pin list, so a view switch
+    // would otherwise leave pins that can never match a visible row.
+    state.rankingsPins.length = 0;
+    el.compareToggle.classList.remove("on");
+    hideToast();
+    el.tabPlayers.classList.toggle("active", view === "players");
+    el.tabTeams.classList.toggle("active", view === "teams");
+    syncSegThumb(el.tabPlayers.closest(".tabs"));
+    el.positionFilterGroup.style.display = view === "players" ? "" : "none";
+    el.minutesFilterGroup.style.display = view === "players" ? "" : "none";
+    el.priceFilterGroup.style.display = view === "players" ? "" : "none";
+    el.inactiveFilterGroup.style.display =
+      view === "players" && HAS_PRICE_DATA && !isNextSeason() ? "" : "none";
+    el.valueModeGroup.style.display = view === "players" ? "" : "none";
+    el.newpriceWrap.style.display = view === "players" && !isNextSeason() ? "" : "none";
+    state.enhancePct = view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
+    updateEnhancePctSlider();
+    syncHighlightUI();
+    syncRankingsPerGwUI();
+    if (view !== "players" && state.valueMode !== "total") {
+      setValueMode("total", { rerender: false });
+    }
+    if ((view !== "players" || isNextSeason()) && state.showNewPrice) {
+      state.showNewPrice = false;
+      el.newpriceIssuesPanel.classList.remove("open");
+      syncShowNewPriceUI();
+    }
+    renderColumnsPanel();
+    if (state.page === "expected") renderExpected();
+    else buildExpectedCatMenu();
+    renderTable();
+    if (view === "players") {
+      requestAnimationFrame(() => syncSegThumb(el.valueModeSeg, { animate: false }));
+    }
+  }
+
+  el.tabPlayers.addEventListener("click", () => setView("players"));
+  el.tabTeams.addEventListener("click", () => setView("teams"));
+
+  el.splitSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-split]");
+    if (!btn) return;
+    state.split = btn.dataset.split;
+    $$("#split-seg button").forEach((b) => b.classList.toggle("active", b === btn));
+    syncSegThumb(el.splitSeg);
+    renderTable();
+  });
+
+  el.expectedSplitSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-split]");
+    if (!btn || btn.disabled) return;
+    state.expectedSplit = btn.dataset.split;
+    $$("#expected-split-seg button").forEach((b) => b.classList.toggle("active", b === btn));
+    syncSegThumb(el.expectedSplitSeg);
+    renderExpected();
+  });
+
+  if (el.feedSortSeg) {
+    el.feedSortSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-feed-sort]");
+      if (!btn) return;
+      state.feedSort = btn.dataset.feedSort === "recent" ? "recent" : "volume";
+      $$("#feed-sort-seg button").forEach((b) => b.classList.toggle("active", b === btn));
+      syncSegThumb(el.feedSortSeg);
+      renderFeed();
+    });
+  }
+
+  if (el.feedSearch) {
+    let feedSearchTimer;
+    el.feedSearch.addEventListener("input", () => {
+      clearTimeout(feedSearchTimer);
+      feedSearchTimer = setTimeout(() => renderFeed(), 120);
+    });
+  }
+
+  let searchTimer;
+  el.search.addEventListener("input", (e) => {
+    clearTimeout(searchTimer);
+    const val = e.target.value;
+    searchTimer = setTimeout(() => {
+      state.search = val;
+      renderTable();
+    }, 120);
+  });
+
+  function setupDualSlider({
+    minInput,
+    maxInput,
+    fillEl,
+    minLabelEl,
+    maxLabelEl,
+    boundsMin,
+    boundsMax,
+    // Optional live bounds (mutated on season switch). When set, overrides
+    // the static boundsMin/boundsMax each paint.
+    getBounds = null,
+    step,
+    get,
+    set,
+    format,
+    onInput = renderTable,
+  }) {
+    function rangeBounds() {
+      if (getBounds) return getBounds();
+      return { min: boundsMin, max: boundsMax };
+    }
+
+    function syncInputBounds() {
+      const { min, max } = rangeBounds();
+      [minInput, maxInput].forEach((inp) => {
+        inp.min = min;
+        inp.max = max;
+        inp.step = step;
+      });
+    }
+    syncInputBounds();
+
+    function updateUI() {
+      syncInputBounds();
+      const { min: bMin, max: bMax } = rangeBounds();
+      const [curMin, curMax] = get();
+      minInput.value = curMin;
+      maxInput.value = curMax;
+      const span = bMax - bMin || 1;
+      const pctMin = ((curMin - bMin) / span) * 100;
+      const pctMax = ((curMax - bMin) / span) * 100;
+      fillEl.style.left = pctMin + "%";
+      fillEl.style.right = 100 - pctMax + "%";
+      minLabelEl.textContent = format(curMin);
+      maxLabelEl.textContent = format(curMax);
+    }
+
+    minInput.addEventListener("input", () => {
+      fillEl.classList.add("is-live");
+      const [, curMax] = get();
+      const v = Math.min(Number(minInput.value), curMax);
+      set(v, curMax);
+      updateUI();
+      onInput();
+    });
+    maxInput.addEventListener("input", () => {
+      fillEl.classList.add("is-live");
+      const [curMin] = get();
+      const v = Math.max(Number(maxInput.value), curMin);
+      set(curMin, v);
+      updateUI();
+      onInput();
+    });
+    const endLive = () => fillEl.classList.remove("is-live");
+    minInput.addEventListener("change", endLive);
+    maxInput.addEventListener("change", endLive);
+    minInput.addEventListener("pointerup", endLive);
+    maxInput.addEventListener("pointerup", endLive);
+
+    updateUI();
+    return updateUI;
+  }
+
+  const updatePriceSlider = setupDualSlider({
+    minInput: el.priceMin,
+    maxInput: el.priceMax,
+    fillEl: el.priceFill,
+    minLabelEl: el.priceMinLabel,
+    maxLabelEl: el.priceMaxLabel,
+    getBounds: () => bounds.price,
+    step: 0.1,
+    get: () => [state.priceMin, state.priceMax],
+    set: (lo, hi) => {
+      state.priceMin = lo;
+      state.priceMax = hi;
+    },
+    format: (v) => "£" + v.toFixed(1) + "m",
+  });
+
+  const updateMinsSlider = setupDualSlider({
+    minInput: el.minsMin,
+    maxInput: el.minsMax,
+    fillEl: el.minsFill,
+    minLabelEl: el.minsMinLabel,
+    maxLabelEl: el.minsMaxLabel,
+    getBounds: () => bounds.mins,
+    step: 10,
+    get: () => [state.minsMin, state.minsMax],
+    set: (lo, hi) => {
+      state.minsMin = lo;
+      state.minsMax = hi;
+    },
+    format: (v) => Math.round(v).toLocaleString(),
+  });
+
+  const updateScheduleGwSlider = setupDualSlider({
+    minInput: el.scheduleGwMin,
+    maxInput: el.scheduleGwMax,
+    fillEl: el.scheduleGwFill,
+    minLabelEl: el.scheduleGwMinLabel,
+    maxLabelEl: el.scheduleGwMaxLabel,
+    boundsMin: SCHEDULE_GW_MIN,
+    boundsMax: SCHEDULE_GW_MAX,
+    step: 1,
+    get: () => [state.scheduleGwMin, state.scheduleGwMax],
+    set: (lo, hi) => {
+      state.scheduleGwMin = lo;
+      state.scheduleGwMax = hi;
+    },
+    format: (v) => `GW${v}`,
+    onInput: renderSchedule,
+  });
+
+  // Single-thumb variant of setupDualSlider, for the Enhance highlight-%
+  // control — one value, fill runs from the track's left edge to the thumb.
+  function setupSingleSlider({
+    input,
+    fillEl,
+    labelEl,
+    boundsMin,
+    boundsMax,
+    step,
+    get,
+    set,
+    format,
+    onInput = renderTable,
+  }) {
+    input.min = boundsMin;
+    input.max = boundsMax;
+    input.step = step;
+
+    function updateUI() {
+      const v = get();
+      input.value = v;
+      const span = boundsMax - boundsMin || 1;
+      fillEl.style.left = "0%";
+      fillEl.style.width = ((v - boundsMin) / span) * 100 + "%";
+      labelEl.textContent = format(v);
+    }
+
+    input.addEventListener("input", () => {
+      fillEl.classList.add("is-live");
+      set(Number(input.value));
+      updateUI();
+      onInput();
+    });
+    const endLive = () => fillEl.classList.remove("is-live");
+    input.addEventListener("change", endLive);
+    input.addEventListener("pointerup", endLive);
+
+    updateUI();
+    return updateUI;
+  }
+
+  // Sidebar Enhance % (Statistics) and Matchups Highlight Ranks are independent —
+  // Matchups is always a team view, so it uses absolute top/bottom place counts.
+  let updateEnhancePctSlider = () => {};
+  let updateScheduleEnhancePctSlider = () => {};
+
+  updateEnhancePctSlider = setupSingleSlider({
+    input: el.enhancePct,
+    fillEl: el.enhancePctFill,
+    labelEl: el.enhancePctLabel,
+    boundsMin: ENHANCE_PCT_MIN,
+    boundsMax: ENHANCE_PCT_MAX,
+    step: 1,
+    get: () => state.enhancePct,
+    set: (v) => {
+      state.enhancePct = v;
+    },
+    format: (v) => `Top ${v}%`,
+    onInput: renderTable,
+  });
+
+  updateScheduleEnhancePctSlider = setupSingleSlider({
+    input: el.scheduleEnhancePct,
+    fillEl: el.scheduleEnhancePctFill,
+    labelEl: el.scheduleEnhancePctLabel,
+    boundsMin: SCHEDULE_ENHANCE_TOP_MIN,
+    boundsMax: SCHEDULE_ENHANCE_TOP_MAX,
+    step: 1,
+    get: () => state.scheduleEnhanceTopN,
+    set: (v) => {
+      state.scheduleEnhanceTopN = v;
+    },
+    format: (v) => `Top/Bottom ${v}`,
+    onInput: renderSchedule,
+  });
+
+  const updateScheduleExpectedWeightSlider = setupSingleSlider({
+    input: el.scheduleExpectedWeight,
+    fillEl: el.scheduleExpectedWeightFill,
+    labelEl: el.scheduleExpectedWeightLabel,
+    boundsMin: 0,
+    boundsMax: 100,
+    step: 5,
+    get: () => state.scheduleExpectedWeight,
+    set: (v) => {
+      state.scheduleExpectedWeight = v;
+    },
+    format: (v) => `${v} / ${100 - v}`,
+    onInput: renderSchedule,
+  });
+
+  if (el.fixtureTtDelay && el.fixtureTtDelayFill && el.fixtureTtDelayLabel) {
+    setupSingleSlider({
+      input: el.fixtureTtDelay,
+      fillEl: el.fixtureTtDelayFill,
+      labelEl: el.fixtureTtDelayLabel,
+      boundsMin: FIXTURE_TT_DELAY_SEC_MIN,
+      boundsMax: FIXTURE_TT_DELAY_SEC_MAX,
+      step: 0.1,
+      get: () => fixtureTtDelaySec,
+      set: (v) => {
+        fixtureTtDelaySec = clampFixtureTtDelaySec(v);
+        try {
+          localStorage.setItem(FIXTURE_TT_DELAY_KEY, String(fixtureTtDelaySec));
+        } catch {
+          /* private browsing */
+        }
+      },
+      format: (v) => `${clampFixtureTtDelaySec(v).toFixed(1)}s`,
+      onInput: () => {},
+    });
+  }
+
+  const scheduleEdgeMinInfo = $("#schedule-edge-min-info");
+  if (scheduleEdgeMinInfo) {
+    scheduleEdgeMinInfo.setAttribute(
+      "data-tip-html",
+      `Determines how many ranked values difference required to trigger matchup advantage ${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}.`
+    );
+  }
+
+  const updateScheduleEdgeMinSlider = setupSingleSlider({
+    input: el.scheduleEdgeMin,
+    fillEl: el.scheduleEdgeMinFill,
+    labelEl: el.scheduleEdgeMinLabel,
+    boundsMin: SCHEDULE_EDGE_MIN,
+    boundsMax: SCHEDULE_EDGE_MAX,
+    step: 1,
+    get: () => state.scheduleEdgeMin,
+    set: (v) => {
+      state.scheduleEdgeMin = v;
+    },
+    format: (v) => `≥ ${v} ranks better`,
+    onInput: renderSchedule,
+  });
+
+  let updateMarketsHeatGoalsSlider = () => {};
+  let updateMarketsHeatCsSlider = () => {};
+  if (el.marketsHeatGoals && el.marketsHeatGoalsFill && el.marketsHeatGoalsLabel) {
+    updateMarketsHeatGoalsSlider = setupSingleSlider({
+      input: el.marketsHeatGoals,
+      fillEl: el.marketsHeatGoalsFill,
+      labelEl: el.marketsHeatGoalsLabel,
+      boundsMin: MARKETS_HEAT_MIN,
+      boundsMax: MARKETS_HEAT_MAX,
+      step: 5,
+      get: () => state.marketsHeatGoals,
+      set: (v) => {
+        state.marketsHeatGoals = clampMarketsHeat(v);
+        saveMarketsHeat(MARKETS_HEAT_GOALS_KEY, state.marketsHeatGoals);
+      },
+      format: formatMarketsGoalsHeatLabel,
+      onInput: renderMarkets,
+    });
+  }
+  if (el.marketsHeatCs && el.marketsHeatCsFill && el.marketsHeatCsLabel) {
+    updateMarketsHeatCsSlider = setupSingleSlider({
+      input: el.marketsHeatCs,
+      fillEl: el.marketsHeatCsFill,
+      labelEl: el.marketsHeatCsLabel,
+      boundsMin: MARKETS_HEAT_MIN,
+      boundsMax: MARKETS_HEAT_MAX,
+      step: 5,
+      get: () => state.marketsHeatCs,
+      set: (v) => {
+        state.marketsHeatCs = clampMarketsHeat(v);
+        saveMarketsHeat(MARKETS_HEAT_CS_KEY, state.marketsHeatCs);
+      },
+      format: formatMarketsCsHeatLabel,
+      onInput: renderMarkets,
+    });
+  }
+
+  function setMarketsSlidersOpen(open) {
+    if (!el.marketsControls || !el.marketsSlidersToggle) return;
+    el.marketsControls.hidden = !open;
+    el.marketsControls.classList.toggle("is-collapsed", !open);
+    el.marketsSlidersToggle.classList.toggle("on", open);
+    el.marketsSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    el.marketsSlidersToggle.title = open ? "Hide color threshold sliders" : "Show color threshold sliders";
+    el.marketsSlidersToggle.setAttribute(
+      "aria-label",
+      open ? "Hide color threshold sliders" : "Show color threshold sliders"
+    );
+    if (open) {
+      requestAnimationFrame(() => {
+        updateMarketsHeatGoalsSlider();
+        updateMarketsHeatCsSlider();
+      });
+    }
+  }
+
+  if (el.marketsSlidersToggle) {
+    el.marketsSlidersToggle.addEventListener("click", () => {
+      setMarketsSlidersOpen(el.marketsControls.hidden);
+    });
+  }
+
+  function setScheduleSlidersOpen(open) {
+    if (!el.scheduleControls || !el.scheduleSlidersToggle) return;
+    el.scheduleControls.hidden = !open;
+    el.scheduleControls.classList.toggle("is-collapsed", !open);
+    el.scheduleSlidersToggle.classList.toggle("on", open);
+    el.scheduleSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    el.scheduleSlidersToggle.title = open ? "Hide matchup sliders" : "Show matchup sliders";
+    el.scheduleSlidersToggle.setAttribute("aria-label", open ? "Hide matchup sliders" : "Show matchup sliders");
+    if (open) {
+      // Fills were measured while collapsed — refresh now that layout is visible.
+      requestAnimationFrame(() => {
+        updateScheduleGwSlider();
+        updateScheduleEnhancePctSlider();
+        updateScheduleExpectedWeightSlider();
+        updateScheduleEdgeMinSlider();
+      });
+    }
+  }
+
+  if (el.scheduleSlidersToggle) {
+    el.scheduleSlidersToggle.addEventListener("click", () => {
+      setScheduleSlidersOpen(el.scheduleControls.hidden);
+    });
+  }
+
+  syncScheduleMatchupControls();
+
+  el.resetFilters.addEventListener("click", () => {
+    state.posFilter.clear();
+    state.teamFilter.clear();
+    state.priceMin = defaultMinPrice();
+    state.priceMax = bounds.price.max;
+    state.minsMin = defaultMinMinutes();
+    state.minsMax = bounds.mins.max;
+    state.search = "";
+    el.search.value = "";
+    state.hideDeparted = true;
+    if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
+    setValueMode("total", { rerender: false });
+    state.split = "combined";
+    $$("#split-seg button").forEach((b) => b.classList.toggle("active", b.dataset.split === "combined"));
+    syncSegThumb(el.splitSeg);
+    state.enhancePct = state.view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
+    updateEnhancePctSlider();
+    updatePriceSlider();
+    updateMinsSlider();
+    syncFilterChipUI();
+    renderTable();
+  });
+
+  if (HAS_PRICE_DATA) {
+    el.showDepartedCheck.addEventListener("change", () => {
+      state.hideDeparted = !el.showDepartedCheck.checked;
+      renderTable();
+    });
+  }
+
+  // Total / Per 90 / Per £m are mutually exclusive — the segmented control
+  // always leaves exactly one option selected.
+  function setValueMode(mode, { rerender = true } = {}) {
+    state.valueMode = mode;
+    $$("#value-mode-seg button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.valueMode === mode)
+    );
+    syncSegThumb(el.valueModeSeg);
+    if (rerender) renderTable();
+  }
+
+  el.valueModeSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value-mode]");
+    if (!btn || btn.dataset.valueMode === state.valueMode) return;
+    setValueMode(btn.dataset.valueMode);
+  });
+
+  // ---------------------------------------------------------------------
+  // Season switch (2025/26 OPTA vs zero-stat 2026/27 FPL squad preview)
+  // ---------------------------------------------------------------------
+  function applySeasonBounds() {
+    const next = computeBounds(state.season);
+    bounds.price.min = next.price.min;
+    bounds.price.max = next.price.max;
+    bounds.mins.min = next.mins.min;
+    bounds.mins.max = next.mins.max;
+    state.priceMin = defaultMinPrice();
+    state.priceMax = bounds.price.max;
+    state.minsMin = defaultMinMinutes();
+    state.minsMax = bounds.mins.max;
+    updatePriceSlider();
+    updateMinsSlider();
+  }
+
+  function syncSeasonChrome() {
+    const next = isNextSeason();
+    if (el.seasonSelect && el.seasonSelect.value !== state.season) {
+      el.seasonSelect.value = state.season;
+    }
+    el.newpriceWrap.style.display = state.view === "players" && !next ? "" : "none";
+    el.inactiveFilterGroup.style.display =
+      state.view === "players" && HAS_PRICE_DATA && !next ? "" : "none";
+    if (next) {
+      state.showNewPrice = false;
+      el.newpriceIssuesPanel.classList.remove("open");
+      syncShowNewPriceUI();
+    }
+  }
+
+  function setSeason(season, { rerender = true } = {}) {
+    if (season !== "2025-26" && season !== "2026-27") return;
+    if (state.season === season) return;
+    state.season = season;
+    // Drop team filters that don't exist in the destination season's chip set.
+    const allowed = new Set(teamCodesForSeason());
+    state.teamFilter.forEach((code) => {
+      if (!allowed.has(code)) state.teamFilter.delete(code);
+    });
+    state.compareSelection.players.clear();
+    state.compareSelection.teams.clear();
+    state.rankingsPins.length = 0;
+    // 2026/27 is preseason zeros — price is the useful default sort.
+    if (state.view === "players") {
+      state.sortKey = isNextSeason() ? "price" : "pts";
+      state.sortDir = "desc";
+    }
+    hideToast();
+    applySeasonBounds();
+    buildTeamFilterChips();
+    syncFilterChipUI();
+    syncSeasonChrome();
+    if (rerender) {
+      renderTable();
+      if (state.page === "expected") renderExpected();
+      if (state.page === "rankings") renderRankings();
+      if (state.page === "schedule") renderSchedule();
+    }
+  }
+
+  if (el.seasonSelect) {
+    el.seasonSelect.addEventListener("change", () => {
+      setSeason(el.seasonSelect.value);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // 2026/27 price toggle + manual-review list for build-time price matches
+  // (see match_new_season_prices() in site/build.py). Matching runs at
+  // build time — players who need a human to disambiguate their 2026/27
+  // price show up in DATA.priceMatchIssues rather than being guessed at.
+  // ---------------------------------------------------------------------
+  function syncShowNewPriceUI() {
+    el.newpriceToggle.classList.toggle("on", state.showNewPrice);
+  }
+
+  el.newpriceToggle.addEventListener("click", () => {
+    if (isNextSeason()) return;
+    state.showNewPrice = !state.showNewPrice;
+    syncShowNewPriceUI();
+    renderTable();
+  });
+
+  syncShowNewPriceUI();
+  syncSeasonChrome();
+
+  function renderPriceIssuesPanel() {
+    const issues = DATA.priceMatchIssues || [];
+    if (!issues.length) {
+      el.newpriceIssuesBadge.style.display = "none";
+      return;
+    }
+    el.newpriceIssuesBadge.style.display = "";
+    el.newpriceIssuesBadge.textContent = `⚠ ${issues.length}`;
+    el.newpriceIssuesPanel.innerHTML = `
+      <h4>Needs manual price match</h4>
+      <p class="issues-note">These names matched more than one 2026/27 player and couldn't be narrowed down automatically. Add an entry to <code>site/price_overrides.json</code> (pid → FPL player <code>code</code>) and rebuild.</p>
+      ${issues
+        .map(
+          (i) => `
+        <div class="issue-row">
+          <div class="issue-head">${escapeHtml(i.name)} <span class="issue-meta">${i.team} · ${i.position}</span></div>
+          <div class="issue-cands">
+            ${i.candidates
+              .map(
+                (c) =>
+                  `<div class="issue-cand">${escapeHtml(c.firstName)} ${escapeHtml(c.secondName)} — ${c.team} ${c.position}, £${c.price.toFixed(1)}m <span class="issue-code">code ${c.code}</span></div>`
+              )
+              .join("") || escapeHtml(i.reason)}
+          </div>
+        </div>
+      `
+        )
+        .join("")}
+    `;
+  }
+
+  el.newpriceIssuesBadge.addEventListener("click", () => {
+    el.newpriceIssuesPanel.classList.toggle("open");
+  });
+  document.addEventListener("click", (e) => {
+    if (!el.newpriceIssuesPanel.contains(e.target) && !el.newpriceIssuesBadge.contains(e.target)) {
+      el.newpriceIssuesPanel.classList.remove("open");
+    }
+  });
+
+  // Highlight Top/Bottom % is always on for Statistics; show the slider and
+  // Recalculate switch whenever that page is active.
+  function syncHighlightUI() {
+    el.enhancePctGroup.style.display = state.page === "opta" ? "" : "none";
+    if (el.enhancePctHint) {
+      el.enhancePctHint.textContent = state.recalculateRanks
+        ? "of filtered rows"
+        : `of all ${state.view}`;
+    }
+    syncRankRecalculateUI();
+  }
+
+  // One switch, two owners: Statistics always offers it; Rankings always does.
+  // Each page keeps its own value so toggling one never silently rewrites the
+  // other's population.
+  function rankRecalculateOwner() {
+    return state.page === "rankings" ? "rankingsRecalculate" : "recalculateRanks";
+  }
+
+  function syncRankRecalculateUI() {
+    const visible = state.page === "rankings" || state.page === "opta";
+    el.rankRecalculateWrap.style.display = visible ? "" : "none";
+    const on = state[rankRecalculateOwner()];
+    el.rankRecalculateToggle.checked = on;
+    const what = state.page === "rankings" ? "ranks" : "highlights";
+    const label = on
+      ? `Recalculate on: ${what} are measured against the filtered ${state.view} only`
+      : `Recalculate off: ${what} are measured against all ${state.view}`;
+    setTip(el.rankRecalculateWrap, label);
+    el.rankRecalculateToggle.setAttribute("aria-label", label);
+  }
+
+  function syncRankingsPerGwUI() {
+    if (!el.rankingsPerGwWrap || !el.rankingsPerGwToggle) return;
+    const visible = state.page === "rankings";
+    el.rankingsPerGwWrap.style.display = visible ? "" : "none";
+    el.rankingsPerGwToggle.checked = state.rankingsPerGw;
+    const basis = state.view === "teams" ? "gameweeks played" : "appearances";
+    const label = state.rankingsPerGw
+      ? `Per GP on: ranking values are divided by ${basis}`
+      : `Per GP off: ranking values are season totals`;
+    setTip(el.rankingsPerGwWrap, label);
+    el.rankingsPerGwToggle.setAttribute("aria-label", label);
+  }
+
+  el.rankRecalculateToggle.addEventListener("change", () => {
+    state[rankRecalculateOwner()] = el.rankRecalculateToggle.checked;
+    syncRankRecalculateUI();
+    renderTable();
+  });
+
+  if (el.rankingsPerGwToggle) {
+    el.rankingsPerGwToggle.addEventListener("change", () => {
+      state.rankingsPerGw = el.rankingsPerGwToggle.checked;
+      syncRankingsPerGwUI();
+      if (state.page === "rankings") renderRankings();
+    });
+  }
+
+  el.compareToggle.addEventListener("click", () => {
+    state.compareMode = !state.compareMode;
+    el.compareToggle.classList.toggle("on", state.compareMode);
+    if (state.compareMode) {
+      const noun = state.view === "teams" ? "teams" : "players";
+      showToast({
+        title: "Compare mode",
+        message: `Click up to ${MAX_COMPARE} ${noun} in the table to compare side by side.`,
+        icon: "scale",
+      });
+    } else {
+      hideToast();
+    }
+    renderTable();
+  });
+
+  el.compareClear.addEventListener("click", () => {
+    compareSet().clear();
+    renderTable();
+  });
+
+  el.sidebarToggle.addEventListener("click", () => {
+    const collapsed = el.sidebar.classList.toggle("collapsed");
+    el.sidebarToggle.classList.toggle("on", !collapsed);
+    if (!collapsed) {
+      requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Appearance (system → light → dark)
+  // ---------------------------------------------------------------------
+  const THEME_KEY = "fpl-explorer-theme";
+  const THEME_ORDER = ["system", "light", "dark"];
+  const THEME_META = {
+    system: { icon: "monitor", label: "System" },
+    light: { icon: "sun", label: "Light" },
+    dark: { icon: "moon", label: "Dark" },
+  };
+
+  function currentThemeMode() {
+    return localStorage.getItem(THEME_KEY) || "system";
+  }
+
+  function syncThemeCycleButton(mode) {
+    if (!el.themeCycleBtn) return;
+    const meta = THEME_META[mode] || THEME_META.system;
+    const label = `Theme: ${meta.label}`;
+    setTip(el.themeCycleBtn, label);
+    el.themeCycleBtn.setAttribute("aria-label", label);
+    el.themeCycleBtn.innerHTML = iconHTML(meta.icon);
+  }
+
+  function applyTheme(mode) {
+    if (mode === "system") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", mode);
+    }
+    localStorage.setItem(THEME_KEY, mode);
+    syncThemeCycleButton(mode);
+  }
+
+  if (el.themeCycleBtn) {
+    el.themeCycleBtn.addEventListener("click", () => {
+      const current = currentThemeMode();
+      const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
+      applyTheme(next);
+    });
+  }
+
+  applyTheme(currentThemeMode());
+
+  // ---------------------------------------------------------------------
+  // TEMP font lab — swap --sans / --mono across the app while evaluating pairs
+  // ---------------------------------------------------------------------
+  const FONT_PAIR_KEY = "fpl-explorer-font-pair";
+  const FONT_PAIRS = {
+    system: {
+      sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+    },
+    "inter-jb": {
+      sans: '"Inter", ui-sans-serif, system-ui, sans-serif',
+      mono: '"JetBrains Mono", ui-monospace, monospace',
+    },
+    plex: {
+      sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+      mono: '"IBM Plex Mono", ui-monospace, monospace',
+    },
+    "jakarta-jb": {
+      sans: '"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif',
+      mono: '"JetBrains Mono", ui-monospace, monospace',
+    },
+    source: {
+      sans: '"Source Sans 3", ui-sans-serif, system-ui, sans-serif',
+      mono: '"Source Code Pro", ui-monospace, monospace',
+    },
+    dm: {
+      sans: '"DM Sans", ui-sans-serif, system-ui, sans-serif',
+      mono: '"DM Mono", ui-monospace, monospace',
+    },
+    "manrope-fira": {
+      sans: '"Manrope", ui-sans-serif, system-ui, sans-serif',
+      mono: '"Fira Code", ui-monospace, monospace',
+    },
+    "figtree-plex": {
+      sans: '"Figtree", ui-sans-serif, system-ui, sans-serif',
+      mono: '"IBM Plex Mono", ui-monospace, monospace',
+    },
+    "sora-jb": {
+      sans: '"Sora", ui-sans-serif, system-ui, sans-serif',
+      mono: '"JetBrains Mono", ui-monospace, monospace',
+    },
+    space: {
+      sans: '"Space Grotesk", ui-sans-serif, system-ui, sans-serif',
+      mono: '"Space Mono", ui-monospace, monospace',
+    },
+  };
+
+  function applyFontPair(id) {
+    const pair = FONT_PAIRS[id] || FONT_PAIRS.system;
+    const root = document.documentElement;
+    root.style.setProperty("--sans", pair.sans);
+    root.style.setProperty("--mono", pair.mono);
+    root.setAttribute("data-font-pair", id in FONT_PAIRS ? id : "system");
+    try {
+      localStorage.setItem(FONT_PAIR_KEY, id in FONT_PAIRS ? id : "system");
+    } catch {
+      /* private browsing */
+    }
+    if (el.fontPairSelect) el.fontPairSelect.value = id in FONT_PAIRS ? id : "system";
+  }
+
+  if (el.fontPairSelect) {
+    let saved = "system";
+    try {
+      saved = localStorage.getItem(FONT_PAIR_KEY) || "system";
+    } catch {
+      saved = "system";
+    }
+    applyFontPair(saved);
+    el.fontPairSelect.addEventListener("change", () => {
+      applyFontPair(el.fontPairSelect.value);
+    });
+  }
+
+  function applyClockFormat(value) {
+    clockFormat = value === "24" ? "24" : "12";
+    try {
+      localStorage.setItem(CLOCK_FORMAT_KEY, clockFormat);
+    } catch {
+      /* private browsing */
+    }
+    if (el.clockFormatSelect) el.clockFormatSelect.value = clockFormat;
+    if (typeof renderMarkets === "function") renderMarkets();
+    if (typeof renderFeed === "function" && state.page === "feed") renderFeed();
+  }
+
+  if (el.clockFormatSelect) {
+    el.clockFormatSelect.value = clockFormat;
+    el.clockFormatSelect.addEventListener("change", () => {
+      applyClockFormat(el.clockFormatSelect.value);
+    });
+  }
+
+  syncPageInfoButton();
+
+  function setPrefsOpen(open) {
+    if (!el.prefsPanel || !el.prefsBtn) return;
+    el.prefsPanel.classList.toggle("open", open);
+    el.prefsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function setColumnsOpen(open) {
+    if (!el.columnsPanel || !el.columnsBtn) return;
+    el.columnsPanel.classList.toggle("open", open);
+    el.columnsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  el.columnsBtn.addEventListener("click", () => {
+    const open = !el.columnsPanel.classList.contains("open");
+    setPrefsOpen(false);
+    setColumnsOpen(open);
+  });
+
+  if (el.prefsBtn && el.prefsPanel) {
+    el.prefsBtn.addEventListener("click", () => {
+      const open = !el.prefsPanel.classList.contains("open");
+      setColumnsOpen(false);
+      setPrefsOpen(open);
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (
+      el.columnsPanel &&
+      !el.columnsPanel.contains(e.target) &&
+      el.columnsBtn &&
+      !el.columnsBtn.contains(e.target)
+    ) {
+      setColumnsOpen(false);
+    }
+    if (
+      el.prefsPanel &&
+      !el.prefsPanel.contains(e.target) &&
+      el.prefsBtn &&
+      !el.prefsBtn.contains(e.target)
+    ) {
+      setPrefsOpen(false);
+    }
+  });
+
+  if (el.fplIdSave) {
+    el.fplIdSave.addEventListener("click", () => {
+      applyManagerId(el.fplIdInput ? el.fplIdInput.value : "");
+    });
+  }
+  if (el.fplIdClear) {
+    el.fplIdClear.addEventListener("click", () => clearManagerId());
+  }
+  if (el.fplIdInput) {
+    el.fplIdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyManagerId(el.fplIdInput.value);
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Sliding selection thumb for .tabs / .segmented button groups
+  // ---------------------------------------------------------------------
+  function ensureSegThumb(container) {
+    let thumb = container.querySelector(":scope > .seg-thumb");
+    if (!thumb) {
+      thumb = document.createElement("span");
+      thumb.className = "seg-thumb";
+      thumb.setAttribute("aria-hidden", "true");
+      container.insertBefore(thumb, container.firstChild);
+    }
+    return thumb;
+  }
+
+  function syncSegThumb(container, { animate = true } = {}) {
+    if (!container) return;
+    const thumb = ensureSegThumb(container);
+    const active = container.querySelector(":scope > .tab-btn.active, :scope > button.active");
+    if (!active || !active.offsetWidth) {
+      thumb.classList.remove("is-ready");
+      return;
+    }
+
+    const cRect = container.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    const x = aRect.left - cRect.left;
+    const y = aRect.top - cRect.top;
+
+    if (!animate || !thumb.classList.contains("is-ready")) {
+      thumb.classList.add("no-motion");
+    }
+    thumb.style.width = `${aRect.width}px`;
+    thumb.style.height = `${aRect.height}px`;
+    thumb.style.transform = `translate(${x}px, ${y}px)`;
+    thumb.classList.add("is-ready");
+    if (thumb.classList.contains("no-motion")) {
+      // Force layout so removing no-motion doesn't animate from 0.
+      void thumb.offsetWidth;
+      thumb.classList.remove("no-motion");
+    }
+  }
+
+  function syncAllSegThumbs(opts) {
+    $$(".tabs, .segmented").forEach((elSeg) => syncSegThumb(elSeg, opts));
+  }
+
+  // ---------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------
+  async function init() {
+    buildStaticFilters();
+    upgradeNativeTitles();
+    renderPriceIssuesPanel();
+    await restoreManagerId();
+    setView("players");
+    buildExpectedCatMenu();
+    // setView renders the OPTA table, so restoring the page comes last.
+    setPage(storedPage());
+    // Position sliding thumbs after layout (sidebar/page visibility settled).
+    requestAnimationFrame(() => {
+      syncAllSegThumbs({ animate: false });
+      requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+    });
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => syncAllSegThumbs({ animate: false }));
+      $$(".tabs, .segmented").forEach((elSeg) => ro.observe(elSeg));
+    }
+    window.addEventListener("resize", () => syncAllSegThumbs({ animate: false }));
+  }
+
+  init();
+})();

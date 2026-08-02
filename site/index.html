@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FPL Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
+<link rel="stylesheet" href="styles.css?v=192" />
+</head>
+<body>
+
+<!-- Lucide icons (lucide.dev, ISC licence) inlined as a sprite -->
+<svg class="icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-table" viewBox="0 0 24 24">
+    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+  </symbol>
+  <symbol id="i-chart-gantt" viewBox="0 0 24 24">
+    <path d="M8 6h10"/><path d="M6 12h9"/><path d="M11 18h7"/><path d="M3 3v18"/>
+  </symbol>
+  <symbol id="i-calendar-days" viewBox="0 0 24 24">
+    <path d="M8 2v4"/><path d="M16 2v4"/>
+    <rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>
+    <path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
+    <path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>
+  </symbol>
+  <symbol id="i-columns" viewBox="0 0 24 24">
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>
+  </symbol>
+  <symbol id="i-sticky-note" viewBox="0 0 24 24">
+    <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/>
+    <path d="M15 3v4a2 2 0 0 0 2 2h4"/>
+  </symbol>
+  <symbol id="i-list-filter" viewBox="0 0 24 24">
+    <path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/>
+  </symbol>
+  <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+    <path d="M21 4H14"/><path d="M10 4H3"/><path d="M21 12H12"/><path d="M8 12H3"/>
+    <path d="M21 20H16"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+  </symbol>
+  <symbol id="i-podium" viewBox="0 0 24 24">
+    <path d="M12 6V2h-1"/>
+    <path d="M9 15a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1"/>
+    <path d="M9 21V11a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v10"/>
+  </symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24">
+    <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+    <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+    <path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24">
+    <path d="M20 6 9 17l-5-5"/>
+  </symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+  </symbol>
+  <symbol id="i-star" viewBox="0 0 24 24">
+    <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>
+  </symbol>
+  <symbol id="i-map-pin-check-inside" viewBox="0 0 24 24">
+    <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+    <path d="m9 10 2 2 4-4"/>
+  </symbol>
+  <symbol id="i-info" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+  </symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
+    <path d="M12 9v4"/><path d="M12 17h.01"/>
+  </symbol>
+  <symbol id="i-swords" viewBox="0 0 24 24">
+    <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/>
+    <line x1="13" x2="19" y1="19" y2="13"/>
+    <line x1="16" x2="20" y1="16" y2="20"/>
+    <line x1="19" x2="21" y1="21" y2="19"/>
+    <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/>
+    <line x1="5" x2="9" y1="14" y2="18"/>
+    <line x1="7" x2="4" y1="17" y2="20"/>
+    <line x1="3" x2="5" y1="19" y2="21"/>
+  </symbol>
+  <symbol id="i-shield-half" viewBox="0 0 24 24">
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+    <path d="M12 22V2"/>
+  </symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24">
+    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+    <path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>
+  </symbol>
+  <symbol id="i-candlestick" viewBox="0 0 24 24">
+    <path d="M9 5v2"/><path d="M9 17v2"/><path d="M15 3v2"/><path d="M15 15v6"/>
+    <rect width="4" height="10" x="7" y="7" rx="1"/><rect width="4" height="6" x="13" y="9" rx="1"/>
+  </symbol>
+  <symbol id="i-rss" viewBox="0 0 24 24">
+    <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
+  </symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24">
+    <path d="m18 15-6-6-6 6"/>
+  </symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24">
+    <path d="m6 9 6 6 6-6"/>
+  </symbol>
+  <symbol id="i-chevrons-up-down" viewBox="0 0 24 24">
+    <path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>
+  </symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24">
+    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+  </symbol>
+  <symbol id="i-x" viewBox="0 0 24 24">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </symbol>
+  <symbol id="i-x-logo" viewBox="0 0 24 24">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/>
+    <path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/>
+    <path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+  </symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24">
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+  </symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24">
+    <rect width="20" height="14" x="2" y="3" rx="2"/>
+    <line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>
+  </symbol>
+  <symbol id="i-user" viewBox="0 0 24 24">
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24">
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <symbol id="i-database-search" viewBox="0 0 24 24">
+    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+    <path d="M3 5v14a9 3 0 0 0 9.28 2.999"/>
+    <path d="M3 12a9 3 0 0 0 8.697 2.998"/>
+    <path d="M21 11.693V5"/>
+    <circle cx="18" cy="18" r="3"/>
+    <path d="m22 22-1.875-1.875"/>
+  </symbol>
+  <symbol id="i-users" viewBox="0 0 24 24">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </symbol>
+  <symbol id="i-house" viewBox="0 0 24 24">
+    <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+    <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+  </symbol>
+  <symbol id="i-plane-takeoff" viewBox="0 0 24 24">
+    <path d="M2 22h20"/>
+    <path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"/>
+  </symbol>
+</svg>
+
+<div class="page-nav">
+  <div class="brand-group">
+    <a class="brand" href="index.html" id="brand-home" aria-label="FPL Explorer home">
+      <h1>
+        <svg class="icon brand-icon" aria-hidden="true"><use href="#i-database-search"/></svg>
+        FPL Explorer
+      </h1>
+    </a>
+    <label class="sr-only" for="season-select">Data season</label>
+    <select id="season-select" class="season-select" aria-label="Data season">
+      <option value="2025-26" selected>2025/26</option>
+      <option value="2026-27">2026/27</option>
+    </select>
+  </div>
+
+  <nav class="page-tabs" aria-label="Pages">
+    <button id="page-opta" class="page-tab-btn active" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-table"/></svg>
+      Statistics
+    </button>
+    <button id="page-rankings" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-podium"/></svg>
+      Rankings
+    </button>
+    <button id="page-schedule" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
+      Matchups
+    </button>
+    <button id="page-feed" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-rss"/></svg>
+      Feed
+    </button>
+    <button id="page-markets" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
+      Markets
+    </button>
+    <div class="page-tab-dropdown" id="expected-tab-wrap">
+      <button id="page-expected" class="page-tab-btn" type="button"
+        aria-haspopup="true" aria-expanded="false" aria-controls="expected-cat-menu">
+        <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
+        xData
+        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </button>
+      <div id="expected-cat-menu" class="dropdown-panel page-tab-menu" role="menu" aria-label="xData categories"></div>
+    </div>
+  </nav>
+
+  <div class="page-nav-actions">
+    <button id="page-info-btn" class="icon-btn icon-only-btn" type="button"
+      title="How this page works" aria-label="How this page works" aria-describedby="page-info-tooltip" aria-expanded="false">
+      <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+    </button>
+    <button id="theme-cycle-btn" class="icon-btn icon-only-btn" type="button"
+      title="Theme: System" aria-label="Theme: System">
+      <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
+    </button>
+    <div class="dropdown-wrap" id="prefs-wrap">
+      <button id="prefs-btn" class="icon-btn icon-only-btn" type="button"
+        title="Preferences" aria-label="Preferences" aria-haspopup="true" aria-expanded="false" aria-controls="prefs-panel">
+        <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>
+      </button>
+      <div id="prefs-panel" class="dropdown-panel settings-panel prefs-panel" role="dialog" aria-labelledby="prefs-heading">
+        <div class="settings-panel-head">
+          <h4 id="prefs-heading">Preferences</h4>
+          <p class="settings-panel-sub">Your FPL team and display</p>
+        </div>
+        <div class="settings-panel-body prefs-panel-body">
+          <section class="settings-section">
+            <div class="settings-section-label">FPL ID</div>
+            <div class="prefs-field">
+              <label class="prefs-field-label" for="fpl-id-input">Manager ID</label>
+              <div class="prefs-id-row">
+                <input id="fpl-id-input" class="prefs-id-input" type="text" inputmode="numeric" pattern="[0-9]*"
+                  autocomplete="off" placeholder="e.g. 296817" aria-describedby="fpl-id-status" />
+                <button id="fpl-id-save" class="icon-btn prefs-action-btn" type="button">Save</button>
+                <button id="fpl-id-clear" class="ghost-btn prefs-action-btn" type="button">Clear</button>
+              </div>
+              <p id="fpl-id-status" class="prefs-status" aria-live="polite"></p>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-label">Fonts</div>
+            <div class="prefs-field">
+              <label class="prefs-field-label" for="font-pair-select">Type pair</label>
+              <select id="font-pair-select" class="font-pair-select prefs-font-select" aria-label="Font pair">
+                <option value="system">System · SF Pro / SF Mono</option>
+                <option value="inter-jb">Inter · JetBrains Mono</option>
+                <option value="plex">IBM Plex Sans · Plex Mono</option>
+                <option value="jakarta-jb">Plus Jakarta · JetBrains</option>
+                <option value="source">Source Sans 3 · Source Code</option>
+                <option value="dm">DM Sans · DM Mono</option>
+                <option value="manrope-fira">Manrope · Fira Code</option>
+                <option value="figtree-plex">Figtree · Plex Mono</option>
+                <option value="sora-jb">Sora · JetBrains Mono</option>
+                <option value="space">Space Grotesk · Space Mono</option>
+              </select>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-label">Time</div>
+            <div class="prefs-field">
+              <label class="prefs-field-label" for="clock-format-select">Clock</label>
+              <select id="clock-format-select" class="font-pair-select prefs-font-select" aria-label="Clock format">
+                <option value="12">12-hour · 2:00 PM</option>
+                <option value="24">24-hour · 14:00</option>
+              </select>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-label">Tooltips</div>
+            <div class="prefs-field">
+              <div class="prefs-slider-head">
+                <label class="prefs-field-label" for="fixture-tt-delay">Fixture delay</label>
+                <span id="fixture-tt-delay-label" class="prefs-slider-value">1.0s</span>
+              </div>
+              <p class="prefs-field-hint">How long to hover a Statistics row before fixtures appear</p>
+              <div class="dual-slider single-slider prefs-slider">
+                <div class="slider-track"></div>
+                <div class="slider-fill" id="fixture-tt-delay-fill"></div>
+                <input type="range" id="fixture-tt-delay" step="0.1" min="0.5" max="5"
+                  aria-label="Fixture tooltip delay in seconds" />
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="topbar" id="subtoolbar">
+  <div class="topbar-start">
+    <button id="sidebar-toggle" class="ghost-btn icon-only-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters">
+      <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
+    </button>
+    <div class="tabs">
+      <button id="tab-players" class="tab-btn active" type="button">
+        <svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>
+        Players
+      </button>
+      <button id="tab-teams" class="tab-btn" type="button">
+        <svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>
+        Teams
+      </button>
+    </div>
+
+    <div class="toggle-group" id="table-only-toggles">
+      <div class="newprice-wrap" id="newprice-wrap">
+        <button id="newprice-toggle" class="ghost-btn" type="button" title="Use matched 2026/27 price, team, and position">Updates</button>
+        <span id="newprice-issues-badge" class="issues-badge" style="display:none;" title="Players needing manual price-match review"></span>
+        <div id="newprice-issues-panel" class="dropdown-panel issues-panel"></div>
+      </div>
+    </div>
+
+    <label id="rank-recalculate-wrap" class="toolbar-switch" style="display:none;"
+      title="Recalculate highlight bands from the current filtered rows">
+      <input id="rank-recalculate-toggle" type="checkbox" checked />
+      <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+      <span>Recalculate</span>
+    </label>
+  </div>
+
+  <div class="topbar-end">
+    <label id="rankings-per-gw-wrap" class="toolbar-switch" style="display:none;"
+      title="Divide ranking values by gameweeks played (teams) or appearances (players)">
+      <input id="rankings-per-gw-toggle" type="checkbox" />
+      <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+      <span>Per GP</span>
+    </label>
+    <button id="compare-toggle" class="ghost-btn icon-label-btn" type="button" title="Click up to 5 rows to compare side by side">
+      <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+      Compare
+    </button>
+    <div class="search-wrap">
+      <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="search-input" type="text" placeholder="Search player or team…" autocomplete="off" />
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar collapsed" id="sidebar">
+    <div class="filter-group" id="value-mode-group">
+      <h3>Values</h3>
+      <div class="segmented segmented-block" id="value-mode-seg">
+        <button data-value-mode="total" class="active" type="button" title="Season totals">Total</button>
+        <button data-value-mode="per90" type="button" title="Divide values by minutes played, scaled to 90">Per 90</button>
+        <button data-value-mode="perM" type="button" title="Divide values by price (£m)">Per £m</button>
+      </div>
+    </div>
+
+    <div class="filter-group" id="split-group">
+      <h3>Fixture Location</h3>
+      <div class="segmented segmented-block" id="split-seg">
+        <button data-split="combined" class="active" type="button" title="Home and away combined">Total</button>
+        <button data-split="home" type="button" title="Home fixtures only">
+          <svg class="icon" aria-hidden="true"><use href="#i-house"/></svg>
+          Home
+        </button>
+        <button data-split="away" type="button" title="Away fixtures only">
+          <svg class="icon" aria-hidden="true"><use href="#i-plane-takeoff"/></svg>
+          Away
+        </button>
+      </div>
+    </div>
+
+    <div class="filter-group" id="expected-split-group" style="display:none;">
+      <h3>Fixture Location</h3>
+      <div class="segmented segmented-grid" id="expected-split-seg">
+        <button data-split="combined" class="active" type="button" title="Home and away combined">Total</button>
+        <button data-split="compare" type="button" title="Home and away side by side">Compare</button>
+        <button data-split="home" type="button" title="Home fixtures only">
+          <svg class="icon" aria-hidden="true"><use href="#i-house"/></svg>
+          Home
+        </button>
+        <button data-split="away" type="button" title="Away fixtures only">
+          <svg class="icon" aria-hidden="true"><use href="#i-plane-takeoff"/></svg>
+          Away
+        </button>
+      </div>
+    </div>
+
+    <div class="filter-group" id="position-filter-group">
+      <h3>Position</h3>
+      <div class="chip-row" id="pos-filters"></div>
+    </div>
+
+    <div class="filter-group">
+      <h3>Team</h3>
+      <div class="chip-row" id="team-filters"></div>
+    </div>
+
+    <div class="filter-group" id="price-filter-group">
+      <h3>Price (£m)</h3>
+      <div class="slider-values"><span id="price-min-label"></span><span id="price-max-label"></span></div>
+      <div class="dual-slider">
+        <div class="slider-track"></div>
+        <div class="slider-fill" id="price-fill"></div>
+        <input type="range" id="price-min" step="0.1" />
+        <input type="range" id="price-max" step="0.1" class="slider-top" />
+      </div>
+    </div>
+
+    <div class="filter-group" id="minutes-filter-group">
+      <h3>Minutes</h3>
+      <div class="slider-values"><span id="mins-min-label"></span><span id="mins-max-label"></span></div>
+      <div class="dual-slider">
+        <div class="slider-track"></div>
+        <div class="slider-fill" id="mins-fill"></div>
+        <input type="range" id="mins-min" step="10" />
+        <input type="range" id="mins-max" step="10" class="slider-top" />
+      </div>
+    </div>
+
+    <div class="filter-group" id="enhance-pct-group" style="display:none;">
+      <h3>Highlight Top/Bottom</h3>
+      <div class="slider-values"><span id="enhance-pct-label"></span><span id="enhance-pct-hint" class="slider-hint">of filtered rows</span></div>
+      <div class="dual-slider single-slider">
+        <div class="slider-track"></div>
+        <div class="slider-fill" id="enhance-pct-fill"></div>
+        <input type="range" id="enhance-pct" step="1" />
+      </div>
+    </div>
+
+    <div class="filter-group" id="inactive-filter-group" style="display:none;">
+      <h3>2026/27 Squad Status</h3>
+      <label class="check-row-block">
+        <span class="check-row-line"><input type="checkbox" id="show-departed-check" /> Include departed players</span>
+        <span class="check-row-note">Not found in the 2026/27 FPL list (e.g. Salah) — hidden by default</span>
+      </label>
+    </div>
+
+    <div class="filter-group">
+      <h3>
+        Reset
+        <span class="reset" id="reset-filters">clear all filters</span>
+      </h3>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="opta-page" class="page-pane">
+      <div class="page-header">
+        <div>
+          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics</h2>
+          <p class="page-subtitle">Browse player and team statistics using customized filters.</p>
+        </div>
+        <div class="page-header-meta">
+          <span class="count-label" id="count-label"></span>
+          <div class="dropdown-wrap" id="columns-wrap">
+            <button id="columns-btn" class="icon-btn icon-only-btn" type="button" title="Columns" aria-label="Columns" aria-haspopup="true" aria-expanded="false" aria-controls="columns-panel">
+              <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
+            </button>
+            <div id="columns-panel" class="dropdown-panel settings-panel" role="dialog" aria-labelledby="columns-heading">
+              <div class="settings-panel-head">
+                <h4 id="columns-heading">Columns</h4>
+                <p class="settings-panel-sub">Show or hide statistics columns</p>
+              </div>
+              <div id="columns-list" class="settings-panel-body"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-wrap" id="compare-wrap" style="display:none;">
+        <div class="compare-header">
+          <span id="compare-title"></span>
+          <span class="ghost-btn" id="compare-clear" role="button" tabindex="0">Clear selection</span>
+        </div>
+        <div class="table-wrap compare-table-wrap">
+          <table>
+            <thead id="compare-head"></thead>
+            <tbody id="compare-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead id="table-head"></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="rankings-page" class="page-pane" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-podium"/></svg>Rankings</h2>
+          <p class="page-subtitle">Top 10 leaders for every metric. Hover to trace a name across cards, or click to pin up to five in their own colour.</p>
+        </div>
+        <span class="count-label" id="rankings-count-label"></span>
+      </div>
+
+      <div class="rankings-pin-bar" id="rankings-pin-bar" style="display:none;"></div>
+
+      <div class="rankings-grid" id="rankings-grid"></div>
+    </div>
+
+    <div id="expected-page" class="page-pane" style="display:none;">
+      <div class="page-header expected-header">
+        <div class="expected-header-text">
+          <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">Expected Data</span></h2>
+          <p id="expected-sub" class="page-subtitle"></p>
+        </div>
+        <div class="expected-header-controls">
+          <div class="expected-legend-inline" id="expected-legend"></div>
+        </div>
+      </div>
+
+      <div class="barbell-wrap" id="barbell-wrap">
+        <div class="barbell-scroll">
+          <div class="barbell-sticky">
+            <div class="barbell-head" id="barbell-head"></div>
+            <div class="barbell-scale" id="barbell-scale"></div>
+          </div>
+          <div class="barbell-body" id="barbell-body"></div>
+        </div>
+        <div id="expected-tooltip" class="chart-tooltip" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div id="schedule-page" class="page-pane" style="display:none;">
+      <div class="page-header schedule-header">
+        <div class="schedule-header-top">
+          <div class="schedule-header-text">
+            <div class="schedule-title-row">
+              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Matchups</h2>
+            </div>
+            <p class="page-subtitle">Find teams with favorable upcoming fixtures for attacking and/or defensive assets</p>
+          </div>
+          <button id="schedule-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
+            title="Show matchup sliders" aria-label="Show matchup sliders" aria-expanded="false" aria-controls="schedule-controls">
+            <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
+          </button>
+        </div>
+
+        <div class="schedule-controls is-collapsed" id="schedule-controls" hidden>
+          <div class="schedule-control">
+            <div class="schedule-control-head">
+              <strong>Gameweek range</strong>
+              <span id="schedule-range-label">GW1–GW7</span>
+            </div>
+            <div class="dual-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="schedule-gw-fill"></div>
+              <input type="range" id="schedule-gw-min" step="1" aria-label="First gameweek" />
+              <input type="range" id="schedule-gw-max" step="1" class="slider-top" aria-label="Last gameweek" />
+            </div>
+            <div class="slider-values">
+              <span id="schedule-gw-min-label">GW1</span>
+              <span id="schedule-gw-max-label">GW7</span>
+            </div>
+          </div>
+
+          <div class="schedule-control">
+            <div class="schedule-control-head">
+              <strong>Highlight Ranks
+                <span class="schedule-control-info" tabindex="0"
+                  data-tip="Controls how many ranked values receive conditional highlighting — top and bottom places get green/red cell tint on each venue split."
+                  aria-label="How Highlight Ranks works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+              <span id="schedule-enhance-pct-label">Top/Bottom 6</span>
+            </div>
+            <div class="dual-slider single-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="schedule-enhance-pct-fill"></div>
+              <input type="range" id="schedule-enhance-pct" step="1" aria-label="Highlight top and bottom ranks" />
+            </div>
+            <div class="slider-values">
+              <span>Less Ranks</span>
+              <span>More Ranks</span>
+            </div>
+          </div>
+
+          <div class="schedule-control" id="schedule-expected-weight-group">
+            <div class="schedule-control-head">
+              <strong>Expected / Actual
+                <span class="schedule-control-info" tabindex="0"
+                  data-tip="Blends expected and actual category ranks for each team when Matchups scores attack and defence. Attack mixes xG with goals; defence mixes xGC with goals conceded and clean sheets. Edges, flags, card totals, and the scatter all use this blend."
+                  aria-label="How Expected / Actual blend works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+              <span id="schedule-expected-weight-label">50 / 50</span>
+            </div>
+            <div class="dual-slider single-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="schedule-expected-weight-fill"></div>
+              <input type="range" id="schedule-expected-weight" step="5" aria-label="Weight expected versus actual stats" />
+            </div>
+            <div class="slider-values">
+              <span>More actual</span>
+              <span>More expected</span>
+            </div>
+          </div>
+
+          <div class="schedule-control" id="schedule-edge-min-group">
+            <div class="schedule-control-head">
+              <strong>Flag threshold
+                <span id="schedule-edge-min-info" class="schedule-control-info" tabindex="0"
+                  aria-label="How Flag threshold works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+              <span id="schedule-edge-min-label">≥ 4 ranks better</span>
+            </div>
+            <div class="dual-slider single-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="schedule-edge-min-fill"></div>
+              <input type="range" id="schedule-edge-min" step="1" aria-label="Minimum rank advantage to flag a matchup" />
+            </div>
+            <div class="slider-values">
+              <span>Less Gap</span>
+              <span>Larger Gap</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section id="schedule-scatter" class="schedule-scatter"></section>
+      <div class="schedule-grid schedule-grid-matchups schedule-grid-analyze" id="schedule-grid"></div>
+    </div>
+
+    <div id="feed-page" class="page-pane" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-rss"/></svg>Social Media Feed</h2>
+          <p class="page-subtitle">Player mentions from curated FPL content creators on X in the last 48 hrs</p>
+        </div>
+        <div class="page-header-meta">
+          <div class="search-wrap feed-search-wrap">
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <input id="feed-search-input" type="text" placeholder="Search player…" autocomplete="off" aria-label="Search players in feed" />
+          </div>
+          <div class="segmented" id="feed-sort-seg" role="group" aria-label="Sort player cards">
+            <button type="button" data-feed-sort="volume" class="active">Volume</button>
+            <button type="button" data-feed-sort="recent">Recent</button>
+          </div>
+        </div>
+      </div>
+      <div class="feed-trending" id="feed-trending"></div>
+    </div>
+
+    <div id="markets-page" class="page-pane" style="display:none;">
+      <div class="page-header markets-header">
+        <div class="markets-header-top">
+          <div class="markets-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets</h2>
+            <p class="page-subtitle">Upcoming EPL fixtures — projected goals, clean sheets, and most likely scores</p>
+          </div>
+          <div class="markets-header-actions">
+            <span id="markets-updated" class="markets-updated" aria-live="polite"></span>
+            <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
+              title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls">
+              <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="markets-controls is-collapsed" id="markets-controls" hidden>
+          <div class="markets-control">
+            <div class="schedule-control-head">
+              <strong>Goals color
+                <span class="schedule-control-info" tabindex="0"
+                  data-tip="How extreme projected goals must be before cells get green (high) or red (low). Deeper color for values well past the band. Right = more colored cells."
+                  aria-label="How Goals color works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+              <span id="markets-heat-goals-label">Default</span>
+            </div>
+            <div class="dual-slider single-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="markets-heat-goals-fill"></div>
+              <input type="range" id="markets-heat-goals" step="5" aria-label="Goals color thresholds" />
+            </div>
+            <div class="slider-values">
+              <span>Less color</span>
+              <span>More color</span>
+            </div>
+          </div>
+          <div class="markets-control">
+            <div class="schedule-control-head">
+              <strong>CS% color
+                <span class="schedule-control-info" tabindex="0"
+                  data-tip="How extreme clean-sheet % must be before cells get green (high) or red (low). Deeper color for values well past the band. Right = more colored cells."
+                  aria-label="How CS% color works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+              <span id="markets-heat-cs-label">Default</span>
+            </div>
+            <div class="dual-slider single-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="markets-heat-cs-fill"></div>
+              <input type="range" id="markets-heat-cs" step="5" aria-label="Clean sheet color thresholds" />
+            </div>
+            <div class="slider-values">
+              <span>Less color</span>
+              <span>More color</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="markets-grid" id="markets-grid"></div>
+    </div>
+  </main>
+</div>
+
+<div id="ui-tooltip" class="ui-tooltip" role="tooltip" style="display:none;"></div>
+<div id="fixture-tooltip" class="fixture-tooltip" style="display:none;"></div>
+<div id="team-rank-tooltip" class="fixture-tooltip team-rank-tooltip" role="tooltip" style="display:none;"></div>
+<div id="matchup-edge-tooltip" class="fixture-tooltip matchup-edge-tooltip" role="tooltip" style="display:none;"></div>
+<div id="schedule-scatter-tooltip" class="fixture-tooltip schedule-scatter-tooltip" role="tooltip" style="display:none;"></div>
+<div id="page-info-tooltip" class="fixture-tooltip page-info-tooltip" role="tooltip" style="display:none;"></div>
+<div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
+<div id="x-search-confirm" class="x-search-confirm" role="dialog" aria-label="Search X" style="display:none;"></div>
+
+<script src="data.js?v=24"></script>
+<script src="social_data.js?v=11"></script>
+<script src="markets_data.js?v=3"></script>
+<script src="app.js?v=203"></script>
+</body>
+</html>

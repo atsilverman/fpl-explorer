@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FPL Data Sources & Accuracy</title>
+  <style>
+    :root {
+      --ink: #10251f;
+      --muted: #5f6f69;
+      --paper: #f5f4ed;
+      --panel: #fffef9;
+      --line: #d9ddd5;
+      --fpl: #5b2a86;
+      --ffh: #006d77;
+      --calc: #b45f06;
+      --good: #177245;
+      --warn: #a33a2b;
+      --soft-fpl: #eee7f5;
+      --soft-ffh: #e4f1f1;
+      --soft-calc: #f7ecdd;
+      --soft-warn: #f8e9e5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 64px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--ink);
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; letter-spacing: -.05em; }
+    h2 { margin-bottom: 16px; font-size: 1.35rem; letter-spacing: -.02em; }
+    h3 { margin-bottom: 8px; font-size: 1rem; }
+    p:last-child { margin-bottom: 0; }
+
+    .eyebrow {
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .subtitle { max-width: 720px; margin: 0; color: var(--muted); font-size: 1.05rem; }
+    .stamp { min-width: 210px; color: var(--muted); font-size: .78rem; text-align: right; }
+    .stamp strong { display: block; color: var(--ink); font-size: .9rem; }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric { padding: 24px 18px; border-right: 1px solid var(--line); }
+    .metric:first-child { padding-left: 0; }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 2rem; line-height: 1; letter-spacing: -.04em; }
+    .metric span { display: block; margin-top: 7px; color: var(--muted); font-size: .78rem; }
+
+    section { margin-top: 36px; }
+
+    .source-flow {
+      display: grid;
+      grid-template-columns: 1fr 72px 1fr 72px 1fr;
+      align-items: stretch;
+    }
+
+    .source, .card, .notice {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .source { padding: 22px; }
+    .source.fpl { border-top: 5px solid var(--fpl); }
+    .source.ffh { border-top: 5px solid var(--ffh); }
+    .source.calc { border-top: 5px solid var(--calc); }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 1.6rem;
+      font-weight: 300;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .fpl .tag, .tag.fpl { background: var(--soft-fpl); color: var(--fpl); }
+    .ffh .tag, .tag.ffh { background: var(--soft-ffh); color: var(--ffh); }
+    .calc .tag, .tag.calc { background: var(--soft-calc); color: var(--calc); }
+
+    .source ul, .card ul { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: .88rem; }
+    li + li { margin-top: 5px; }
+
+    .precedence {
+      margin-top: 16px;
+      padding: 16px 18px;
+      background: var(--soft-fpl);
+      border-left: 4px solid var(--fpl);
+      border-radius: 8px;
+      font-size: .9rem;
+    }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { overflow: hidden; }
+    .card-head { padding: 20px 22px 16px; border-bottom: 1px solid var(--line); }
+    .card-body { padding: 20px 22px 22px; }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: 128px 1fr;
+      gap: 14px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: .86rem;
+    }
+
+    .stat-row:last-child { border-bottom: 0; }
+    .stat-row strong { color: var(--ink); }
+    .stat-row span { color: var(--muted); }
+
+    .count-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin-bottom: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .count-strip div { padding: 13px; text-align: center; border-right: 1px solid var(--line); }
+    .count-strip div:last-child { border-right: 0; }
+    .count-strip b { display: block; font-size: 1.35rem; }
+    .count-strip small { color: var(--muted); }
+
+    .accuracy {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .accuracy div { padding: 12px; background: #f0f1eb; border-radius: 9px; }
+    .accuracy b { display: block; font-size: 1.15rem; }
+    .accuracy span { color: var(--muted); font-size: .72rem; }
+
+    .limitations {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .notice { padding: 18px; border-top: 4px solid var(--warn); }
+    .notice p { color: var(--muted); font-size: .82rem; }
+
+    .updates {
+      padding: 22px;
+      background: var(--soft-ffh);
+      border: 1px solid #bfd5d4;
+      border-radius: 14px;
+    }
+
+    .accuracy-note {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: #f0f1eb;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+
+    .accuracy-note strong { color: var(--ink); }
+
+    .update-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .update-grid p { color: var(--muted); font-size: .84rem; }
+
+    footer {
+      margin-top: 38px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .74rem;
+    }
+
+    code {
+      padding: 2px 5px;
+      background: rgba(16, 37, 31, .06);
+      border-radius: 4px;
+      color: var(--ink);
+      font-size: .82em;
+    }
+
+    @media (max-width: 850px) {
+      header { grid-template-columns: 1fr; }
+      .stamp { text-align: left; }
+      .hero-metrics { grid-template-columns: repeat(2, 1fr); }
+      .metric:nth-child(2) { border-right: 0; }
+      .source-flow { grid-template-columns: 1fr; gap: 10px; }
+      .arrow { height: 28px; transform: rotate(90deg); }
+      .two-col, .update-grid { grid-template-columns: 1fr; }
+      .limitations { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      main { width: min(100% - 22px, 1120px); padding-top: 28px; }
+      .hero-metrics, .accuracy, .limitations { grid-template-columns: 1fr; }
+      .metric { padding-left: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .metric:last-child { border-bottom: 0; }
+      .count-strip { grid-template-columns: 1fr; }
+      .count-strip div { border-right: 0; border-bottom: 1px solid var(--line); }
+      .count-strip div:last-child { border-bottom: 0; }
+    }
+
+    @media print {
+      body { background: white; }
+      main { width: 100%; padding: 20px; }
+      section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">FPL Data Explorer · provenance map</p>
+        <h1>Where every stat comes from</h1>
+        <p class="subtitle">A compact guide to Fantasy Football Hub (FFH) exports, official FPL API data, source precedence, derived metrics and the limits of what the current dataset can support.</p>
+      </div>
+      <div class="stamp">
+        <strong>Verified 30 July 2026 · 14:40</strong>
+        Generated data: 13:05<br>
+        Latest API snapshots: 23 July
+      </div>
+    </header>
+
+    <div class="hero-metrics">
+      <div class="metric"><b>420</b><span>players in the combined 2025/26 dataset</span></div>
+      <div class="metric"><b>382</b><span>matched to official FPL history · 90.95%</span></div>
+      <div class="metric"><b>8 + 5</b><span>API-overwritten fields + API-only additions</span></div>
+      <div class="metric"><b>17 + 3</b><span>measured clubs + promoted clubs with provisional ranks</span></div>
+    </div>
+
+    <section>
+      <p class="eyebrow">Pipeline</p>
+      <h2>Two source families, then calculated presentation</h2>
+      <div class="source-flow">
+        <article class="source ffh">
+          <span class="tag">Fantasy Football Hub</span>
+          <h3>2025/26 home & away exports</h3>
+          <ul>
+            <li>All team performance statistics</li>
+            <li>Every player venue split</li>
+            <li>FFH-only shot, chance, passing and xPts fields</li>
+            <li>Loaded from the project’s root CSV files</li>
+          </ul>
+        </article>
+        <div class="arrow" aria-hidden="true">→</div>
+        <article class="source fpl">
+          <span class="tag">Official FPL API</span>
+          <h3>Season totals & current metadata</h3>
+          <ul>
+            <li><code>history_past</code> for official player totals</li>
+            <li><code>bootstrap-static</code> for price, identity and set pieces</li>
+            <li><code>fixtures</code> for gameweek, opponent and venue</li>
+            <li>Only combined player totals can be corrected</li>
+          </ul>
+        </article>
+        <div class="arrow" aria-hidden="true">→</div>
+        <article class="source calc">
+          <span class="tag">Calculated</span>
+          <h3>Browser and build-time derivations</h3>
+          <ul>
+            <li>Home + away season totals</li>
+            <li>Per 90, per £m and price deltas</li>
+            <li>G+A, CBIT/R, Pts/GP and G/GP</li>
+            <li>Expected gaps and fixture matchup ranks</li>
+          </ul>
+        </article>
+      </div>
+      <div class="precedence"><strong>Precedence rule:</strong> for a matched player’s combined season row, official FPL values replace FFH outright on the eight overlapping fields. Home/away rows and all team statistics remain FFH-based.</div>
+    </section>
+
+    <section>
+      <p class="eyebrow">Player data</p>
+      <h2>What wins, what stays, what is calculated</h2>
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><span class="tag fpl">Official FPL favored</span><h3>Combined view · matched players only</h3></div>
+          <div class="card-body">
+            <div class="stat-row"><strong>8 replacements</strong><span>Minutes, xG, goals, xA, assists, BPS, bonus and total FPL points.</span></div>
+            <div class="stat-row"><strong>5 additions</strong><span>Clean sheets, goals conceded, xGC, saves and official xGI.</span></div>
+            <div class="stat-row"><strong>Current metadata</strong><span>2026/27 price, team, position, status and penalty/free-kick/corner order.</span></div>
+            <div class="stat-row"><strong>Raw actions</strong><span>CBIT and CBIRT totals from official clearances, blocks, interceptions, tackles and recoveries.</span></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><span class="tag ffh">FFH retained</span><h3>Venue splits and unavailable API fields</h3></div>
+          <div class="card-body">
+            <div class="stat-row"><strong>10 FFH-only</strong><span>Price, apps, shots, shots on target, IN, big chances, key passes, big chances created, xPts and DC points.</span></div>
+            <div class="stat-row"><strong>All splits</strong><span>Home and away player rows never receive API corrections because <code>history_past</code> has no venue split.</span></div>
+            <div class="stat-row"><strong>DC stays FFH</strong><span>FFH DC is fantasy points; API <code>defensive_contribution</code> is an action count. They differ by roughly 20×.</span></div>
+            <div class="stat-row"><strong>38 unmatched</strong><span>These rows remain FFH-only and lack API additions, current prices and set-piece metadata.</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">Team data</p>
+      <h2>Entirely FFH-based performance, official fixtures</h2>
+      <div class="two-col">
+        <article class="card">
+          <div class="card-body">
+            <div class="count-strip">
+              <div><b>15</b><small>raw team fields</small></div>
+              <div><b>3</b><small>visible derived metrics</small></div>
+              <div><b>0</b><small>API-enriched team stats</small></div>
+            </div>
+            <p><strong>Raw:</strong> GP, shots, shots on target, IN, big chances, xG, goals, xGC, xCS, goals conceded, clean sheets, xGD, GD and total squad FPL points.</p>
+            <p><strong>Derived:</strong> combined GD is recomputed as goals − conceded; Pts/GP and G/GP are calculated in the browser.</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-body">
+            <h3>Difficulty model</h3>
+            <p>The schedule page does <strong>not</strong> use FPL’s fixture-difficulty or team-strength fields. It creates venue-specific ranks from xG, goals, xGC, goals conceded and clean sheets, then blends expected and actual ranks.</p>
+            <p>Promoted clubs Coventry, Ipswich and Hull have no historical FFH row, so ranks 18–20 are provisional rather than measured.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">Derived metrics</p>
+      <h2>Counts depend on what “derived” means</h2>
+      <div class="two-col">
+        <article class="card">
+          <div class="card-body">
+            <h3>Main table columns</h3>
+            <p><strong>Players:</strong> 28 displayed stat fields; two are explicitly derived—G+A and position-selected CBIT/R. Official xGI is season-total only; it is no longer approximated on unsupported splits.</p>
+            <p><strong>Teams:</strong> 16 displayed metrics; three are derived—GD, Pts/GP and G/GP. Combined totals are also sums of home and away.</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-body">
+            <h3>Analytical transformations</h3>
+            <p>Per-90, per-£m, price-rate change, expected-vs-actual differences, DEFCON threshold status, attack/defence composite ranks, fixture edges and schedule scores are calculated outputs—not independent source statistics.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">Cross-check</p>
+      <h2>How closely FFH matched official FPL totals</h2>
+      <div class="accuracy">
+        <div><b>100%</b><span>Goals, assists, bonus and points exact</span></div>
+        <div><b>99.5%</b><span>Minutes exact · maximum gap 42</span></div>
+        <div><b>35.1%</b><span>xG exact · mean absolute gap 0.04</span></div>
+        <div><b>25.9%</b><span>xA exact · mean absolute gap 0.029</span></div>
+      </div>
+      <div class="accuracy-note">
+        <strong>Precision used:</strong> “Exact” means full stored-value equality (<code>abs(diff) &lt; 1e-6</code>). Values are already carried at 3 decimal places from both sources. Rounding both sides to <strong>2 decimal places does not raise the match rate</strong> — xG stays 35.1% and xA stays 25.9%. Only rounding to 1 decimal place lifts them (to 70.9% and 76.4%). The remaining gaps are real model differences, not display rounding.
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">Accuracy limits</p>
+      <h2>What this dataset cannot establish reliably</h2>
+      <div class="limitations">
+        <article class="notice"><h3>Player venue defence</h3><p>No accurate home/away player xGC, goals conceded, clean sheets, saves, official xGI or defensive-action totals.</p></article>
+        <article class="notice"><h3>Exact DEFCON frequency</h3><p>Season actions per 90 cannot reveal how many individual matches actually crossed a per-match threshold.</p></article>
+        <article class="notice"><h3>Player xCS</h3><p>The FPL API exposes no player-level expected-clean-sheets metric to compare with actual clean sheets.</p></article>
+        <article class="notice"><h3>Promoted teams</h3><p>No measured prior-season Premier League profile; their matchup ranks are fixed provisional assumptions.</p></article>
+        <article class="notice"><h3>Historical detail</h3><p>No old gameweek-level history or reliable past club affiliation from the live API alone.</p></article>
+        <article class="notice"><h3>Match-level analysis</h3><p>The current inputs cannot support rolling form, opponent-adjusted performance or per-fixture team analysis.</p></article>
+      </div>
+    </section>
+
+    <section class="updates">
+      <p class="eyebrow">Updates since the original recap</p>
+      <h2>Code changed; source snapshots did not</h2>
+      <div class="update-grid">
+        <div><h3>CBIT/R is now visible</h3><p>The player table now exposes a position-aware CBIT/R column from official action totals. Defenders use CBIT; midfielders and forwards use CBIRT.</p></div>
+        <div><h3>DC is clarified</h3><p>Defensive-contribution points remain a separate FFH field in the FPL points group, preventing the raw-action/API unit mismatch.</p></div>
+        <div><h3>No fresher source data</h3><p><code>data.js</code> was rebuilt at 13:05, but it still names the 23 July bootstrap and fixture snapshots. Coverage remains 382 of 420.</p></div>
+      </div>
+      <p style="margin-top:16px;"><strong>Still unresolved:</strong> the FFH <code>IN</code> field is stored as <code>touchesBox</code> but displayed as “Shots in the box.” The source meaning needs confirmation before that label can be trusted.</p>
+      <p style="margin-top:10px;"><strong>Display convention:</strong> a red triangle now marks source-unsupported cells, while “–” is reserved for stats that cannot apply to the player’s position.</p>
+    </section>
+
+    <footer>
+      Sources inspected: four Fantasy Football Hub (FFH) root CSV exports; <code>site/build.py</code>; <code>site/app.js</code>; <code>site/data.js</code>; <code>snapshots/history_past_2025-26.json</code>; <code>bootstrap-static_2026-07-23.json</code>; <code>fixtures_2026-07-23.json</code>; and <code>reports/fpl_api_diff_2025-26.json</code>.
+    </footer>
+  </main>
+</body>
+</html>

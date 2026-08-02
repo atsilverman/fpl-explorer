@@ -1,0 +1,69 @@
+{
+  "accounts": [
+    {
+      "handle": "LetsTalk_FPL",
+      "label": "Lets Talk FPL",
+      "roles": ["analysis", "qa"]
+    },
+    {
+      "handle": "Pras_fpl",
+      "label": "Pras",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "FPLFocal",
+      "label": "FPL Focal",
+      "roles": ["news", "rumor"]
+    },
+    {
+      "handle": "FPL_Harry",
+      "label": "FPL Harry",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "robtFPL",
+      "label": "Rob",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "sertalpbilal",
+      "label": "Sertalp Bilal",
+      "roles": ["analysis", "data"]
+    },
+    {
+      "handle": "FPL_Pickle",
+      "label": "FPL Pickle",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "BigManBakar",
+      "label": "BigManBakar",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "FPL__Raptor",
+      "label": "FPL Raptor",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "FPLOlympian",
+      "label": "FPL Olympian",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "FPL_JianBatra",
+      "label": "Jian Batra",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "PlanetFPLPod",
+      "label": "Planet FPL",
+      "roles": ["analysis", "qa"]
+    },
+    {
+      "handle": "BenDinnery",
+      "label": "Ben Dinnery",
+      "roles": ["news", "rumor"]
+    }
+  ]
+}
