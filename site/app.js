@@ -540,6 +540,7 @@
     mobileSheetTitle: $("#mobile-sheet-title"),
     mobileSheetBody: $("#mobile-sheet-body"),
     mobileSheetPanel: document.querySelector("#mobile-sheet .mobile-sheet-panel"),
+    searchClearFab: $("#search-clear-fab"),
     scheduleRangeLabel: $("#schedule-range-label"),
     scheduleGwMin: $("#schedule-gw-min"),
     scheduleGwMax: $("#schedule-gw-max"),
@@ -892,7 +893,10 @@
   function playerUpdateNoteHTML(row) {
     if (!playerHasSeasonUpdate(row)) return "";
     const summary = playerUpdateSummary(row);
-    return `<span class="player-update-note" onclick="event.stopPropagation()"${tipAttr(summary)} aria-label="${escapeHtml(summary)}">${stickyNoteSVG()}</span>`;
+    // No inline stopPropagation — mobile tip sheet uses capture + identity
+    // chrome handling so ownership / note taps open the tray without toggling
+    // compare rows.
+    return `<span class="player-update-note"${tipAttr(summary)} aria-label="${escapeHtml(summary)}">${stickyNoteSVG()}</span>`;
   }
 
   function spitOwnedPinHTML() {
@@ -1000,7 +1004,21 @@
   }
 
   function playerNameHTML(row) {
-    return `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${ownedFlagHTML(row)}${playerUpdateNoteHTML(row)}</div>`;
+    const icons = `${ownedFlagHTML(row)}${playerUpdateNoteHTML(row)}`;
+    return `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span><span class="player-name-icons">${icons}</span></div>`;
+  }
+
+  function playerCrestHTML(teamCode, tip) {
+    const inner = badgeHTML(teamCode, "player-cell-badge");
+    if (!inner) return "";
+    return tip
+      ? `<span class="player-cell-crest"${tip}>${inner}</span>`
+      : `<span class="player-cell-crest">${inner}</span>`;
+  }
+
+  /** Flat identity: crest | name / sub — no copy wrapper (keeps crest column tight). */
+  function playerIdentityHTML(crestHTML, nameHTML, subHTML) {
+    return `<div class="player-cell">${crestHTML || ""}${nameHTML}${subHTML || ""}</div>`;
   }
 
   function syncFplIdStatus() {
@@ -1246,19 +1264,13 @@
       const position = updatesOverlayOn() && row.newPosition ? row.newPosition : row.position;
       const teamChanged = updatesOverlayOn() && row.newTeam && row.newTeam !== row.team;
       const posChanged = updatesOverlayOn() && row.newPosition && row.newPosition !== row.position;
-      const crest = teamChanged
-        ? `<span${tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`)}>${badgeHTML(teamCode, "player-cell-badge")}</span>`
-        : badgeHTML(teamCode, "player-cell-badge");
+      const crest = playerCrestHTML(
+        teamCode,
+        teamChanged ? tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`) : ""
+      );
       const posTip = posChanged ? tipAttr(`Was ${row.position}`) : "";
-      return `<div class="player-cell">
-        ${crest}
-        <div class="player-cell-copy">
-          ${playerNameHTML(row)}
-          <div class="player-cell-sub">
-            <span class="pos-badge pos-${position}"${posTip}>${position}</span>
-          </div>
-        </div>
-      </div>`;
+      const sub = `<div class="player-cell-sub"><span class="pos-badge pos-${position}"${posTip}>${position}</span></div>`;
+      return playerIdentityHTML(crest, playerNameHTML(row), sub);
     }
     if (col.key === "name") {
       const pos = LEAGUE_POSITIONS[row.team];
@@ -1266,13 +1278,9 @@
       const posHTML = pos != null
         ? `<span class="team-league-pos"${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`
         : "";
-      return `<div class="player-cell">
-        ${badgeHTML(row.team, "player-cell-badge")}
-        <div class="player-cell-copy">
-          <div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>
-          ${posHTML ? `<div class="player-cell-sub">${posHTML}</div>` : ""}
-        </div>
-      </div>`;
+      const sub = posHTML ? `<div class="player-cell-sub">${posHTML}</div>` : "";
+      const name = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
+      return playerIdentityHTML(playerCrestHTML(row.team), name, sub);
     }
     if (col.key === "price") {
       const val = fmtDisplayValue(displayValue(row, col), col);
@@ -1340,6 +1348,31 @@
   function columnsLiveInFilters() {
     return preferMobileSheet() || COLUMNS_IN_FILTERS_MQ.matches;
   }
+
+  // Mobile Statistics name-column scroll morph — disabled for now.
+  function nameSimplifyWraps() {
+    const wraps = [];
+    const main = el.tableBody && el.tableBody.closest(".table-wrap");
+    if (main) wraps.push(main);
+    const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
+    if (compare) wraps.push(compare);
+    return wraps;
+  }
+
+  function clearNameColumnSimplify(wrap) {
+    if (!wrap) return;
+    wrap.classList.remove("name-simplify-ready", "is-name-simplifying");
+    wrap.style.removeProperty("--name-collapse");
+  }
+
+  function syncAllNameColumnSimplifies() {
+    nameSimplifyWraps().forEach(clearNameColumnSimplify);
+  }
+
+  function bindAllNameColumnSimplifies() {
+    syncAllNameColumnSimplifies();
+  }
+
   function syncPointerMode() {
     document.documentElement.dataset.pointer = hasFineHover() ? "fine" : "coarse";
   }
@@ -1511,6 +1544,7 @@
         el.mobileSheetTitle.textContent = "";
       }
     }, 280);
+    syncSearchClearFab();
   }
 
   function beginMobileSheetShell({ title = "", titleHtml = "", key = null } = {}) {
@@ -1578,6 +1612,7 @@
     el.mobileSheet.classList.add("is-open");
     // Ignore backdrop/X dismiss from the same gesture that opened the sheet.
     sheetIgnoreDismissUntil = Date.now() + 450;
+    syncSearchClearFab();
     return true;
   }
 
@@ -1728,26 +1763,42 @@
     hideUiTooltip();
   });
 
+  // Name / identity chrome tips (ownership pin, sticky note, crest/pos change,
+  // league place) — Statistics + xData. Rankings keeps its own tap behavior.
+  function isIdentityChromeTipTarget(tipEl) {
+    if (!tipEl || tipEl.closest(".rankings-row")) return false;
+    return !!tipEl.closest(".player-cell, .barbell-label, .barbell-group-identity");
+  }
+
   // Touch: tap non-conflicting [data-tip] targets → mobile sheet.
-  // Skip controls/rows that already own the tap for another action.
-  document.addEventListener("click", (event) => {
-    if (hasFineHover()) return;
-    const target = tipTargetFrom(event.target);
-    if (!target) {
-      hideUiTooltip();
-      return;
-    }
-    if (
-      !target.classList.contains("player-update-note") &&
-      target.closest(
-        "a, button, input, label, select, textarea, summary, .rankings-row, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
-      )
-    ) {
-      return;
-    }
-    event.preventDefault();
-    openPlainTipSheet(target);
-  });
+  // Capture phase so identity icons still open even when a parent row handler
+  // would otherwise consume the tap (and so we can stopPropagation before
+  // compare-row toggle). Skip Rankings entirely.
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (hasFineHover()) return;
+      const target = tipTargetFrom(event.target);
+      if (!target) {
+        hideUiTooltip();
+        return;
+      }
+      if (target.closest(".rankings-row")) return;
+      const identityTip = isIdentityChromeTipTarget(target);
+      if (
+        !identityTip &&
+        target.closest(
+          "a, button, input, label, select, textarea, summary, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
+        )
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (identityTip) event.stopPropagation();
+      openPlainTipSheet(target);
+    },
+    true
+  );
 
   document.addEventListener("focusin", (event) => {
     if (!hasFineHover()) return;
@@ -1855,6 +1906,7 @@
     renderCompareTable();
     if (state.page === "expected") renderExpected();
     if (state.page === "rankings") renderRankings();
+    bindAllNameColumnSimplifies();
   }
 
   // ---------------------------------------------------------------------
@@ -3596,6 +3648,14 @@
     `;
   }
 
+  // Scale sticks just under the head; keep --barbell-head-h in sync so they
+  // abut with no gap (and no overlap that would clip axis labels).
+  function syncBarbellHeadHeight() {
+    const sticky = el.barbellHead && el.barbellHead.parentElement;
+    if (!sticky || !el.barbellHead) return;
+    sticky.style.setProperty("--barbell-head-h", `${el.barbellHead.offsetHeight}px`);
+  }
+
   function buildExpectedHead(cat) {
     el.barbellHead.innerHTML = "";
     const compareMode = state.expectedSplit === "compare";
@@ -3631,6 +3691,7 @@
       }
       el.barbellHead.appendChild(div);
     });
+    syncBarbellHeadHeight();
   }
 
   // Floating hover tooltip for barbell dots, positioned against barbell-wrap
@@ -3713,13 +3774,11 @@
       } else if (tagHTML) {
         subHTML = `<div class="player-cell-sub">${tagHTML}</div>`;
       }
-      label.innerHTML = `<div class="player-cell">
-        ${badgeHTML(row.team, "player-cell-badge")}
-        <div class="player-cell-copy">
-          ${playerNameHTML(row)}
-          ${subHTML}
-        </div>
-      </div>`;
+      label.innerHTML = playerIdentityHTML(
+        playerCrestHTML(row.team),
+        playerNameHTML(row),
+        subHTML
+      );
       setTip(label, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
       div.appendChild(label);
     }
@@ -3818,13 +3877,11 @@
         subHTML = `<div class="player-cell-sub"><span class="team-league-pos"${tipAttr(`${leaguePos}${ordinalSuffix(leaguePos)} in the ${seasonLabel}`)}>${leaguePos}${ordinalSuffix(leaguePos)}</span></div>`;
       }
     }
-    identity.innerHTML = `<div class="player-cell">
-      ${badgeHTML(row.team, "player-cell-badge")}
-      <div class="player-cell-copy">
-        ${playerNameHTML(row)}
-        ${subHTML}
-      </div>
-    </div>`;
+    identity.innerHTML = playerIdentityHTML(
+      playerCrestHTML(row.team),
+      playerNameHTML(row),
+      subHTML
+    );
     setTip(identity, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
     return identity;
   }
@@ -5671,7 +5728,9 @@ python3 site/annotate_social.py</pre>
     closeMobileSheet();
     if (page !== "feed") closeFeedSearch();
     else syncFeedSearchLayout();
+    syncSearchClearFab();
     syncPageInfoButton();
+    syncAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
     el.pageExpected.classList.toggle("active", page === "expected");
@@ -5799,6 +5858,7 @@ python3 site/annotate_social.py</pre>
   window.addEventListener("resize", () => {
     syncPageTabsScrollHints();
     syncExpectedCatToolbar();
+    syncBarbellHeadHeight();
     if (preferMobileSheet()) {
       setExpectedCatMenuOpen(false);
       return;
@@ -6027,6 +6087,7 @@ python3 site/annotate_social.py</pre>
         el.feedSearch.value = "";
         renderFeed();
       }
+      syncSearchClearFab();
       return;
     }
     el.feedSearchWrap.classList.remove("search-open");
@@ -6035,6 +6096,7 @@ python3 site/annotate_social.py</pre>
       el.feedSearch.value = "";
       renderFeed();
     }
+    syncSearchClearFab();
   }
 
   function openFeedSearch() {
@@ -6074,8 +6136,12 @@ python3 site/annotate_social.py</pre>
   if (el.feedSearch) {
     let feedSearchTimer;
     el.feedSearch.addEventListener("input", () => {
+      syncSearchClearFab();
       clearTimeout(feedSearchTimer);
       feedSearchTimer = setTimeout(() => renderFeed(), 120);
+    });
+    el.feedSearch.addEventListener("focus", () => {
+      syncSearchClearFab();
     });
     el.feedSearch.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -6084,6 +6150,7 @@ python3 site/annotate_social.py</pre>
           if (el.feedSearch.value) {
             el.feedSearch.value = "";
             renderFeed();
+            syncSearchClearFab();
           } else {
             el.feedSearch.blur();
           }
@@ -6098,11 +6165,51 @@ python3 site/annotate_social.py</pre>
     if (feedSearchAlwaysOpen()) return;
     if (!el.feedSearchWrap || !el.feedSearchWrap.classList.contains("search-open")) return;
     if (el.feedSearchWrap.contains(e.target)) return;
+    if (el.searchClearFab && el.searchClearFab.contains(e.target)) return;
     if (el.feedSearch && el.feedSearch.value.trim()) return;
     closeFeedSearch();
   });
 
   let searchTimer;
+
+  // Mobile: floating Clear search when the active page search has text.
+  function currentSearchInput() {
+    if (state.page === "feed") return el.feedSearch || null;
+    if (state.page === "schedule" || state.page === "markets") return null;
+    return el.search || null;
+  }
+
+  function syncSearchClearFab() {
+    const fab = el.searchClearFab;
+    if (!fab) return;
+    const input = currentSearchInput();
+    const hasQuery = !!(input && String(input.value || "").trim());
+    const show = preferMobileSheet() && hasQuery && !mobileSheetOpen;
+    fab.hidden = !show;
+    fab.classList.toggle("is-visible", show);
+    fab.setAttribute("aria-hidden", show ? "false" : "true");
+    document.documentElement.classList.toggle("has-search-clear-fab", show);
+  }
+
+  function clearCurrentSearch() {
+    if (state.page === "feed") {
+      if (el.feedSearch) {
+        el.feedSearch.value = "";
+        el.feedSearch.blur();
+        renderFeed();
+      }
+      if (!feedSearchAlwaysOpen()) closeFeedSearch();
+    } else {
+      if (el.search) {
+        el.search.value = "";
+        el.search.blur();
+      }
+      state.search = "";
+      closeMobileSearch();
+      renderTable();
+    }
+    syncSearchClearFab();
+  }
 
   function closeMobileSearch({ clear = false } = {}) {
     if (!el.searchWrap) return;
@@ -6112,6 +6219,7 @@ python3 site/annotate_social.py</pre>
       el.search.value = "";
       state.search = "";
     }
+    syncSearchClearFab();
   }
 
   function openMobileSearch() {
@@ -6135,6 +6243,7 @@ python3 site/annotate_social.py</pre>
     if (!el.searchWrap) return;
     if (!el.searchWrap.classList.contains("search-open")) return;
     if (el.searchWrap.contains(e.target)) return;
+    if (el.searchClearFab && el.searchClearFab.contains(e.target)) return;
     if (el.search && el.search.value.trim()) return;
     closeMobileSearch();
   });
@@ -6149,6 +6258,7 @@ python3 site/annotate_social.py</pre>
   el.search.addEventListener("input", (e) => {
     clearTimeout(searchTimer);
     const val = e.target.value;
+    syncSearchClearFab();
     searchTimer = setTimeout(() => {
       state.search = val;
       renderTable();
@@ -6159,7 +6269,16 @@ python3 site/annotate_social.py</pre>
     if (el.searchWrap && !el.searchWrap.classList.contains("search-open")) {
       openMobileSearch();
     }
+    syncSearchClearFab();
   });
+
+  if (el.searchClearFab) {
+    el.searchClearFab.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearCurrentSearch();
+    });
+  }
 
   function setupDualSlider({
     minInput,
@@ -6615,6 +6734,7 @@ python3 site/annotate_social.py</pre>
     el.search.value = "";
     if (el.searchWrap) el.searchWrap.classList.remove("search-open");
     if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    syncSearchClearFab();
     state.hideDeparted = true;
     if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
     setValueMode("total", { rerender: false });
@@ -6846,7 +6966,8 @@ python3 site/annotate_social.py</pre>
 
   // ---------------------------------------------------------------------
   // Appearance (device → light → dark). Default is always device/system.
-  // Accent chrome color (tabs, toggles, selection) via --blue-hsl.
+  // Accent chrome color (tabs, toggles, selection, icons) via --blue-hsl.
+  // Data green/red (--positive / --negative) stay fixed and independent.
   // ---------------------------------------------------------------------
   const THEME_KEY = "fpl-explorer-theme";
   const ACCENT_KEY = "fpl-explorer-accent";
@@ -6912,6 +7033,10 @@ python3 site/annotate_social.py</pre>
     const accent = ACCENT_BY_ID[id] || ACCENT_BY_ID.blue;
     const hsl = themePrefersDark() ? accent.dark : accent.light;
     document.documentElement.style.setProperty("--blue-hsl", hsl);
+    // Clear any earlier experiment that wrote data colours onto the root.
+    document.documentElement.style.removeProperty("--positive");
+    document.documentElement.style.removeProperty("--negative");
+    document.documentElement.removeAttribute("data-accent");
     if (persist) {
       try {
         localStorage.setItem(ACCENT_KEY, accent.id);
@@ -7172,8 +7297,12 @@ python3 site/annotate_social.py</pre>
   bindMqChange(FINE_HOVER_MQ, () => {
     syncPointerMode();
     syncColumnsPanelHost();
+    syncAllNameColumnSimplifies();
   });
-  bindMqChange(NARROW_MQ, syncColumnsPanelHost);
+  bindMqChange(NARROW_MQ, () => {
+    syncColumnsPanelHost();
+    syncAllNameColumnSimplifies();
+  });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
   syncColumnsPanelHost();
 
@@ -7292,17 +7421,23 @@ python3 site/annotate_social.py</pre>
     if (typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(() => syncAllSegThumbs({ animate: false }));
       $$(".tabs, .segmented").forEach((elSeg) => ro.observe(elSeg));
+      if (el.barbellHead) {
+        const headRo = new ResizeObserver(() => syncBarbellHeadHeight());
+        headRo.observe(el.barbellHead);
+      }
     }
     window.addEventListener("resize", () => {
       syncAllSegThumbs({ animate: false });
       syncFeedSearchLayout();
       syncPageTabsScrollHints();
+      syncAllNameColumnSimplifies();
     });
     if (typeof NARROW_MQ.addEventListener === "function") {
       NARROW_MQ.addEventListener("change", syncFeedSearchLayout);
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(syncFeedSearchLayout);
     }
+    bindAllNameColumnSimplifies();
   }
 
   init();
