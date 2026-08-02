@@ -14,13 +14,15 @@ Run:
 
 Optional:
   POSTS_PER_ACCOUNT=40 python3 site/fetch_social.py
-  WINDOW_HOURS=48 python3 site/fetch_social.py
+  WINDOW_HOURS=168 python3 site/fetch_social.py
+  python3 site/fetch_social.py --backfill   # ignore since_id; paginate last WINDOW_HOURS
 
-Keeps a rolling ~48h window of original posts. The static site only reads
+Keeps a rolling ~7-day window of original posts. The static site only reads
 social_data.js — the token never ships to Vercel.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -57,10 +59,10 @@ def load_dotenv(path: Path = ENV_PATH) -> None:
 load_dotenv()
 
 POSTS_PER_ACCOUNT = max(5, min(100, int(os.environ.get("POSTS_PER_ACCOUNT", "40"))))
-# Hard time window for the Feed (player-mention cards).
-WINDOW_HOURS = max(6, min(168, int(os.environ.get("WINDOW_HOURS", "48"))))
+# Hard time window for the Feed (player-mention cards) — up to 7 days.
+WINDOW_HOURS = max(6, min(168, int(os.environ.get("WINDOW_HOURS", "168"))))
 # Cap after the time prune so the static file stays small.
-MAX_POSTS_RETAINED = max(50, int(os.environ.get("MAX_POSTS_RETAINED", "400")))
+MAX_POSTS_RETAINED = max(50, int(os.environ.get("MAX_POSTS_RETAINED", "1000")))
 
 TWEET_FIELDS = ",".join(
     [
@@ -184,21 +186,72 @@ def resolve_user(handle: str, cached_id: str | None, cached_account: dict | None
     return user
 
 
-def fetch_user_tweets(user_id: str, since_id: str | None) -> tuple[list[dict], dict]:
-    params = {
-        "max_results": str(min(100, max(5, POSTS_PER_ACCOUNT))),
-        "tweet.fields": TWEET_FIELDS,
-        "expansions": "attachments.media_keys,author_id,referenced_tweets.id",
-        "media.fields": MEDIA_FIELDS,
-        "user.fields": USER_FIELDS,
-        "exclude": "retweets",
-    }
-    if since_id:
-        params["since_id"] = since_id
-    data = api_get(f"/users/{user_id}/tweets", params)
-    tweets = data.get("data") or []
-    includes = data.get("includes") or {}
-    return tweets, includes
+def fetch_user_tweets(
+    user_id: str,
+    since_id: str | None,
+    *,
+    start_time: str | None = None,
+    max_pages: int = 1,
+) -> tuple[list[dict], dict]:
+    """
+    Fetch recent tweets for a user (originals, replies, quotes, and retweets).
+    When start_time is set (backfill), since_id is ignored and pages are followed
+    until exhausted or max_pages is reached.
+    """
+    tweets: list[dict] = []
+    includes_acc: dict = {"media": [], "users": [], "tweets": []}
+    pagination_token: str | None = None
+    pages = max(1, max_pages)
+
+    for _ in range(pages):
+        params = {
+            "max_results": str(min(100, max(5, POSTS_PER_ACCOUNT))),
+            "tweet.fields": TWEET_FIELDS,
+            "expansions": "attachments.media_keys,author_id,referenced_tweets.id",
+            "media.fields": MEDIA_FIELDS,
+            "user.fields": USER_FIELDS,
+        }
+        if start_time:
+            params["start_time"] = start_time
+        elif since_id:
+            params["since_id"] = since_id
+        if pagination_token:
+            params["pagination_token"] = pagination_token
+
+        data = api_get(f"/users/{user_id}/tweets", params)
+        batch = data.get("data") or []
+        tweets.extend(batch)
+        inc = data.get("includes") or {}
+        for key in ("media", "users", "tweets"):
+            includes_acc.setdefault(key, []).extend(inc.get(key) or [])
+
+        pagination_token = (data.get("meta") or {}).get("next_token")
+        if not pagination_token or not batch:
+            break
+
+    return tweets, includes_acc
+
+
+def window_start_iso(hours: int, now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    start = now.timestamp() - hours * 3600
+    return datetime.fromtimestamp(start, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Fetch curated X posts into social_data.js")
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Ignore since_id; paginate posts within WINDOW_HOURS (fills older days).",
+    )
+    parser.add_argument(
+        "--pages",
+        type=int,
+        default=0,
+        help="Max timeline pages per account when backfilling (default: 5, max 10).",
+    )
+    return parser.parse_args(argv)
 
 
 def media_index(includes: dict) -> dict[str, dict]:
@@ -295,7 +348,13 @@ def write_output(payload: dict) -> None:
     OUT_PATH.write_text(body, encoding="utf-8")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    backfill = args.backfill or os.environ.get("BACKFILL", "").strip().lower() in ("1", "true", "yes")
+    backfill_pages = args.pages or int(os.environ.get("BACKFILL_PAGES", "5") or "5")
+    backfill_pages = max(1, min(10, backfill_pages))
+    start_time = window_start_iso(WINDOW_HOURS) if backfill else None
+
     curated = load_accounts()
     existing = load_existing()
     prior_posts = existing.get("posts") or []
@@ -304,6 +363,9 @@ def main() -> None:
     accounts_out = []
     new_posts: list[dict] = []
     fetched_counts: list[tuple[str, int]] = []
+
+    if backfill:
+        print(f"Backfill mode: start_time={start_time}, up to {backfill_pages} page(s)/account")
 
     for entry in curated:
         handle = entry["handle"]
@@ -325,13 +387,23 @@ def main() -> None:
         }
         accounts_out.append(account)
 
-        since_id = newest_id_for_handle(prior_posts, account["handle"])
-        tweets, includes = fetch_user_tweets(account["userId"], since_id)
+        since_id = None if backfill else newest_id_for_handle(prior_posts, account["handle"])
+        tweets, includes = fetch_user_tweets(
+            account["userId"],
+            since_id,
+            start_time=start_time,
+            max_pages=backfill_pages if backfill else 1,
+        )
         media_by_key = media_index(includes)
         batch = [normalize_post(t, account, media_by_key) for t in tweets]
         new_posts.extend(batch)
         fetched_counts.append((account["handle"], len(batch)))
-        print(f"@{account['handle']}: fetched {len(batch)} post(s)" + (f" (since_id={since_id})" if since_id else ""))
+        mode_note = ""
+        if backfill:
+            mode_note = f" (backfill ≤{backfill_pages}p)"
+        elif since_id:
+            mode_note = f" (since_id={since_id})"
+        print(f"@{account['handle']}: fetched {len(batch)} post(s){mode_note}")
 
     # Merge by post id: keep prior posts, upsert this run (no duplicates).
     prior_ids = {p["id"] for p in prior_posts if p.get("id")}
@@ -387,7 +459,9 @@ def main() -> None:
             "droppedForRetentionCap": dropped_for_cap,
             "newestIdByHandle": newest_by_handle,
             # Incremental pulls use since_id = newest kept id per handle.
-            "incremental": True,
+            "incremental": not backfill,
+            "backfill": backfill,
+            "backfillStartTime": start_time,
             # Carry forward; refresh with: python3 site/annotate_social.py
             "analysis": analysis_meta,
         },
@@ -397,7 +471,10 @@ def main() -> None:
     print(f"\nWrote {OUT_PATH.name}: {len(merged)} post(s), {len(accounts_out)} account(s)")
     print(f"generatedAt: {generated}")
     print(f"Window: last {WINDOW_HOURS}h (dropped {dropped_for_age} older)")
-    print(f"New since last fetch: {len(truly_new_ids)} (deduped by id; since_id incremental)")
+    if backfill:
+        print(f"Backfill new/merged ids this run: {len(truly_new_ids)}")
+    else:
+        print(f"New since last fetch: {len(truly_new_ids)} (deduped by id; since_id incremental)")
     if merged:
         sample = merged[0]
         keys = sorted(sample.keys())

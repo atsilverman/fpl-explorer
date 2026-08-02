@@ -2,12 +2,34 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>FPL Explorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=192" />
+<link rel="stylesheet" href="styles.css?v=250" />
+<script>
+(() => {
+  try {
+    const root = document.documentElement;
+    const theme = localStorage.getItem("fpl-explorer-theme");
+    if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
+    const accents = {
+      blue: { light: "217 91% 60%", dark: "217 91% 60%" },
+      teal: { light: "173 80% 36%", dark: "172 66% 50%" },
+      violet: { light: "262 72% 50%", dark: "263 70% 65%" },
+      rose: { light: "346 77% 50%", dark: "347 77% 60%" },
+      amber: { light: "32 95% 44%", dark: "38 92% 50%" },
+    };
+    const id = localStorage.getItem("fpl-explorer-accent") || "blue";
+    const accent = accents[id] || accents.blue;
+    const dark =
+      theme === "dark" ||
+      (theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    root.style.setProperty("--blue-hsl", dark ? accent.dark : accent.light);
+  } catch (_) {}
+})();
+</script>
 </head>
 <body>
 
@@ -25,6 +47,14 @@
     <path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>
     <path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>
   </symbol>
+  <symbol id="i-calendar-search" viewBox="0 0 24 24">
+    <path d="M16 2v4"/>
+    <path d="M21 11.75V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7.25"/>
+    <path d="m22 22-1.875-1.875"/>
+    <path d="M3 10h18"/>
+    <path d="M8 2v4"/>
+    <circle cx="18" cy="18" r="3"/>
+  </symbol>
   <symbol id="i-columns" viewBox="0 0 24 24">
     <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>
   </symbol>
@@ -41,6 +71,13 @@
   </symbol>
   <symbol id="i-search" viewBox="0 0 24 24">
     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+  </symbol>
+  <symbol id="i-refresh-ccw-dot" viewBox="0 0 24 24">
+    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+    <path d="M3 3v5h5"/>
+    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+    <path d="M16 16h5v5"/>
+    <circle cx="12" cy="12" r="1"/>
   </symbol>
   <symbol id="i-podium" viewBox="0 0 24 24">
     <path d="M12 6V2h-1"/>
@@ -158,6 +195,18 @@
     <path d="M2 22h20"/>
     <path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"/>
   </symbol>
+  <symbol id="i-trending-up" viewBox="0 0 24 24">
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+  </symbol>
+  <symbol id="i-trending-down" viewBox="0 0 24 24">
+    <polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>
+  </symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24">
+    <path d="M5 12h14"/>
+  </symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24">
+    <path d="M5 12h14"/><path d="M12 5v14"/>
+  </symbol>
 </svg>
 
 <div class="page-nav">
@@ -184,6 +233,15 @@
       <svg class="icon" aria-hidden="true"><use href="#i-podium"/></svg>
       Rankings
     </button>
+    <div class="page-tab-dropdown" id="expected-tab-wrap">
+      <button id="page-expected" class="page-tab-btn" type="button"
+        aria-haspopup="true" aria-expanded="false" aria-controls="expected-cat-menu">
+        <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
+        xData
+        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </button>
+      <div id="expected-cat-menu" class="dropdown-panel page-tab-menu" role="menu" aria-label="xData categories"></div>
+    </div>
     <button id="page-schedule" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
       Matchups
@@ -196,24 +254,11 @@
       <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
       Markets
     </button>
-    <div class="page-tab-dropdown" id="expected-tab-wrap">
-      <button id="page-expected" class="page-tab-btn" type="button"
-        aria-haspopup="true" aria-expanded="false" aria-controls="expected-cat-menu">
-        <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
-        xData
-        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-      </button>
-      <div id="expected-cat-menu" class="dropdown-panel page-tab-menu" role="menu" aria-label="xData categories"></div>
-    </div>
   </nav>
 
   <div class="page-nav-actions">
-    <button id="page-info-btn" class="icon-btn icon-only-btn" type="button"
-      title="How this page works" aria-label="How this page works" aria-describedby="page-info-tooltip" aria-expanded="false">
-      <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-    </button>
     <button id="theme-cycle-btn" class="icon-btn icon-only-btn" type="button"
-      title="Theme: System" aria-label="Theme: System">
+      title="Theme: Device" aria-label="Theme: Device">
       <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
     </button>
     <div class="dropdown-wrap" id="prefs-wrap">
@@ -227,6 +272,21 @@
           <p class="settings-panel-sub">Your FPL team and display</p>
         </div>
         <div class="settings-panel-body prefs-panel-body">
+          <section class="settings-section">
+            <div class="settings-section-label">Appearance</div>
+            <div class="prefs-field prefs-theme-field">
+              <span class="prefs-field-label" id="theme-seg-label">Theme</span>
+              <div class="segmented segmented-block" id="theme-seg" role="group" aria-labelledby="theme-seg-label">
+                <button type="button" data-theme-mode="system" class="active" title="Match device light/dark setting">Device</button>
+                <button type="button" data-theme-mode="light" title="Always light">Light</button>
+                <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
+              </div>
+            </div>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="accent-swatch-label">Accent</span>
+              <div class="prefs-accent-swatches" id="accent-swatches" role="radiogroup" aria-labelledby="accent-swatch-label"></div>
+            </div>
+          </section>
           <section class="settings-section">
             <div class="settings-section-label">FPL ID</div>
             <div class="prefs-field">
@@ -268,7 +328,7 @@
               </select>
             </div>
           </section>
-          <section class="settings-section">
+          <section class="settings-section prefs-tooltips-section">
             <div class="settings-section-label">Tooltips</div>
             <div class="prefs-field">
               <div class="prefs-slider-head">
@@ -291,7 +351,7 @@
 </div>
 
 <div class="topbar" id="subtoolbar">
-  <div class="topbar-start">
+  <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
     <button id="sidebar-toggle" class="ghost-btn icon-only-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters">
       <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
     </button>
@@ -305,37 +365,62 @@
         Teams
       </button>
     </div>
-
-    <div class="toggle-group" id="table-only-toggles">
-      <div class="newprice-wrap" id="newprice-wrap">
-        <button id="newprice-toggle" class="ghost-btn" type="button" title="Use matched 2026/27 price, team, and position">Updates</button>
-        <span id="newprice-issues-badge" class="issues-badge" style="display:none;" title="Players needing manual price-match review"></span>
-        <div id="newprice-issues-panel" class="dropdown-panel issues-panel"></div>
-      </div>
-    </div>
-
-    <label id="rank-recalculate-wrap" class="toolbar-switch" style="display:none;"
-      title="Recalculate highlight bands from the current filtered rows">
-      <input id="rank-recalculate-toggle" type="checkbox" checked />
-      <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-      <span>Recalculate</span>
-    </label>
   </div>
 
-  <div class="topbar-end">
-    <label id="rankings-per-gw-wrap" class="toolbar-switch" style="display:none;"
-      title="Divide ranking values by gameweeks played (teams) or appearances (players)">
-      <input id="rankings-per-gw-toggle" type="checkbox" />
-      <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-      <span>Per GP</span>
-    </label>
-    <button id="compare-toggle" class="ghost-btn icon-label-btn" type="button" title="Click up to 5 rows to compare side by side">
-      <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
-      Compare
+  <div class="topbar-actions-cluster" id="stats-toolbar-actions">
+    <div class="topbar-cluster topbar-data-cluster">
+      <div class="toggle-group" id="table-only-toggles">
+        <div class="newprice-wrap" id="newprice-wrap">
+          <button id="newprice-toggle" class="ghost-btn icon-label-btn" type="button" title="Use matched 2026/27 price, team, and position" aria-label="Updates">
+            <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
+            <span class="btn-label">Updates</span>
+          </button>
+          <span id="newprice-issues-badge" class="issues-badge" style="display:none;" title="Players needing manual price-match review"></span>
+          <div id="newprice-issues-panel" class="dropdown-panel issues-panel"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="topbar-cluster topbar-end-cluster">
+      <button id="compare-toggle" class="ghost-btn icon-label-btn" type="button" title="Click up to 5 rows to compare side by side" aria-label="Compare">
+        <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+        <span class="btn-label">Compare</span>
+      </button>
+      <button id="columns-btn" class="ghost-btn icon-only-btn" type="button" title="Columns" aria-label="Columns" aria-expanded="false" aria-controls="columns-sidebar">
+        <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
+      </button>
+      <div class="dropdown-wrap expected-cat-toolbar" id="expected-cat-toolbar" hidden>
+        <button id="expected-cat-btn" class="ghost-btn expected-cat-btn" type="button"
+          title="xData category" aria-label="xData category" aria-haspopup="true" aria-expanded="false">
+          <span id="expected-cat-label" class="expected-cat-label">Category</span>
+          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+        </button>
+      </div>
+      <div class="search-wrap" id="search-wrap">
+        <button id="search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button" title="Search" aria-label="Search" aria-expanded="false" aria-controls="search-input">
+          <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+        </button>
+        <svg class="icon search-field-icon" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="search-input" type="search" placeholder="Search player or team…" autocomplete="off" enterkeyhint="search" />
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar-cluster topbar-feed-start" id="feed-toolbar-start" style="display:none;">
+    <button id="feed-filters-toggle" class="ghost-btn icon-only-btn" type="button"
+      title="Show feed filters" aria-label="Show feed filters" aria-expanded="false" aria-controls="feed-controls">
+      <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
     </button>
-    <div class="search-wrap">
-      <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-      <input id="search-input" type="text" placeholder="Search player or team…" autocomplete="off" />
+  </div>
+  <div class="topbar-cluster topbar-feed-end" id="feed-toolbar-end" style="display:none;">
+    <div class="search-wrap feed-search-wrap" id="feed-search-wrap">
+      <button id="feed-search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button"
+        title="Search" aria-label="Search players or teams in feed" aria-expanded="false" aria-controls="feed-search-input">
+        <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <svg class="icon search-field-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="feed-search-input" type="search" placeholder="Search player or team…" autocomplete="off" aria-label="Search players or teams in feed" enterkeyhint="search" />
     </div>
   </div>
 </div>
@@ -416,7 +501,7 @@
 
     <div class="filter-group" id="enhance-pct-group" style="display:none;">
       <h3>Highlight Top/Bottom</h3>
-      <div class="slider-values"><span id="enhance-pct-label"></span><span id="enhance-pct-hint" class="slider-hint">of filtered rows</span></div>
+      <div class="slider-values"><span id="enhance-pct-label"></span><span id="enhance-pct-hint" class="slider-hint">of all players</span></div>
       <div class="dual-slider single-slider">
         <div class="slider-track"></div>
         <div class="slider-fill" id="enhance-pct-fill"></div>
@@ -438,30 +523,57 @@
         <span class="reset" id="reset-filters">clear all filters</span>
       </h3>
     </div>
+
+    <!-- On narrow / sheet layouts, #columns-list is moved here so column
+         toggles live inside the Filters tray. Desktop hosts it in
+         #columns-sidebar instead. -->
+    <div id="sidebar-columns-host" class="sidebar-columns-host" hidden></div>
+  </aside>
+
+  <aside class="feed-filters-sidebar collapsed" id="feed-controls" aria-label="Feed filters" style="display:none;">
+    <div class="filter-group feed-control-range">
+      <h3>Date range</h3>
+      <div class="segmented feed-range-seg" id="feed-range-seg" role="group" aria-label="Feed date range">
+        <button type="button" data-feed-range="today" class="active">Today</button>
+        <button type="button" data-feed-range="3d">Last 3 days</button>
+        <button type="button" data-feed-range="7d">Past week</button>
+      </div>
+    </div>
+    <div class="filter-group feed-control-types">
+      <h3>
+        Post type
+        <span class="reset feed-filter-reset" id="feed-reset-types" role="button" tabindex="0">clear</span>
+      </h3>
+      <div class="chip-row" id="feed-type-filters"></div>
+    </div>
+    <div class="filter-group feed-control-creators">
+      <h3>
+        Creator
+        <span class="reset feed-filter-reset" id="feed-reset-creators" role="button" tabindex="0">clear</span>
+      </h3>
+      <div class="chip-row" id="feed-creator-filters"></div>
+    </div>
+    <div class="filter-group feed-control-teams">
+      <h3>
+        Team
+        <span class="reset feed-filter-reset" id="feed-reset-teams" role="button" tabindex="0">clear</span>
+      </h3>
+      <div class="chip-row" id="feed-team-filters"></div>
+    </div>
   </aside>
 
   <main class="main">
     <div id="opta-page" class="page-pane">
-      <div class="page-header">
-        <div>
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics</h2>
-          <p class="page-subtitle">Browse player and team statistics using customized filters.</p>
-        </div>
-        <div class="page-header-meta">
-          <span class="count-label" id="count-label"></span>
-          <div class="dropdown-wrap" id="columns-wrap">
-            <button id="columns-btn" class="icon-btn icon-only-btn" type="button" title="Columns" aria-label="Columns" aria-haspopup="true" aria-expanded="false" aria-controls="columns-panel">
-              <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
-            </button>
-            <div id="columns-panel" class="dropdown-panel settings-panel" role="dialog" aria-labelledby="columns-heading">
-              <div class="settings-panel-head">
-                <h4 id="columns-heading">Columns</h4>
-                <p class="settings-panel-sub">Show or hide statistics columns</p>
-              </div>
-              <div id="columns-list" class="settings-panel-body"></div>
-            </div>
+      <div class="page-header opta-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics<button class="page-info-btn" type="button" aria-label="How Statistics works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+          </div>
+          <div class="page-header-meta">
+            <span class="count-label" id="count-label"></span>
           </div>
         </div>
+        <p class="page-subtitle">Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.</p>
       </div>
 
       <div class="compare-wrap" id="compare-wrap" style="display:none;">
@@ -488,8 +600,8 @@
     <div id="rankings-page" class="page-pane" style="display:none;">
       <div class="page-header">
         <div>
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-podium"/></svg>Rankings</h2>
-          <p class="page-subtitle">Top 10 leaders for every metric. Hover to trace a name across cards, or click to pin up to five in their own colour.</p>
+          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-podium"/></svg>Rankings<button class="page-info-btn" type="button" aria-label="How Rankings works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+          <p class="page-subtitle">Top 10 leaderboards for OPTA and FPL metrics, grouped into Key Stats, Attacking, and Defending.</p>
         </div>
         <span class="count-label" id="rankings-count-label"></span>
       </div>
@@ -501,13 +613,15 @@
 
     <div id="expected-page" class="page-pane" style="display:none;">
       <div class="page-header expected-header">
-        <div class="expected-header-text">
-          <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">Expected Data</span></h2>
-          <p id="expected-sub" class="page-subtitle"></p>
+        <div class="expected-header-top">
+          <div class="expected-header-text">
+            <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">Expected Data</span><button class="page-info-btn" type="button" aria-label="How Expected Data works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+          </div>
+          <div class="expected-header-controls">
+            <div class="expected-legend-inline" id="expected-legend"></div>
+          </div>
         </div>
-        <div class="expected-header-controls">
-          <div class="expected-legend-inline" id="expected-legend"></div>
-        </div>
+        <p id="expected-sub" class="page-subtitle"></p>
       </div>
 
       <div class="barbell-wrap" id="barbell-wrap">
@@ -527,9 +641,9 @@
         <div class="schedule-header-top">
           <div class="schedule-header-text">
             <div class="schedule-title-row">
-              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Matchups</h2>
+              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Matchups<button class="page-info-btn" type="button" aria-label="How Matchups works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             </div>
-            <p class="page-subtitle">Find teams with favorable upcoming fixtures for attacking and/or defensive assets</p>
+            <p class="page-subtitle">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
           </div>
           <button id="schedule-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
             title="Show matchup sliders" aria-label="Show matchup sliders" aria-expanded="false" aria-controls="schedule-controls">
@@ -627,20 +741,10 @@
     </div>
 
     <div id="feed-page" class="page-pane" style="display:none;">
-      <div class="page-header">
-        <div>
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-rss"/></svg>Social Media Feed</h2>
-          <p class="page-subtitle">Player mentions from curated FPL content creators on X in the last 48 hrs</p>
-        </div>
-        <div class="page-header-meta">
-          <div class="search-wrap feed-search-wrap">
-            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-            <input id="feed-search-input" type="text" placeholder="Search player…" autocomplete="off" aria-label="Search players in feed" />
-          </div>
-          <div class="segmented" id="feed-sort-seg" role="group" aria-label="Sort player cards">
-            <button type="button" data-feed-sort="volume" class="active">Volume</button>
-            <button type="button" data-feed-sort="recent">Recent</button>
-          </div>
+      <div class="page-header feed-header">
+        <div class="feed-header-text">
+          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-rss"/></svg>Social Media Feed<button class="page-info-btn" type="button" aria-label="How Social Media Feed works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+          <p class="page-subtitle">Player-mention cards from curated X accounts — filter by date range, creator, and post type, with quotes underneath.</p>
         </div>
       </div>
       <div class="feed-trending" id="feed-trending"></div>
@@ -650,11 +754,10 @@
       <div class="page-header markets-header">
         <div class="markets-header-top">
           <div class="markets-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets</h2>
-            <p class="page-subtitle">Upcoming EPL fixtures — projected goals, clean sheets, and most likely scores</p>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets<button class="page-info-btn" type="button" aria-label="How Markets works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
           </div>
           <div class="markets-header-actions">
-            <span id="markets-updated" class="markets-updated" aria-live="polite"></span>
             <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
               title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls">
               <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
@@ -663,6 +766,22 @@
         </div>
 
         <div class="markets-controls is-collapsed" id="markets-controls" hidden>
+          <div class="markets-control markets-control-compare">
+            <div class="schedule-control-head">
+              <strong>Compare
+                <span class="schedule-control-info" tabindex="0"
+                  data-tip="Show how projected Goals and CS% moved versus an earlier odds pull. Current hides changes. Last run compares to the previous refresh; Last 72 hr uses the snapshot nearest that lookback."
+                  aria-label="How Compare works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+            </div>
+            <div class="segmented markets-compare-seg" id="markets-compare-seg" role="group" aria-label="Odds compare window">
+              <button type="button" data-markets-compare="current" class="active">Current</button>
+              <button type="button" data-markets-compare="last">Last run</button>
+              <button type="button" data-markets-compare="72h">Last 72 hr</button>
+            </div>
+          </div>
           <div class="markets-control">
             <div class="schedule-control-head">
               <strong>Goals color
@@ -708,8 +827,13 @@
         </div>
       </div>
       <div class="markets-grid" id="markets-grid"></div>
+      <p class="markets-attribution" id="markets-attribution" hidden></p>
     </div>
   </main>
+
+  <aside class="columns-sidebar collapsed" id="columns-sidebar" aria-label="Columns">
+    <div id="columns-list"></div>
+  </aside>
 </div>
 
 <div id="ui-tooltip" class="ui-tooltip" role="tooltip" style="display:none;"></div>
@@ -718,12 +842,25 @@
 <div id="matchup-edge-tooltip" class="fixture-tooltip matchup-edge-tooltip" role="tooltip" style="display:none;"></div>
 <div id="schedule-scatter-tooltip" class="fixture-tooltip schedule-scatter-tooltip" role="tooltip" style="display:none;"></div>
 <div id="page-info-tooltip" class="fixture-tooltip page-info-tooltip" role="tooltip" style="display:none;"></div>
+<div id="mobile-sheet" class="mobile-sheet" hidden aria-hidden="true">
+  <div class="mobile-sheet-backdrop" data-sheet-dismiss></div>
+  <div class="mobile-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-sheet-title">
+    <div class="mobile-sheet-grab" data-sheet-drag>
+      <span class="mobile-sheet-handle" aria-hidden="true"></span>
+    </div>
+    <div class="mobile-sheet-header" data-sheet-drag>
+      <h3 id="mobile-sheet-title" class="mobile-sheet-title"></h3>
+      <button type="button" class="ghost-btn icon-only-btn mobile-sheet-close" data-sheet-dismiss aria-label="Close">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="mobile-sheet-body" class="mobile-sheet-body"></div>
+  </div>
+</div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<div id="x-search-confirm" class="x-search-confirm" role="dialog" aria-label="Search X" style="display:none;"></div>
-
 <script src="data.js?v=24"></script>
 <script src="social_data.js?v=11"></script>
 <script src="markets_data.js?v=3"></script>
-<script src="app.js?v=203"></script>
+<script src="app.js?v=250"></script>
 </body>
 </html>

@@ -98,11 +98,49 @@
     return `hsl(var(--negative) / ${alpha})`;
   }
 
-  // Soft green/red cell tint for Enhance highlights. Intensity 1 → strongest
-  // in the band, 0 → weakest; still tapers, but stays light enough that the
-  // cell text remains readable over long tables.
-  function enhanceFillAlpha(intensity) {
-    return (0.08 + intensity * 0.4).toFixed(3);
+  // Enhance highlight paint. Intensity 1 = strongest in the band.
+  // Soft ranks stay translucent tints; leaders punch toward a darker solid
+  // so the value can flip to light text.
+  function enhanceHighlightPaint(kind, intensity) {
+    const t = Math.min(1, Math.max(0, Number(intensity) || 0));
+    // Ease-in keeps the lower band soft and concentrates drama at the top.
+    const e = Math.pow(t, 0.72);
+    const base = kind === "top" ? "hsl(var(--positive))" : "hsl(var(--negative))";
+    if (e < 0.65) {
+      const alpha = (0.12 + e * 0.55).toFixed(3); // ~0.12–0.48
+      return {
+        backgroundColor: kind === "top" ? positiveFill(alpha) : negativeFill(alpha),
+        color: "",
+        strong: false,
+      };
+    }
+    // Strong band: mix toward black so white text stays readable on light
+    // and dark themes. e=0.65 → ~18% black; e=1 → ~34% black.
+    const blackPct = Math.round(18 + ((e - 0.65) / 0.35) * 16);
+    return {
+      backgroundColor: `color-mix(in srgb, ${base} ${100 - blackPct}%, black)`,
+      color: "#fff",
+      strong: true,
+    };
+  }
+
+  function applyEnhanceHighlight(td, kind, intensity) {
+    const paint = enhanceHighlightPaint(kind, intensity);
+    td.classList.add(kind === "top" ? "highlight-top" : "highlight-bottom");
+    td.classList.toggle("highlight-strong", paint.strong);
+    td.style.backgroundColor = paint.backgroundColor;
+    if (paint.color) td.style.color = paint.color;
+    else td.style.removeProperty("color");
+  }
+
+  function enhanceHighlightInlineStyle(kind, intensity) {
+    const paint = enhanceHighlightPaint(kind, intensity);
+    const color = paint.color ? `;color:${paint.color}` : "";
+    const strong = paint.strong ? " highlight-strong" : "";
+    return {
+      style: `background-color:${paint.backgroundColor}${color}`,
+      strongClass: strong,
+    };
   }
 
   // ---------------------------------------------------------------------
@@ -351,10 +389,8 @@
     valueMode: "total", // total | per90 | perM
     showNewPrice: false,
     hideDeparted: true,
-    // Always-on top/bottom % cell tint (raw values stay in the cells).
-    // Preserve the existing behavior by default: filter changes redefine the
-    // highlight population. Turn this off to band against the full view instead.
-    recalculateRanks: true,
+    // Always-on top/bottom % cell tint vs the full Players/Teams view
+    // (raw values stay in the cells; filters don't shrink the bands).
     enhancePct: ENHANCE_PCT_PLAYERS,
     scheduleEnhanceTopN: SCHEDULE_ENHANCE_TOP_DEFAULT,
     compareMode: false,
@@ -363,13 +399,6 @@
     sortDir: "desc",
     hiddenCols: new Set(),
     rankingsPins: [],
-    // Rankings defaults the other way to the OPTA table: a search or filter
-    // there is usually "where does this player actually place", so ranks stay
-    // measured against the whole view until the user asks to recalculate.
-    rankingsRecalculate: false,
-    // Divide every ranking card by gameweeks played (teams) or appearances
-    // (players) so games-in-hand don't distort early-season leaderboards.
-    rankingsPerGw: false,
     expectedCat: "goals", // goals | assists | gi | conceded | cs
     expectedSortKey: "actual", // diff | expected | actual | name
     expectedSortDir: "desc",
@@ -379,10 +408,14 @@
     scheduleMatchups: true,
     scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
     scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
-    feedSort: "volume", // volume | recent
+    feedRange: "today", // today | 3d | 7d
+    feedCreatorFilter: new Set(), // empty = all creators
+    feedTypeFilter: new Set(["original"]), // selected types; default original only
+    feedTeamFilter: new Set(), // empty = all teams
     // Markets Goals/CS heat fills — 0 = stricter (less color), 100 = looser (more).
     marketsHeatGoals: MARKETS_HEAT_DEFAULT,
     marketsHeatCs: MARKETS_HEAT_DEFAULT,
+    marketsCompare: "current", // current | last | 72h
   };
 
   const MAX_COMPARE = 5;
@@ -452,10 +485,17 @@
     pageExpected: $("#page-expected"),
     expectedTabWrap: $("#expected-tab-wrap"),
     expectedCatMenu: $("#expected-cat-menu"),
+    expectedCatToolbar: $("#expected-cat-toolbar"),
+    expectedCatBtn: $("#expected-cat-btn"),
+    expectedCatLabel: $("#expected-cat-label"),
     pageSchedule: $("#page-schedule"),
     pageFeed: $("#page-feed"),
     pageMarkets: $("#page-markets"),
     subtoolbar: $("#subtoolbar"),
+    statsToolbarStart: $("#stats-toolbar-start"),
+    statsToolbarActions: $("#stats-toolbar-actions"),
+    feedToolbarStart: $("#feed-toolbar-start"),
+    feedToolbarEnd: $("#feed-toolbar-end"),
     optaPage: $("#opta-page"),
     rankingsPage: $("#rankings-page"),
     rankingsPinBar: $("#rankings-pin-bar"),
@@ -467,11 +507,21 @@
     feedPage: $("#feed-page"),
     feedList: $("#feed-list"),
     feedTrending: $("#feed-trending"),
-    feedSortSeg: $("#feed-sort-seg"),
+    feedFiltersToggle: $("#feed-filters-toggle"),
+    feedControls: $("#feed-controls"),
+    feedRangeSeg: $("#feed-range-seg"),
+    feedTypeFilters: $("#feed-type-filters"),
+    feedCreatorFilters: $("#feed-creator-filters"),
+    feedTeamFilters: $("#feed-team-filters"),
+    feedResetTypes: $("#feed-reset-types"),
+    feedResetCreators: $("#feed-reset-creators"),
+    feedResetTeams: $("#feed-reset-teams"),
+    feedSearchWrap: $("#feed-search-wrap"),
+    feedSearchToggle: $("#feed-search-toggle"),
     feedSearch: $("#feed-search-input"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
-    marketsUpdated: $("#markets-updated"),
+    marketsAttribution: $("#markets-attribution"),
     marketsControls: $("#markets-controls"),
     marketsSlidersToggle: $("#markets-sliders-toggle"),
     marketsHeatGoals: $("#markets-heat-goals"),
@@ -480,9 +530,14 @@
     marketsHeatCs: $("#markets-heat-cs"),
     marketsHeatCsFill: $("#markets-heat-cs-fill"),
     marketsHeatCsLabel: $("#markets-heat-cs-label"),
+    marketsCompareSeg: $("#markets-compare-seg"),
     scheduleScatter: $("#schedule-scatter"),
     scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
     uiTooltip: $("#ui-tooltip"),
+    mobileSheet: $("#mobile-sheet"),
+    mobileSheetTitle: $("#mobile-sheet-title"),
+    mobileSheetBody: $("#mobile-sheet-body"),
+    mobileSheetPanel: document.querySelector("#mobile-sheet .mobile-sheet-panel"),
     scheduleRangeLabel: $("#schedule-range-label"),
     scheduleGwMin: $("#schedule-gw-min"),
     scheduleGwMax: $("#schedule-gw-max"),
@@ -514,18 +569,21 @@
     expectedTooltip: $("#expected-tooltip"),
     seasonSelect: $("#season-select"),
     tableOnlyToggles: $("#table-only-toggles"),
-    columnsWrap: $("#columns-wrap"),
-    columnsHeading: $("#columns-heading"),
+    columnsSidebar: $("#columns-sidebar"),
     tabPlayers: $("#tab-players"),
     tabTeams: $("#tab-teams"),
     splitGroup: $("#split-group"),
     splitSeg: $("#split-seg"),
     search: $("#search-input"),
+    searchWrap: $("#search-wrap"),
+    searchToggle: $("#search-toggle"),
     sidebar: $("#sidebar"),
     sidebarToggle: $("#sidebar-toggle"),
-    pageInfoBtn: $("#page-info-btn"),
+    sidebarColumnsHost: $("#sidebar-columns-host"),
     pageInfoTooltip: $("#page-info-tooltip"),
     themeCycleBtn: $("#theme-cycle-btn"),
+    themeSeg: $("#theme-seg"),
+    accentSwatches: $("#accent-swatches"),
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplIdInput: $("#fpl-id-input"),
@@ -561,10 +619,6 @@
     newpriceToggle: $("#newprice-toggle"),
     newpriceIssuesBadge: $("#newprice-issues-badge"),
     newpriceIssuesPanel: $("#newprice-issues-panel"),
-    rankRecalculateWrap: $("#rank-recalculate-wrap"),
-    rankRecalculateToggle: $("#rank-recalculate-toggle"),
-    rankingsPerGwWrap: $("#rankings-per-gw-wrap"),
-    rankingsPerGwToggle: $("#rankings-per-gw-toggle"),
     compareToggle: $("#compare-toggle"),
     compareWrap: $("#compare-wrap"),
     compareTitle: $("#compare-title"),
@@ -572,9 +626,7 @@
     compareHead: $("#compare-head"),
     compareBody: $("#compare-body"),
     toastRoot: $("#toast-root"),
-    xSearchConfirm: $("#x-search-confirm"),
     columnsBtn: $("#columns-btn"),
-    columnsPanel: $("#columns-panel"),
     columnsList: $("#columns-list"),
     countLabel: $("#count-label"),
     tableHead: $("#table-head"),
@@ -884,6 +936,7 @@
   const FPL_ID_KEY = "fpl-explorer-manager-id";
   // Screenshot squad for manager 296817 — FPL picks API isn't updated for
   // 2026/27 yet, so we resolve these names to stable `code` values locally.
+  // Names are FPL `web_name` (same as DATA.players after build rename).
   const MOCK_OWNED_NAMES = [
     "Darlow",
     "O'Reilly",
@@ -905,13 +958,24 @@
   let savedManagerId = null;
 
   function resolveMockOwnedCodes() {
+    // Prefer code-bearing rows; match exact web_name, then normalized form
+    // so accents/punctuation drift doesn't drop pins.
     const byName = new Map();
+    const byNorm = new Map();
+    const norm = (s) =>
+      String(s || "")
+        .normalize("NFKD")
+        .replace(/\p{M}/gu, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
     (DATA.players.combined || []).forEach((p) => {
-      if (p && p.name && p.code != null) byName.set(p.name, p.code);
+      if (!p || p.code == null || !p.name) return;
+      byName.set(p.name, p.code);
+      byNorm.set(norm(p.name), p.code);
     });
     const codes = new Set();
     MOCK_OWNED_NAMES.forEach((name) => {
-      const code = byName.get(name);
+      const code = byName.get(name) ?? byNorm.get(norm(name));
       if (code != null) codes.add(code);
     });
     return codes;
@@ -933,69 +997,8 @@
     return `<span class="owned-flag"${tipAttr("In your squad")} aria-label="In your squad">${ownedPinSVG()}</span>`;
   }
 
-  function xSearchURL(name) {
-    return `https://x.com/search?q=${encodeURIComponent(`${name} fpl`)}&src=typed_query&f=live`;
-  }
-
-  function playerNameLinkHTML(name, className = "player-name") {
-    const label = `${name} fpl`;
-    return `<a class="${className} player-x-search" href="${escapeHtml(xSearchURL(name))}" target="_blank" rel="noopener noreferrer" data-x-name="${escapeHtml(name)}"${tipAttr(`Search X for “${label}”`)}>${escapeHtml(name)}</a>`;
-  }
-
-  let xSearchConfirmAnchor = null;
-
-  function hideXSearchConfirm() {
-    if (!el.xSearchConfirm) return;
-    el.xSearchConfirm.style.display = "none";
-    el.xSearchConfirm.innerHTML = "";
-    xSearchConfirmAnchor = null;
-  }
-
-  function positionXSearchConfirm(anchor) {
-    const tip = el.xSearchConfirm;
-    if (!tip || !anchor) return;
-    tip.style.display = "block";
-    tip.style.visibility = "hidden";
-    const tipW = tip.offsetWidth;
-    const tipH = tip.offsetHeight;
-    const rect = anchor.getBoundingClientRect();
-    let left = rect.left;
-    let top = rect.bottom + 8;
-    if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
-    if (left < 8) left = 8;
-    if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 8;
-    if (top < 8) top = 8;
-    tip.style.left = `${left}px`;
-    tip.style.top = `${top}px`;
-    tip.style.visibility = "visible";
-  }
-
-  function showXSearchConfirm(anchor) {
-    const name = (anchor.dataset.xName || anchor.textContent || "").trim();
-    if (!name || !el.xSearchConfirm) return;
-    hideUiTooltip();
-    hideFixtureTooltip();
-    xSearchConfirmAnchor = anchor;
-    const label = `${name} fpl`;
-    const url = xSearchURL(name);
-    el.xSearchConfirm.innerHTML = `
-      <div class="x-search-confirm-msg">Search X for <strong>“${escapeHtml(label)}”</strong>?</div>
-      <div class="x-search-confirm-actions">
-        <button type="button" class="ghost-btn x-search-confirm-cancel">Cancel</button>
-        <a class="icon-btn x-search-confirm-go" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Search</a>
-      </div>`;
-    positionXSearchConfirm(anchor);
-    const goBtn = el.xSearchConfirm.querySelector(".x-search-confirm-go");
-    if (goBtn) {
-      goBtn.addEventListener("click", () => {
-        hideXSearchConfirm();
-      });
-      goBtn.focus();
-    }
-  }
-
   function playerNameHTML(row) {
-    return `<div class="player-name-line">${playerNameLinkHTML(row.name)}${ownedFlagHTML(row)}${playerUpdateNoteHTML(row)}</div>`;
+    return `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${ownedFlagHTML(row)}${playerUpdateNoteHTML(row)}</div>`;
   }
 
   function syncFplIdStatus() {
@@ -1078,9 +1081,9 @@
   }
 
   // Builds { colKey: { top: Map(rowKey -> intensity), bottom: Map(...) } }
-  // for the columns visible in the current view. The caller supplies either
-  // the filtered rows or the full player/team population depending on the
-  // Recalculate switch. topN is state.enhancePct of that population. Players rank only
+  // for the columns visible in the current view. Bands are always measured
+  // against the full player/team population (not the filtered rows). topN is
+  // state.enhancePct of that population. Players rank only
   // the best values (green). Teams — a much smaller population — rank
   // both the best and worst (green "target" / red "avoid"), with the
   // bottom set drawn only from values outside the top set so the two never
@@ -1320,18 +1323,25 @@
   // Desktop-like hover vs touch-first. Desktop UX stays on the fine path;
   // coarse remaps tips / rankings cross-highlight to taps.
   const FINE_HOVER_MQ = window.matchMedia("(hover: hover) and (pointer: fine)");
+  const NARROW_MQ = window.matchMedia("(max-width: 720px)");
   function hasFineHover() {
     return FINE_HOVER_MQ.matches;
+  }
+  // Bottom sheet on touch-first devices, and on narrow viewports even when the
+  // browser reports fine hover (common on phones / hybrid tablets).
+  function preferMobileSheet() {
+    return !hasFineHover() || NARROW_MQ.matches;
+  }
+  // Match the stacked-filter layout breakpoint: column toggles live in the
+  // Filters tray/panel instead of a separate right rail + toolbar button.
+  const COLUMNS_IN_FILTERS_MQ = window.matchMedia("(max-width: 900px)");
+  function columnsLiveInFilters() {
+    return preferMobileSheet() || COLUMNS_IN_FILTERS_MQ.matches;
   }
   function syncPointerMode() {
     document.documentElement.dataset.pointer = hasFineHover() ? "fine" : "coarse";
   }
   syncPointerMode();
-  if (typeof FINE_HOVER_MQ.addEventListener === "function") {
-    FINE_HOVER_MQ.addEventListener("change", syncPointerMode);
-  } else if (typeof FINE_HOVER_MQ.addListener === "function") {
-    FINE_HOVER_MQ.addListener(syncPointerMode);
-  }
 
   // Themed replacement for native title tooltips. Prefer setTip / tipAttr over
   // element.title so short labels (column headers, toolbar buttons) use the
@@ -1355,7 +1365,7 @@
   function upgradeNativeTitles(root = document) {
     root.querySelectorAll("[title]").forEach((node) => {
       // Page-info already has a rich custom tooltip; leave it alone.
-      if (node === el.pageInfoBtn) return;
+      if (node.classList && node.classList.contains("page-info-btn")) return;
       if (node.closest(".fixture-tooltip, .chart-tooltip, .ui-tooltip")) return;
       const text = node.getAttribute("title");
       if (!text) return;
@@ -1384,6 +1394,278 @@
       }
     }, 140);
   }
+
+  // ---------------------------------------------------------------------
+  // Mobile bottom sheet — tips, prefs, filters, fixture/team ranks.
+  // Desktop keeps floating tooltips / dropdowns via hasFineHover().
+  // ---------------------------------------------------------------------
+  let mobileSheetOpen = false;
+  let mobileSheetKey = null;
+  let sheetDragStartY = null;
+  let sheetDragDy = 0;
+  let sheetDragFromHandle = false;
+  let matchupEdgeActiveCell = null;
+  let sheetHost = null; // { el, parent, nextSibling, cleanup }
+  let sheetReturnFocus = null;
+  let sheetIgnoreDismissUntil = 0;
+
+  function restoreSheetHost() {
+    if (!sheetHost) return;
+    const { el: hostEl, parent, nextSibling, cleanup } = sheetHost;
+    try {
+      if (typeof cleanup === "function") cleanup(hostEl);
+    } catch {
+      /* host cleanup best-effort */
+    }
+    if (parent) {
+      if (nextSibling && nextSibling.parentNode === parent) parent.insertBefore(hostEl, nextSibling);
+      else parent.appendChild(hostEl);
+    }
+    hostEl.classList.remove("mobile-sheet-hosted");
+    sheetHost = null;
+  }
+
+  function releaseMobileSheetFocus() {
+    const active = document.activeElement;
+    if (active && el.mobileSheet && el.mobileSheet.contains(active) && typeof active.blur === "function") {
+      active.blur();
+    }
+    const returnTo = sheetReturnFocus;
+    sheetReturnFocus = null;
+    if (
+      returnTo &&
+      returnTo.isConnected &&
+      typeof returnTo.focus === "function" &&
+      (!el.mobileSheet || !el.mobileSheet.contains(returnTo))
+    ) {
+      try {
+        returnTo.focus({ preventScroll: true });
+      } catch {
+        try {
+          returnTo.focus();
+        } catch {
+          /* focus restore best-effort */
+        }
+      }
+    }
+  }
+
+  function closeMobileSheet() {
+    if (!el.mobileSheet || !mobileSheetOpen) return;
+    mobileSheetOpen = false;
+    const closingKey = mobileSheetKey;
+    mobileSheetKey = null;
+    sheetDragStartY = null;
+    sheetDragDy = 0;
+    // Move focus out before aria-hidden — Chrome warns if a descendant stays focused.
+    releaseMobileSheetFocus();
+    el.mobileSheet.classList.remove("is-open");
+    el.mobileSheet.setAttribute("aria-hidden", "true");
+    document.documentElement.classList.remove("mobile-sheet-active");
+    if (el.mobileSheetPanel) {
+      el.mobileSheetPanel.style.transform = "";
+      el.mobileSheetPanel.style.transition = "";
+    }
+    $$(".page-info-btn[aria-expanded='true']").forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+    $$(".team-rank-info[aria-expanded='true']").forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+    if (el.prefsBtn && closingKey === "prefs") el.prefsBtn.setAttribute("aria-expanded", "false");
+    if (el.sidebarToggle && closingKey === "filters") el.sidebarToggle.classList.remove("on");
+    if (el.columnsBtn && closingKey === "columns") {
+      el.columnsBtn.setAttribute("aria-expanded", "false");
+      el.columnsBtn.classList.remove("on");
+    }
+    if (el.scheduleSlidersToggle && closingKey === "schedule-filters") {
+      el.scheduleSlidersToggle.classList.remove("on");
+      el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
+    }
+    if (el.marketsSlidersToggle && closingKey === "markets-filters") {
+      el.marketsSlidersToggle.classList.remove("on");
+      el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
+    }
+    if (el.expectedCatBtn && closingKey === "expected-cats") {
+      el.expectedCatBtn.setAttribute("aria-expanded", "false");
+    }
+    if (el.feedFiltersToggle && closingKey === "feed-filters") {
+      el.feedFiltersToggle.setAttribute("aria-expanded", "false");
+      const active = feedFiltersActive();
+      el.feedFiltersToggle.classList.toggle("on", active);
+      el.feedFiltersToggle.title = active ? "Feed filters (active)" : "Show feed filters";
+      el.feedFiltersToggle.setAttribute(
+        "aria-label",
+        active ? "Show feed filters (filters active)" : "Show feed filters"
+      );
+    }
+    window.setTimeout(() => {
+      if (mobileSheetOpen || !el.mobileSheet) return;
+      restoreSheetHost();
+      el.mobileSheet.hidden = true;
+      if (el.mobileSheetBody) el.mobileSheetBody.innerHTML = "";
+      if (el.mobileSheetTitle) {
+        el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
+        el.mobileSheetTitle.textContent = "";
+      }
+    }, 280);
+  }
+
+  function beginMobileSheetShell({ title = "", titleHtml = "", key = null } = {}) {
+    if (!el.mobileSheet || !el.mobileSheetPanel || !el.mobileSheetBody) return false;
+    if (!preferMobileSheet()) return false;
+    if (key && mobileSheetOpen && mobileSheetKey === key) {
+      closeMobileSheet();
+      return false;
+    }
+    restoreSheetHost();
+    hideUiTooltip();
+    if (el.teamRankTooltip) {
+      el.teamRankTooltip.style.display = "none";
+      el.teamRankTooltip.innerHTML = "";
+    }
+    if (el.matchupEdgeTooltip) {
+      el.matchupEdgeTooltip.style.display = "none";
+      el.matchupEdgeTooltip.innerHTML = "";
+      matchupEdgeActiveCell = null;
+    }
+    if (el.pageInfoTooltip) {
+      el.pageInfoTooltip.style.display = "none";
+      el.pageInfoTooltip.innerHTML = "";
+      el.pageInfoTooltip.classList.remove("page-info-annotate");
+    }
+    if (el.scheduleScatterTooltip) {
+      el.scheduleScatterTooltip.style.display = "none";
+      el.scheduleScatterTooltip.innerHTML = "";
+    }
+    if (el.fixtureTooltip) {
+      el.fixtureTooltip.style.display = "none";
+      el.fixtureTooltip.innerHTML = "";
+    }
+
+    const opener = document.activeElement;
+    sheetReturnFocus =
+      opener &&
+      opener !== document.body &&
+      opener !== document.documentElement &&
+      !(el.mobileSheet && el.mobileSheet.contains(opener))
+        ? opener
+        : sheetReturnFocus;
+
+    mobileSheetKey = key;
+    if (el.mobileSheetTitle) {
+      if (titleHtml) {
+        el.mobileSheetTitle.classList.add("mobile-sheet-title-rich");
+        el.mobileSheetTitle.innerHTML = titleHtml;
+      } else {
+        el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
+        el.mobileSheetTitle.textContent = title || "";
+      }
+    }
+    el.mobileSheetBody.innerHTML = "";
+    el.mobileSheet.hidden = false;
+    el.mobileSheet.setAttribute("aria-hidden", "false");
+    document.documentElement.classList.add("mobile-sheet-active");
+    el.mobileSheetPanel.style.transform = "";
+    el.mobileSheetPanel.style.transition = "";
+    mobileSheetOpen = true;
+    // Enable pointer-events immediately so the opening tap cannot fall through
+    // the sheet to page tabs underneath (was navigating to Matchups).
+    el.mobileSheet.classList.remove("is-open");
+    void el.mobileSheet.offsetWidth;
+    el.mobileSheet.classList.add("is-open");
+    // Ignore backdrop/X dismiss from the same gesture that opened the sheet.
+    sheetIgnoreDismissUntil = Date.now() + 450;
+    return true;
+  }
+
+  function openMobileSheet({ title = "", titleHtml = "", html = "", key = null } = {}) {
+    if (!beginMobileSheetShell({ title, titleHtml, key })) return;
+    el.mobileSheetBody.innerHTML = html || "";
+  }
+
+  function openMobileSheetHost({ title = "", titleHtml = "", key = null, hostEl, prepare = null, cleanup = null } = {}) {
+    if (!hostEl) return;
+    if (!beginMobileSheetShell({ title, titleHtml, key })) return;
+    sheetHost = {
+      el: hostEl,
+      parent: hostEl.parentNode,
+      nextSibling: hostEl.nextSibling,
+      cleanup,
+    };
+    hostEl.classList.add("mobile-sheet-hosted");
+    if (typeof prepare === "function") prepare(hostEl);
+    el.mobileSheetBody.appendChild(hostEl);
+    requestAnimationFrame(() => {
+      if (typeof syncAllSegThumbs === "function") syncAllSegThumbs({ animate: false });
+    });
+  }
+
+  function openPlainTipSheet(anchor) {
+    if (!anchor) return;
+    const html = anchor.getAttribute("data-tip-html");
+    const text = anchor.getAttribute("data-tip");
+    if (!html && !text) return;
+    const title =
+      anchor.getAttribute("aria-label") ||
+      anchor.getAttribute("title") ||
+      "Details";
+    const body = html || `<p class="mobile-sheet-plain">${escapeHtml(text)}</p>`;
+    const key = `tip:${title}:${text || html || ""}`;
+    openMobileSheet({ title, html: body, key });
+  }
+
+  if (el.mobileSheet) {
+    el.mobileSheet.addEventListener("click", (event) => {
+      if (event.target.closest("[data-sheet-dismiss]")) {
+        event.preventDefault();
+        if (Date.now() < sheetIgnoreDismissUntil) return;
+        closeMobileSheet();
+      }
+    });
+    const onDragStart = (event) => {
+      if (!mobileSheetOpen || !el.mobileSheetPanel) return;
+      const touch = event.touches && event.touches[0];
+      if (!touch) return;
+      const onHandle = !!event.target.closest("[data-sheet-drag]");
+      const body = el.mobileSheetBody;
+      if (!onHandle && body && body.scrollTop > 0) return;
+      sheetDragFromHandle = onHandle;
+      sheetDragStartY = touch.clientY;
+      sheetDragDy = 0;
+      el.mobileSheetPanel.style.transition = "none";
+    };
+    const onDragMove = (event) => {
+      if (sheetDragStartY == null || !el.mobileSheetPanel) return;
+      const touch = event.touches && event.touches[0];
+      if (!touch) return;
+      const dy = touch.clientY - sheetDragStartY;
+      sheetDragDy = Math.max(0, dy);
+      if (sheetDragDy > 0 && event.cancelable) event.preventDefault();
+      el.mobileSheetPanel.style.transform = `translateY(${sheetDragDy}px)`;
+    };
+    const onDragEnd = () => {
+      if (sheetDragStartY == null || !el.mobileSheetPanel) return;
+      const shouldClose = sheetDragDy > 88 || (sheetDragFromHandle && sheetDragDy > 56);
+      sheetDragStartY = null;
+      el.mobileSheetPanel.style.transition = "";
+      if (shouldClose) {
+        closeMobileSheet();
+      } else {
+        el.mobileSheetPanel.style.transform = "";
+      }
+      sheetDragDy = 0;
+      sheetDragFromHandle = false;
+    };
+    el.mobileSheet.addEventListener("touchstart", onDragStart, { passive: true });
+    el.mobileSheet.addEventListener("touchmove", onDragMove, { passive: false });
+    el.mobileSheet.addEventListener("touchend", onDragEnd);
+    el.mobileSheet.addEventListener("touchcancel", onDragEnd);
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && mobileSheetOpen) closeMobileSheet();
+  });
 
   function positionUiTooltip(anchor) {
     const tip = el.uiTooltip;
@@ -1444,8 +1726,8 @@
     hideUiTooltip();
   });
 
-  // Touch: tap non-conflicting [data-tip] targets to toggle tips. Skip
-  // buttons/links/rows that already own the tap for another action.
+  // Touch: tap non-conflicting [data-tip] targets → mobile sheet.
+  // Skip controls/rows that already own the tap for another action.
   document.addEventListener("click", (event) => {
     if (hasFineHover()) return;
     const target = tipTargetFrom(event.target);
@@ -1456,21 +1738,17 @@
     if (
       !target.classList.contains("player-update-note") &&
       target.closest(
-        "a, button, input, select, textarea, summary, .rankings-row, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team]"
+        "a, button, input, label, select, textarea, summary, .rankings-row, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
       )
     ) {
       return;
     }
-    if (uiTipAnchor === target && el.uiTooltip && el.uiTooltip.classList.contains("visible")) {
-      hideUiTooltip();
-      return;
-    }
-    clearTimeout(uiTipTimer);
-    uiTipAnchor = target;
-    showUiTooltip(target);
+    event.preventDefault();
+    openPlainTipSheet(target);
   });
 
   document.addEventListener("focusin", (event) => {
+    if (!hasFineHover()) return;
     const target = tipTargetFrom(event.target);
     if (!target) return;
     clearTimeout(uiTipTimer);
@@ -1479,6 +1757,7 @@
   });
 
   document.addEventListener("focusout", (event) => {
+    if (!hasFineHover()) return;
     const target = tipTargetFrom(event.target);
     if (!target || target !== uiTipAnchor) return;
     hideUiTooltip();
@@ -1486,49 +1765,10 @@
 
   window.addEventListener("scroll", () => {
     hideUiTooltip();
-    hideXSearchConfirm();
   }, true);
   window.addEventListener("resize", () => {
     hideUiTooltip();
-    hideXSearchConfirm();
   });
-
-  document.addEventListener("click", (event) => {
-    const tip = el.xSearchConfirm;
-    const link = event.target.closest("a.player-x-search");
-    if (link) {
-      // Allow modified / non-primary clicks to use the real href.
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      if (xSearchConfirmAnchor === link && tip && tip.style.display !== "none") {
-        hideXSearchConfirm();
-        return;
-      }
-      showXSearchConfirm(link);
-      return;
-    }
-    if (tip && tip.style.display !== "none") {
-      if (event.target.closest("#x-search-confirm")) {
-        if (event.target.closest(".x-search-confirm-cancel")) {
-          event.preventDefault();
-          hideXSearchConfirm();
-        }
-        return;
-      }
-      hideXSearchConfirm();
-    }
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") hideXSearchConfirm();
-  });
-
-  function rankReferenceRows(filteredRows) {
-    return state.recalculateRanks ? filteredRows : getRows();
-  }
 
   function renderBody(rows) {
     const vcols = visibleColumns();
@@ -1545,8 +1785,7 @@
       return;
     }
 
-    const referenceRows = rankReferenceRows(rows);
-    const highlightMaps = buildHighlightMaps(referenceRows);
+    const highlightMaps = buildHighlightMaps(getRows());
     rows.forEach((r) =>
       el.tableBody.appendChild(buildDataRow(r, vcols, highlightMaps))
     );
@@ -1591,11 +1830,9 @@
             const topIntensity = highlightMaps[c.key].top.get(key);
             const bottomIntensity = highlightMaps[c.key].bottom.get(key);
             if (topIntensity !== undefined) {
-              td.classList.add("highlight-top");
-              td.style.backgroundColor = positiveFill(enhanceFillAlpha(topIntensity));
+              applyEnhanceHighlight(td, "top", topIntensity);
             } else if (bottomIntensity !== undefined) {
-              td.classList.add("highlight-bottom");
-              td.style.backgroundColor = negativeFill(enhanceFillAlpha(bottomIntensity));
+              applyEnhanceHighlight(td, "bottom", bottomIntensity);
             }
           }
         }
@@ -1713,13 +1950,19 @@
     // figures, so being top of a category (rank 1) is a hard fixture and
     // reads red, bottom reads green.
     let style = "";
+    let extraClass = "";
     const ranks = highlightMaps[split] && highlightMaps[split][key];
     const topIntensity = ranks && ranks.top.get(teamCode);
     const bottomIntensity = ranks && ranks.bottom.get(teamCode);
     if (topIntensity !== undefined) {
-      style = ` style="background-color:${negativeFill(enhanceFillAlpha(topIntensity))}"`;
+      // Opponent top = hard fixture → red.
+      const paint = enhanceHighlightInlineStyle("bottom", topIntensity);
+      style = ` style="${paint.style}"`;
+      extraClass = paint.strongClass;
     } else if (bottomIntensity !== undefined) {
-      style = ` style="background-color:${positiveFill(enhanceFillAlpha(bottomIntensity))}"`;
+      const paint = enhanceHighlightInlineStyle("top", bottomIntensity);
+      style = ` style="${paint.style}"`;
+      extraClass = paint.strongClass;
     }
     const rank = rankMaps[split] && rankMaps[split][key] && rankMaps[split][key].get(teamCode);
     const text = rank == null ? "—" : String(rank);
@@ -1730,7 +1973,9 @@
         ? ` title="Provisional rank — no prior-season OPTA data"`
         : ` title="${escapeHtml(fmtTtStat(value, decimals))}"`;
     // First defending column (xGC) gets a left rule to split attack from defence.
-    const cls = key === "xgc" ? ` class="ftt-def-start"` : "";
+    const baseCls = key === "xgc" ? "ftt-def-start" : "";
+    const clsName = `${baseCls}${extraClass}`.trim();
+    const cls = clsName ? ` class="${clsName}"` : "";
     return `<td${cls}${style}${title}>${text}</td>`;
   }
 
@@ -1910,10 +2155,19 @@
     const headActions = scoreSummary || infoButton
       ? `<div class="ftt-head-actions">${scoreSummary}${infoButton}</div>`
       : "";
-    const header = `<div class="ftt-head">${badgeHTML(teamCode)}<span>${escapeHtml(teamLabel)}</span>
+    // Sheet titles with badge + player/team — omit the redundant in-body head
+    // (and the "Next N" line) unless there are matchup score actions to show.
+    const sheetMode = options.sheetMode === true;
+    let header = "";
+    if (sheetMode) {
+      if (headActions) header = `<div class="ftt-head ftt-head-sheet">${headActions}</div>`;
+    } else {
+      const headName = options.headName || teamLabel;
+      header = `<div class="ftt-head">${badgeHTML(teamCode)}<span>${escapeHtml(headName)}</span>
       ${showMeta ? `<span class="ftt-sub">next ${fixtures.length}</span>` : ""}
       ${headActions}
       </div>`;
+    }
     if (!fixtures.length) {
       return `${header}<div class="ftt-empty">${showMeta ? "No upcoming fixtures" : "No fixtures in this range"}</div>`;
     }
@@ -1952,7 +2206,7 @@
       ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · red = tough matchup</div>` : ""}`;
   }
 
-  function fixtureTooltipHTML(teamCode) {
+  function fixtureTooltipHTML(teamCode, options = {}) {
     const population = Math.max(
       Object.keys(TEAM_STATS.home || {}).length,
       Object.keys(TEAM_STATS.away || {}).length,
@@ -1962,7 +2216,8 @@
     return fixtureCardHTML(
       teamCode,
       fixtureHighlightMaps(tipTopN),
-      fixtureRankMaps()
+      fixtureRankMaps(),
+      options
     );
   }
 
@@ -2028,8 +2283,9 @@
   function matchupPageInfoHTML() {
     // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
     return `<div class="spit-head">${iconHTML("calendar-days")}<span>How Matchups works</span></div>
-      <p class="spit-intro">How to read a fixture card — numbers mark each part of the example below.</p>
+      <p class="spit-intro">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
       <div class="spit-annotate">
+        <p class="spit-annotate-lead">How to read a fixture card — numbers mark each part of the example below.</p>
         <div class="spit-annotate-figure" aria-hidden="true">
           <img class="spit-annotate-img spit-annotate-img-dark" src="img/matchup-card-guide-dark.png" width="888" height="670" alt="" decoding="async" />
           <img class="spit-annotate-img spit-annotate-img-light" src="img/matchup-card-guide-light.png" width="888" height="670" alt="" decoding="async" />
@@ -2061,12 +2317,11 @@
           <div class="spit-list">
             <div class="spit-row"><span class="spit-symbol spit-rank">1–10</span><span>Each card lists leaders for one metric. Tied values share a place; the next place skips ahead.</span></div>
             <div class="spit-row"><span class="spit-symbol spit-medals" aria-hidden="true"><i class="spit-medal gold"></i><i class="spit-medal silver"></i><i class="spit-medal bronze"></i></span><span>Gold, silver, and bronze mark places 1–3 on each card.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Recalc</span><span>Defaults off: places are vs the full Players or Teams list, so a search still shows true overall rank. On: renumber within the filtered set.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Per GP</span><span>Divides every card by gameweeks played (teams) or appearances (players) — useful when some teams have games in hand. Card abbreviations show “/ GW”.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Place</span><span>Places are always vs all Players/Teams. Filters and search only decide who appears on the card — a filtered #12 stays #12 overall.</span></div>
             <div class="spit-row"><span class="spit-symbol spit-rank">Hover</span><span>Highlights the same player or team across every visible card.</span></div>
             <div class="spit-row"><span class="spit-symbol spit-rank">Pin</span><span>Click to pin up to five names, each in its own colour. The bar above the cards is the colour key — clear pins there. Pins clear when switching Players / Teams.</span></div>
             <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad (when an ID is saved in Preferences).</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90, or Per £m — same scaling as Statistics. Per GP always divides season totals first.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90, or Per £m — same scaling as Statistics.</span></div>
           </div>
         </div>
         <div class="spit-note">Fixture Location, filters, and search refresh every card. Some FPL defensive totals are season-only and drop on Home or Away.</div>`;
@@ -2096,14 +2351,16 @@
     }
     if (state.page === "feed") {
       return `<div class="spit-head">${iconHTML("rss")}<span>How Social Media Feed works</span></div>
-        <p class="spit-intro">Player-mention cards from curated X accounts — who got talked about in the last 48 hours, with quotes underneath.</p>
+        <p class="spit-intro">Player-mention cards from curated X accounts — filter by date range, creator, and post type, with quotes underneath.</p>
         <div class="spit-section">
           <h4>Cards</h4>
           <div class="spit-list">
             <div class="spit-row"><span class="spit-symbol spit-rank">Who</span><span>Each card is one <strong>resolved player</strong> (FPL code). Ambiguous surnames need team/position context from the annotator.</span></div>
             <div class="spit-row"><span class="spit-symbol spit-rank">Stats</span><span>Position-flavored season stats from the explorer catalog (GK / DEF / MID / FWD). Missing values show as —.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Quotes</span><span>Original posts mentioning that player, newest first. Use the X icon to open the post.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Sort</span><span><strong>Volume</strong>: most mentions, then newest. <strong>Recent</strong>: newest mention first; if one post names several players (same timestamp), higher volume wins, then name.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Quotes</span><span>Posts mentioning that player, newest first. Use the X icon to open the post. Timestamps tint from blue (fresh) to faint (older).</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Filters</span><span><strong>Date range</strong>: Today, Last 3 days, or Past week. <strong>Post type</strong>: defaults to original posts; turn on reply, quote, or retweet as needed. <strong>Creator</strong> / <strong>Team</strong>: empty chips mean “all”.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Search</span><span>Filters player cards by name or team (code or club name) within the active filters. If Today / Last 3 days has no hits, a Past week shortcut appears when matches exist there.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Order</span><span>Cards are ordered by mention volume (most first), then newest, then name.</span></div>
           </div>
         </div>
         <div class="spit-section">
@@ -2126,6 +2383,7 @@
             <div class="spit-row"><span class="spit-symbol spit-rank">CS</span><span>Clean sheet % = P(opponent scores 0) under that Poisson model (not a native book market).</span></div>
             <div class="spit-row"><span class="spit-symbol spit-rank">Scores</span><span>Top three most likely exact scores from the same model, with club badges on each side.</span></div>
             <div class="spit-row"><span class="spit-symbol spit-rank">Color</span><span>Green / red fills mark strong or weak Goals and CS%. Deeper fills kick in for values well past the threshold. Separate sliders tighten or widen each band.</span></div>
+            <div class="spit-row"><span class="spit-symbol spit-rank">Compare</span><span>Current / Last run / Last 72 hr — under Goals and CS%, show how each side moved versus the previous refresh or the snapshot nearest 72 hours ago.</span></div>
           </div>
         </div>
         <div class="spit-section">
@@ -2137,7 +2395,7 @@
             <div class="spit-row"><span class="spit-symbol spit-rank">Fetch</span><span><code>ODDS_API_KEY=…</code> in <code>.env</code>, then <code>python3 site/fetch_markets.py</code>.</span></div>
           </div>
         </div>
-        <div class="spit-note">Header shows last pull time, API, and the primary odds book used for these fixtures.</div>`;
+        <div class="spit-note">Footer shows last pull time, API, and the primary odds book used for these fixtures.</div>`;
     }
     if (state.page === "schedule") {
       return matchupPageInfoHTML();
@@ -2149,9 +2407,9 @@
         <div class="spit-list">
           <div class="spit-row"><span class="spit-symbol spit-rank">H/A</span><span>Fixture Location: Total, Home, or Away.</span></div>
           <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90 ((stat ÷ mins) × 90), or Per £m (stat ÷ price). One decimal; tiny rates show as &lt;0.1.</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">Tint</span><span>Always-on green/red Highlight Top/Bottom shading on raw values (players: top %; teams: top and bottom). Recalculate defaults on (filtered set); off = full view.</span></div>
+          <div class="spit-row"><span class="spit-symbol spit-rank">Tint</span><span>Always-on green/red Highlight Top/Bottom shading on raw values (players: top %; teams: top and bottom). Bands are always vs all Players/Teams — filters don't shrink them.</span></div>
           <div class="spit-row"><span class="spit-symbol">${iconHTML("scale")}</span><span>Compare: click up to five rows to highlight and compare side by side; best value in each column is marked. Click again to remove.</span></div>
-          <div class="spit-row"><span class="spit-symbol">${iconHTML("columns")}</span><span>Columns: show or hide metric columns from the Columns control.</span></div>
+          <div class="spit-row"><span class="spit-symbol">${iconHTML("columns")}</span><span>Columns: show or hide metric columns (toolbar control on desktop; inside Filters on mobile).</span></div>
         </div>
       </div>
       <div class="spit-section">
@@ -2211,7 +2469,7 @@
       <div class="schedule-scatter-head">
         <div>
           <h3>Schedule balance</h3>
-          <p>Average fixture advantage across the selected gameweeks. Right = easier to attack; up = easier to defend.</p>
+          <p>Average fixture advantage across the selected gameweeks.</p>
         </div>
         <div class="schedule-scatter-key">
           <span>${iconHTML("swords", "ftt-attack-icon")} Better attack →</span>
@@ -2219,10 +2477,10 @@
         </div>
       </div>
       <div class="schedule-scatter-plot">
-        <div class="schedule-quadrant schedule-quadrant-defence"><span>Defence</span></div>
-        <div class="schedule-quadrant schedule-quadrant-both"><span>Attack + defence</span></div>
-        <div class="schedule-quadrant schedule-quadrant-tough"><span>Tougher</span></div>
-        <div class="schedule-quadrant schedule-quadrant-attack"><span>Attack</span></div>
+        <div class="schedule-quadrant schedule-quadrant-defence"></div>
+        <div class="schedule-quadrant schedule-quadrant-both"></div>
+        <div class="schedule-quadrant schedule-quadrant-tough"></div>
+        <div class="schedule-quadrant schedule-quadrant-attack"></div>
         <div class="schedule-scatter-axis schedule-scatter-axis-x"></div>
         <div class="schedule-scatter-axis schedule-scatter-axis-y"></div>
         <span class="schedule-axis-label schedule-axis-x-bad">Worse attacking schedule</span>
@@ -2369,7 +2627,12 @@
     fixtureTtActiveTeam = teamCode;
     fixtureTtActiveTr = tr;
     fixtureTtPendingTeam = null;
-    el.fixtureTooltip.innerHTML = fixtureTooltipHTML(teamCode);
+    const rowName = (tr.dataset.rowName || "").trim();
+    const headName = state.view === "players" && rowName ? rowName : null;
+    el.fixtureTooltip.innerHTML = fixtureTooltipHTML(
+      teamCode,
+      headName ? { headName } : {}
+    );
     positionFixtureTooltip();
   }
 
@@ -2461,19 +2724,28 @@
         return;
       }
       const team = tr.dataset.team;
-      if (fixtureTtActiveTeam === team && el.fixtureTooltip.style.display !== "none") {
-        hideFixtureTooltip();
+      if (!team) return;
+      clearTimeout(fixtureTtTimer);
+      hideFixtureTooltip();
+      const rowName = (tr.dataset.rowName || "").trim();
+      const teamLabel = TEAM_NAMES[team] || team;
+      const title = state.view === "players" && rowName ? rowName : teamLabel;
+      const key = `fixture:${team}:${rowName || team}`;
+      if (mobileSheetOpen && mobileSheetKey === key) {
+        closeMobileSheet();
         return;
       }
-      clearTimeout(fixtureTtTimer);
-      const rect = tr.getBoundingClientRect();
-      fixtureTtPointer = { x: rect.left + Math.min(120, rect.width / 2), y: rect.top + 8 };
-      showFixtureTooltip(tr);
+      openMobileSheet({
+        title,
+        titleHtml: `${badgeHTML(team)}<span>${escapeHtml(title)}</span>`,
+        html: fixtureTooltipHTML(team, { sheetMode: true }),
+        key,
+      });
     });
     if (scrollRoot) {
       scrollRoot.addEventListener("scroll", () => {
         clearTimeout(fixtureTtTimer);
-        hideFixtureTooltip();
+        if (hasFineHover()) hideFixtureTooltip();
       }, { passive: true });
     }
   }
@@ -2525,7 +2797,6 @@
   }
 
   let matchupEdgePointer = { x: 0, y: 0 };
-  let matchupEdgeActiveCell = null;
 
   function hideMatchupEdgeTooltip() {
     if (!el.matchupEdgeTooltip) return;
@@ -2624,20 +2895,32 @@
       hideMatchupEdgeTooltip();
     }
   });
-  el.scheduleGrid.addEventListener("click", (event) => {
-    if (hasFineHover()) return;
-    const button = event.target.closest(".team-rank-info");
-    if (button) {
-      event.preventDefault();
-      event.stopPropagation();
-      hideMatchupEdgeTooltip();
-      if (button.getAttribute("aria-expanded") === "true") {
-        hideTeamRankTooltip();
-      } else {
-        showTeamRankTooltip(button, event);
-      }
+  function openTeamRankSheet(teamCode) {
+    if (!teamCode) return;
+    const key = `team-rank:${teamCode}`;
+    if (mobileSheetOpen && mobileSheetKey === key) {
+      closeMobileSheet();
       return;
     }
+    const teamLabel = TEAM_NAMES[teamCode] || teamCode;
+    $$(".team-rank-info[aria-expanded='true']").forEach((button) => {
+      button.setAttribute("aria-expanded", "false");
+    });
+    openMobileSheet({
+      title: teamLabel,
+      html: teamRankTooltipHTML(teamCode),
+      key,
+    });
+    const btn =
+      el.scheduleGrid &&
+      el.scheduleGrid.querySelector(`.team-rank-info[data-team="${CSS.escape(teamCode)}"]`);
+    if (btn) btn.setAttribute("aria-expanded", "true");
+  }
+
+  el.scheduleGrid.addEventListener("click", (event) => {
+    if (hasFineHover()) return;
+    if (event.target.closest("#mobile-sheet")) return;
+
     const verdict = event.target.closest(".ftt-verdict-tip");
     if (verdict) {
       event.preventDefault();
@@ -2650,35 +2933,76 @@
       }
       return;
     }
+
+    const button = event.target.closest(".team-rank-info");
+    if (button) {
+      event.preventDefault();
+      event.stopPropagation();
+      hideMatchupEdgeTooltip();
+      openTeamRankSheet(button.dataset.team);
+      return;
+    }
+
+    const card = event.target.closest(".schedule-card");
+    if (card && card.dataset.team) {
+      event.preventDefault();
+      hideMatchupEdgeTooltip();
+      openTeamRankSheet(card.dataset.team);
+      return;
+    }
+
     hideTeamRankTooltip();
     hideMatchupEdgeTooltip();
   });
   el.scheduleGrid.addEventListener("focusin", (event) => {
+    if (!hasFineHover()) return;
     const button = event.target.closest(".team-rank-info");
     if (button) showTeamRankTooltip(button);
   });
   el.scheduleGrid.addEventListener("focusout", (event) => {
+    if (!hasFineHover()) return;
     if (event.target.closest(".team-rank-info")) hideTeamRankTooltip();
   });
+
+  let pageInfoAnchor = null;
+
+  function pageInfoButtons() {
+    return $$(".page-info-btn");
+  }
+
+  function activePageInfoBtn() {
+    const pane = typeof pagePaneFor === "function" ? pagePaneFor(state.page) : null;
+    if (pane) {
+      const btn = pane.querySelector(".page-info-btn");
+      if (btn) return btn;
+    }
+    return pageInfoButtons()[0] || null;
+  }
+
+  function clearPageInfoExpanded() {
+    pageInfoButtons().forEach((btn) => btn.setAttribute("aria-expanded", "false"));
+  }
 
   function hidePageInfoTooltip() {
     if (!el.pageInfoTooltip) return;
     el.pageInfoTooltip.style.display = "none";
     el.pageInfoTooltip.innerHTML = "";
     el.pageInfoTooltip.classList.remove("page-info-annotate");
-    if (el.pageInfoBtn) el.pageInfoBtn.setAttribute("aria-expanded", "false");
+    clearPageInfoExpanded();
+    pageInfoAnchor = null;
   }
 
   function positionPageInfoTooltip() {
     const tip = el.pageInfoTooltip;
-    if (!tip || !el.pageInfoBtn) return;
+    const anchor = pageInfoAnchor || activePageInfoBtn();
+    if (!tip || !anchor) return;
     // Size class before measuring so annotate width/height are correct on first paint.
     tip.classList.toggle("page-info-annotate", !!tip.querySelector(".spit-annotate"));
     tip.style.visibility = "hidden";
     tip.style.display = "block";
     const tipW = tip.offsetWidth;
     const tipH = tip.offsetHeight;
-    const rect = el.pageInfoBtn.getBoundingClientRect();
+    const rect = anchor.getBoundingClientRect();
     let left = Math.min(rect.left, window.innerWidth - tipW - 8);
     let top = rect.bottom + 10;
     if (top + tipH > window.innerHeight - 8) {
@@ -2690,7 +3014,6 @@
   }
 
   function syncPageInfoButton() {
-    if (!el.pageInfoBtn) return;
     const labels = {
       opta: "How Statistics works",
       rankings: "How Rankings works",
@@ -2699,45 +3022,83 @@
       feed: "How Social Media Feed works",
       markets: "How Markets works",
     };
-    const label = labels[state.page] || "How this page works";
-    el.pageInfoBtn.removeAttribute("title");
-    el.pageInfoBtn.removeAttribute("data-tip");
-    el.pageInfoBtn.setAttribute("aria-label", label);
+    pageInfoButtons().forEach((btn) => {
+      const pane = btn.closest(".page-pane");
+      let page = state.page;
+      if (pane) {
+        if (pane.id === "opta-page") page = "opta";
+        else if (pane.id === "rankings-page") page = "rankings";
+        else if (pane.id === "expected-page") page = "expected";
+        else if (pane.id === "schedule-page") page = "schedule";
+        else if (pane.id === "feed-page") page = "feed";
+        else if (pane.id === "markets-page") page = "markets";
+      }
+      const label = labels[page] || "How this page works";
+      btn.removeAttribute("title");
+      btn.removeAttribute("data-tip");
+      btn.setAttribute("aria-label", label);
+    });
   }
 
-  function showPageInfoTooltip() {
-    if (!el.pageInfoBtn || !el.pageInfoTooltip) return;
+  function showPageInfoTooltip(anchor) {
+    const btn = anchor || activePageInfoBtn();
+    if (!btn || !el.pageInfoTooltip) return;
+    pageInfoAnchor = btn;
+    if (!hasFineHover()) {
+      const title = btn.getAttribute("aria-label") || "How this page works";
+      const key = `page-info:${state.page}`;
+      if (mobileSheetOpen && mobileSheetKey === key) {
+        closeMobileSheet();
+        return;
+      }
+      openMobileSheet({
+        title,
+        html: pageInfoTooltipHTML(),
+        key,
+      });
+      clearPageInfoExpanded();
+      btn.setAttribute("aria-expanded", "true");
+      return;
+    }
     hideUiTooltip();
     hideTeamRankTooltip();
     hideMatchupEdgeTooltip();
     hideScheduleScatterTooltip();
-    el.pageInfoBtn.setAttribute("aria-expanded", "true");
+    clearPageInfoExpanded();
+    btn.setAttribute("aria-expanded", "true");
     el.pageInfoTooltip.innerHTML = pageInfoTooltipHTML();
     positionPageInfoTooltip();
   }
 
-  if (el.pageInfoBtn) {
-    el.pageInfoBtn.addEventListener("mouseover", () => {
-      if (!hasFineHover()) return;
-      showPageInfoTooltip();
-    });
-    el.pageInfoBtn.addEventListener("mouseout", (event) => {
-      if (!hasFineHover()) return;
-      if (event.relatedTarget && el.pageInfoBtn.contains(event.relatedTarget)) return;
-      hidePageInfoTooltip();
-    });
-    el.pageInfoBtn.addEventListener("click", (event) => {
-      if (hasFineHover()) return;
-      event.preventDefault();
-      if (el.pageInfoBtn.getAttribute("aria-expanded") === "true") {
-        hidePageInfoTooltip();
-      } else {
-        showPageInfoTooltip();
-      }
-    });
-    el.pageInfoBtn.addEventListener("focus", () => showPageInfoTooltip());
-    el.pageInfoBtn.addEventListener("blur", hidePageInfoTooltip);
-  }
+  document.addEventListener("mouseover", (event) => {
+    const btn = event.target.closest && event.target.closest(".page-info-btn");
+    if (!btn || !hasFineHover()) return;
+    showPageInfoTooltip(btn);
+  });
+  document.addEventListener("mouseout", (event) => {
+    const btn = event.target.closest && event.target.closest(".page-info-btn");
+    if (!btn || !hasFineHover()) return;
+    if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
+    hidePageInfoTooltip();
+  });
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest && event.target.closest(".page-info-btn");
+    if (!btn) return;
+    if (hasFineHover()) return;
+    event.preventDefault();
+    showPageInfoTooltip(btn);
+  });
+  document.addEventListener("focusin", (event) => {
+    const btn = event.target.closest && event.target.closest(".page-info-btn");
+    if (!btn || !hasFineHover()) return;
+    showPageInfoTooltip(btn);
+  });
+  document.addEventListener("focusout", (event) => {
+    const btn = event.target.closest && event.target.closest(".page-info-btn");
+    if (!btn || !hasFineHover()) return;
+    if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
+    hidePageInfoTooltip();
+  });
 
   let scheduleScatterPointer = { x: 0, y: 0 };
 
@@ -3006,10 +3367,9 @@
     });
     el.columnsList.innerHTML = "";
     groupOrder.forEach((g) => {
-      const section = document.createElement("section");
-      section.className = "settings-section";
-      const heading = document.createElement("div");
-      heading.className = "settings-section-label";
+      const section = document.createElement("div");
+      section.className = "filter-group";
+      const heading = document.createElement("h3");
       heading.textContent = g;
       section.appendChild(heading);
       groups.get(g).forEach((c) => {
@@ -3106,10 +3466,60 @@
     });
   }
 
+  function clearExpectedCatMenuPosition() {
+    if (!el.expectedCatMenu) return;
+    el.expectedCatMenu.classList.remove("is-fixed");
+    el.expectedCatMenu.style.left = "";
+    el.expectedCatMenu.style.top = "";
+    el.expectedCatMenu.style.minWidth = "";
+  }
+
+  function positionExpectedCatMenuFixed() {
+    if (!el.expectedCatMenu || !el.pageExpected) return;
+    const r = el.pageExpected.getBoundingClientRect();
+    const menuWidth = Math.max(176, el.expectedCatMenu.offsetWidth || 176);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8));
+    el.expectedCatMenu.classList.add("is-fixed");
+    el.expectedCatMenu.style.left = `${left}px`;
+    el.expectedCatMenu.style.top = `${r.bottom + 6}px`;
+    el.expectedCatMenu.style.minWidth = `${Math.max(menuWidth, r.width)}px`;
+  }
+
   function setExpectedCatMenuOpen(open) {
     if (!el.expectedTabWrap || !el.pageExpected) return;
     el.expectedTabWrap.classList.toggle("open", open);
     el.pageExpected.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      // Escape overflow clipping on the horizontal tab strip (mobile).
+      if (!hasFineHover() || window.matchMedia("(max-width: 720px)").matches) {
+        requestAnimationFrame(() => {
+          positionExpectedCatMenuFixed();
+          requestAnimationFrame(positionExpectedCatMenuFixed);
+        });
+      } else {
+        clearExpectedCatMenuPosition();
+      }
+    } else {
+      clearExpectedCatMenuPosition();
+    }
+  }
+
+  function syncExpectedCatToolbar() {
+    if (!el.expectedCatToolbar || !el.expectedCatBtn || !el.expectedCatLabel) return;
+    const show = preferMobileSheet() && state.page === "expected";
+    el.expectedCatToolbar.hidden = !show;
+    if (!show) {
+      el.expectedCatBtn.setAttribute("aria-expanded", "false");
+      return;
+    }
+    const cat = currentExpectedCat();
+    el.expectedCatLabel.textContent = cat.label;
+    el.expectedCatBtn.title = cat.label;
+    el.expectedCatBtn.setAttribute("aria-label", `xData category: ${cat.label}`);
+    el.expectedCatBtn.setAttribute(
+      "aria-expanded",
+      mobileSheetOpen && mobileSheetKey === "expected-cats" ? "true" : "false"
+    );
   }
 
   function buildExpectedCatMenu() {
@@ -3131,6 +3541,33 @@
         setPage("expected");
       });
       el.expectedCatMenu.appendChild(btn);
+    });
+  }
+
+  function openExpectedCatSheet() {
+    const cats = expectedCats();
+    const active = currentExpectedCat();
+    const html = `<div class="mobile-sheet-cat-list" role="menu" aria-label="xData categories">${cats
+      .map(
+        (c) =>
+          `<button type="button" role="menuitem" class="page-tab-menu-item${
+            c.key === active.key ? " active" : ""
+          }" data-expected-cat="${escapeHtml(c.key)}">${escapeHtml(c.label)}</button>`
+      )
+      .join("")}</div>`;
+    openMobileSheet({ title: "xData category", html, key: "expected-cats" });
+    if (el.expectedCatBtn) el.expectedCatBtn.setAttribute("aria-expanded", "true");
+    if (!el.mobileSheetBody) return;
+    el.mobileSheetBody.querySelectorAll("[data-expected-cat]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-expected-cat");
+        if (!key) return;
+        state.expectedCat = key;
+        closeMobileSheet();
+        syncExpectedCatToolbar();
+        if (state.page === "expected") renderExpected();
+        else setPage("expected");
+      });
     });
   }
 
@@ -3524,6 +3961,7 @@
     updateExpectedSplitAvailability(cat);
     const compareMode = state.expectedSplit === "compare";
     buildExpectedCatMenu();
+    syncExpectedCatToolbar();
     hideExpectedTooltip();
 
     el.expectedTitle.querySelector(".page-title-text").textContent = "Expected Data";
@@ -3546,7 +3984,7 @@
     renderExpectedLegend();
     el.expectedSub.textContent = compareMode
       ? "Home and away side by side for the same players or teams."
-      : "Expected versus actual season totals for the selected category.";
+      : "Compare expected (x) stats with what actually happened — who overperformed or underperformed.";
 
     // Compare mode always groups by the combined (whole-season) totals —
     // the Home/Away rows within a group come from their own splits, but
@@ -3663,33 +4101,13 @@
       .sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
   }
 
-  // Games played for Per GP: team GP, or player appearances.
-  function rankingsGamesPlayed(row) {
-    return state.view === "teams" ? row.gp || 0 : row.apps || 0;
-  }
-
-  // Rankings can scale every card by games played without touching Statistics.
-  // When Per GP is on, divide season totals (not already-scaled Per 90 / Per £m
-  // values) so the toggle stays honest about games in hand.
+  // Rankings use the same display values as Statistics (totals / Per 90 / Per £m).
   function rankingsValue(row, col) {
-    if (!state.rankingsPerGw) return displayValue(row, col);
-    if (col.derived && !col.rate) return row[col.key];
-    const gp = rankingsGamesPlayed(row);
-    if (!gp) return 0;
-    const total = row[col.key];
-    if (total == null) return 0;
-    return total / gp;
-  }
-
-  function rankingsDisplayDecimals(col) {
-    if (state.rankingsPerGw) return Math.max(col.decimals || 0, 1);
-    return displayDecimals(col);
+    return displayValue(row, col);
   }
 
   function fmtRankingsValue(value, col) {
-    if (state.rankingsPerGw && value > 0 && value < 0.1) return "<0.1";
-    if (!state.rankingsPerGw) return fmtDisplayValue(value, col);
-    return fmtNum(value, rankingsDisplayDecimals(col));
+    return fmtDisplayValue(value, col);
   }
 
   // Competition ranks over a sorted entry list: tied values share a rank and
@@ -3706,14 +4124,12 @@
     return map;
   }
 
-  // The card always lists the best filtered rows, but the number beside each
-  // one comes from referenceRows — the full view unless the user turns
-  // Recalculate on — so a search shows a player's real placing instead of
-  // renumbering the handful of matches 1, 2, 3.
+  // Places always come from the full Players/Teams list; `rows` only
+  // decides who is eligible to appear on the card (filters/search).
   function topRankedForCol(rows, col, referenceRows) {
-    const entries = rankableEntries(rows, col);
-    const ranks = denseRankMap(referenceRows ? rankableEntries(referenceRows, col) : entries);
-    return entries.slice(0, RANKINGS_TOP_N).map((e) => ({
+    const filteredEntries = rankableEntries(rows, col);
+    const ranks = denseRankMap(rankableEntries(referenceRows || rows, col));
+    return filteredEntries.slice(0, RANKINGS_TOP_N).map((e) => ({
       row: e.row,
       val: e.val,
       rank: ranks.get(e.key) ?? null,
@@ -3723,7 +4139,10 @@
   function rankingsIdentityHTML(row) {
     let meta = "";
     if (state.view === "players") {
-      meta = `${escapeHtml(row.team)} · ${escapeHtml(row.position)}`;
+      const pos = row.position || "";
+      const price = effectivePrice(row);
+      const priceLabel = price ? `£${Number(price).toFixed(1)}m` : "";
+      meta = [pos, priceLabel].filter(Boolean).map(escapeHtml).join(" · ");
     } else {
       const pos = LEAGUE_POSITIONS[row.team];
       if (pos != null) {
@@ -3731,9 +4150,7 @@
         meta = `<span${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`;
       }
     }
-    const nameHTML = state.view === "players"
-      ? playerNameLinkHTML(row.name, "rankings-name")
-      : `<span class="rankings-name">${escapeHtml(row.name)}</span>`;
+    const nameHTML = `<span class="rankings-name">${escapeHtml(row.name)}</span>`;
     const metaHTML = meta ? `<span class="rankings-meta">${meta}</span>` : "";
     return `${badgeHTML(row.team)}<span class="rankings-identity-text"><span class="rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>${metaHTML}</span>`;
   }
@@ -3741,7 +4158,7 @@
   function rankingsCardHTML(col, rows, referenceRows) {
     const leaders = topRankedForCol(rows, col, referenceRows);
     const title = metricDisplayTitle(col);
-    const keyLabel = state.rankingsPerGw ? `${col.label} / GW` : col.label;
+    const keyLabel = col.label;
     const body = leaders.length
       ? `<ol class="rankings-list">${leaders
           .map((entry) => {
@@ -3869,7 +4286,7 @@
       return;
     }
 
-    const referenceRows = state.rankingsRecalculate ? null : getRows();
+    const referenceRows = getRows();
     el.rankingsGrid.innerHTML = sections
       .map((section) => {
         const cards = section.metricCols
@@ -3903,17 +4320,9 @@
       if (e.target.closest("a")) return;
       const row = e.target.closest(".rankings-row");
       if (!row || !el.rankingsGrid.contains(row)) return;
-      const key = row.dataset.rowKey;
-      // Touch: first tap sticky-highlights across cards; second tap pins.
-      if (!hasFineHover()) {
-        if (el.rankingsGrid.dataset.hoverKey === key) {
-          toggleRankingsPin(key);
-        } else {
-          setRankingsCrossHover(key);
-        }
-        return;
-      }
-      toggleRankingsPin(key);
+      // Mobile: pin on first tap (no sticky cross-highlight preview).
+      if (!hasFineHover()) clearRankingsCrossHover();
+      toggleRankingsPin(row.dataset.rowKey);
     });
     el.rankingsGrid.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -3924,7 +4333,7 @@
     });
   }
 
-  // Touch: dismiss sticky rankings highlight / xData tips when tapping away.
+  // Touch: dismiss sticky rankings highlight (if any) / xData tips when tapping away.
   document.addEventListener("click", (e) => {
     if (hasFineHover()) return;
     if (el.rankingsGrid && el.rankingsGrid.dataset.hoverKey && !e.target.closest(".rankings-row")) {
@@ -3954,7 +4363,7 @@
   // ---------------------------------------------------------------------
   // Feed page — player-mention cards from annotated social_data.js
   // ---------------------------------------------------------------------
-  const FEED_WINDOW_HOURS = 48;
+  const FEED_HISTORY_DAYS = 7;
 
   const INDEXABLE_FEED_BASES = new Set([
     "unique_full_alias",
@@ -4005,6 +4414,210 @@
     return feedPlayerCatalog().get(Number(code)) || null;
   }
 
+  function localDayKey(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  const FEED_POST_TYPES = [
+    { key: "original", label: "Original" },
+    { key: "reply", label: "Reply" },
+    { key: "quote", label: "Quote" },
+    { key: "retweet", label: "Retweet" },
+  ];
+
+  const FEED_RANGE_LABELS = {
+    today: "Today",
+    "3d": "the last 3 days",
+    "7d": "the past week",
+  };
+
+  function feedTypeFilterIsDefault() {
+    return state.feedTypeFilter.size === 1 && state.feedTypeFilter.has("original");
+  }
+
+  function feedRangeDayCount(range = state.feedRange) {
+    if (range === "3d") return 3;
+    if (range === "7d") return FEED_HISTORY_DAYS;
+    return 1;
+  }
+
+  function feedRangeDayKeys(range = state.feedRange, now = new Date()) {
+    const n = feedRangeDayCount(range);
+    const keys = [];
+    for (let offset = 0; offset < n; offset++) {
+      keys.push(
+        localDayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset))
+      );
+    }
+    return keys;
+  }
+
+  function feedPostKind(post) {
+    const refs = post && post.referencedTweets;
+    const types = new Set(
+      (Array.isArray(refs) ? refs : [])
+        .map((r) => (r && r.type) || "")
+        .filter(Boolean)
+    );
+    if (types.has("retweeted")) return "retweet";
+    if (types.has("quoted")) return "quote";
+    if (types.has("replied_to") || (post && post.inReplyToUserId)) return "reply";
+    return "original";
+  }
+
+  function feedFiltersActive() {
+    return (
+      state.feedRange !== "today" ||
+      state.feedCreatorFilter.size > 0 ||
+      !feedTypeFilterIsDefault() ||
+      state.feedTeamFilter.size > 0
+    );
+  }
+
+  function syncFeedFiltersToggle() {
+    if (!el.feedFiltersToggle) return;
+    const active = feedFiltersActive();
+    const panelOpen =
+      el.feedControls &&
+      !el.feedControls.classList.contains("collapsed") &&
+      el.feedControls.style.display !== "none";
+    const open = panelOpen || (mobileSheetOpen && mobileSheetKey === "feed-filters");
+    el.feedFiltersToggle.classList.toggle("on", open || active);
+    const label = open ? "Hide feed filters" : "Show feed filters";
+    el.feedFiltersToggle.title = active && !open ? "Feed filters (active)" : label;
+    el.feedFiltersToggle.setAttribute(
+      "aria-label",
+      active && !open ? "Show feed filters (filters active)" : label
+    );
+    el.feedFiltersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function setFeedFiltersOpen(open) {
+    if (!el.feedControls || !el.feedFiltersToggle) return;
+    if (!hasFineHover()) {
+      if (open) {
+        openMobileSheetHost({
+          title: "Feed filters",
+          key: "feed-filters",
+          hostEl: el.feedControls,
+          prepare(host) {
+            host.style.display = "";
+            host.hidden = false;
+            host.classList.remove("collapsed");
+            buildFeedTypeChips();
+            buildFeedCreatorChips();
+            buildFeedTeamChips();
+            syncFeedRangeSeg();
+          },
+          cleanup(host) {
+            host.classList.add("collapsed");
+            host.style.display = state.page === "feed" ? "" : "none";
+          },
+        });
+        syncFeedFiltersToggle();
+      } else if (mobileSheetKey === "feed-filters") {
+        closeMobileSheet();
+      } else {
+        el.feedControls.classList.add("collapsed");
+        syncFeedFiltersToggle();
+      }
+      return;
+    }
+    el.feedControls.style.display = "";
+    el.feedControls.hidden = false;
+    el.feedControls.classList.toggle("collapsed", !open);
+    if (open) {
+      buildFeedTypeChips();
+      buildFeedCreatorChips();
+      buildFeedTeamChips();
+      syncFeedRangeSeg();
+      requestAnimationFrame(() => syncSegThumb(el.feedRangeSeg, { animate: false }));
+    }
+    syncFeedFiltersToggle();
+  }
+
+  function syncFeedRangeSeg() {
+    if (!el.feedRangeSeg) return;
+    $$("#feed-range-seg button[data-feed-range]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.feedRange === state.feedRange);
+    });
+    syncSegThumb(el.feedRangeSeg, { animate: false });
+  }
+
+  function buildFeedTypeChips() {
+    const root = el.feedTypeFilters;
+    if (!root) return;
+    root.innerHTML = "";
+    for (const spec of FEED_POST_TYPES) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip" + (state.feedTypeFilter.has(spec.key) ? " active" : "");
+      chip.dataset.feedType = spec.key;
+      chip.textContent = spec.label;
+      chip.addEventListener("click", () => {
+        toggleSetValue(state.feedTypeFilter, spec.key);
+        chip.classList.toggle("active", state.feedTypeFilter.has(spec.key));
+        syncFeedFiltersToggle();
+        renderFeed();
+      });
+      root.appendChild(chip);
+    }
+  }
+
+  function buildFeedCreatorChips() {
+    const root = el.feedCreatorFilters;
+    if (!root) return;
+    root.innerHTML = "";
+    const accounts = SOCIAL.accounts || [];
+    for (const acc of accounts) {
+      const handle = acc.handle;
+      if (!handle) continue;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip" + (state.feedCreatorFilter.has(handle) ? " active" : "");
+      chip.dataset.feedCreator = handle;
+      const label = acc.label || handle;
+      if (acc.avatarUrl) {
+        chip.classList.add("feed-creator-chip");
+        chip.innerHTML = `<img class="feed-creator-avatar" src="${escapeHtml(acc.avatarUrl)}" alt="" width="16" height="16" loading="lazy" /><span>${escapeHtml(label)}</span>`;
+      } else {
+        chip.textContent = label;
+      }
+      chip.addEventListener("click", () => {
+        toggleSetValue(state.feedCreatorFilter, handle);
+        chip.classList.toggle("active", state.feedCreatorFilter.has(handle));
+        syncFeedFiltersToggle();
+        renderFeed();
+      });
+      root.appendChild(chip);
+    }
+  }
+
+  function buildFeedTeamChips() {
+    const root = el.feedTeamFilters;
+    if (!root) return;
+    root.innerHTML = "";
+    teamCodesForSeason().forEach((code) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className =
+        "chip team-chip" + (state.feedTeamFilter.has(code) ? " active" : "");
+      chip.dataset.feedTeam = code;
+      chip.innerHTML = `${badgeHTML(code)}${escapeHtml(code)}`;
+      setTip(chip, teamNameForSeason(code));
+      chip.addEventListener("click", () => {
+        toggleSetValue(state.feedTeamFilter, code);
+        chip.classList.toggle("active", state.feedTeamFilter.has(code));
+        syncFeedFiltersToggle();
+        renderFeed();
+      });
+      root.appendChild(chip);
+    });
+  }
+
   function detectLocaleClockFormat() {
     try {
       const parts = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).formatToParts(
@@ -4045,6 +4658,16 @@
     if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
     if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)}d`;
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  /** 0 = just now, 1 = FEED_HISTORY_DAYS (or older). Drives feed-time color mix. */
+  function feedTimeAgeProgress(iso) {
+    if (!iso) return 1;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 1;
+    const ageMs = Math.max(0, Date.now() - d.getTime());
+    const maxMs = FEED_HISTORY_DAYS * 86400 * 1000;
+    return Math.min(1, ageMs / maxMs);
   }
 
   function formatFeedAbsolute(iso) {
@@ -4160,22 +4783,28 @@
     return html;
   }
 
-  function feedPostsInWindow(posts, windowHours = FEED_WINDOW_HOURS) {
-    const now = Date.now();
-    const winMs = windowHours * 3600 * 1000;
+  function feedPostsFiltered(posts, { range = state.feedRange } = {}) {
+    const keys = new Set(feedRangeDayKeys(range));
     return (posts || []).filter((post) => {
-      const created = post.createdAt ? new Date(post.createdAt).getTime() : NaN;
-      if (Number.isNaN(created)) return false;
-      const ageMs = now - created;
-      return ageMs >= -3600 * 1000 && ageMs <= winMs;
+      if (!post.createdAt) return false;
+      const created = new Date(post.createdAt);
+      if (Number.isNaN(created.getTime())) return false;
+      if (!keys.has(localDayKey(created))) return false;
+      if (state.feedCreatorFilter.size && !state.feedCreatorFilter.has(post.handle)) {
+        return false;
+      }
+      if (state.feedTypeFilter.size && !state.feedTypeFilter.has(feedPostKind(post))) {
+        return false;
+      }
+      return true;
     });
   }
 
-  function computeFeedMentionCards(posts) {
-    const windowPosts = feedPostsInWindow(posts);
+  function computeFeedMentionCards(posts, { range = state.feedRange } = {}) {
+    const scopedPosts = feedPostsFiltered(posts, { range });
     const byCode = new Map();
 
-    for (const post of windowPosts) {
+    for (const post of scopedPosts) {
       const analysis = post.analysis || {};
       for (const e of analysis.entities || []) {
         if (!e || e.type !== "player" || !e.resolved || e.code == null) continue;
@@ -4231,26 +4860,21 @@
           latestAt: bucket.latestAt,
         };
       })
-      .sort((a, b) => sortFeedCards(a, b, state.feedSort));
+      .sort((a, b) => sortFeedCards(a, b));
 
     return {
-      windowHours: FEED_WINDOW_HOURS,
-      windowPostCount: windowPosts.length,
+      range,
+      scopedPostCount: scopedPosts.length,
       cards,
     };
   }
 
-  function sortFeedCards(a, b, mode) {
+  function sortFeedCards(a, b) {
     const byRecent = () =>
       String(b.latestAt || "").localeCompare(String(a.latestAt || ""));
     const byVolume = () => b.posts - a.posts;
     const byName = () => String(a.name || "").localeCompare(String(b.name || ""));
-    if (mode === "recent") {
-      // Same post can tag several players → identical latestAt; break ties by
-      // volume (who else is getting talked about), then name.
-      return byRecent() || byVolume() || byName();
-    }
-    // Volume (default): most mentions, then most recent, then name.
+    // Volume desc: most mentions, then most recent, then name.
     return byVolume() || byRecent() || byName();
   }
 
@@ -4281,7 +4905,7 @@
               <div class="feed-source-meta-line">
                 <a class="feed-handle" href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>
                 <span class="feed-meta-dot" aria-hidden="true">·</span>
-                <time class="feed-time" datetime="${escapeHtml(post.createdAt || "")}"${tipAttr(formatFeedAbsolute(post.createdAt))}>${formatFeedTime(post.createdAt)}</time>
+                <time class="feed-time" style="--feed-age:${feedTimeAgeProgress(post.createdAt).toFixed(3)}" datetime="${escapeHtml(post.createdAt || "")}"${tipAttr(formatFeedAbsolute(post.createdAt))}>${formatFeedTime(post.createdAt)}</time>
               </div>
             </div>
             <a class="feed-source-open icon-only-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open on X"${tipAttr("Open on X")}>${iconHTML("x-logo")}</a>
@@ -4301,9 +4925,14 @@
       .join("")
       .toUpperCase() || "?";
     const photo = feedPlayerPhotoUrl(card.code);
-    const badge = card.team ? badgeHTML(card.team, "feed-player-team-badge") : "";
+    const teamLabel = card.team ? teamNameForSeason(card.team) : "";
+    const badge = card.team
+      ? badgeHTML(card.team, "feed-player-team-badge").replace(
+          "<img ",
+          `<img${tipAttr(teamLabel)} `
+        )
+      : "";
     const metaBits = [];
-    if (card.team) metaBits.push(card.team);
     if (card.position) metaBits.push(card.position);
     if (card.price != null) metaBits.push(`£${Number(card.price).toFixed(1)}m`);
     if (card.pts != null) metaBits.push(`${Number(card.pts)} Pts`);
@@ -4341,7 +4970,7 @@
             ${badge}
           </div>
           <div class="feed-player-title">
-            <h3 class="feed-player-name">${escapeHtml(card.name)}</h3>
+            <h3 class="feed-player-name"><span class="feed-player-name-text">${escapeHtml(card.name)}</span></h3>
             <p class="feed-player-meta">${escapeHtml(metaBits.join(" · "))}</p>
           </div>
         </div>
@@ -4433,6 +5062,19 @@
     if (api) parts.push(api);
     const book = marketsBookLabel(marketsPrimaryBookKey());
     if (book) parts.push(`Odds: ${book}`);
+    const hours = marketsCompareHours();
+    if (state.marketsCompare !== "current") {
+      const snap = pickMarketsHistorySnapshot(hours);
+      if (snap && snap.generatedAt) {
+        const vs = fmtMarketsUpdated(snap.generatedAt);
+        if (vs) parts.push(`vs ${vs}`);
+        else parts.push(state.marketsCompare === "last" ? "vs last run" : "vs last 72h");
+      } else {
+        parts.push(
+          state.marketsCompare === "last" ? "No prior run yet" : "No ~72h snapshot yet"
+        );
+      }
+    }
     return parts.join(" · ");
   }
 
@@ -4521,7 +5163,91 @@
     </div>`;
   }
 
-  function marketsTeamRowHTML(side, goals, cs, role) {
+  function marketsCompareHours() {
+    if (state.marketsCompare === "72h") return 72;
+    return 0;
+  }
+
+  function pickMarketsHistorySnapshot(hoursAgo) {
+    const hist = Array.isArray(MARKETS.history) ? MARKETS.history : [];
+    if (!hist.length) return null;
+    if (!hoursAgo) {
+      // Last run = most recent retained snapshot.
+      let best = null;
+      let bestT = -Infinity;
+      for (const snap of hist) {
+        const t = Date.parse(snap && snap.generatedAt);
+        if (!Number.isFinite(t)) continue;
+        if (t >= bestT) {
+          bestT = t;
+          best = snap;
+        }
+      }
+      return best;
+    }
+    const target = Date.now() - hoursAgo * 3600 * 1000;
+    let best = null;
+    let bestScore = Infinity;
+    for (const snap of hist) {
+      const t = Date.parse(snap && snap.generatedAt);
+      if (!Number.isFinite(t)) continue;
+      const dist = Math.abs(t - target);
+      // Prefer snapshots at or before the lookback target.
+      const score = t > target ? dist + 6 * 3600 * 1000 : dist;
+      if (score < bestScore) {
+        bestScore = score;
+        best = snap;
+      }
+    }
+    return best;
+  }
+
+  function marketsBaselineMap() {
+    if (state.marketsCompare === "current") return null;
+    const hours = marketsCompareHours(); // 0 => last run
+    const snap = pickMarketsHistorySnapshot(hours);
+    if (!snap || !Array.isArray(snap.fixtures)) return null;
+    const byId = new Map();
+    for (const fx of snap.fixtures) {
+      if (!fx || fx.id == null) continue;
+      byId.set(String(fx.id), fx);
+    }
+    return { generatedAt: snap.generatedAt || "", byId };
+  }
+
+  function marketsBaselineSide(baselineFx, role) {
+    if (!baselineFx) return null;
+    const goals = baselineFx.goals || {};
+    const cs = baselineFx.cleanSheet || {};
+    return {
+      goals: role === "home" ? Number(goals.home) : Number(goals.away),
+      cs: role === "home" ? Number(cs.home) : Number(cs.away),
+    };
+  }
+
+  function marketsStatDeltaHTML(current, past, { decimals = 2, suffix = "", kind = "goals" } = {}) {
+    if (state.marketsCompare === "current") return "";
+    if (!Number.isFinite(current) || !Number.isFinite(past)) {
+      return `<span class="markets-stat-delta markets-stat-delta-empty" title="No earlier snapshot for this fixture">—</span>`;
+    }
+    const delta = current - past;
+    const eps = kind === "cs" ? 0.51 : 0.015;
+    if (Math.abs(delta) < eps) {
+      return `<span class="markets-stat-delta markets-stat-delta-flat" title="Unchanged vs earlier pull">${iconHTML(
+        "minus"
+      )}<span>0${suffix}</span></span>`;
+    }
+    const up = delta > 0;
+    const abs = Math.abs(delta).toFixed(decimals);
+    const tip = `${up ? "Up" : "Down"} ${abs}${suffix} vs earlier pull`;
+    return `<span class="markets-stat-delta markets-stat-delta-${
+      up ? "up" : "down"
+    }" title="${escapeHtml(tip)}">${iconHTML(up ? "trending-up" : "trending-down")}<span>${
+      up ? "+" : "−"
+    }${escapeHtml(abs)}${escapeHtml(suffix)}</span></span>`;
+  }
+
+  function marketsTeamRowHTML(side, goals, cs, role, baselineSide) {
     const code = side?.code || "";
     const label = marketsTeamLabel(side);
     const gTone = marketsHeatTone("goals", goals);
@@ -4530,6 +5256,14 @@
       role === "home"
         ? `<span class="markets-side-mark" title="Home" aria-label="Home">H</span>`
         : `<span class="markets-side-mark" title="Away" aria-label="Away">A</span>`;
+    const pastGoals =
+      baselineSide && Number.isFinite(Number(baselineSide.goals))
+        ? Number(baselineSide.goals)
+        : null;
+    const pastCs =
+      baselineSide && Number.isFinite(Number(baselineSide.cs))
+        ? Number(baselineSide.cs)
+        : null;
     return `<div class="markets-team-row markets-team-row-${role}">
       <div class="markets-team-cell">
         ${badgeHTML(code, "markets-badge")}
@@ -4537,10 +5271,16 @@
         ${sideMark}
       </div>
       <div class="markets-stat markets-stat-${gTone}" title="Projected goals">
-        <span class="markets-stat-value" data-count-to="${Number(goals)}" data-count-decimals="2">${Number(goals).toFixed(2)}</span>
+        <span class="markets-stat-stack">
+          <span class="markets-stat-value" data-count-to="${Number(goals)}" data-count-decimals="2">${Number(goals).toFixed(2)}</span>
+          ${marketsStatDeltaHTML(Number(goals), pastGoals, { decimals: 2, kind: "goals" })}
+        </span>
       </div>
       <div class="markets-stat markets-stat-${cTone}" title="Clean sheet %">
-        <span class="markets-stat-value" data-count-to="${Math.round(Number(cs))}" data-count-decimals="0" data-count-suffix="%">${Math.round(Number(cs))}%</span>
+        <span class="markets-stat-stack">
+          <span class="markets-stat-value" data-count-to="${Math.round(Number(cs))}" data-count-decimals="0" data-count-suffix="%">${Math.round(Number(cs))}%</span>
+          ${marketsStatDeltaHTML(Number(cs), pastCs, { decimals: 0, suffix: "%", kind: "cs" })}
+        </span>
       </div>
     </div>`;
   }
@@ -4561,7 +5301,7 @@
     return `<div class="markets-divider" role="heading" aria-level="3"><span>${escapeHtml(label)}</span></div>`;
   }
 
-  function marketsCardHTML(fx) {
+  function marketsCardHTML(fx, baseline) {
     const homeCode = fx.home?.code || "";
     const awayCode = fx.away?.code || "";
     const goalsH = Number(fx.goals?.home);
@@ -4574,8 +5314,14 @@
       ? topScores.map((s) => marketsScoreRowHTML(s.score, s.prob, homeCode, awayCode)).join("")
       : `<div class="markets-scores-empty">—</div>`;
     const kickLabel = [when.day, when.date, when.time].filter(Boolean).join(" ");
+    const pastFx =
+      baseline && fx.id != null ? baseline.byId.get(String(fx.id)) : null;
+    const homeBase = marketsBaselineSide(pastFx, "home");
+    const awayBase = marketsBaselineSide(pastFx, "away");
 
-    return `<article class="markets-card">
+    return `<article class="markets-card${
+      state.marketsCompare !== "current" ? " markets-card-compare" : ""
+    }">
       <div class="markets-body">
         <div class="markets-body-heads">
           <div class="markets-col-heads">
@@ -4587,8 +5333,8 @@
         </div>
         <div class="markets-body-rows">
           <div class="markets-teams">
-            ${marketsTeamRowHTML(fx.home, goalsH, csH, "home")}
-            ${marketsTeamRowHTML(fx.away, goalsA, csA, "away")}
+            ${marketsTeamRowHTML(fx.home, goalsH, csH, "home", homeBase)}
+            ${marketsTeamRowHTML(fx.away, goalsA, csA, "away", awayBase)}
           </div>
           <div class="markets-scores-list" aria-label="Most likely scores">${scoresHTML}</div>
         </div>
@@ -4596,13 +5342,32 @@
     </article>`;
   }
 
+  function syncMarketsAttribution() {
+    if (!el.marketsAttribution) return;
+    const text = marketsAttributionText();
+    if (!text) {
+      el.marketsAttribution.hidden = true;
+      el.marketsAttribution.textContent = "";
+      return;
+    }
+    el.marketsAttribution.hidden = false;
+    el.marketsAttribution.textContent = text;
+  }
+
+  function syncMarketsCompareSeg() {
+    if (!el.marketsCompareSeg) return;
+    $$("#markets-compare-seg button[data-markets-compare]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.marketsCompare === state.marketsCompare);
+    });
+    syncSegThumb(el.marketsCompareSeg, { animate: false });
+  }
+
   function renderMarkets() {
     const root = el.marketsGrid;
     if (!root) return;
     const fixtures = MARKETS.fixtures || [];
-    if (el.marketsUpdated) {
-      el.marketsUpdated.textContent = marketsAttributionText();
-    }
+    syncMarketsCompareSeg();
+    syncMarketsAttribution();
     if (!fixtures.length) {
       root.innerHTML = `<div class="empty-state markets-empty">
         <p>No market odds loaded yet.</p>
@@ -4612,6 +5377,7 @@
       return;
     }
 
+    const baseline = marketsBaselineMap();
     const groups = new Map();
     for (const fx of fixtures) {
       const key = marketsLocalDateKey(fx.commenceTime) || "_";
@@ -4626,7 +5392,7 @@
     const parts = [];
     for (const group of groups.values()) {
       parts.push(marketsDateDividerHTML(group.sampleIso));
-      for (const fx of group.fixtures) parts.push(marketsCardHTML(fx));
+      for (const fx of group.fixtures) parts.push(marketsCardHTML(fx, baseline));
     }
     root.innerHTML = parts.join("");
   }
@@ -4634,23 +5400,49 @@
   function feedCardMatchesQuery(card, query) {
     const q = String(query || "").trim().toLowerCase();
     if (!q) return true;
-    const hay = [card.name, card.team, card.position]
+    const teamName = card.team ? teamNameForSeason(card.team) : "";
+    const hay = [card.name, card.team, teamName, card.position]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
     return hay.includes(q);
   }
 
+  function feedCardMatchesTeamFilter(card) {
+    if (!state.feedTeamFilter.size) return true;
+    return card.team && state.feedTeamFilter.has(card.team);
+  }
+
+  function feedSearchWiderRangeHits(posts, query) {
+    if (!(state.feedRange === "today" || state.feedRange === "3d")) return 0;
+    const weekMention = computeFeedMentionCards(posts, { range: "7d" });
+    return weekMention.cards.filter(
+      (card) => feedCardMatchesTeamFilter(card) && feedCardMatchesQuery(card, query)
+    ).length;
+  }
+
+  function feedWidenRangeHintHTML(count) {
+    if (!count) return "";
+    const label = count === 1 ? "1 match" : `${count} matches`;
+    return `<p class="feed-empty-widen">
+      <button type="button" class="feed-widen-range" data-feed-widen="7d">
+        ${escapeHtml(label)} in the past week — show Past week
+      </button>
+    </p>`;
+  }
+
   function renderFeed() {
     const root = el.feedTrending || el.feedList;
     if (!root) return;
+    syncFeedRangeSeg();
+    syncFeedFiltersToggle();
     const posts = SOCIAL.posts || [];
     const accounts = SOCIAL.accounts || [];
-    const meta = SOCIAL.meta || {};
     const postsById = new Map(posts.map((p) => [String(p.id), p]));
-    const mention = computeFeedMentionCards(posts);
-    const windowHours = meta.windowHours || mention.windowHours || FEED_WINDOW_HOURS;
+    const rangeLabel = FEED_RANGE_LABELS[state.feedRange] || "the selected range";
     const query = el.feedSearch ? el.feedSearch.value : "";
+    const trimmed = String(query || "").trim();
+    const mention = computeFeedMentionCards(posts);
 
     if (!posts.length) {
       const handles = accounts.map((a) => `@${a.handle}`).filter(Boolean).join(", ") || "@LetsTalk_FPL";
@@ -4664,19 +5456,30 @@ python3 site/annotate_social.py</pre>
     }
 
     if (!mention.cards.length) {
+      const widenCount = trimmed ? feedSearchWiderRangeHits(posts, query) : 0;
       root.innerHTML = `<div class="empty-state feed-empty">
-        <p>No player mentions in the last ${windowHours}h.</p>
-        <p class="feed-empty-hint">Pull fresher posts or re-annotate with the mention pipeline.</p>
+        <p>No player mentions for ${escapeHtml(rangeLabel)}.</p>
+        ${
+          widenCount
+            ? feedWidenRangeHintHTML(widenCount)
+            : `<p class="feed-empty-hint">Widen the date range, clear creator/type/team filters, or pull fresher posts.</p>`
+        }
       </div>`;
       return;
     }
 
-    const filtered = mention.cards.filter((card) => feedCardMatchesQuery(card, query));
-    const trimmed = String(query || "").trim();
+    const filtered = mention.cards.filter(
+      (card) => feedCardMatchesTeamFilter(card) && feedCardMatchesQuery(card, query)
+    );
     if (!filtered.length) {
+      const widenCount = trimmed ? feedSearchWiderRangeHits(posts, query) : 0;
       root.innerHTML = `<div class="empty-state feed-empty" role="status">
-        <p>No players found${trimmed ? ` for “${escapeHtml(trimmed)}”` : ""}.</p>
-        <p class="feed-empty-hint">Try another name, or clear the search to see all mentions.</p>
+        <p>No players found${trimmed ? ` for “${escapeHtml(trimmed)}”` : ""} in ${escapeHtml(rangeLabel)}.</p>
+        ${
+          widenCount
+            ? feedWidenRangeHintHTML(widenCount)
+            : `<p class="feed-empty-hint">Try another name or team, or clear search / filters.</p>`
+        }
       </div>`;
       return;
     }
@@ -4863,6 +5666,9 @@ python3 site/annotate_social.py</pre>
     clearTimeout(fixtureTtTimer);
     hideFixtureTooltip();
     hidePageInfoTooltip();
+    closeMobileSheet();
+    if (page !== "feed") closeFeedSearch();
+    else syncFeedSearchLayout();
     syncPageInfoButton();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
@@ -4876,13 +5682,38 @@ python3 site/annotate_social.py</pre>
     el.schedulePage.style.display = page === "schedule" ? "" : "none";
     if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
-    const hideChrome = page === "schedule" || page === "feed" || page === "markets";
+    const hideChrome = page === "schedule" || page === "markets";
+    const isFeed = page === "feed";
     el.subtoolbar.style.display = hideChrome ? "none" : "";
-    el.sidebar.style.display = hideChrome ? "none" : "";
+    el.sidebar.style.display = hideChrome || isFeed ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed ? "none" : "";
+    if (el.feedToolbarStart) el.feedToolbarStart.style.display = isFeed ? "" : "none";
+    if (el.feedToolbarEnd) el.feedToolbarEnd.style.display = isFeed ? "" : "none";
+    if (el.feedControls) {
+      if (isFeed) {
+        el.feedControls.style.display = "";
+        el.feedControls.hidden = false;
+        syncFeedFiltersToggle();
+      } else {
+        el.feedControls.classList.add("collapsed");
+        el.feedControls.style.display = "none";
+        syncFeedFiltersToggle();
+      }
+    }
+    if (el.columnsSidebar) {
+      // Right rail is desktop-only; narrow / sheet layouts embed columns in Filters.
+      el.columnsSidebar.style.display =
+        page === "opta" && !columnsLiveInFilters() ? "" : "none";
+    }
     el.tableOnlyToggles.style.display = page === "opta" ? "" : "none";
     if (el.compareToggle) el.compareToggle.style.display = page === "opta" ? "" : "none";
+    if (el.columnsBtn) {
+      el.columnsBtn.style.display =
+        page === "opta" && !columnsLiveInFilters() ? "" : "none";
+    }
+    syncColumnsPanelHost();
     syncHighlightUI();
-    syncRankingsPerGwUI();
     if (page !== "opta") {
       setColumnsOpen(false);
     }
@@ -4907,31 +5738,85 @@ python3 site/annotate_social.py</pre>
     // Enter after content is in the DOM so the animation covers real layout.
     playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+    syncExpectedCatToolbar();
   }
 
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   el.pageExpected.addEventListener("click", (e) => {
-    // Touch / click: toggle the category menu. Hover still opens it via CSS.
+    e.preventDefault();
     e.stopPropagation();
+    // Mobile / narrow: plain page tab — category lives in the toolbar.
+    if (preferMobileSheet()) {
+      setExpectedCatMenuOpen(false);
+      setPage("expected");
+      return;
+    }
+    // Desktop wide: toggle the category menu. Hover still opens via CSS + mouseenter.
+    buildExpectedCatMenu();
     const willOpen = !el.expectedTabWrap.classList.contains("open");
     setExpectedCatMenuOpen(willOpen);
     setPage("expected");
   });
+  if (el.expectedCatBtn) {
+    el.expectedCatBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!preferMobileSheet() || state.page !== "expected") return;
+      if (mobileSheetOpen && mobileSheetKey === "expected-cats") {
+        closeMobileSheet();
+        syncExpectedCatToolbar();
+        return;
+      }
+      openExpectedCatSheet();
+      syncExpectedCatToolbar();
+    });
+  }
   el.pageSchedule.addEventListener("click", () => setPage("schedule"));
   if (el.pageFeed) el.pageFeed.addEventListener("click", () => setPage("feed"));
   if (el.pageMarkets) el.pageMarkets.addEventListener("click", () => setPage("markets"));
   if (el.expectedTabWrap) {
     el.expectedTabWrap.addEventListener("mouseenter", () => {
+      if (preferMobileSheet()) return;
+      if (!hasFineHover()) return;
       buildExpectedCatMenu();
       setExpectedCatMenuOpen(true);
     });
-    el.expectedTabWrap.addEventListener("mouseleave", () => setExpectedCatMenuOpen(false));
+    el.expectedTabWrap.addEventListener("mouseleave", () => {
+      if (preferMobileSheet()) return;
+      if (!hasFineHover()) return;
+      setExpectedCatMenuOpen(false);
+    });
   }
   document.addEventListener("click", (e) => {
+    if (preferMobileSheet()) return;
+    if (!hasFineHover()) return;
     if (!el.expectedTabWrap || !el.expectedTabWrap.classList.contains("open")) return;
     if (!el.expectedTabWrap.contains(e.target)) setExpectedCatMenuOpen(false);
   });
+  window.addEventListener("resize", () => {
+    syncExpectedCatToolbar();
+    if (preferMobileSheet()) {
+      setExpectedCatMenuOpen(false);
+      return;
+    }
+    if (!hasFineHover()) return;
+    if (el.expectedTabWrap?.classList.contains("open")) {
+      if (window.matchMedia("(max-width: 720px)").matches) {
+        positionExpectedCatMenuFixed();
+      } else {
+        clearExpectedCatMenuPosition();
+      }
+    }
+  });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!hasFineHover()) return;
+      if (el.expectedTabWrap?.classList.contains("open")) setExpectedCatMenuOpen(false);
+    },
+    true
+  );
 
   // Brand mark always returns to OPTA (home) with a full refresh so filters
   // and ephemeral UI state reset alongside the page switch.
@@ -4977,7 +5862,6 @@ python3 site/annotate_social.py</pre>
     state.enhancePct = view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
     updateEnhancePctSlider();
     syncHighlightUI();
-    syncRankingsPerGwUI();
     if (view !== "players" && state.valueMode !== "total") {
       setValueMode("total", { rerender: false });
     }
@@ -4988,7 +5872,10 @@ python3 site/annotate_social.py</pre>
     }
     renderColumnsPanel();
     if (state.page === "expected") renderExpected();
-    else buildExpectedCatMenu();
+    else {
+      buildExpectedCatMenu();
+      syncExpectedCatToolbar();
+    }
     renderTable();
     if (view === "players") {
       requestAnimationFrame(() => syncSegThumb(el.valueModeSeg, { animate: false }));
@@ -5016,14 +5903,145 @@ python3 site/annotate_social.py</pre>
     renderExpected();
   });
 
-  if (el.feedSortSeg) {
-    el.feedSortSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-feed-sort]");
+  if (el.feedFiltersToggle) {
+    el.feedFiltersToggle.addEventListener("click", () => {
+      const open = hasFineHover()
+        ? el.feedControls && el.feedControls.classList.contains("collapsed")
+        : !(mobileSheetOpen && mobileSheetKey === "feed-filters");
+      setFeedFiltersOpen(!!open);
+    });
+  }
+
+  if (el.feedRangeSeg) {
+    el.feedRangeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-feed-range]");
       if (!btn) return;
-      state.feedSort = btn.dataset.feedSort === "recent" ? "recent" : "volume";
-      $$("#feed-sort-seg button").forEach((b) => b.classList.toggle("active", b === btn));
-      syncSegThumb(el.feedSortSeg);
+      const range = btn.dataset.feedRange;
+      if (!range || range === state.feedRange) return;
+      if (range !== "today" && range !== "3d" && range !== "7d") return;
+      state.feedRange = range;
+      syncFeedRangeSeg();
+      syncFeedFiltersToggle();
       renderFeed();
+    });
+  }
+
+  const feedResultsRoot = el.feedTrending || el.feedList;
+  if (feedResultsRoot) {
+    feedResultsRoot.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-feed-widen]");
+      if (!btn) return;
+      const range = btn.dataset.feedWiden;
+      if (range !== "today" && range !== "3d" && range !== "7d") return;
+      if (range === state.feedRange) return;
+      state.feedRange = range;
+      syncFeedRangeSeg();
+      syncFeedFiltersToggle();
+      renderFeed();
+    });
+  }
+
+  function clearFeedTypeFilter() {
+    state.feedTypeFilter = new Set(["original"]);
+    buildFeedTypeChips();
+    syncFeedFiltersToggle();
+    renderFeed();
+  }
+
+  function clearFeedCreatorFilter() {
+    state.feedCreatorFilter.clear();
+    buildFeedCreatorChips();
+    syncFeedFiltersToggle();
+    renderFeed();
+  }
+
+  function clearFeedTeamFilter() {
+    state.feedTeamFilter.clear();
+    buildFeedTeamChips();
+    syncFeedFiltersToggle();
+    renderFeed();
+  }
+
+  if (el.feedResetTypes) {
+    el.feedResetTypes.addEventListener("click", clearFeedTypeFilter);
+    el.feedResetTypes.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        clearFeedTypeFilter();
+      }
+    });
+  }
+  if (el.feedResetCreators) {
+    el.feedResetCreators.addEventListener("click", clearFeedCreatorFilter);
+    el.feedResetCreators.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        clearFeedCreatorFilter();
+      }
+    });
+  }
+  if (el.feedResetTeams) {
+    el.feedResetTeams.addEventListener("click", clearFeedTeamFilter);
+    el.feedResetTeams.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        clearFeedTeamFilter();
+      }
+    });
+  }
+
+  function feedSearchAlwaysOpen() {
+    return !hasFineHover() || NARROW_MQ.matches;
+  }
+
+  function closeFeedSearch({ clear = false } = {}) {
+    if (!el.feedSearchWrap) return;
+    if (feedSearchAlwaysOpen()) {
+      if (clear && el.feedSearch) {
+        el.feedSearch.value = "";
+        renderFeed();
+      }
+      return;
+    }
+    el.feedSearchWrap.classList.remove("search-open");
+    if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
+    if (clear && el.feedSearch) {
+      el.feedSearch.value = "";
+      renderFeed();
+    }
+  }
+
+  function openFeedSearch() {
+    if (!el.feedSearchWrap) return;
+    el.feedSearchWrap.classList.add("search-open");
+    if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      if (el.feedSearch) el.feedSearch.focus({ preventScroll: true });
+    });
+  }
+
+  function syncFeedSearchLayout() {
+    if (!el.feedSearchWrap) return;
+    if (feedSearchAlwaysOpen()) {
+      el.feedSearchWrap.classList.add("search-open", "feed-search-always-open");
+      if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "true");
+    } else {
+      el.feedSearchWrap.classList.remove("feed-search-always-open");
+      if (!(el.feedSearch && el.feedSearch.value.trim())) {
+        el.feedSearchWrap.classList.remove("search-open");
+        if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
+      }
+    }
+  }
+
+  if (el.feedSearchToggle) {
+    el.feedSearchToggle.addEventListener("click", () => {
+      if (feedSearchAlwaysOpen()) return;
+      if (el.feedSearchWrap && el.feedSearchWrap.classList.contains("search-open")) {
+        closeFeedSearch();
+      } else {
+        openFeedSearch();
+      }
     });
   }
 
@@ -5033,9 +6051,75 @@ python3 site/annotate_social.py</pre>
       clearTimeout(feedSearchTimer);
       feedSearchTimer = setTimeout(() => renderFeed(), 120);
     });
+    el.feedSearch.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (feedSearchAlwaysOpen()) {
+          if (el.feedSearch.value) {
+            el.feedSearch.value = "";
+            renderFeed();
+          } else {
+            el.feedSearch.blur();
+          }
+        } else {
+          closeFeedSearch();
+        }
+      }
+    });
   }
 
+  document.addEventListener("click", (e) => {
+    if (feedSearchAlwaysOpen()) return;
+    if (!el.feedSearchWrap || !el.feedSearchWrap.classList.contains("search-open")) return;
+    if (el.feedSearchWrap.contains(e.target)) return;
+    if (el.feedSearch && el.feedSearch.value.trim()) return;
+    closeFeedSearch();
+  });
+
   let searchTimer;
+
+  function closeMobileSearch({ clear = false } = {}) {
+    if (!el.searchWrap) return;
+    el.searchWrap.classList.remove("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    if (clear) {
+      el.search.value = "";
+      state.search = "";
+    }
+  }
+
+  function openMobileSearch() {
+    if (!el.searchWrap) return;
+    el.searchWrap.classList.add("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      el.search.focus({ preventScroll: true });
+    });
+  }
+
+  if (el.searchToggle) {
+    el.searchToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (el.searchWrap.classList.contains("search-open")) closeMobileSearch();
+      else openMobileSearch();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!el.searchWrap) return;
+    if (!el.searchWrap.classList.contains("search-open")) return;
+    if (el.searchWrap.contains(e.target)) return;
+    if (el.search && el.search.value.trim()) return;
+    closeMobileSearch();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!el.searchWrap?.classList.contains("search-open")) return;
+    closeMobileSearch();
+    el.search.blur();
+  });
+
   el.search.addEventListener("input", (e) => {
     clearTimeout(searchTimer);
     const val = e.target.value;
@@ -5043,6 +6127,12 @@ python3 site/annotate_social.py</pre>
       state.search = val;
       renderTable();
     }, 120);
+  });
+
+  el.search.addEventListener("focus", () => {
+    if (el.searchWrap && !el.searchWrap.classList.contains("search-open")) {
+      openMobileSearch();
+    }
   });
 
   function setupDualSlider({
@@ -5341,8 +6431,57 @@ python3 site/annotate_social.py</pre>
     });
   }
 
+  if (el.marketsCompareSeg) {
+    el.marketsCompareSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-markets-compare]");
+      if (!btn || !el.marketsCompareSeg.contains(btn)) return;
+      const mode = btn.dataset.marketsCompare;
+      if (mode !== "current" && mode !== "last" && mode !== "72h") return;
+      if (mode === state.marketsCompare) return;
+      state.marketsCompare = mode;
+      syncMarketsCompareSeg();
+      renderMarkets();
+    });
+  }
+
   function setMarketsSlidersOpen(open) {
     if (!el.marketsControls || !el.marketsSlidersToggle) return;
+    if (!hasFineHover()) {
+      if (open) {
+        openMobileSheetHost({
+          title: "Markets filters",
+          key: "markets-filters",
+          hostEl: el.marketsControls,
+          prepare(host) {
+            host.hidden = false;
+            host.classList.remove("is-collapsed");
+          },
+          cleanup(host) {
+            host.hidden = true;
+            host.classList.add("is-collapsed");
+          },
+        });
+        el.marketsSlidersToggle.classList.add("on");
+        el.marketsSlidersToggle.setAttribute("aria-expanded", "true");
+        el.marketsSlidersToggle.title = "Hide color threshold sliders";
+        el.marketsSlidersToggle.setAttribute("aria-label", "Hide color threshold sliders");
+        requestAnimationFrame(() => {
+          updateMarketsHeatGoalsSlider();
+          updateMarketsHeatCsSlider();
+          syncMarketsCompareSeg();
+        });
+      } else if (mobileSheetKey === "markets-filters") {
+        closeMobileSheet();
+      } else {
+        el.marketsControls.hidden = true;
+        el.marketsControls.classList.add("is-collapsed");
+        el.marketsSlidersToggle.classList.remove("on");
+        el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
+        el.marketsSlidersToggle.title = "Show color threshold sliders";
+        el.marketsSlidersToggle.setAttribute("aria-label", "Show color threshold sliders");
+      }
+      return;
+    }
     el.marketsControls.hidden = !open;
     el.marketsControls.classList.toggle("is-collapsed", !open);
     el.marketsSlidersToggle.classList.toggle("on", open);
@@ -5356,18 +6495,60 @@ python3 site/annotate_social.py</pre>
       requestAnimationFrame(() => {
         updateMarketsHeatGoalsSlider();
         updateMarketsHeatCsSlider();
+        syncMarketsCompareSeg();
       });
     }
   }
 
   if (el.marketsSlidersToggle) {
     el.marketsSlidersToggle.addEventListener("click", () => {
+      if (!hasFineHover()) {
+        setMarketsSlidersOpen(!(mobileSheetOpen && mobileSheetKey === "markets-filters"));
+        return;
+      }
       setMarketsSlidersOpen(el.marketsControls.hidden);
     });
   }
 
   function setScheduleSlidersOpen(open) {
     if (!el.scheduleControls || !el.scheduleSlidersToggle) return;
+    if (!hasFineHover()) {
+      if (open) {
+        openMobileSheetHost({
+          title: "Matchup filters",
+          key: "schedule-filters",
+          hostEl: el.scheduleControls,
+          prepare(host) {
+            host.hidden = false;
+            host.classList.remove("is-collapsed");
+          },
+          cleanup(host) {
+            host.hidden = true;
+            host.classList.add("is-collapsed");
+          },
+        });
+        el.scheduleSlidersToggle.classList.add("on");
+        el.scheduleSlidersToggle.setAttribute("aria-expanded", "true");
+        el.scheduleSlidersToggle.title = "Hide matchup sliders";
+        el.scheduleSlidersToggle.setAttribute("aria-label", "Hide matchup sliders");
+        requestAnimationFrame(() => {
+          updateScheduleGwSlider();
+          updateScheduleEnhancePctSlider();
+          updateScheduleExpectedWeightSlider();
+          updateScheduleEdgeMinSlider();
+        });
+      } else if (mobileSheetKey === "schedule-filters") {
+        closeMobileSheet();
+      } else {
+        el.scheduleControls.hidden = true;
+        el.scheduleControls.classList.add("is-collapsed");
+        el.scheduleSlidersToggle.classList.remove("on");
+        el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
+        el.scheduleSlidersToggle.title = "Show matchup sliders";
+        el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup sliders");
+      }
+      return;
+    }
     el.scheduleControls.hidden = !open;
     el.scheduleControls.classList.toggle("is-collapsed", !open);
     el.scheduleSlidersToggle.classList.toggle("on", open);
@@ -5387,6 +6568,10 @@ python3 site/annotate_social.py</pre>
 
   if (el.scheduleSlidersToggle) {
     el.scheduleSlidersToggle.addEventListener("click", () => {
+      if (!hasFineHover()) {
+        setScheduleSlidersOpen(!(mobileSheetOpen && mobileSheetKey === "schedule-filters"));
+        return;
+      }
       setScheduleSlidersOpen(el.scheduleControls.hidden);
     });
   }
@@ -5402,6 +6587,8 @@ python3 site/annotate_social.py</pre>
     state.minsMax = bounds.mins.max;
     state.search = "";
     el.search.value = "";
+    if (el.searchWrap) el.searchWrap.classList.remove("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     state.hideDeparted = true;
     if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
     setValueMode("total", { rerender: false });
@@ -5522,6 +6709,11 @@ python3 site/annotate_social.py</pre>
     if (isNextSeason()) return;
     state.showNewPrice = !state.showNewPrice;
     syncShowNewPriceUI();
+    showToast({
+      title: state.showNewPrice ? "Enabled" : "Disabled",
+      message: "new season price, Position, Teams",
+      icon: "refresh-ccw-dot",
+    });
     renderTable();
   });
 
@@ -5568,63 +6760,13 @@ python3 site/annotate_social.py</pre>
     }
   });
 
-  // Highlight Top/Bottom % is always on for Statistics; show the slider and
-  // Recalculate switch whenever that page is active.
+  // Highlight Top/Bottom % is always on for Statistics; show the slider
+  // whenever that page is active. Bands always use the full view.
   function syncHighlightUI() {
     el.enhancePctGroup.style.display = state.page === "opta" ? "" : "none";
     if (el.enhancePctHint) {
-      el.enhancePctHint.textContent = state.recalculateRanks
-        ? "of filtered rows"
-        : `of all ${state.view}`;
+      el.enhancePctHint.textContent = `of all ${state.view}`;
     }
-    syncRankRecalculateUI();
-  }
-
-  // One switch, two owners: Statistics always offers it; Rankings always does.
-  // Each page keeps its own value so toggling one never silently rewrites the
-  // other's population.
-  function rankRecalculateOwner() {
-    return state.page === "rankings" ? "rankingsRecalculate" : "recalculateRanks";
-  }
-
-  function syncRankRecalculateUI() {
-    const visible = state.page === "rankings" || state.page === "opta";
-    el.rankRecalculateWrap.style.display = visible ? "" : "none";
-    const on = state[rankRecalculateOwner()];
-    el.rankRecalculateToggle.checked = on;
-    const what = state.page === "rankings" ? "ranks" : "highlights";
-    const label = on
-      ? `Recalculate on: ${what} are measured against the filtered ${state.view} only`
-      : `Recalculate off: ${what} are measured against all ${state.view}`;
-    setTip(el.rankRecalculateWrap, label);
-    el.rankRecalculateToggle.setAttribute("aria-label", label);
-  }
-
-  function syncRankingsPerGwUI() {
-    if (!el.rankingsPerGwWrap || !el.rankingsPerGwToggle) return;
-    const visible = state.page === "rankings";
-    el.rankingsPerGwWrap.style.display = visible ? "" : "none";
-    el.rankingsPerGwToggle.checked = state.rankingsPerGw;
-    const basis = state.view === "teams" ? "gameweeks played" : "appearances";
-    const label = state.rankingsPerGw
-      ? `Per GP on: ranking values are divided by ${basis}`
-      : `Per GP off: ranking values are season totals`;
-    setTip(el.rankingsPerGwWrap, label);
-    el.rankingsPerGwToggle.setAttribute("aria-label", label);
-  }
-
-  el.rankRecalculateToggle.addEventListener("change", () => {
-    state[rankRecalculateOwner()] = el.rankRecalculateToggle.checked;
-    syncRankRecalculateUI();
-    renderTable();
-  });
-
-  if (el.rankingsPerGwToggle) {
-    el.rankingsPerGwToggle.addEventListener("change", () => {
-      state.rankingsPerGw = el.rankingsPerGwToggle.checked;
-      syncRankingsPerGwUI();
-      if (state.page === "rankings") renderRankings();
-    });
   }
 
   el.compareToggle.addEventListener("click", () => {
@@ -5649,6 +6791,26 @@ python3 site/annotate_social.py</pre>
   });
 
   el.sidebarToggle.addEventListener("click", () => {
+    if (!hasFineHover()) {
+      if (mobileSheetOpen && mobileSheetKey === "filters") {
+        closeMobileSheet();
+        return;
+      }
+      openMobileSheetHost({
+        title: "Filters",
+        key: "filters",
+        hostEl: el.sidebar,
+        prepare(host) {
+          host.classList.remove("collapsed");
+        },
+        cleanup(host) {
+          host.classList.add("collapsed");
+        },
+      });
+      el.sidebarToggle.classList.add("on");
+      requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
+      return;
+    }
     const collapsed = el.sidebar.classList.toggle("collapsed");
     el.sidebarToggle.classList.toggle("on", !collapsed);
     if (!collapsed) {
@@ -5657,18 +6819,40 @@ python3 site/annotate_social.py</pre>
   });
 
   // ---------------------------------------------------------------------
-  // Appearance (system → light → dark)
+  // Appearance (device → light → dark). Default is always device/system.
+  // Accent chrome color (tabs, toggles, selection) via --blue-hsl.
   // ---------------------------------------------------------------------
   const THEME_KEY = "fpl-explorer-theme";
+  const ACCENT_KEY = "fpl-explorer-accent";
   const THEME_ORDER = ["system", "light", "dark"];
   const THEME_META = {
-    system: { icon: "monitor", label: "System" },
+    system: { icon: "monitor", label: "Device" },
     light: { icon: "sun", label: "Light" },
     dark: { icon: "moon", label: "Dark" },
   };
+  const ACCENT_OPTIONS = [
+    { id: "blue", label: "Blue", light: "217 91% 60%", dark: "217 91% 60%", swatch: "217 91% 60%" },
+    { id: "teal", label: "Teal", light: "173 80% 36%", dark: "172 66% 50%", swatch: "172 66% 45%" },
+    { id: "violet", label: "Violet", light: "262 72% 50%", dark: "263 70% 65%", swatch: "262 72% 58%" },
+    { id: "rose", label: "Rose", light: "346 77% 50%", dark: "347 77% 60%", swatch: "346 77% 55%" },
+    { id: "amber", label: "Amber", light: "32 95% 44%", dark: "38 92% 50%", swatch: "32 95% 48%" },
+  ];
+  const ACCENT_BY_ID = Object.fromEntries(ACCENT_OPTIONS.map((a) => [a.id, a]));
 
   function currentThemeMode() {
-    return localStorage.getItem(THEME_KEY) || "system";
+    const stored = localStorage.getItem(THEME_KEY);
+    return THEME_ORDER.includes(stored) ? stored : "system";
+  }
+
+  function currentAccentId() {
+    const stored = localStorage.getItem(ACCENT_KEY);
+    return ACCENT_BY_ID[stored] ? stored : "blue";
+  }
+
+  function themePrefersDark(mode = currentThemeMode()) {
+    if (mode === "dark") return true;
+    if (mode === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
   function syncThemeCycleButton(mode) {
@@ -5677,17 +6861,62 @@ python3 site/annotate_social.py</pre>
     const label = `Theme: ${meta.label}`;
     setTip(el.themeCycleBtn, label);
     el.themeCycleBtn.setAttribute("aria-label", label);
+    el.themeCycleBtn.setAttribute("title", label);
     el.themeCycleBtn.innerHTML = iconHTML(meta.icon);
   }
 
+  function syncThemeSeg(mode) {
+    if (!el.themeSeg) return;
+    Array.from(el.themeSeg.querySelectorAll("button[data-theme-mode]")).forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.themeMode === mode);
+    });
+    if (typeof syncSegThumb === "function") syncSegThumb(el.themeSeg, { animate: false });
+  }
+
+  function syncAccentSwatches(id) {
+    if (!el.accentSwatches) return;
+    Array.from(el.accentSwatches.querySelectorAll(".prefs-accent-swatch")).forEach((btn) => {
+      const on = btn.dataset.accent === id;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  }
+
+  function applyAccent(id, { persist = true } = {}) {
+    const accent = ACCENT_BY_ID[id] || ACCENT_BY_ID.blue;
+    const hsl = themePrefersDark() ? accent.dark : accent.light;
+    document.documentElement.style.setProperty("--blue-hsl", hsl);
+    if (persist) {
+      try {
+        localStorage.setItem(ACCENT_KEY, accent.id);
+      } catch {
+        // ignore
+      }
+    }
+    syncAccentSwatches(accent.id);
+  }
+
   function applyTheme(mode) {
-    if (mode === "system") {
+    const next = THEME_ORDER.includes(mode) ? mode : "system";
+    if (next === "system") {
       document.documentElement.removeAttribute("data-theme");
     } else {
-      document.documentElement.setAttribute("data-theme", mode);
+      document.documentElement.setAttribute("data-theme", next);
     }
-    localStorage.setItem(THEME_KEY, mode);
-    syncThemeCycleButton(mode);
+    localStorage.setItem(THEME_KEY, next);
+    syncThemeCycleButton(next);
+    syncThemeSeg(next);
+    applyAccent(currentAccentId(), { persist: false });
+  }
+
+  function buildAccentSwatches() {
+    if (!el.accentSwatches) return;
+    el.accentSwatches.innerHTML = ACCENT_OPTIONS.map(
+      (a) =>
+        `<button type="button" class="prefs-accent-swatch" role="radio"
+          data-accent="${a.id}" title="${a.label}" aria-label="${a.label} accent"
+          style="--swatch-hsl: ${a.swatch}"></button>`
+    ).join("");
   }
 
   if (el.themeCycleBtn) {
@@ -5698,7 +6927,33 @@ python3 site/annotate_social.py</pre>
     });
   }
 
+  if (el.themeSeg) {
+    el.themeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-theme-mode]");
+      if (!btn || !el.themeSeg.contains(btn)) return;
+      applyTheme(btn.dataset.themeMode || "system");
+      btn.blur();
+    });
+  }
+
+  if (el.accentSwatches) {
+    el.accentSwatches.addEventListener("click", (e) => {
+      const btn = e.target.closest(".prefs-accent-swatch");
+      if (!btn || !el.accentSwatches.contains(btn)) return;
+      applyAccent(btn.dataset.accent || "blue");
+    });
+  }
+
+  const systemThemeMq = window.matchMedia("(prefers-color-scheme: dark)");
+  const onSystemThemeChange = () => {
+    if (currentThemeMode() === "system") applyAccent(currentAccentId(), { persist: false });
+  };
+  if (systemThemeMq.addEventListener) systemThemeMq.addEventListener("change", onSystemThemeChange);
+  else if (systemThemeMq.addListener) systemThemeMq.addListener(onSystemThemeChange);
+
+  buildAccentSwatches();
   applyTheme(currentThemeMode());
+  applyAccent(currentAccentId());
 
   // ---------------------------------------------------------------------
   // TEMP font lab — swap --sans / --mono across the app while evaluating pairs
@@ -5774,6 +7029,14 @@ python3 site/annotate_social.py</pre>
     });
   }
 
+  // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
+  try {
+    localStorage.removeItem("fpl-explorer-ui-scale");
+  } catch {
+    /* private browsing */
+  }
+  document.documentElement.style.removeProperty("--ui-scale");
+
   function applyClockFormat(value) {
     clockFormat = value === "24" ? "24" : "12";
     try {
@@ -5797,39 +7060,109 @@ python3 site/annotate_social.py</pre>
 
   function setPrefsOpen(open) {
     if (!el.prefsPanel || !el.prefsBtn) return;
+    if (!hasFineHover()) {
+      if (open) {
+        openMobileSheetHost({
+          title: "Preferences",
+          key: "prefs",
+          hostEl: el.prefsPanel,
+          prepare(host) {
+            host.classList.add("open");
+          },
+          cleanup(host) {
+            host.classList.remove("open");
+          },
+        });
+        el.prefsBtn.setAttribute("aria-expanded", "true");
+      } else if (mobileSheetKey === "prefs") {
+        closeMobileSheet();
+      } else {
+        el.prefsPanel.classList.remove("open");
+        el.prefsBtn.setAttribute("aria-expanded", "false");
+      }
+      return;
+    }
     el.prefsPanel.classList.toggle("open", open);
     el.prefsBtn.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
-  function setColumnsOpen(open) {
-    if (!el.columnsPanel || !el.columnsBtn) return;
-    el.columnsPanel.classList.toggle("open", open);
-    el.columnsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  function syncColumnsPanelHost() {
+    if (!el.columnsList) return;
+    const inFilters = columnsLiveInFilters();
+    const host = inFilters ? el.sidebarColumnsHost : el.columnsSidebar;
+    if (host && el.columnsList.parentElement !== host) {
+      host.appendChild(el.columnsList);
+    }
+    if (el.sidebarColumnsHost) {
+      el.sidebarColumnsHost.hidden = !inFilters || state.page !== "opta";
+    }
+    if (el.columnsBtn) {
+      el.columnsBtn.style.display =
+        state.page === "opta" && !inFilters ? "" : "none";
+      if (inFilters) {
+        el.columnsBtn.setAttribute("aria-expanded", "false");
+        el.columnsBtn.classList.remove("on");
+      }
+    }
+    if (el.columnsSidebar) {
+      el.columnsSidebar.style.display =
+        state.page === "opta" && !inFilters ? "" : "none";
+      if (inFilters) el.columnsSidebar.classList.add("collapsed");
+    }
+    // Close a leftover Columns sheet if the layout flipped to in-filters.
+    if (inFilters && mobileSheetOpen && mobileSheetKey === "columns") {
+      closeMobileSheet();
+    }
   }
 
-  el.columnsBtn.addEventListener("click", () => {
-    const open = !el.columnsPanel.classList.contains("open");
-    setPrefsOpen(false);
-    setColumnsOpen(open);
+  function setColumnsOpen(open) {
+    if (!el.columnsSidebar || !el.columnsBtn) return;
+    // Narrow / sheet: columns live inside Filters — no separate panel.
+    if (columnsLiveInFilters()) {
+      el.columnsSidebar.classList.add("collapsed");
+      el.columnsBtn.setAttribute("aria-expanded", "false");
+      el.columnsBtn.classList.remove("on");
+      if (mobileSheetOpen && mobileSheetKey === "columns") closeMobileSheet();
+      return;
+    }
+    el.columnsSidebar.classList.toggle("collapsed", !open);
+    el.columnsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    el.columnsBtn.classList.toggle("on", open);
+  }
+
+  if (el.columnsBtn) {
+    el.columnsBtn.addEventListener("click", () => {
+      if (columnsLiveInFilters()) return;
+      setPrefsOpen(false);
+      setColumnsOpen(el.columnsSidebar.classList.contains("collapsed"));
+    });
+  }
+
+  function bindMqChange(mq, fn) {
+    if (!mq) return;
+    if (typeof mq.addEventListener === "function") mq.addEventListener("change", fn);
+    else if (typeof mq.addListener === "function") mq.addListener(fn);
+  }
+  bindMqChange(FINE_HOVER_MQ, () => {
+    syncPointerMode();
+    syncColumnsPanelHost();
   });
+  bindMqChange(NARROW_MQ, syncColumnsPanelHost);
+  bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
+  syncColumnsPanelHost();
 
   if (el.prefsBtn && el.prefsPanel) {
     el.prefsBtn.addEventListener("click", () => {
-      const open = !el.prefsPanel.classList.contains("open");
+      const open = hasFineHover()
+        ? !el.prefsPanel.classList.contains("open")
+        : !(mobileSheetOpen && mobileSheetKey === "prefs");
       setColumnsOpen(false);
       setPrefsOpen(open);
     });
   }
 
   document.addEventListener("click", (e) => {
-    if (
-      el.columnsPanel &&
-      !el.columnsPanel.contains(e.target) &&
-      el.columnsBtn &&
-      !el.columnsBtn.contains(e.target)
-    ) {
-      setColumnsOpen(false);
-    }
+    if (e.target.closest && e.target.closest("#mobile-sheet")) return;
     if (
       el.prefsPanel &&
       !el.prefsPanel.contains(e.target) &&
@@ -5880,16 +7213,17 @@ python3 site/annotate_social.py</pre>
       return;
     }
 
-    const cRect = container.getBoundingClientRect();
-    const aRect = active.getBoundingClientRect();
-    const x = aRect.left - cRect.left;
-    const y = aRect.top - cRect.top;
+    // Use offset* (layout CSS px) — getBoundingClientRect drifts under html zoom.
+    const x = active.offsetLeft;
+    const y = active.offsetTop;
+    const w = active.offsetWidth;
+    const h = active.offsetHeight;
 
     if (!animate || !thumb.classList.contains("is-ready")) {
       thumb.classList.add("no-motion");
     }
-    thumb.style.width = `${aRect.width}px`;
-    thumb.style.height = `${aRect.height}px`;
+    thumb.style.width = `${w}px`;
+    thumb.style.height = `${h}px`;
     thumb.style.transform = `translate(${x}px, ${y}px)`;
     thumb.classList.add("is-ready");
     if (thumb.classList.contains("no-motion")) {
@@ -5908,6 +7242,11 @@ python3 site/annotate_social.py</pre>
   // ---------------------------------------------------------------------
   async function init() {
     buildStaticFilters();
+    buildFeedTypeChips();
+    buildFeedCreatorChips();
+    buildFeedTeamChips();
+    syncFeedRangeSeg();
+    syncFeedSearchLayout();
     upgradeNativeTitles();
     renderPriceIssuesPanel();
     await restoreManagerId();
@@ -5924,7 +7263,15 @@ python3 site/annotate_social.py</pre>
       const ro = new ResizeObserver(() => syncAllSegThumbs({ animate: false }));
       $$(".tabs, .segmented").forEach((elSeg) => ro.observe(elSeg));
     }
-    window.addEventListener("resize", () => syncAllSegThumbs({ animate: false }));
+    window.addEventListener("resize", () => {
+      syncAllSegThumbs({ animate: false });
+      syncFeedSearchLayout();
+    });
+    if (typeof NARROW_MQ.addEventListener === "function") {
+      NARROW_MQ.addEventListener("change", syncFeedSearchLayout);
+    } else if (typeof NARROW_MQ.addListener === "function") {
+      NARROW_MQ.addListener(syncFeedSearchLayout);
+    }
   }
 
   init();

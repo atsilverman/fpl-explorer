@@ -397,13 +397,15 @@ def match_new_season_prices(players_combined):
 
     Returns (results, issues, meta):
       results: {pid: {price2627, priceDelta, newTeam, newPosition, status,
-        penaltiesOrder, directFreekicksOrder, cornersOrder, code}}
+        penaltiesOrder, directFreekicksOrder, cornersOrder, code, webName}}
         the three *Order fields are the club's set-piece pecking order
         (1 = first choice) straight off the matched element, None if the
         player isn't on that list at all. `code` is the matched element's
         stable FPL code — also used to join against
         snapshots/history_past_2025-26.json (see apply_last_season_api_stats()).
-        status is one of "ok" (name/team/position all agree), "transfer"
+        `webName` is the element's display string; main() copies it onto
+        `name` after matching so the UI matches the FPL API (Hub CSV names
+        remain the join key / pid basis). status is one of "ok" (name/team/position all agree), "transfer"
         (unique name match, team differs), "reclassified" (unique name
         match, position differs — can combine with "transfer"), or absent
         entirely if there's truly no 2026/27 price.
@@ -498,6 +500,9 @@ def match_new_season_prices(players_combined):
             "directFreekicksOrder": e.get("direct_freekicks_order"),
             "cornersOrder": e.get("corners_and_indirect_freekicks_order"),
             "code": e["code"],
+            # Display rename only — applied after match so Hub CSV strings
+            # stay the join key. Player `id` keeps the Hub-based pid.
+            "webName": e["web_name"],
         }
 
     meta = {
@@ -657,11 +662,22 @@ def main():
     teams = merge_teams(th, ta)
 
     price_matches, price_issues, price_meta = match_new_season_prices(players["combined"])
+    renamed = 0
     for split in ("home", "away", "combined"):
         for rec in players[split]:
             m = price_matches.get(rec["id"])
-            if m:
-                rec.update(m)
+            if not m:
+                continue
+            web_name = m.get("webName")
+            payload = {k: v for k, v in m.items() if k != "webName"}
+            rec.update(payload)
+            # Align display with FPL API once we have a unique code match
+            # (team/position already used as validators in the matcher).
+            # Unmatched / ambiguous rows keep the Hub CSV name.
+            if web_name:
+                if split == "combined" and rec.get("name") != web_name:
+                    renamed += 1
+                rec["name"] = web_name
 
     # Season-total stats straight from the FPL API replace our CSV numbers
     # for direct-overlap fields and add API-only fields (combined view only —
@@ -755,6 +771,10 @@ def main():
             f"2026/27 prices: {price_meta['matched']}/{price_meta['totalPlayers']} matched from "
             f"{price_meta['source']} ({price_meta['unmatched']} no longer in the elements list, "
             f"{price_meta['ambiguous']} ambiguous — needs manual resolution in site/price_overrides.json)"
+        )
+        print(
+            f"Display names: {renamed} renamed to FPL web_name "
+            f"({price_meta['matched'] - renamed} already matched the API string)"
         )
         if price_issues:
             print("Ambiguous matches needing review:")

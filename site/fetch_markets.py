@@ -30,6 +30,9 @@ ENV_PATH = ROOT / ".env"
 OUT_PATH = SITE / "markets_data.js"
 API_BASE = "https://api.the-odds-api.com/v4"
 SPORT = "soccer_epl"
+# Keep enough snapshots for Last 72 hr compare (daily refresh + buffer).
+HISTORY_MAX_AGE_HOURS = 84
+HISTORY_MAX_SNAPSHOTS = 16
 
 # Prefer sharp / exchange books for the primary line.
 BOOK_PRIORITY = (
@@ -418,6 +421,92 @@ def write_markets_js(payload: dict) -> None:
     OUT_PATH.write_text(f"window.FPL_MARKETS = {body};\n", encoding="utf-8")
 
 
+def load_existing_markets() -> dict | None:
+    if not OUT_PATH.is_file():
+        return None
+    text = OUT_PATH.read_text(encoding="utf-8").strip()
+    marker = "window.FPL_MARKETS = "
+    if not text.startswith(marker):
+        return None
+    raw = text[len(marker) :]
+    if raw.endswith(";"):
+        raw = raw[:-1]
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def slim_fixture(fx: dict) -> dict | None:
+    fid = fx.get("id")
+    if not fid:
+        return None
+    goals = fx.get("goals") or {}
+    cs = fx.get("cleanSheet") or {}
+    return {
+        "id": fid,
+        "goals": {
+            "home": goals.get("home"),
+            "away": goals.get("away"),
+        },
+        "cleanSheet": {
+            "home": cs.get("home"),
+            "away": cs.get("away"),
+        },
+    }
+
+
+def parse_iso_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def build_history(prev: dict | None, new_generated_at: str) -> list[dict]:
+    """Roll previous current fixtures into history, prune past the compare window."""
+    history: list[dict] = []
+    if prev:
+        for snap in prev.get("history") or []:
+            if isinstance(snap, dict) and snap.get("generatedAt") and snap.get("fixtures"):
+                history.append(snap)
+        prev_at = prev.get("generatedAt")
+        prev_fixtures = prev.get("fixtures")
+        if (
+            prev_at
+            and prev_at != new_generated_at
+            and isinstance(prev_fixtures, list)
+            and prev_fixtures
+        ):
+            slim = [s for s in (slim_fixture(fx) for fx in prev_fixtures) if s]
+            if slim:
+                # Replace same-timestamp entry if re-fetching; else append.
+                history = [h for h in history if h.get("generatedAt") != prev_at]
+                history.append({"generatedAt": prev_at, "fixtures": slim})
+
+    now = datetime.now(timezone.utc)
+    cutoff = now.timestamp() - HISTORY_MAX_AGE_HOURS * 3600
+    pruned: list[dict] = []
+    for snap in history:
+        dt = parse_iso_utc(snap.get("generatedAt"))
+        if dt is None or dt.timestamp() < cutoff:
+            continue
+        pruned.append(snap)
+    pruned.sort(key=lambda s: s.get("generatedAt") or "")
+    if len(pruned) > HISTORY_MAX_SNAPSHOTS:
+        pruned = pruned[-HISTORY_MAX_SNAPSHOTS:]
+    return pruned
+
+
 def main() -> int:
     api_key = os.environ.get("ODDS_API_KEY", "").strip()
     if not api_key:
@@ -467,8 +556,12 @@ def main() -> int:
     used = headers.get("x-requests-used")
     last_cost = headers.get("x-requests-last")
 
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    prev = load_existing_markets()
+    history = build_history(prev, generated_at)
+
     payload = {
-        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generatedAt": generated_at,
         "meta": {
             "sport": SPORT,
             "regions": "uk,eu",
@@ -480,13 +573,15 @@ def main() -> int:
             "requestsLast": last_cost,
             "eventsRaw": len(data),
             "eventsMapped": len(fixtures),
+            "historySnapshots": len(history),
         },
         "fixtures": fixtures,
+        "history": history,
     }
     write_markets_js(payload)
     print(
         f"Wrote {OUT_PATH.name}: {len(fixtures)} fixtures "
-        f"(raw {len(data)}; remaining credits: {remaining})"
+        f"(raw {len(data)}; history {len(history)}; remaining credits: {remaining})"
     )
     return 0
 
