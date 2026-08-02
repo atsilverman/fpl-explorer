@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=275" />
+<link rel="stylesheet" href="styles.css?v=287" />
 <script>
 (() => {
   try {
@@ -251,10 +251,15 @@
       <svg class="icon" aria-hidden="true"><use href="#i-rss"/></svg>
       Feed
     </button>
-    <button id="page-markets" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
-      Markets
-    </button>
+    <div class="page-tab-dropdown" id="markets-tab-wrap">
+      <button id="page-markets" class="page-tab-btn" type="button"
+        aria-haspopup="true" aria-expanded="false" aria-controls="markets-view-menu">
+        <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
+        Markets
+        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </button>
+      <div id="markets-view-menu" class="dropdown-panel page-tab-menu" role="menu" aria-label="Matchup card view"></div>
+    </div>
   </nav>
   </div>
 
@@ -399,12 +404,24 @@
           <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
         </button>
       </div>
+      <div class="dropdown-wrap expected-cat-toolbar markets-view-toolbar" id="markets-view-toolbar" hidden>
+        <button id="markets-view-toolbar-btn" class="ghost-btn expected-cat-btn" type="button"
+          title="Matchup card view" aria-label="Matchup card view" aria-haspopup="true" aria-expanded="false">
+          <span id="markets-view-toolbar-label" class="expected-cat-label">Goals and CS%</span>
+          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+        </button>
+      </div>
+      <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
+        title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls" hidden>
+        <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
+      </button>
       <div class="search-wrap" id="search-wrap">
         <button id="search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button" title="Search" aria-label="Search" aria-expanded="false" aria-controls="search-input">
           <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
         </button>
         <svg class="icon search-field-icon" aria-hidden="true"><use href="#i-search"/></svg>
         <input id="search-input" type="search" placeholder="Search player or team…" autocomplete="off" enterkeyhint="search" />
+        <button type="button" id="search-clear-btn" class="search-clear-btn" hidden>Clear</button>
       </div>
     </div>
   </div>
@@ -423,12 +440,16 @@
       </button>
       <svg class="icon search-field-icon" aria-hidden="true"><use href="#i-search"/></svg>
       <input id="feed-search-input" type="search" placeholder="Search player or team…" autocomplete="off" aria-label="Search players or teams in feed" enterkeyhint="search" />
+      <button type="button" id="feed-search-clear-btn" class="search-clear-btn" hidden>Clear</button>
     </div>
   </div>
 </div>
 
 <div class="layout">
   <aside class="sidebar collapsed" id="sidebar">
+    <div class="filters-reset-row" id="filters-reset-row" hidden>
+      <button type="button" class="reset filters-reset-btn" id="reset-filters">Reset</button>
+    </div>
     <div class="filter-group" id="value-mode-group">
       <h3>Values</h3>
       <div class="segmented segmented-block" id="value-mode-seg">
@@ -517,13 +538,6 @@
         <span class="check-row-line"><input type="checkbox" id="show-departed-check" /> Include departed players</span>
         <span class="check-row-note">Not found in the 2026/27 FPL list (e.g. Salah) — hidden by default</span>
       </label>
-    </div>
-
-    <div class="filter-group">
-      <h3>
-        Reset
-        <span class="reset" id="reset-filters">clear all filters</span>
-      </h3>
     </div>
 
     <!-- On narrow / sheet layouts, #columns-list is moved here so column
@@ -757,11 +771,7 @@
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets<button class="page-info-btn" type="button" aria-label="How Markets works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
           </div>
-          <div class="markets-header-actions">
-            <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
-              title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls">
-              <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
-            </button>
+          <div class="markets-header-actions" id="markets-header-actions">
           </div>
         </div>
 
@@ -850,6 +860,7 @@
     </div>
     <div class="mobile-sheet-header" data-sheet-drag>
       <h3 id="mobile-sheet-title" class="mobile-sheet-title"></h3>
+      <button type="button" class="ghost-btn mobile-sheet-reset" id="mobile-sheet-reset" hidden>Reset</button>
       <button type="button" class="ghost-btn icon-only-btn mobile-sheet-close" data-sheet-dismiss aria-label="Close">
         <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
       </button>
@@ -858,13 +869,9 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<button type="button" id="search-clear-fab" class="search-clear-fab" hidden aria-label="Clear search">
-  <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-  <span>Clear search</span>
-</button>
 <script src="data.js?v=24"></script>
 <script src="social_data.js?v=11"></script>
 <script src="markets_data.js?v=3"></script>
-<script src="app.js?v=274"></script>
+<script src="app.js?v=287"></script>
 </body>
 </html>

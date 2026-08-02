@@ -416,6 +416,7 @@
     marketsHeatGoals: MARKETS_HEAT_DEFAULT,
     marketsHeatCs: MARKETS_HEAT_DEFAULT,
     marketsCompare: "current", // current | last | 72h
+    marketsCardView: "stats", // stats (G+CS%) | scoreline
   };
 
   const MAX_COMPARE = 5;
@@ -493,6 +494,11 @@
     pageSchedule: $("#page-schedule"),
     pageFeed: $("#page-feed"),
     pageMarkets: $("#page-markets"),
+    marketsTabWrap: $("#markets-tab-wrap"),
+    marketsViewMenu: $("#markets-view-menu"),
+    marketsViewToolbar: $("#markets-view-toolbar"),
+    marketsViewToolbarBtn: $("#markets-view-toolbar-btn"),
+    marketsViewToolbarLabel: $("#markets-view-toolbar-label"),
     subtoolbar: $("#subtoolbar"),
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
@@ -533,6 +539,7 @@
     marketsHeatCsFill: $("#markets-heat-cs-fill"),
     marketsHeatCsLabel: $("#markets-heat-cs-label"),
     marketsCompareSeg: $("#markets-compare-seg"),
+    marketsHeaderActions: $("#markets-header-actions"),
     scheduleScatter: $("#schedule-scatter"),
     scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
     uiTooltip: $("#ui-tooltip"),
@@ -540,7 +547,10 @@
     mobileSheetTitle: $("#mobile-sheet-title"),
     mobileSheetBody: $("#mobile-sheet-body"),
     mobileSheetPanel: document.querySelector("#mobile-sheet .mobile-sheet-panel"),
-    searchClearFab: $("#search-clear-fab"),
+    mobileSheetReset: $("#mobile-sheet-reset"),
+    filtersResetRow: $("#filters-reset-row"),
+    searchClearBtn: $("#search-clear-btn"),
+    feedSearchClearBtn: $("#feed-search-clear-btn"),
     scheduleRangeLabel: $("#schedule-range-label"),
     scheduleGwMin: $("#schedule-gw-min"),
     scheduleGwMax: $("#schedule-gw-max"),
@@ -694,6 +704,65 @@
   function syncFilterChipUI() {
     $$("#pos-filters .chip").forEach((c) => c.classList.toggle("active", state.posFilter.has(c.dataset.pos)));
     $$("#team-filters .chip").forEach((c) => c.classList.toggle("active", state.teamFilter.has(c.dataset.team)));
+    syncFiltersResetUI();
+  }
+
+  function defaultEnhancePct() {
+    return state.view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
+  }
+
+  function filtersAreDirty() {
+    if (state.posFilter.size) return true;
+    if (state.teamFilter.size) return true;
+    if (state.search.trim()) return true;
+    if (state.priceMin !== defaultMinPrice() || state.priceMax !== bounds.price.max) return true;
+    if (state.minsMin !== defaultMinMinutes() || state.minsMax !== bounds.mins.max) return true;
+    if (!state.hideDeparted) return true;
+    if (state.valueMode !== "total") return true;
+    if (state.split !== "combined") return true;
+    if (state.enhancePct !== defaultEnhancePct()) return true;
+    if (state.page === "opta" && state.hiddenCols.size) return true;
+    return false;
+  }
+
+  function syncFiltersResetUI() {
+    const dirty = filtersAreDirty();
+    const sheetFilters = mobileSheetOpen && mobileSheetKey === "filters";
+    if (el.mobileSheetReset) {
+      el.mobileSheetReset.hidden = !(sheetFilters && dirty);
+    }
+    if (el.filtersResetRow) {
+      // Sheet header owns Reset while Filters is hosted; otherwise top of sidebar.
+      el.filtersResetRow.hidden = !dirty || sheetFilters;
+    }
+  }
+
+  function resetFiltersToDefault() {
+    state.posFilter.clear();
+    state.teamFilter.clear();
+    state.priceMin = defaultMinPrice();
+    state.priceMax = bounds.price.max;
+    state.minsMin = defaultMinMinutes();
+    state.minsMax = bounds.mins.max;
+    state.search = "";
+    if (el.search) el.search.value = "";
+    if (el.searchWrap) el.searchWrap.classList.remove("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    syncSearchClearBtns();
+    state.hideDeparted = true;
+    if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
+    setValueMode("total", { rerender: false });
+    state.split = "combined";
+    $$("#split-seg button").forEach((b) => b.classList.toggle("active", b.dataset.split === "combined"));
+    syncSegThumb(el.splitSeg);
+    state.enhancePct = defaultEnhancePct();
+    state.hiddenCols = new Set();
+    updateEnhancePctSlider();
+    updatePriceSlider();
+    updateMinsSlider();
+    syncFilterChipUI();
+    renderColumnsPanel();
+    renderTable();
   }
 
   // ---------------------------------------------------------------------
@@ -1524,6 +1593,9 @@
     if (el.expectedCatBtn && closingKey === "expected-cats") {
       el.expectedCatBtn.setAttribute("aria-expanded", "false");
     }
+    if (el.marketsViewToolbarBtn && closingKey === "markets-view") {
+      el.marketsViewToolbarBtn.setAttribute("aria-expanded", "false");
+    }
     if (el.feedFiltersToggle && closingKey === "feed-filters") {
       el.feedFiltersToggle.setAttribute("aria-expanded", "false");
       const active = feedFiltersActive();
@@ -1543,8 +1615,10 @@
         el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
         el.mobileSheetTitle.textContent = "";
       }
+      if (el.mobileSheetReset) el.mobileSheetReset.hidden = true;
     }, 280);
-    syncSearchClearFab();
+    syncSearchClearBtns();
+    syncFiltersResetUI();
   }
 
   function beginMobileSheetShell({ title = "", titleHtml = "", key = null } = {}) {
@@ -1612,7 +1686,8 @@
     el.mobileSheet.classList.add("is-open");
     // Ignore backdrop/X dismiss from the same gesture that opened the sheet.
     sheetIgnoreDismissUntil = Date.now() + 450;
-    syncSearchClearFab();
+    syncSearchClearBtns();
+    syncFiltersResetUI();
     return true;
   }
 
@@ -1907,6 +1982,7 @@
     if (state.page === "expected") renderExpected();
     if (state.page === "rankings") renderRankings();
     bindAllNameColumnSimplifies();
+    syncFiltersResetUI();
   }
 
   // ---------------------------------------------------------------------
@@ -3420,12 +3496,16 @@
       groups.get(g).push(c);
     });
     el.columnsList.innerHTML = "";
+    el.columnsList.className = "columns-list";
     groupOrder.forEach((g) => {
-      const section = document.createElement("div");
-      section.className = "filter-group";
+      const section = document.createElement("section");
+      section.className = "columns-section";
       const heading = document.createElement("h3");
-      heading.textContent = g;
+      heading.className = "columns-section-label";
+      heading.innerHTML = `<span>${escapeHtml(g)}</span>`;
       section.appendChild(heading);
+      const grid = document.createElement("div");
+      grid.className = "columns-switch-grid";
       groups.get(g).forEach((c) => {
         const row = document.createElement("label");
         row.className = "settings-switch-row";
@@ -3449,8 +3529,9 @@
         row.appendChild(text);
         row.appendChild(input);
         row.appendChild(track);
-        section.appendChild(row);
+        grid.appendChild(row);
       });
+      section.appendChild(grid);
       el.columnsList.appendChild(section);
     });
   }
@@ -5222,6 +5303,84 @@
     </div>`;
   }
 
+  // A/B graduated: every matchup uses a Poisson score matrix in Scoreline view.
+  const MARKETS_SCORE_MATRIX_MAX = 4;
+
+  function poissonPmf(k, lam) {
+    const L = Math.max(0, Number(lam) || 0);
+    if (L <= 0) return k === 0 ? 1 : 0;
+    let fact = 1;
+    for (let i = 2; i <= k; i++) fact *= i;
+    return Math.exp(-L) * Math.pow(L, k) / fact;
+  }
+
+  function marketsScoreMatrixHTML(fx) {
+    const lh = Number(fx.goals?.home);
+    const la = Number(fx.goals?.away);
+    if (!Number.isFinite(lh) || !Number.isFinite(la)) {
+      return `<div class="markets-scores-empty">—</div>`;
+    }
+    const maxG = MARKETS_SCORE_MATRIX_MAX;
+    const cells = [];
+    let peak = 0;
+    for (let i = 0; i <= maxG; i++) {
+      for (let j = 0; j <= maxG; j++) {
+        const p = poissonPmf(i, lh) * poissonPmf(j, la);
+        if (p > peak) peak = p;
+        cells.push({ i, j, p });
+      }
+    }
+    const homeCode = fx.home?.code || "H";
+    const awayCode = fx.away?.code || "A";
+    const homeBadge =
+      badgeHTML(homeCode, "markets-score-matrix-badge") ||
+      `<span class="markets-score-matrix-code">${escapeHtml(homeCode)}</span>`;
+    const awayBadge =
+      badgeHTML(awayCode, "markets-score-matrix-badge") ||
+      `<span class="markets-score-matrix-code">${escapeHtml(awayCode)}</span>`;
+
+    let xNums = "";
+    for (let j = 0; j <= maxG; j++) {
+      xNums += `<span class="markets-score-matrix-x">${j}</span>`;
+    }
+
+    let grid = "";
+    for (let i = 0; i <= maxG; i++) {
+      grid += `<span class="markets-score-matrix-y">${i}</span>`;
+      for (let j = 0; j <= maxG; j++) {
+        const cell = cells[i * (maxG + 1) + j];
+        const pct = cell.p * 100;
+        const intensity = peak > 0 ? cell.p / peak : 0;
+        const hot = pct >= 1.5;
+        grid += `<span class="markets-score-matrix-cell${hot ? " is-hot" : ""}" style="--msm-p:${intensity.toFixed(
+          3
+        )}" title="${i}-${j}: ${pct.toFixed(1)}%"><span class="msm-pct">${
+          pct < 0.5 ? "·" : pct.toFixed(0) + "%"
+        }</span></span>`;
+      }
+    }
+
+    return `<div class="markets-score-matrix" role="img" aria-label="Exact-score odds matrix, ${escapeHtml(
+      homeCode
+    )} rows vs ${escapeHtml(awayCode)} columns">
+      <div class="markets-score-matrix-x-head">
+        <span class="markets-score-matrix-pad" aria-hidden="true"></span>
+        <div class="markets-score-matrix-x-block">
+          <span class="markets-score-matrix-axis-label markets-score-matrix-x-badge" title="${escapeHtml(
+            fx.away?.name || awayCode
+          )} goals">${awayBadge}<span class="markets-score-matrix-team">${escapeHtml(awayCode)}</span></span>
+          <div class="markets-score-matrix-x-nums">${xNums}</div>
+        </div>
+      </div>
+      <div class="markets-score-matrix-body">
+        <span class="markets-score-matrix-axis-label markets-score-matrix-y-badge" title="${escapeHtml(
+          fx.home?.name || homeCode
+        )} goals">${homeBadge}<span class="markets-score-matrix-team">${escapeHtml(homeCode)}</span></span>
+        <div class="markets-score-matrix-grid">${grid}</div>
+      </div>
+    </div>`;
+  }
+
   function marketsCompareHours() {
     if (state.marketsCompare === "72h") return 72;
     return 0;
@@ -5360,6 +5519,158 @@
     return `<div class="markets-divider" role="heading" aria-level="3"><span>${escapeHtml(label)}</span></div>`;
   }
 
+  function marketsCardViews() {
+    return [
+      { key: "stats", label: "Goals and CS%" },
+      { key: "scoreline", label: "Scoreline" },
+    ];
+  }
+
+  function currentMarketsCardView() {
+    const views = marketsCardViews();
+    return views.find((v) => v.key === state.marketsCardView) || views[0];
+  }
+
+  function setMarketsCardView(key, { rerender = true } = {}) {
+    const views = marketsCardViews();
+    if (!views.some((v) => v.key === key)) return;
+    if (state.marketsCardView === key) return;
+    state.marketsCardView = key;
+    syncMarketsViewControls();
+    if (rerender) renderMarkets();
+  }
+
+  function syncMarketsViewControls() {
+    const view = currentMarketsCardView();
+    const label = view.label;
+    const sheetOpen = mobileSheetOpen && mobileSheetKey === "markets-view";
+    const marketsMobile = preferMobileSheet() && state.page === "markets";
+    const marketsDesktop = !preferMobileSheet() && state.page === "markets";
+    if (el.pageMarkets) {
+      el.pageMarkets.setAttribute(
+        "aria-expanded",
+        el.marketsTabWrap?.classList.contains("open") ? "true" : "false"
+      );
+    }
+    if (el.marketsViewToolbarLabel) el.marketsViewToolbarLabel.textContent = label;
+    if (el.marketsViewToolbarBtn) {
+      el.marketsViewToolbarBtn.title = label;
+      el.marketsViewToolbarBtn.setAttribute("aria-label", `Matchup card view: ${label}`);
+      el.marketsViewToolbarBtn.setAttribute("aria-expanded", sheetOpen ? "true" : "false");
+    }
+    if (el.marketsViewToolbar) {
+      el.marketsViewToolbar.hidden = !marketsMobile;
+    }
+    // Sliders: desktop header; mobile toolbar immediately right of the view dropdown.
+    if (el.marketsSlidersToggle) {
+      if (marketsMobile && el.marketsViewToolbar) {
+        if (el.marketsSlidersToggle.previousElementSibling !== el.marketsViewToolbar) {
+          el.marketsViewToolbar.after(el.marketsSlidersToggle);
+        }
+        el.marketsSlidersToggle.hidden = false;
+      } else if (marketsDesktop && el.marketsHeaderActions) {
+        if (el.marketsSlidersToggle.parentElement !== el.marketsHeaderActions) {
+          el.marketsHeaderActions.appendChild(el.marketsSlidersToggle);
+        }
+        el.marketsSlidersToggle.hidden = false;
+      } else {
+        el.marketsSlidersToggle.hidden = true;
+      }
+    }
+    // Keep Markets mobile chrome in sync on resize / pointer changes.
+    if (el.subtoolbar && state.page === "markets") {
+      el.subtoolbar.style.display = preferMobileSheet() ? "" : "none";
+      el.subtoolbar.classList.toggle("is-markets-mobile", preferMobileSheet());
+      if (el.statsToolbarStart) el.statsToolbarStart.style.display = "none";
+      if (el.statsToolbarActions) {
+        el.statsToolbarActions.style.display = preferMobileSheet() ? "" : "none";
+      }
+    }
+    buildMarketsViewMenu();
+  }
+
+  function clearMarketsViewMenuPosition() {
+    if (!el.marketsViewMenu) return;
+    el.marketsViewMenu.classList.remove("is-fixed");
+    el.marketsViewMenu.style.left = "";
+    el.marketsViewMenu.style.top = "";
+    el.marketsViewMenu.style.minWidth = "";
+  }
+
+  function positionMarketsViewMenuFixed() {
+    if (!el.marketsViewMenu || !el.pageMarkets) return;
+    const r = el.pageMarkets.getBoundingClientRect();
+    const menuWidth = Math.max(148, el.marketsViewMenu.offsetWidth || 148);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8));
+    el.marketsViewMenu.classList.add("is-fixed");
+    el.marketsViewMenu.style.left = `${left}px`;
+    el.marketsViewMenu.style.top = `${r.bottom + 6}px`;
+    el.marketsViewMenu.style.minWidth = `${Math.max(menuWidth, r.width)}px`;
+  }
+
+  function setMarketsViewMenuOpen(open) {
+    if (!el.marketsTabWrap || !el.pageMarkets) return;
+    el.marketsTabWrap.classList.toggle("open", open);
+    el.pageMarkets.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      if (!hasFineHover() || window.matchMedia("(max-width: 720px)").matches) {
+        requestAnimationFrame(() => {
+          positionMarketsViewMenuFixed();
+          requestAnimationFrame(positionMarketsViewMenuFixed);
+        });
+      } else {
+        clearMarketsViewMenuPosition();
+      }
+    } else {
+      clearMarketsViewMenuPosition();
+    }
+  }
+
+  function buildMarketsViewMenu() {
+    if (!el.marketsViewMenu) return;
+    const views = marketsCardViews();
+    const active = currentMarketsCardView();
+    el.marketsViewMenu.innerHTML = "";
+    views.forEach((v) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "menuitem");
+      btn.className = "page-tab-menu-item";
+      btn.textContent = v.label;
+      btn.classList.toggle("active", v.key === active.key);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setMarketsViewMenuOpen(false);
+        setMarketsCardView(v.key);
+      });
+      el.marketsViewMenu.appendChild(btn);
+    });
+  }
+
+  function openMarketsViewSheet() {
+    const views = marketsCardViews();
+    const active = currentMarketsCardView();
+    const html = `<div class="mobile-sheet-cat-list" role="menu" aria-label="Matchup card view">${views
+      .map(
+        (v) =>
+          `<button type="button" role="menuitem" class="page-tab-menu-item${
+            v.key === active.key ? " active" : ""
+          }" data-markets-view="${escapeHtml(v.key)}">${escapeHtml(v.label)}</button>`
+      )
+      .join("")}</div>`;
+    openMobileSheet({ title: "Matchup view", html, key: "markets-view" });
+    if (el.marketsViewToolbarBtn) el.marketsViewToolbarBtn.setAttribute("aria-expanded", "true");
+    if (!el.mobileSheetBody) return;
+    el.mobileSheetBody.querySelectorAll("[data-markets-view]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-markets-view");
+        if (!key) return;
+        closeMobileSheet();
+        setMarketsCardView(key);
+      });
+    });
+  }
+
   function marketsCardHTML(fx, baseline) {
     const homeCode = fx.home?.code || "";
     const awayCode = fx.away?.code || "";
@@ -5369,33 +5680,48 @@
     const csA = Number(fx.cleanSheet?.away);
     const when = fmtMarketsKickoffParts(fx.commenceTime);
     const topScores = (fx.topScores || []).slice(0, 3);
-    const scoresHTML = topScores.length
-      ? topScores.map((s) => marketsScoreRowHTML(s.score, s.prob, homeCode, awayCode)).join("")
-      : `<div class="markets-scores-empty">—</div>`;
     const kickLabel = [when.day, when.date, when.time].filter(Boolean).join(" ");
     const pastFx =
       baseline && fx.id != null ? baseline.byId.get(String(fx.id)) : null;
     const homeBase = marketsBaselineSide(pastFx, "home");
     const awayBase = marketsBaselineSide(pastFx, "away");
+    const compareCls = state.marketsCompare !== "current" ? " markets-card-compare" : "";
+    const scorelineMode = state.marketsCardView === "scoreline";
 
-    return `<article class="markets-card${
-      state.marketsCompare !== "current" ? " markets-card-compare" : ""
-    }">
+    if (scorelineMode) {
+      const matrixHTML = marketsScoreMatrixHTML(fx);
+      const hasMatrix = !matrixHTML.includes("markets-scores-empty");
+      const scoresHTML = hasMatrix
+        ? matrixHTML
+        : topScores.length
+          ? topScores.map((s) => marketsScoreRowHTML(s.score, s.prob, homeCode, awayCode)).join("")
+          : `<div class="markets-scores-empty">—</div>`;
+      const fixtureLabel = `${marketsTeamLabel(fx.home)} vs ${marketsTeamLabel(fx.away)}`;
+      return `<article class="markets-card markets-card-scoreline${hasMatrix ? " markets-card-matrix" : ""}${compareCls}">
+        <div class="markets-body markets-body-scoreline">
+          <div class="markets-scoreline-head">
+            <span class="markets-col-head markets-col-head-team markets-kickoff"${kickLabel ? ` title="${escapeHtml(kickLabel)}"` : ""}>${escapeHtml(when.time || "")}</span>
+            <span class="markets-scoreline-fixture" title="${escapeHtml(fixtureLabel)}">${escapeHtml(homeCode || "H")} vs ${escapeHtml(awayCode || "A")}</span>
+          </div>
+          <div class="${hasMatrix ? "markets-scores-matrix-wrap" : "markets-scores-list markets-scores-list-solo"}" aria-label="${hasMatrix ? "Score matrix" : "Most likely scores"}">${scoresHTML}</div>
+        </div>
+      </article>`;
+    }
+
+    return `<article class="markets-card markets-card-stats${compareCls}">
       <div class="markets-body">
-        <div class="markets-body-heads">
+        <div class="markets-body-heads markets-body-heads-solo">
           <div class="markets-col-heads">
             <span class="markets-col-head markets-col-head-team markets-kickoff"${kickLabel ? ` title="${escapeHtml(kickLabel)}"` : ""}>${escapeHtml(when.time || "")}</span>
             <span class="markets-col-head">Goals</span>
             <span class="markets-col-head">CS%</span>
           </div>
-          <span class="markets-col-head markets-col-head-scores">Scores</span>
         </div>
-        <div class="markets-body-rows">
+        <div class="markets-body-rows markets-body-rows-solo">
           <div class="markets-teams">
             ${marketsTeamRowHTML(fx.home, goalsH, csH, "home", homeBase)}
             ${marketsTeamRowHTML(fx.away, goalsA, csA, "away", awayBase)}
           </div>
-          <div class="markets-scores-list" aria-label="Most likely scores">${scoresHTML}</div>
         </div>
       </div>
     </article>`;
@@ -5454,6 +5780,7 @@
       for (const fx of group.fixtures) parts.push(marketsCardHTML(fx, baseline));
     }
     root.innerHTML = parts.join("");
+    syncMarketsViewControls();
   }
 
   function feedCardMatchesQuery(card, query) {
@@ -5715,7 +6042,47 @@ python3 site/annotate_social.py</pre>
     pane._countUpRaf = requestAnimationFrame(tick);
   }
 
+  function resetSearchAndFiltersForNavigation({ rerender = false } = {}) {
+    state.search = "";
+    if (el.search) el.search.value = "";
+    if (el.searchWrap) el.searchWrap.classList.remove("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+
+    state.posFilter.clear();
+    state.teamFilter.clear();
+    state.priceMin = defaultMinPrice();
+    state.priceMax = bounds.price.max;
+    state.minsMin = defaultMinMinutes();
+    state.minsMax = bounds.mins.max;
+    if (typeof syncFilterChipUI === "function") syncFilterChipUI();
+    if (typeof updatePriceSlider === "function") updatePriceSlider();
+    if (typeof updateMinsSlider === "function") updateMinsSlider();
+
+    if (el.feedSearch) el.feedSearch.value = "";
+    if (el.feedSearchWrap && !feedSearchAlwaysOpen()) {
+      el.feedSearchWrap.classList.remove("search-open");
+      if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
+    }
+    state.feedCreatorFilter.clear();
+    state.feedTeamFilter.clear();
+    state.feedTypeFilter = new Set(["original"]);
+    state.feedRange = "today";
+    if (typeof syncFeedRangeSeg === "function") syncFeedRangeSeg();
+    if (typeof buildFeedTypeChips === "function") buildFeedTypeChips();
+    if (typeof buildFeedCreatorChips === "function") buildFeedCreatorChips();
+    if (typeof buildFeedTeamChips === "function") buildFeedTeamChips();
+    if (typeof syncFeedFiltersToggle === "function") syncFeedFiltersToggle();
+
+    syncSearchClearBtns();
+    if (rerender) {
+      if (state.page === "feed") renderFeed();
+      else if (state.page === "opta" || state.page === "rankings") renderTable();
+      if (state.page === "rankings") renderRankings();
+    }
+  }
+
   function setPage(page) {
+    const prev = state.page;
     state.page = page;
     try {
       localStorage.setItem(PAGE_KEY, page);
@@ -5726,9 +6093,11 @@ python3 site/annotate_social.py</pre>
     hideFixtureTooltip();
     hidePageInfoTooltip();
     closeMobileSheet();
-    if (page !== "feed") closeFeedSearch();
-    else syncFeedSearchLayout();
-    syncSearchClearFab();
+    if (prev !== page) {
+      resetSearchAndFiltersForNavigation({ rerender: false });
+    }
+    if (page === "feed") syncFeedSearchLayout();
+    syncSearchClearBtns();
     syncPageInfoButton();
     syncAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
@@ -5743,11 +6112,15 @@ python3 site/annotate_social.py</pre>
     el.schedulePage.style.display = page === "schedule" ? "" : "none";
     if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
-    const hideChrome = page === "schedule" || page === "markets";
+    const isMarkets = page === "markets";
+    // Schedule has no subtoolbar. Markets hides it on desktop, but keeps a
+    // minimal mobile bar for the G+CS% / Scoreline picker (like xData).
+    const hideSubtoolbar = page === "schedule" || (isMarkets && !preferMobileSheet());
     const isFeed = page === "feed";
-    el.subtoolbar.style.display = hideChrome ? "none" : "";
-    el.sidebar.style.display = hideChrome || isFeed ? "none" : "";
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed ? "none" : "";
+    el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
+    el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
+    el.sidebar.style.display = page === "schedule" || isMarkets || isFeed ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets ? "none" : "";
     if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed ? "none" : "";
     if (el.feedToolbarStart) el.feedToolbarStart.style.display = isFeed ? "" : "none";
     if (el.feedToolbarEnd) el.feedToolbarEnd.style.display = isFeed ? "" : "none";
@@ -5785,6 +6158,7 @@ python3 site/annotate_social.py</pre>
       el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
+    if (page !== "markets") setMarketsViewMenuOpen(false);
     if (page === "rankings") {
       renderRankings();
     } else if (page === "expected") {
@@ -5795,11 +6169,14 @@ python3 site/annotate_social.py</pre>
       renderFeed();
     } else if (page === "markets") {
       renderMarkets();
+    } else if (page === "opta") {
+      renderTable();
     }
     // Enter after content is in the DOM so the animation covers real layout.
     playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
     syncExpectedCatToolbar();
+    syncMarketsViewControls();
   }
 
   el.pageOpta.addEventListener("click", () => setPage("opta"));
@@ -5835,7 +6212,35 @@ python3 site/annotate_social.py</pre>
   }
   el.pageSchedule.addEventListener("click", () => setPage("schedule"));
   if (el.pageFeed) el.pageFeed.addEventListener("click", () => setPage("feed"));
-  if (el.pageMarkets) el.pageMarkets.addEventListener("click", () => setPage("markets"));
+  if (el.pageMarkets) {
+    el.pageMarkets.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Mobile / narrow: plain page tab — view picker lives in the toolbar.
+      if (preferMobileSheet()) {
+        setMarketsViewMenuOpen(false);
+        setPage("markets");
+        return;
+      }
+      buildMarketsViewMenu();
+      const willOpen = !el.marketsTabWrap?.classList.contains("open");
+      setMarketsViewMenuOpen(willOpen);
+      setPage("markets");
+    });
+  }
+  if (el.marketsTabWrap) {
+    el.marketsTabWrap.addEventListener("mouseenter", () => {
+      if (preferMobileSheet()) return;
+      if (!hasFineHover()) return;
+      buildMarketsViewMenu();
+      setMarketsViewMenuOpen(true);
+    });
+    el.marketsTabWrap.addEventListener("mouseleave", () => {
+      if (preferMobileSheet()) return;
+      if (!hasFineHover()) return;
+      setMarketsViewMenuOpen(false);
+    });
+  }
   if (el.expectedTabWrap) {
     el.expectedTabWrap.addEventListener("mouseenter", () => {
       if (preferMobileSheet()) return;
@@ -5855,12 +6260,20 @@ python3 site/annotate_social.py</pre>
     if (!el.expectedTabWrap || !el.expectedTabWrap.classList.contains("open")) return;
     if (!el.expectedTabWrap.contains(e.target)) setExpectedCatMenuOpen(false);
   });
+  document.addEventListener("click", (e) => {
+    if (preferMobileSheet()) return;
+    if (!hasFineHover()) return;
+    if (!el.marketsTabWrap || !el.marketsTabWrap.classList.contains("open")) return;
+    if (!el.marketsTabWrap.contains(e.target)) setMarketsViewMenuOpen(false);
+  });
   window.addEventListener("resize", () => {
     syncPageTabsScrollHints();
     syncExpectedCatToolbar();
+    syncMarketsViewControls();
     syncBarbellHeadHeight();
     if (preferMobileSheet()) {
       setExpectedCatMenuOpen(false);
+      setMarketsViewMenuOpen(false);
       return;
     }
     if (!hasFineHover()) return;
@@ -5869,6 +6282,13 @@ python3 site/annotate_social.py</pre>
         positionExpectedCatMenuFixed();
       } else {
         clearExpectedCatMenuPosition();
+      }
+    }
+    if (el.marketsTabWrap?.classList.contains("open")) {
+      if (window.matchMedia("(max-width: 720px)").matches) {
+        positionMarketsViewMenuFixed();
+      } else {
+        clearMarketsViewMenuPosition();
       }
     }
   });
@@ -5933,6 +6353,7 @@ python3 site/annotate_social.py</pre>
     // Player ids and team codes share the same pin list, so a view switch
     // would otherwise leave pins that can never match a visible row.
     state.rankingsPins.length = 0;
+    resetSearchAndFiltersForNavigation({ rerender: false });
     el.compareToggle.classList.remove("on");
     hideToast();
     el.tabPlayers.classList.toggle("active", view === "players");
@@ -6087,7 +6508,7 @@ python3 site/annotate_social.py</pre>
         el.feedSearch.value = "";
         renderFeed();
       }
-      syncSearchClearFab();
+      syncSearchClearBtns();
       return;
     }
     el.feedSearchWrap.classList.remove("search-open");
@@ -6096,13 +6517,14 @@ python3 site/annotate_social.py</pre>
       el.feedSearch.value = "";
       renderFeed();
     }
-    syncSearchClearFab();
+    syncSearchClearBtns();
   }
 
   function openFeedSearch() {
     if (!el.feedSearchWrap) return;
     el.feedSearchWrap.classList.add("search-open");
     if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "true");
+    syncSearchClearBtns();
     requestAnimationFrame(() => {
       if (el.feedSearch) el.feedSearch.focus({ preventScroll: true });
     });
@@ -6120,6 +6542,7 @@ python3 site/annotate_social.py</pre>
         if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
       }
     }
+    syncSearchClearBtns();
   }
 
   if (el.feedSearchToggle) {
@@ -6136,12 +6559,12 @@ python3 site/annotate_social.py</pre>
   if (el.feedSearch) {
     let feedSearchTimer;
     el.feedSearch.addEventListener("input", () => {
-      syncSearchClearFab();
+      syncSearchClearBtns();
       clearTimeout(feedSearchTimer);
       feedSearchTimer = setTimeout(() => renderFeed(), 120);
     });
     el.feedSearch.addEventListener("focus", () => {
-      syncSearchClearFab();
+      syncSearchClearBtns();
     });
     el.feedSearch.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -6150,7 +6573,7 @@ python3 site/annotate_social.py</pre>
           if (el.feedSearch.value) {
             el.feedSearch.value = "";
             renderFeed();
-            syncSearchClearFab();
+            syncSearchClearBtns();
           } else {
             el.feedSearch.blur();
           }
@@ -6165,50 +6588,42 @@ python3 site/annotate_social.py</pre>
     if (feedSearchAlwaysOpen()) return;
     if (!el.feedSearchWrap || !el.feedSearchWrap.classList.contains("search-open")) return;
     if (el.feedSearchWrap.contains(e.target)) return;
-    if (el.searchClearFab && el.searchClearFab.contains(e.target)) return;
     if (el.feedSearch && el.feedSearch.value.trim()) return;
     closeFeedSearch();
   });
 
   let searchTimer;
 
-  // Mobile: floating Clear search when the active page search has text.
-  function currentSearchInput() {
-    if (state.page === "feed") return el.feedSearch || null;
-    if (state.page === "schedule" || state.page === "markets") return null;
-    return el.search || null;
-  }
-
-  function syncSearchClearFab() {
-    const fab = el.searchClearFab;
-    if (!fab) return;
-    const input = currentSearchInput();
-    const hasQuery = !!(input && String(input.value || "").trim());
-    const show = preferMobileSheet() && hasQuery && !mobileSheetOpen;
-    fab.hidden = !show;
-    fab.classList.toggle("is-visible", show);
-    fab.setAttribute("aria-hidden", show ? "false" : "true");
-    document.documentElement.classList.toggle("has-search-clear-fab", show);
-  }
-
-  function clearCurrentSearch() {
-    if (state.page === "feed") {
-      if (el.feedSearch) {
-        el.feedSearch.value = "";
-        el.feedSearch.blur();
-        renderFeed();
-      }
-      if (!feedSearchAlwaysOpen()) closeFeedSearch();
-    } else {
-      if (el.search) {
-        el.search.value = "";
-        el.search.blur();
-      }
-      state.search = "";
-      closeMobileSearch();
-      renderTable();
+  function syncSearchClearBtns() {
+    const pairs = [
+      { input: el.search, btn: el.searchClearBtn, wrap: el.searchWrap },
+      { input: el.feedSearch, btn: el.feedSearchClearBtn, wrap: el.feedSearchWrap },
+    ];
+    for (const { input, btn, wrap } of pairs) {
+      if (!btn) continue;
+      const open = !wrap || wrap.classList.contains("search-open");
+      const hasQuery = !!(input && String(input.value || "").trim());
+      btn.hidden = !(open && hasQuery);
     }
-    syncSearchClearFab();
+  }
+
+  function clearMainSearch() {
+    if (el.search) {
+      el.search.value = "";
+      el.search.focus({ preventScroll: true });
+    }
+    state.search = "";
+    syncSearchClearBtns();
+    renderTable();
+  }
+
+  function clearFeedSearchInput() {
+    if (el.feedSearch) {
+      el.feedSearch.value = "";
+      el.feedSearch.focus({ preventScroll: true });
+    }
+    syncSearchClearBtns();
+    renderFeed();
   }
 
   function closeMobileSearch({ clear = false } = {}) {
@@ -6216,16 +6631,17 @@ python3 site/annotate_social.py</pre>
     el.searchWrap.classList.remove("search-open");
     if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     if (clear) {
-      el.search.value = "";
+      if (el.search) el.search.value = "";
       state.search = "";
     }
-    syncSearchClearFab();
+    syncSearchClearBtns();
   }
 
   function openMobileSearch() {
     if (!el.searchWrap) return;
     el.searchWrap.classList.add("search-open");
     if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "true");
+    syncSearchClearBtns();
     requestAnimationFrame(() => {
       el.search.focus({ preventScroll: true });
     });
@@ -6243,7 +6659,6 @@ python3 site/annotate_social.py</pre>
     if (!el.searchWrap) return;
     if (!el.searchWrap.classList.contains("search-open")) return;
     if (el.searchWrap.contains(e.target)) return;
-    if (el.searchClearFab && el.searchClearFab.contains(e.target)) return;
     if (el.search && el.search.value.trim()) return;
     closeMobileSearch();
   });
@@ -6258,7 +6673,7 @@ python3 site/annotate_social.py</pre>
   el.search.addEventListener("input", (e) => {
     clearTimeout(searchTimer);
     const val = e.target.value;
-    syncSearchClearFab();
+    syncSearchClearBtns();
     searchTimer = setTimeout(() => {
       state.search = val;
       renderTable();
@@ -6269,16 +6684,24 @@ python3 site/annotate_social.py</pre>
     if (el.searchWrap && !el.searchWrap.classList.contains("search-open")) {
       openMobileSearch();
     }
-    syncSearchClearFab();
+    syncSearchClearBtns();
   });
 
-  if (el.searchClearFab) {
-    el.searchClearFab.addEventListener("click", (e) => {
+  if (el.searchClearBtn) {
+    el.searchClearBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      clearCurrentSearch();
+      clearMainSearch();
     });
   }
+  if (el.feedSearchClearBtn) {
+    el.feedSearchClearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearFeedSearchInput();
+    });
+  }
+
 
   function setupDualSlider({
     minInput,
@@ -6589,6 +7012,23 @@ python3 site/annotate_social.py</pre>
     });
   }
 
+  if (el.marketsViewToolbarBtn) {
+    el.marketsViewToolbarBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!preferMobileSheet() || state.page !== "markets") return;
+      if (mobileSheetOpen && mobileSheetKey === "markets-view") {
+        closeMobileSheet();
+        syncMarketsViewControls();
+        return;
+      }
+      openMarketsViewSheet();
+      syncMarketsViewControls();
+    });
+  }
+  buildMarketsViewMenu();
+  syncMarketsViewControls();
+
   function setMarketsSlidersOpen(open) {
     if (!el.marketsControls || !el.marketsSlidersToggle) return;
     if (!hasFineHover()) {
@@ -6723,31 +7163,13 @@ python3 site/annotate_social.py</pre>
 
   syncScheduleMatchupControls();
 
-  el.resetFilters.addEventListener("click", () => {
-    state.posFilter.clear();
-    state.teamFilter.clear();
-    state.priceMin = defaultMinPrice();
-    state.priceMax = bounds.price.max;
-    state.minsMin = defaultMinMinutes();
-    state.minsMax = bounds.mins.max;
-    state.search = "";
-    el.search.value = "";
-    if (el.searchWrap) el.searchWrap.classList.remove("search-open");
-    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
-    syncSearchClearFab();
-    state.hideDeparted = true;
-    if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
-    setValueMode("total", { rerender: false });
-    state.split = "combined";
-    $$("#split-seg button").forEach((b) => b.classList.toggle("active", b.dataset.split === "combined"));
-    syncSegThumb(el.splitSeg);
-    state.enhancePct = state.view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
-    updateEnhancePctSlider();
-    updatePriceSlider();
-    updateMinsSlider();
-    syncFilterChipUI();
-    renderTable();
-  });
+  function onResetFiltersClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    resetFiltersToDefault();
+  }
+  if (el.resetFilters) el.resetFilters.addEventListener("click", onResetFiltersClick);
+  if (el.mobileSheetReset) el.mobileSheetReset.addEventListener("click", onResetFiltersClick);
 
   if (HAS_PRICE_DATA) {
     el.showDepartedCheck.addEventListener("change", () => {
@@ -7298,10 +7720,14 @@ python3 site/annotate_social.py</pre>
     syncPointerMode();
     syncColumnsPanelHost();
     syncAllNameColumnSimplifies();
+    syncExpectedCatToolbar();
+    syncMarketsViewControls();
   });
   bindMqChange(NARROW_MQ, () => {
     syncColumnsPanelHost();
     syncAllNameColumnSimplifies();
+    syncExpectedCatToolbar();
+    syncMarketsViewControls();
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
   syncColumnsPanelHost();
