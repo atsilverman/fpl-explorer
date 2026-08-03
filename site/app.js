@@ -2410,12 +2410,58 @@
     return "Tough attack + defence";
   }
 
+  function pageInfoIsMobile() {
+    return preferMobileSheet();
+  }
+
+  function spitRow(symbol, text, symbolClass = "") {
+    const cls = symbolClass ? `spit-symbol ${symbolClass}` : "spit-symbol";
+    return `<div class="spit-row"><span class="${cls}">${symbol}</span><span>${text}</span></div>`;
+  }
+
+  function spitSection(title, rows) {
+    return `<div class="spit-section"><h4>${title}</h4><div class="spit-list">${rows.join("")}</div></div>`;
+  }
+
+  function spitHead(icon, title) {
+    if (pageInfoIsMobile()) return "";
+    return `<div class="spit-head">${iconHTML(icon)}<span>${title}</span></div>`;
+  }
+
+  function spitIntro(text) {
+    return `<p class="spit-intro">${text}</p>`;
+  }
+
+  function spitNote(text) {
+    return `<div class="spit-note">${text}</div>`;
+  }
+
+  function spitRank(label) {
+    return `<span class="spit-rank">${label}</span>`;
+  }
+
+  function spitMedalsHTML() {
+    return `<i class="spit-medal gold"></i><i class="spit-medal silver"></i><i class="spit-medal bronze"></i>`;
+  }
+
   function matchupPageInfoHTML() {
+    const mobile = pageInfoIsMobile();
+    const iconRows = [
+      spitRow(iconHTML("sliders-horizontal"), "Gameweek range, Highlight Ranks, Expected/Actual blend, and Flag threshold."),
+      spitRow(
+        `${iconHTML("swords", "ftt-attack-icon")} ${iconHTML("shield-half", "ftt-defence-icon")}`,
+        "Attack / defence edge when Advantage ≥ Flag threshold."
+      ),
+    ];
+    if (!mobile) {
+      iconRows.push(spitRow(iconHTML("info"), "On a card — that club’s own home/away attack &amp; defence ranks."));
+    }
     // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
-    return `<div class="spit-head">${iconHTML("calendar-days")}<span>How Matchups works</span></div>
-      <p class="spit-intro">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
+    return `${spitHead("calendar-days", "How Matchups works")}
+      ${spitIntro("Soft upcoming runs for attack and/or defence — edges, ranks, and schedule balance.")}
+      ${spitSection("Icons", iconRows)}
       <div class="spit-annotate">
-        <p class="spit-annotate-lead">How to read a fixture card — numbers mark each part of the example below.</p>
+        <p class="spit-annotate-lead">Fixture card key</p>
         <div class="spit-annotate-figure" aria-hidden="true">
           <img class="spit-annotate-img spit-annotate-img-dark" src="img/matchup-card-guide-dark.png" width="888" height="670" alt="" decoding="async" />
           <img class="spit-annotate-img spit-annotate-img-light" src="img/matchup-card-guide-light.png" width="888" height="670" alt="" decoding="async" />
@@ -2428,135 +2474,147 @@
           </ol>
         </div>
         <ol class="spit-annotate-key">
-          <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then how many fixtures contributed.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s own home/away attack &amp; defence ranks.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — fixture is at home for the team on the card.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Red tint = tougher, green = softer.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — attack or defence edge when Advantage ≥ Flag threshold.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then count.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s home/away attack &amp; defence ranks.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — home for the team on the card.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Red = tougher, green = softer.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
         </ol>
       </div>
-      <div class="spit-note">Highlight Ranks controls cell tint · Expected/Actual blends ranks compared · Scatter averages every fixture (not only flagged). Promoted clubs use provisional ranks 18–20.</div>`;
+      ${spitNote("Scatter averages every fixture (not only flagged). Promoted clubs use provisional ranks 18–20.")}`;
   }
 
   function pageInfoTooltipHTML() {
+    const mobile = pageInfoIsMobile();
+
     if (state.page === "rankings") {
-      return `<div class="spit-head">${iconHTML("podium")}<span>How Rankings works</span></div>
-        <p class="spit-intro">Top 10 leaderboards for OPTA and FPL metrics, grouped into Key Stats, Attacking, and Defending.</p>
-        <div class="spit-section">
-          <h4>Cards</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">1–10</span><span>Each card lists leaders for one metric. Tied values share a place; the next place skips ahead.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-medals" aria-hidden="true"><i class="spit-medal gold"></i><i class="spit-medal silver"></i><i class="spit-medal bronze"></i></span><span>Gold, silver, and bronze mark places 1–3 on each card.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Place</span><span>Places are always vs all Players/Teams. Filters and search only decide who appears on the card — a filtered #12 stays #12 overall.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Hover</span><span>Highlights the same player or team across every visible card.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Pin</span><span>Click to pin up to five names, each in its own colour. The bar above the cards is the colour key — clear pins there. Pins clear when switching Players / Teams.</span></div>
-            <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad (when an ID is saved in Preferences).</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90, or Per £m — same scaling as Statistics.</span></div>
-          </div>
-        </div>
-        <div class="spit-note">Fixture Location, filters, and search refresh every card. Some FPL defensive totals are season-only and drop on Home or Away.</div>`;
+      const iconRows = [
+        spitRow(spitMedalsHTML(), "Places 1–3 on each card.", "spit-medals"),
+        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)."),
+      ];
+      const reading = [
+        spitRow(spitRank("Place"), "Always vs all Players/Teams — filters only hide rows; a filtered #12 stays #12."),
+        spitRow(
+          spitRank(mobile ? "Tap" : "Pin"),
+          mobile
+            ? "Tap a row to pin (up to five). Colour key above the cards; clears when switching Players / Teams."
+            : "Click to pin up to five. Hover cross-highlights the same name across cards. Colour key above the cards."
+        ),
+      ];
+      return `${spitHead("podium", "How Rankings works")}
+        ${spitIntro("Top 10 leaderboards for OPTA and FPL metrics.")}
+        ${spitSection("Icons", iconRows)}
+        ${spitSection("Reading", reading)}`;
     }
+
     if (state.page === "expected") {
-      return `<div class="spit-head">${iconHTML("chart-gantt")}<span>How Expected Data works</span></div>
-        <p class="spit-intro">Compare expected (x) stats with what actually happened — who overperformed or underperformed.</p>
-        <div class="spit-section">
-          <h4>Chart</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">•</span><span>Each row is a barbell from expected to actual for the selected category. A moving dash (“ants”) along the bar shows the direction of the gap.</span></div>
-            <div class="spit-row"><span class="spit-symbol"><i class="spit-easy"></i></span><span>Green = Outperforming (more goals/assists than xG/xA, or fewer goals conceded than xGC).</span></div>
-            <div class="spit-row"><span class="spit-symbol"><i class="spit-tough"></i></span><span>Red = Underperforming expectation.</span></div>
-            <div class="spit-row"><span class="spit-symbol"><i class="spit-even"></i></span><span>Blue = Even — actual is essentially level with expected.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Diff</span><span>Actual − expected. Pill colour intensity scales with the size of the gap. For xGC, a negative Diff can still be green (conceded less than expected). Default sort is Actual.</span></div>
-            <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad.</span></div>
-          </div>
-        </div>
-        <div class="spit-section">
-          <h4>Controls</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">Cats</span><span>Pick a category from the xData tab menu. Players: xG vs Goals, xA vs Assists, xGI vs G+A, xGC vs Conceded. Teams: xG vs Goals, xGC vs Conceded, xCS vs Clean Sheets.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">H/A</span><span>Fixture Location: Total, Home, Away, or Compare (home and away stacked). Player xGI and xGC are season-total only.</span></div>
-          </div>
-        </div>
-        <div class="spit-note">Sidebar filters and Players / Teams still apply. Green/red here means over/under vs expectation — not fixture difficulty (see Matchups).</div>`;
+      const iconRows = [
+        spitRow(`<i class="spit-easy"></i>`, "Outperforming expectation"),
+        spitRow(`<i class="spit-tough"></i>`, "Underperforming expectation"),
+        spitRow(`<i class="spit-even"></i>`, "Even — actual ≈ expected"),
+        spitRow(spitOwnedPinHTML(), "In your FPL squad"),
+      ];
+      if (mobile) {
+        iconRows.unshift(
+          spitRow(spitRank("Cat"), "Category — toolbar dropdown")
+        );
+      }
+      const reading = [
+        spitRow(spitRank("Bar"), "Expected → actual. Moving dashes show the gap direction."),
+        spitRow(
+          spitRank("Diff"),
+          "Actual − expected. Pill intensity scales with gap size. For xGC, a negative Diff can still be green (conceded less than expected)."
+        ),
+      ];
+      return `${spitHead("chart-gantt", "How Expected Data works")}
+        ${spitIntro("Expected (x) vs actual — who over- or underperformed.")}
+        ${spitSection("Icons", iconRows)}
+        ${spitSection("Reading", reading)}
+        ${spitNote("Green/red here is over/under vs expectation — not Matchups fixture difficulty.")}`;
     }
+
     if (state.page === "feed") {
-      return `<div class="spit-head">${iconHTML("rss")}<span>How Social Media Feed works</span></div>
-        <p class="spit-intro">Player-mention cards from curated X accounts — filter by date range, creator, and post type, with quotes underneath.</p>
-        <div class="spit-section">
-          <h4>Cards</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">Who</span><span>Each card is one <strong>resolved player</strong> (FPL code). Ambiguous surnames need team/position context from the annotator.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Stats</span><span>Position-flavored season stats from the explorer catalog (GK / DEF / MID / FWD). Missing values show as —.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Quotes</span><span>Posts mentioning that player, newest first. Use the X icon to open the post. Timestamps tint from blue (fresh) to faint (older).</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Filters</span><span><strong>Date range</strong>: Today, Last 3 days, or Past week. <strong>Post type</strong>: defaults to original posts; turn on reply, quote, or retweet as needed. <strong>Creator</strong> / <strong>Team</strong>: empty chips mean “all”.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Search</span><span>Filters player cards by name or team (code or club name) within the active filters. If Today / Last 3 days has no hits, a Past week shortcut appears when matches exist there.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Order</span><span>Cards are ordered by mention volume (most first), then newest, then name.</span></div>
-          </div>
-        </div>
-        <div class="spit-section">
-          <h4>Pipeline</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">Cache</span><span>Refreshing this page never calls X and never spends credits.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Fetch</span><span><code>python3 site/fetch_social.py</code> then <code>python3 site/annotate_social.py</code>.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Handles</span><span>Add accounts in <code>site/social_accounts.json</code>.</span></div>
-          </div>
-        </div>
-        <div class="spit-note">Mentions come from a slim LLM (or heuristic fallback) — not stance or topic labels.</div>`;
+      const iconRows = [
+        spitRow(iconHTML("x-logo"), "Open the post on X"),
+      ];
+      const reading = [
+        spitRow(spitRank("Card"), "One resolved FPL player. Quotes newest first."),
+        spitRow(spitRank("Order"), "Most mentions first, then newest."),
+      ];
+      return `${spitHead("rss", "How Social Media Feed works")}
+        ${spitIntro("Player-mention cards from curated X accounts.")}
+        ${spitSection("Icons", iconRows)}
+        ${spitSection("Reading", reading)}
+        ${spitNote("Refreshing the page never calls X — it only reads the local cache.")}`;
     }
+
     if (state.page === "markets") {
-      return `<div class="spit-head">${iconHTML("candlestick")}<span>How Markets works</span></div>
-        <p class="spit-intro">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
-        <div class="spit-section">
-          <h4>Numbers</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">Goals</span><span>Independent Poisson λ fitted to de-vigged 1X2 and the match totals line — projected goals for each side.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">CS</span><span>Clean sheet % = P(opponent scores 0) under that Poisson model (not a native book market).</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Scores</span><span>Top three most likely exact scores from the same model, with club badges on each side.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Color</span><span>Green / red fills mark strong or weak Goals and CS%. Deeper fills kick in for values well past the threshold. Separate sliders tighten or widen each band.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Compare</span><span>Current / Last run / Last 72 hr — under Goals and CS%, show how each side moved versus the previous refresh or the snapshot nearest 72 hours ago.</span></div>
-          </div>
-        </div>
-        <div class="spit-section">
-          <h4>Pipeline</h4>
-          <div class="spit-list">
-            <div class="spit-row"><span class="spit-symbol spit-rank">API</span><span>Odds from <strong>The Odds API</strong> (<code>soccer_epl</code>, UK/EU). Key stays in <code>.env</code> — never in the browser.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Odds</span><span>Primary lines prefer <strong>Pinnacle</strong>, then Betfair exchanges; other books are fallbacks.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Cache</span><span>This page only reads <code>markets_data.js</code>.</span></div>
-            <div class="spit-row"><span class="spit-symbol spit-rank">Fetch</span><span><code>ODDS_API_KEY=…</code> in <code>.env</code>, then <code>python3 site/fetch_markets.py</code>.</span></div>
-          </div>
-        </div>
-        <div class="spit-note">Footer shows last pull time, API, and the primary odds book used for these fixtures.</div>`;
+      const iconRows = [];
+      if (mobile) {
+        iconRows.push(
+          spitRow(spitRank("View"), "Goals and CS% or Scoreline — toolbar dropdown"),
+          spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window")
+        );
+      } else {
+        iconRows.push(
+          spitRow(spitRank("View"), "Goals and CS% or Scoreline — Markets tab menu"),
+          spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window")
+        );
+      }
+      const reading = [
+        spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
+        spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
+        spitRow(spitRank("Scoreline"), "Exact-score matrix (% in cells). Goals view lists top likely scores."),
+        spitRow(spitRank("Color"), "Green/red bands on Goals and CS%; deeper past the threshold."),
+        spitRow(spitRank("Compare"), "Last run or Last 72 hr — movement vs prior odds pull."),
+      ];
+      return `${spitHead("candlestick", "How Markets works")}
+        ${spitIntro("Projected goals, clean-sheet %, and scorelines from bookmaker odds.")}
+        ${spitSection("Icons", iconRows)}
+        ${spitSection("Reading", reading)}`;
     }
+
     if (state.page === "schedule") {
       return matchupPageInfoHTML();
     }
-    return `<div class="spit-head">${iconHTML("table")}<span>How Statistics works</span></div>
-      <p class="spit-intro">Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.</p>
-      <div class="spit-section">
-        <h4>Table</h4>
-        <div class="spit-list">
-          <div class="spit-row"><span class="spit-symbol spit-rank">H/A</span><span>Fixture Location: Total, Home, or Away.</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">/90</span><span>Values (players): Total, Per 90 ((stat ÷ mins) × 90), or Per £m (stat ÷ price). One decimal; tiny rates show as &lt;0.1.</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">Tint</span><span>Always-on green/red Highlight Top/Bottom shading on raw values (players: top %; teams: top and bottom). Bands are always vs all Players/Teams — filters don't shrink them.</span></div>
-          <div class="spit-row"><span class="spit-symbol">${iconHTML("scale")}</span><span>Compare: click up to five rows to highlight and compare side by side; best value in each column is marked. Click again to remove.</span></div>
-          <div class="spit-row"><span class="spit-symbol">${iconHTML("columns")}</span><span>Columns: show or hide metric columns (toolbar control on desktop; inside Filters on mobile).</span></div>
-        </div>
-      </div>
-      <div class="spit-section">
-        <h4>Row details</h4>
-        <div class="spit-list">
-          <div class="spit-row"><span class="spit-symbol spit-rank">Tip</span><span>Hover a row (not the Player/Team name column) for upcoming fixtures and opponent ranks by venue.</span></div>
-          <div class="spit-row"><span class="spit-symbol">${spitOwnedPinHTML()}</span><span>Red pin = in your FPL squad (save an ID in Preferences).</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">Name</span><span>Player names open a live X search for that player.</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">Updates</span><span>On 2025/26: swap in matched 2026/27 price, club, and position (price shows green/red ±). Use the season menu for a full 2026/27 zero-stat squad view.</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">CBIT/R</span><span>Clearances, blocks, interceptions &amp; tackles — plus recoveries for MID/FWD. DC is the FPL points from those actions.</span></div>
-          <div class="spit-row"><span class="spit-symbol">${spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold")}</span><span>Blue check beside CBIT/R: enough actions per 90 for the DC threshold (10 DEF / 12 MID·FWD).</span></div>
-          <div class="spit-row"><span class="spit-symbol">${spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece")}</span><span>Green check in PK / FK / CK: 1st-choice set-piece taker.</span></div>
-          <div class="spit-row"><span class="spit-symbol">${iconHTML("triangle-alert", "source-unsupported")}</span><span>Source can’t fill this cell — e.g. FPL season totals have no Home/Away. Hover for the reason.</span></div>
-          <div class="spit-row"><span class="spit-symbol spit-rank">–</span><span>Stat doesn’t apply (e.g. saves for an outfielder).</span></div>
-        </div>
-      </div>
-      <div class="spit-note">Green/red cell shading on this page is top/bottom % highlighting on raw values — not Matchups fixture difficulty or Expected Data over/under.</div>`;
+
+    // Statistics (default)
+    const iconRows = [
+      spitRow(iconHTML("refresh-ccw-dot"), "Updates — matched 2026/27 price, club, position"),
+      spitRow(iconHTML("scale"), "Compare — up to five rows side by side"),
+    ];
+    if (!mobile) {
+      iconRows.push(spitRow(iconHTML("columns"), "Show/hide metric columns — toolbar"));
+    }
+    iconRows.push(
+      spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)"),
+      spitRow(
+        spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold"),
+        "Blue check — enough CBIT/R per 90 for the DC threshold (10 DEF / 12 MID·FWD)"
+      ),
+      spitRow(
+        spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
+        "Green check — 1st-choice PK / FK / CK"
+      ),
+      spitRow(iconHTML("triangle-alert", "source-unsupported"), "Source can’t fill this cell")
+    );
+    const reading = [
+      spitRow(
+        spitRank("Tint"),
+        "Green/red Highlight Top/Bottom on raw values. Bands vs all Players/Teams — filters don’t shrink them."
+      ),
+      spitRow(
+        spitRank(mobile ? "Fixtures" : "Hover"),
+        mobile
+          ? "Tap a data cell for upcoming fixtures and opponent ranks by venue."
+          : "Hover a row (not the name column) for upcoming fixtures and opponent ranks by venue."
+      ),
+      spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
+    ];
+    return `${spitHead("table", "How Statistics works")}
+      ${spitIntro("Season OPTA and FPL stats — filter, sort, and compare.")}
+      ${spitSection("Icons", iconRows)}
+      ${spitSection("Reading", reading)}`;
   }
 
   function shuffleCopy(items) {
@@ -3174,7 +3232,7 @@
     const btn = anchor || activePageInfoBtn();
     if (!btn || !el.pageInfoTooltip) return;
     pageInfoAnchor = btn;
-    if (!hasFineHover()) {
+    if (preferMobileSheet()) {
       const title = btn.getAttribute("aria-label") || "How this page works";
       const key = `page-info:${state.page}`;
       if (mobileSheetOpen && mobileSheetKey === key) {
@@ -3202,30 +3260,30 @@
 
   document.addEventListener("mouseover", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || !hasFineHover()) return;
+    if (!btn || preferMobileSheet()) return;
     showPageInfoTooltip(btn);
   });
   document.addEventListener("mouseout", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || !hasFineHover()) return;
+    if (!btn || preferMobileSheet()) return;
     if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
     hidePageInfoTooltip();
   });
   document.addEventListener("click", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
     if (!btn) return;
-    if (hasFineHover()) return;
+    if (!preferMobileSheet()) return;
     event.preventDefault();
     showPageInfoTooltip(btn);
   });
   document.addEventListener("focusin", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || !hasFineHover()) return;
+    if (!btn || preferMobileSheet()) return;
     showPageInfoTooltip(btn);
   });
   document.addEventListener("focusout", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || !hasFineHover()) return;
+    if (!btn || preferMobileSheet()) return;
     if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
     hidePageInfoTooltip();
   });
@@ -3484,6 +3542,11 @@
   // Columns settings panel
   // ---------------------------------------------------------------------
   function renderColumnsPanel() {
+    if (!el.columnsList) return;
+    el.columnsList.innerHTML = "";
+    el.columnsList.className = "columns-list";
+    if (state.page !== "opta") return;
+
     const groupOrder = [];
     const groups = new Map();
     cols().forEach((c) => {
@@ -3495,8 +3558,6 @@
       }
       groups.get(g).push(c);
     });
-    el.columnsList.innerHTML = "";
-    el.columnsList.className = "columns-list";
     groupOrder.forEach((g) => {
       const section = document.createElement("section");
       section.className = "columns-section";
@@ -3520,6 +3581,7 @@
         input.addEventListener("change", () => {
           if (input.checked) state.hiddenCols.delete(c.key);
           else state.hiddenCols.add(c.key);
+          syncFiltersResetUI();
           renderTable();
         });
         const track = document.createElement("span");
@@ -6134,18 +6196,20 @@ python3 site/annotate_social.py</pre>
       }
     }
     if (el.columnsSidebar) {
-      // Right rail is desktop-only; narrow / sheet layouts embed columns in Filters.
+      // Right rail is desktop-only; mid-width embeds columns in Filters.
+      // Mobile Statistics has no column toggles.
       el.columnsSidebar.style.display =
-        page === "opta" && !columnsLiveInFilters() ? "" : "none";
+        page === "opta" && !columnsLiveInFilters() && !preferMobileSheet() ? "" : "none";
     }
     el.tableOnlyToggles.style.display = page === "opta" ? "" : "none";
     if (el.compareToggle) el.compareToggle.style.display = page === "opta" ? "" : "none";
     if (el.columnsBtn) {
       el.columnsBtn.style.display =
-        page === "opta" && !columnsLiveInFilters() ? "" : "none";
+        page === "opta" && !columnsLiveInFilters() && !preferMobileSheet() ? "" : "none";
     }
     syncColumnsPanelHost();
     syncHighlightUI();
+    renderColumnsPanel();
     if (page !== "opta") {
       setColumnsOpen(false);
     }
@@ -6234,6 +6298,7 @@ python3 site/annotate_social.py</pre>
       if (preferMobileSheet()) {
         setMarketsViewMenuOpen(false);
         setPage("markets");
+        requestAnimationFrame(scrollActivePageTabIntoView);
         return;
       }
       // Desktop: same as xData — toggle the view menu and land on Markets.
@@ -6242,7 +6307,24 @@ python3 site/annotate_social.py</pre>
       const willOpen = !el.marketsTabWrap?.classList.contains("open");
       setMarketsViewMenuOpen(willOpen);
       setPage("markets");
+      requestAnimationFrame(scrollActivePageTabIntoView);
     });
+  }
+  // Mobile: also accept taps on the wrap (caret/gap) so the last tab isn't missed.
+  if (el.marketsTabWrap) {
+    el.marketsTabWrap.addEventListener(
+      "click",
+      (e) => {
+        if (!preferMobileSheet()) return;
+        if (e.target.closest("#page-markets")) return; // button handler already ran
+        e.preventDefault();
+        e.stopPropagation();
+        setMarketsViewMenuOpen(false);
+        setPage("markets");
+        requestAnimationFrame(scrollActivePageTabIntoView);
+      },
+      true
+    );
   }
   if (el.marketsTabWrap) {
     el.marketsTabWrap.addEventListener("mouseenter", () => {
@@ -6373,8 +6455,9 @@ python3 site/annotate_social.py</pre>
       return;
     }
     const left = tabs.scrollLeft;
+    // Subpixel scrollLeft often never reaches maxScroll exactly.
     clip.classList.toggle("has-more-left", left > 1);
-    clip.classList.toggle("has-more-right", left < maxScroll - 1);
+    clip.classList.toggle("has-more-right", left < maxScroll - 2);
   }
 
   if (el.pageTabs) {
@@ -7724,28 +7807,32 @@ python3 site/annotate_social.py</pre>
   function syncColumnsPanelHost() {
     if (!el.columnsList) return;
     const inFilters = columnsLiveInFilters();
-    const host = inFilters ? el.sidebarColumnsHost : el.columnsSidebar;
+    const mobile = preferMobileSheet();
+    // Statistics column toggles stay out of the mobile Filters sheet — no
+    // Columns toolbar icon there either. Mid-width desktop still embeds them.
+    const optaInFilters = state.page === "opta" && inFilters && !mobile;
+    const host = optaInFilters ? el.sidebarColumnsHost : el.columnsSidebar;
     if (host && el.columnsList.parentElement !== host) {
       host.appendChild(el.columnsList);
     }
     if (el.sidebarColumnsHost) {
-      el.sidebarColumnsHost.hidden = !inFilters || state.page !== "opta";
+      el.sidebarColumnsHost.hidden = !optaInFilters;
     }
     if (el.columnsBtn) {
       el.columnsBtn.style.display =
-        state.page === "opta" && !inFilters ? "" : "none";
-      if (inFilters) {
+        state.page === "opta" && !inFilters && !mobile ? "" : "none";
+      if (inFilters || mobile) {
         el.columnsBtn.setAttribute("aria-expanded", "false");
         el.columnsBtn.classList.remove("on");
       }
     }
     if (el.columnsSidebar) {
       el.columnsSidebar.style.display =
-        state.page === "opta" && !inFilters ? "" : "none";
-      if (inFilters) el.columnsSidebar.classList.add("collapsed");
+        state.page === "opta" && !inFilters && !mobile ? "" : "none";
+      if (inFilters || mobile) el.columnsSidebar.classList.add("collapsed");
     }
     // Close a leftover Columns sheet if the layout flipped to in-filters.
-    if (inFilters && mobileSheetOpen && mobileSheetKey === "columns") {
+    if ((inFilters || mobile) && mobileSheetOpen && mobileSheetKey === "columns") {
       closeMobileSheet();
     }
   }

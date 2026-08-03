@@ -236,10 +236,11 @@ a { color: var(--blue); }
 
 /* ---------- Page nav ---------- */
 .page-nav {
+  --page-nav-pad-y: 12px;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 18px;
+  padding: var(--page-nav-pad-y) 18px;
   background: hsl(var(--card));
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -263,8 +264,9 @@ a { color: var(--blue); }
   gap: 8px;
   flex: 0 0 auto;
   min-width: max-content;
-  margin-bottom: -12px;
-  padding-bottom: 12px;
+  /* Reach the page-nav hairline so the active indicator can sit on it. */
+  margin-bottom: calc(-1 * var(--page-nav-pad-y));
+  padding-bottom: 0;
 }
 @media (max-width: 1100px) {
   .page-tabs-clip {
@@ -273,14 +275,14 @@ a { color: var(--blue); }
     flex: 1 0 100%;
     min-width: 0;
     position: relative;
-    margin-bottom: -12px;
+    margin-bottom: calc(-1 * var(--page-nav-pad-y));
   }
   .page-tabs-clip::before,
   .page-tabs-clip::after {
     content: "";
     position: absolute;
     top: 0;
-    bottom: 12px;
+    bottom: 0;
     width: 28px;
     pointer-events: none;
     z-index: 3;
@@ -319,7 +321,15 @@ a { color: var(--blue); }
     overscroll-behavior-x: contain;
     scrollbar-width: none;
     margin-bottom: 0;
-    padding-bottom: 12px;
+    /* Extra end inset so Markets (last tab) can sit fully on-screen and
+       remain tappable instead of flush against the clip edge. */
+    padding-inline: 0 20px;
+    padding-bottom: 0;
+    scroll-padding-inline: 12px;
+    touch-action: pan-x;
+  }
+  .page-tabs .page-tab-btn {
+    touch-action: manipulation;
   }
   .page-tabs::-webkit-scrollbar {
     display: none;
@@ -334,16 +344,15 @@ a { color: var(--blue); }
   .page-tabs {
     gap: 4px;
   }
-  /* Let absolute category menus escape the scroll clip only when they are
-     not fixed — fixed menus are used whenever the tab strip scrolls so
-     overflow:visible never resets scrollLeft (Markets is rightmost). */
-  .page-tabs-clip:has(.page-tab-dropdown.open):not(:has(.page-tab-menu.is-fixed)) .page-tabs,
-  .page-tabs-clip:has(.page-tab-dropdown:hover):not(:has(.page-tab-menu.is-fixed)) .page-tabs {
+  /* Only when a non-fixed menu is actually open. Do NOT key off :hover —
+     sticky hover on touch resets overflow/scrollLeft and makes the
+     rightmost Markets tab impossible to land on. */
+  .page-tabs-clip:has(.page-tab-dropdown.open):not(:has(.page-tab-menu.is-fixed)) .page-tabs {
     overflow: visible;
   }
   .page-tab-btn {
     flex: none;
-    padding: 8px 10px;
+    padding: 8px 10px calc(8px + var(--page-nav-pad-y));
   }
   .page-tab-menu:not(.is-fixed) {
     left: 0;
@@ -352,6 +361,7 @@ a { color: var(--blue); }
 }
 .page-tab-btn {
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -359,7 +369,8 @@ a { color: var(--blue); }
   border: none;
   background: transparent;
   color: var(--text-dim);
-  padding: 8px 12px;
+  /* Bottom pad absorbs page-nav inset so the indicator meets the divider. */
+  padding: 8px 12px calc(8px + var(--page-nav-pad-y));
   border-radius: calc(var(--radius) - 2px);
   font-size: 13.5px;
   font-weight: 500;
@@ -375,7 +386,19 @@ a { color: var(--blue); }
   color: hsl(var(--blue-hsl) / 0.9);
   font-weight: 600;
   border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
-  box-shadow: inset 0 -2px 0 hsl(var(--blue-hsl));
+  box-shadow: none;
+}
+/* X/iOS-style selected tab: thicker bar snapped to the hairline below. */
+.page-tab-btn.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: hsl(var(--blue-hsl));
+  border-radius: 3px 3px 0 0;
+  pointer-events: none;
 }
 .page-tab-btn.active .icon {
   color: hsl(var(--blue-hsl) / 0.9);
@@ -1308,7 +1331,8 @@ a { color: var(--blue); }
 }
 .columns-sidebar.collapsed { display: none; }
 
-/* Column toggles embedded in the Filters sidebar/sheet (narrow layouts). */
+/* Column toggles embedded in the Filters sidebar
+   (Statistics on mid-width desktop; not on mobile sheet). */
 .sidebar-columns-host {
   display: block;
   margin-top: 4px;
@@ -1437,6 +1461,22 @@ a { color: var(--blue); }
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* Position has exactly four chips — stretch them across the filter card. */
+#pos-filters.chip-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+#pos-filters .chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  text-align: center;
 }
 .chip {
   border: 1px solid var(--border);
@@ -1639,7 +1679,8 @@ a { color: var(--blue); }
     display: contents;
   }
   .page-nav {
-    padding: 10px 12px;
+    --page-nav-pad-y: 10px;
+    padding: var(--page-nav-pad-y) 12px;
     gap: 10px;
   }
 
@@ -2087,11 +2128,31 @@ a { color: var(--blue); }
 @media (max-width: 720px) {
   .table-wrap {
     max-height: calc(100vh - 200px);
+    --name-col-w: 132px;
+    --crest-size: 16px;
+    --badge-size: 16px;
+  }
+  .table-wrap > table {
+    font-size: 11.5px;
+  }
+  .table-wrap > table > thead tr.section-row th {
+    height: 18px;
+    padding: 2px 6px;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+  }
+  .table-wrap > table > thead tr:not(.section-row) th {
+    padding: 6px 6px;
+    font-size: 10.5px;
   }
   .table-wrap > table > thead tr:not(.section-row) th,
   .table-wrap > table > tbody td {
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .table-wrap > table > tbody td {
+    padding-top: 7px;
+    padding-bottom: 7px;
   }
   .table-wrap > table > thead tr:not(.section-row) th.col-name,
   .table-wrap > table > thead tr:not(.section-row) th.col-team,
@@ -2099,7 +2160,28 @@ a { color: var(--blue); }
   .table-wrap > table > tbody td.col-name,
   .table-wrap > table > tbody td.col-team,
   .table-wrap > table > tbody td.col-player {
-    padding-left: 14px;
+    padding-left: 10px;
+  }
+  .table-wrap .player-name {
+    font-size: 12px;
+  }
+  .table-wrap .player-cell {
+    --crest-gap: 6px;
+  }
+  .table-wrap .player-cell-sub,
+  .table-wrap .player-cell-sub .team-tag {
+    font-size: 9.5px;
+  }
+  .table-wrap .pos-badge {
+    font-size: 9px;
+    padding: 0 5px;
+  }
+  .table-wrap .team-tag {
+    font-size: 10px;
+  }
+  .table-wrap .team-tag .badge-img {
+    width: 12px;
+    height: 12px;
   }
 }
 
@@ -3809,6 +3891,65 @@ tbody tr.row-selected td:first-child {
   .barbell-scroll {
     max-height: calc(100vh - 280px);
   }
+  .barbell-wrap {
+    --barbell-name-w: 132px;
+    --barbell-head-h: 32px;
+    --crest-size: 16px;
+    --badge-size: 16px;
+  }
+  .barbell-head {
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 10px;
+    min-width: 560px;
+  }
+  .barbell-head-cell:first-child {
+    margin: -7px 0 -7px -10px;
+    padding: 7px 6px 7px 10px;
+  }
+  .barbell-scale {
+    gap: 8px;
+    padding: 4px 10px 6px;
+    min-width: 560px;
+  }
+  .barbell-scale > :first-child {
+    margin: -4px 0 -6px -10px;
+    padding: 4px 6px 6px 10px;
+  }
+  .barbell-scale-tick span {
+    font-size: 9px;
+  }
+  .barbell-row {
+    padding: 7px 10px;
+  }
+  .barbell-group .barbell-row {
+    padding: 7px 10px;
+  }
+  .barbell-label {
+    margin: -7px 0 -7px -10px;
+    padding: 7px 6px 7px 10px;
+  }
+  .barbell-group .barbell-label {
+    margin-top: -7px;
+    margin-bottom: -7px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  .barbell-label .player-cell {
+    --crest-gap: 6px;
+  }
+  .barbell-group-identity .player-name,
+  .barbell-label .player-name {
+    font-size: 12px;
+  }
+  .barbell-value {
+    font-size: 10.5px;
+  }
+  .diff-pill {
+    min-width: 2.8em;
+    padding: 1px 5px;
+    font-size: 10px;
+  }
   .expected-legend-inline {
     gap: 10px;
     margin-top: 6px;
@@ -4552,14 +4693,21 @@ tbody tr.row-selected td:first-child {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 20px;
+  flex: 0 0 22px;
   min-height: 18px;
   font-family: var(--mono);
   font-weight: 700;
+  gap: 2px;
+}
+.spit-symbol .icon {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
 }
 
 .spit-symbol.spit-medals,
-.spit-symbol.spit-scatter-key {
+.spit-symbol.spit-scatter-key,
+.spit-symbol:has(.icon + .icon) {
   flex-basis: auto;
   min-width: 20px;
   gap: 3px;
