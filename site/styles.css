@@ -222,6 +222,21 @@ a { color: var(--blue); }
   flex: none;
   display: block;
 }
+
+/* Theme-swapped crest art (e.g. Spurs navy → white on dark). */
+.badge-img-dark { display: none; }
+:root[data-theme="light"] .badge-img-dark { display: none; }
+:root[data-theme="light"] .badge-img-light { display: block; }
+:root[data-theme="dark"] .badge-img-light { display: none; }
+:root[data-theme="dark"] .badge-img-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .badge-img-light { display: none; }
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .badge-img-dark { display: block; }
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .badge-img-light { display: block; }
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .badge-img-dark { display: none; }
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -3956,6 +3971,37 @@ tbody tr.row-selected td:first-child {
   color: var(--text-dim);
   white-space: nowrap;
 }
+
+/* Vertical rail between the barbell track and the first stat column. */
+.barbell-track + .barbell-value,
+.bh-track + .barbell-head-cell,
+.barbell-scale-track + div {
+  position: relative;
+}
+.barbell-track + .barbell-value::before,
+.bh-track + .barbell-head-cell::before,
+.barbell-scale-track + div::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--barbell-gap) / -2);
+  top: -10px;
+  bottom: -10px;
+  width: 1px;
+  background: hsl(var(--border-hsl) / 0.55);
+  pointer-events: none;
+}
+.barbell-group .barbell-row > .barbell-track + .barbell-value::before {
+  top: -9px;
+  bottom: -9px;
+}
+.barbell-head > .bh-track + .barbell-head-cell::before {
+  top: -9px;
+  bottom: -9px;
+}
+.barbell-scale > .barbell-scale-track + div::before {
+  top: -6px;
+  bottom: -8px;
+}
 .diff-pill {
   display: inline-flex;
   align-items: center;
@@ -4049,6 +4095,19 @@ tbody tr.row-selected td:first-child {
   }
   .barbell-value {
     font-size: 10.5px;
+  }
+  .barbell-track + .barbell-value::before,
+  .barbell-group .barbell-row > .barbell-track + .barbell-value::before {
+    top: -7px;
+    bottom: -7px;
+  }
+  .barbell-head > .bh-track + .barbell-head-cell::before {
+    top: -7px;
+    bottom: -7px;
+  }
+  .barbell-scale > .barbell-scale-track + div::before {
+    top: -4px;
+    bottom: -6px;
   }
   .diff-pill {
     min-width: 2.5em;
@@ -4603,20 +4662,6 @@ tbody tr.row-selected td:first-child {
   width: 27px;
   height: 27px;
   object-fit: contain;
-}
-
-/* Dark mode: club-tinted tiles so badges sit on a complementary light ground */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .schedule-scatter-point {
-    background: color-mix(in srgb, var(--scatter-accent, #888888) 16%, white);
-    border-color: color-mix(in srgb, var(--scatter-accent, #888888) 22%, transparent);
-    color: #111;
-  }
-}
-:root[data-theme="dark"] .schedule-scatter-point {
-  background: color-mix(in srgb, var(--scatter-accent, #888888) 16%, white);
-  border-color: color-mix(in srgb, var(--scatter-accent, #888888) 22%, transparent);
-  color: #111;
 }
 
 .schedule-scatter-code {
@@ -6141,10 +6186,8 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 }
 
 .feed-source-open .icon {
-  width: 13px;
-  height: 13px;
-  fill: currentColor;
-  stroke: none;
+  width: 14px;
+  height: 14px;
 }
 
 .feed-source-text {
@@ -6389,8 +6432,27 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   object-fit: cover;
   object-position: center top;
   background: hsl(var(--muted) / 0.85);
-  border: 1px solid hsl(var(--border-hsl) / 0.75);
+  border: 1px solid color-mix(in srgb, var(--feed-team-accent, hsl(var(--border-hsl))) 28%, hsl(var(--border-hsl) / 0.75));
   display: block;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--feed-team-accent, transparent) 12%, transparent),
+    0 3px 10px color-mix(in srgb, var(--feed-team-accent, transparent) 22%, transparent),
+    0 8px 20px color-mix(in srgb, var(--feed-team-accent, transparent) 12%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .feed-player-photo {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--feed-team-accent, transparent) 18%, transparent),
+      0 3px 12px color-mix(in srgb, var(--feed-team-accent, transparent) 28%, transparent),
+      0 10px 24px color-mix(in srgb, var(--feed-team-accent, transparent) 16%, transparent);
+  }
+}
+:root[data-theme="dark"] .feed-player-photo {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--feed-team-accent, transparent) 18%, transparent),
+    0 3px 12px color-mix(in srgb, var(--feed-team-accent, transparent) 28%, transparent),
+    0 10px 24px color-mix(in srgb, var(--feed-team-accent, transparent) 16%, transparent);
 }
 
 .feed-player-photo-fallback {
@@ -6445,6 +6507,8 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 }
 
 .feed-player-stats {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
   gap: 6px;
@@ -6457,7 +6521,9 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   min-width: 0;
   padding: 6px 8px;
   border-radius: calc(var(--radius) - 4px);
-  background: hsl(var(--muted) / 0.45);
+  /* Opaque so photo team-glow can't tint through. */
+  background: color-mix(in srgb, hsl(var(--muted)) 62%, hsl(var(--card)));
+  isolation: isolate;
 }
 
 .feed-player-stat-label {

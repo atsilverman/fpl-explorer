@@ -10,6 +10,10 @@
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
   const TEAM_NAMES = { ...DATA.teamNames, ...(DATA.fixtureTeamNames || {}) };
   const TEAM_BADGES = DATA.teamBadges || {}; // short code -> "badges/XXX.svg" (only where art exists)
+  // Dark-surface variants (navy/black crests that disappear on dark UI).
+  const TEAM_BADGES_DARK = {
+    TOT: "badges/TOT-white.svg",
+  };
   // Soft dark-mode scatter disc tint — club primary mixed toward white in CSS.
   const TEAM_SCATTER_ACCENT = {
     ARS: "#ef0107",
@@ -82,7 +86,12 @@
     const src = TEAM_BADGES[teamCode];
     if (!src) return "";
     const cls = className ? `badge-img ${className}` : "badge-img";
-    return `<img class="${cls}" src="${src}" alt="" />`;
+    const darkSrc = TEAM_BADGES_DARK[teamCode];
+    if (!darkSrc) return `<img class="${cls}" src="${src}" alt="" />`;
+    return (
+      `<img class="${cls} badge-img-light" src="${src}" alt="" />` +
+      `<img class="${cls} badge-img-dark" src="${darkSrc}" alt="" />`
+    );
   }
 
   function iconHTML(name, className) {
@@ -2531,7 +2540,7 @@
 
     if (state.page === "feed") {
       const iconRows = [
-        spitRow(iconHTML("x-logo"), "Open the post on X"),
+        spitRow(iconHTML("arrow-up-right"), "Open the post"),
       ];
       const reading = [
         spitRow(spitRank("Card"), "One resolved FPL player. Quotes newest first."),
@@ -5194,7 +5203,7 @@
                 <time class="feed-time" style="--feed-age:${feedTimeAgeProgress(post.createdAt).toFixed(3)}" datetime="${escapeHtml(post.createdAt || "")}"${tipAttr(formatFeedAbsolute(post.createdAt))}>${formatFeedTime(post.createdAt)}</time>
               </div>
             </div>
-            <a class="feed-source-open icon-only-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open on X"${tipAttr("Open on X")}>${iconHTML("x-logo")}</a>
+            <a class="feed-source-open icon-only-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open post"${tipAttr("Open post")}>${iconHTML("arrow-up-right")}</a>
           </header>
           <div class="feed-source-text">${body || "<span class='feed-trend-empty'>No text</span>"}</div>
         </article>`;
