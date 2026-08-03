@@ -1848,7 +1848,8 @@
   // Touch: tap non-conflicting [data-tip] targets → mobile sheet.
   // Capture phase so identity icons still open even when a parent row handler
   // would otherwise consume the tap (and so we can stopPropagation before
-  // compare-row toggle). Skip Rankings entirely.
+  // compare-row toggle). Skip Rankings entirely. Skip table sort headers —
+  // their tips are for hover; a tap must only change sort.
   document.addEventListener(
     "click",
     (event) => {
@@ -1863,7 +1864,7 @@
       if (
         !identityTip &&
         target.closest(
-          "a, button, input, label, select, textarea, summary, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
+          "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
         )
       ) {
         return;
