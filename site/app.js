@@ -4364,7 +4364,7 @@
     const scale = leaders.reduce((m, e) => Math.max(m, Math.abs(e.val) || 0), 0) || 1;
     const body = leaders.length
       ? `<ol class="rankings-list">${leaders
-          .map((entry) => {
+          .map((entry, barI) => {
             const medal =
               entry.rank === 1 ? "gold" : entry.rank === 2 ? "silver" : entry.rank === 3 ? "bronze" : "";
             const key = String(rowKey(entry.row));
@@ -4379,7 +4379,7 @@
               <span class="rankings-rank">${entry.rank == null ? "–" : entry.rank}</span>
               <span class="rankings-identity">${rankingsIdentityHTML(entry.row)}</span>
               <span class="rankings-meter">
-                <span class="rankings-bar" style="width:${pct.toFixed(2)}%">
+                <span class="rankings-bar" style="--bar-pct:${pct.toFixed(2)}%;--bar-i:${barI}">
                   <span class="rankings-value">${valueLabel}</span>
                 </span>
               </span>
@@ -4482,6 +4482,23 @@
     });
   }
 
+  function animateRankingsBars() {
+    if (!el.rankingsGrid) return;
+    const bars = el.rankingsGrid.querySelectorAll(".rankings-bar");
+    if (!bars.length) return;
+    bars.forEach((bar) => bar.classList.remove("is-drawn"));
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const draw = () => bars.forEach((bar) => bar.classList.add("is-drawn"));
+    if (reduce) {
+      draw();
+      return;
+    }
+    // Two frames so width:0 paints before transitioning to --bar-pct.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(draw);
+    });
+  }
+
   function renderRankings() {
     if (!el.rankingsGrid) return;
     clearRankingsCrossHover();
@@ -4506,6 +4523,7 @@
       })
       .join("");
     renderRankingsPinBar();
+    animateRankingsBars();
   }
 
   if (el.rankingsGrid) {
@@ -6054,11 +6072,12 @@ python3 site/annotate_social.py</pre>
         pane.classList.remove("is-enter-pending");
         pane.classList.add("is-entering");
         if (marketsEnter) startMarketsStatCountUp(pane);
+        if (rankingsEnter) animateRankingsBars();
         // Matchups cards cascade with scatter (no wait for scatter to finish).
         const clearMs = expectedEnter
           ? 2400
           : rankingsEnter
-            ? 1400
+            ? 1800
             : slowEnter
               ? 1800
               : marketsEnter
