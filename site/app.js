@@ -103,29 +103,52 @@
     return `hsl(var(--positive) / ${alpha})`;
   }
 
+  function positiveHighlightFill(alpha) {
+    return `hsl(var(--positive-highlight, var(--positive)) / ${alpha})`;
+  }
+
   function negativeFill(alpha) {
     return `hsl(var(--negative) / ${alpha})`;
   }
 
   // Enhance highlight paint. Intensity 1 = strongest in the band.
-  // Soft ranks stay translucent tints; leaders punch toward a darker solid
-  // so the value can flip to light text.
+  // Soft ranks stay translucent tints; leaders punch harder. Light-mode
+  // greens stay as washes (dark text) so they don't go near-black forest.
+  // Dark mode / red bottoms still solidify toward black for white text.
   function enhanceHighlightPaint(kind, intensity) {
     const t = Math.min(1, Math.max(0, Number(intensity) || 0));
     // Ease-in keeps the lower band soft and concentrates drama at the top.
     const e = Math.pow(t, 0.72);
-    const base = kind === "top" ? "hsl(var(--positive))" : "hsl(var(--negative))";
+    const dark = themePrefersDark();
+    const isTop = kind === "top";
+    const base = isTop
+      ? "hsl(var(--positive-highlight, var(--positive)))"
+      : "hsl(var(--negative))";
     if (e < 0.65) {
-      const alpha = (0.12 + e * 0.55).toFixed(3); // ~0.12–0.48
+      // Dark green washes used to neon on near-black rows — keep them quieter.
+      const alpha = dark
+        ? (isTop ? 0.1 + e * 0.26 : 0.12 + e * 0.42).toFixed(3) // top ~0.10–0.27
+        : (0.12 + e * 0.55).toFixed(3); // ~0.12–0.48
       return {
-        backgroundColor: kind === "top" ? positiveFill(alpha) : negativeFill(alpha),
+        backgroundColor: isTop ? positiveHighlightFill(alpha) : negativeFill(alpha),
         color: "",
         strong: false,
       };
     }
-    // Strong band: mix toward black so white text stays readable on light
-    // and dark themes. e=0.65 → ~18% black; e=1 → ~34% black.
-    const blackPct = Math.round(18 + ((e - 0.65) / 0.35) * 16);
+    // Light-mode top: richer wash, keep dark text — no color-mix toward black.
+    if (!dark && isTop) {
+      const alpha = (0.5 + ((e - 0.65) / 0.35) * 0.26).toFixed(3); // ~0.50–0.76
+      return {
+        backgroundColor: positiveHighlightFill(alpha),
+        color: "",
+        strong: false,
+      };
+    }
+    // Strong band: mix toward black so white text stays readable.
+    // Dark green solids need more black so they don't glow.
+    const blackPct = dark
+      ? Math.round((isTop ? 34 : 24) + ((e - 0.65) / 0.35) * (isTop ? 18 : 16))
+      : Math.round(18 + ((e - 0.65) / 0.35) * 16);
     return {
       backgroundColor: `color-mix(in srgb, ${base} ${100 - blackPct}%, black)`,
       color: "#fff",
@@ -243,7 +266,7 @@
   const ENHANCE_EXCLUDE = new Set(["price", "apps", "gp"]);
   const ENHANCE_PCT_MIN = 2;
   const ENHANCE_PCT_MAX = 40;
-  const ENHANCE_PCT_PLAYERS = 10;
+  const ENHANCE_PCT_PLAYERS = 5;
   const ENHANCE_PCT_TEAMS = 30;
   // Matchups highlight band as absolute ranks (always a ~20-team view).
   const SCHEDULE_ENHANCE_TOP_MIN = 1;
@@ -925,10 +948,11 @@
     return { pos, per90, actions: row.__cbitr, rule, threshold: rule.threshold, meets: per90 >= rule.threshold };
   }
 
-  // Filled blue check beside CBIT/R for players clearing their threshold on a
+  // Filled check beside CBIT/R for players clearing their threshold on a
   // per-90 basis — a quick read on who is a repeatable defensive-contribution
   // source rather than someone who banked points in heavy-minute games.
   // Uses the same circle-check mark as set-pieces (not the home-fixture star).
+  // Color: blue in light mode, red in dark mode (see .threshold-dot).
   function defconDotHTML(row) {
     const status = defconStatus(row);
     if (!status || !status.meets) return "";
@@ -1806,6 +1830,12 @@
     const html = anchor.getAttribute("data-tip-html");
     const text = anchor.getAttribute("data-tip");
     if (!html && !text) return;
+    // Don't stack compact tips over Matchups card / edge popovers.
+    hideMatchupEdgeTooltip();
+    hideTeamRankTooltip();
+    hideScheduleScatterTooltip();
+    clearTimeout(fixtureTtTimer);
+    hideFixtureTooltip();
     clearTimeout(uiTipHideTimer);
     if (html) tip.innerHTML = html;
     else tip.textContent = text;
@@ -1817,6 +1847,8 @@
 
   function tipTargetFrom(node) {
     if (!node || !node.closest) return null;
+    // Rich Matchups tips own these targets — skip the compact ui-tooltip.
+    if (node.closest(".ftt-verdict-tip, .team-rank-info, .page-info-btn")) return null;
     return node.closest("[data-tip], [data-tip-html]");
   }
 
@@ -1825,6 +1857,12 @@
     const target = tipTargetFrom(event.target);
     if (!target) return;
     if (target === uiTipAnchor) return;
+    // Hide card tips as soon as we enter an icon tip host (don't wait for delay).
+    hideMatchupEdgeTooltip();
+    hideTeamRankTooltip();
+    hideScheduleScatterTooltip();
+    clearTimeout(fixtureTtTimer);
+    hideFixtureTooltip();
     clearTimeout(uiTipTimer);
     uiTipAnchor = target;
     uiTipTimer = setTimeout(() => {
@@ -2332,12 +2370,12 @@
             <th class="ftt-def-start" title="Opponent expected goals conceded rank (venue split)">xGC</th>
             <th title="Opponent goals conceded rank (venue split)">GC</th>
             <th title="Opponent clean sheets rank (venue split)">CS</th>
-            ${showMatchups ? `<th class="ftt-verdict" title="Favorable matchups for ${escapeHtml(teamLabel)}">${badgeHTML(teamCode)}</th>` : ""}
+            ${showMatchups ? `<th class="ftt-verdict" title="Favorable matchups for ${escapeHtml(teamLabel)}"></th>` : ""}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · red = tough matchup</div>` : ""}`;
+      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · soft green = easier, red = tougher (quieter green in dark mode)</div>` : ""}`;
   }
 
   function fixtureTooltipHTML(teamCode, options = {}) {
@@ -2481,7 +2519,7 @@
           <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then count.</span></li>
           <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s home/away attack &amp; defence ranks.</span></li>
           <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — home for the team on the card.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Red = tougher, green = softer.</span></li>
+          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Soft green / tough red cell tint (quieter green in dark mode).</span></li>
           <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
         </ol>
       </div>
@@ -2534,16 +2572,18 @@
         ${spitIntro("Expected (x) vs actual — who over- or underperformed.")}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}
-        ${spitNote("Green/red here is over/under vs expectation — not Matchups fixture difficulty.")}`;
+        ${spitNote("Green/red here is over/under vs expectation — not Matchups fixture difficulty. Soft green is quieter in dark mode.")}`;
     }
 
     if (state.page === "feed") {
       const iconRows = [
         spitRow(iconHTML("arrow-up-right"), "Open the post"),
-        spitRow(spitRank("Type"), "Original / Reply / Quote / Retweet badge under each quote"),
+        spitRow(spitRank("Type"), "Original / Reply / Quote / Retweet badge — bottom right of each quote"),
       ];
       const reading = [
-        spitRow(spitRank("Map"), "Treemap — share of mentions. Click a tile to filter to that player."),
+        ...(mobile
+          ? []
+          : [spitRow(spitRank("Map"), "Treemap — share of mentions. Click a tile to filter to that player.")]),
         spitRow(spitRank("Card"), "One resolved FPL player. Quotes newest first."),
         spitRow(spitRank("Order"), "Most mentions first, then newest."),
       ];
@@ -2571,7 +2611,7 @@
         spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
         spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
         spitRow(spitRank("Scoreline"), "Exact-score matrix (% in cells). Goals view lists top likely scores."),
-        spitRow(spitRank("Color"), "Green/red bands on Goals and CS%; deeper past the threshold."),
+        spitRow(spitRank("Color"), "Green/red bands on Goals and CS%; deeper past the threshold. Soft green is quieter in dark mode."),
         spitRow(spitRank("Compare"), "Last run or Last 72 hr — movement vs prior odds pull."),
       ];
       return `${spitHead("candlestick", "How Markets works")}
@@ -2596,18 +2636,18 @@
       spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)"),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold"),
-        "Blue check — enough CBIT/R per 90 for the DC threshold (10 DEF / 12 MID·FWD)"
+        "DC threshold check — enough CBIT/R per 90 (10 DEF / 12 MID·FWD). Blue in light mode, red in dark mode."
       ),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
-        "Green check — 1st-choice PK / FK / CK"
+        "Set-piece check — 1st-choice PK / FK / CK (green)."
       ),
       spitRow(iconHTML("triangle-alert", "source-unsupported"), "Source can’t fill this cell")
     );
     const reading = [
       spitRow(
         spitRank("Tint"),
-        "Green/red Highlight Top/Bottom on raw values. Bands vs all Players/Teams — filters don’t shrink them."
+        "Green/red Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them. Soft green fills use a quieter tone in dark mode."
       ),
       spitRow(
         spitRank(mobile ? "Fixtures" : "Hover"),
@@ -2749,6 +2789,7 @@
     el.scheduleGrid.innerHTML = profiles.map((profile) =>
       scheduleCardHTML(profile, highlightMaps, rankMaps)
     ).join("");
+    upgradeNativeTitles(el.scheduleGrid);
 
     el.scheduleRangeLabel.textContent =
       state.scheduleGwMin === state.scheduleGwMax
@@ -2866,12 +2907,22 @@
     return !!(node && node.closest && node.closest("td.col-player, td.col-name"));
   }
 
+  function isFixtureTtIconTipTarget(node) {
+    // Compact [data-tip] icons (threshold check, set-piece, etc.) own the hover —
+    // don't stack the fixtures card tip underneath them.
+    return !!tipTargetFrom(node);
+  }
+
   function bindFixtureTooltipSurface(tbody, scrollRoot) {
     if (!tbody) return;
     tbody.addEventListener("mouseover", (e) => {
       if (!hasFineHover()) return;
       if (state.page !== "opta") return;
-      if (isSourceWarningTarget(e.target) || isFixtureTtNameColumnTarget(e.target)) {
+      if (
+        isSourceWarningTarget(e.target) ||
+        isFixtureTtNameColumnTarget(e.target) ||
+        isFixtureTtIconTipTarget(e.target)
+      ) {
         clearTimeout(fixtureTtTimer);
         hideFixtureTooltip();
         return;
@@ -2882,7 +2933,11 @@
     });
     tbody.addEventListener("mousemove", (e) => {
       if (!hasFineHover()) return;
-      if (isSourceWarningTarget(e.target) || isFixtureTtNameColumnTarget(e.target)) {
+      if (
+        isSourceWarningTarget(e.target) ||
+        isFixtureTtNameColumnTarget(e.target) ||
+        isFixtureTtIconTipTarget(e.target)
+      ) {
         clearTimeout(fixtureTtTimer);
         hideFixtureTooltip();
         return;
@@ -2898,8 +2953,14 @@
       if (!tr) return;
       const next = e.relatedTarget && e.relatedTarget.closest("tbody tr[data-team]");
       // Still inside the same row (cell → cell) — keep tip / pending delay,
-      // unless the next cell is the sticky Player/Team name column.
-      if (next === tr && !isFixtureTtNameColumnTarget(e.relatedTarget)) return;
+      // unless the next cell is the sticky Player/Team name column or an icon tip.
+      if (
+        next === tr &&
+        !isFixtureTtNameColumnTarget(e.relatedTarget) &&
+        !isFixtureTtIconTipTarget(e.relatedTarget)
+      ) {
+        return;
+      }
       clearTimeout(fixtureTtTimer);
       hideFixtureTooltip();
     });
@@ -3052,6 +3113,10 @@
 
   el.scheduleGrid.addEventListener("mouseover", (event) => {
     if (!hasFineHover()) return;
+    // Compact icon tips (slider info, etc.) take priority — don't open card tips underneath.
+    if (tipTargetFrom(event.target) || (el.uiTooltip && el.uiTooltip.classList.contains("visible"))) {
+      return;
+    }
     const button = event.target.closest(".team-rank-info");
     if (button) {
       hideMatchupEdgeTooltip();
@@ -3066,6 +3131,11 @@
   });
   el.scheduleGrid.addEventListener("mousemove", (event) => {
     if (!hasFineHover()) return;
+    if (tipTargetFrom(event.target) || (el.uiTooltip && el.uiTooltip.classList.contains("visible"))) {
+      hideMatchupEdgeTooltip();
+      hideTeamRankTooltip();
+      return;
+    }
     const button = event.target.closest(".team-rank-info");
     if (button && el.teamRankTooltip && el.teamRankTooltip.style.display !== "none") {
       teamRankPointer = { x: event.clientX, y: event.clientY };

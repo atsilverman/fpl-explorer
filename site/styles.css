@@ -34,6 +34,7 @@
      Independent of prefs Accent (--blue-hsl), which only drives chrome
      (tabs, icons, selection). Matchup attack/defence icons stay fixed. */
   --positive: 134 61% 49%;
+  --positive-highlight: 134 61% 49%;
   --negative: 3 92% 71%;
   --blue-hsl: 217 91% 60%;
   --matchup-attack: 3 92% 71%;
@@ -49,11 +50,11 @@
   --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
 
   /* Frosted surfaces — tooltips & popovers only.
-     Match dark’s denser fill so Matchups / fixture tips stay readable. */
-  --glass-bg: hsl(0 0% 100% / 0.72);
-  --glass-border: hsl(var(--border-hsl) / 0.55);
-  --glass-blur: 14px;
-  --glass-saturate: 1.25;
+     Dense fill so Matchups / fixture tips stay readable over busy UI. */
+  --glass-bg: hsl(0 0% 100% / 0.9);
+  --glass-border: hsl(var(--border-hsl) / 0.65);
+  --glass-blur: 18px;
+  --glass-saturate: 1.2;
 
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -105,7 +106,8 @@
     --border-hsl: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
-    --positive: 134 61% 49%;
+    --positive: 142 42% 46%;
+    --positive-highlight: 148 32% 36%;
     --negative: 3 92% 71%;
     --blue-hsl: 217 91% 60%;
     --matchup-attack: 3 92% 71%;
@@ -114,10 +116,10 @@
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
     --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.5), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.6), 0 4px 6px -4px hsl(0 0% 0% / 0.6);
-    --glass-bg: hsl(240 10% 8% / 0.72);
-    --glass-border: hsl(0 0% 100% / 0.1);
-    --glass-blur: 14px;
-    --glass-saturate: 1.25;
+    --glass-bg: hsl(240 10% 8% / 0.9);
+    --glass-border: hsl(0 0% 100% / 0.14);
+    --glass-blur: 18px;
+    --glass-saturate: 1.2;
     --check-on-fill: #111;
   }
 }
@@ -143,7 +145,8 @@
   --border-hsl: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
   --ring: 240 4.9% 83.9%;
-  --positive: 134 61% 49%;
+  --positive: 142 42% 46%;
+  --positive-highlight: 148 32% 36%;
   --negative: 3 92% 71%;
   --blue-hsl: 217 91% 60%;
   --matchup-attack: 3 92% 71%;
@@ -152,10 +155,10 @@
   --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
   --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.5), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
   --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.6), 0 4px 6px -4px hsl(0 0% 0% / 0.6);
-  --glass-bg: hsl(240 10% 8% / 0.72);
-  --glass-border: hsl(0 0% 100% / 0.1);
-  --glass-blur: 14px;
-  --glass-saturate: 1.25;
+  --glass-bg: hsl(240 10% 8% / 0.9);
+  --glass-border: hsl(0 0% 100% / 0.14);
+  --glass-blur: 18px;
+  --glass-saturate: 1.2;
   --check-on-fill: #111;
 }
 
@@ -2568,7 +2571,7 @@ thead th.col-check, tbody td.col-check { text-align: center; }
 }
 
 /* Marks a CBIT/R value whose per-90 rate clears the player's defensive-
-   contribution threshold — filled blue check inline after the number. */
+   contribution threshold — filled check inline after the number. */
 .threshold-dot {
   display: inline-flex;
   align-items: center;
@@ -2579,6 +2582,15 @@ thead th.col-check, tbody td.col-check { text-align: center; }
 .threshold-dot .check-mark-icon {
   width: 12px;
   height: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .threshold-dot {
+    color: var(--red);
+  }
+}
+:root[data-theme="dark"] .threshold-dot {
+  color: var(--red);
 }
 
 .source-unsupported {
@@ -4943,6 +4955,15 @@ tbody tr.row-selected td:first-child {
 .spit-check-mark--threshold { color: var(--blue); }
 .spit-check-mark--setpiece { color: hsl(var(--positive)); }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .spit-check-mark--threshold {
+    color: var(--red);
+  }
+}
+:root[data-theme="dark"] .spit-check-mark--threshold {
+  color: var(--red);
+}
+
 .spit-scatter-key {
   display: inline-flex;
   align-items: center;
@@ -6375,7 +6396,8 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 .feed-source-foot {
   display: flex;
   align-items: center;
-  padding: 6px 0 0 42px;
+  justify-content: flex-end;
+  padding: 2px 0 0;
 }
 
 .feed-post-kind {
@@ -6458,9 +6480,6 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 
 @media (max-width: 640px) {
   .feed-source-text {
-    padding-left: 0;
-  }
-  .feed-source-foot {
     padding-left: 0;
   }
 }
