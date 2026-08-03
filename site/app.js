@@ -418,8 +418,7 @@
     scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
     scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
     feedRange: "today", // today | 3d | 7d
-    feedCreatorFilter: new Set(), // empty = all creators
-    feedTypeFilter: new Set(["original"]), // selected types; default original only
+    feedTypeFilter: new Set(), // empty = all post types
     feedTeamFilter: new Set(), // empty = all teams
     feedSelectedCode: null, // treemap selection — filter cards to one player
     // Markets Goals/CS heat fills — 0 = stricter (less color), 100 = looser (more).
@@ -530,10 +529,8 @@
     feedControls: $("#feed-controls"),
     feedRangeSeg: $("#feed-range-seg"),
     feedTypeFilters: $("#feed-type-filters"),
-    feedCreatorFilters: $("#feed-creator-filters"),
     feedTeamFilters: $("#feed-team-filters"),
     feedResetTypes: $("#feed-reset-types"),
-    feedResetCreators: $("#feed-reset-creators"),
     feedResetTeams: $("#feed-reset-teams"),
     feedSearchWrap: $("#feed-search-wrap"),
     feedSearchToggle: $("#feed-search-toggle"),
@@ -2543,6 +2540,7 @@
     if (state.page === "feed") {
       const iconRows = [
         spitRow(iconHTML("arrow-up-right"), "Open the post"),
+        spitRow(spitRank("Type"), "Original / Reply / Quote / Retweet badge under each quote"),
       ];
       const reading = [
         spitRow(spitRank("Map"), "Treemap — share of mentions. Click a tile to filter to that player."),
@@ -4670,7 +4668,7 @@
   };
 
   function feedTypeFilterIsDefault() {
-    return state.feedTypeFilter.size === 1 && state.feedTypeFilter.has("original");
+    return state.feedTypeFilter.size === 0;
   }
 
   function feedRangeDayCount(range = state.feedRange) {
@@ -4706,7 +4704,6 @@
   function feedFiltersActive() {
     return (
       state.feedRange !== "today" ||
-      state.feedCreatorFilter.size > 0 ||
       !feedTypeFilterIsDefault() ||
       state.feedTeamFilter.size > 0
     );
@@ -4743,7 +4740,6 @@
             host.hidden = false;
             host.classList.remove("collapsed");
             buildFeedTypeChips();
-            buildFeedCreatorChips();
             buildFeedTeamChips();
             syncFeedRangeSeg();
           },
@@ -4766,7 +4762,6 @@
     el.feedControls.classList.toggle("collapsed", !open);
     if (open) {
       buildFeedTypeChips();
-      buildFeedCreatorChips();
       buildFeedTeamChips();
       syncFeedRangeSeg();
       requestAnimationFrame(() => syncSegThumb(el.feedRangeSeg, { animate: false }));
@@ -4795,35 +4790,6 @@
       chip.addEventListener("click", () => {
         toggleSetValue(state.feedTypeFilter, spec.key);
         chip.classList.toggle("active", state.feedTypeFilter.has(spec.key));
-        syncFeedFiltersToggle();
-        renderFeed();
-      });
-      root.appendChild(chip);
-    }
-  }
-
-  function buildFeedCreatorChips() {
-    const root = el.feedCreatorFilters;
-    if (!root) return;
-    root.innerHTML = "";
-    const accounts = SOCIAL.accounts || [];
-    for (const acc of accounts) {
-      const handle = acc.handle;
-      if (!handle) continue;
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip" + (state.feedCreatorFilter.has(handle) ? " active" : "");
-      chip.dataset.feedCreator = handle;
-      const label = acc.label || handle;
-      if (acc.avatarUrl) {
-        chip.classList.add("feed-creator-chip");
-        chip.innerHTML = `<img class="feed-creator-avatar" src="${escapeHtml(acc.avatarUrl)}" alt="" width="16" height="16" loading="lazy" /><span>${escapeHtml(label)}</span>`;
-      } else {
-        chip.textContent = label;
-      }
-      chip.addEventListener("click", () => {
-        toggleSetValue(state.feedCreatorFilter, handle);
-        chip.classList.toggle("active", state.feedCreatorFilter.has(handle));
         syncFeedFiltersToggle();
         renderFeed();
       });
@@ -5088,9 +5054,6 @@
       const created = new Date(post.createdAt);
       if (Number.isNaN(created.getTime())) return false;
       if (!keys.has(localDayKey(created))) return false;
-      if (state.feedCreatorFilter.size && !state.feedCreatorFilter.has(post.handle)) {
-        return false;
-      }
       if (state.feedTypeFilter.size && !state.feedTypeFilter.has(feedPostKind(post))) {
         return false;
       }
@@ -5181,6 +5144,11 @@
     return byVolume() || byRecent() || byName();
   }
 
+  function feedPostKindLabel(kind) {
+    const hit = FEED_POST_TYPES.find((t) => t.key === kind);
+    return (hit && hit.label) || "Original";
+  }
+
   function feedQuoteRowsHTML(postIds, postsById, card) {
     const rows = (postIds || [])
       .map((id) => postsById.get(String(id)))
@@ -5195,6 +5163,8 @@
         const name = post.authorName || handle;
         const url = post.url || `https://x.com/${handle}/status/${post.id}`;
         const body = formatFeedPostBody(post.text || "", card, post);
+        const kind = feedPostKind(post);
+        const kindLabel = feedPostKindLabel(kind);
         const avatar = post.authorAvatarUrl
           ? `<img class="feed-source-avatar" src="${escapeHtml(post.authorAvatarUrl)}" alt="" width="32" height="32" loading="lazy" />`
           : `<span class="feed-source-avatar feed-source-avatar-fallback" aria-hidden="true">${escapeHtml((handle || "?").slice(0, 1).toUpperCase())}</span>`;
@@ -5214,6 +5184,9 @@
             <a class="feed-source-open icon-only-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open post"${tipAttr("Open post")}>${iconHTML("arrow-up-right")}</a>
           </header>
           <div class="feed-source-text">${body || "<span class='feed-trend-empty'>No text</span>"}</div>
+          <footer class="feed-source-foot">
+            <span class="feed-post-kind feed-post-kind-${escapeHtml(kind)}">${escapeHtml(kindLabel)}</span>
+          </footer>
         </article>`;
       })
       .join("");
@@ -5985,6 +5958,14 @@
   const FEED_TREEMAP_W = 1000;
   const FEED_TREEMAP_H = 220;
 
+  function feedTreemapIsCompact() {
+    try {
+      return window.matchMedia("(max-width: 640px)").matches;
+    } catch {
+      return false;
+    }
+  }
+
   function feedTreemapShortName(card) {
     const name = String(card.name || "").trim();
     if (!name) return "?";
@@ -6076,11 +6057,17 @@
   function clearFeedTreemap() {
     if (!el.feedTreemap) return;
     el.feedTreemap.hidden = true;
+    el.feedTreemap.classList.remove("is-scrollable");
     el.feedTreemap.innerHTML = "";
   }
 
   function renderFeedTreemap(cards, rangeLabel) {
     if (!el.feedTreemap) return;
+    // Desktop/tablet only — mobile cards already carry the mention list.
+    if (feedTreemapIsCompact()) {
+      clearFeedTreemap();
+      return;
+    }
     const selected = state.feedSelectedCode != null ? String(state.feedSelectedCode) : "";
     const top = (cards || [])
       .filter((c) => c && c.posts > 0)
@@ -6098,7 +6085,9 @@
     }
 
     const totalMentions = top.reduce((s, d) => s + d.value, 0);
-    const layout = squarifyFeedMentions(top, FEED_TREEMAP_W, FEED_TREEMAP_H);
+    const layoutW = FEED_TREEMAP_W;
+    const layoutH = FEED_TREEMAP_H;
+    const layout = squarifyFeedMentions(top, layoutW, layoutH);
     const selectedCard = selected
       ? top.find((c) => String(c.code) === selected)
       : null;
@@ -6106,10 +6095,10 @@
       .map((cell, i) => {
         const accent = TEAM_SCATTER_ACCENT[cell.team] || "#6b7280";
         const text = feedTreemapTextColor(accent);
-        const left = (cell.x / FEED_TREEMAP_W) * 100;
-        const topPct = (cell.y / FEED_TREEMAP_H) * 100;
-        const width = (cell.w / FEED_TREEMAP_W) * 100;
-        const height = (cell.h / FEED_TREEMAP_H) * 100;
+        const left = (cell.x / layoutW) * 100;
+        const topPct = (cell.y / layoutH) * 100;
+        const width = (cell.w / layoutW) * 100;
+        const height = (cell.h / layoutH) * 100;
         const pct = totalMentions ? Math.round((cell.value / totalMentions) * 100) : 0;
         const showCount = cell.w * cell.h > 9000;
         const showName = cell.w > 70 && cell.h > 36;
@@ -6129,6 +6118,7 @@
       : "";
 
     el.feedTreemap.hidden = false;
+    el.feedTreemap.classList.remove("is-scrollable");
     el.feedTreemap.innerHTML = `
       <div class="feed-treemap-head">
         <div>
@@ -6141,7 +6131,9 @@
         </div>
         ${clearBtn}
       </div>
-      <div class="feed-treemap-plot" role="group" aria-label="Treemap of player mention volume">${cells}</div>
+      <div class="feed-treemap-scroll">
+        <div class="feed-treemap-plot" role="group" aria-label="Treemap of player mention volume">${cells}</div>
+      </div>
     `;
 
     el.feedTreemap.querySelectorAll(".feed-treemap-cell").forEach((btn) => {
@@ -6199,7 +6191,7 @@ python3 site/annotate_social.py</pre>
         ${
           widenCount
             ? feedWidenRangeHintHTML(widenCount)
-            : `<p class="feed-empty-hint">Widen the date range, clear creator/type/team filters, or pull fresher posts.</p>`
+            : `<p class="feed-empty-hint">Widen the date range, clear type/team filters, or pull fresher posts.</p>`
         }
       </div>`;
       return;
@@ -6443,14 +6435,12 @@ python3 site/annotate_social.py</pre>
       el.feedSearchWrap.classList.remove("search-open");
       if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
     }
-    state.feedCreatorFilter.clear();
     state.feedTeamFilter.clear();
-    state.feedTypeFilter = new Set(["original"]);
+    state.feedTypeFilter.clear();
     state.feedRange = "today";
     state.feedSelectedCode = null;
     if (typeof syncFeedRangeSeg === "function") syncFeedRangeSeg();
     if (typeof buildFeedTypeChips === "function") buildFeedTypeChips();
-    if (typeof buildFeedCreatorChips === "function") buildFeedCreatorChips();
     if (typeof buildFeedTeamChips === "function") buildFeedTeamChips();
     if (typeof syncFeedFiltersToggle === "function") syncFeedFiltersToggle();
 
@@ -6915,15 +6905,8 @@ python3 site/annotate_social.py</pre>
   }
 
   function clearFeedTypeFilter() {
-    state.feedTypeFilter = new Set(["original"]);
+    state.feedTypeFilter.clear();
     buildFeedTypeChips();
-    syncFeedFiltersToggle();
-    renderFeed();
-  }
-
-  function clearFeedCreatorFilter() {
-    state.feedCreatorFilter.clear();
-    buildFeedCreatorChips();
     syncFeedFiltersToggle();
     renderFeed();
   }
@@ -6941,15 +6924,6 @@ python3 site/annotate_social.py</pre>
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         clearFeedTypeFilter();
-      }
-    });
-  }
-  if (el.feedResetCreators) {
-    el.feedResetCreators.addEventListener("click", clearFeedCreatorFilter);
-    el.feedResetCreators.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        clearFeedCreatorFilter();
       }
     });
   }
@@ -8294,7 +8268,6 @@ python3 site/annotate_social.py</pre>
   async function init() {
     buildStaticFilters();
     buildFeedTypeChips();
-    buildFeedCreatorChips();
     buildFeedTeamChips();
     syncFeedRangeSeg();
     syncFeedSearchLayout();

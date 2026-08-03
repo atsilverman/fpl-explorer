@@ -64,6 +64,26 @@
       "handle": "BenDinnery",
       "label": "Ben Dinnery",
       "roles": ["news", "rumor"]
+    },
+    {
+      "handle": "timbayer93",
+      "label": "Tim Bayer",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "BenCrellin",
+      "label": "Ben Crellin",
+      "roles": ["analysis", "data"]
+    },
+    {
+      "handle": "FPLJoeYT",
+      "label": "FPL Joe",
+      "roles": ["analysis"]
+    },
+    {
+      "handle": "SolioAnalytics",
+      "label": "Solio Analytics",
+      "roles": ["analysis", "data"]
     }
   ]
 }
