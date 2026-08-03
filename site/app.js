@@ -1300,11 +1300,6 @@
         arrow.className = "arrow";
         arrow.innerHTML = iconHTML(state.sortDir === "asc" ? "chevron-up" : "chevron-down");
         th.appendChild(arrow);
-      } else {
-        const arrow = document.createElement("span");
-        arrow.className = "arrow";
-        arrow.innerHTML = iconHTML("chevrons-up-down");
-        th.appendChild(arrow);
       }
       th.addEventListener("click", () => {
         if (state.sortKey === c.key) {
@@ -4996,6 +4991,10 @@
     return maps;
   }
 
+  function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   function linkifyFeedText(text) {
     const raw = String(text || "");
     let html = escapeHtml(raw);
@@ -5007,6 +5006,65 @@
       /(^|[\s(])@([A-Za-z0-9_]{1,15})\b/g,
       (_, pre, handle) =>
         `${pre}<a href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>`
+    );
+    return html;
+  }
+
+  function feedPlayerMentionAliases(card, post) {
+    const aliases = new Set();
+    const add = (value) => {
+      const s = String(value || "").trim();
+      if (s.length >= 2) aliases.add(s);
+    };
+    add(card && card.name);
+    const code = card && card.code != null ? String(card.code) : "";
+    const entities = (post && post.analysis && post.analysis.entities) || [];
+    for (const e of entities) {
+      if (!e || e.type !== "player" || !e.resolved) continue;
+      if (code && String(e.code) !== code) continue;
+      add(e.mention);
+      add(e.name);
+    }
+    return [...aliases].sort((a, b) => b.length - a.length);
+  }
+
+  function highlightFeedPlayerMentions(escapedHtml, aliases) {
+    if (!escapedHtml || !aliases || !aliases.length) return escapedHtml;
+    const unique = [];
+    const seen = new Set();
+    for (const alias of aliases) {
+      const key = alias.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(alias);
+    }
+    if (!unique.length) return escapedHtml;
+    const pattern = unique.map(escapeRegExp).join("|");
+    // Avoid matching inside words (Haaland in FooHaaland) while allowing hyphens.
+    const re = new RegExp(`(?<![A-Za-z0-9_])(?:${pattern})(?![A-Za-z0-9_])`, "gi");
+    return escapedHtml.replace(
+      re,
+      (match) => `<mark class="feed-player-mention">${match}</mark>`
+    );
+  }
+
+  function formatFeedPostBody(text, card, post) {
+    let html = escapeHtml(String(text || ""));
+    html = highlightFeedPlayerMentions(html, feedPlayerMentionAliases(card, post));
+    html = html.replace(/https?:\/\/[^\s<]+/g, (url) => {
+      // Skip URLs that were already wrapped or sit inside a mark/tag.
+      if (url.includes("<")) return url;
+      const href = escapeHtml(url);
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
+    });
+    // Don't rewrite @handles that landed inside a highlight mark.
+    html = html.replace(
+      /(^|[\s(])@([A-Za-z0-9_]{1,15})\b/g,
+      (full, pre, handle, offset, str) => {
+        const before = str.slice(Math.max(0, offset - 24), offset);
+        if (/<mark\b[^>]*>[^<]*$/i.test(before)) return full;
+        return `${pre}<a href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>`;
+      }
     );
     return html;
   }
@@ -5106,7 +5164,7 @@
     return byVolume() || byRecent() || byName();
   }
 
-  function feedQuoteRowsHTML(postIds, postsById) {
+  function feedQuoteRowsHTML(postIds, postsById, card) {
     const rows = (postIds || [])
       .map((id) => postsById.get(String(id)))
       .filter(Boolean)
@@ -5119,7 +5177,7 @@
         const handle = post.handle || "";
         const name = post.authorName || handle;
         const url = post.url || `https://x.com/${handle}/status/${post.id}`;
-        const body = linkifyFeedText(post.text || "");
+        const body = formatFeedPostBody(post.text || "", card, post);
         const avatar = post.authorAvatarUrl
           ? `<img class="feed-source-avatar" src="${escapeHtml(post.authorAvatarUrl)}" alt="" width="32" height="32" loading="lazy" />`
           : `<span class="feed-source-avatar feed-source-avatar-fallback" aria-hidden="true">${escapeHtml((handle || "?").slice(0, 1).toUpperCase())}</span>`;
@@ -5189,8 +5247,10 @@
     const photoBlock = photo
       ? `<img class="feed-player-photo" src="${escapeHtml(photo)}" alt="" width="72" height="72" loading="lazy" data-initials="${escapeHtml(initials)}" />`
       : `<span class="feed-player-photo feed-player-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+    const teamAccent = TEAM_SCATTER_ACCENT[card.team] || "";
+    const accentStyle = teamAccent ? `--feed-team-accent:${teamAccent};` : "";
 
-    return `<article class="rankings-card feed-player-card" style="--enter-i:${enterIndex}">
+    return `<article class="rankings-card feed-player-card" style="--enter-i:${enterIndex};${accentStyle}">
       <div class="feed-player-card-top">
         <div class="feed-player-identity">
           <div class="feed-player-photo-wrap">
@@ -5204,7 +5264,7 @@
         </div>
         <div class="feed-player-stats">${stats}</div>
       </div>
-      <div class="feed-source-list feed-player-quotes">${feedQuoteRowsHTML(card.postIds, postsById)}</div>
+      <div class="feed-source-list feed-player-quotes">${feedQuoteRowsHTML(card.postIds, postsById, card)}</div>
     </article>`;
   }
 

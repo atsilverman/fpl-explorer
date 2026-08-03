@@ -2344,7 +2344,7 @@ tbody td.col-player.has-update-change {
 thead th .arrow {
   display: inline-flex;
   align-items: center;
-  opacity: 0.4;
+  opacity: 1;
   margin-left: 3px;
   font-size: 12px;
   vertical-align: -2px;
@@ -2358,7 +2358,6 @@ thead th .col-caveat {
   font-weight: 700;
 }
 thead th.sorted { color: var(--text); font-weight: 600; }
-thead th.sorted .arrow { opacity: 1; }
 
 /* Subtle vertical rule at each section boundary (Goal Threat / Creativity /
    FPL / Derived), so the groupings still read as columns once you're deep
@@ -3514,6 +3513,12 @@ tbody tr.row-selected td:first-child {
   box-shadow: var(--shadow-sm);
   --barbell-name-w: 148px;
   --barbell-name-w-compare: 132px;
+  --barbell-min-w: 650px;
+  --barbell-track-min: 220px;
+  --barbell-num-w: 68px;
+  --barbell-gap: 12px;
+  --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+  --barbell-cols-compare: var(--barbell-name-w-compare) 48px minmax(200px, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
 }
 .barbell-scroll {
   overflow: auto;
@@ -3538,8 +3543,8 @@ tbody tr.row-selected td:first-child {
 }
 .barbell-head {
   display: grid;
-  grid-template-columns: var(--barbell-name-w) minmax(220px, 1fr) 68px 68px 68px;
-  gap: 12px;
+  grid-template-columns: var(--barbell-cols);
+  gap: var(--barbell-gap);
   padding: 9px 14px;
   /* Solid mix so sticky Player cell can match without a visible “chip”. */
   --barbell-head-bg: color-mix(in srgb, hsl(var(--muted)) 45%, hsl(var(--card)));
@@ -3549,14 +3554,14 @@ tbody tr.row-selected td:first-child {
   font-weight: 600;
   letter-spacing: 0.3px;
   color: var(--text-dim);
-  min-width: 650px;
+  min-width: var(--barbell-min-w);
   position: sticky;
   top: 0;
   z-index: 6;
   align-items: stretch;
 }
 .barbell-head.is-compare {
-  grid-template-columns: var(--barbell-name-w-compare) 48px minmax(200px, 1fr) 68px 68px 68px;
+  grid-template-columns: var(--barbell-cols-compare);
 }
 .barbell-head-cell {
   text-align: right;
@@ -3583,11 +3588,11 @@ tbody tr.row-selected td:first-child {
    0..maxVal scale that every dot is positioned against. */
 .barbell-scale {
   display: grid;
-  grid-template-columns: var(--barbell-name-w) minmax(220px, 1fr) 68px 68px 68px;
-  gap: 12px;
+  grid-template-columns: var(--barbell-cols);
+  gap: var(--barbell-gap);
   padding: 6px 14px 8px;
   border-bottom: 1px solid var(--row-divider);
-  min-width: 650px;
+  min-width: var(--barbell-min-w);
   background: hsl(var(--card));
   position: sticky;
   top: var(--barbell-head-h);
@@ -3595,7 +3600,7 @@ tbody tr.row-selected td:first-child {
   align-items: stretch;
 }
 .barbell-scale.is-compare {
-  grid-template-columns: var(--barbell-name-w-compare) 48px minmax(200px, 1fr) 68px 68px 68px;
+  grid-template-columns: var(--barbell-cols-compare);
 }
 /* Opaque sticky mask so scale labels slide under the Player column.
    Stretch through vertical padding so the rail meets the horizontal rules. */
@@ -3648,12 +3653,12 @@ tbody tr.row-selected td:first-child {
 }
 .barbell-row {
   display: grid;
-  grid-template-columns: var(--barbell-name-w) minmax(220px, 1fr) 68px 68px 68px;
-  gap: 12px;
+  grid-template-columns: var(--barbell-cols);
+  gap: var(--barbell-gap);
   align-items: stretch;
   padding: 10px 14px;
   border-bottom: 1px solid var(--row-divider);
-  min-width: 650px;
+  min-width: var(--barbell-min-w);
   background: hsl(var(--card));
 }
 .barbell-body > .barbell-row:last-child { border-bottom: none; }
@@ -3671,7 +3676,7 @@ tbody tr.row-selected td:first-child {
   gap: 0 4px;
   align-items: stretch;
   padding: 8px 14px;
-  min-width: 650px;
+  min-width: var(--barbell-min-w);
   background: hsl(var(--card));
 }
 .barbell-group.is-compare:nth-child(even) { background: var(--bg-panel-2); }
@@ -3984,25 +3989,30 @@ tbody tr.row-selected td:first-child {
     max-height: calc(100vh - 280px);
   }
   .barbell-wrap {
-    --barbell-name-w: 132px;
+    --barbell-name-w: 120px;
+    --barbell-name-w-compare: 112px;
     --barbell-head-h: 32px;
     --crest-size: 16px;
     --badge-size: 16px;
+    /* Keep head / scale / rows on the same width — mismatched min-widths
+       left a blank strip past Diff when scrolled right. */
+    --barbell-min-w: 520px;
+    --barbell-track-min: 150px;
+    --barbell-num-w: 52px;
+    --barbell-gap: 6px;
+    --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(140px, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
   }
   .barbell-head {
-    gap: 8px;
     padding: 7px 10px;
     font-size: 10px;
-    min-width: 560px;
   }
   .barbell-head-cell:first-child {
     margin: -7px 0 -7px -10px;
     padding: 7px 6px 7px 10px;
   }
   .barbell-scale {
-    gap: 8px;
     padding: 4px 10px 6px;
-    min-width: 560px;
   }
   .barbell-scale > :first-child {
     margin: -4px 0 -6px -10px;
@@ -4016,6 +4026,9 @@ tbody tr.row-selected td:first-child {
   }
   .barbell-group .barbell-row {
     padding: 7px 10px;
+  }
+  .barbell-group.is-compare {
+    padding: 6px 10px;
   }
   .barbell-label {
     margin: -7px 0 -7px -10px;
@@ -4038,8 +4051,8 @@ tbody tr.row-selected td:first-child {
     font-size: 10.5px;
   }
   .diff-pill {
-    min-width: 2.8em;
-    padding: 1px 5px;
+    min-width: 2.5em;
+    padding: 1px 4px;
     font-size: 10px;
   }
   .expected-legend-inline {
@@ -6153,6 +6166,39 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   text-decoration: underline;
 }
 
+/* Highlighter on the card player's name / resolved mention in quote text. */
+.feed-source-text mark.feed-player-mention {
+  --mention-hl: #f3ebc0;
+  --mention-hl-soft: color-mix(in srgb, var(--mention-hl) 48%, transparent);
+  color: inherit;
+  font-weight: 700;
+  padding: 0.05em 0.18em;
+  margin: 0 -0.04em;
+  border-radius: 0.25em;
+  background: linear-gradient(
+    transparent 10%,
+    var(--mention-hl-soft) 10%,
+    var(--mention-hl) 28%,
+    var(--mention-hl) 72%,
+    var(--mention-hl-soft) 90%,
+    transparent 90%
+  );
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .feed-source-text mark.feed-player-mention {
+    --mention-hl: color-mix(in srgb, #d4bc5a 28%, transparent);
+    --mention-hl-soft: color-mix(in srgb, #d4bc5a 12%, transparent);
+  }
+}
+
+:root[data-theme="dark"] .feed-source-text mark.feed-player-mention {
+  --mention-hl: color-mix(in srgb, #d4bc5a 28%, transparent);
+  --mention-hl-soft: color-mix(in srgb, #d4bc5a 12%, transparent);
+}
+
 .feed-trend-empty {
   margin: 0;
   font-size: 13px;
@@ -6280,6 +6326,46 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   flex-direction: column;
   gap: 12px;
   padding: 14px 14px 12px;
+  /* Soft club wash → card surface (low accent, long fade). */
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 18%, #fff) 0%,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 9%, #fff) 28%,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 3%, #fff) 58%,
+    #fff 82%,
+    hsl(var(--card)) 100%
+  );
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .feed-player-card-top {
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 22%, hsl(var(--card))) 0%,
+      color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 10%, hsl(var(--card))) 32%,
+      color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 3%, hsl(var(--card))) 62%,
+      hsl(var(--card)) 88%
+    );
+  }
+}
+:root[data-theme="dark"] .feed-player-card-top {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 22%, hsl(var(--card))) 0%,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 10%, hsl(var(--card))) 32%,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 3%, hsl(var(--card))) 62%,
+    hsl(var(--card)) 88%
+  );
+}
+:root[data-theme="light"] .feed-player-card-top {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 18%, #fff) 0%,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 9%, #fff) 28%,
+    color-mix(in srgb, var(--feed-team-accent, hsl(var(--muted-foreground))) 3%, #fff) 58%,
+    #fff 82%,
+    hsl(var(--card)) 100%
+  );
 }
 
 .feed-player-identity {
@@ -6325,7 +6411,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   height: 28px;
   object-fit: contain;
   background: hsl(var(--card) / 0.95);
-  border-radius: 50%;
+  border-radius: 7px;
   border: 1px solid hsl(var(--border-hsl) / 0.8);
   padding: 2px;
   box-shadow: var(--shadow-sm);
