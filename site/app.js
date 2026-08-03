@@ -421,6 +421,7 @@
     feedCreatorFilter: new Set(), // empty = all creators
     feedTypeFilter: new Set(["original"]), // selected types; default original only
     feedTeamFilter: new Set(), // empty = all teams
+    feedSelectedCode: null, // treemap selection — filter cards to one player
     // Markets Goals/CS heat fills — 0 = stricter (less color), 100 = looser (more).
     marketsHeatGoals: MARKETS_HEAT_DEFAULT,
     marketsHeatCs: MARKETS_HEAT_DEFAULT,
@@ -524,6 +525,7 @@
     feedPage: $("#feed-page"),
     feedList: $("#feed-list"),
     feedTrending: $("#feed-trending"),
+    feedTreemap: $("#feed-treemap"),
     feedFiltersToggle: $("#feed-filters-toggle"),
     feedControls: $("#feed-controls"),
     feedRangeSeg: $("#feed-range-seg"),
@@ -1868,7 +1870,7 @@
       if (
         !identityTip &&
         target.closest(
-          "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
+          "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .feed-treemap-cell, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
         )
       ) {
         return;
@@ -2543,6 +2545,7 @@
         spitRow(iconHTML("arrow-up-right"), "Open the post"),
       ];
       const reading = [
+        spitRow(spitRank("Map"), "Treemap — share of mentions. Click a tile to filter to that player."),
         spitRow(spitRank("Card"), "One resolved FPL player. Quotes newest first."),
         spitRow(spitRank("Order"), "Most mentions first, then newest."),
       ];
@@ -5101,11 +5104,16 @@
 
     for (const post of scopedPosts) {
       const analysis = post.analysis || {};
+      // One credit per player per post — repeat name/entity hits must not inflate.
+      const seenCodes = new Set();
       for (const e of analysis.entities || []) {
         if (!e || e.type !== "player" || !e.resolved || e.code == null) continue;
         const basis = e.matchBasis || "";
         if (basis && !INDEXABLE_FEED_BASES.has(basis)) continue;
         const key = String(e.code);
+        if (seenCodes.has(key)) continue;
+        seenCodes.add(key);
+
         let bucket = byCode.get(key);
         if (!bucket) {
           bucket = {
@@ -5259,7 +5267,7 @@
     const teamAccent = TEAM_SCATTER_ACCENT[card.team] || "";
     const accentStyle = teamAccent ? `--feed-team-accent:${teamAccent};` : "";
 
-    return `<article class="rankings-card feed-player-card" style="--enter-i:${enterIndex};${accentStyle}">
+    return `<article class="rankings-card feed-player-card" id="feed-card-${escapeHtml(String(card.code))}" style="--enter-i:${enterIndex};${accentStyle}">
       <div class="feed-player-card-top">
         <div class="feed-player-identity">
           <div class="feed-player-photo-wrap">
@@ -5973,6 +5981,189 @@
     </p>`;
   }
 
+  const FEED_TREEMAP_MAX = 14;
+  const FEED_TREEMAP_W = 1000;
+  const FEED_TREEMAP_H = 220;
+
+  function feedTreemapShortName(card) {
+    const name = String(card.name || "").trim();
+    if (!name) return "?";
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0];
+    return parts[parts.length - 1];
+  }
+
+  function accentLuminance(hex) {
+    const raw = String(hex || "").replace("#", "");
+    if (raw.length !== 6) return 0.5;
+    const r = parseInt(raw.slice(0, 2), 16) / 255;
+    const g = parseInt(raw.slice(2, 4), 16) / 255;
+    const b = parseInt(raw.slice(4, 6), 16) / 255;
+    const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  }
+
+  function feedTreemapTextColor(accent) {
+    return accentLuminance(accent) > 0.55 ? "#111" : "#fff";
+  }
+
+  // Squarified treemap (Bruls et al.) — layout only in abstract units.
+  function squarifyFeedMentions(items, width, height) {
+    const total = items.reduce((sum, d) => sum + d.value, 0);
+    if (!total || width <= 0 || height <= 0) return [];
+    const nodes = items.map((d) => ({
+      ...d,
+      area: (d.value / total) * width * height,
+    }));
+    const out = [];
+    let x0 = 0;
+    let y0 = 0;
+    let x1 = width;
+    let y1 = height;
+    let row = [];
+    let i = 0;
+
+    const shortest = () => Math.min(x1 - x0, y1 - y0);
+    const worst = (areas, side) => {
+      if (!areas.length) return Infinity;
+      const s = areas.reduce((a, b) => a + b, 0);
+      const mx = Math.max(...areas);
+      const mn = Math.min(...areas);
+      return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
+    };
+
+    const flush = (rowNodes) => {
+      if (!rowNodes.length) return;
+      const sum = rowNodes.reduce((a, b) => a + b.area, 0);
+      const wide = x1 - x0 >= y1 - y0;
+      if (wide) {
+        const rw = sum / (y1 - y0);
+        let y = y0;
+        for (const node of rowNodes) {
+          const h = node.area / rw;
+          out.push({ ...node, x: x0, y, w: rw, h });
+          y += h;
+        }
+        x0 += rw;
+      } else {
+        const rh = sum / (x1 - x0);
+        let x = x0;
+        for (const node of rowNodes) {
+          const w = node.area / rh;
+          out.push({ ...node, x, y: y0, w, h: rh });
+          x += w;
+        }
+        y0 += rh;
+      }
+    };
+
+    while (i < nodes.length) {
+      const side = shortest();
+      const next = nodes[i];
+      const rowAreas = row.map((n) => n.area);
+      if (!row.length || worst(rowAreas.concat(next.area), side) <= worst(rowAreas, side)) {
+        row.push(next);
+        i += 1;
+      } else {
+        flush(row);
+        row = [];
+      }
+    }
+    flush(row);
+    return out;
+  }
+
+  function clearFeedTreemap() {
+    if (!el.feedTreemap) return;
+    el.feedTreemap.hidden = true;
+    el.feedTreemap.innerHTML = "";
+  }
+
+  function renderFeedTreemap(cards, rangeLabel) {
+    if (!el.feedTreemap) return;
+    const selected = state.feedSelectedCode != null ? String(state.feedSelectedCode) : "";
+    const top = (cards || [])
+      .filter((c) => c && c.posts > 0)
+      .slice(0, FEED_TREEMAP_MAX)
+      .map((c) => ({
+        code: c.code,
+        name: c.name,
+        shortName: feedTreemapShortName(c),
+        team: c.team,
+        value: c.posts,
+      }));
+    if (top.length < 2) {
+      clearFeedTreemap();
+      return;
+    }
+
+    const totalMentions = top.reduce((s, d) => s + d.value, 0);
+    const layout = squarifyFeedMentions(top, FEED_TREEMAP_W, FEED_TREEMAP_H);
+    const selectedCard = selected
+      ? top.find((c) => String(c.code) === selected)
+      : null;
+    const cells = layout
+      .map((cell, i) => {
+        const accent = TEAM_SCATTER_ACCENT[cell.team] || "#6b7280";
+        const text = feedTreemapTextColor(accent);
+        const left = (cell.x / FEED_TREEMAP_W) * 100;
+        const topPct = (cell.y / FEED_TREEMAP_H) * 100;
+        const width = (cell.w / FEED_TREEMAP_W) * 100;
+        const height = (cell.h / FEED_TREEMAP_H) * 100;
+        const pct = totalMentions ? Math.round((cell.value / totalMentions) * 100) : 0;
+        const showCount = cell.w * cell.h > 9000;
+        const showName = cell.w > 70 && cell.h > 36;
+        const isSelected = selected && String(cell.code) === selected;
+        const tip = isSelected
+          ? `${cell.name} · selected — click to clear`
+          : `${cell.name} · ${cell.value} post${cell.value === 1 ? "" : "s"} — click to filter`;
+        return `<button type="button" class="feed-treemap-cell${isSelected ? " is-selected" : ""}" style="--enter-i:${i};left:${left.toFixed(2)}%;top:${topPct.toFixed(2)}%;width:${width.toFixed(2)}%;height:${height.toFixed(2)}%;--cell-accent:${accent};--cell-fg:${text}" data-feed-card="${escapeHtml(String(cell.code))}" aria-pressed="${isSelected ? "true" : "false"}" aria-label="${escapeHtml(`${cell.name}: ${cell.value} post${cell.value === 1 ? "" : "s"} (${pct}%)${isSelected ? ", selected" : ""}`)}"${tipAttr(tip)}>
+          ${showName ? `<span class="feed-treemap-name">${escapeHtml(cell.shortName)}</span>` : ""}
+          ${showCount ? `<span class="feed-treemap-count">${cell.value}</span>` : ""}
+        </button>`;
+      })
+      .join("");
+
+    const clearBtn = selectedCard
+      ? `<button type="button" class="feed-treemap-clear" data-feed-treemap-clear${tipAttr("Show all players")}>Clear ${escapeHtml(selectedCard.shortName)}</button>`
+      : "";
+
+    el.feedTreemap.hidden = false;
+    el.feedTreemap.innerHTML = `
+      <div class="feed-treemap-head">
+        <div>
+          <h3>Mention share</h3>
+          <p>${
+            selectedCard
+              ? `Filtered to <strong>${escapeHtml(selectedCard.name)}</strong> — click again or Clear to show all.`
+              : `Top players in ${escapeHtml(rangeLabel)} — sized by posts (one count per player per post). Click a tile to filter.`
+          }</p>
+        </div>
+        ${clearBtn}
+      </div>
+      <div class="feed-treemap-plot" role="group" aria-label="Treemap of player mention volume">${cells}</div>
+    `;
+
+    el.feedTreemap.querySelectorAll(".feed-treemap-cell").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const code = btn.getAttribute("data-feed-card");
+        if (!code) return;
+        state.feedSelectedCode =
+          state.feedSelectedCode != null && String(state.feedSelectedCode) === code
+            ? null
+            : code;
+        renderFeed();
+      });
+    });
+    const clearEl = el.feedTreemap.querySelector("[data-feed-treemap-clear]");
+    if (clearEl) {
+      clearEl.addEventListener("click", () => {
+        state.feedSelectedCode = null;
+        renderFeed();
+      });
+    }
+  }
+
   function renderFeed() {
     const root = el.feedTrending || el.feedList;
     if (!root) return;
@@ -5987,6 +6178,8 @@
     const mention = computeFeedMentionCards(posts);
 
     if (!posts.length) {
+      state.feedSelectedCode = null;
+      clearFeedTreemap();
       const handles = accounts.map((a) => `@${a.handle}`).filter(Boolean).join(", ") || "@LetsTalk_FPL";
       root.innerHTML = `<div class="empty-state feed-empty">
         <p>No posts loaded yet — player cards need a fetched corpus.</p>
@@ -5998,6 +6191,8 @@ python3 site/annotate_social.py</pre>
     }
 
     if (!mention.cards.length) {
+      state.feedSelectedCode = null;
+      clearFeedTreemap();
       const widenCount = trimmed ? feedSearchWiderRangeHits(posts, query) : 0;
       root.innerHTML = `<div class="empty-state feed-empty">
         <p>No player mentions for ${escapeHtml(rangeLabel)}.</p>
@@ -6014,6 +6209,8 @@ python3 site/annotate_social.py</pre>
       (card) => feedCardMatchesTeamFilter(card) && feedCardMatchesQuery(card, query)
     );
     if (!filtered.length) {
+      state.feedSelectedCode = null;
+      clearFeedTreemap();
       const widenCount = trimmed ? feedSearchWiderRangeHits(posts, query) : 0;
       root.innerHTML = `<div class="empty-state feed-empty" role="status">
         <p>No players found${trimmed ? ` for “${escapeHtml(trimmed)}”` : ""} in ${escapeHtml(rangeLabel)}.</p>
@@ -6026,7 +6223,21 @@ python3 site/annotate_social.py</pre>
       return;
     }
 
-    const cards = filtered
+    if (
+      state.feedSelectedCode != null &&
+      !filtered.some((c) => String(c.code) === String(state.feedSelectedCode))
+    ) {
+      state.feedSelectedCode = null;
+    }
+
+    // Treemap stays on the full filtered set so selection can switch; cards narrow.
+    renderFeedTreemap(filtered, rangeLabel);
+    const cardsForList =
+      state.feedSelectedCode != null
+        ? filtered.filter((c) => String(c.code) === String(state.feedSelectedCode))
+        : filtered;
+
+    const cards = cardsForList
       .map((card, i) => feedPlayerCardHTML(card, postsById, i))
       .join("");
 
@@ -6091,6 +6302,8 @@ python3 site/annotate_social.py</pre>
       ".schedule-grid > .schedule-card",
       ".schedule-scatter-head",
       ".schedule-scatter-point",
+      ".feed-treemap-head",
+      ".feed-treemap-cell",
       ".feed-trending .feed-player-card",
       ".feed-trending .feed-source-row",
     ].join(", ");
@@ -6107,6 +6320,16 @@ python3 site/annotate_social.py</pre>
         node.style.setProperty("--enter-i", String(i));
       });
       pane.querySelectorAll(".schedule-grid > .schedule-card").forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+    }
+    // Feed: treemap cells get their own index (already set in HTML); cards
+    // restart so they don't inherit the treemap stagger.
+    if (pane.id === "feed-page") {
+      pane.querySelectorAll(".feed-treemap-cell").forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+      pane.querySelectorAll(".feed-trending .feed-player-card").forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
       });
     }
@@ -6224,6 +6447,7 @@ python3 site/annotate_social.py</pre>
     state.feedTeamFilter.clear();
     state.feedTypeFilter = new Set(["original"]);
     state.feedRange = "today";
+    state.feedSelectedCode = null;
     if (typeof syncFeedRangeSeg === "function") syncFeedRangeSeg();
     if (typeof buildFeedTypeChips === "function") buildFeedTypeChips();
     if (typeof buildFeedCreatorChips === "function") buildFeedCreatorChips();

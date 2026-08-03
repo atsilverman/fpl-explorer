@@ -1831,6 +1831,7 @@ a { color: var(--blue); }
 .page-pane.is-enter-pending > .barbell-wrap,
 .page-pane.is-enter-pending > .schedule-scatter,
 .page-pane.is-enter-pending > .schedule-grid,
+.page-pane.is-enter-pending > .feed-treemap,
 .page-pane.is-enter-pending > .feed-trending,
 .page-pane.is-enter-pending > .markets-grid {
   opacity: 0;
@@ -1841,6 +1842,7 @@ a { color: var(--blue); }
 .page-pane.is-entering .barbell-body > .barbell-group,
 .page-pane.is-entering .schedule-grid > .schedule-card,
 .page-pane.is-entering .schedule-scatter-head,
+.page-pane.is-entering .feed-treemap-head,
 .page-pane.is-entering .feed-trending .feed-player-card {
   animation: page-enter-item 0.42s var(--ease-out) both;
   animation-delay: 0.08s;
@@ -1854,6 +1856,11 @@ a { color: var(--blue); }
 .page-pane.is-entering .schedule-scatter-point {
   animation: page-enter-scatter-point 0.48s var(--ease-out) both;
   animation-delay: calc(0.1s + (min(var(--enter-i, 0), 22) * 0.032s));
+}
+
+.page-pane.is-entering .feed-treemap-cell {
+  animation: page-enter-item 0.42s var(--ease-out) both;
+  animation-delay: calc(0.1s + (min(var(--enter-i, 0), 22) * 0.028s));
 }
 
 /* Statistics: rows cascade top → bottom like Rankings lists. */
@@ -1951,6 +1958,7 @@ a { color: var(--blue); }
   .page-pane.is-enter-pending > .barbell-wrap,
   .page-pane.is-enter-pending > .schedule-scatter,
   .page-pane.is-enter-pending > .schedule-grid,
+  .page-pane.is-enter-pending > .feed-treemap,
   .page-pane.is-enter-pending > .feed-trending,
   .page-pane.is-enter-pending > .markets-grid {
     opacity: 1;
@@ -1964,6 +1972,8 @@ a { color: var(--blue); }
   .page-pane.is-entering .schedule-grid > .schedule-card,
   .page-pane.is-entering .schedule-scatter-head,
   .page-pane.is-entering .schedule-scatter-point,
+  .page-pane.is-entering .feed-treemap-head,
+  .page-pane.is-entering .feed-treemap-cell,
   .page-pane.is-entering .feed-trending .feed-player-card,
   .page-pane.is-entering .feed-trending .feed-source-row,
   .page-pane.is-entering .markets-grid > .markets-card,
@@ -5740,6 +5750,165 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 }
 
 /* ---------- FPL Feed ---------- */
+.feed-treemap {
+  margin-bottom: 16px;
+  padding: 14px;
+  background: hsl(var(--card));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.feed-treemap[hidden] {
+  display: none;
+}
+
+.feed-treemap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 10px;
+}
+
+.feed-treemap-head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.feed-treemap-head p {
+  margin: 3px 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.feed-treemap-head p strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.feed-treemap-clear {
+  flex: none;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid hsl(var(--border-hsl) / 0.9);
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s var(--ease-out), border-color 0.14s var(--ease-out);
+}
+
+.feed-treemap-clear:hover {
+  background: hsl(var(--muted) / 0.85);
+  border-color: hsl(var(--ring));
+}
+
+.feed-treemap-plot {
+  position: relative;
+  height: clamp(112px, 16vw, 148px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+}
+
+.feed-treemap-cell {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 1px;
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--cell-accent, #666) 35%, hsl(var(--card)));
+  border-radius: 0;
+  background: color-mix(in srgb, var(--cell-accent, #6b7280) 78%, #111);
+  color: var(--cell-fg, #fff);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 12%, transparent);
+  transition: filter 0.14s var(--ease-out), transform 0.14s var(--ease-out);
+}
+
+.feed-treemap-cell:hover,
+.feed-treemap-cell:focus-visible {
+  z-index: 2;
+  filter: brightness(1.08);
+  outline: none;
+}
+
+.feed-treemap-cell.is-selected {
+  z-index: 3;
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, #fff 78%, transparent),
+    0 0 0 2px hsl(var(--ring));
+}
+
+.feed-treemap-plot:has(.feed-treemap-cell.is-selected) .feed-treemap-cell:not(.is-selected) {
+  opacity: 0.48;
+  filter: saturate(0.85);
+}
+
+.feed-treemap-cell:focus-visible {
+  box-shadow: var(--focus-ring), inset 0 0 0 1px color-mix(in srgb, #fff 12%, transparent);
+}
+
+.feed-treemap-cell.is-selected:focus-visible {
+  box-shadow:
+    var(--focus-ring),
+    inset 0 0 0 2px color-mix(in srgb, #fff 78%, transparent);
+}
+
+.feed-treemap-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-treemap-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.88;
+  line-height: 1.1;
+}
+
+@media (max-width: 640px) {
+  .feed-treemap {
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .feed-treemap-plot {
+    height: 108px;
+  }
+  .feed-treemap-cell {
+    padding: 5px 6px;
+  }
+  .feed-treemap-name {
+    font-size: 10.5px;
+  }
+  .feed-treemap-count {
+    font-size: 10px;
+  }
+}
+
 .feed-trending {
   display: flex;
   flex-direction: column;
