@@ -4361,6 +4361,7 @@
     const leaders = topRankedForCol(rows, col, referenceRows);
     const title = metricDisplayTitle(col);
     const keyLabel = col.label;
+    const scale = leaders.reduce((m, e) => Math.max(m, Math.abs(e.val) || 0), 0) || 1;
     const body = leaders.length
       ? `<ol class="rankings-list">${leaders
           .map((entry) => {
@@ -4369,12 +4370,19 @@
             const key = String(rowKey(entry.row));
             const pin = state.rankingsPins.indexOf(key);
             const pinCls = pin >= 0 ? ` is-pinned pin-${pin + 1}` : "";
+            const pct = Math.max(8, Math.min(100, (Math.abs(entry.val) / scale) * 100));
+            const valueLabel = fmtRankingsValue(entry.val, col);
             return `<li class="rankings-row${medal ? ` medal-${medal}` : ""}${pinCls}"
               data-row-key="${escapeHtml(key)}" role="button" tabindex="0"
-              aria-pressed="${pin >= 0 ? "true" : "false"}">
+              aria-pressed="${pin >= 0 ? "true" : "false"}"
+              aria-label="${escapeHtml(`${entry.rank == null ? "–" : entry.rank}. ${entry.row.name}, ${valueLabel}`)}">
               <span class="rankings-rank">${entry.rank == null ? "–" : entry.rank}</span>
               <span class="rankings-identity">${rankingsIdentityHTML(entry.row)}</span>
-              <span class="rankings-value">${fmtRankingsValue(entry.val, col)}</span>
+              <span class="rankings-meter">
+                <span class="rankings-bar" style="width:${pct.toFixed(2)}%">
+                  <span class="rankings-value">${valueLabel}</span>
+                </span>
+              </span>
             </li>`;
           })
           .join("")}</ol>`
