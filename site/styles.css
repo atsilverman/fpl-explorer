@@ -7820,6 +7820,8 @@ html.mobile-sheet-active body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  overscroll-behavior: none;
 }
 /* ---------- Team builder ---------- */
 #team-page {
@@ -7833,8 +7835,11 @@ html.mobile-sheet-active body {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 #team-page .team-header {
   flex: none;
@@ -7944,10 +7949,12 @@ html.mobile-sheet-active body {
 }
 #team-squad-view {
   flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   overflow: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
   touch-action: pan-x pan-y;
   padding-bottom: 8px;
 }
@@ -7969,7 +7976,7 @@ html.mobile-sheet-active body {
   margin-left: -2px;
   background: hsl(var(--foreground) / 0.22);
   pointer-events: none;
-  z-index: 2;
+  z-index: 1;
 }
 #team-page .player-cell {
   --crest-size: 28px;
@@ -7993,6 +8000,21 @@ html.mobile-sheet-active body {
 #team-page tbody td.col-player {
   padding-top: 0;
   padding-bottom: 0;
+  overflow: hidden;
+  z-index: 5;
+}
+#team-page thead th.col-player {
+  z-index: 8;
+}
+#team-page tbody td.col-team-stat,
+#team-page tbody td.col-team-spark,
+#team-page tbody td.team-heat-cell,
+#team-picker-view tbody td.col-team-stat,
+#team-picker-view tbody td.col-team-spark,
+#team-picker-view tbody td.team-heat-cell,
+#team-picker-view tbody td.team-price,
+#team-picker-view tbody td.col-team-setpiece {
+  z-index: 0;
 }
 .team-player-id {
   display: flex;
@@ -8004,9 +8026,6 @@ html.mobile-sheet-active body {
 .team-player-id .player-cell {
   flex: 1;
   min-width: 0;
-}
-#team-page tbody tr.team-player-row > td.col-player {
-  overflow: visible;
 }
 #team-page tbody tr.team-player-row.is-actions-open > td.col-player {
   z-index: 9;
@@ -8043,7 +8062,10 @@ html.mobile-sheet-active body {
   opacity: 0.42;
 }
 @media (hover: hover) and (pointer: fine) {
-  #team-page tbody tr.team-player-row:hover > td.col-player {
+  #team-page tbody tr.team-player-row:hover > td.col-player,
+  #team-page tbody tr.team-player-row:focus-within > td.col-player,
+  #team-page tbody tr.team-player-row.is-actions-open > td.col-player {
+    overflow: visible;
     z-index: 9;
   }
   #team-page tbody tr.team-player-row:hover .team-row-actions,
@@ -8286,10 +8308,12 @@ html.mobile-sheet-active body {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   overflow: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
 #team-picker-view[hidden] {
