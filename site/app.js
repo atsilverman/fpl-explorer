@@ -421,6 +421,7 @@
     valueMode: "total", // total | per90 | perM
     showNewPrice: false,
     hideDeparted: true,
+    setPieceTakersOnly: false,
     // Always-on top/bottom % cell tint vs the full Players/Teams view
     // (raw values stay in the cells; filters don't shrink the bands).
     enhancePct: ENHANCE_PCT_PLAYERS,
@@ -679,6 +680,8 @@
     teamRankTooltip: $("#team-rank-tooltip"),
     matchupEdgeTooltip: $("#matchup-edge-tooltip"),
     positionFilterGroup: $("#position-filter-group"),
+    setpieceFilterGroup: $("#setpiece-filter-group"),
+    setpieceTakersCheck: $("#setpiece-takers-check"),
     minutesFilterGroup: $("#minutes-filter-group"),
     priceFilterGroup: $("#price-filter-group"),
     inactiveFilterGroup: $("#inactive-filter-group"),
@@ -749,6 +752,7 @@
     if (state.priceMin !== defaultMinPrice() || state.priceMax !== bounds.price.max) return true;
     if (state.minsMin !== defaultMinMinutes() || state.minsMax !== bounds.mins.max) return true;
     if (!state.hideDeparted) return true;
+    if (state.setPieceTakersOnly) return true;
     if (state.valueMode !== "total") return true;
     if (state.split !== "combined") return true;
     if (state.enhancePct !== defaultEnhancePct()) return true;
@@ -782,6 +786,8 @@
     syncSearchClearBtns();
     state.hideDeparted = true;
     if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
+    state.setPieceTakersOnly = false;
+    if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
     setValueMode("total", { rerender: false });
     state.split = "combined";
     $$("#split-seg button").forEach((b) => b.classList.toggle("active", b.dataset.split === "combined"));
@@ -807,11 +813,41 @@
     return state.view === "players" ? DATA.players[state.split] : DATA.teams[state.split];
   }
 
+  // Set-piece marks use FPL's absolute order (same source as The Scout page):
+  //   PK → #1 check only
+  //   FK / CK → #1 check, #2 shows "2"
+  // Null and #3+ stay completely blank.
+  const SET_PIECE_CHECK_KEYS = ["penaltiesOrder", "directFreekicksOrder", "cornersOrder"];
+  const SET_PIECE_DISPLAY_MAX = {
+    penaltiesOrder: 1,
+    directFreekicksOrder: 2,
+    cornersOrder: 2,
+  };
+
+  function setPieceOrder(row, key) {
+    if (row == null || row[key] == null || row[key] === "") return null;
+    const n = Number(row[key]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function setPieceDisplayRank(row, key) {
+    const order = setPieceOrder(row, key);
+    if (order == null) return null;
+    const max = SET_PIECE_DISPLAY_MAX[key] ?? 1;
+    if (order < 1 || order > max) return null;
+    return order;
+  }
+
+  function isSetPieceTaker(row) {
+    return SET_PIECE_CHECK_KEYS.some((key) => setPieceOrder(row, key) === 1);
+  }
+
   function applyFilters(rows) {
     const q = state.search.trim().toLowerCase();
     return rows.filter((r) => {
       if (state.view === "players") {
         if (!isNextSeason() && HAS_PRICE_DATA && state.hideDeparted && r.price2627 == null) return false;
+        if (state.setPieceTakersOnly && !isSetPieceTaker(r)) return false;
         if (state.posFilter.size && !state.posFilter.has(r.position)) return false;
         if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
         if (r.price < state.priceMin || r.price > state.priceMax) return false;
@@ -1020,9 +1056,9 @@
         return dir * String(va).localeCompare(String(vb));
       }
       if (col.type === "check") {
-        va = a[col.key] === 1 ? 1 : 0;
-        vb = b[col.key] === 1 ? 1 : 0;
-        return dir * (va - vb);
+        const rankA = setPieceDisplayRank(a, col.key) || 99;
+        const rankB = setPieceDisplayRank(b, col.key) || 99;
+        return dir * (rankA - rankB);
       }
       const aNA = !isStatAvailable(a, col);
       const bNA = !isStatAvailable(b, col);
@@ -1298,11 +1334,10 @@
     return tr;
   }
 
-  // FPL's preseason corners order isn't 1-based yet, so the CK column is
-  // flagged until a real 1st-choice taker appears in the data.
+  // Caveat only while a set-piece column has no absolute #1 in the data.
   const COLUMN_CAVEATS = {
     cornersOrder:
-      "FPL hasn't published 1st-choice corner takers for 2026/27 yet.",
+      "Some clubs still have no FPL #1 corner taker listed — only published #1/#2 show.",
   };
 
   function columnCaveat(col) {
@@ -1384,9 +1419,12 @@
       return delta ? `<span class="cell-inline align-end">${val}${delta}</span>` : val;
     }
     if (col.type === "check") {
-      const order = row[col.key];
-      const title = order === 1 ? "1st choice" : order ? `${order}${ordinalSuffix(order)} choice` : "Not on the list";
-      return `<span class="check-mark"${tipAttr(title)}>${order === 1 ? `<svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>` : ""}</span>`;
+      const mark = setPieceDisplayRank(row, col.key);
+      if (mark == null) return "";
+      if (mark === 1) {
+        return `<span class="check-mark"${tipAttr("1st choice")}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+      }
+      return `<span class="check-mark check-mark-rank"${tipAttr(`${mark}${ordinalSuffix(mark)} choice`)}>${mark}</span>`;
     }
     if (!isStatApplicable(row, col)) {
       return `<span${tipAttr(notApplicableReason(row, col))}>–</span>`;
@@ -1604,7 +1642,10 @@
       button.setAttribute("aria-expanded", "false");
     });
     if (el.prefsBtn && closingKey === "prefs") el.prefsBtn.setAttribute("aria-expanded", "false");
-    if (el.sidebarToggle && closingKey === "filters") el.sidebarToggle.classList.remove("on");
+    if (el.sidebarToggle && closingKey === "filters") {
+      el.sidebarToggle.classList.remove("on");
+      el.sidebarToggle.setAttribute("aria-pressed", "false");
+    }
     if (el.columnsBtn && closingKey === "columns") {
       el.columnsBtn.setAttribute("aria-expanded", "false");
       el.columnsBtn.classList.remove("on");
@@ -2535,12 +2576,12 @@
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)."),
       ];
       const reading = [
-        spitRow(spitRank("Place"), "Always vs all Players/Teams — filters only hide rows; a filtered #12 stays #12."),
+        spitRow(spitRank("Place"), "Among the current filters (and any pinned compares) — not the full unfiltered list. Default mins/price cuts stop low-minute Per 90 outliers from taking #1."),
         spitRow(
           spitRank(mobile ? "Tap" : "Pin"),
           mobile
-            ? "Tap a row to pin (up to five). Colour key above the cards; clears when switching Players / Teams."
-            : "Click to pin up to five. Hover cross-highlights the same name across cards. Colour key above the cards."
+            ? "Tap a row to pin (up to five). Pins stay on every card after you filter (e.g. a mid vs Forwards), sorted by value. Colour key above the cards; clears when switching Players / Teams."
+            : "Click to pin up to five. Pins stay on every card after you filter (e.g. a mid vs Forwards), sorted by value. Hover cross-highlights the same name across cards."
         ),
       ];
       return `${spitHead("podium", "How Rankings works")}
@@ -2640,7 +2681,7 @@
       ),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
-        "Set-piece check — 1st-choice PK / FK / CK (green)."
+        "Set-piece — FPL #1 (green check). FK/CK also show #2."
       ),
       spitRow(iconHTML("triangle-alert", "source-unsupported"), "Source can’t fill this cell")
     );
@@ -4333,7 +4374,9 @@
 
   // Click-to-pin: up to five subjects stay highlighted across every card, each
   // holding its own colour slot until it's unpinned. Slots are reused lowest
-  // first so removing the 2nd pin frees colour 2 for the next click.
+  // first so removing the 2nd pin frees colour 2 for the next click. Pinned
+  // rows are also retained on cards after filters hide them from the top-N
+  // (e.g. pin a midfielder, filter Forwards → mid stays for comparison).
   const RANKINGS_MAX_PINS = 5;
 
   function isRankingsMetricCol(col) {
@@ -4401,15 +4444,51 @@
     return map;
   }
 
-  // Places always come from the full Players/Teams list; `rows` only
-  // decides who is eligible to appear on the card (filters/search).
-  function topRankedForCol(rows, col, referenceRows) {
+  // Places match the filtered board: rank among current filters (plus any
+  // pinned subjects merged in for compare). Ranking vs the full unfiltered
+  // list made Per 90 / Per £m look oddly high — low-minute outliers take the
+  // top overall places while the default mins/price filters hide them.
+  function topRankedForCol(rows, col, populationForPins) {
     const filteredEntries = rankableEntries(rows, col);
-    const ranks = denseRankMap(rankableEntries(referenceRows || rows, col));
-    return filteredEntries.slice(0, RANKINGS_TOP_N).map((e) => ({
+    const leaders = filteredEntries.slice(0, RANKINGS_TOP_N).map((e) => ({
+      row: e.row,
+      key: e.key,
+      val: e.val,
+      retained: false,
+    }));
+    const present = new Set(leaders.map((e) => e.key));
+    const pinPool = rankableEntries(populationForPins || rows, col);
+    const byKey = new Map(pinPool.map((e) => [e.key, e]));
+    for (const pinKey of state.rankingsPins) {
+      if (present.has(pinKey)) continue;
+      const entry = byKey.get(pinKey);
+      if (!entry) continue;
+      leaders.push({
+        row: entry.row,
+        key: entry.key,
+        val: entry.val,
+        retained: true,
+      });
+      present.add(pinKey);
+    }
+
+    // Rank universe = everyone still in the filter, plus retained pins.
+    const rankUniverse = new Map(filteredEntries.map((e) => [e.key, e]));
+    for (const e of leaders) {
+      if (e.retained) rankUniverse.set(e.key, { row: e.row, key: e.key, val: e.val });
+    }
+    const lowerBetter = LOWER_BETTER.has(col.key);
+    const ranked = [...rankUniverse.values()].sort((a, b) =>
+      lowerBetter ? a.val - b.val : b.val - a.val
+    );
+    const ranks = denseRankMap(ranked);
+
+    leaders.sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
+    return leaders.map((e) => ({
       row: e.row,
       val: e.val,
       rank: ranks.get(e.key) ?? null,
+      retained: e.retained,
     }));
   }
 
@@ -4445,12 +4524,14 @@
             const key = String(rowKey(entry.row));
             const pin = state.rankingsPins.indexOf(key);
             const pinCls = pin >= 0 ? ` is-pinned pin-${pin + 1}` : "";
+            const retainedCls = entry.retained ? " is-pin-retained" : "";
             const pct = Math.max(8, Math.min(100, (Math.abs(entry.val) / scale) * 100));
             const valueLabel = fmtRankingsValue(entry.val, col);
-            return `<li class="rankings-row${medal ? ` medal-${medal}` : ""}${pinCls}"
+            const compareNote = entry.retained ? " (pinned compare)" : "";
+            return `<li class="rankings-row${medal ? ` medal-${medal}` : ""}${pinCls}${retainedCls}"
               data-row-key="${escapeHtml(key)}" role="button" tabindex="0"
               aria-pressed="${pin >= 0 ? "true" : "false"}"
-              aria-label="${escapeHtml(`${entry.rank == null ? "–" : entry.rank}. ${entry.row.name}, ${valueLabel}`)}">
+              aria-label="${escapeHtml(`${entry.rank == null ? "–" : entry.rank}. ${entry.row.name}, ${valueLabel}${compareNote}`)}">
               <span class="rankings-rank">${entry.rank == null ? "–" : entry.rank}</span>
               <span class="rankings-identity">${rankingsIdentityHTML(entry.row)}</span>
               <span class="rankings-meter">
@@ -4532,7 +4613,9 @@
       if (pins.length >= RANKINGS_MAX_PINS) return;
       pins.push(key);
     }
-    syncRankingsPinClasses();
+    // Re-render so pinned subjects outside the filtered top-N stay/appear on cards.
+    if (state.page === "rankings") renderRankings();
+    else syncRankingsPinClasses();
   }
 
   function clearRankingsCrossHover() {
@@ -4588,11 +4671,12 @@
       return;
     }
 
-    const referenceRows = getRows();
+    // Rank among the filtered population (pins looked up from the full list).
+    const populationForPins = getRows();
     el.rankingsGrid.innerHTML = sections
       .map((section) => {
         const cards = section.metricCols
-          .map((col) => rankingsCardHTML(col, filtered, referenceRows))
+          .map((col) => rankingsCardHTML(col, filtered, populationForPins))
           .join("");
         return `<div class="rankings-divider"><span>${escapeHtml(section.label)}</span></div>${cards}`;
       })
@@ -4655,7 +4739,8 @@
     el.rankingsPinBar.addEventListener("click", (e) => {
       if (e.target.closest("#rankings-pin-clear")) {
         state.rankingsPins.length = 0;
-        syncRankingsPinClasses();
+        if (state.page === "rankings") renderRankings();
+        else syncRankingsPinClasses();
         return;
       }
       const chip = e.target.closest("[data-pin-key]");
@@ -6492,6 +6577,8 @@ python3 site/annotate_social.py</pre>
 
     state.posFilter.clear();
     state.teamFilter.clear();
+    state.setPieceTakersOnly = false;
+    if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
     state.priceMin = defaultMinPrice();
     state.priceMax = bounds.price.max;
     state.minsMin = defaultMinMinutes();
@@ -6499,6 +6586,7 @@ python3 site/annotate_social.py</pre>
     if (typeof syncFilterChipUI === "function") syncFilterChipUI();
     if (typeof updatePriceSlider === "function") updatePriceSlider();
     if (typeof updateMinsSlider === "function") updateMinsSlider();
+    if (typeof syncFiltersResetUI === "function") syncFiltersResetUI();
 
     if (el.feedSearch) el.feedSearch.value = "";
     if (el.feedSearchWrap && !feedSearchAlwaysOpen()) {
@@ -6886,6 +6974,7 @@ python3 site/annotate_social.py</pre>
     el.tabTeams.classList.toggle("active", view === "teams");
     syncSegThumb(el.tabPlayers.closest(".tabs"));
     el.positionFilterGroup.style.display = view === "players" ? "" : "none";
+    if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = view === "players" ? "" : "none";
     el.minutesFilterGroup.style.display = view === "players" ? "" : "none";
     el.priceFilterGroup.style.display = view === "players" ? "" : "none";
     el.inactiveFilterGroup.style.display =
@@ -7688,6 +7777,14 @@ python3 site/annotate_social.py</pre>
     });
   }
 
+  if (el.setpieceTakersCheck) {
+    el.setpieceTakersCheck.addEventListener("change", () => {
+      state.setPieceTakersOnly = !!el.setpieceTakersCheck.checked;
+      syncFiltersResetUI();
+      renderTable();
+    });
+  }
+
   // Total / Per 90 / Per £m are mutually exclusive — the segmented control
   // always leaves exactly one option selected.
   function setValueMode(mode, { rerender = true } = {}) {
@@ -7886,11 +7983,13 @@ python3 site/annotate_social.py</pre>
         },
       });
       el.sidebarToggle.classList.add("on");
+      el.sidebarToggle.setAttribute("aria-pressed", "true");
       requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
       return;
     }
     const collapsed = el.sidebar.classList.toggle("collapsed");
     el.sidebarToggle.classList.toggle("on", !collapsed);
+    el.sidebarToggle.setAttribute("aria-pressed", collapsed ? "false" : "true");
     if (!collapsed) {
       requestAnimationFrame(() => syncAllSegThumbs({ animate: false }));
     }
@@ -8344,6 +8443,17 @@ python3 site/annotate_social.py</pre>
     upgradeNativeTitles();
     renderPriceIssuesPanel();
     await restoreManagerId();
+    // Desktop keeps Filters open by default; touch/narrow keeps the sheet pattern
+    // (collapsed until the filter button opens it).
+    if (preferMobileSheet()) {
+      el.sidebar.classList.add("collapsed");
+      el.sidebarToggle.classList.remove("on");
+      el.sidebarToggle.setAttribute("aria-pressed", "false");
+    } else {
+      el.sidebar.classList.remove("collapsed");
+      el.sidebarToggle.classList.add("on");
+      el.sidebarToggle.setAttribute("aria-pressed", "true");
+    }
     setView("players");
     buildExpectedCatMenu();
     // setView renders the OPTA table, so restoring the page comes last.

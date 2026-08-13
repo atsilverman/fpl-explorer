@@ -2551,6 +2551,13 @@ thead th.col-check, tbody td.col-check { text-align: center; }
   color: hsl(var(--positive));
   font-family: var(--sans);
 }
+.check-mark-rank {
+  min-width: 1.1em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+}
 /* Inline SVG (not .icon) so Lucide's stroke defaults don't wipe the white check. */
 .check-mark-icon {
   width: 15px;

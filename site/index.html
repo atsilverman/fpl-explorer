@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=334" />
+<link rel="stylesheet" href="styles.css?v=337" />
 <script>
 (() => {
   try {
@@ -362,7 +362,7 @@
 
 <div class="topbar" id="subtoolbar">
   <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
-    <button id="sidebar-toggle" class="ghost-btn icon-only-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters">
+    <button id="sidebar-toggle" class="ghost-btn icon-only-btn on" type="button" title="Hide/show filters" aria-label="Hide/show filters" aria-pressed="true">
       <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
     </button>
     <div class="tabs">
@@ -445,7 +445,7 @@
 </div>
 
 <div class="layout">
-  <aside class="sidebar collapsed" id="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="filters-reset-row" id="filters-reset-row" hidden>
       <button type="button" class="reset filters-reset-btn" id="reset-filters">Reset</button>
     </div>
@@ -492,6 +492,14 @@
     <div class="filter-group" id="position-filter-group">
       <h3>Position</h3>
       <div class="chip-row" id="pos-filters"></div>
+    </div>
+
+    <div class="filter-group" id="setpiece-filter-group">
+      <h3>Set Pieces</h3>
+      <label class="check-row-block">
+        <span class="check-row-line"><input type="checkbox" id="setpiece-takers-check" /> Set piece takers only</span>
+        <span class="check-row-note">FPL #1 for PK, FK, or CK (green check)</span>
+      </label>
     </div>
 
     <div class="filter-group">
@@ -866,10 +874,10 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=25"></script>
+<script src="data.js?v=26"></script>
 <script src="social_data.js?v=12"></script>
 <script src="markets_data.js?v=4"></script>
-<script src="app.js?v=335"></script>
+<script src="app.js?v=341"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
