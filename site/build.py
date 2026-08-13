@@ -345,9 +345,10 @@ def latest_fixtures_snapshot():
 
 def build_fixtures_by_team():
     """Builds per-team upcoming fixture lists from the FPL fixtures snapshot,
-    keyed by short_name (ARS, …). Each entry is {gw, opp, ha, kickoff} from
-    that team's perspective (ha = H/A). Also returns bootstrap team names so
-    promoted clubs missing from the OPTA CSVs still have a display name, plus
+    keyed by short_name (ARS, …). Each entry is {gw, opp, ha, kickoff, difficulty}
+    from that team's perspective (ha = H/A). difficulty is FPL's 1–5 FDR
+    (team_h_difficulty / team_a_difficulty). Also returns bootstrap team names
+    so promoted clubs missing from the OPTA CSVs still have a display name, plus
     a small meta blob naming the source files.
     """
     fx_path = latest_fixtures_snapshot()
@@ -368,16 +369,44 @@ def build_fixtures_by_team():
     ]
     upcoming.sort(key=lambda f: (f["event"], f.get("kickoff_time") or ""))
 
+    def fpl_difficulty(f, ha):
+        raw = f.get("team_h_difficulty" if ha == "H" else "team_a_difficulty")
+        try:
+            d = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return d if 1 <= d <= 5 else None
+
     for f in upcoming:
         home = teams_by_id.get(f["team_h"])
         away = teams_by_id.get(f["team_a"])
         if not home or not away:
             continue
         kickoff = f.get("kickoff_time")
-        by_team[home].append({"gw": f["event"], "opp": away, "ha": "H", "kickoff": kickoff})
-        by_team[away].append({"gw": f["event"], "opp": home, "ha": "A", "kickoff": kickoff})
+        home_row = {"gw": f["event"], "opp": away, "ha": "H", "kickoff": kickoff}
+        away_row = {"gw": f["event"], "opp": home, "ha": "A", "kickoff": kickoff}
+        home_d = fpl_difficulty(f, "H")
+        away_d = fpl_difficulty(f, "A")
+        if home_d is not None:
+            home_row["difficulty"] = home_d
+        if away_d is not None:
+            away_row["difficulty"] = away_d
+        by_team[home].append(home_row)
+        by_team[away].append(away_row)
 
-    meta = {"source": fx_path.name, "bootstrap": bs_path.name}
+    events = bootstrap.get("events") or []
+    current_gw = next((e.get("id") for e in events if e.get("is_current")), None)
+    if current_gw is None:
+        current_gw = next((e.get("id") for e in events if e.get("is_next")), None)
+    if current_gw is None:
+        gws = [fx["gw"] for rows in by_team.values() for fx in rows if fx.get("gw") is not None]
+        current_gw = min(gws) if gws else 1
+
+    meta = {
+        "source": fx_path.name,
+        "bootstrap": bs_path.name,
+        "currentGw": current_gw,
+    }
     return by_team, team_names, meta
 
 
