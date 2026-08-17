@@ -8,6 +8,7 @@
   const DATA = window.FPL_DATA;
   const SOCIAL = window.FPL_SOCIAL || { generatedAt: null, accounts: [], posts: [] };
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
+  const OWNERSHIP = window.FPL_OWNERSHIP || { generatedAt: null, checkIns: [] };
   const TEAM_NAMES = { ...DATA.teamNames, ...(DATA.fixtureTeamNames || {}) };
   const TEAM_BADGES = DATA.teamBadges || {}; // short code -> "badges/XXX.svg" (only where art exists)
   // Dark-surface variants (navy/black crests that disappear on dark UI).
@@ -67,6 +68,10 @@
   const FIXTURE_TT_DELAY_SEC_MAX = 5;
   const FIXTURE_TT_DELAY_SEC_DEFAULT = 1;
   const FIXTURE_TT_COUNT = 7;
+  const OWNERSHIP_FILTER_DEFAULT = 5;
+  const OWNERSHIP_FILTER_MAX = 100;
+  const OWNERSHIP_TREND_THRESHOLD_DEFAULT = 0.5;
+  const OWNERSHIP_TREND_THRESHOLD_MAX = 5;
   // Statistics-page fixture tooltip shading — wider than the players Enhance
   // default (10%) so tough/soft opponents read clearly in fixture tips.
   const FIXTURE_TT_ENHANCE_PCT = 30;
@@ -82,15 +87,37 @@
   // not matched yet".
   const HAS_PRICE_DATA = !!(DATA.newSeasonPriceMeta && DATA.newSeasonPriceMeta.source);
 
+  // Tall shield SVGs (Hull, Arsenal, Villa, …) fill the full crest-box height
+  // while roundels leave side slack, so they read larger at the same CSS size.
+  // Fit % is precomputed from each file's viewBox aspect (rsvg raster check);
+  // square/circular art stays at 100. Regenerate: compare max/min viewBox sides,
+  // pct = clamp(74, 100, round(100 * 1.05 / ratio)) when ratio > 1.08.
+  const CREST_FIT_PCT = {
+    "badges/ARS.svg": 87,
+    "badges/AVL.svg": 78,
+    "badges/BOU.svg": 80,
+    "badges/COV.svg": 81,
+    "badges/FUL.svg": 79,
+    "badges/HUL.svg": 83,
+    "badges/IPS.svg": 84,
+    "badges/LEE.svg": 87,
+    // Spurs stays at 100: the cockerel is a narrow figure, not a wide shield, so
+    // full box height reads the same weight as Liverpool's liver bird.
+  };
+
   function badgeHTML(teamCode, className) {
     const src = TEAM_BADGES[teamCode];
     if (!src) return "";
     const cls = className ? `badge-img ${className}` : "badge-img";
+    const fitAttr = (imgSrc) => {
+      const pct = CREST_FIT_PCT[imgSrc];
+      return pct && pct < 100 ? ` style="--crest-fit:${pct}%"` : "";
+    };
     const darkSrc = TEAM_BADGES_DARK[teamCode];
-    if (!darkSrc) return `<img class="${cls}" src="${src}" alt="" />`;
+    if (!darkSrc) return `<img class="${cls}" src="${src}"${fitAttr(src)} alt="" />`;
     return (
-      `<img class="${cls} badge-img-light" src="${src}" alt="" />` +
-      `<img class="${cls} badge-img-dark" src="${darkSrc}" alt="" />`
+      `<img class="${cls} badge-img-light" src="${src}"${fitAttr(src)} alt="" />` +
+      `<img class="${cls} badge-img-dark" src="${darkSrc}"${fitAttr(darkSrc)} alt="" />`
     );
   }
 
@@ -111,54 +138,85 @@
     return `hsl(var(--negative) / ${alpha})`;
   }
 
-  // Enhance highlight paint. Intensity 1 = strongest in the band.
-  // Soft ranks stay translucent tints; leaders punch harder. Light-mode
-  // greens stay as washes (dark text) so they don't go near-black forest.
-  // Dark mode / red bottoms still solidify toward black for white text.
-  function enhanceHighlightPaint(kind, intensity) {
+  function fdrEasyFill(alpha) {
+    return `hsl(var(--fdr-easy) / ${alpha})`;
+  }
+
+  function fdrHardFill(alpha) {
+    return `hsl(var(--fdr-hard) / ${alpha})`;
+  }
+
+  // Shared intensity ramp for Enhance (green/red) and Team FDR (blue/pink).
+  // Intensity 1 = strongest in the band. Low intensities must be able to
+  // reach ~0 so the tail melts into the row; leaders still punch.
+  // Light-mode easy stays a wash (dark text). Dark mode / hard ends still
+  // solidify toward black for white text.
+  function spectrumHighlightPaint(isEasy, intensity, palette) {
     const t = Math.min(1, Math.max(0, Number(intensity) || 0));
-    // Ease-in keeps the lower band soft and concentrates drama at the top.
-    const e = Math.pow(t, 0.72);
+    if (t < 0.04) {
+      return { backgroundColor: "", color: "", strong: false, skip: true, emphasize: false };
+    }
     const dark = themePrefersDark();
-    const isTop = kind === "top";
-    const base = isTop
-      ? "hsl(var(--positive-highlight, var(--positive)))"
-      : "hsl(var(--negative))";
-    if (e < 0.65) {
-      // Dark green washes used to neon on near-black rows — keep them quieter.
+    const base = isEasy ? palette.easy : palette.hard;
+    if (t < 0.65) {
+      // No alpha floor — the lowest ranks in the band should read as the row.
       const alpha = dark
-        ? (isTop ? 0.1 + e * 0.26 : 0.12 + e * 0.42).toFixed(3) // top ~0.10–0.27
-        : (0.12 + e * 0.55).toFixed(3); // ~0.12–0.48
+        ? (isEasy ? t * 0.4 : t * 0.56).toFixed(3)
+        : (t * 0.74).toFixed(3);
       return {
-        backgroundColor: isTop ? positiveHighlightFill(alpha) : negativeFill(alpha),
+        backgroundColor: (isEasy ? palette.easyFill : palette.hardFill)(alpha),
         color: "",
         strong: false,
+        emphasize: t >= 0.42,
       };
     }
-    // Light-mode top: richer wash, keep dark text — no color-mix toward black.
-    if (!dark && isTop) {
-      const alpha = (0.5 + ((e - 0.65) / 0.35) * 0.26).toFixed(3); // ~0.50–0.76
+    // Light-mode easy: richer wash, keep dark text — no color-mix toward black.
+    if (!dark && isEasy) {
+      const alpha = (0.5 + ((t - 0.65) / 0.35) * 0.26).toFixed(3); // ~0.50–0.76
       return {
-        backgroundColor: positiveHighlightFill(alpha),
+        backgroundColor: palette.easyFill(alpha),
         color: "",
         strong: false,
+        emphasize: true,
       };
     }
     // Strong band: mix toward black so white text stays readable.
-    // Dark green solids need more black so they don't glow.
+    // Dark easy solids need more black so they don't glow.
     const blackPct = dark
-      ? Math.round((isTop ? 34 : 24) + ((e - 0.65) / 0.35) * (isTop ? 18 : 16))
-      : Math.round(18 + ((e - 0.65) / 0.35) * 16);
+      ? Math.round((isEasy ? 34 : 24) + ((t - 0.65) / 0.35) * (isEasy ? 18 : 16))
+      : Math.round(18 + ((t - 0.65) / 0.35) * 16);
     return {
       backgroundColor: `color-mix(in srgb, ${base} ${100 - blackPct}%, black)`,
       color: "#fff",
       strong: true,
+      emphasize: true,
     };
+  }
+
+  function enhanceHighlightPaint(kind, intensity) {
+    return spectrumHighlightPaint(kind === "top", intensity, {
+      easy: "hsl(var(--positive-highlight, var(--positive)))",
+      hard: "hsl(var(--negative))",
+      easyFill: positiveHighlightFill,
+      hardFill: negativeFill,
+    });
+  }
+
+  function fdrHighlightPaint(kind, intensity) {
+    return spectrumHighlightPaint(kind === "easy", intensity, {
+      easy: "hsl(var(--fdr-easy))",
+      hard: "hsl(var(--fdr-hard))",
+      easyFill: fdrEasyFill,
+      hardFill: fdrHardFill,
+    });
   }
 
   function applyEnhanceHighlight(td, kind, intensity) {
     const paint = enhanceHighlightPaint(kind, intensity);
-    td.classList.add(kind === "top" ? "highlight-top" : "highlight-bottom");
+    if (paint.skip) return;
+    if (paint.emphasize || paint.strong) {
+      td.classList.add(kind === "top" ? "highlight-top" : "highlight-bottom");
+    }
     td.classList.toggle("highlight-strong", paint.strong);
     td.style.backgroundColor = paint.backgroundColor;
     if (paint.color) td.style.color = paint.color;
@@ -167,11 +225,27 @@
 
   function enhanceHighlightInlineStyle(kind, intensity) {
     const paint = enhanceHighlightPaint(kind, intensity);
+    if (paint.skip) return { style: "", strongClass: "" };
     const color = paint.color ? `;color:${paint.color}` : "";
+    const kindClass =
+      paint.emphasize || paint.strong ? (kind === "top" ? " highlight-top" : " highlight-bottom") : "";
     const strong = paint.strong ? " highlight-strong" : "";
     return {
       style: `background-color:${paint.backgroundColor}${color}`,
-      strongClass: strong,
+      strongClass: `${kindClass}${strong}`,
+    };
+  }
+
+  function fdrHighlightInlineStyle(kind, intensity) {
+    const paint = fdrHighlightPaint(kind, intensity);
+    if (paint.skip) return { style: "", strongClass: "" };
+    const color = paint.color ? `;color:${paint.color}` : "";
+    const kindClass =
+      paint.emphasize || paint.strong ? (kind === "easy" ? " highlight-top" : " highlight-bottom") : "";
+    const strong = paint.strong ? " highlight-strong" : "";
+    return {
+      style: `background-color:${paint.backgroundColor}${color}`,
+      strongClass: `${kindClass}${strong}`,
     };
   }
 
@@ -181,6 +255,7 @@
   const PLAYER_COLS = [
     { key: "player", label: "Player", type: "player", pin: true },
     { key: "price", label: "£m", decimals: 1, group: "Core", title: "Price (£m)" },
+    { key: "owned", label: "Own%", decimals: 1, group: "Core", title: "Current FPL ownership" },
     { key: "apps", label: "Apps", decimals: 0, group: "Core", title: "Appearances" },
     { key: "mins", label: "Mins", decimals: 0, group: "Core", title: "Minutes played" },
     { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
@@ -263,7 +338,7 @@
     "cleanSheets", "goalsConceded", "xgc", "saves", "__cbitr", "xgi",
   ]);
   // Columns exempt from Enhance ranking even though they're numeric.
-  const ENHANCE_EXCLUDE = new Set(["price", "apps", "gp"]);
+  const ENHANCE_EXCLUDE = new Set(["price", "owned", "apps", "gp"]);
   const ENHANCE_PCT_MIN = 2;
   const ENHANCE_PCT_MAX = 40;
   const ENHANCE_PCT_PLAYERS = 5;
@@ -407,7 +482,7 @@
   // State
   // ---------------------------------------------------------------------
   const state = {
-    page: "opta", // opta | rankings | expected | schedule | feed | markets | team
+    page: "opta", // opta | rankings | ownership | expected | schedule | feed | markets | team | notes
     season: "2025-26", // 2025-26 | 2026-27
     view: "players", // players | teams
     split: "combined", // combined | home | away
@@ -416,6 +491,7 @@
     teamFilter: new Set(),
     priceMin: null,
     priceMax: null,
+    ownedMin: OWNERSHIP_FILTER_DEFAULT,
     minsMin: null,
     minsMax: null,
     valueMode: "total", // total | per90 | perM
@@ -455,11 +531,22 @@
     teamViceCode: null,
     teamPickerSlot: null, // { position, starter, replaceCode }
     teamGwStart: null,
-    teamPickerSearch: "",
     teamSortKey: null,
     teamSortDir: "desc",
     teamSubCode: null,
+    teamAffordableOnly: false,
+    teamCompareMode: false,
+    teamCompareCodes: [], // pins + click-to-select, max MAX_COMPARE
+    teamHoverCompareCode: null,
+    teamSearchActiveCode: null,
+    teamMode: "planner", // planner | actual
+    ownershipTrending: false,
+    ownershipTrendThreshold: OWNERSHIP_TREND_THRESHOLD_DEFAULT,
+    actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
+    notes: [],
+    notesGroupBy: "none", // none | player | team
   };
+  state.teamSearchPins = state.teamCompareCodes;
 
   const MAX_COMPARE = 5;
 
@@ -471,7 +558,7 @@
     return state.season === "2026-27";
   }
 
-  // Updates chrome (arrows / ± / sticky notes) only on 2025/26 data.
+  // Updates chrome (arrows / ±) only on 2025/26 data.
   function updatesOverlayOn() {
     return !isNextSeason() && state.showNewPrice;
   }
@@ -502,6 +589,8 @@
   // Mutable range used by the price/mins dual sliders (updated on season switch).
   const bounds = computeBounds("2025-26");
   function defaultMinPrice() {
+    // Player select shows the full catalog; elsewhere keep the £4.5m+ default.
+    if (state.page === "team" && state.teamPickerSlot) return bounds.price.min;
     return Math.min(Math.max(4.5, bounds.price.min), bounds.price.max);
   }
   function defaultMinMinutes() {
@@ -516,6 +605,27 @@
     return state.view === "players" ? PLAYER_COLS : TEAM_COLS;
   }
 
+  const latestOwnershipCheckIn =
+    Array.isArray(OWNERSHIP.checkIns) && OWNERSHIP.checkIns.length
+      ? OWNERSHIP.checkIns[OWNERSHIP.checkIns.length - 1]
+      : null;
+  const latestOwnershipByCode = new Map(
+    ((latestOwnershipCheckIn && latestOwnershipCheckIn.players) || [])
+      .filter((player) => player && player.code != null)
+      .map((player) => [Number(player.code), Number(player.owned)])
+  );
+
+  function currentOwnership(code) {
+    if (code == null || code === "") return null;
+    const owned = latestOwnershipByCode.get(Number(code));
+    return Number.isFinite(owned) ? owned : null;
+  }
+
+  function passesOwnershipFilter(row) {
+    const owned = currentOwnership(row && row.code);
+    return owned != null && owned >= state.ownedMin;
+  }
+
   // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
@@ -525,7 +635,9 @@
   const el = {
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
+    pageOwnership: $("#page-ownership"),
     pageTeam: $("#page-team"),
+    pageNotes: $("#page-notes"),
     pageExpected: $("#page-expected"),
     pageTabs: $("#page-tabs"),
     pageTabsClip: $("#page-tabs-clip"),
@@ -552,22 +664,60 @@
     rankingsPinBar: $("#rankings-pin-bar"),
     rankingsGrid: $("#rankings-grid"),
     rankingsCountLabel: $("#rankings-count-label"),
+    ownershipPage: $("#ownership-page"),
+    ownershipChart: $("#ownership-chart"),
+    ownershipChartWrap: $("#ownership-chart-wrap"),
+    ownershipTooltip: $("#ownership-tooltip"),
+    ownershipCountLabel: $("#ownership-count-label"),
+    ownershipTrendingGroup: $("#ownership-trending-group"),
+    ownershipTrendingToggle: $("#ownership-trending-toggle"),
+    ownershipTrendThreshold: $("#ownership-trend-threshold"),
+    ownershipTrendThresholdFill: $("#ownership-trend-threshold-fill"),
+    ownershipTrendThresholdLabel: $("#ownership-trend-threshold-label"),
+    ownershipTrendCards: $("#ownership-trend-cards"),
+    ownershipTrendRisers: $("#ownership-trend-risers"),
+    ownershipTrendFallers: $("#ownership-trend-fallers"),
     teamPage: $("#team-page"),
+    teamPageSubtitle: $("#team-page-subtitle"),
+    teamModeSeg: $("#team-mode-seg"),
+    teamResyncBtn: $("#team-resync-btn"),
+    teamRowMenu: $("#team-row-menu"),
+    notesPage: $("#notes-page"),
+    notesCollage: $("#notes-collage"),
+    notesCountLabel: $("#notes-count-label"),
+    notesGroupSeg: $("#notes-group-seg"),
+    noteContextMenu: $("#note-context-menu"),
+    noteModal: $("#note-modal"),
+    noteModalTitle: $("#note-modal-title"),
+    noteModalSub: $("#note-modal-sub"),
+    noteTextInput: $("#note-text-input"),
+    noteModalSave: $("#note-modal-save"),
     teamBudgetBar: $("#team-budget-bar"),
     teamSubBar: $("#team-sub-bar"),
     teamGwNav: $("#team-gw-nav"),
     teamSquadView: $("#team-squad-view"),
     teamPickerView: $("#team-picker-view"),
-    teamPickerBar: $("#team-picker-bar"),
-    teamPickerTitle: $("#team-picker-title"),
-    teamPickerMeta: $("#team-picker-meta"),
-    teamPickerSearch: $("#team-picker-search"),
-    teamPickerCancel: $("#team-picker-cancel"),
     teamSquadHead: $("#team-squad-head"),
     teamSquadBody: $("#team-squad-body"),
+    teamSearchResults: $("#team-search-results"),
+    teamSearchTitle: $("#team-search-title"),
+    teamSearchClearPins: $("#team-search-clear-pins"),
+    teamSearchHead: $("#team-search-head"),
+    teamSearchBody: $("#team-search-body"),
     teamPickerHead: $("#team-picker-head"),
     teamPickerBody: $("#team-picker-body"),
     teamClearBtn: $("#team-clear-btn"),
+    teamAffordableGroup: $("#team-affordable-group"),
+    teamAffordableCheck: $("#team-affordable-check"),
+    teamCompareBtn: $("#team-compare-btn"),
+    teamCompareWrap: $("#team-compare-wrap"),
+    teamCompareTitle: $("#team-compare-title"),
+    teamCompareClear: $("#team-compare-clear"),
+    teamCompareHead: $("#team-compare-head"),
+    teamCompareBody: $("#team-compare-body"),
+    teamToolbarControls: $("#team-toolbar-controls"),
+    teamToolbarMode: $("#team-toolbar-mode"),
+    searchHome: $(".topbar-end-cluster"),
     expectedPage: $("#expected-page"),
     schedulePage: $("#schedule-page"),
     scheduleGrid: $("#schedule-grid"),
@@ -673,6 +823,9 @@
     priceMinLabel: $("#price-min-label"),
     priceMaxLabel: $("#price-max-label"),
     priceFill: $("#price-fill"),
+    ownedMin: $("#owned-min"),
+    ownedMinLabel: $("#owned-min-label"),
+    ownedMinFill: $("#owned-min-fill"),
     minsMin: $("#mins-min"),
     minsMax: $("#mins-max"),
     minsMinLabel: $("#mins-min-label"),
@@ -697,6 +850,10 @@
     compareHead: $("#compare-head"),
     compareBody: $("#compare-body"),
     toastRoot: $("#toast-root"),
+    confirmModal: $("#confirm-modal"),
+    confirmModalTitle: $("#confirm-modal-title"),
+    confirmModalMsg: $("#confirm-modal-msg"),
+    confirmModalOk: $("#confirm-modal-ok"),
     columnsBtn: $("#columns-btn"),
     columnsList: $("#columns-list"),
     countLabel: $("#count-label"),
@@ -710,6 +867,7 @@
     setpieceTakersCheck: $("#setpiece-takers-check"),
     minutesFilterGroup: $("#minutes-filter-group"),
     priceFilterGroup: $("#price-filter-group"),
+    ownedFilterGroup: $("#owned-filter-group"),
     inactiveFilterGroup: $("#inactive-filter-group"),
     showDepartedCheck: $("#show-departed-check"),
   };
@@ -765,7 +923,7 @@
   function syncFilterChipUI() {
     const lock = state.page === "team" && state.teamPickerSlot && state.teamPickerSlot.position;
     $$("#pos-filters .chip").forEach((c) => {
-      c.classList.toggle("active", lock ? c.dataset.pos === lock : state.posFilter.has(c.dataset.pos));
+      c.classList.toggle("active", !lock && state.posFilter.has(c.dataset.pos));
       c.classList.toggle("is-locked", !!lock);
     });
     $$("#team-filters .chip").forEach((c) => c.classList.toggle("active", state.teamFilter.has(c.dataset.team)));
@@ -781,9 +939,12 @@
     if (state.teamFilter.size) return true;
     if (state.search.trim()) return true;
     if (state.priceMin !== defaultMinPrice() || state.priceMax !== bounds.price.max) return true;
+    if (state.ownedMin !== OWNERSHIP_FILTER_DEFAULT) return true;
+    if (state.ownershipTrendThreshold !== OWNERSHIP_TREND_THRESHOLD_DEFAULT) return true;
     if (state.minsMin !== defaultMinMinutes() || state.minsMax !== bounds.mins.max) return true;
     if (!state.hideDeparted) return true;
     if (state.setPieceTakersOnly) return true;
+    if (state.page === "team" && state.teamAffordableOnly) return true;
     if (state.valueMode !== "total") return true;
     if (state.split !== "combined") return true;
     if (state.enhancePct !== defaultEnhancePct()) return true;
@@ -808,6 +969,8 @@
     state.teamFilter.clear();
     state.priceMin = defaultMinPrice();
     state.priceMax = bounds.price.max;
+    state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
+    state.ownershipTrendThreshold = OWNERSHIP_TREND_THRESHOLD_DEFAULT;
     state.minsMin = defaultMinMinutes();
     state.minsMax = bounds.mins.max;
     state.search = "";
@@ -819,6 +982,8 @@
     if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
     state.setPieceTakersOnly = false;
     if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
+    state.teamAffordableOnly = false;
+    if (el.teamAffordableCheck) el.teamAffordableCheck.checked = false;
     setValueMode("total", { rerender: false });
     state.split = "combined";
     $$("#split-seg button").forEach((b) => b.classList.toggle("active", b.dataset.split === "combined"));
@@ -827,10 +992,13 @@
     state.hiddenCols = new Set();
     updateEnhancePctSlider();
     updatePriceSlider();
+    updateOwnedSlider();
+    updateOwnershipTrendThresholdSlider();
     updateMinsSlider();
     syncFilterChipUI();
     renderColumnsPanel();
     renderTable();
+    if (state.page === "ownership") renderOwnership();
   }
 
   // ---------------------------------------------------------------------
@@ -874,7 +1042,8 @@
   }
 
   function applyFilters(rows) {
-    const q = state.search.trim().toLowerCase();
+    // Rankings has no search UI — ignore any leftover query from other pages.
+    const q = state.page === "rankings" ? "" : state.search.trim().toLowerCase();
     return rows.filter((r) => {
       if (state.view === "players") {
         if (!isNextSeason() && HAS_PRICE_DATA && state.hideDeparted && r.price2627 == null) return false;
@@ -882,6 +1051,7 @@
         if (state.posFilter.size && !state.posFilter.has(r.position)) return false;
         if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
         if (r.price < state.priceMin || r.price > state.priceMax) return false;
+        if (!passesOwnershipFilter(r)) return false;
         if (r.mins < state.minsMin || r.mins > state.minsMax) return false;
         if (q) {
           const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
@@ -923,6 +1093,7 @@
     // Already-normalised derived rates (Pts/GP, G/GP) must not be rescaled.
     if (col.derived && !col.rate) return row[col.key];
     if (col.key === "price") return effectivePrice(row) || row.price;
+    if (col.key === "owned") return currentOwnership(row.code);
     if (state.view === "players" && col.rate) {
       if (state.valueMode === "per90") return per90Value(row, col);
       if (state.valueMode === "perM") return perMillionValue(row, col);
@@ -1032,39 +1203,13 @@
     return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0Z"/><path d="m9 10 2 2 4-4"/></svg>`;
   }
 
-  // Filled Lucide sticky-note — marks players with a 2026/27 price/team/pos change.
-  function stickyNoteSVG(className = "player-update-note-icon") {
-    return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="m16 3 5 5h-3a2 2 0 0 1-2-2Z"/></svg>`;
-  }
-
-  // Sticky-note affordance: team / position moves only (price-only changes
-  // are common and would mark nearly every row).
+  // Team / position moves only (price-only changes are common).
+  // Used for the Updates overlay blue edge, not an in-row icon.
   function playerHasSeasonUpdate(row) {
-    // Sticky-note only makes sense on 2025/26 rows (previewing next season).
     if (isNextSeason() || !HAS_PRICE_DATA || !row || state.view !== "players") return false;
     const teamChanged = !!(row.newTeam && row.newTeam !== row.team);
     const posChanged = !!(row.newPosition && row.newPosition !== row.position);
     return teamChanged || posChanged;
-  }
-
-  function playerUpdateSummary(row) {
-    const parts = [];
-    if (row.newTeam && row.newTeam !== row.team) {
-      parts.push(`${row.team} → ${row.newTeam}`);
-    }
-    if (row.newPosition && row.newPosition !== row.position) {
-      parts.push(`${row.position} → ${row.newPosition}`);
-    }
-    return parts.length ? `2026/27: ${parts.join(" · ")}` : "2026/27 update";
-  }
-
-  function playerUpdateNoteHTML(row) {
-    if (!playerHasSeasonUpdate(row)) return "";
-    const summary = playerUpdateSummary(row);
-    // No inline stopPropagation — mobile tip sheet uses capture + identity
-    // chrome handling so ownership / note taps open the tray without toggling
-    // compare rows.
-    return `<span class="player-update-note"${tipAttr(summary)} aria-label="${escapeHtml(summary)}">${stickyNoteSVG()}</span>`;
   }
 
   function spitOwnedPinHTML() {
@@ -1108,58 +1253,343 @@
   // Viewer-owned squad (FPL manager ID → owned player codes)
   // ---------------------------------------------------------------------
   const FPL_ID_KEY = "fpl-explorer-manager-id";
-  // Screenshot squad for manager 296817 — FPL picks API isn't updated for
-  // 2026/27 yet, so we resolve these names to stable `code` values locally.
-  // Names are FPL `web_name` (same as DATA.players after build rename).
-  const MOCK_OWNED_NAMES = [
-    "Darlow",
-    "O'Reilly",
-    "Struijk",
-    "Senesi",
-    "Palmer",
-    "Semenyo",
-    "B.Fernandes",
-    "Tavernier",
-    "Calvert-Lewin",
-    "Haaland",
-    "João Pedro",
-    "Verbruggen",
-    "Hill",
-    "Groß",
-    "Van Hecke",
-  ];
+  const TEAM_MODE_KEY = "fpl-explorer-team-mode";
+  const TEAM_ACTUAL_KEY = "fpl-explorer-team-actual";
+  const NOTES_KEY = "fpl-explorer-notes-v1";
   let ownedCodes = new Set();
   let savedManagerId = null;
+  let noteMenuOpenedAt = 0;
+  let noteDraft = null;
 
-  function resolveMockOwnedCodes() {
-    // Prefer code-bearing rows; match exact web_name, then normalized form
-    // so accents/punctuation drift doesn't drop pins.
-    const byName = new Map();
-    const byNorm = new Map();
-    const norm = (s) =>
-      String(s || "")
-        .normalize("NFKD")
-        .replace(/\p{M}/gu, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-    (DATA.players.combined || []).forEach((p) => {
-      if (!p || p.code == null || !p.name) return;
-      byName.set(p.name, p.code);
-      byNorm.set(norm(p.name), p.code);
-    });
-    const codes = new Set();
-    MOCK_OWNED_NAMES.forEach((name) => {
-      const code = byName.get(name) ?? byNorm.get(norm(name));
-      if (code != null) codes.add(code);
-    });
-    return codes;
+  async function fetchManagerSquad(managerId) {
+    const url = `/api/fpl/squad?id=${encodeURIComponent(managerId)}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (!res.ok || !data || !data.ok) {
+      const err = new Error((data && data.error) || `Manager sync failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   }
 
-  // Real path later: GET /api/entry/{id}/event/{gw}/picks/ → picks[].element
-  // mapped through bootstrap-static elements[].code. Until FPL publishes
-  // 2026/27 picks, always return the screenshot mock for any saved ID.
-  async function loadOwnedSquad(_managerId) {
-    return resolveMockOwnedCodes();
+  function normalizeSquadSlots(raw) {
+    return (Array.isArray(raw) ? raw : [])
+      .filter((s) => s && s.code != null && TEAM_SQUAD_MAX[s.position])
+      .slice(0, 15)
+      .map((s) => ({
+        code: Number(s.code) || s.code,
+        position: s.position,
+        starter: !!s.starter,
+        benchOrder: Number.isFinite(s.benchOrder) ? s.benchOrder : 0,
+      }));
+  }
+
+  function loadActualSnapshot() {
+    try {
+      const raw = localStorage.getItem(TEAM_ACTUAL_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.squad)) return null;
+      return {
+        squad: normalizeSquadSlots(parsed.squad),
+        captain: parsed.captain != null ? Number(parsed.captain) || parsed.captain : null,
+        vice: parsed.vice != null ? Number(parsed.vice) || parsed.vice : null,
+        meta: parsed.meta || null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function saveActualSnapshot(snap) {
+    try {
+      localStorage.setItem(
+        TEAM_ACTUAL_KEY,
+        JSON.stringify({
+          version: 1,
+          squad: snap.squad || [],
+          captain: snap.captain ?? null,
+          vice: snap.vice ?? null,
+          meta: snap.meta || null,
+        })
+      );
+    } catch {
+      /* private browsing */
+    }
+  }
+
+  function applySquadSnapshot(snap) {
+    state.teamSquad = normalizeSquadSlots(snap && snap.squad);
+    state.teamCaptainCode = snap && snap.captain != null ? Number(snap.captain) || snap.captain : null;
+    state.teamViceCode = snap && snap.vice != null ? Number(snap.vice) || snap.vice : null;
+    normalizeTeamRoles();
+  }
+
+  function teamIsEditable() {
+    return state.teamMode !== "actual";
+  }
+
+  function plannerDraftIsEmpty() {
+    try {
+      const raw = localStorage.getItem(TEAM_DRAFT_KEY);
+      if (!raw) return !state.teamSquad.length;
+      const parsed = JSON.parse(raw);
+      return !(parsed && Array.isArray(parsed.squad) && parsed.squad.length);
+    } catch {
+      return !state.teamSquad.length;
+    }
+  }
+
+  function syncFplIdStatus() {
+    if (!el.fplIdStatus) return;
+    if (!savedManagerId) {
+      el.fplIdStatus.textContent = "No manager ID saved.";
+      return;
+    }
+    const n = ownedCodes.size;
+    const meta = state.actualMeta;
+    const bits = [`ID ${savedManagerId}`];
+    if (meta && meta.teamName) bits.push(meta.teamName);
+    if (meta && meta.gwLabel) bits.push(meta.gwLabel);
+    if (n > 0) bits.push(`${n} pick${n === 1 ? "" : "s"}`);
+    else if (meta && meta.hasPicks === false) bits.push("no published picks yet");
+    else bits.push("not synced");
+    el.fplIdStatus.textContent = bits.join(" · ");
+  }
+
+  function syncTeamModeUI() {
+    if (el.teamPage) {
+      el.teamPage.dataset.teamMode = state.teamMode;
+      el.teamPage.classList.toggle("is-actual-readonly", state.teamMode === "actual");
+    }
+    if (el.teamModeSeg) {
+      el.teamModeSeg.querySelectorAll("[data-team-mode]").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-team-mode") === state.teamMode);
+      });
+      syncSegThumb(el.teamModeSeg, { animate: false });
+    }
+    if (el.teamResyncBtn) {
+      el.teamResyncBtn.hidden = !savedManagerId || state.teamMode !== "planner";
+    }
+    if (el.teamPageSubtitle) {
+      el.teamPageSubtitle.textContent =
+        state.teamMode === "actual"
+          ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
+          : "Editable planner squad (£100.0m). Resync replaces this with your linked Actual team.";
+    }
+    syncTeamClearBtn();
+  }
+
+  function setTeamMode(mode, { render = true, persist = true } = {}) {
+    const next = mode === "actual" ? "actual" : "planner";
+    if (state.teamMode === "planner" && next !== "planner") {
+      saveTeamDraft();
+      closeTeamPicker({ silent: true });
+      cancelTeamSub({ silent: true });
+      hideTeamRowActionsPopup();
+    }
+    state.teamMode = next;
+    if (persist) {
+      try {
+        localStorage.setItem(TEAM_MODE_KEY, next);
+      } catch {
+        /* private browsing */
+      }
+    }
+    if (next === "actual") {
+      const snap = loadActualSnapshot() || { squad: [], captain: null, vice: null, meta: state.actualMeta };
+      state.actualMeta = snap.meta || state.actualMeta;
+      applySquadSnapshot(snap);
+      state.teamCompareMode = false;
+      state.teamCompareCodes = [];
+      state.teamSearchActiveCode = null;
+    } else {
+      loadTeamDraft();
+    }
+    syncTeamModeUI();
+    if (render) renderTeam();
+  }
+
+  async function ingestManagerSquad(payload, { seedPlannerIfEmpty = false } = {}) {
+    const snap = {
+      squad: normalizeSquadSlots(payload.squad),
+      captain: payload.captain != null ? Number(payload.captain) || payload.captain : null,
+      vice: payload.vice != null ? Number(payload.vice) || payload.vice : null,
+      meta: {
+        syncedAt: payload.syncedAt || new Date().toISOString(),
+        gw: payload.gw,
+        gwLabel: payload.gwLabel || (payload.hasPicks ? `Gameweek ${payload.gw}` : "Preseason"),
+        teamName: payload.teamName || "",
+        managerName: payload.managerName || "",
+        hasPicks: !!payload.hasPicks,
+        message: payload.message || null,
+        managerId: String(payload.managerId || savedManagerId || ""),
+      },
+    };
+    saveActualSnapshot(snap);
+    state.actualMeta = snap.meta;
+    ownedCodes = new Set(snap.squad.map((s) => s.code));
+    if (seedPlannerIfEmpty && payload.hasPicks && plannerDraftIsEmpty()) {
+      const prevMode = state.teamMode;
+      state.teamMode = "planner";
+      applySquadSnapshot(snap);
+      saveTeamDraft();
+      state.teamMode = prevMode;
+      if (prevMode === "actual") applySquadSnapshot(snap);
+    } else if (state.teamMode === "actual") {
+      applySquadSnapshot(snap);
+    }
+    syncFplIdStatus();
+    syncTeamModeUI();
+    return snap;
+  }
+
+  async function syncManagerFromApi(managerId, { seedPlannerIfEmpty = false, quiet = false } = {}) {
+    const payload = await fetchManagerSquad(managerId);
+    await ingestManagerSquad(payload, { seedPlannerIfEmpty });
+    if (!quiet) {
+      showToast({
+        title: payload.hasPicks ? "FPL squad synced" : "Manager linked",
+        message: payload.hasPicks
+          ? `${payload.squad.length} picks · ${payload.gwLabel || "GW"}`
+          : payload.message || "No published picks yet — Actual stays empty until FPL publishes them.",
+        icon: payload.hasPicks ? "circle-check" : "info",
+      });
+    }
+    return payload;
+  }
+
+  async function applyManagerId(rawId, { quiet = false, render = true, seedPlannerIfEmpty = true } = {}) {
+    const id = String(rawId || "").trim();
+    if (!/^\d+$/.test(id) || Number(id) <= 0) {
+      if (!quiet) {
+        showToast({ title: "Invalid FPL ID", message: "Enter a positive numeric manager ID.", icon: "triangle-alert" });
+      }
+      return false;
+    }
+    savedManagerId = id;
+    try {
+      localStorage.setItem(FPL_ID_KEY, id);
+    } catch {
+      /* private browsing */
+    }
+    if (el.fplIdInput) el.fplIdInput.value = id;
+    try {
+      await syncManagerFromApi(id, { seedPlannerIfEmpty, quiet });
+    } catch (err) {
+      ownedCodes = new Set();
+      syncFplIdStatus();
+      if (!quiet) {
+        showToast({
+          title: "Could not sync FPL team",
+          message: err && err.message ? err.message : "Check the ID and try again.",
+          icon: "triangle-alert",
+        });
+      }
+      if (render) renderTable();
+      return false;
+    }
+    if (render) renderTable();
+    return true;
+  }
+
+  function clearManagerId({ quiet = false, render = true } = {}) {
+    savedManagerId = null;
+    ownedCodes = new Set();
+    state.actualMeta = null;
+    try {
+      localStorage.removeItem(FPL_ID_KEY);
+      localStorage.removeItem(TEAM_ACTUAL_KEY);
+    } catch {
+      /* private browsing */
+    }
+    if (el.fplIdInput) el.fplIdInput.value = "";
+    if (state.teamMode === "actual") {
+      applySquadSnapshot({ squad: [], captain: null, vice: null });
+    }
+    syncFplIdStatus();
+    syncTeamModeUI();
+    if (!quiet) {
+      showToast({ title: "FPL ID cleared", message: "Actual team link removed. Planner draft is unchanged.", icon: "info" });
+    }
+    if (render) renderTable();
+  }
+
+  async function restoreManagerId() {
+    let saved = "";
+    let mode = "planner";
+    try {
+      saved = localStorage.getItem(FPL_ID_KEY) || "";
+      mode = localStorage.getItem(TEAM_MODE_KEY) === "actual" ? "actual" : "planner";
+    } catch {
+      saved = "";
+      mode = "planner";
+    }
+    const actual = loadActualSnapshot();
+    if (actual) {
+      state.actualMeta = actual.meta || null;
+      ownedCodes = new Set(actual.squad.map((s) => s.code));
+    }
+    if (el.fplIdInput && saved) el.fplIdInput.value = saved;
+    state.teamMode = "planner";
+    loadTeamDraft();
+    if (saved) {
+      try {
+        await syncManagerFromApi(saved, { seedPlannerIfEmpty: true, quiet: true });
+      } catch {
+        syncFplIdStatus();
+      }
+    } else {
+      syncFplIdStatus();
+    }
+    setTeamMode(mode, { render: false, persist: false });
+  }
+
+  function requestResyncPlanner() {
+    if (!savedManagerId) {
+      showToast({ title: "No manager linked", message: "Save a Manager ID in Preferences first.", icon: "triangle-alert" });
+      return;
+    }
+    openConfirmModal({
+      title: "Resync planner from Actual?",
+      message: "This replaces your Planner squad with the latest linked FPL team. Planner-only edits will be lost.",
+      okLabel: "Resync planner",
+    }).then(async (ok) => {
+      if (!ok) return;
+      try {
+        const payload = await fetchManagerSquad(savedManagerId);
+        const snap = await ingestManagerSquad(payload, { seedPlannerIfEmpty: false });
+        state.teamMode = "planner";
+        try {
+          localStorage.setItem(TEAM_MODE_KEY, "planner");
+        } catch {
+          /* private browsing */
+        }
+        applySquadSnapshot(snap);
+        saveTeamDraft();
+        syncTeamModeUI();
+        renderTeam();
+        showToast({
+          title: "Planner resynced",
+          message: payload.hasPicks
+            ? `Copied ${payload.squad.length} picks from Actual.`
+            : payload.message || "Actual had no published picks — planner cleared.",
+          icon: "circle-check",
+        });
+      } catch (err) {
+        showToast({
+          title: "Resync failed",
+          message: err && err.message ? err.message : "Could not reach the FPL proxy.",
+          icon: "triangle-alert",
+        });
+      }
+    });
   }
 
   function isOwnedRow(row) {
@@ -1172,7 +1602,7 @@
   }
 
   function playerNameHTML(row) {
-    const icons = `${ownedFlagHTML(row)}${playerUpdateNoteHTML(row)}`;
+    const icons = ownedFlagHTML(row);
     return `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span><span class="player-name-icons">${icons}</span></div>`;
   }
 
@@ -1187,6 +1617,15 @@
   /** Flat identity: crest | name / sub — no copy wrapper (keeps crest column tight). */
   function playerIdentityHTML(crestHTML, nameHTML, subHTML) {
     return `<div class="player-cell">${crestHTML || ""}${nameHTML}${subHTML || ""}</div>`;
+  }
+
+  function posBadgeHTML(position, opts) {
+    const raw = String(position || "").toUpperCase();
+    const pos = raw === "GKP" ? "GK" : raw;
+    if (!/^(GK|DEF|MID|FWD)$/.test(pos)) return "";
+    const label = (opts && opts.label) || pos;
+    const attrs = (opts && opts.attrs) || "";
+    return `<span class="pos-badge pos-${pos}"${attrs}>${escapeHtml(label)}</span>`;
   }
 
   function syncFplIdStatus() {
@@ -1268,6 +1707,13 @@
     );
   }
 
+  // Intensity 1 = first in the highlighted band, 0 = last (melts into the row).
+  // Ease-in keeps colour on true leaders; the tail of the band is near-invisible.
+  function rankBandIntensity(i, n) {
+    if (n <= 1) return 1;
+    return Math.pow(1 - i / (n - 1), 1.55);
+  }
+
   // Builds { colKey: { top: Map(rowKey -> intensity), bottom: Map(...) } }
   // for the columns visible in the current view. Bands are always measured
   // against the full player/team population (not the filtered rows). topN is
@@ -1299,13 +1745,13 @@
       withVals.sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
 
       const topSlice = withVals.slice(0, topN);
-      const top = new Map(topSlice.map((x, i) => [x.key, 1 - i / topSlice.length]));
+      const top = new Map(topSlice.map((x, i) => [x.key, rankBandIntensity(i, topSlice.length)]));
 
       const bottom = new Map();
       if (isTeams) {
         const remaining = withVals.slice(topSlice.length);
         const bottomSlice = remaining.slice(-topN).reverse();
-        bottomSlice.forEach((x, i) => bottom.set(x.key, 1 - i / bottomSlice.length));
+        bottomSlice.forEach((x, i) => bottom.set(x.key, rankBandIntensity(i, bottomSlice.length)));
       }
 
       maps[col.key] = { top, bottom };
@@ -1313,8 +1759,8 @@
     return maps;
   }
 
-  // Price is excluded from the top/bottom% Enhance system (it's a level, not
-  // a rate stat — tinting "top 10% most expensive" isn't useful).
+  // Price and Own% are excluded from the top/bottom% Enhance system (levels,
+  // not rate stats — tinting “most expensive/owned” isn’t useful).
 
   // ---------------------------------------------------------------------
   // Rendering
@@ -1431,7 +1877,7 @@
         teamChanged ? tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`) : ""
       );
       const posTip = posChanged ? tipAttr(`Was ${row.position}`) : "";
-      const sub = `<div class="player-cell-sub"><span class="pos-badge pos-${position}"${posTip}>${position}</span></div>`;
+      const sub = `<div class="player-cell-sub">${posBadgeHTML(position, { attrs: posTip })}</div>`;
       return playerIdentityHTML(crest, playerNameHTML(row), sub);
     }
     if (col.key === "name") {
@@ -1448,6 +1894,9 @@
       const val = fmtDisplayValue(displayValue(row, col), col);
       const delta = priceDeltaHTML(row);
       return delta ? `<span class="cell-inline align-end">${val}${delta}</span>` : val;
+    }
+    if (col.key === "owned") {
+      return fmtOwnedPct(currentOwnership(row.code));
     }
     if (col.type === "check") {
       const mark = setPieceDisplayRank(row, col.key);
@@ -1573,7 +2022,6 @@
     });
   }
 
-  const UI_TIP_DELAY_MS = 280;
   let uiTipTimer = null;
   let uiTipAnchor = null;
   let uiTipHideTimer = null;
@@ -1939,7 +2387,7 @@
     uiTipAnchor = target;
     uiTipTimer = setTimeout(() => {
       if (uiTipAnchor === target) showUiTooltip(target);
-    }, UI_TIP_DELAY_MS);
+    }, popupDelayMs());
   });
 
   document.addEventListener("mouseout", (event) => {
@@ -1951,8 +2399,8 @@
     hideUiTooltip();
   });
 
-  // Name / identity chrome tips (ownership pin, sticky note, crest/pos change,
-  // league place) — Statistics + xData. Rankings keeps its own tap behavior.
+  // Name / identity chrome tips (ownership pin, crest/pos change, league place)
+  // — Statistics + xData. Rankings keeps its own tap behavior.
   function isIdentityChromeTipTarget(tipEl) {
     if (!tipEl || tipEl.closest(".rankings-row")) return false;
     return !!tipEl.closest(".player-cell, .barbell-label, .barbell-group-identity");
@@ -2039,6 +2487,8 @@
     const teamCode = currentTeamCode(r);
     if (teamCode) tr.dataset.team = teamCode;
     tr.dataset.rowName = r.name || "";
+    if (r.code != null) tr.dataset.playerCode = String(r.code);
+    tr.dataset.rowKey = String(key);
     if (state.compareMode) {
       const selected = compareSet().has(key);
       tr.classList.add("row-selectable");
@@ -2087,6 +2537,11 @@
   function renderTable() {
     clearTimeout(fixtureTtTimer);
     hideFixtureTooltip();
+    if (state.page === "ownership") {
+      renderOwnership();
+      syncFiltersResetUI();
+      return;
+    }
     if (state.page === "team") {
       renderTeam();
       syncFiltersResetUI();
@@ -2153,8 +2608,8 @@
         const topSlice = ranked.slice(0, n);
         const bottomSlice = ranked.slice(-n).reverse();
         maps[split][key] = {
-          top: new Map(topSlice.map((x, i) => [x.key, 1 - i / topSlice.length])),
-          bottom: new Map(bottomSlice.map((x, i) => [x.key, 1 - i / bottomSlice.length])),
+          top: new Map(topSlice.map((x, i) => [x.key, rankBandIntensity(i, topSlice.length)])),
+          bottom: new Map(bottomSlice.map((x, i) => [x.key, rankBandIntensity(i, bottomSlice.length)])),
         };
       });
     });
@@ -2671,6 +3126,22 @@
         ${spitNote("Refreshing the page never calls X — it only reads the local cache.")}`;
     }
 
+    if (state.page === "ownership") {
+      const reading = [
+        spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines; hover colorizes the club."),
+        spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
+        spitRow(spitRank("Trending"), "Toolbar toggle colors lines by ownership rise/fall and lists Risers / Fallers above the chart."),
+        spitRow(spitRank("Axis"), "X is a manual snapshot date, not a gameweek. Run python3 site/fetch_ownership.py to add a check-in."),
+        spitRow(spitRank(mobile ? "Tap" : "Hover"), mobile
+          ? "Tap a line for the player/club card (photo, badge, price, owned %, change)."
+          : "Hover a line for the player/club card (photo, badge, price, owned %, change)."),
+      ];
+      return `${spitHead("trending-up", "How Ownership works")}
+        ${spitIntro("FPL selected-by-% over the check-ins saved in this repo.")}
+        ${spitSection("Reading", reading)}
+        ${spitNote("The page never calls the FPL API — it only reads ownership_data.js.")}`;
+    }
+
     if (state.page === "markets") {
       const iconRows = [];
       if (mobile) {
@@ -2699,24 +3170,42 @@
 
     if (state.page === "team") {
       const iconRows = [
-        spitRow(iconHTML("plus"), "Empty row — add a player of that position"),
-        spitRow(spitRank("Row"), "Hover a player (tap on mobile) for C / V / bench / replace / remove."),
-        spitRow(iconHTML("refresh-ccw-dot"), "Replace this player"),
-        spitRow(iconHTML("x"), "Remove from the squad"),
+        spitRow(iconHTML("plus"), "Empty row — add a player of that position (Planner only)"),
+        spitRow(spitRank("Row"), "Right-click a planner player for captain, vice, bench, replace, remove, or Add note."),
+        spitRow(iconHTML("refresh-ccw-dot"), "Resync — replace Planner with the linked Actual FPL squad (confirm first)"),
+        spitRow(iconHTML("scale"), "Compare — click up to 5 players in the squad, search, or picker"),
       ];
       const reading = [
+        spitRow(spitRank("Actual"), "Read-only copy of your linked manager squad from the FPL API."),
+        spitRow(spitRank("Planner"), "Editable local draft (one team). Survives refresh. Resync overwrites it from Actual."),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Faint rank is among that position last season. New signings show –."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (green check). FK/CK also show #2."),
-        spitRow(spitRank("Heat"), "Six consecutive gameweeks. Boxed column is the window start (current GW on entry). Prev/next shifts by one."),
-        spitRow(spitRank("Select"), "Empty slot or Replace swaps this table for the player list. Filters open then. Back or Escape returns to the squad."),
-        spitRow(spitRank("Prices"), "2026/27 FPL list. FPL ID import comes later."),
+        spitRow(spitRank("Heat"), "Six consecutive gameweeks. Caps = home, lowercase = away. The right-edge line is the window start. Prev/next shifts by one."),
+        spitRow(spitRank("Select"), "Empty slot or Replace opens the player list. Filters (including Affordable) open then. Back or Escape returns to the squad."),
+        spitRow(spitRank("Affordable"), "In Filters while picking — hides anyone above remaining Bank. Replace credits the outgoing player's price."),
+        spitRow(spitRank("Squad"), "Preferences → Clear planner removes every Planner pick. Actual is unchanged."),
+        spitRow(spitRank("Compare"), "Search, then ↑↓ and Enter or click a row to pin (up to 5). Pinning clears the search and keeps the pin list — Compare mode is disabled while pins exist. Hover a squad or search-result row to highlight stat winners. With no pins, Compare mode click-selects instead of add/replace."),
+        spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager ID to import Actual."),
       ];
       return `${spitHead("shirt", "How Team works")}
-        ${spitIntro("Preseason squad builder — fill slots, stay in budget, and scan fixture difficulty.")}
+        ${spitIntro("Actual is your live FPL squad; Planner is the editable draft you keep locally.")}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}`;
+    }
+
+    if (state.page === "notes") {
+      return `${spitHead("sticky-note", "How Notes works")}
+        ${spitIntro("Freeform comments on players and clubs, saved with the current gameweek (or Preseason).")}
+        ${spitSection("Icons", [
+          spitRow(iconHTML("notebook-pen"), "Right-click a player, crest, or team surface → Add note"),
+          spitRow(spitRank("Group"), "All · By player · By team"),
+        ])}
+        ${spitSection("Reading", [
+          spitRow(spitRank("Sort"), "Newest notes first."),
+          spitRow(spitRank("Confirm"), "Player and club are saved automatically from what you clicked — no picker."),
+        ])}`;
     }
 
     if (state.page === "schedule") {
@@ -2749,10 +3238,10 @@
         "Green/red Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them. Soft green fills use a quieter tone in dark mode."
       ),
       spitRow(
-        spitRank(mobile ? "Fixtures" : "Hover"),
+        spitRank("Fixtures"),
         mobile
           ? "Tap a data cell for upcoming fixtures and opponent ranks by venue."
-          : "Hover a row (not the name column) for upcoming fixtures and opponent ranks by venue."
+          : "Click a data cell (not the name column) for upcoming fixtures and opponent ranks by venue. Click again to dismiss."
       ),
       spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
     ];
@@ -2916,6 +3405,9 @@
   }
 
   let fixtureTtDelaySec = loadFixtureTtDelaySec();
+  function popupDelayMs() {
+    return Math.round(fixtureTtDelaySec * 1000);
+  }
   let fixtureTtTimer = null;
   let fixtureTtActiveTeam = null;
   let fixtureTtPendingTeam = null;
@@ -2970,32 +3462,20 @@
     positionFixtureTooltip();
   }
 
-  function scheduleFixtureTooltip(tr, event) {
-    fixtureTtPointer = { x: event.clientX, y: event.clientY };
+  function toggleFixtureTooltipFromClick(tr, event) {
     const teamCode = tr && tr.dataset.team;
-    if (!teamCode) {
-      clearTimeout(fixtureTtTimer);
-      hideFixtureTooltip();
-      return;
-    }
-    // Already showing for this row — follow the pointer only.
+    if (!teamCode || !el.fixtureTooltip) return;
+    fixtureTtPointer = { x: event.clientX, y: event.clientY };
+    clearTimeout(fixtureTtTimer);
     if (
       fixtureTtActiveTr === tr &&
       fixtureTtActiveTeam === teamCode &&
       el.fixtureTooltip.style.display !== "none"
     ) {
-      positionFixtureTooltip();
+      hideFixtureTooltip();
       return;
     }
-    // Same row still pending — don't restart the delay when moving between cells.
-    if (fixtureTtPendingTr === tr) return;
-
-    clearTimeout(fixtureTtTimer);
-    fixtureTtPendingTeam = teamCode;
-    fixtureTtPendingTr = tr;
-    fixtureTtTimer = setTimeout(() => {
-      showFixtureTooltip(fixtureTtPendingTr);
-    }, Math.round(fixtureTtDelaySec * 1000));
+    showFixtureTooltip(tr);
   }
 
   function isSourceWarningTarget(target) {
@@ -3014,57 +3494,20 @@
 
   function bindFixtureTooltipSurface(tbody, scrollRoot) {
     if (!tbody) return;
-    tbody.addEventListener("mouseover", (e) => {
-      if (!hasFineHover()) return;
-      if (state.page !== "opta") return;
-      if (
-        isSourceWarningTarget(e.target) ||
-        isFixtureTtNameColumnTarget(e.target) ||
-        isFixtureTtIconTipTarget(e.target)
-      ) {
-        clearTimeout(fixtureTtTimer);
-        hideFixtureTooltip();
-        return;
-      }
-      const tr = e.target.closest("tbody tr[data-team]");
-      if (!tr) return;
-      scheduleFixtureTooltip(tr, e);
-    });
     tbody.addEventListener("mousemove", (e) => {
       if (!hasFineHover()) return;
+      if (el.fixtureTooltip.style.display === "none") return;
       if (
         isSourceWarningTarget(e.target) ||
         isFixtureTtNameColumnTarget(e.target) ||
         isFixtureTtIconTipTarget(e.target)
       ) {
-        clearTimeout(fixtureTtTimer);
-        hideFixtureTooltip();
         return;
       }
       fixtureTtPointer = { x: e.clientX, y: e.clientY };
-      if (fixtureTtActiveTeam && el.fixtureTooltip.style.display !== "none") {
-        positionFixtureTooltip();
-      }
-    });
-    tbody.addEventListener("mouseout", (e) => {
-      if (!hasFineHover()) return;
-      const tr = e.target.closest("tbody tr[data-team]");
-      if (!tr) return;
-      const next = e.relatedTarget && e.relatedTarget.closest("tbody tr[data-team]");
-      // Still inside the same row (cell → cell) — keep tip / pending delay,
-      // unless the next cell is the sticky Player/Team name column or an icon tip.
-      if (
-        next === tr &&
-        !isFixtureTtNameColumnTarget(e.relatedTarget) &&
-        !isFixtureTtIconTipTarget(e.relatedTarget)
-      ) {
-        return;
-      }
-      clearTimeout(fixtureTtTimer);
-      hideFixtureTooltip();
+      if (fixtureTtActiveTeam) positionFixtureTooltip();
     });
     tbody.addEventListener("click", (e) => {
-      if (hasFineHover()) return;
       if (state.page !== "opta") return;
       if (state.compareMode) return; // row click selects for compare
       if (e.target.closest("a, button")) return;
@@ -3079,6 +3522,13 @@
       }
       const team = tr.dataset.team;
       if (!team) return;
+
+      if (hasFineHover()) {
+        e.stopPropagation();
+        toggleFixtureTooltipFromClick(tr, e);
+        return;
+      }
+
       clearTimeout(fixtureTtTimer);
       hideFixtureTooltip();
       const rowName = (tr.dataset.rowName || "").trim();
@@ -3099,13 +3549,21 @@
     if (scrollRoot) {
       scrollRoot.addEventListener("scroll", () => {
         clearTimeout(fixtureTtTimer);
-        if (hasFineHover()) hideFixtureTooltip();
+        hideFixtureTooltip();
       }, { passive: true });
     }
   }
 
   bindFixtureTooltipSurface(el.tableBody, el.tableBody && el.tableBody.closest(".table-wrap"));
   bindFixtureTooltipSurface(el.compareBody, el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap"));
+
+  document.addEventListener("click", (e) => {
+    if (!el.fixtureTooltip || el.fixtureTooltip.style.display === "none") return;
+    if (!hasFineHover()) return;
+    if (e.target.closest("#fixture-tooltip")) return;
+    if (e.target.closest("#opta-page tbody tr[data-team], #compare-body tr[data-team]")) return;
+    hideFixtureTooltip();
+  });
 
   let teamRankPointer = { x: 0, y: 0 };
 
@@ -3210,23 +3668,29 @@
     positionMatchupEdgeTooltip();
   }
 
+  let scheduleHoverTimer = null;
   el.scheduleGrid.addEventListener("mouseover", (event) => {
     if (!hasFineHover()) return;
     // Compact icon tips (slider info, etc.) take priority — don't open card tips underneath.
     if (tipTargetFrom(event.target) || (el.uiTooltip && el.uiTooltip.classList.contains("visible"))) {
+      clearTimeout(scheduleHoverTimer);
       return;
     }
     const button = event.target.closest(".team-rank-info");
-    if (button) {
-      hideMatchupEdgeTooltip();
-      showTeamRankTooltip(button, event);
-      return;
-    }
     const verdict = event.target.closest(".ftt-verdict-tip");
-    if (verdict) {
+    if (!button && !verdict) return;
+    const x = event.clientX;
+    const y = event.clientY;
+    clearTimeout(scheduleHoverTimer);
+    scheduleHoverTimer = setTimeout(() => {
+      if (button) {
+        hideMatchupEdgeTooltip();
+        showTeamRankTooltip(button, { clientX: x, clientY: y });
+        return;
+      }
       hideTeamRankTooltip();
-      showMatchupEdgeTooltip(verdict, event);
-    }
+      showMatchupEdgeTooltip(verdict, { clientX: x, clientY: y });
+    }, popupDelayMs());
   });
   el.scheduleGrid.addEventListener("mousemove", (event) => {
     if (!hasFineHover()) return;
@@ -3251,10 +3715,12 @@
     if (!hasFineHover()) return;
     const button = event.target.closest(".team-rank-info");
     if (button && !(event.relatedTarget && button.contains(event.relatedTarget))) {
+      clearTimeout(scheduleHoverTimer);
       hideTeamRankTooltip();
     }
     const verdict = event.target.closest(".ftt-verdict-tip");
     if (verdict && !(event.relatedTarget && verdict.contains(event.relatedTarget))) {
+      clearTimeout(scheduleHoverTimer);
       hideMatchupEdgeTooltip();
     }
   });
@@ -3346,7 +3812,11 @@
     pageInfoButtons().forEach((btn) => btn.setAttribute("aria-expanded", "false"));
   }
 
+  let pageInfoHoverTimer = null;
+
   function hidePageInfoTooltip() {
+    clearTimeout(pageInfoHoverTimer);
+    pageInfoHoverTimer = null;
     if (!el.pageInfoTooltip) return;
     el.pageInfoTooltip.style.display = "none";
     el.pageInfoTooltip.innerHTML = "";
@@ -3383,8 +3853,10 @@
       expected: "How Expected Data works",
       schedule: "How Matchups works",
       feed: "How Social Media Feed works",
+      ownership: "How Ownership works",
       markets: "How Markets works",
       team: "How Team works",
+      notes: "How Notes works",
     };
     pageInfoButtons().forEach((btn) => {
       const pane = btn.closest(".page-pane");
@@ -3395,8 +3867,10 @@
         else if (pane.id === "expected-page") page = "expected";
         else if (pane.id === "schedule-page") page = "schedule";
         else if (pane.id === "feed-page") page = "feed";
+        else if (pane.id === "ownership-page") page = "ownership";
         else if (pane.id === "markets-page") page = "markets";
         else if (pane.id === "team-page") page = "team";
+        else if (pane.id === "notes-page") page = "notes";
       }
       const label = labels[page] || "How this page works";
       btn.removeAttribute("title");
@@ -3438,12 +3912,17 @@
   document.addEventListener("mouseover", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
     if (!btn || preferMobileSheet()) return;
-    showPageInfoTooltip(btn);
+    clearTimeout(pageInfoHoverTimer);
+    pageInfoHoverTimer = setTimeout(() => {
+      if (!btn.isConnected) return;
+      showPageInfoTooltip(btn);
+    }, popupDelayMs());
   });
   document.addEventListener("mouseout", (event) => {
     const btn = event.target.closest && event.target.closest(".page-info-btn");
     if (!btn || preferMobileSheet()) return;
     if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
+    clearTimeout(pageInfoHoverTimer);
     hidePageInfoTooltip();
   });
   document.addEventListener("click", (event) => {
@@ -3466,8 +3945,11 @@
   });
 
   let scheduleScatterPointer = { x: 0, y: 0 };
+  let scatterHoverTimer = null;
 
   function hideScheduleScatterTooltip() {
+    clearTimeout(scatterHoverTimer);
+    scatterHoverTimer = null;
     if (!el.scheduleScatterTooltip) return;
     el.scheduleScatterTooltip.style.display = "none";
     el.scheduleScatterTooltip.innerHTML = "";
@@ -3548,7 +4030,13 @@
     el.scheduleScatter.addEventListener("mouseover", (event) => {
       if (!hasFineHover()) return;
       const point = event.target.closest(".schedule-scatter-point");
-      if (point) showScheduleScatterTooltip(point, event);
+      if (!point) return;
+      const x = event.clientX;
+      const y = event.clientY;
+      clearTimeout(scatterHoverTimer);
+      scatterHoverTimer = setTimeout(() => {
+        showScheduleScatterTooltip(point, { clientX: x, clientY: y });
+      }, popupDelayMs());
     });
     el.scheduleScatter.addEventListener("mousemove", (event) => {
       if (!hasFineHover()) return;
@@ -4042,7 +4530,11 @@
     el.expectedTooltip.style.top = Math.max(4, top) + "px";
   }
 
+  let expectedTipTimer = null;
+
   function hideExpectedTooltip() {
+    clearTimeout(expectedTipTimer);
+    expectedTipTimer = null;
     if (!el.expectedTooltip) return;
     el.expectedTooltip.style.display = "none";
     delete el.expectedTooltip.dataset.dot;
@@ -4074,12 +4566,16 @@
     } else {
       const label = document.createElement("div");
       label.className = "barbell-label";
+      if (row.code != null) label.dataset.playerCode = String(row.code);
+      if (row.team) label.dataset.team = String(currentTeamCode(row) || row.team);
+      label.dataset.rowName = row.name || "";
+      label.dataset.rowKey = String(rowKey(row));
       const tagHTML = locSuffix
         ? `<span class="loc-tag">${locSuffix === "Home" ? "H" : "A"}</span>`
         : "";
       let subHTML = "";
       if (state.view === "players" && row.position) {
-        subHTML = `<div class="player-cell-sub"><span class="pos-badge pos-${escapeHtml(row.position)}">${escapeHtml(row.position)}</span>${tagHTML}</div>`;
+        subHTML = `<div class="player-cell-sub">${posBadgeHTML(row.position)}${tagHTML}</div>`;
       } else if (state.view === "teams") {
         const leaguePos = LEAGUE_POSITIONS[row.team];
         const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
@@ -4127,7 +4623,13 @@
       const tipHTML = () => expectedDotTooltipHTML(row, statLabel, value, decimals, locSuffix);
       dot.addEventListener("mouseenter", (evt) => {
         if (!hasFineHover()) return;
-        showExpectedTooltip(evt, tipHTML());
+        clearTimeout(expectedTipTimer);
+        const html = tipHTML();
+        const x = evt.clientX;
+        const y = evt.clientY;
+        expectedTipTimer = setTimeout(() => {
+          showExpectedTooltip({ clientX: x, clientY: y }, html);
+        }, popupDelayMs());
       });
       dot.addEventListener("mousemove", (evt) => {
         if (!hasFineHover()) return;
@@ -4186,9 +4688,13 @@
   function buildBarbellCompareIdentity(row) {
     const identity = document.createElement("div");
     identity.className = "barbell-group-identity";
+    if (row.code != null) identity.dataset.playerCode = String(row.code);
+    if (row.team) identity.dataset.team = String(currentTeamCode(row) || row.team);
+    identity.dataset.rowName = row.name || "";
+    identity.dataset.rowKey = String(rowKey(row));
     let subHTML = "";
     if (state.view === "players" && row.position) {
-      subHTML = `<div class="player-cell-sub"><span class="pos-badge pos-${escapeHtml(row.position)}">${escapeHtml(row.position)}</span></div>`;
+      subHTML = `<div class="player-cell-sub">${posBadgeHTML(row.position)}</div>`;
     } else if (state.view === "teams") {
       const leaguePos = LEAGUE_POSITIONS[row.team];
       const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
@@ -4558,7 +5064,10 @@
       const pos = row.position || "";
       const price = effectivePrice(row);
       const priceLabel = price ? `£${Number(price).toFixed(1)}m` : "";
-      meta = [pos, priceLabel].filter(Boolean).map(escapeHtml).join(" · ");
+      const bits = [];
+      if (pos) bits.push(posBadgeHTML(pos));
+      if (priceLabel) bits.push(`<span>${escapeHtml(priceLabel)}</span>`);
+      meta = bits.join("");
     } else {
       const pos = LEAGUE_POSITIONS[row.team];
       if (pos != null) {
@@ -4568,7 +5077,7 @@
     }
     const nameHTML = `<span class="rankings-name">${escapeHtml(row.name)}</span>`;
     const metaHTML = meta ? `<span class="rankings-meta">${meta}</span>` : "";
-    return `${badgeHTML(row.team)}<span class="rankings-identity-text"><span class="rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>${metaHTML}</span>`;
+    return `${playerCrestHTML(row.team)}<span class="rankings-identity-text"><span class="rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>${metaHTML}</span>`;
   }
 
   function rankingsCardHTML(col, rows, referenceRows) {
@@ -4589,7 +5098,7 @@
             const valueLabel = fmtRankingsValue(entry.val, col);
             const compareNote = entry.retained ? " (pinned compare)" : "";
             return `<li class="rankings-row${medal ? ` medal-${medal}` : ""}${pinCls}${retainedCls}"
-              data-row-key="${escapeHtml(key)}" role="button" tabindex="0"
+              data-row-key="${escapeHtml(key)}"${entry.row.code != null ? ` data-player-code="${escapeHtml(String(entry.row.code))}"` : ""}${entry.row.team ? ` data-team="${escapeHtml(String(currentTeamCode(entry.row) || entry.row.team))}"` : ""} role="button" tabindex="0"
               aria-pressed="${pin >= 0 ? "true" : "false"}"
               aria-label="${escapeHtml(`${entry.rank == null ? "–" : entry.rank}. ${entry.row.name}, ${valueLabel}${compareNote}`)}">
               <span class="rankings-rank">${entry.rank == null ? "–" : entry.rank}</span>
@@ -4674,7 +5183,8 @@
       pins.push(key);
     }
     // Re-render so pinned subjects outside the filtered top-N stay/appear on cards.
-    if (state.page === "rankings") renderRankings();
+    // Skip the grow-in — that animation is for first paint / filter changes.
+    if (state.page === "rankings") renderRankings({ animateBars: false });
     else syncRankingsPinClasses();
   }
 
@@ -4717,7 +5227,7 @@
     });
   }
 
-  function renderRankings() {
+  function renderRankings({ animateBars = true } = {}) {
     if (!el.rankingsGrid) return;
     clearRankingsCrossHover();
     const filtered = applyFilters(getRows());
@@ -4742,7 +5252,13 @@
       })
       .join("");
     renderRankingsPinBar();
-    animateRankingsBars();
+    if (animateBars) {
+      animateRankingsBars();
+    } else {
+      el.rankingsGrid.querySelectorAll(".rankings-bar").forEach((bar) => {
+        bar.classList.add("is-drawn");
+      });
+    }
   }
 
   if (el.rankingsGrid) {
@@ -4819,6 +5335,8 @@
   const TEAM_HEAT_N = 6;
   const TEAM_DRAFT_KEY = "fpl-explorer-team-draft";
   const TEAM_POS_LABEL = { GK: "GKP", DEF: "DEF", MID: "MID", FWD: "FWD" };
+  // XI sections top-to-bottom (attack first), then Bench below.
+  const TEAM_VIEW_POS_ORDER = ["FWD", "MID", "DEF", "GK"];
   const TEAM_STAT_COLS = [
     { key: "pts", label: "Pts", decimals: 0, title: "Total FPL points" },
     { key: "xPts", label: "xPts", decimals: 1, title: "Expected FPL points" },
@@ -4920,8 +5438,9 @@
   function teamDataColCount(opts) {
     opts = opts || {};
     const price = opts.price ? 1 : 0;
+    const ownership = opts.ownership ? 1 : 0;
     const setp = opts.setPieces ? TEAM_SETPIECE_COLS.length : 0;
-    return 1 + price + TEAM_STAT_COLS.length + 1 + setp + teamHeatGws().length;
+    return 1 + price + ownership + TEAM_STAT_COLS.length + 1 + setp + teamHeatGws().length;
   }
 
   function teamDefaultSortDir(key) {
@@ -4930,7 +5449,10 @@
     return "desc";
   }
 
-  function teamSortTh(key, label, extraClass, title) {
+  function teamSortTh(key, label, extraClass, title, opts) {
+    if (opts && opts.plain) {
+      return `<th class="${extraClass || ""}"${tipAttr(title || label)}>${escapeHtml(label)}</th>`;
+    }
     const sorted = state.teamSortKey === key;
     const arrow = sorted
       ? `<span class="arrow">${iconHTML(state.teamSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`
@@ -4939,17 +5461,44 @@
   }
 
   function teamMetricHeadHTML(opts) {
-    const stats = TEAM_STAT_COLS.map((col) =>
-      teamSortTh(col.key, col.label, "col-num col-team-stat", `${col.title} · 2025/26`)
+    const plain = !!(opts && opts.plain);
+    const divideFirst = !(opts && opts.price);
+    const stats = TEAM_STAT_COLS.map((col, i) =>
+      teamSortTh(
+        col.key,
+        col.label,
+        `col-num col-team-stat${divideFirst && i === 0 ? " sec-divider" : ""}`,
+        `${col.title} · 2025/26`,
+        { plain }
+      )
     ).join("");
-    const spark = teamSortTh("trend", "Trend", "col-team-spark", "Mock recent-form trend");
+    const spark = teamSortTh("trend", "Trend", "col-team-spark", "Mock recent-form trend", { plain });
     const setp =
       opts && opts.setPieces
-        ? TEAM_SETPIECE_COLS.map((col) => teamSortTh(col.key, col.label, "col-check col-team-setpiece", col.title)).join(
-            ""
-          )
+        ? TEAM_SETPIECE_COLS.map((col) =>
+            teamSortTh(col.key, col.label, "col-check col-team-setpiece", col.title, { plain })
+          ).join("")
         : "";
     return `${stats}${spark}${setp}`;
+  }
+
+  function teamSectionHeadHTML(opts) {
+    opts = opts || {};
+    const statsN =
+      (opts.price ? 1 : 0) +
+      (opts.ownership ? 1 : 0) +
+      TEAM_STAT_COLS.length +
+      1 +
+      (opts.setPieces ? TEAM_SETPIECE_COLS.length : 0);
+    const heatN = teamHeatGws().length;
+    return `<tr class="section-row"><th class="sec-sticky-lead">Player</th><th class="sec-divider" colspan="${statsN}">Statistics</th><th class="sec-divider" colspan="${heatN}">Fixtures</th></tr>`;
+  }
+
+  function teamHeadRowsHTML(colRowInner, opts) {
+    opts = opts || {};
+    const cols = `<tr>${colRowInner}</tr>`;
+    if (opts.noSections) return cols;
+    return `${teamSectionHeadHTML(opts)}${cols}`;
   }
 
   const teamTrendCache = new Map();
@@ -5003,6 +5552,7 @@
     if (!row) return key === "player" ? "" : -Infinity;
     if (key === "player") return String(row.name || "").toLowerCase();
     if (key === "price") return Number(row.price) || 0;
+    if (key === "owned") return currentOwnership(row.code) ?? -Infinity;
     if (key === "trend") {
       const series = teamMockTrend(row.code);
       return series[series.length - 1] - series[0];
@@ -5034,23 +5584,37 @@
     return slots.slice().sort((a, b) => compareTeamRows(teamPlayerByCode(a.code), teamPlayerByCode(b.code)));
   }
 
-  function teamStatCellHTML(prior, pos, col) {
+  const TEAM_STAT_RANK_FADE = 35;
+  const TEAM_STAT_RANK_MAX = 50;
+
+  function teamStatRankHTML(rank) {
+    if (rank == null || rank > TEAM_STAT_RANK_MAX) return "";
+    const label = `${rank}${ordinalSuffix(rank)}`;
+    if (rank > TEAM_STAT_RANK_FADE) {
+      return `<span class="team-stat-rank">${escapeHtml(label)}</span>`;
+    }
+    const t = rankBandIntensity(rank - 1, TEAM_STAT_RANK_FADE);
+    if (t < 0.04) {
+      return `<span class="team-stat-rank">${escapeHtml(label)}</span>`;
+    }
+    const mix = Math.max(0, Math.min(100, Math.round(t * 100)));
+    const weight = t >= 0.5 ? 650 : 500;
+    return `<span class="team-stat-rank is-top" style="color:color-mix(in srgb, hsl(var(--positive)) ${mix}%, var(--text-faint));font-weight:${weight}">${escapeHtml(label)}</span>`;
+  }
+
+  function teamStatCellHTML(prior, pos, col, extraClass) {
+    const cls = `col-num col-team-stat${extraClass ? ` ${extraClass}` : ""}`;
     if (!prior) {
-      return `<td class="col-num col-team-stat is-blank">–</td>`;
+      return `<td class="${cls} is-blank" data-team-stat="${escapeHtml(col.key)}">–</td>`;
     }
     const raw = Number(prior[col.key]);
     if (!Number.isFinite(raw) || Math.abs(raw) < 1e-9) {
-      return `<td class="col-num col-team-stat is-blank">–</td>`;
+      return `<td class="${cls} is-blank" data-team-stat="${escapeHtml(col.key)}">–</td>`;
     }
     const rank = teamPosRankMaps()[col.key][pos] && teamPosRankMaps()[col.key][pos].get(Number(prior.code));
     const val = fmtNum(raw, col.decimals);
-    const rankLabel = rank != null ? `${rank}${ordinalSuffix(rank)}` : "";
-    const tip = rank != null
-      ? `${col.title} · ${rankLabel} among ${TEAM_POS_LABEL[pos] || pos} (2025/26)`
-      : `${col.title} · 2025/26`;
-    const rankClass = rank != null && rank <= 10 ? " is-top" : "";
-    return `<td class="col-num col-team-stat"${tipAttr(tip)}>
-      <span class="team-stat-val">${val}</span>${rank != null ? `<span class="team-stat-rank${rankClass}">${escapeHtml(rankLabel)}</span>` : ""}
+    return `<td class="${cls}" data-team-stat="${escapeHtml(col.key)}">
+      <span class="team-stat-val">${val}</span>${teamStatRankHTML(rank)}
     </td>`;
   }
 
@@ -5065,13 +5629,149 @@
 
   function teamMetricCellsHTML(row, opts) {
     const prior = teamPriorRow(row.code);
-    const stats = TEAM_STAT_COLS.map((col) => teamStatCellHTML(prior, row.position, col)).join("");
+    const divideFirst = !(opts && opts.price);
+    const stats = TEAM_STAT_COLS.map((col, i) =>
+      teamStatCellHTML(prior, row.position, col, divideFirst && i === 0 ? "sec-divider" : "")
+    ).join("");
     const spark = teamSparkCellHTML(row);
     const setp =
       opts && opts.setPieces
         ? TEAM_SETPIECE_COLS.map((col) => teamSetPieceCellHTML(row, col)).join("")
         : "";
     return `${stats}${spark}${setp}`;
+  }
+
+  function teamCompareHas(code) {
+    return state.teamCompareCodes.some((c) => teamCodeEq(c, code));
+  }
+
+  function toggleTeamCompareCode(code) {
+    if (code == null || code === "") return false;
+    const key = Number(code) || code;
+    const i = state.teamCompareCodes.findIndex((c) => teamCodeEq(c, key));
+    if (i >= 0) {
+      state.teamCompareCodes.splice(i, 1);
+      return true;
+    }
+    if (state.teamCompareCodes.length >= MAX_COMPARE) {
+      showToast({
+        title: "Compare",
+        message: `You can compare up to ${MAX_COMPARE} players.`,
+        icon: "scale",
+      });
+      return false;
+    }
+    state.teamCompareCodes.push(key);
+    return true;
+  }
+
+  function clearTeamCompareSelection() {
+    state.teamCompareCodes.length = 0;
+    state.teamHoverCompareCode = null;
+  }
+
+  function teamCompareHighlightMap(rows) {
+    const maps = {};
+    const list = (rows || []).filter(Boolean);
+    TEAM_STAT_COLS.forEach((col) => {
+      const withVals = list
+        .map((r) => {
+          const prior = teamPriorRow(r.code);
+          const val = prior ? Number(prior[col.key]) : NaN;
+          return { key: String(r.code), val };
+        })
+        .filter((x) => Number.isFinite(x.val) && Math.abs(x.val) > 1e-9);
+      if (withVals.length < 2) return;
+      const best = Math.max(...withVals.map((x) => x.val));
+      const winners = new Set(withVals.filter((x) => x.val === best).map((x) => x.key));
+      if (winners.size < withVals.length) maps[col.key] = winners;
+    });
+    return maps;
+  }
+
+  function teamSearchCardOpen() {
+    return !!(el.teamSearchResults && !el.teamSearchResults.hidden);
+  }
+
+  function teamVisibleSearchCompareRows() {
+    const q = teamSearchQuery();
+    const { available } = q ? teamAutocompleteMatches(q) : { available: [] };
+    const rows = [];
+    const seen = new Set();
+    const add = (row) => {
+      if (!row || row.code == null) return;
+      const key = String(row.code);
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push(row);
+    };
+    available.forEach((m) => add(m.row));
+    state.teamCompareCodes.forEach((code) => add(teamPlayerByCode(code)));
+    return rows;
+  }
+
+  function teamActiveCompareRows() {
+    if (state.teamHoverCompareCode != null && teamSearchCardOpen()) {
+      const rows = teamVisibleSearchCompareRows();
+      const hoverRow = teamPlayerByCode(state.teamHoverCompareCode);
+      if (hoverRow && !rows.some((r) => teamCodeEq(r.code, hoverRow.code))) rows.push(hoverRow);
+      return rows;
+    }
+    if (state.teamCompareCodes.length >= 2) {
+      return state.teamCompareCodes.map((code) => teamPlayerByCode(code)).filter(Boolean);
+    }
+    return [];
+  }
+
+  function paintTeamCompareWinners() {
+    if (!el.teamPage) return;
+    const map = teamCompareHighlightMap(teamActiveCompareRows());
+    el.teamPage.querySelectorAll("td[data-team-stat]").forEach((td) => {
+      const tr = td.closest("tr[data-team-code]");
+      const col = td.getAttribute("data-team-stat");
+      const code = tr && tr.dataset.teamCode;
+      const win = !!(map[col] && code != null && map[col].has(String(code)));
+      td.classList.toggle("highlight-top", win);
+      if (win) td.style.backgroundColor = positiveFill(0.24);
+      else td.style.removeProperty("background-color");
+    });
+    el.teamPage.querySelectorAll("tr[data-team-code]").forEach((tr) => {
+      if (tr.closest("#team-search-results, #team-compare-wrap")) {
+        tr.classList.remove("row-selected");
+        if (state.teamCompareMode) tr.classList.add("row-selectable");
+        else tr.classList.remove("row-selectable");
+        return;
+      }
+      const selected = teamCompareHas(tr.dataset.teamCode);
+      tr.classList.toggle("row-selected", selected);
+      if (state.teamCompareMode) tr.classList.add("row-selectable");
+      else if (!selected) tr.classList.remove("row-selectable");
+    });
+  }
+
+  function syncTeamCompareBtn() {
+    if (!el.teamCompareBtn) return;
+    const pinned = state.teamCompareCodes.length > 0;
+    if (pinned && state.teamCompareMode) state.teamCompareMode = false;
+    const on = !!state.teamCompareMode;
+    const blocked = pinned || !teamIsEditable();
+    el.teamCompareBtn.classList.toggle("on", on);
+    el.teamCompareBtn.classList.toggle("is-disabled", blocked);
+    el.teamCompareBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    el.teamCompareBtn.setAttribute("aria-disabled", blocked ? "true" : "false");
+    el.teamCompareBtn.disabled = blocked;
+    el.teamCompareBtn.title = pinned
+      ? "Clear pinned players to use Compare mode"
+      : !teamIsEditable()
+        ? "Switch to Planner to compare and edit"
+        : "Click up to 5 players to compare";
+  }
+
+  function renderTeamCompareWrap() {
+    if (!el.teamCompareWrap) return;
+    // Pins / compare rows live in the search card so this duplicate stays closed.
+    el.teamCompareWrap.hidden = true;
+    if (el.teamCompareBody) el.teamCompareBody.innerHTML = "";
   }
 
   function loadTeamDraft() {
@@ -5098,6 +5798,7 @@
   }
 
   function saveTeamDraft() {
+    if (state.teamMode === "actual") return;
     try {
       localStorage.setItem(
         TEAM_DRAFT_KEY,
@@ -5120,6 +5821,26 @@
         return sum + (row ? Number(row.price) || 0 : 0);
       }, 0)
     );
+  }
+
+  function teamBankRemaining(replaceCode) {
+    const replaceRow = replaceCode != null ? teamPlayerByCode(replaceCode) : null;
+    return teamMoney(TEAM_BUDGET - teamSpent() + (replaceRow ? Number(replaceRow.price) || 0 : 0));
+  }
+
+  function teamRowAffordable(row, replaceCode) {
+    if (!row) return false;
+    return Number(row.price) <= teamBankRemaining(replaceCode) + 1e-9;
+  }
+
+  function syncTeamAffordableCheck() {
+    if (!el.teamAffordableCheck) return;
+    el.teamAffordableCheck.checked = !!state.teamAffordableOnly;
+  }
+
+  function syncTeamClearBtn() {
+    if (!el.teamClearBtn) return;
+    el.teamClearBtn.disabled = !teamIsEditable() || !state.teamSquad.length;
   }
 
   function teamClubCounts(ignoreCode) {
@@ -5233,6 +5954,10 @@
   }
 
   function addTeamPlayer(row, { starter, replaceCode } = {}) {
+    if (!teamIsEditable()) {
+      showToast({ title: "Actual is read-only", message: "Switch to Planner to change the squad.", icon: "info" });
+      return false;
+    }
     const err = teamAddError(row, { starter, replaceCode });
     if (err) {
       showToast({ title: "Can't add player", message: err, icon: "triangle-alert" });
@@ -5255,6 +5980,7 @@
   }
 
   function removeTeamPlayer(code) {
+    if (!teamIsEditable()) return;
     state.teamSquad = state.teamSquad.filter((s) => s.code !== code);
     if (state.teamCaptainCode === code) state.teamCaptainCode = null;
     if (state.teamViceCode === code) state.teamViceCode = null;
@@ -5263,6 +5989,7 @@
   }
 
   function setTeamCaptain(code) {
+    if (!teamIsEditable()) return;
     const slot = state.teamSquad.find((s) => s.code === code);
     if (!slot || !slot.starter) {
       showToast({ title: "Captain", message: "Captain must be in the starting XI.", icon: "triangle-alert" });
@@ -5275,6 +6002,7 @@
   }
 
   function setTeamVice(code) {
+    if (!teamIsEditable()) return;
     const slot = state.teamSquad.find((s) => s.code === code);
     if (!slot || !slot.starter) {
       showToast({ title: "Vice-captain", message: "Vice-captain must be in the starting XI.", icon: "triangle-alert" });
@@ -5339,6 +6067,7 @@
   }
 
   function beginTeamSub(code) {
+    if (!teamIsEditable()) return false;
     const partners = teamSwapPartnerCodes(code);
     if (!partners.length) {
       showToast({
@@ -5389,6 +6118,7 @@
   }
 
   function toggleTeamStarter(code) {
+    if (!teamIsEditable()) return;
     if (state.teamSubCode != null) {
       if (teamCodeEq(state.teamSubCode, code)) {
         cancelTeamSub();
@@ -5418,6 +6148,7 @@
   }
 
   function clearTeamSquad() {
+    if (!teamIsEditable()) return;
     state.teamSquad = [];
     state.teamCaptainCode = null;
     state.teamViceCode = null;
@@ -5427,29 +6158,87 @@
     renderTeam();
   }
 
+  let confirmModalResolver = null;
+
+  function closeConfirmModal(ok) {
+    if (!el.confirmModal) return;
+    el.confirmModal.hidden = true;
+    const resolve = confirmModalResolver;
+    confirmModalResolver = null;
+    if (resolve) resolve(!!ok);
+  }
+
+  function openConfirmModal({ title, message, okLabel = "Confirm" } = {}) {
+    if (!el.confirmModal) return Promise.resolve(false);
+    if (el.confirmModalTitle) el.confirmModalTitle.textContent = title || "Confirm";
+    if (el.confirmModalMsg) el.confirmModalMsg.textContent = message || "";
+    if (el.confirmModalOk) el.confirmModalOk.textContent = okLabel;
+    el.confirmModal.hidden = false;
+    requestAnimationFrame(() => {
+      const cancelBtn = el.confirmModal.querySelector("[data-confirm-cancel].ghost-btn");
+      (cancelBtn || el.confirmModalOk)?.focus();
+    });
+    return new Promise((resolve) => {
+      confirmModalResolver = resolve;
+    });
+  }
+
+  function requestClearTeamSquad() {
+    if (!teamIsEditable()) {
+      showToast({ title: "Actual is read-only", message: "Switch to Planner to clear the draft.", icon: "info" });
+      return;
+    }
+    if (!state.teamSquad.length) return;
+    openConfirmModal({
+      title: "Clear planner?",
+      message: "This removes every player from the Planner draft. Your Actual FPL team is unchanged.",
+      okLabel: "Clear planner",
+    }).then((ok) => {
+      if (ok) clearTeamSquad();
+    });
+  }
+
   function openTeamPicker({ position, starter, replaceCode }) {
+    if (!teamIsEditable()) {
+      showToast({ title: "Actual is read-only", message: "Switch to Planner to add or replace players.", icon: "info" });
+      return;
+    }
     cancelTeamSub({ silent: true });
     state.teamPickerSlot = { position, starter: !!starter, replaceCode: replaceCode ?? null };
-    state.teamPickerSearch = "";
-    if (el.teamPickerSearch) el.teamPickerSearch.value = "";
+    state.search = "";
+    if (el.search) el.search.value = "";
+    syncSearchClearBtns();
     state.posFilter = new Set();
+    // Full price range in picker — don't carry Statistics' £4.5m+ default.
+    state.priceMin = bounds.price.min;
+    state.priceMax = bounds.price.max;
+    if (typeof updatePriceSlider === "function") updatePriceSlider();
     syncFilterChipUI();
+    // Picker filters start collapsed, but subsequent filter-driven renders must
+    // preserve the user's open/closed choice.
+    if (!preferMobileSheet() && el.sidebar) {
+      el.sidebar.classList.add("collapsed");
+      if (el.sidebarToggle) {
+        el.sidebarToggle.classList.remove("on");
+        el.sidebarToggle.setAttribute("aria-pressed", "false");
+      }
+    }
     renderTeam();
-    if (el.teamPickerSearch) {
+    if (el.search && teamSearchAlwaysOpen()) {
       requestAnimationFrame(() => {
         try {
-          el.teamPickerSearch.focus({ preventScroll: true });
+          el.search.focus({ preventScroll: true });
         } catch {
-          el.teamPickerSearch.focus();
+          el.search.focus();
         }
       });
+    } else if (el.search && state.page === "team") {
+      openMobileSearch();
     }
   }
 
   function closeTeamPicker({ silent } = {}) {
     state.teamPickerSlot = null;
-    state.teamPickerSearch = "";
-    if (el.teamPickerSearch) el.teamPickerSearch.value = "";
     if (!silent) {
       syncFilterChipUI();
       renderTeam();
@@ -5463,23 +6252,23 @@
     if (el.teamPage) el.teamPage.classList.toggle("is-picking", picking);
     if (el.teamSquadView) el.teamSquadView.hidden = picking;
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
-    if (el.teamClearBtn) el.teamClearBtn.hidden = picking;
+    syncTeamSearchHost();
     const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "feed" || (state.page === "team" && !picking);
     if (el.sidebar) el.sidebar.style.display = hideSidebar ? "none" : "";
     if (el.sidebarToggle) {
       el.sidebarToggle.style.display = state.page === "team" && !picking ? "none" : "";
     }
-    if (picking && !preferMobileSheet() && el.sidebar) {
-      el.sidebar.classList.remove("collapsed");
-      if (el.sidebarToggle) {
-        el.sidebarToggle.classList.add("on");
-        el.sidebarToggle.setAttribute("aria-pressed", "true");
-      }
+    if (el.subtoolbar && state.page === "team") {
+      el.subtoolbar.style.display = "";
+      el.subtoolbar.classList.remove("is-markets-mobile");
+    }
+    if (state.page === "team" && el.ownedFilterGroup) {
+      el.ownedFilterGroup.style.display = picking ? "none" : "";
     }
   }
 
   function applyTeamPickerFilters(rows) {
-    const q = (state.teamPickerSearch || state.search || "").trim().toLowerCase();
+    const q = (state.search || "").trim().toLowerCase();
     const lock = state.teamPickerSlot && state.teamPickerSlot.position;
     const inSquad = new Set(state.teamSquad.map((s) => s.code));
     const replaceCode = state.teamPickerSlot && state.teamPickerSlot.replaceCode;
@@ -5491,6 +6280,7 @@
       if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
       if (r.price < state.priceMin || r.price > state.priceMax) return false;
       if (state.setPieceTakersOnly && !isSetPieceTaker(r)) return false;
+      if (state.teamAffordableOnly && !teamRowAffordable(r, replaceCode)) return false;
       if (q) {
         const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
         if (!hay.includes(q)) return false;
@@ -5499,48 +6289,55 @@
     });
   }
 
-  function teamHeatIsCurrent(gw) {
-    return gw === teamCurrentGw();
+  function teamHeatWindowStart() {
+    return teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
   }
 
   function teamHeatAnchorClass(gw) {
-    return teamHeatIsCurrent(gw) ? " is-anchor" : "";
+    return gw === teamHeatWindowStart() ? " is-anchor" : "";
   }
 
-  function teamHeatCellHTML(teamCode, gw) {
+  function teamHeatOppLabel(fx) {
+    const code = String(fx.opp || "");
+    if (!code) return "–";
+    return fx.ha === "A" ? code.toLowerCase() : code.toUpperCase();
+  }
+
+  function teamHeatCellHTML(teamCode, gw, isFirst) {
     const fixtures = (FIXTURES_BY_TEAM[teamCode] || []).filter((fx) => fx.gw === gw);
+    const divide = isFirst ? " sec-divider" : "";
     if (!fixtures.length) {
-      return `<td class="team-heat-cell is-blank${teamHeatAnchorClass(gw)}"><span class="team-heat-label">–</span></td>`;
+      return `<td class="team-heat-cell is-blank${divide}${teamHeatAnchorClass(gw)}"><span class="team-heat-label">–</span></td>`;
     }
     const fx = fixtures[0];
-    const extra = fixtures.length > 1 ? `+${fixtures.length - 1}` : "";
-    const label = `${fx.opp} (${fx.ha})${extra}`;
+    const label = fixtures.map(teamHeatOppLabel).join("+");
     const d = Number(fx.difficulty);
     const fdr = Number.isFinite(d) && d >= 1 && d <= 5 ? d : null;
     let style = "";
     let extraClass = fdr != null ? ` fdr-${fdr}` : "";
     if (fdr === 1) {
-      const paint = enhanceHighlightInlineStyle("top", 1);
+      const paint = fdrHighlightInlineStyle("easy", 1);
       style = ` style="${paint.style}"`;
-      extraClass += ` highlight-top${paint.strongClass || ""}`;
+      extraClass += paint.strongClass;
     } else if (fdr === 2) {
-      const paint = enhanceHighlightInlineStyle("top", 0.48);
+      const paint = fdrHighlightInlineStyle("easy", 0.48);
       style = ` style="${paint.style}"`;
-      extraClass += ` highlight-top${paint.strongClass || ""}`;
+      extraClass += paint.strongClass;
     } else if (fdr === 4) {
-      const paint = enhanceHighlightInlineStyle("bottom", 0.48);
+      const paint = fdrHighlightInlineStyle("hard", 0.48);
       style = ` style="${paint.style}"`;
-      extraClass += ` highlight-bottom${paint.strongClass || ""}`;
+      extraClass += paint.strongClass;
     } else if (fdr === 5) {
-      const paint = enhanceHighlightInlineStyle("bottom", 1);
+      const paint = fdrHighlightInlineStyle("hard", 1);
       style = ` style="${paint.style}"`;
-      extraClass += ` highlight-bottom${paint.strongClass || ""}`;
+      extraClass += paint.strongClass;
     }
     const fdrWord = fdr == null ? null : ["", "easiest", "easier", "average", "tougher", "toughest"][fdr];
     const extraTip = fixtures.slice(1).map((other) => {
       const od = Number(other.difficulty);
       const word = Number.isFinite(od) ? ` FDR ${od}` : "";
-      return `${other.opp} (${other.ha})${word}`;
+      const loc = other.ha === "H" ? "Home" : "Away";
+      return `${other.opp} (${loc})${word}`;
     });
     const tip = [
       `GW${gw} ${fx.ha === "H" ? "Home" : "Away"} vs ${teamNameForSeason(fx.opp) || fx.opp}`,
@@ -5549,13 +6346,17 @@
     ]
       .filter(Boolean)
       .join(" · ");
-    return `<td class="team-heat-cell${extraClass}${teamHeatAnchorClass(gw)}"${style}${tipAttr(tip)}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
+    return `<td class="team-heat-cell${extraClass}${divide}${teamHeatAnchorClass(gw)}"${style}${tipAttr(tip)}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
   }
 
   function teamHeatHeadHTML() {
     return teamHeatGws()
-      .map((gw) => `<th class="col-heat${teamHeatAnchorClass(gw)}">GW${gw}</th>`)
+      .map((gw, i) => `<th class="col-heat${i === 0 ? " sec-divider" : ""}${teamHeatAnchorClass(gw)}">GW${gw}</th>`)
       .join("");
+  }
+
+  function teamHeatCellsHTML(teamCode) {
+    return teamHeatGws().map((gw, i) => teamHeatCellHTML(teamCode, gw, i === 0)).join("");
   }
 
   function syncTeamGwAnchorLine() {
@@ -5582,24 +6383,80 @@
         ? `<span class="team-role-badge is-v"${tipAttr("Vice-captain")}>V</span>`
         : "";
     const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${role}</div>`;
-    const sub = `<div class="player-cell-sub">${escapeHtml(teamNameForSeason(row.team))} · £${Number(row.price).toFixed(1)}m</div>`;
+    const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}<span>${Number(row.price).toFixed(1)}M</span></div>`;
     const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
     return playerIdentityHTML(crest, nameHTML, sub);
   }
 
-  function teamActionsOverlayHTML(row, slot) {
-    if (!slot) return "";
+  function teamRowMenuItemHTML({ attrs, icon, label, on = false, danger = false }) {
+    const check = on ? `<span class="team-row-menu-check">${iconHTML("check")}</span>` : "";
+    return `<button type="button" class="settings-switch-row team-row-menu-item${on ? " is-on" : ""}${danger ? " is-danger" : ""}" role="menuitem" ${attrs}>
+      <span class="team-row-menu-icon" aria-hidden="true">${icon}</span>
+      <span class="settings-switch-text"><span class="settings-switch-label">${escapeHtml(label)}</span></span>
+      ${check}
+    </button>`;
+  }
+
+  function teamRowMenuHTML(row, slot) {
+    const code = escapeHtml(String(row.code));
     const isC = state.teamCaptainCode === row.code;
     const isV = state.teamViceCode === row.code;
-    const xiBtns = slot.starter
-      ? `<button type="button" class="ghost-btn icon-only-btn team-act${isC ? " on" : ""}" data-team-captain="${escapeHtml(String(row.code))}" aria-label="Captain"${tipAttr("Captain")}>C</button>
-         <button type="button" class="ghost-btn icon-only-btn team-act${isV ? " on" : ""}" data-team-vice="${escapeHtml(String(row.code))}" aria-label="Vice-captain"${tipAttr("Vice-captain")}>V</button>
-         <button type="button" class="ghost-btn icon-only-btn team-act" data-team-toggle-xi="${escapeHtml(String(row.code))}" aria-label="Move to bench"${tipAttr("Move to bench")}>${iconHTML("chevron-down")}</button>`
-      : `<button type="button" class="ghost-btn icon-only-btn team-act" data-team-toggle-xi="${escapeHtml(String(row.code))}" aria-label="Move to XI"${tipAttr("Move to XI")}>${iconHTML("chevron-up")}</button>`;
-    return `<div class="team-row-actions" role="group" aria-label="Player actions">
-        ${xiBtns}
-        <button type="button" class="ghost-btn icon-only-btn team-act" data-team-replace="${escapeHtml(String(row.code))}" data-team-replace-pos="${escapeHtml(row.position)}" data-team-replace-starter="${slot.starter ? "1" : "0"}" aria-label="Replace"${tipAttr("Replace")}>${iconHTML("refresh-ccw-dot")}</button>
-        <button type="button" class="ghost-btn icon-only-btn team-act" data-team-remove="${escapeHtml(String(row.code))}" aria-label="Remove"${tipAttr("Remove")}>${iconHTML("x")}</button>
+    const roleItems = slot.starter
+      ? [
+          teamRowMenuItemHTML({
+            attrs: `data-team-captain="${code}"`,
+            icon: `<span class="team-role-badge is-c">C</span>`,
+            label: "Captain",
+            on: isC,
+          }),
+          teamRowMenuItemHTML({
+            attrs: `data-team-vice="${code}"`,
+            icon: `<span class="team-role-badge is-v">V</span>`,
+            label: "Vice-captain",
+            on: isV,
+          }),
+          teamRowMenuItemHTML({
+            attrs: `data-team-toggle-xi="${code}"`,
+            icon: iconHTML("chevron-down"),
+            label: "Move to bench",
+          }),
+        ].join("")
+      : teamRowMenuItemHTML({
+          attrs: `data-team-toggle-xi="${code}"`,
+          icon: iconHTML("chevron-up"),
+          label: "Move to XI",
+        });
+    const squadItems = [
+      teamRowMenuItemHTML({
+        attrs: `data-team-replace="${code}" data-team-replace-pos="${escapeHtml(row.position)}" data-team-replace-starter="${slot.starter ? "1" : "0"}"`,
+        icon: iconHTML("refresh-ccw-dot"),
+        label: "Replace",
+      }),
+      teamRowMenuItemHTML({
+        attrs: `data-team-note="${code}"`,
+        icon: iconHTML("notebook-pen"),
+        label: "Add note",
+      }),
+      teamRowMenuItemHTML({
+        attrs: `data-team-remove="${code}"`,
+        icon: iconHTML("x"),
+        label: "Remove",
+        danger: true,
+      }),
+    ].join("");
+    return `<div class="settings-panel-head">
+        <h4 id="team-row-menu-title">${escapeHtml(row.name)}</h4>
+        <p class="settings-panel-sub">${escapeHtml(TEAM_POS_LABEL[row.position] || row.position)} · ${escapeHtml(teamNameForSeason(row.team))} · £${Number(row.price).toFixed(1)}m</p>
+      </div>
+      <div class="settings-panel-body team-row-menu-body">
+        <section class="settings-section">
+          <div class="settings-section-label">Role</div>
+          ${roleItems}
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-label">Squad</div>
+          ${squadItems}
+        </section>
       </div>`;
   }
 
@@ -5609,20 +6466,160 @@
     });
   }
 
+  let teamRowMenuOpenedAt = 0;
+  let teamRowMenuRow = null;
+
+  function teamRowMenuAllowed() {
+    return teamIsEditable() && !state.teamPickerSlot && state.teamSubCode == null;
+  }
+
+  function teamRowMenuIsOpen() {
+    return !!(el.teamRowMenu && el.teamRowMenu.classList.contains("open"));
+  }
+
+  function teamSquadPlayerRowFromNode(node) {
+    if (!node || !node.closest) return null;
+    const row = node.closest("#team-squad-view tr.team-player-row[data-team-code]");
+    if (!row || row.closest("#team-search-results")) return null;
+    return row;
+  }
+
+  function closeTeamRowMenu({ force } = {}) {
+    if (!force && Date.now() - teamRowMenuOpenedAt < 350) return;
+    if (el.teamRowMenu) {
+      el.teamRowMenu.classList.remove("open");
+      el.teamRowMenu.setAttribute("aria-hidden", "true");
+      el.teamRowMenu.innerHTML = "";
+      el.teamRowMenu.style.left = "";
+      el.teamRowMenu.style.top = "";
+    }
+    teamRowMenuRow = null;
+    clearTeamRowActions();
+  }
+
+  function hideTeamRowActionsPopup() {
+    closeTeamRowMenu({ force: true });
+  }
+
+  function positionTeamRowMenu(x, y) {
+    const menu = el.teamRowMenu;
+    if (!menu) return;
+    const pad = 8;
+    const w = menu.offsetWidth || 240;
+    const h = menu.offsetHeight || 280;
+    let left = x;
+    let top = y;
+    if (left + w > window.innerWidth - pad) left = x - w;
+    if (top + h > window.innerHeight - pad) top = y - h;
+    left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+    top = Math.max(pad, Math.min(top, window.innerHeight - h - pad));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }
+
+  function menuPointFromEvent(e, rowEl) {
+    if (e && Number.isFinite(e.clientX) && (e.clientX || e.clientY)) {
+      return { x: e.clientX, y: e.clientY };
+    }
+    const r = rowEl.getBoundingClientRect();
+    return { x: r.left + 16, y: r.bottom - 4 };
+  }
+
+  function openTeamRowMenuAt(rowEl, e) {
+    const code = Number(rowEl.dataset.teamCode) || rowEl.dataset.teamCode;
+    const slot = state.teamSquad.find((s) => teamCodeEq(s.code, code));
+    const row = slot ? teamPlayerByCode(slot.code) : null;
+    if (!slot || !row || !el.teamRowMenu || !teamRowMenuAllowed()) {
+      closeTeamRowMenu({ force: true });
+      return;
+    }
+    hideUiTooltip();
+    if (el.prefsPanel && el.prefsPanel.classList.contains("open")) setPrefsOpen(false);
+    clearTeamRowActions();
+    rowEl.classList.add("is-actions-open");
+    teamRowMenuRow = rowEl;
+    el.teamRowMenu.innerHTML = teamRowMenuHTML(row, slot);
+    el.teamRowMenu.classList.add("open");
+    el.teamRowMenu.setAttribute("aria-hidden", "false");
+    teamRowMenuOpenedAt = Date.now();
+    const pt = menuPointFromEvent(e, rowEl);
+    positionTeamRowMenu(pt.x, pt.y);
+    requestAnimationFrame(() => {
+      if (!teamRowMenuIsOpen()) return;
+      positionTeamRowMenu(pt.x, pt.y);
+      el.teamRowMenu.focus({ preventScroll: true });
+    });
+  }
+
+  function applyTeamRowAction(target) {
+    if (!target || !target.closest) return false;
+    const remove = target.closest("[data-team-remove]");
+    if (remove) {
+      closeTeamRowMenu({ force: true });
+      removeTeamPlayer(Number(remove.dataset.teamRemove) || remove.dataset.teamRemove);
+      renderTeam();
+      return true;
+    }
+    const replace = target.closest("[data-team-replace]");
+    if (replace) {
+      closeTeamRowMenu({ force: true });
+      openTeamPicker({
+        position: replace.dataset.teamReplacePos,
+        starter: replace.dataset.teamReplaceStarter === "1",
+        replaceCode: Number(replace.dataset.teamReplace) || replace.dataset.teamReplace,
+      });
+      return true;
+    }
+    const cap = target.closest("[data-team-captain]");
+    if (cap) {
+      closeTeamRowMenu({ force: true });
+      setTeamCaptain(Number(cap.dataset.teamCaptain) || cap.dataset.teamCaptain);
+      return true;
+    }
+    const vice = target.closest("[data-team-vice]");
+    if (vice) {
+      closeTeamRowMenu({ force: true });
+      setTeamVice(Number(vice.dataset.teamVice) || vice.dataset.teamVice);
+      return true;
+    }
+    const toggle = target.closest("[data-team-toggle-xi]");
+    if (toggle) {
+      closeTeamRowMenu({ force: true });
+      toggleTeamStarter(Number(toggle.dataset.teamToggleXi) || toggle.dataset.teamToggleXi);
+      return true;
+    }
+    const note = target.closest("[data-team-note]");
+    if (note) {
+      closeTeamRowMenu({ force: true });
+      const code = Number(note.dataset.teamNote) || note.dataset.teamNote;
+      const row = teamPlayerByCode(code);
+      if (row) {
+        openNoteModal({
+          entityType: "player",
+          playerCode: row.code,
+          playerName: row.name,
+          teamCode: row.team,
+          teamName: teamNameForSeason(row.team) || row.team,
+        });
+      }
+      return true;
+    }
+    return false;
+  }
+
   function teamFilledRowHTML(slot, enterI) {
     const row = teamPlayerByCode(slot.code);
     if (!row) return "";
-    const gws = teamHeatGws();
     const subPartners =
       state.teamSubCode == null
         ? null
         : new Set(teamSwapPartnerCodes(state.teamSubCode).map((c) => String(c)));
-    const heat = gws.map((gw) => teamHeatCellHTML(row.team, gw)).join("");
+    const heat = teamHeatCellsHTML(row.team);
     let subClass = "";
     if (state.teamSubCode != null && teamCodeEq(slot.code, state.teamSubCode)) subClass = " is-sub-source";
     else if (subPartners && subPartners.has(String(slot.code))) subClass = " is-sub-target";
     return `<tr class="team-player-row${subClass}" style="--enter-i:${enterI}" data-team-code="${escapeHtml(String(row.code))}"${subClass === " is-sub-target" ? ' role="button"' : ""}>
-      <td class="col-player"><div class="team-player-id">${teamPlayerCellHTML(row, slot)}</div>${teamActionsOverlayHTML(row, slot)}</td>
+      <td class="col-player"><div class="team-player-id">${teamPlayerCellHTML(row, slot)}</div></td>
       ${teamMetricCellsHTML(row)}
       ${heat}
     </tr>`;
@@ -5691,9 +6688,12 @@
     const overClub = [...clubs.entries()].filter(([, c]) => c > TEAM_CLUB_MAX);
     const cap = teamPlayerByCode(state.teamCaptainCode);
     const vice = teamPlayerByCode(state.teamViceCode);
-    const over = itb < -1e-9;
+    const bankTone = itb < -1e-9 ? "is-neg" : itb > 1e-9 ? "is-pos" : "";
+    const picking = !!state.teamPickerSlot;
+    el.teamBudgetBar.classList.toggle("is-picking", picking);
+    el.teamBudgetBar.classList.remove("is-over", "is-low");
     el.teamBudgetBar.innerHTML = `
-      <div class="team-budget-stat${over ? " is-over" : ""}">
+      <div class="team-budget-stat${bankTone ? ` ${bankTone}` : ""}">
         <span class="team-budget-label">Bank</span>
         <strong>£${itb.toFixed(1)}m</strong>
       </div>
@@ -5717,7 +6717,318 @@
         overClub.length
           ? `<div class="team-budget-warn">${overClub.map(([t, c]) => `${t} ${c}/${TEAM_CLUB_MAX}`).join(" · ")}</div>`
           : ""
+      }
+      ${
+        picking
+          ? `<button type="button" class="ghost-btn icon-label-btn team-picker-cancel" id="team-picker-cancel" aria-label="Back to squad">
+              <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+              <span class="btn-label">Back</span>
+            </button>`
+          : ""
       }`;
+  }
+
+  const TEAM_SEARCH_LIMIT = 8;
+
+  function teamSearchQuery() {
+    return (state.search || "").trim().toLowerCase();
+  }
+
+  function teamSearchHaystack(row) {
+    return `${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team)}`.toLowerCase();
+  }
+
+  function teamSearchPts(row) {
+    const prior = teamPriorRow(row.code);
+    return Number((prior && prior.pts) || row.pts) || 0;
+  }
+
+  function teamSearchScore(row, q) {
+    if (!q) return 99;
+    const name = String(row.name || "").toLowerCase();
+    const team = String(row.team || "").toLowerCase();
+    const teamName = teamNameForSeason(row.team).toLowerCase();
+    const tokens = name.split(/[\s.]+/).filter(Boolean);
+    const last = tokens[tokens.length - 1] || "";
+    if (name === q || team === q) return 0;
+    if (name.startsWith(q)) return 1;
+    if (last.startsWith(q)) return 2;
+    if (tokens.some((t) => t.startsWith(q))) return 3;
+    if (name.includes(q)) return 4;
+    if (team.startsWith(q) || teamName.startsWith(q)) return 5;
+    if (team.includes(q) || teamName.includes(q)) return 6;
+    if (teamSearchHaystack(row).includes(q)) return 7;
+    return 99;
+  }
+
+  function teamSlotByCode(code) {
+    return state.teamSquad.find((s) => String(s.code) === String(code)) || null;
+  }
+
+  function teamSquadSlotNote(slot) {
+    if (!slot) return "In squad";
+    const pos = TEAM_POS_LABEL[slot.position] || slot.position;
+    return slot.starter ? `XI · ${pos}` : `Bench · ${pos}`;
+  }
+
+  function teamPreferredAddSlot(row) {
+    if (!teamAddError(row, { starter: true })) return { starter: true };
+    return { starter: false };
+  }
+
+  function teamSearchSort(a, b) {
+    if (a.score !== b.score) return a.score - b.score;
+    const pts = teamSearchPts(b.row) - teamSearchPts(a.row);
+    if (pts) return pts;
+    return String(a.row.name).localeCompare(String(b.row.name));
+  }
+
+  function teamAutocompleteMatches(q) {
+    if (!q) return { available: [] };
+    const available = teamCatalog()
+      .map((row) => ({
+        row,
+        score: teamSearchScore(row, q),
+        slot: teamSlotByCode(row.code),
+      }))
+      .filter((x) => x.score < 99)
+      .filter((x) => !x.slot)
+      .filter((x) => !state.teamAffordableOnly || teamRowAffordable(x.row))
+      .sort(teamSearchSort)
+      .slice(0, TEAM_SEARCH_LIMIT);
+    return { available };
+  }
+
+  function teamSearchRowHTML(row, slot, i, opts) {
+    const heat = teamHeatCellsHTML(row.team);
+    const inSquad = !!slot;
+    const pinned = teamCompareHas(row.code);
+    const note = inSquad
+      ? `<span class="team-search-in">${escapeHtml(teamSquadSlotNote(slot))}</span>`
+      : "";
+    const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${note}</div>`;
+    const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}<span>${Number(row.price).toFixed(1)}M</span></div>`;
+    const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
+    const selectable = state.teamCompareMode || pinned ? " row-selectable" : "";
+    const cls = `team-search-row${inSquad && !(opts && opts.pin) ? " is-in-squad" : ""}${opts && opts.pin ? " is-pinned-row" : ""}${selectable}`;
+    const id = `team-search-opt-${escapeHtml(String(row.code))}`;
+    return `<tr class="${cls}" id="${id}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" role="option">
+      <td class="col-player"><div class="team-player-id">${playerIdentityHTML(crest, nameHTML, sub)}</div></td>
+      ${teamMetricCellsHTML(row)}
+      ${heat}
+    </tr>`;
+  }
+
+  function teamPinnedRows() {
+    return state.teamCompareCodes.map((code) => teamPlayerByCode(code)).filter(Boolean);
+  }
+
+  function teamSearchNavCodes() {
+    if (!el.teamSearchBody) return [];
+    return [...el.teamSearchBody.querySelectorAll("tr.team-search-row[data-team-code]")].map(
+      (tr) => Number(tr.dataset.teamCode) || tr.dataset.teamCode
+    );
+  }
+
+  function teamSearchRowByCode(code) {
+    if (!el.teamSearchBody || code == null) return null;
+    const key = String(code);
+    return [...el.teamSearchBody.querySelectorAll("tr.team-search-row[data-team-code]")].find((tr) =>
+      teamCodeEq(tr.dataset.teamCode, key)
+    );
+  }
+
+  function syncTeamSearchCombobox() {
+    if (!el.search) return;
+    if (state.page === "team" && !state.teamPickerSlot) {
+      el.search.setAttribute("role", "combobox");
+      el.search.setAttribute("aria-autocomplete", "list");
+      el.search.setAttribute("aria-controls", "team-search-body");
+      el.search.setAttribute("aria-expanded", teamSearchCardOpen() ? "true" : "false");
+    } else {
+      el.search.removeAttribute("role");
+      el.search.removeAttribute("aria-autocomplete");
+      el.search.removeAttribute("aria-controls");
+      el.search.removeAttribute("aria-expanded");
+      el.search.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  function applyTeamSearchActive(code, { scroll = false } = {}) {
+    const codes = teamSearchNavCodes();
+    if (!codes.length) {
+      state.teamSearchActiveCode = null;
+      if (el.search) el.search.removeAttribute("aria-activedescendant");
+      return;
+    }
+    const match = code != null ? codes.find((c) => teamCodeEq(c, code)) : null;
+    state.teamSearchActiveCode = match != null ? match : codes[0];
+    el.teamSearchBody.querySelectorAll("tr.team-search-row.is-active").forEach((tr) => {
+      tr.classList.remove("is-active");
+      tr.removeAttribute("aria-selected");
+    });
+    const row = teamSearchRowByCode(state.teamSearchActiveCode);
+    if (row) {
+      row.classList.add("is-active");
+      row.setAttribute("aria-selected", "true");
+      if (scroll) row.scrollIntoView({ block: "nearest" });
+      if (el.search && row.id) el.search.setAttribute("aria-activedescendant", row.id);
+    }
+  }
+
+  function clearTeamHoverCompare() {
+    if (state.teamHoverCompareCode == null) {
+      paintTeamCompareWinners();
+      return;
+    }
+    state.teamHoverCompareCode = null;
+    paintTeamCompareWinners();
+  }
+
+  function setTeamHoverCompare(code) {
+    if (code == null || code === "") {
+      clearTeamHoverCompare();
+      return;
+    }
+    if (state.teamHoverCompareCode != null && teamCodeEq(state.teamHoverCompareCode, code)) return;
+    state.teamHoverCompareCode = Number(code) || code;
+    paintTeamCompareWinners();
+  }
+
+  let teamSearchIgnoreHover = false;
+
+  function moveTeamSearchActive(delta) {
+    flushTeamSearchInput();
+    if (!teamSearchCardOpen()) return;
+    const codes = teamSearchNavCodes();
+    if (!codes.length) return;
+    const cur = codes.findIndex((c) => teamCodeEq(c, state.teamSearchActiveCode));
+    const next =
+      cur < 0 ? (delta > 0 ? 0 : codes.length - 1) : (cur + delta + codes.length) % codes.length;
+    teamSearchIgnoreHover = true;
+    applyTeamSearchActive(codes[next], { scroll: true });
+    clearTeamHoverCompare();
+  }
+
+  function pinTeamSearchActive() {
+    flushTeamSearchInput();
+    if (!teamSearchCardOpen()) return;
+    if (state.teamSearchActiveCode == null) applyTeamSearchActive(null);
+    const code = state.teamSearchActiveCode;
+    if (code == null) return;
+    if (!toggleTeamCompareCode(code)) return;
+    if (teamSearchQuery()) clearTeamSearchQuery({ keepFocus: true });
+    renderTeam();
+    focusTeamSearchInput();
+  }
+
+  function focusTeamSearchInput() {
+    if (!el.search) return;
+    try {
+      el.search.focus({ preventScroll: true });
+    } catch {
+      el.search.focus();
+    }
+  }
+
+  function clearTeamSearchQuery({ keepFocus = true } = {}) {
+    if (el.search) el.search.value = "";
+    state.search = "";
+    state.teamSearchActiveCode = null;
+    syncSearchClearBtns();
+    if (keepFocus) focusTeamSearchInput();
+  }
+
+  function flushTeamSearchInput() {
+    if (!el.search) return;
+    clearTimeout(searchTimer);
+    const val = el.search.value;
+    if (state.search === val) return;
+    state.search = val;
+    if (state.page === "team") renderTeam();
+  }
+
+  function renderTeamSearchResults() {
+    if (!el.teamSearchResults) return;
+    if (state.teamPickerSlot) {
+      el.teamSearchResults.hidden = true;
+      el.teamSearchResults.classList.remove("is-pin-stash");
+      state.teamSearchActiveCode = null;
+      clearTeamHoverCompare();
+      syncTeamSearchCombobox();
+      return;
+    }
+    const q = teamSearchQuery();
+    const pins = teamPinnedRows();
+    if (!q && !pins.length) {
+      el.teamSearchResults.hidden = true;
+      el.teamSearchResults.classList.remove("is-pin-stash");
+      state.teamSearchActiveCode = null;
+      clearTeamHoverCompare();
+      syncTeamSearchCombobox();
+      return;
+    }
+    const { available } = q ? teamAutocompleteMatches(q) : { available: [] };
+    const pinSet = new Set(pins.map((row) => String(row.code)));
+    const availableVis = available.filter((m) => !pinSet.has(String(m.row.code)));
+    const stashPins = pins;
+    const pinStashOnly = !q && stashPins.length > 0;
+    el.teamSearchResults.hidden = false;
+    el.teamSearchResults.classList.toggle("is-pin-stash", pinStashOnly);
+    syncTeamSearchCombobox();
+    if (el.teamSearchTitle) {
+      const nPin = stashPins.length;
+      const nAdd = availableVis.length;
+      if (pinStashOnly) el.teamSearchTitle.textContent = `${nPin} pinned`;
+      else if (!nAdd && !nPin) el.teamSearchTitle.textContent = `No matches for “${q}”`;
+      else if (!nAdd && nPin) el.teamSearchTitle.textContent = `No matches for “${q}” · ${nPin} pinned`;
+      else if (nPin && nAdd) el.teamSearchTitle.textContent = `${nAdd} match${nAdd === 1 ? "" : "es"} · ${nPin} pinned`;
+      else if (nPin) el.teamSearchTitle.textContent = `${nPin} pinned`;
+      else el.teamSearchTitle.textContent = `${nAdd} match${nAdd === 1 ? "" : "es"} for “${q}”`;
+    }
+    const hint = el.teamSearchResults.querySelector(".team-search-hint");
+    const hasRows = !!(availableVis.length || stashPins.length);
+    if (hint) {
+      hint.textContent = pinStashOnly
+        ? "↑↓ · Enter or click to unpin"
+        : "↑↓ to choose · Enter or click to pin";
+      hint.hidden = !hasRows;
+    }
+    if (el.teamSearchClearPins) el.teamSearchClearPins.hidden = !stashPins.length;
+    const heatHead = teamHeatHeadHTML();
+    if (el.teamSearchHead) {
+      el.teamSearchHead.innerHTML = teamHeadRowsHTML(
+        `${teamSortTh("player", "Player", "col-player", "Player", { plain: true })}${teamMetricHeadHTML({ plain: true })}${heatHead}`
+      );
+    }
+    if (!el.teamSearchBody) return;
+    if (!availableVis.length && !stashPins.length) {
+      el.teamSearchBody.innerHTML = `<tr class="team-search-empty"><td class="col-player" colspan="${teamDataColCount()}">No players match that search.</td></tr>`;
+      state.teamSearchActiveCode = null;
+      if (el.search) el.search.removeAttribute("aria-activedescendant");
+      return;
+    }
+    const cols = teamDataColCount();
+    const rows = [];
+    let i = 0;
+    if (stashPins.length) {
+      if (!pinStashOnly) {
+        rows.push(
+          `<tr class="section-row team-section-row is-pinned-section" style="--enter-i:${i++}"><th colspan="${cols}">${stashPins.length} pinned</th></tr>`
+        );
+      }
+      stashPins.forEach((row) => rows.push(teamSearchRowHTML(row, teamSlotByCode(row.code), i++, { pin: true })));
+    }
+    if (availableVis.length) {
+      if (stashPins.length) {
+        rows.push(
+          `<tr class="section-row team-section-row" style="--enter-i:${i++}"><th colspan="${cols}">Matches</th></tr>`
+        );
+      }
+      availableVis.forEach((m) => rows.push(teamSearchRowHTML(m.row, null, i++)));
+    }
+    el.teamSearchBody.innerHTML = rows.join("");
+    applyTeamSearchActive(state.teamSearchActiveCode);
   }
 
   function renderTeamSquadTables() {
@@ -5725,7 +7036,7 @@
     const plan = teamEmptyPlan();
     let enterI = 0;
     const rows = [];
-    for (const pos of POSITIONS) {
+    for (const pos of TEAM_VIEW_POS_ORDER) {
       const starters = sortTeamSlots(state.teamSquad.filter((s) => s.starter && s.position === pos));
       if (!starters.length && !plan.xiEmpty[pos]) continue;
       rows.push(
@@ -5753,7 +7064,10 @@
       rows.push(teamEmptyRowHTML(pos, false, enterI++));
     });
     if (el.teamSquadHead) {
-      el.teamSquadHead.innerHTML = `<tr>${teamSortTh("player", "Player", "col-player")}${teamMetricHeadHTML()}${heatHead}</tr>`;
+      el.teamSquadHead.innerHTML = teamHeadRowsHTML(
+        `${teamSortTh("player", "Player", "col-player")}${teamMetricHeadHTML()}${heatHead}`,
+        { noSections: true }
+      );
     }
     if (el.teamSquadBody) el.teamSquadBody.innerHTML = rows.join("");
   }
@@ -5765,36 +7079,29 @@
     if (state.teamSortKey) rows.sort(compareTeamRows);
     else rows.sort((a, b) => (b.price || 0) - (a.price || 0) || String(a.name).localeCompare(String(b.name)));
     const heatHead = teamHeatHeadHTML();
-    const posLabel = TEAM_POS_LABEL[slot.position] || slot.position;
-    const replaceRow = slot.replaceCode != null ? teamPlayerByCode(slot.replaceCode) : null;
-    if (el.teamPickerTitle) {
-      el.teamPickerTitle.textContent = replaceRow
-        ? `Select a replacement for ${replaceRow.name}`
-        : `Select ${posLabel} for the ${slot.starter ? "starting XI" : "bench"}`;
-    }
-    if (el.teamPickerMeta) {
-      el.teamPickerMeta.textContent = `${rows.length.toLocaleString()} player${rows.length === 1 ? "" : "s"} · 2026/27 prices · 2025/26 stats`;
-    }
-    if (el.teamPickerSearch && el.teamPickerSearch.value !== (state.teamPickerSearch || "")) {
-      el.teamPickerSearch.value = state.teamPickerSearch || "";
-    }
     if (el.teamPickerHead) {
-      el.teamPickerHead.innerHTML = `<tr>${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num team-price")}${teamMetricHeadHTML({ setPieces: true })}${heatHead}</tr>`;
+      el.teamPickerHead.innerHTML = teamHeadRowsHTML(
+        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num team-price sec-divider")}${teamSortTh("owned", "Own%", "col-num col-team-owned", "Current FPL ownership")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
+        { price: true, ownership: true, setPieces: true, noSections: true }
+      );
     }
     if (!rows.length) {
-      el.teamPickerBody.innerHTML = `<tr class="team-empty-row"><td class="col-player" colspan="${teamDataColCount({ price: true, setPieces: true })}">No players match the current filters.</td></tr>`;
+      el.teamPickerBody.innerHTML = `<tr class="team-empty-row"><td class="col-player" colspan="${teamDataColCount({ price: true, ownership: true, setPieces: true })}">No players match the current filters.</td></tr>`;
       return;
     }
     el.teamPickerBody.innerHTML = rows
       .map((row, i) => {
-        const heat = teamHeatGws().map((gw) => teamHeatCellHTML(row.team, gw)).join("");
+        const heat = teamHeatCellsHTML(row.team);
         const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
-        const sub = `<div class="player-cell-sub">${escapeHtml(TEAM_POS_LABEL[row.position] || row.position)} · ${escapeHtml(teamNameForSeason(row.team))}</div>`;
+        const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}</div>`;
         const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
-        return `<tr class="team-picker-row" style="--enter-i:${i}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
+        const selected = state.teamCompareMode && teamCompareHas(row.code) ? " row-selected" : "";
+        const selectable = state.teamCompareMode ? " row-selectable" : "";
+        return `<tr class="team-picker-row${selected}${selectable}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
           <td class="col-player">${playerIdentityHTML(crest, nameHTML, sub)}</td>
-          <td class="col-num team-price">£${Number(row.price).toFixed(1)}</td>
-          ${teamMetricCellsHTML(row, { setPieces: true })}
+          <td class="col-num team-price sec-divider">${Number(row.price).toFixed(1)}</td>
+          <td class="col-num col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
+          ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
           ${heat}
         </tr>`;
       })
@@ -5809,16 +7116,28 @@
     if (!el.teamPage) return;
     if (state.teamGwStart == null) state.teamGwStart = teamClampGwStart(teamCurrentGw());
     normalizeTeamRoles();
+    state.teamHoverCompareCode = null;
+    hideTeamRowActionsPopup();
+    syncTeamModeUI();
     const picking = !!state.teamPickerSlot;
+    el.teamPage.classList.toggle("is-comparing", !!state.teamCompareMode);
+    syncTeamCompareBtn();
     syncTeamPickerChrome();
+    syncTeamAffordableCheck();
+    syncTeamClearBtn();
     renderTeamGwNav();
     renderTeamBudgetBar();
     renderTeamSubBar();
+    renderTeamCompareWrap();
     syncTeamPickerChips();
     if (picking) renderTeamPicker();
-    else renderTeamSquadTables();
+    else {
+      renderTeamSearchResults();
+      renderTeamSquadTables();
+    }
     upgradeNativeTitles(el.teamPage);
     syncTeamGwAnchorLine();
+    paintTeamCompareWinners();
   }
 
   function applyTeamPageBounds() {
@@ -5856,9 +7175,60 @@
       teamShiftGw(1);
       return;
     }
-    if (e.target.closest("#team-clear-btn")) {
-      clearTeamSquad();
+    if (e.target.closest("#team-compare-btn")) {
+      if (!teamIsEditable()) {
+        showToast({ title: "Actual is read-only", message: "Switch to Planner to compare and edit.", icon: "info" });
+        return;
+      }
+      if (state.teamCompareCodes.length) {
+        showToast({
+          title: "Compare unavailable",
+          message: "Clear pinned players first — search pins and Compare mode clash.",
+          icon: "scale",
+        });
+        return;
+      }
+      state.teamCompareMode = !state.teamCompareMode;
+      if (state.teamCompareMode) {
+        showToast({
+          title: "Compare mode",
+          message: `Click up to ${MAX_COMPARE} players in the table to compare side by side.`,
+          icon: "scale",
+        });
+      } else {
+        hideToast();
+      }
+      renderTeam();
       return;
+    }
+    if (e.target.closest("#team-compare-clear") || e.target.closest("#team-search-clear-pins")) {
+      clearTeamCompareSelection();
+      renderTeam();
+      return;
+    }
+    const searchPinRow = e.target.closest("#team-search-results tr.team-search-row[data-team-code]");
+    if (searchPinRow) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!toggleTeamCompareCode(searchPinRow.dataset.teamCode)) return;
+      if (teamSearchQuery()) clearTeamSearchQuery({ keepFocus: false });
+      renderTeam();
+      focusTeamSearchInput();
+      return;
+    }
+    if (state.teamCompareMode) {
+      const selectable = e.target.closest(
+        "tr.team-player-row[data-team-code], tr.team-search-row[data-team-code], tr.team-picker-row[data-team-code]"
+      );
+      if (
+        selectable &&
+        !e.target.closest(".team-act") &&
+        !(selectable.classList.contains("team-player-row") && state.teamSubCode != null)
+      ) {
+        toggleTeamCompareCode(selectable.dataset.teamCode);
+        renderTeam();
+        return;
+      }
     }
     if (e.target.closest("#team-sub-cancel")) {
       cancelTeamSub();
@@ -5893,36 +7263,7 @@
       });
       return;
     }
-    const remove = e.target.closest("[data-team-remove]");
-    if (remove) {
-      removeTeamPlayer(Number(remove.dataset.teamRemove) || remove.dataset.teamRemove);
-      renderTeam();
-      return;
-    }
-    const replace = e.target.closest("[data-team-replace]");
-    if (replace) {
-      openTeamPicker({
-        position: replace.dataset.teamReplacePos,
-        starter: replace.dataset.teamReplaceStarter === "1",
-        replaceCode: Number(replace.dataset.teamReplace) || replace.dataset.teamReplace,
-      });
-      return;
-    }
-    const cap = e.target.closest("[data-team-captain]");
-    if (cap) {
-      setTeamCaptain(Number(cap.dataset.teamCaptain) || cap.dataset.teamCaptain);
-      return;
-    }
-    const vice = e.target.closest("[data-team-vice]");
-    if (vice) {
-      setTeamVice(Number(vice.dataset.teamVice) || vice.dataset.teamVice);
-      return;
-    }
-    const toggle = e.target.closest("[data-team-toggle-xi]");
-    if (toggle) {
-      toggleTeamStarter(Number(toggle.dataset.teamToggleXi) || toggle.dataset.teamToggleXi);
-      return;
-    }
+    if (applyTeamRowAction(e.target)) return;
     if (state.teamSubCode != null) {
       const subRow = e.target.closest("tr.team-player-row[data-team-code]");
       if (subRow) {
@@ -5930,16 +7271,14 @@
         return;
       }
     }
-    const filled = e.target.closest("tr.team-player-row");
-    if (filled && !e.target.closest(".team-act")) {
-      if (!hasFineHover() || preferMobileSheet()) {
-        const already = filled.classList.contains("is-actions-open");
-        clearTeamRowActions();
-        if (!already) filled.classList.add("is-actions-open");
-      }
+    const filled = teamSquadPlayerRowFromNode(e.target);
+    if (filled && teamRowMenuAllowed() && !hasFineHover()) {
+      e.stopPropagation();
+      if (teamRowMenuIsOpen() && teamRowMenuRow === filled) closeTeamRowMenu({ force: true });
+      else openTeamRowMenuAt(filled, e);
       return;
     }
-    clearTeamRowActions();
+    closeTeamRowMenu();
   }
 
   function handleTeamUiKeydown(e) {
@@ -5964,14 +7303,129 @@
     el.teamPage.addEventListener("click", handleTeamUiClick);
     el.teamPage.addEventListener("keydown", handleTeamUiKeydown);
   }
-  if (el.teamPickerSearch) {
-    el.teamPickerSearch.addEventListener("input", (e) => {
-      state.teamPickerSearch = e.target.value;
-      if (state.teamPickerSlot) renderTeamPicker();
+  if (el.teamRowMenu) {
+    el.teamRowMenu.addEventListener("click", (e) => {
+      e.stopPropagation();
+      applyTeamRowAction(e.target);
+    });
+    el.teamRowMenu.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  document.addEventListener("contextmenu", (e) => {
+    if (e.target.closest("#note-modal, #confirm-modal, #team-row-menu, #note-context-menu, input, textarea, select")) {
+      return;
+    }
+    const squadRow = teamSquadPlayerRowFromNode(e.target);
+    if (squadRow && state.page === "team" && teamRowMenuAllowed()) {
+      e.preventDefault();
+      closeNoteContextMenu();
+      openTeamRowMenuAt(squadRow, e);
+      return;
+    }
+    const target = resolveNoteTargetFromNode(e.target);
+    if (!target) return;
+    e.preventDefault();
+    openNoteContextMenuAt(target, e.clientX, e.clientY);
+  });
+  document.addEventListener("click", (e) => {
+    if (el.teamRowMenu && el.teamRowMenu.contains(e.target)) return;
+    closeTeamRowMenu();
+  });
+  document.addEventListener(
+    "scroll",
+    (e) => {
+      if (teamRowMenuIsOpen()) {
+        if (el.teamRowMenu && e.target && el.teamRowMenu.contains(e.target)) return;
+        closeTeamRowMenu({ force: true });
+      }
+      if (el.noteContextMenu && el.noteContextMenu.classList.contains("open")) {
+        if (el.noteContextMenu.contains(e.target)) return;
+        closeNoteContextMenu();
+      }
+    },
+    true
+  );
+  window.addEventListener("resize", () => {
+    closeTeamRowMenu({ force: true });
+    closeNoteContextMenu();
+  });
+  if (el.teamSquadView) {
+    el.teamSquadView.addEventListener("pointerover", (e) => {
+      if (!hasFineHover()) return;
+      const row = e.target.closest("tr.team-player-row[data-team-code]");
+      if (!row || row.closest("#team-search-results") || !el.teamSquadView.contains(row)) return;
+      const code = Number(row.dataset.teamCode) || row.dataset.teamCode;
+      setTeamHoverCompare(code);
+    });
+    el.teamSquadView.addEventListener("pointerout", (e) => {
+      const row = e.target.closest("tr.team-player-row[data-team-code]");
+      if (!row || row.closest("#team-search-results")) return;
+      const rel = e.relatedTarget;
+      if (rel && row.contains(rel)) return;
+      const nextRow = rel && rel.closest && rel.closest("tr.team-player-row[data-team-code]");
+      const nextSquad =
+        nextRow && el.teamSquadView.contains(nextRow) && !nextRow.closest("#team-search-results");
+      const nextSearch =
+        rel && rel.closest && rel.closest("#team-search-results tr.team-search-row[data-team-code]");
+      if (state.teamHoverCompareCode != null && !nextSquad && !nextSearch) clearTeamHoverCompare();
+    });
+    el.teamSquadView.addEventListener("pointerleave", () => {
+      clearTeamHoverCompare();
+    });
+  }
+  if (el.teamSearchResults) {
+    el.teamSearchResults.addEventListener("pointerover", (e) => {
+      if (teamSearchIgnoreHover) return;
+      const row = e.target.closest("tr.team-search-row[data-team-code]");
+      if (!row || !el.teamSearchResults.contains(row)) return;
+      const code = Number(row.dataset.teamCode) || row.dataset.teamCode;
+      if (state.teamSearchActiveCode == null || !teamCodeEq(state.teamSearchActiveCode, code)) {
+        applyTeamSearchActive(code);
+      }
+      setTeamHoverCompare(code);
+    });
+    el.teamSearchResults.addEventListener("pointerout", (e) => {
+      const row = e.target.closest("tr.team-search-row[data-team-code]");
+      if (!row) return;
+      const rel = e.relatedTarget;
+      if (rel && row.contains(rel)) return;
+      const nextSearch =
+        rel && rel.closest && rel.closest("#team-search-results tr.team-search-row[data-team-code]");
+      const nextSquad =
+        rel &&
+        rel.closest &&
+        rel.closest("#team-squad-view tr.team-player-row[data-team-code]");
+      if (state.teamHoverCompareCode != null && !nextSearch && !nextSquad) clearTeamHoverCompare();
+    });
+    el.teamSearchResults.addEventListener("pointerleave", () => {
+      clearTeamHoverCompare();
+    });
+    el.teamSearchResults.addEventListener("mousemove", () => {
+      teamSearchIgnoreHover = false;
+    });
+  }
+  if (el.confirmModal) {
+    el.confirmModal.addEventListener("click", (e) => {
+      if (e.target.closest("[data-confirm-cancel]")) {
+        closeConfirmModal(false);
+        return;
+      }
+      if (e.target.closest("#confirm-modal-ok")) {
+        closeConfirmModal(true);
+      }
     });
   }
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    if (el.confirmModal && !el.confirmModal.hidden) {
+      e.preventDefault();
+      closeConfirmModal(false);
+      return;
+    }
+    if (teamRowMenuIsOpen()) {
+      e.preventDefault();
+      closeTeamRowMenu({ force: true });
+      return;
+    }
     if (mobileSheetOpen) return;
     if (state.page === "team" && state.teamPickerSlot) {
       e.preventDefault();
@@ -5983,6 +7437,7 @@
   });
 
   loadTeamDraft();
+  syncTeamClearBtn();
 
   // ---------------------------------------------------------------------
   // Feed page — player-mention cards from annotated social_data.js
@@ -6600,9 +8055,9 @@
         )
       : "";
     const metaBits = [];
-    if (card.position) metaBits.push(card.position);
-    if (card.price != null) metaBits.push(`£${Number(card.price).toFixed(1)}m`);
-    if (card.pts != null) metaBits.push(`${Number(card.pts)} Pts`);
+    if (card.position) metaBits.push(posBadgeHTML(card.position));
+    if (card.price != null) metaBits.push(`<span>£${Number(card.price).toFixed(1)}m</span>`);
+    if (card.pts != null) metaBits.push(`<span>${Number(card.pts)} Pts</span>`);
     const rankMaps = feedStatRankMaps(card.position);
     const posLabel = String(card.position || "").toUpperCase();
     const stats = feedPosStatSpecs(card.position)
@@ -6631,7 +8086,7 @@
     const teamAccent = TEAM_SCATTER_ACCENT[card.team] || "";
     const accentStyle = teamAccent ? `--feed-team-accent:${teamAccent};` : "";
 
-    return `<article class="rankings-card feed-player-card" id="feed-card-${escapeHtml(String(card.code))}" style="--enter-i:${enterIndex};${accentStyle}">
+    return `<article class="rankings-card feed-player-card" id="feed-card-${escapeHtml(String(card.code))}" data-feed-code="${escapeHtml(String(card.code))}" data-team="${escapeHtml(String(card.team || ""))}" style="--enter-i:${enterIndex};${accentStyle}">
       <div class="feed-player-card-top">
         <div class="feed-player-identity">
           <div class="feed-player-photo-wrap">
@@ -6640,7 +8095,7 @@
           </div>
           <div class="feed-player-title">
             <h3 class="feed-player-name"><span class="feed-player-name-text">${escapeHtml(card.name)}</span></h3>
-            <p class="feed-player-meta">${escapeHtml(metaBits.join(" · "))}</p>
+            <p class="feed-player-meta">${metaBits.join("")}</p>
           </div>
         </div>
         <div class="feed-player-stats">${stats}</div>
@@ -6862,10 +8317,10 @@
     const homeCode = fx.home?.code || "H";
     const awayCode = fx.away?.code || "A";
     const homeBadge =
-      badgeHTML(homeCode, "markets-score-matrix-badge") ||
+      playerCrestHTML(homeCode) ||
       `<span class="markets-score-matrix-code">${escapeHtml(homeCode)}</span>`;
     const awayBadge =
-      badgeHTML(awayCode, "markets-score-matrix-badge") ||
+      playerCrestHTML(awayCode) ||
       `<span class="markets-score-matrix-code">${escapeHtml(awayCode)}</span>`;
 
     let xNums = "";
@@ -7011,9 +8466,9 @@
       baselineSide && Number.isFinite(Number(baselineSide.cs))
         ? Number(baselineSide.cs)
         : null;
-    return `<div class="markets-team-row markets-team-row-${role}">
-      <div class="markets-team-cell">
-        ${badgeHTML(code, "markets-badge")}
+    return `<div class="markets-team-row markets-team-row-${role}" data-team="${escapeHtml(code)}">
+      <div class="markets-team-cell" data-team="${escapeHtml(code)}">
+        ${playerCrestHTML(code)}
         <span class="markets-side-name">${escapeHtml(label)}</span>
         ${sideMark}
       </div>
@@ -7638,8 +9093,1176 @@ python3 site/annotate_social.py</pre>
   }
 
 
+  // ---------------------------------------------------------------------
+  // Ownership page — multi-line selected_by% over manual check-ins
+  // ---------------------------------------------------------------------
+  const OWNERSHIP_TOP_PLAYERS = 100;
+  const OWNERSHIP_TEAM_TOP_N = 20;
+  const OWNERSHIP_PAD = { top: 18, right: 18, bottom: 32, left: 42 };
+  const OWNERSHIP_POINT_HIT = 16;
+  const OWNERSHIP_LINE_HIT = 10;
+  const OWNERSHIP_PLAYER_TREND_CARD_N = 5;
+  const OWNERSHIP_TEAM_TREND_CARD_N = 8;
+
+  let ownershipHoverKey = null;
+  let ownershipHoverIndex = null;
+  let ownershipTipTimer = null;
+  let ownershipSeriesCache = [];
+  let ownershipLayout = null;
+  let ownershipRo = null;
+
+  function ownershipCheckIns() {
+    return Array.isArray(OWNERSHIP.checkIns) ? OWNERSHIP.checkIns : [];
+  }
+
+  function ownershipCatalogByCode() {
+    const map = new Map();
+    const combined = (DATA.players && DATA.players.combined) || [];
+    for (const row of combined) {
+      if (row && row.code != null) map.set(Number(row.code), row);
+    }
+    return map;
+  }
+
+  function fmtOwnershipDate(iso) {
+    if (!iso) return "";
+    const [y, m, d] = String(iso).split("-").map(Number);
+    if (!y || !m || !d) return String(iso);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    try {
+      return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+    } catch {
+      return `${d} ${m}/${y}`;
+    }
+  }
+
+  function fmtOwnedPct(v) {
+    if (v == null || Number.isNaN(v)) return "—";
+    const n = Number(v);
+    return `${n.toFixed(n >= 10 || n === 0 ? 1 : 1)}%`;
+  }
+
+  function ownershipDelta(curr, prev) {
+    if (curr == null || prev == null) return null;
+    return Math.round((Number(curr) - Number(prev)) * 10) / 10;
+  }
+
+  function ownershipTrendScore(series) {
+    const owned = (series.points || [])
+      .filter((pt) => pt && pt.owned != null && !Number.isNaN(Number(pt.owned)))
+      .map((pt) => Number(pt.owned));
+    if (owned.length < 2) {
+      return {
+        kind: "flat",
+        recent: 0,
+        net: 0,
+        current: owned.length ? owned[owned.length - 1] : null,
+      };
+    }
+    const recent = Math.round((owned[owned.length - 1] - owned[owned.length - 2]) * 10) / 10;
+    const net = Math.round((owned[owned.length - 1] - owned[0]) * 10) / 10;
+    const current = owned[owned.length - 1];
+    const recentThreshold = state.ownershipTrendThreshold;
+    const netThreshold = recentThreshold * 2;
+    let kind = "flat";
+    if (recent >= recentThreshold) kind = "riser";
+    else if (recent <= -recentThreshold) kind = "faller";
+    else if (Math.abs(recent) < recentThreshold && net >= netThreshold) kind = "riser";
+    else if (Math.abs(recent) < recentThreshold && net <= -netThreshold) kind = "faller";
+    return { kind, recent, net, current };
+  }
+
+  function ownershipTrendAccent(kind) {
+    if (kind === "riser") return "hsl(var(--positive))";
+    if (kind === "faller") return "hsl(var(--negative))";
+    return "";
+  }
+
+  function fmtOwnershipTrendDelta(delta) {
+    if (delta == null || Number.isNaN(delta)) return "—";
+    const n = Number(delta);
+    if (n > 0) return `+${n.toFixed(1)}`;
+    return n.toFixed(1);
+  }
+
+  function ownershipTrendCardHTML(series, trend) {
+    const badge = series.team ? badgeHTML(series.team) : "";
+    const deltaCls =
+      trend.kind === "riser" ? "is-up" : trend.kind === "faller" ? "is-down" : "is-flat";
+    const meta =
+      series.kind === "team"
+        ? `Top ${OWNERSHIP_TEAM_TOP_N} avg`
+        : series.position
+          ? series.position
+          : "";
+    return `<button type="button" class="ownership-trend-row" data-ownership-key="${escapeHtml(series.key)}">
+      <span class="ownership-trend-identity">${badge}<span class="ownership-trend-name">${escapeHtml(series.name || "")}</span></span>
+      <span class="ownership-trend-meta">${escapeHtml(meta)}</span>
+      <span class="ownership-trend-owned">${escapeHtml(fmtOwnedPct(trend.current))}</span>
+      <span class="ownership-trend-delta ${deltaCls}">${escapeHtml(fmtOwnershipTrendDelta(trend.recent))}</span>
+    </button>`;
+  }
+
+  function compareOwnershipTrends(a, b) {
+    const ar = Math.abs(a.trend.recent);
+    const br = Math.abs(b.trend.recent);
+    if (ar !== br) return br - ar;
+    const an = Math.abs(a.trend.net);
+    const bn = Math.abs(b.trend.net);
+    if (an !== bn) return bn - an;
+    return (b.trend.current || 0) - (a.trend.current || 0);
+  }
+
+  function syncOwnershipTrendingUI() {
+    const on = !!state.ownershipTrending;
+    if (el.ownershipTrendingToggle) {
+      el.ownershipTrendingToggle.classList.toggle("on", on);
+      el.ownershipTrendingToggle.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (el.ownershipTrendCards) {
+      el.ownershipTrendCards.hidden = state.page !== "ownership";
+    }
+  }
+
+  function renderOwnershipTrendCards(series) {
+    if (!el.ownershipTrendRisers || !el.ownershipTrendFallers) return;
+    const scored = (series || [])
+      .map((s) => ({ series: s, trend: s._trend || ownershipTrendScore(s) }))
+      .filter((x) => x.trend.kind !== "flat");
+    const cardLimit =
+      state.view === "teams" ? OWNERSHIP_TEAM_TREND_CARD_N : OWNERSHIP_PLAYER_TREND_CARD_N;
+    const risers = scored
+      .filter((x) => x.trend.kind === "riser")
+      .sort(compareOwnershipTrends)
+      .slice(0, cardLimit);
+    const fallers = scored
+      .filter((x) => x.trend.kind === "faller")
+      .sort(compareOwnershipTrends)
+      .slice(0, cardLimit);
+    (series || []).forEach((item) => {
+      item._trendCard = false;
+    });
+    [...risers, ...fallers].forEach((item) => {
+      item.series._trendCard = true;
+    });
+    const empty = `<div class="ownership-trend-empty">No ownership movers match the current filters.</div>`;
+    el.ownershipTrendRisers.innerHTML = risers.length
+      ? risers.map((x) => ownershipTrendCardHTML(x.series, x.trend)).join("")
+      : empty;
+    el.ownershipTrendFallers.innerHTML = fallers.length
+      ? fallers.map((x) => ownershipTrendCardHTML(x.series, x.trend)).join("")
+      : empty;
+    syncOwnershipTrendingUI();
+  }
+
+  function ownershipPlayerPassesFilters(p, catalog) {
+    if (state.posFilter.size && !state.posFilter.has(p.position)) return false;
+    if (state.teamFilter.size && !state.teamFilter.has(p.team)) return false;
+    const price = Number(p.price);
+    if (Number.isFinite(price) && (price < state.priceMin || price > state.priceMax)) return false;
+    if (!Number.isFinite(Number(p.owned)) || Number(p.owned) < state.ownedMin) return false;
+    if (!isNextSeason() && HAS_PRICE_DATA && state.hideDeparted) {
+      const row = catalog.get(Number(p.code));
+      if (row && row.price2627 == null) return false;
+    }
+    const q = state.search.trim().toLowerCase();
+    if (q) {
+      const hay = `${p.name || ""} ${p.team || ""} ${teamNameForSeason(p.team) || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }
+
+  function ownershipTeamPassesFilters(team, name) {
+    if (state.teamFilter.size && !state.teamFilter.has(team)) return false;
+    const q = state.search.trim().toLowerCase();
+    if (q) {
+      const hay = `${name || ""} ${team || ""} ${teamNameForSeason(team) || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }
+
+  function teamTopNAvg(players, n) {
+    if (!players || players.length < n) return null;
+    const sorted = players.slice().sort((a, b) => (b.owned || 0) - (a.owned || 0) || a.code - b.code);
+    const top = sorted.slice(0, n);
+    const sum = top.reduce((s, p) => s + (Number(p.owned) || 0), 0);
+    return { owned: Math.round((sum / n) * 10) / 10, n, sample: top[0] };
+  }
+
+  function ownershipScaleMax(series) {
+    const max = Math.max(
+      0,
+      ...(series || []).flatMap((item) =>
+        (item.points || [])
+          .map((point) => Number(point && point.owned))
+          .filter(Number.isFinite)
+      )
+    );
+    return niceOwnershipMax(max);
+  }
+
+  function buildOwnershipPlayerSeries() {
+    const checkIns = ownershipCheckIns();
+    if (!checkIns.length) return [];
+    const catalog = ownershipCatalogByCode();
+    const latest = checkIns[checkIns.length - 1];
+    const universe = (latest.players || []).filter((p) => ownershipPlayerPassesFilters(p, catalog));
+    const top = universe
+      .slice()
+      .sort((a, b) => (b.owned || 0) - (a.owned || 0) || a.code - b.code)
+      .slice(0, OWNERSHIP_TOP_PLAYERS);
+    const byCodeAt = checkIns.map((ci) => {
+      const map = new Map();
+      (ci.players || []).forEach((p) => map.set(Number(p.code), p));
+      return map;
+    });
+    return top.map((seed) => {
+      const points = checkIns.map((ci, i) => {
+        const hit = byCodeAt[i].get(Number(seed.code));
+        if (!hit) return { i, checkedAt: ci.checkedAt, owned: null, player: null };
+        return { i, checkedAt: ci.checkedAt, owned: Number(hit.owned), player: hit };
+      });
+      const last = points.filter((pt) => pt.player).pop();
+      const player = (last && last.player) || seed;
+      return {
+        key: `p:${seed.code}`,
+        kind: "player",
+        code: Number(seed.code),
+        name: player.name,
+        team: player.team,
+        position: player.position,
+        price: player.price,
+        points,
+        filteredCount: universe.length,
+      };
+    });
+  }
+
+  function buildOwnershipTeamSeries() {
+    const checkIns = ownershipCheckIns();
+    if (!checkIns.length) return [];
+    const perCheckIn = checkIns.map((ci) => {
+      const byTeam = new Map();
+      (ci.players || []).forEach((p) => {
+        if (!p.team) return;
+        if (!byTeam.has(p.team)) byTeam.set(p.team, []);
+        byTeam.get(p.team).push(p);
+      });
+      const map = new Map();
+      byTeam.forEach((list, team) => {
+        const agg = teamTopNAvg(list, OWNERSHIP_TEAM_TOP_N);
+        if (agg) map.set(team, agg);
+      });
+      return map;
+    });
+    const latestMap = perCheckIn[perCheckIn.length - 1];
+    const teams = Array.from(latestMap.keys()).filter((team) =>
+      ownershipTeamPassesFilters(team, teamNameForSeason(team))
+    );
+    teams.sort((a, b) => (latestMap.get(b).owned || 0) - (latestMap.get(a).owned || 0) || a.localeCompare(b));
+    return teams.map((team) => {
+      const points = checkIns.map((ci, i) => {
+        const hit = perCheckIn[i].get(team);
+        if (!hit) return { i, checkedAt: ci.checkedAt, owned: null, n: null };
+        return { i, checkedAt: ci.checkedAt, owned: hit.owned, n: hit.n };
+      });
+      return {
+        key: `t:${team}`,
+        kind: "team",
+        team,
+        name: teamNameForSeason(team) || team,
+        points,
+        filteredCount: teams.length,
+      };
+    });
+  }
+
+  function ownershipPolylines(points, xAt, yAt) {
+    const lines = [];
+    let cur = [];
+    points.forEach((pt) => {
+      if (pt.owned == null || Number.isNaN(pt.owned)) {
+        if (cur.length) lines.push(cur);
+        cur = [];
+        return;
+      }
+      cur.push({ x: xAt(pt.i), y: yAt(pt.owned), i: pt.i, owned: pt.owned });
+    });
+    if (cur.length) lines.push(cur);
+    return lines;
+  }
+
+  // Catmull–Rom → cubic Bezier so series pass through each check-in smoothly
+  // instead of sharp polyline corners.
+  function pathFromPts(pts) {
+    if (!pts.length) return "";
+    if (pts.length === 1) return `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    if (pts.length === 2) {
+      return `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} L${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
+    }
+    let d = `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[i + 2] || p2;
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  function distPointSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-6) {
+      const ex = px - ax;
+      const ey = py - ay;
+      return Math.hypot(ex, ey);
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+
+  function niceOwnershipMax(raw) {
+    const v = Math.max(10, Number(raw) || 10);
+    const padded = v * 1.08;
+    const step = padded <= 20 ? 5 : 10;
+    return Math.ceil(padded / step) * step;
+  }
+
+  function hideOwnershipTooltip() {
+    clearTimeout(ownershipTipTimer);
+    ownershipTipTimer = null;
+    if (!el.ownershipTooltip) return;
+    el.ownershipTooltip.style.display = "none";
+  }
+
+  function ownershipInitials(name) {
+    return String(name || "?")
+      .split(/[\s.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase() || "?";
+  }
+
+  function ownershipTooltipHTML(series, ptIndex) {
+    const pts = series.points || [];
+    let idx = ptIndex;
+    if (idx == null || !pts[idx] || pts[idx].owned == null) {
+      idx = -1;
+      for (let i = pts.length - 1; i >= 0; i--) {
+        if (pts[i] && pts[i].owned != null) {
+          idx = i;
+          break;
+        }
+      }
+    }
+    const pt = pts[idx];
+    if (!pt) return "";
+    let prev = null;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (pts[i] && pts[i].owned != null) {
+        prev = pts[i];
+        break;
+      }
+    }
+    const delta = ownershipDelta(pt.owned, prev && prev.owned);
+    const trend =
+      state.ownershipTrending && series._trendCard ? ownershipTrendScore(series) : null;
+    const deltaCls =
+      trend && trend.kind === "riser"
+        ? "is-up"
+        : trend && trend.kind === "faller"
+          ? "is-down"
+          : delta == null
+            ? "is-flat"
+            : delta > 0
+              ? "is-up"
+              : delta < 0
+                ? "is-down"
+                : "is-flat";
+    const deltaTxt =
+      delta == null ? "first check-in" : delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1);
+    const when = fmtOwnershipDate(pt.checkedAt);
+    const trendRow =
+      trend && trend.kind !== "flat"
+        ? `<div class="tt-row"><span>Trend</span><b class="tt-delta ${deltaCls}">${escapeHtml(
+            `${fmtOwnershipTrendDelta(trend.recent)} recent · ${fmtOwnershipTrendDelta(trend.net)} net`
+          )}</b></div>`
+        : "";
+    if (series.kind === "team") {
+      const badge = series.team ? badgeHTML(series.team) : "";
+      return `<div class="tt-identity">
+          <div class="tt-title">
+            <div class="tt-name">${badge}${escapeHtml(series.name)}</div>
+            <div class="tt-meta"><span>Top ${OWNERSHIP_TEAM_TOP_N} avg</span></div>
+          </div>
+        </div>
+        <div class="tt-row"><span>Owned</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
+        <div class="tt-row"><span>vs last</span><b class="tt-delta ${deltaCls}">${escapeHtml(deltaTxt)}</b></div>
+        ${trendRow}
+        <div class="tt-checkin">${escapeHtml(when)}</div>`;
+    }
+    const player = pt.player || series;
+    const photo = feedPlayerPhotoUrl(series.code);
+    const initials = ownershipInitials(player.name || series.name);
+    const photoBlock = photo
+      ? `<img class="tt-photo" src="${escapeHtml(photo)}" alt="" width="44" height="56" data-initials="${escapeHtml(initials)}" />`
+      : `<span class="tt-photo tt-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+    const badge = player.team ? badgeHTML(player.team) : "";
+    const metaBits = [];
+    if (player.position) metaBits.push(posBadgeHTML(player.position));
+    if (player.price != null) metaBits.push(`<span>£${Number(player.price).toFixed(1)}m</span>`);
+    return `<div class="tt-identity">
+        ${photoBlock}
+        <div class="tt-title">
+          <div class="tt-name">${badge}${escapeHtml(player.name || series.name)}</div>
+          <div class="tt-meta">${metaBits.join("")}</div>
+        </div>
+      </div>
+      <div class="tt-row"><span>Owned</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
+      <div class="tt-row"><span>vs last</span><b class="tt-delta ${deltaCls}">${escapeHtml(deltaTxt)}</b></div>
+      ${trendRow}
+      <div class="tt-checkin">${escapeHtml(when)}</div>`;
+  }
+
+  function showOwnershipTooltip(clientX, clientY, html) {
+    if (!el.ownershipTooltip || !el.ownershipChartWrap) return;
+    el.ownershipTooltip.innerHTML = html;
+    el.ownershipTooltip.querySelectorAll("img.tt-photo").forEach((img) => {
+      img.addEventListener("error", () => {
+        const fallback = document.createElement("span");
+        fallback.className = "tt-photo tt-photo-fallback";
+        fallback.setAttribute("aria-hidden", "true");
+        fallback.textContent = img.getAttribute("data-initials") || "?";
+        img.replaceWith(fallback);
+      }, { once: true });
+    });
+    el.ownershipTooltip.style.display = "block";
+    positionOwnershipTooltip(clientX, clientY);
+  }
+
+  function positionOwnershipTooltip(clientX, clientY) {
+    if (!el.ownershipTooltip || !el.ownershipChartWrap) return;
+    const wrap = el.ownershipChartWrap.getBoundingClientRect();
+    let left = clientX - wrap.left + 14;
+    let top = clientY - wrap.top + 14;
+    const ttW = el.ownershipTooltip.offsetWidth || 220;
+    const ttH = el.ownershipTooltip.offsetHeight || 120;
+    if (left + ttW > wrap.width - 6) left = clientX - wrap.left - ttW - 14;
+    if (top + ttH > wrap.height - 6) top = clientY - wrap.top - ttH - 14;
+    el.ownershipTooltip.style.left = `${Math.max(6, left)}px`;
+    el.ownershipTooltip.style.top = `${Math.max(6, top)}px`;
+  }
+
+  function ownershipLastOwnedIndex(series) {
+    if (!series || !series.points) return null;
+    for (let i = series.points.length - 1; i >= 0; i--) {
+      if (series.points[i] && series.points[i].owned != null) return i;
+    }
+    return null;
+  }
+
+  function ownershipAccentForSeries(series) {
+    if (!series) return "";
+    if (state.ownershipTrending && series._trendCard && series._trend) {
+      return (
+        ownershipTrendAccent(series._trend.kind) ||
+        TEAM_SCATTER_ACCENT[series.team] ||
+        ""
+      );
+    }
+    return TEAM_SCATTER_ACCENT[series.team] || "";
+  }
+
+  function hoverOwnershipSeries(key, { index = null, showTip = false, tipClientX, tipClientY } = {}) {
+    const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
+    if (!series) {
+      setOwnershipHover(null, null);
+      hideOwnershipTooltip();
+      return;
+    }
+    const idx = index != null ? index : ownershipLastOwnedIndex(series);
+    setOwnershipHover(key, idx);
+    if (showTip && hasFineHover() && tipClientX != null && tipClientY != null) {
+      showOwnershipTooltip(tipClientX, tipClientY, ownershipTooltipHTML(series, idx));
+    }
+  }
+
+  function setOwnershipHover(key, index) {
+    ownershipHoverKey = key;
+    ownershipHoverIndex = index;
+    if (!el.ownershipChart) return;
+    const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
+    const trending = !!state.ownershipTrending;
+    const accent = ownershipAccentForSeries(series);
+    el.ownershipChart.querySelectorAll(".ownership-line, .ownership-dot").forEach((node) => {
+      const match = node.getAttribute("data-key") === key;
+      node.classList.toggle("is-active", !!key && match);
+      node.classList.toggle("is-dim", !!key && !match);
+      if (match && accent) {
+        node.style.setProperty("--ownership-accent", accent);
+        if (node.tagName.toLowerCase() === "path") node.style.stroke = accent;
+        else node.style.fill = accent;
+      } else if (!trending) {
+        node.style.removeProperty("--ownership-accent");
+        node.style.stroke = "";
+        node.style.fill = "";
+      } else {
+        // Keep CSS trend classes; clear hover overrides when not the active series.
+        node.style.removeProperty("--ownership-accent");
+        node.style.stroke = "";
+        node.style.fill = "";
+      }
+    });
+    if (el.ownershipTrendCards) {
+      el.ownershipTrendCards.querySelectorAll("[data-ownership-key]").forEach((row) => {
+        row.classList.toggle("is-active", !!key && row.getAttribute("data-ownership-key") === key);
+      });
+    }
+    const svg = el.ownershipChart.querySelector("svg");
+    if (svg && key) {
+      svg.querySelectorAll(`.ownership-line[data-key="${key}"], .ownership-dot[data-key="${key}"]`).forEach((node) => {
+        svg.appendChild(node);
+      });
+    }
+    const guide = el.ownershipChart.querySelector(".ownership-hover-guide");
+    if (guide && ownershipLayout && index != null && ownershipLayout.xAt) {
+      const x = ownershipLayout.xAt(index);
+      guide.setAttribute("x1", x.toFixed(1));
+      guide.setAttribute("x2", x.toFixed(1));
+      guide.style.display = key ? "" : "none";
+    } else if (guide) {
+      guide.style.display = "none";
+    }
+  }
+
+  function hitTestOwnership(px, py) {
+    const series = ownershipSeriesCache;
+    const layout = ownershipLayout;
+    if (!series.length || !layout) return null;
+    let bestPoint = null;
+    let bestPointD = OWNERSHIP_POINT_HIT;
+    series.forEach((s) => {
+      (s._drawn || []).forEach((line) => {
+        line.forEach((pt) => {
+          const d = Math.hypot(px - pt.x, py - pt.y);
+          if (d < bestPointD) {
+            bestPointD = d;
+            bestPoint = { series: s, index: pt.i, d };
+          }
+        });
+      });
+    });
+    if (bestPoint) return bestPoint;
+    let bestLine = null;
+    let bestLineD = OWNERSHIP_LINE_HIT;
+    series.forEach((s) => {
+      (s._drawn || []).forEach((line) => {
+        for (let i = 1; i < line.length; i++) {
+          const a = line[i - 1];
+          const b = line[i];
+          const d = distPointSeg(px, py, a.x, a.y, b.x, b.y);
+          if (d < bestLineD) {
+            bestLineD = d;
+            const useB = Math.hypot(px - b.x, py - b.y) < Math.hypot(px - a.x, py - a.y);
+            bestLine = { series: s, index: useB ? b.i : a.i, d };
+          }
+        }
+        if (line.length === 1) {
+          const d = Math.hypot(px - line[0].x, py - line[0].y);
+          if (d < bestLineD) {
+            bestLineD = d;
+            bestLine = { series: s, index: line[0].i, d };
+          }
+        }
+      });
+    });
+    return bestLine;
+  }
+
+  function ownershipPointerToSvg(evt) {
+    const svg = el.ownershipChart && el.ownershipChart.querySelector("svg");
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const vb = svg.viewBox.baseVal;
+    const x = ((evt.clientX - rect.left) / rect.width) * vb.width;
+    const y = ((evt.clientY - rect.top) / rect.height) * vb.height;
+    return { x, y };
+  }
+
+  function onOwnershipPointerMove(evt) {
+    const pt = ownershipPointerToSvg(evt);
+    if (!pt) return;
+    const hit = hitTestOwnership(pt.x, pt.y);
+    if (!hit) {
+      if (ownershipHoverKey) {
+        setOwnershipHover(null, null);
+        hideOwnershipTooltip();
+      }
+      return;
+    }
+    const changed = ownershipHoverKey !== hit.series.key || ownershipHoverIndex !== hit.index;
+    setOwnershipHover(hit.series.key, hit.index);
+    if (hasFineHover()) {
+      clearTimeout(ownershipTipTimer);
+      const html = ownershipTooltipHTML(hit.series, hit.index);
+      if (changed || !el.ownershipTooltip || el.ownershipTooltip.style.display === "none") {
+        showOwnershipTooltip(evt.clientX, evt.clientY, html);
+      } else {
+        positionOwnershipTooltip(evt.clientX, evt.clientY);
+      }
+    }
+  }
+
+  function onOwnershipPointerLeave() {
+    setOwnershipHover(null, null);
+    hideOwnershipTooltip();
+  }
+
+  function onOwnershipClick(evt) {
+    if (hasFineHover()) return;
+    const pt = ownershipPointerToSvg(evt);
+    if (!pt) return;
+    const hit = hitTestOwnership(pt.x, pt.y);
+    if (!hit) {
+      setOwnershipHover(null, null);
+      hideOwnershipTooltip();
+      return;
+    }
+    if (
+      el.ownershipTooltip &&
+      el.ownershipTooltip.style.display !== "none" &&
+      ownershipHoverKey === hit.series.key &&
+      ownershipHoverIndex === hit.index
+    ) {
+      hideOwnershipTooltip();
+      setOwnershipHover(null, null);
+      return;
+    }
+    setOwnershipHover(hit.series.key, hit.index);
+    showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
+  }
+
+  let ownershipLastSize = "";
+
+  function renderOwnership() {
+    if (!el.ownershipChart) return;
+    hideOwnershipTooltip();
+    const checkIns = ownershipCheckIns();
+    const series =
+      state.view === "teams" ? buildOwnershipTeamSeries() : buildOwnershipPlayerSeries();
+    series.forEach((s) => {
+      s._trend = ownershipTrendScore(s);
+    });
+    ownershipSeriesCache = series;
+    renderOwnershipTrendCards(series);
+    if (el.ownershipChartWrap) {
+      el.ownershipChartWrap.classList.toggle("is-trending", !!state.ownershipTrending);
+    }
+
+    if (el.ownershipCountLabel) {
+      if (!checkIns.length) {
+        el.ownershipCountLabel.textContent = "No check-ins";
+      } else if (state.view === "teams") {
+        el.ownershipCountLabel.textContent = `${series.length} club${series.length === 1 ? "" : "s"}`;
+      } else {
+        const filtered = series.length ? series[0].filteredCount : 0;
+        el.ownershipCountLabel.textContent = `Top ${series.length} of ${filtered.toLocaleString()} players`;
+      }
+    }
+
+    const wrap = el.ownershipChartWrap || el.ownershipChart;
+    const w = Math.max(320, wrap.clientWidth || 640);
+    const h = Math.max(260, wrap.clientHeight || 420);
+    ownershipLastSize = `${wrap.clientWidth}x${wrap.clientHeight}`;
+    const pad = OWNERSHIP_PAD;
+    const innerW = Math.max(40, w - pad.left - pad.right);
+    const innerH = Math.max(40, h - pad.top - pad.bottom);
+    const n = checkIns.length;
+    const xAt = (i) => {
+      if (n <= 1) return pad.left + innerW / 2;
+      return pad.left + (i / (n - 1)) * innerW;
+    };
+    const yMax = ownershipScaleMax(series);
+    const yAt = (owned) => pad.top + (1 - owned / yMax) * innerH;
+    ownershipLayout = { w, h, pad, innerW, innerH, xAt, yAt, yMax, n };
+
+    if (!checkIns.length) {
+      el.ownershipChart.innerHTML = `<div class="ownership-empty">No ownership check-ins yet. Run <code>python3 site/fetch_ownership.py</code> to capture the current FPL selected-by-%.</div>`;
+      return;
+    }
+    if (!series.length) {
+      el.ownershipChart.innerHTML = `<div class="ownership-empty">No players or clubs match the current filters.</div>`;
+      return;
+    }
+
+    const tickStep = yMax <= 20 ? 5 : 10;
+    const yTicks = [];
+    for (let v = 0; v <= yMax + 1e-6; v += tickStep) yTicks.push(v);
+
+    series.forEach((s) => {
+      s._drawn = ownershipPolylines(s.points, xAt, yAt);
+    });
+
+    const grid = yTicks
+      .map((v) => {
+        const y = yAt(v);
+        return `<line class="ownership-grid-line" x1="${pad.left}" x2="${w - pad.right}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" />
+          <text class="ownership-axis-label is-y" x="${pad.left - 8}" y="${(y + 3).toFixed(1)}">${v}%</text>`;
+      })
+      .join("");
+
+    const xLabels = checkIns
+      .map((ci, i) => {
+        const x = xAt(i);
+        return `<text class="ownership-axis-label is-x" x="${x.toFixed(1)}" y="${h - 10}">${escapeHtml(fmtOwnershipDate(ci.checkedAt))}</text>`;
+      })
+      .join("");
+
+    const trendClass = (s) => {
+      if (!state.ownershipTrending || !s._trendCard || !s._trend) return "";
+      if (s._trend.kind === "riser") return " is-riser";
+      if (s._trend.kind === "faller") return " is-faller";
+      return " is-flat-trend";
+    };
+
+    const lines = series
+      .map((s) =>
+        s._drawn
+          .map((line) => {
+            if (line.length === 1) return "";
+            return `<path class="ownership-line${trendClass(s)}" data-key="${escapeHtml(s.key)}" d="${pathFromPts(line)}" />`;
+          })
+          .join("")
+      )
+      .join("");
+
+    const dots = series
+      .map((s) =>
+        s._drawn
+          .flat()
+          .map(
+            (pt) =>
+              `<circle class="ownership-dot${trendClass(s)}" data-key="${escapeHtml(s.key)}" cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="2.1" />`
+          )
+          .join("")
+      )
+      .join("");
+
+    el.ownershipChart.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" aria-hidden="true">
+        ${grid}
+        <line class="ownership-hover-guide" x1="0" x2="0" y1="${pad.top}" y2="${h - pad.bottom}" style="display:none" />
+        ${lines}
+        ${dots}
+        ${xLabels}
+      </svg>`;
+
+    const svg = el.ownershipChart.querySelector("svg");
+    if (svg && !svg._ownershipBound) {
+      svg._ownershipBound = true;
+      svg.addEventListener("mousemove", onOwnershipPointerMove);
+      svg.addEventListener("mouseleave", onOwnershipPointerLeave);
+      svg.addEventListener("click", onOwnershipClick);
+    } else if (svg) {
+      // innerHTML replaced the node; rebind
+      svg.addEventListener("mousemove", onOwnershipPointerMove);
+      svg.addEventListener("mouseleave", onOwnershipPointerLeave);
+      svg.addEventListener("click", onOwnershipClick);
+    }
+
+    if (ownershipHoverKey) {
+      const still = series.find((s) => s.key === ownershipHoverKey);
+      if (still) setOwnershipHover(still.key, ownershipHoverIndex);
+      else setOwnershipHover(null, null);
+    }
+
+    if (typeof ResizeObserver !== "undefined" && wrap && !ownershipRo) {
+      ownershipRo = new ResizeObserver(() => {
+        if (state.page !== "ownership") return;
+        const box = el.ownershipChartWrap || el.ownershipChart;
+        const key = `${box.clientWidth}x${box.clientHeight}`;
+        if (key === ownershipLastSize) return;
+        renderOwnership();
+      });
+      ownershipRo.observe(wrap);
+    }
+
+    syncFiltersResetUI();
+  }
+
+
   const PAGE_KEY = "fpl-explorer-page";
-  const PAGES = ["opta", "rankings", "expected", "schedule", "feed", "markets", "team"];
+  const PAGES = ["opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team", "notes"];
+
+  // ---------------------------------------------------------------------
+  // Notes (right-click → freeform comments)
+  // ---------------------------------------------------------------------
+  function noteGwMeta() {
+    const gw = teamCurrentGw();
+    const label =
+      (state.actualMeta && state.actualMeta.gwLabel) ||
+      (DATA.fixturesMeta && Number(DATA.fixturesMeta.currentGw) <= 1 ? "Preseason" : null) ||
+      `Gameweek ${gw}`;
+    const isPreseason = /preseason/i.test(String(label)) || Number(gw) <= 1;
+    return { gw, gwLabel: isPreseason ? "Preseason" : label };
+  }
+
+  function loadNotes() {
+    try {
+      const raw = localStorage.getItem(NOTES_KEY);
+      if (!raw) {
+        state.notes = [];
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      state.notes = Array.isArray(parsed && parsed.notes) ? parsed.notes.filter((n) => n && n.id && n.text) : [];
+    } catch {
+      state.notes = [];
+    }
+  }
+
+  function saveNotes() {
+    try {
+      localStorage.setItem(NOTES_KEY, JSON.stringify({ version: 1, notes: state.notes }));
+    } catch {
+      /* private browsing */
+    }
+  }
+
+  function newNoteId() {
+    return `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function findPlayerRowByKey(key) {
+    if (key == null || key === "") return null;
+    const pools = [teamCatalog(), (DATA.players && DATA.players.combined) || []];
+    for (const pool of pools) {
+      const hit = pool.find(
+        (p) => p && (teamCodeEq(p.code, key) || String(p.id) === String(key) || String(p.name) === String(key))
+      );
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  function noteTargetFromPlayer(row) {
+    if (!row) return null;
+    const team = currentTeamCode(row) || row.team;
+    return {
+      entityType: "player",
+      playerCode: row.code != null ? row.code : null,
+      playerName: row.name || null,
+      teamCode: team || null,
+      teamName: team ? teamNameForSeason(team) || TEAM_NAMES[team] || team : null,
+      position: row.position || null,
+    };
+  }
+
+  function noteTargetFromTeam(teamCode) {
+    if (!teamCode) return null;
+    const code = String(teamCode);
+    const known =
+      TEAM_NAMES[code] ||
+      (DATA.teamNames && DATA.teamNames[code]) ||
+      (DATA.fixtureTeamNames && DATA.fixtureTeamNames[code]) ||
+      /^[A-Z]{3}$/.test(code);
+    if (!known) return null;
+    return {
+      entityType: "team",
+      teamCode: code,
+      teamName: teamNameForSeason(code) || TEAM_NAMES[code] || code,
+    };
+  }
+
+  function resolveNoteTargetFromNode(node) {
+    if (!node || !node.closest) return null;
+
+    const playerCodeEl = node.closest("[data-player-code]");
+    if (playerCodeEl && playerCodeEl.dataset.playerCode) {
+      const row = findPlayerRowByKey(playerCodeEl.dataset.playerCode);
+      if (row) return noteTargetFromPlayer(row);
+    }
+
+    const teamCodeProp = node.closest("[data-team-code]");
+    if (teamCodeProp && teamCodeProp.dataset.teamCode) {
+      const row = findPlayerRowByKey(teamCodeProp.dataset.teamCode);
+      if (row) return noteTargetFromPlayer(row);
+    }
+
+    const feedCard = node.closest("[data-feed-code], [data-feed-card], .feed-player-card");
+    if (feedCard) {
+      const code = feedCard.dataset.feedCode || feedCard.dataset.feedCard || feedCard.dataset.code || null;
+      if (code != null) {
+        const row = findPlayerRowByKey(code);
+        if (row) return noteTargetFromPlayer(row);
+      }
+    }
+
+    const pinChip = node.closest("[data-pin-key]");
+    if (pinChip && pinChip.dataset.pinKey) {
+      const key = pinChip.dataset.pinKey;
+      const player = findPlayerRowByKey(key);
+      if (player) return noteTargetFromPlayer(player);
+      const team = noteTargetFromTeam(key);
+      if (team) return team;
+    }
+
+    const rankRow = node.closest("[data-row-key]");
+    if (rankRow && rankRow.dataset.rowKey) {
+      const key = rankRow.dataset.rowKey;
+      const player = findPlayerRowByKey(key);
+      if (player) return noteTargetFromPlayer(player);
+      const team = noteTargetFromTeam(key);
+      if (team) return team;
+    }
+
+    const namedTeamEl = node.closest("[data-team][data-row-name], tr[data-team][data-row-name]");
+    if (namedTeamEl && namedTeamEl.dataset.team && namedTeamEl.dataset.rowName) {
+      const team = namedTeamEl.dataset.team;
+      const rowName = namedTeamEl.dataset.rowName.trim();
+      if (namedTeamEl.dataset.playerCode) {
+        const byCode = findPlayerRowByKey(namedTeamEl.dataset.playerCode);
+        if (byCode) return noteTargetFromPlayer(byCode);
+      }
+      const pools = [];
+      try {
+        pools.push(getRows() || []);
+      } catch {
+        /* ignore */
+      }
+      pools.push(teamCatalog(), (DATA.players && DATA.players.combined) || []);
+      for (const pool of pools) {
+        const match = (pool || []).find(
+          (r) =>
+            r &&
+            r.name === rowName &&
+            (currentTeamCode(r) === team || r.team === team || !team)
+        );
+        if (match && match.code != null) return noteTargetFromPlayer(match);
+      }
+    }
+
+    const teamEl = node.closest("[data-team]");
+    if (teamEl && teamEl.dataset.team) {
+      if (teamEl.dataset.playerCode) {
+        const row = findPlayerRowByKey(teamEl.dataset.playerCode);
+        if (row) return noteTargetFromPlayer(row);
+      }
+      const team = noteTargetFromTeam(teamEl.dataset.team);
+      if (team) return team;
+    }
+
+    const crest = node.closest(
+      ".player-cell-crest, .badge-img, .feed-player-team-badge, .markets-team-cell, .player-cell, .rankings-identity"
+    );
+    if (crest) {
+      const host =
+        crest.closest(
+          "[data-player-code], [data-team-code], [data-row-key], [data-team], [data-feed-code], [data-pin-key], .rankings-row, .barbell-label, .barbell-group-identity, .markets-team-row, .schedule-card, .feed-player-card, tr.team-search-row, tr.team-picker-row, tr.team-player-row"
+        ) || crest.parentElement;
+      if (host && host !== node) return resolveNoteTargetFromNode(host);
+    }
+
+    return null;
+  }
+
+  function noteContextTitle(target) {
+    if (target.playerCode != null || target.playerName) return target.playerName || "Player";
+    return target.teamName || target.teamCode || "Team";
+  }
+
+  function noteContextSub(target) {
+    if (target.playerCode != null || target.playerName) {
+      const bits = [];
+      const pos = target.position || (findPlayerRowByKey(target.playerCode) || {}).position;
+      if (pos) bits.push(TEAM_POS_LABEL[pos] || pos);
+      if (target.teamName || target.teamCode) bits.push(target.teamName || target.teamCode);
+      return bits.join(" · ") || "Player";
+    }
+    return "Club";
+  }
+
+  function closeNoteContextMenu() {
+    if (!el.noteContextMenu) return;
+    el.noteContextMenu.classList.remove("open");
+    el.noteContextMenu.setAttribute("aria-hidden", "true");
+    el.noteContextMenu.innerHTML = "";
+  }
+
+  function openNoteContextMenuAt(target, x, y) {
+    if (!el.noteContextMenu || !target) return;
+    closeTeamRowMenu({ force: true });
+    hideUiTooltip();
+    const title = noteContextTitle(target);
+    const sub = noteContextSub(target);
+    const crest = target.teamCode ? playerCrestHTML(target.teamCode) : "";
+    el.noteContextMenu.innerHTML = `<div class="settings-panel-head">
+        <h4 id="note-context-menu-title">${crest ? `<span class="note-context-crest">${crest}</span>` : ""}${escapeHtml(title)}</h4>
+        <p class="settings-panel-sub">${escapeHtml(sub)}</p>
+      </div>
+      <div class="settings-panel-body team-row-menu-body">
+        <section class="settings-section">
+          <div class="settings-section-label">Notes</div>
+          <button type="button" class="settings-switch-row team-row-menu-item" role="menuitem" data-note-add>
+            <span class="team-row-menu-icon" aria-hidden="true">${iconHTML("notebook-pen")}</span>
+            <span class="settings-switch-text"><span class="settings-switch-label">Add note</span></span>
+          </button>
+        </section>
+      </div>`;
+    el.noteContextMenu.classList.add("open");
+    el.noteContextMenu.setAttribute("aria-hidden", "false");
+    el.noteContextMenu.setAttribute("aria-labelledby", "note-context-menu-title");
+    noteMenuOpenedAt = Date.now();
+    noteDraft = { target, x, y };
+    const pad = 8;
+    const w = el.noteContextMenu.offsetWidth || 260;
+    const h = el.noteContextMenu.offsetHeight || 160;
+    let left = x;
+    let top = y;
+    if (left + w > window.innerWidth - pad) left = x - w;
+    if (top + h > window.innerHeight - pad) top = y - h;
+    left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+    top = Math.max(pad, Math.min(top, window.innerHeight - h - pad));
+    el.noteContextMenu.style.left = `${left}px`;
+    el.noteContextMenu.style.top = `${top}px`;
+    requestAnimationFrame(() => {
+      if (!el.noteContextMenu.classList.contains("open")) return;
+      const first = el.noteContextMenu.querySelector("[role=menuitem]");
+      if (first) first.focus({ preventScroll: true });
+    });
+  }
+
+  function closeNoteModal() {
+    if (!el.noteModal) return;
+    el.noteModal.hidden = true;
+    noteDraft = null;
+    if (el.noteTextInput) el.noteTextInput.value = "";
+  }
+
+  function openNoteModal(target) {
+    if (!el.noteModal || !target) return;
+    closeNoteContextMenu();
+    if (!target.playerCode && !target.playerName && !target.teamCode) return;
+    noteDraft = { target };
+    if (el.noteModalSub) {
+      el.noteModalSub.textContent = noteContextSub(target)
+        ? `${noteContextTitle(target)} · ${noteContextSub(target)}`
+        : noteContextTitle(target);
+    }
+    if (el.noteTextInput) el.noteTextInput.value = "";
+    el.noteModal.hidden = false;
+    requestAnimationFrame(() => el.noteTextInput && el.noteTextInput.focus());
+  }
+
+  function saveNoteFromModal() {
+    if (!noteDraft || !noteDraft.target) return;
+    const text = (el.noteTextInput && el.noteTextInput.value || "").trim();
+    if (!text) {
+      showToast({ title: "Empty note", message: "Write a comment before saving.", icon: "triangle-alert" });
+      return;
+    }
+    const target = noteDraft.target;
+    const gw = noteGwMeta();
+    const hasPlayer = target.playerCode != null || !!target.playerName;
+    state.notes.unshift({
+      id: newNoteId(),
+      text,
+      createdAt: new Date().toISOString(),
+      gw: gw.gw,
+      gwLabel: gw.gwLabel,
+      entityType: hasPlayer ? "player" : "team",
+      playerCode: target.playerCode ?? null,
+      playerName: target.playerName || null,
+      teamCode: target.teamCode || null,
+      teamName: target.teamName || null,
+    });
+    saveNotes();
+    closeNoteModal();
+    showToast({
+      title: "Note saved",
+      message: noteContextTitle(target),
+      icon: "circle-check",
+    });
+    if (state.page === "notes") renderNotes();
+  }
+
+  function deleteNote(id) {
+    state.notes = state.notes.filter((n) => n.id !== id);
+    saveNotes();
+    renderNotes();
+  }
+
+  function noteCardHTML(note) {
+    const title =
+      note.entityType === "player"
+        ? note.playerName || "Player"
+        : note.teamName || note.teamCode || "Team";
+    const crest = note.teamCode ? playerCrestHTML(note.teamCode) : "";
+    const when = note.createdAt ? new Date(note.createdAt).toLocaleString() : "";
+    return `<article class="note-card" data-note-id="${escapeHtml(note.id)}">
+      <div class="note-card-head">${crest}<div class="note-card-title">${escapeHtml(title)}</div></div>
+      <div class="note-card-meta"><span>${escapeHtml(note.gwLabel || `GW ${note.gw}`)}</span><span>${escapeHtml(when)}</span></div>
+      <div class="note-card-body">${escapeHtml(note.text)}</div>
+      <div class="note-card-actions"><button type="button" class="ghost-btn" data-note-delete="${escapeHtml(note.id)}">Delete</button></div>
+    </article>`;
+  }
+
+  function renderNotes() {
+    if (!el.notesCollage) return;
+    const notes = state.notes.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    if (el.notesCountLabel) el.notesCountLabel.textContent = `${notes.length} note${notes.length === 1 ? "" : "s"}`;
+    if (el.notesGroupSeg) {
+      el.notesGroupSeg.querySelectorAll("[data-notes-group]").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-notes-group") === state.notesGroupBy);
+      });
+      syncSegThumb(el.notesGroupSeg, { animate: false });
+    }
+    if (!notes.length) {
+      el.notesCollage.innerHTML = `<div class="notes-empty">No notes yet. Right-click a player, crest, or team row and choose Add note.</div>`;
+      return;
+    }
+    if (state.notesGroupBy === "none") {
+      el.notesCollage.innerHTML = notes.map(noteCardHTML).join("");
+      return;
+    }
+    const groups = new Map();
+    notes.forEach((n) => {
+      const key =
+        state.notesGroupBy === "player"
+          ? n.entityType === "player"
+            ? `p:${n.playerCode || n.playerName}`
+            : `t:${n.teamCode}`
+          : `t:${n.teamCode || "unknown"}`;
+      const label =
+        state.notesGroupBy === "player"
+          ? n.entityType === "player"
+            ? n.playerName || "Player"
+            : n.teamName || n.teamCode || "Team"
+          : n.teamName || n.teamCode || "Team";
+      if (!groups.has(key)) groups.set(key, { label, items: [] });
+      groups.get(key).items.push(n);
+    });
+    el.notesCollage.innerHTML = [...groups.values()]
+      .map(
+        (g) =>
+          `<section class="notes-group-block"><h3 class="notes-group-title">${escapeHtml(g.label)}</h3>${g.items
+            .map(noteCardHTML)
+            .join("")}</section>`
+      )
+      .join("");
+  }
 
   function storedPage() {
     try {
@@ -7653,11 +10276,13 @@ python3 site/annotate_social.py</pre>
   function pagePaneFor(page) {
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
+    if (page === "ownership") return el.ownershipPage;
     if (page === "expected") return el.expectedPage;
     if (page === "schedule") return el.schedulePage;
     if (page === "feed") return el.feedPage;
     if (page === "markets") return el.marketsPage;
     if (page === "team") return el.teamPage;
+    if (page === "notes") return el.notesPage;
     return null;
   }
 
@@ -7821,12 +10446,16 @@ python3 site/annotate_social.py</pre>
     state.teamFilter.clear();
     state.setPieceTakersOnly = false;
     if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
+    state.teamAffordableOnly = false;
+    if (el.teamAffordableCheck) el.teamAffordableCheck.checked = false;
     state.priceMin = defaultMinPrice();
     state.priceMax = bounds.price.max;
+    state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
     state.minsMin = defaultMinMinutes();
     state.minsMax = bounds.mins.max;
     if (typeof syncFilterChipUI === "function") syncFilterChipUI();
     if (typeof updatePriceSlider === "function") updatePriceSlider();
+    if (typeof updateOwnedSlider === "function") updateOwnedSlider();
     if (typeof updateMinsSlider === "function") updateMinsSlider();
     if (typeof syncFiltersResetUI === "function") syncFiltersResetUI();
 
@@ -7847,7 +10476,7 @@ python3 site/annotate_social.py</pre>
     syncSearchClearBtns();
     if (rerender) {
       if (state.page === "feed") renderFeed();
-      else if (state.page === "opta" || state.page === "rankings" || state.page === "team") renderTable();
+      else if (state.page === "opta" || state.page === "rankings" || state.page === "team" || state.page === "ownership") renderTable();
       if (state.page === "rankings") renderRankings();
     }
   }
@@ -7862,7 +10491,10 @@ python3 site/annotate_social.py</pre>
     }
     clearTimeout(fixtureTtTimer);
     hideFixtureTooltip();
+    hideOwnershipTooltip();
     hidePageInfoTooltip();
+    hideTeamRowActionsPopup();
+    closeNoteContextMenu();
     closeMobileSheet();
     if (prev !== page) {
       if (prev === "team") {
@@ -7877,36 +10509,51 @@ python3 site/annotate_social.py</pre>
       if (page === "team" || prev === "team") buildTeamFilterChips();
     }
     if (page === "feed") syncFeedSearchLayout();
+    syncTeamSearchHost();
     syncSearchClearBtns();
     syncPageInfoButton();
     syncAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
+    if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
     el.pageExpected.classList.toggle("active", page === "expected");
     el.pageSchedule.classList.toggle("active", page === "schedule");
     if (el.pageFeed) el.pageFeed.classList.toggle("active", page === "feed");
     if (el.pageMarkets) el.pageMarkets.classList.toggle("active", page === "markets");
     if (el.pageTeam) el.pageTeam.classList.toggle("active", page === "team");
+    if (el.pageNotes) el.pageNotes.classList.toggle("active", page === "notes");
+    document.documentElement.dataset.page = page;
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
+    if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
     el.expectedPage.style.display = page === "expected" ? "" : "none";
     el.schedulePage.style.display = page === "schedule" ? "" : "none";
     if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
     if (el.teamPage) el.teamPage.style.display = page === "team" ? "" : "none";
+    if (el.notesPage) el.notesPage.style.display = page === "notes" ? "" : "none";
     const isMarkets = page === "markets";
     // Schedule has no subtoolbar. Markets hides it on desktop, but keeps a
     // minimal mobile bar for the G+CS% / Scoreline picker (like xData).
-    const hideSubtoolbar = page === "schedule" || (isMarkets && !preferMobileSheet());
+    const hideSubtoolbar =
+      page === "schedule" ||
+      page === "notes" ||
+      (isMarkets && !preferMobileSheet());
     const isFeed = page === "feed";
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
     el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
-    el.sidebar.style.display = page === "schedule" || isMarkets || isFeed || (page === "team" && !state.teamPickerSlot) ? "none" : "";
+    el.sidebar.style.display =
+      page === "schedule" || isMarkets || isFeed || page === "notes" || (page === "team" && !state.teamPickerSlot)
+        ? "none"
+        : "";
     if (el.sidebarToggle) {
-      el.sidebarToggle.style.display = page === "team" && !state.teamPickerSlot ? "none" : "";
+      el.sidebarToggle.style.display =
+        page === "team" && !state.teamPickerSlot ? "none" : page === "notes" ? "none" : "";
     }
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets ? "none" : "";
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets || page === "notes" ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed || page === "notes" ? "none" : "";
+    if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
+    if (el.teamToolbarMode) el.teamToolbarMode.hidden = page !== "team";
     if (el.feedToolbarStart) el.feedToolbarStart.style.display = isFeed ? "" : "none";
     if (el.feedToolbarEnd) el.feedToolbarEnd.style.display = isFeed ? "" : "none";
     if (el.feedControls) {
@@ -7940,12 +10587,13 @@ python3 site/annotate_social.py</pre>
     }
     // Expected Data keeps its own Fixture Location control (adds Compare),
     // swapped into the same sidebar slot as the shared Total/Home/Away group.
-    el.splitGroup.style.display = page === "expected" || page === "team" ? "none" : "";
+    el.splitGroup.style.display =
+      page === "expected" || page === "team" || page === "notes" || page === "ownership" ? "none" : "";
     if (el.expectedSplitGroup) {
       el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
     }
     const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
-    if (viewTabs) viewTabs.style.display = page === "team" ? "none" : "";
+    if (viewTabs) viewTabs.style.display = page === "team" || page === "notes" ? "none" : "";
     if (page === "team") {
       if (state.view !== "players") {
         state.view = "players";
@@ -7957,22 +10605,43 @@ python3 site/annotate_social.py</pre>
       el.inactiveFilterGroup.style.display = "none";
       el.positionFilterGroup.style.display = "";
       el.priceFilterGroup.style.display = "";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "";
+      if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "";
     } else {
       el.valueModeGroup.style.display = state.view === "players" ? "" : "none";
       el.minutesFilterGroup.style.display = state.view === "players" ? "" : "none";
       el.priceFilterGroup.style.display = state.view === "players" ? "" : "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = state.view === "players" ? "" : "none";
       el.positionFilterGroup.style.display = state.view === "players" ? "" : "none";
       if (el.setpieceFilterGroup) {
         el.setpieceFilterGroup.style.display = state.view === "players" ? "" : "none";
       }
+      if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "none";
       el.inactiveFilterGroup.style.display =
         state.view === "players" && HAS_PRICE_DATA && !isNextSeason() ? "" : "none";
+    }
+    if (page === "ownership") {
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      el.tableOnlyToggles.style.display = "none";
+      if (el.compareToggle) el.compareToggle.style.display = "none";
+    }
+    if (el.ownershipTrendingGroup) {
+      el.ownershipTrendingGroup.style.display = page === "ownership" ? "" : "none";
+    }
+    if (page !== "ownership") {
+      if (el.ownershipTrendCards) el.ownershipTrendCards.hidden = true;
+    } else {
+      syncOwnershipTrendingUI();
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
     if (page !== "markets") setMarketsViewMenuOpen(false);
     if (page === "rankings") {
       renderRankings();
+    } else if (page === "ownership") {
+      renderOwnership();
     } else if (page === "expected") {
       renderExpected();
     } else if (page === "schedule") {
@@ -7985,12 +10654,15 @@ python3 site/annotate_social.py</pre>
       renderTable();
     } else if (page === "team") {
       renderTeam();
+    } else if (page === "notes") {
+      renderNotes();
     }
     // Enter after content is in the DOM so the animation covers real layout.
     playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
       scrollActivePageTabIntoView();
+      if (page === "ownership") renderOwnership();
     });
     syncExpectedCatToolbar();
     syncMarketsViewControls();
@@ -7998,7 +10670,54 @@ python3 site/annotate_social.py</pre>
 
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
+  if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
+  if (el.ownershipTrendingToggle) {
+    el.ownershipTrendingToggle.addEventListener("click", () => {
+      state.ownershipTrending = !state.ownershipTrending;
+      syncOwnershipTrendingUI();
+      if (state.page === "ownership") renderOwnership();
+    });
+  }
+  if (el.ownershipTrendCards) {
+    el.ownershipTrendCards.addEventListener("pointerover", (e) => {
+      if (!hasFineHover()) return;
+      const row = e.target.closest("[data-ownership-key]");
+      if (!row || !el.ownershipTrendCards.contains(row)) return;
+      if (e.relatedTarget && row.contains(e.relatedTarget)) return;
+      const key = row.getAttribute("data-ownership-key");
+      if (!key || ownershipHoverKey === key) return;
+      hoverOwnershipSeries(key);
+    });
+    // Clear only when the pointer leaves the cards entirely — clearing per row
+    // would blink the chart while scrubbing between names.
+    el.ownershipTrendCards.addEventListener("pointerleave", () => {
+      if (!hasFineHover()) return;
+      if (!ownershipHoverKey) return;
+      setOwnershipHover(null, null);
+      hideOwnershipTooltip();
+    });
+    el.ownershipTrendCards.addEventListener("click", (e) => {
+      const row = e.target.closest("[data-ownership-key]");
+      if (!row) return;
+      const key = row.getAttribute("data-ownership-key");
+      const series = ownershipSeriesCache.find((s) => s.key === key);
+      if (!series) return;
+      const lastIdx = ownershipLastOwnedIndex(series);
+      setOwnershipHover(key, lastIdx);
+      if (hasFineHover()) {
+        const wrap = el.ownershipChartWrap && el.ownershipChartWrap.getBoundingClientRect();
+        if (wrap) {
+          showOwnershipTooltip(
+            wrap.left + wrap.width * 0.72,
+            wrap.top + wrap.height * 0.28,
+            ownershipTooltipHTML(series, lastIdx)
+          );
+        }
+      }
+    });
+  }
   if (el.pageTeam) el.pageTeam.addEventListener("click", () => setPage("team"));
+  if (el.pageNotes) el.pageNotes.addEventListener("click", () => setPage("notes"));
   el.pageExpected.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -8261,10 +10980,17 @@ python3 site/annotate_social.py</pre>
     if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = view === "players" ? "" : "none";
     el.minutesFilterGroup.style.display = view === "players" ? "" : "none";
     el.priceFilterGroup.style.display = view === "players" ? "" : "none";
+    if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = view === "players" ? "" : "none";
     el.inactiveFilterGroup.style.display =
       view === "players" && HAS_PRICE_DATA && !isNextSeason() ? "" : "none";
     el.valueModeGroup.style.display = view === "players" ? "" : "none";
     el.newpriceWrap.style.display = view === "players" && !isNextSeason() ? "" : "none";
+    if (state.page === "ownership") {
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      el.newpriceWrap.style.display = "none";
+    }
     state.enhancePct = view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
     updateEnhancePctSlider();
     syncHighlightUI();
@@ -8497,7 +11223,8 @@ python3 site/annotate_social.py</pre>
     }
     state.search = "";
     syncSearchClearBtns();
-    renderTable();
+    if (state.page === "team") renderTeam();
+    else if (state.page !== "rankings") renderTable();
   }
 
   function clearFeedSearchInput() {
@@ -8509,8 +11236,42 @@ python3 site/annotate_social.py</pre>
     renderFeed();
   }
 
+  function teamSearchAlwaysOpen() {
+    return state.page === "team" && !preferMobileSheet();
+  }
+
+  function mainSearchAlwaysOpen() {
+    return (state.page === "team" || state.page === "opta") && !preferMobileSheet();
+  }
+
+  function syncTeamSearchHost() {
+    if (!el.searchWrap) return;
+    const home = el.searchHome;
+    if (home && el.searchWrap.parentElement !== home) home.appendChild(el.searchWrap);
+    // Rankings: no search — hide the control entirely.
+    el.searchWrap.style.display = state.page === "rankings" ? "none" : "";
+    el.searchWrap.classList.toggle("team-search-always-open", teamSearchAlwaysOpen());
+    el.searchWrap.classList.toggle(
+      "stats-search-always-open",
+      state.page === "opta" && !preferMobileSheet()
+    );
+    if (state.page === "rankings") {
+      el.searchWrap.classList.remove("search-open");
+      if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    } else if (mainSearchAlwaysOpen()) {
+      el.searchWrap.classList.add("search-open");
+      if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "true");
+    } else if (!(el.search && el.search.value.trim())) {
+      el.searchWrap.classList.remove("search-open");
+      if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    }
+    syncSearchClearBtns();
+    syncTeamSearchCombobox();
+  }
+
   function closeMobileSearch({ clear = false } = {}) {
     if (!el.searchWrap) return;
+    if (mainSearchAlwaysOpen() && !clear) return;
     el.searchWrap.classList.remove("search-open");
     if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     if (clear) {
@@ -8530,15 +11291,17 @@ python3 site/annotate_social.py</pre>
     });
   }
 
-  if (el.searchToggle) {
+    if (el.searchToggle) {
     el.searchToggle.addEventListener("click", (e) => {
       e.preventDefault();
+      if (mainSearchAlwaysOpen()) return;
       if (el.searchWrap.classList.contains("search-open")) closeMobileSearch();
       else openMobileSearch();
     });
   }
 
   document.addEventListener("click", (e) => {
+    if (mainSearchAlwaysOpen()) return;
     if (!el.searchWrap) return;
     if (!el.searchWrap.classList.contains("search-open")) return;
     if (el.searchWrap.contains(e.target)) return;
@@ -8549,6 +11312,7 @@ python3 site/annotate_social.py</pre>
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!el.searchWrap?.classList.contains("search-open")) return;
+    if (mainSearchAlwaysOpen()) return;
     closeMobileSearch();
     el.search.blur();
   });
@@ -8559,8 +11323,22 @@ python3 site/annotate_social.py</pre>
     syncSearchClearBtns();
     searchTimer = setTimeout(() => {
       state.search = val;
-      renderTable();
+      if (state.page === "rankings") return;
+      if (state.page === "team") renderTeam();
+      else renderTable();
     }, 120);
+  });
+
+  el.search.addEventListener("keydown", (e) => {
+    if (state.page !== "team" || state.teamPickerSlot) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      moveTeamSearchActive(e.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    pinTeamSearchActive();
   });
 
   el.search.addEventListener("focus", () => {
@@ -8754,6 +11532,35 @@ python3 site/annotate_social.py</pre>
   // Matchups is always a team view, so it uses absolute top/bottom place counts.
   let updateEnhancePctSlider = () => {};
   let updateScheduleEnhancePctSlider = () => {};
+  const updateOwnedSlider = setupSingleSlider({
+    input: el.ownedMin,
+    fillEl: el.ownedMinFill,
+    labelEl: el.ownedMinLabel,
+    boundsMin: 0,
+    boundsMax: OWNERSHIP_FILTER_MAX,
+    step: 0.5,
+    get: () => state.ownedMin,
+    set: (value) => {
+      state.ownedMin = value;
+    },
+    format: (value) => `${value.toFixed(1)}%+`,
+  });
+
+  const updateOwnershipTrendThresholdSlider = setupSingleSlider({
+    input: el.ownershipTrendThreshold,
+    fillEl: el.ownershipTrendThresholdFill,
+    labelEl: el.ownershipTrendThresholdLabel,
+    boundsMin: 0.1,
+    boundsMax: OWNERSHIP_TREND_THRESHOLD_MAX,
+    step: 0.1,
+    get: () => state.ownershipTrendThreshold,
+    set: (value) => {
+      state.ownershipTrendThreshold = value;
+    },
+    format: (value) =>
+      `${value.toFixed(1)} pp recent · ${(value * 2).toFixed(1)} pp net`,
+    onInput: renderOwnership,
+  });
 
   updateEnhancePctSlider = setupSingleSlider({
     input: el.enhancePct,
@@ -9069,6 +11876,14 @@ python3 site/annotate_social.py</pre>
     });
   }
 
+  if (el.teamAffordableCheck) {
+    el.teamAffordableCheck.addEventListener("change", () => {
+      state.teamAffordableOnly = !!el.teamAffordableCheck.checked;
+      syncFiltersResetUI();
+      renderTable();
+    });
+  }
+
   // Total / Per 90 / Per £m are mutually exclusive — the segmented control
   // always leaves exactly one option selected.
   function setValueMode(mode, { rerender = true } = {}) {
@@ -9097,9 +11912,11 @@ python3 site/annotate_social.py</pre>
     bounds.mins.max = next.mins.max;
     state.priceMin = defaultMinPrice();
     state.priceMax = bounds.price.max;
+    state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
     state.minsMin = defaultMinMinutes();
     state.minsMax = bounds.mins.max;
     updatePriceSlider();
+    updateOwnedSlider();
     updateMinsSlider();
   }
 
@@ -9426,7 +12243,8 @@ python3 site/annotate_social.py</pre>
   // ---------------------------------------------------------------------
   // TEMP font lab — swap --sans / --mono across the app while evaluating pairs
   // ---------------------------------------------------------------------
-  const FONT_PAIR_KEY = "fpl-explorer-font-pair";
+  const FONT_PAIR_KEY = "fpl-explorer-font-pair-v2";
+  const FONT_PAIR_DEFAULT = "manrope-fira";
   const FONT_PAIRS = {
     system: {
       sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -9471,25 +12289,26 @@ python3 site/annotate_social.py</pre>
   };
 
   function applyFontPair(id) {
-    const pair = FONT_PAIRS[id] || FONT_PAIRS.system;
+    const resolved = id in FONT_PAIRS ? id : FONT_PAIR_DEFAULT;
+    const pair = FONT_PAIRS[resolved];
     const root = document.documentElement;
     root.style.setProperty("--sans", pair.sans);
     root.style.setProperty("--mono", pair.mono);
-    root.setAttribute("data-font-pair", id in FONT_PAIRS ? id : "system");
+    root.setAttribute("data-font-pair", resolved);
     try {
-      localStorage.setItem(FONT_PAIR_KEY, id in FONT_PAIRS ? id : "system");
+      localStorage.setItem(FONT_PAIR_KEY, resolved);
     } catch {
       /* private browsing */
     }
-    if (el.fontPairSelect) el.fontPairSelect.value = id in FONT_PAIRS ? id : "system";
+    if (el.fontPairSelect) el.fontPairSelect.value = resolved;
   }
 
   if (el.fontPairSelect) {
-    let saved = "system";
+    let saved = FONT_PAIR_DEFAULT;
     try {
-      saved = localStorage.getItem(FONT_PAIR_KEY) || "system";
+      saved = localStorage.getItem(FONT_PAIR_KEY) || FONT_PAIR_DEFAULT;
     } catch {
-      saved = "system";
+      saved = FONT_PAIR_DEFAULT;
     }
     applyFontPair(saved);
     el.fontPairSelect.addEventListener("change", () => {
@@ -9500,6 +12319,7 @@ python3 site/annotate_social.py</pre>
   // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
   try {
     localStorage.removeItem("fpl-explorer-ui-scale");
+    localStorage.removeItem("fpl-explorer-font-pair");
   } catch {
     /* private browsing */
   }
@@ -9528,6 +12348,7 @@ python3 site/annotate_social.py</pre>
 
   function setPrefsOpen(open) {
     if (!el.prefsPanel || !el.prefsBtn) return;
+    if (open) syncTeamClearBtn();
     if (!hasFineHover()) {
       if (open) {
         openMobileSheetHost({
@@ -9661,6 +12482,75 @@ python3 site/annotate_social.py</pre>
   if (el.fplIdClear) {
     el.fplIdClear.addEventListener("click", () => clearManagerId());
   }
+  if (el.teamModeSeg) {
+    el.teamModeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-team-mode]");
+      if (!btn) return;
+      setTeamMode(btn.getAttribute("data-team-mode"));
+    });
+  }
+  if (el.teamResyncBtn) {
+    el.teamResyncBtn.addEventListener("click", () => requestResyncPlanner());
+  }
+  if (el.notesGroupSeg) {
+    el.notesGroupSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-notes-group]");
+      if (!btn) return;
+      state.notesGroupBy = btn.getAttribute("data-notes-group") || "none";
+      renderNotes();
+    });
+  }
+  if (el.notesCollage) {
+    el.notesCollage.addEventListener("click", (e) => {
+      const del = e.target.closest("[data-note-delete]");
+      if (!del) return;
+      const id = del.getAttribute("data-note-delete");
+      openConfirmModal({
+        title: "Delete note?",
+        message: "This removes the comment permanently from this browser.",
+        okLabel: "Delete",
+      }).then((ok) => {
+        if (ok) deleteNote(id);
+      });
+    });
+  }
+  if (el.noteModal) {
+    el.noteModal.addEventListener("click", (e) => {
+      if (e.target.closest("[data-note-cancel]")) {
+        closeNoteModal();
+        return;
+      }
+      if (e.target.closest("#note-modal-save")) saveNoteFromModal();
+    });
+  }
+  if (el.noteContextMenu) {
+    el.noteContextMenu.addEventListener("click", (e) => {
+      if (e.target.closest("[data-note-add]") && noteDraft && noteDraft.target) {
+        openNoteModal(noteDraft.target);
+      }
+    });
+    el.noteContextMenu.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  document.addEventListener("pointerdown", (e) => {
+    if (!el.noteContextMenu || !el.noteContextMenu.classList.contains("open")) return;
+    if (Date.now() - noteMenuOpenedAt < 350) return;
+    if (e.target.closest("#note-context-menu")) return;
+    closeNoteContextMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (el.noteModal && !el.noteModal.hidden) {
+      closeNoteModal();
+      return;
+    }
+    closeNoteContextMenu();
+  });
+  if (el.teamClearBtn) {
+    el.teamClearBtn.addEventListener("click", () => {
+      setPrefsOpen(false);
+      requestClearTeamSquad();
+    });
+  }
   if (el.fplIdInput) {
     el.fplIdInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -9728,18 +12618,12 @@ python3 site/annotate_social.py</pre>
     syncFeedSearchLayout();
     upgradeNativeTitles();
     renderPriceIssuesPanel();
+    loadNotes();
     await restoreManagerId();
-    // Desktop keeps Filters open by default; touch/narrow keeps the sheet pattern
-    // (collapsed until the filter button opens it).
-    if (preferMobileSheet()) {
-      el.sidebar.classList.add("collapsed");
-      el.sidebarToggle.classList.remove("on");
-      el.sidebarToggle.setAttribute("aria-pressed", "false");
-    } else {
-      el.sidebar.classList.remove("collapsed");
-      el.sidebarToggle.classList.add("on");
-      el.sidebarToggle.setAttribute("aria-pressed", "true");
-    }
+    // Filters start closed on every page and viewport; the toolbar button opens them.
+    el.sidebar.classList.add("collapsed");
+    el.sidebarToggle.classList.remove("on");
+    el.sidebarToggle.setAttribute("aria-pressed", "false");
     setView("players");
     buildExpectedCatMenu();
     // setView renders the OPTA table, so restoring the page comes last.
@@ -9764,13 +12648,20 @@ python3 site/annotate_social.py</pre>
     window.addEventListener("resize", () => {
       syncAllSegThumbs({ animate: false });
       syncFeedSearchLayout();
+      syncTeamSearchHost();
       syncPageTabsScrollHints();
       syncAllNameColumnSimplifies();
     });
     if (typeof NARROW_MQ.addEventListener === "function") {
-      NARROW_MQ.addEventListener("change", syncFeedSearchLayout);
+      NARROW_MQ.addEventListener("change", () => {
+        syncFeedSearchLayout();
+        syncTeamSearchHost();
+      });
     } else if (typeof NARROW_MQ.addListener === "function") {
-      NARROW_MQ.addListener(syncFeedSearchLayout);
+      NARROW_MQ.addListener(() => {
+        syncFeedSearchLayout();
+        syncTeamSearchHost();
+      });
     }
     bindAllNameColumnSimplifies();
   }

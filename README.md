@@ -10,8 +10,9 @@ Static Fantasy Premier League research site — browse OPTA/FPL stats, fixture m
 
 | Tab | What it shows |
 |-----|----------------|
-| **Statistics** | Sortable player/team table (Total / Home / Away). Value modes: season total, per 90, per £m. Column picker, compare up to 5 rows, fixture hover tooltips, owned-player pins (manager ID in Preferences). Season switch: **2025/26** full stats vs **2026/27** zero-stat squad + prices. |
+| **Statistics** | Sortable player/team table (Total / Home / Away), including current FPL ownership. Value modes: season total, per 90, per £m. Column picker, compare up to 5 rows, click-to-open fixture tooltips, owned-player pins (manager ID in Preferences). Season switch: **2025/26** full stats vs **2026/27** zero-stat squad + prices. |
 | **Rankings** | Top-10 cards per metric. Hover to cross-highlight a name across cards; pin up to five colours. |
+| **Ownership** | Multi-line `selected_by%` over manual FPL check-ins. Players default to 5%+ owned, capped at the latest top 100 (grey lines, hover uses club colour). Risers/Fallers always show the top five player ownership movers; the sidebar threshold controls qualification and **Trending** colors only those listed movers. Teams average each club’s current top 20. |
 | **Matchups** | Upcoming fixture difficulty cards plus an attack/defence scatter. Blend Expected vs Actual ranks; highlight edges for favourable attacking or defensive matchups. |
 | **Feed** | Player-mention cards from curated FPL creators on X (~last 48 hours), with quotes and season stats. Search + Volume / Recent sort. |
 | **Markets** | Upcoming EPL fixtures from bookmaker odds: projected goals, clean-sheet %, most likely scorelines. Grouped by local date; heat colouring for Goals / CS%. |
@@ -69,6 +70,10 @@ Relegated clubs from the prior campaign are excluded where appropriate; promoted
 
 Refreshing the browser never spends X credits; only the fetch script does.
 
+### Ownership (`ownership_data.js`)
+
+`python3 site/fetch_ownership.py` — pulls `bootstrap-static`, writes `snapshots/bootstrap-static_YYYY-MM-DD.json` if that calendar day is new (overwrites same-day), then rebuilds a slim check-in history from every non-archived bootstrap snapshot. `python3 site/fetch_ownership.py --rebuild-only` skips the live fetch. The page never calls the FPL API.
+
 ### Markets (`markets_data.js`)
 
 `python3 site/fetch_markets.py` — [The Odds API](https://the-odds-api.com/) (`ODDS_API_KEY`), sport `soccer_epl`, UK/EU regions. Prefers Pinnacle (then Betfair), de-vigs 1X2 + totals, fits independent Poisson λ for goals / CS% / top scores. The API key never ships to the browser; the page only reads the static JS cache.
@@ -101,6 +106,7 @@ cp .env.example .env
 
 python3 site/build.py                 # after CSV / snapshot updates
 python3 site/fetch_history_past.py    # optional: rebuild history_past snapshot
+python3 site/fetch_ownership.py       # ownership check-in + history bundle
 python3 site/fetch_social.py && python3 site/annotate_social.py
 python3 site/fetch_markets.py         # ~few Odds API credits per pull
 ```
