@@ -542,6 +542,7 @@
     teamHoverCompareCode: null,
     teamSearchActiveCode: null,
     teamMode: "planner", // planner | actual
+    teamSparkMetric: "form", // form | owned
     ownershipTrending: true,
     ownershipTrendThreshold: OWNERSHIP_TREND_THRESHOLD_DEFAULT,
     ownershipTrendWindow: OWNERSHIP_TREND_WINDOW_DEFAULT,
@@ -1548,6 +1549,7 @@
       ownedCodes = new Set(actual.squad.map((s) => s.code));
     }
     if (el.fplIdInput && saved) el.fplIdInput.value = saved;
+    if (saved) savedManagerId = saved;
     state.teamMode = "planner";
     loadTeamDraft();
     if (saved) {
@@ -1637,75 +1639,6 @@
     const label = (opts && opts.label) || pos;
     const attrs = (opts && opts.attrs) || "";
     return `<span class="pos-badge pos-${pos}"${attrs}>${escapeHtml(label)}</span>`;
-  }
-
-  function syncFplIdStatus() {
-    if (!el.fplIdStatus) return;
-    if (!savedManagerId) {
-      el.fplIdStatus.textContent = "No manager ID saved.";
-      return;
-    }
-    const n = ownedCodes.size;
-    el.fplIdStatus.textContent =
-      n > 0
-        ? `ID ${savedManagerId} · ${n} owned player${n === 1 ? "" : "s"} (mock).`
-        : `ID ${savedManagerId} · no owned players matched.`;
-  }
-
-  async function applyManagerId(rawId, { quiet = false, render = true } = {}) {
-    const id = String(rawId || "").trim();
-    if (!/^\d+$/.test(id) || Number(id) <= 0) {
-      if (!quiet) {
-        showToast({ title: "Invalid FPL ID", message: "Enter a positive numeric manager ID.", icon: "triangle-alert" });
-      }
-      return false;
-    }
-    savedManagerId = id;
-    try {
-      localStorage.setItem(FPL_ID_KEY, id);
-    } catch {
-      /* private browsing */
-    }
-    if (el.fplIdInput) el.fplIdInput.value = id;
-    ownedCodes = await loadOwnedSquad(id);
-    syncFplIdStatus();
-    if (!quiet) {
-      showToast({
-        title: "FPL ID saved",
-        message: `Loaded ${ownedCodes.size} owned players (mock data).`,
-        icon: "circle-check",
-      });
-    }
-    if (render) renderTable();
-    return true;
-  }
-
-  function clearManagerId({ quiet = false, render = true } = {}) {
-    savedManagerId = null;
-    ownedCodes = new Set();
-    try {
-      localStorage.removeItem(FPL_ID_KEY);
-    } catch {
-      /* private browsing */
-    }
-    if (el.fplIdInput) el.fplIdInput.value = "";
-    syncFplIdStatus();
-    if (!quiet) {
-      showToast({ title: "FPL ID cleared", message: "Owned-player markers removed.", icon: "info" });
-    }
-    if (render) renderTable();
-  }
-
-  async function restoreManagerId() {
-    let saved = "";
-    try {
-      saved = localStorage.getItem(FPL_ID_KEY) || "";
-    } catch {
-      saved = "";
-    }
-    if (el.fplIdInput && saved) el.fplIdInput.value = saved;
-    if (saved) await applyManagerId(saved, { quiet: true, render: false });
-    else syncFplIdStatus();
   }
 
   function isNumericCol(col) {
@@ -2157,6 +2090,10 @@
     const teamGwSelect = $("#team-gw-select");
     if (teamGwSelect && closingKey === "team-gw") {
       teamGwSelect.setAttribute("aria-expanded", "false");
+    }
+    if (closingKey === "team-row") {
+      teamRowMenuRow = null;
+      if (typeof clearTeamRowActions === "function") clearTeamRowActions();
     }
     if (el.marketsViewToolbarBtn && closingKey === "markets-view") {
       el.marketsViewToolbarBtn.setAttribute("aria-expanded", "false");
@@ -3199,8 +3136,9 @@
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Faint rank is among that position last season. New signings show –."),
+        spitRow(spitRank("Form"), "Sparkline of mock recent form. Click or tap it (or the column header) to switch to TSB% from ownership check-ins."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (green check). FK/CK also show #2."),
-        spitRow(spitRank("Heat"), "Six consecutive gameweeks. Caps = home, lowercase = away. The right-edge line is the window start. Prev/next shifts by one."),
+        spitRow(spitRank("Heat"), "Always six fixture columns from the selected gameweek (left of the line). Pick GW2 to shift the run forward so GW2 is current."),
         spitRow(spitRank("Select"), "Empty slot or Replace opens the player list. Filters (including Affordable) open then. Back or Escape returns to the squad."),
         spitRow(spitRank("Affordable"), "In Filters while picking — hides anyone above remaining Bank. Replace credits the outgoing player's price."),
         spitRow(spitRank("Squad"), "Preferences → Clear planner removes every Planner pick. Actual is unchanged."),
@@ -5391,14 +5329,16 @@
   }
 
   function teamClampGwStart(start) {
-    const maxStart = Math.max(SCHEDULE_GW_MIN, SCHEDULE_GW_MAX - TEAM_HEAT_N + 1);
-    return Math.min(maxStart, Math.max(SCHEDULE_GW_MIN, Number(start) || SCHEDULE_GW_MIN));
+    return Math.min(
+      SCHEDULE_GW_MAX,
+      Math.max(SCHEDULE_GW_MIN, Number(start) || SCHEDULE_GW_MIN)
+    );
   }
 
   function teamHeatGws() {
     const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
     const gws = [];
-    for (let g = start; gws.length < TEAM_HEAT_N && g <= SCHEDULE_GW_MAX; g++) gws.push(g);
+    for (let i = 0; i < TEAM_HEAT_N; i++) gws.push(start + i);
     return gws;
   }
 
@@ -5478,6 +5418,27 @@
     return `<th class="${extraClass}${sorted ? " sorted" : ""}" data-team-sort="${escapeHtml(key)}"${tipAttr(title || label)}>${escapeHtml(label)}${arrow}</th>`;
   }
 
+  function teamSparkMetricIsOwned() {
+    return state.teamSparkMetric === "owned";
+  }
+
+  function teamSparkHeadHTML(opts) {
+    const owned = teamSparkMetricIsOwned();
+    const label = owned ? "TSB%" : "Form";
+    const title = owned
+      ? "Selected-by-% across ownership check-ins. Click a sparkline to show Form."
+      : "Recent form (mock). Click a sparkline to show TSB%.";
+    if (opts && opts.plain) {
+      return `<th class="col-team-spark"${tipAttr(title)}>${escapeHtml(label)}</th>`;
+    }
+    return `<th class="col-team-spark" data-team-spark-toggle="1"${tipAttr(title)}>${escapeHtml(label)}</th>`;
+  }
+
+  function toggleTeamSparkMetric() {
+    state.teamSparkMetric = teamSparkMetricIsOwned() ? "form" : "owned";
+    renderTeam();
+  }
+
   function teamMetricHeadHTML(opts) {
     const plain = !!(opts && opts.plain);
     const divideFirst = !(opts && opts.price);
@@ -5490,7 +5451,7 @@
         { plain }
       )
     ).join("");
-    const spark = teamSortTh("trend", "Trend", "col-team-spark", "Mock recent-form trend", { plain });
+    const spark = teamSparkHeadHTML({ plain });
     const setp =
       opts && opts.setPieces
         ? TEAM_SETPIECE_COLS.map((col) =>
@@ -5509,14 +5470,43 @@
       1 +
       (opts.setPieces ? TEAM_SETPIECE_COLS.length : 0);
     const heatN = teamHeatGws().length;
-    return `<tr class="section-row"><th class="sec-sticky-lead">Player</th><th class="sec-divider" colspan="${statsN}">Statistics</th><th class="sec-divider" colspan="${heatN}">Fixtures</th></tr>`;
+    return `<tr class="section-row"><th class="sec-sticky-lead"></th><th class="sec-divider" colspan="${statsN}">Statistics</th><th class="sec-divider" colspan="${heatN}">Fixtures</th></tr>`;
   }
 
   function teamHeadRowsHTML(colRowInner, opts) {
     opts = opts || {};
-    const cols = `<tr>${colRowInner}</tr>`;
-    if (opts.noSections) return cols;
-    return `${teamSectionHeadHTML(opts)}${cols}`;
+    return `${teamSectionHeadHTML(opts)}<tr>${colRowInner}</tr>`;
+  }
+
+  function teamSectionHeatFillHTML() {
+    return teamHeatGws()
+      .map(
+        (gw, i) =>
+          `<td class="team-section-fill team-heat-cell${i === 0 ? " sec-divider" : ""}${teamHeatAnchorClass(
+            gw
+          )}"></td>`
+      )
+      .join("");
+  }
+
+  function teamSectionRowHTML(label, enterI, extraClass, colOpts) {
+    const heatN = teamHeatGws().length;
+    const statsN = Math.max(0, teamDataColCount(colOpts) - 1 - heatN);
+    const cls = extraClass ? ` ${extraClass}` : "";
+    return `<tr class="section-row team-section-row${cls}" style="--enter-i:${enterI}">
+      <th class="col-player">${escapeHtml(label)}</th>
+      ${statsN ? `<td class="team-section-fill" colspan="${statsN}"></td>` : ""}
+      ${teamSectionHeatFillHTML()}
+    </tr>`;
+  }
+
+  function teamMessageRowHTML(message, extraClass, colOpts) {
+    const rest = Math.max(0, teamDataColCount(colOpts) - 1);
+    const cls = extraClass ? ` ${extraClass}` : "team-empty-row";
+    return `<tr class="${cls}">
+      <td class="col-player">${escapeHtml(message)}</td>
+      ${rest ? `<td class="team-section-fill" colspan="${rest}"></td>` : ""}
+    </tr>`;
   }
 
   const teamTrendCache = new Map();
@@ -5541,29 +5531,77 @@
     return series;
   }
 
+  let teamOwnedSeriesCache = new Map();
+  let teamOwnedSeriesCacheN = -1;
+  function teamOwnedSeries(code) {
+    const checkIns = ownershipCheckIns();
+    if (teamOwnedSeriesCacheN !== checkIns.length) {
+      const map = new Map();
+      for (const ci of checkIns) {
+        for (const p of ci.players || []) {
+          if (p == null || p.code == null) continue;
+          const v = Number(p.owned);
+          if (!Number.isFinite(v)) continue;
+          const k = Number(p.code);
+          let arr = map.get(k);
+          if (!arr) {
+            arr = [];
+            map.set(k, arr);
+          }
+          arr.push(v);
+        }
+      }
+      teamOwnedSeriesCache = map;
+      teamOwnedSeriesCacheN = checkIns.length;
+    }
+    const arr = teamOwnedSeriesCache.get(Number(code));
+    if (!arr || !arr.length) return [];
+    return arr.length > 12 ? arr.slice(-12) : arr;
+  }
+
+  function teamSparkSeries(row) {
+    if (!row || row.code == null) return [];
+    return teamSparkMetricIsOwned() ? teamOwnedSeries(row.code) : teamMockTrend(row.code);
+  }
+
+  function teamSparkSvg(series, tone) {
+    const w = 64;
+    const h = 22;
+    const pad = 2;
+    const n = series.length;
+    const lo = Math.min(...series);
+    const hi = Math.max(...series);
+    const rng = hi - lo || 1;
+    const pts = series.map((v, i) => {
+      const x = n === 1 ? w / 2 : pad + (i / (n - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - lo) / rng) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const end = pts[pts.length - 1].split(",");
+    const line = n >= 2 ? `<polyline points="${pts.join(" ")}" />` : "";
+    return `<svg class="team-spark ${tone}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">${line}<circle cx="${end[0]}" cy="${end[1]}" r="1.8" /></svg>`;
+  }
+
   function teamSparkCellHTML(row) {
-    const series = teamMockTrend(row.code);
+    const owned = teamSparkMetricIsOwned();
+    const series = teamSparkSeries(row);
+    const next = owned ? "Form" : "TSB%";
+    if (!series.length) {
+      const tip = owned
+        ? `No TSB% history yet · click to show ${next}`
+        : `No form yet · click to show ${next}`;
+      return `<td class="col-team-spark is-blank" data-team-spark-toggle="1"${tipAttr(tip)}><span class="team-spark-empty">–</span></td>`;
+    }
     const first = series[0];
     const last = series[series.length - 1];
     const delta = last - first;
     const span = Math.max(...series) - Math.min(...series) || 1;
-    const tone = Math.abs(delta) < span * 0.12 ? "is-flat" : delta > 0 ? "is-up" : "is-down";
-    const w = 64;
-    const h = 22;
-    const pad = 2;
-    const lo = Math.min(...series);
-    const hi = Math.max(...series);
-    const rng = hi - lo || 1;
-    const pts = series
-      .map((v, i) => {
-        const x = pad + (i / (series.length - 1)) * (w - pad * 2);
-        const y = h - pad - ((v - lo) / rng) * (h - pad * 2);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-    const end = pts.slice(pts.lastIndexOf(" ") + 1).split(",");
-    const tip = `Mock form · ${delta >= 0 ? "+" : ""}${delta.toFixed(1)} over ${series.length} weeks`;
-    return `<td class="col-team-spark"${tipAttr(tip)}><svg class="team-spark ${tone}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}" /><circle cx="${end[0]}" cy="${end[1]}" r="1.8" /></svg></td>`;
+    const tone = series.length < 2 || Math.abs(delta) < span * 0.12 ? "is-flat" : delta > 0 ? "is-up" : "is-down";
+    const deltaTxt = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}`;
+    const tip = owned
+      ? `TSB% · ${fmtOwnedPct(last)} · ${deltaTxt} over ${series.length} check-ins · click to show ${next}`
+      : `Form · ${deltaTxt} over ${series.length} weeks · click to show ${next}`;
+    return `<td class="col-team-spark" data-team-spark-toggle="1"${tipAttr(tip)}>${teamSparkSvg(series, tone)}</td>`;
   }
 
   function teamSortValue(row, key) {
@@ -5572,7 +5610,8 @@
     if (key === "price") return Number(row.price) || 0;
     if (key === "owned") return currentOwnership(row.code) ?? -Infinity;
     if (key === "trend") {
-      const series = teamMockTrend(row.code);
+      const series = teamSparkSeries(row);
+      if (series.length < 2) return series.length === 1 ? series[0] : -Infinity;
       return series[series.length - 1] - series[0];
     }
     if (TEAM_SETPIECE_COLS.some((c) => c.key === key)) {
@@ -6311,8 +6350,12 @@
     return teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
   }
 
+  function teamHeatGwInSeason(gw) {
+    return gw >= SCHEDULE_GW_MIN && gw <= SCHEDULE_GW_MAX;
+  }
+
   function teamHeatAnchorClass(gw) {
-    return gw === teamHeatWindowStart() ? " is-anchor" : "";
+    return teamHeatGwInSeason(gw) && gw === teamHeatWindowStart() ? " is-anchor" : "";
   }
 
   function teamHeatOppLabel(fx) {
@@ -6369,27 +6412,15 @@
 
   function teamHeatHeadHTML() {
     return teamHeatGws()
-      .map((gw, i) => `<th class="col-heat${i === 0 ? " sec-divider" : ""}${teamHeatAnchorClass(gw)}">GW${gw}</th>`)
+      .map((gw, i) => {
+        const label = teamHeatGwInSeason(gw) ? `GW${gw}` : "–";
+        return `<th class="col-heat${i === 0 ? " sec-divider" : ""}${teamHeatAnchorClass(gw)}">${label}</th>`;
+      })
       .join("");
   }
 
   function teamHeatCellsHTML(teamCode) {
     return teamHeatGws().map((gw, i) => teamHeatCellHTML(teamCode, gw, i === 0)).join("");
-  }
-
-  function syncTeamGwAnchorLine() {
-    if (!el.teamPage) return;
-    el.teamPage.querySelectorAll(".team-table-wrap").forEach((wrap) => {
-      const view = wrap.closest("#team-squad-view, #team-picker-view");
-      const th = wrap.querySelector("thead th.col-heat.is-anchor");
-      if (!th || (view && view.hidden)) {
-        wrap.classList.remove("has-gw-line");
-        wrap.style.removeProperty("--team-gw-line-x");
-        return;
-      }
-      wrap.classList.add("has-gw-line");
-      wrap.style.setProperty("--team-gw-line-x", `${th.offsetLeft + th.offsetWidth}px`);
-    });
   }
 
   function teamPlayerCellHTML(row, slot) {
@@ -6415,7 +6446,7 @@
     </button>`;
   }
 
-  function teamRowMenuHTML(row, slot) {
+  function teamRowMenuItemsHTML(row, slot, { note = true } = {}) {
     const code = escapeHtml(String(row.code));
     const isC = state.teamCaptainCode === row.code;
     const isV = state.teamViceCode === row.code;
@@ -6450,31 +6481,41 @@
         icon: iconHTML("refresh-ccw-dot"),
         label: "Replace",
       }),
-      teamRowMenuItemHTML({
-        attrs: `data-team-note="${code}"`,
-        icon: iconHTML("notebook-pen"),
-        label: "Add note",
-      }),
+    ];
+    if (note) {
+      squadItems.push(
+        teamRowMenuItemHTML({
+          attrs: `data-team-note="${code}"`,
+          icon: iconHTML("notebook-pen"),
+          label: "Add note",
+        })
+      );
+    }
+    squadItems.push(
       teamRowMenuItemHTML({
         attrs: `data-team-remove="${code}"`,
         icon: iconHTML("x"),
         label: "Remove",
         danger: true,
-      }),
-    ].join("");
-    return `<div class="settings-panel-head">
-        <h4 id="team-row-menu-title">${escapeHtml(row.name)}</h4>
-        <p class="settings-panel-sub">${escapeHtml(TEAM_POS_LABEL[row.position] || row.position)} · ${escapeHtml(teamNameForSeason(row.team))} · £${Number(row.price).toFixed(1)}m</p>
-      </div>
-      <div class="settings-panel-body team-row-menu-body">
-        <section class="settings-section">
+      })
+    );
+    return `<section class="settings-section">
           <div class="settings-section-label">Role</div>
           ${roleItems}
         </section>
         <section class="settings-section">
           <div class="settings-section-label">Squad</div>
-          ${squadItems}
-        </section>
+          ${squadItems.join("")}
+        </section>`;
+  }
+
+  function teamRowMenuHTML(row, slot) {
+    return `<div class="settings-panel-head">
+        <h4 id="team-row-menu-title">${escapeHtml(row.name)}</h4>
+        <p class="settings-panel-sub">${escapeHtml(TEAM_POS_LABEL[row.position] || row.position)} · ${escapeHtml(teamNameForSeason(row.team))} · £${Number(row.price).toFixed(1)}m</p>
+      </div>
+      <div class="settings-panel-body team-row-menu-body">
+        ${teamRowMenuItemsHTML(row, slot, { note: true })}
       </div>`;
   }
 
@@ -6492,7 +6533,10 @@
   }
 
   function teamRowMenuIsOpen() {
-    return !!(el.teamRowMenu && el.teamRowMenu.classList.contains("open"));
+    return (
+      !!(el.teamRowMenu && el.teamRowMenu.classList.contains("open")) ||
+      !!(mobileSheetOpen && mobileSheetKey === "team-row")
+    );
   }
 
   function teamSquadPlayerRowFromNode(node) {
@@ -6504,6 +6548,10 @@
 
   function closeTeamRowMenu({ force } = {}) {
     if (!force && Date.now() - teamRowMenuOpenedAt < 350) return;
+    if (mobileSheetOpen && mobileSheetKey === "team-row") {
+      closeMobileSheet();
+      return;
+    }
     if (el.teamRowMenu) {
       el.teamRowMenu.classList.remove("open");
       el.teamRowMenu.setAttribute("aria-hidden", "true");
@@ -6543,11 +6591,48 @@
     return { x: r.left + 16, y: r.bottom - 4 };
   }
 
+  function openTeamRowSheet(rowEl, row, slot) {
+    hideUiTooltip();
+    if (el.prefsPanel && el.prefsPanel.classList.contains("open")) setPrefsOpen(false);
+    if (el.teamRowMenu && el.teamRowMenu.classList.contains("open")) {
+      el.teamRowMenu.classList.remove("open");
+      el.teamRowMenu.setAttribute("aria-hidden", "true");
+      el.teamRowMenu.innerHTML = "";
+    }
+    clearTeamRowActions();
+    rowEl.classList.add("is-actions-open");
+    teamRowMenuRow = rowEl;
+    teamRowMenuOpenedAt = Date.now();
+    const sub = `${TEAM_POS_LABEL[row.position] || row.position} · ${teamNameForSeason(row.team) || row.team} · £${Number(row.price).toFixed(1)}m`;
+    openMobileSheet({
+      title: row.name,
+      html: `<p class="team-row-sheet-sub">${escapeHtml(sub)}</p>
+        <div class="team-row-menu-body">${teamRowMenuItemsHTML(row, slot, { note: false })}</div>`,
+      key: "team-row",
+    });
+    if (!el.mobileSheetBody) return;
+    el.mobileSheetBody.querySelectorAll(".team-row-menu-item").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        applyTeamRowAction(ev.currentTarget);
+      });
+    });
+  }
+
   function openTeamRowMenuAt(rowEl, e) {
     const code = Number(rowEl.dataset.teamCode) || rowEl.dataset.teamCode;
     const slot = state.teamSquad.find((s) => teamCodeEq(s.code, code));
     const row = slot ? teamPlayerByCode(slot.code) : null;
-    if (!slot || !row || !el.teamRowMenu || !teamRowMenuAllowed()) {
+    if (!slot || !row || !teamRowMenuAllowed()) {
+      closeTeamRowMenu({ force: true });
+      return;
+    }
+    if (preferMobileSheet()) {
+      openTeamRowSheet(rowEl, row, slot);
+      return;
+    }
+    if (!el.teamRowMenu) {
       closeTeamRowMenu({ force: true });
       return;
     }
@@ -6645,10 +6730,21 @@
 
   function teamEmptyRowHTML(pos, starter, enterI) {
     const label = starter ? `Add ${TEAM_POS_LABEL[pos]}` : `Add ${TEAM_POS_LABEL[pos]} to bench`;
+    const metrics = TEAM_STAT_COLS.map(
+      (col, i) => `<td class="col-num col-team-stat${i === 0 ? " sec-divider" : ""} is-blank"></td>`
+    ).join("");
+    const spark = `<td class="col-team-spark is-blank" data-team-spark-toggle="1"></td>`;
+    const heat = teamHeatGws()
+      .map(
+        (gw, i) =>
+          `<td class="team-heat-cell is-blank${i === 0 ? " sec-divider" : ""}${teamHeatAnchorClass(gw)}"></td>`
+      )
+      .join("");
     return `<tr class="team-empty-row" style="--enter-i:${enterI}" data-team-add-pos="${pos}" data-team-add-starter="${starter ? "1" : "0"}" role="button" tabindex="0">
-      <td class="col-player" colspan="${teamDataColCount()}">
+      <td class="col-player">
         <span class="team-add-slot">${iconHTML("plus")}<span>${escapeHtml(label)}</span></span>
       </td>
+      ${metrics}${spark}${heat}
     </tr>`;
   }
 
@@ -6688,30 +6784,29 @@
     if (!el.teamGwNav) return;
     const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
     state.teamGwStart = start;
-    const end = Math.min(SCHEDULE_GW_MAX, start + TEAM_HEAT_N - 1);
     const minStart = SCHEDULE_GW_MIN;
-    const maxStart = Math.max(SCHEDULE_GW_MIN, SCHEDULE_GW_MAX - TEAM_HEAT_N + 1);
-    const range = `GW${start}–GW${end}`;
-    if (NARROW_MQ.matches) {
+    const maxStart = SCHEDULE_GW_MAX;
+    const label = `GW${start}`;
+    if (preferMobileSheet()) {
       const open = !!(mobileSheetOpen && mobileSheetKey === "team-gw");
       el.teamGwNav.innerHTML = `
         <button type="button" class="ghost-btn team-gw-select-btn" id="team-gw-select"
           aria-haspopup="dialog" aria-expanded="${open ? "true" : "false"}"
-          aria-label="Gameweek window, ${range}">
-          <span class="team-gw-range">${range}</span>
+          aria-label="Selected gameweek, ${label}">
+          <span class="team-gw-range">${label}</span>
           ${iconHTML("chevron-down", "page-tab-caret")}
         </button>`;
       return;
     }
     el.teamGwNav.innerHTML = `
       <button type="button" class="ghost-btn icon-only-btn" id="team-gw-prev" ${start <= minStart ? "disabled" : ""} aria-label="Previous gameweek">${iconHTML("chevron-left")}</button>
-      <span class="team-gw-range">${range}</span>
+      <span class="team-gw-range">${label}</span>
       <button type="button" class="ghost-btn icon-only-btn" id="team-gw-next" ${start >= maxStart ? "disabled" : ""} aria-label="Next gameweek">${iconHTML("chevron-right")}</button>`;
   }
 
   function openTeamGwSheet() {
     const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
-    const windowGws = new Set(teamHeatGws());
+    const windowGws = new Set(teamHeatGws().filter(teamHeatGwInSeason));
     const cells = [];
     for (let gw = SCHEDULE_GW_MIN; gw <= SCHEDULE_GW_MAX; gw++) {
       const cls = [
@@ -7072,27 +7167,22 @@
     }
     if (!el.teamSearchBody) return;
     if (!availableVis.length && !stashPins.length) {
-      el.teamSearchBody.innerHTML = `<tr class="team-search-empty"><td class="col-player" colspan="${teamDataColCount()}">No players match that search.</td></tr>`;
+      el.teamSearchBody.innerHTML = teamMessageRowHTML("No players match that search.", "team-search-empty");
       state.teamSearchActiveCode = null;
       if (el.search) el.search.removeAttribute("aria-activedescendant");
       return;
     }
-    const cols = teamDataColCount();
     const rows = [];
     let i = 0;
     if (stashPins.length) {
       if (!pinStashOnly) {
-        rows.push(
-          `<tr class="section-row team-section-row is-pinned-section" style="--enter-i:${i++}"><th colspan="${cols}">${stashPins.length} pinned</th></tr>`
-        );
+        rows.push(teamSectionRowHTML(`${stashPins.length} pinned`, i++, "is-pinned-section"));
       }
       stashPins.forEach((row) => rows.push(teamSearchRowHTML(row, teamSlotByCode(row.code), i++, { pin: true })));
     }
     if (availableVis.length) {
       if (stashPins.length) {
-        rows.push(
-          `<tr class="section-row team-section-row" style="--enter-i:${i++}"><th colspan="${cols}">Matches</th></tr>`
-        );
+        rows.push(teamSectionRowHTML("Matches", i++));
       }
       availableVis.forEach((m) => rows.push(teamSearchRowHTML(m.row, null, i++)));
     }
@@ -7108,9 +7198,7 @@
     for (const pos of TEAM_VIEW_POS_ORDER) {
       const starters = sortTeamSlots(state.teamSquad.filter((s) => s.starter && s.position === pos));
       if (!starters.length && !plan.xiEmpty[pos]) continue;
-      rows.push(
-        `<tr class="section-row team-section-row" style="--enter-i:${enterI++}"><th colspan="${teamDataColCount()}">${TEAM_POS_LABEL[pos]}</th></tr>`
-      );
+      rows.push(teamSectionRowHTML(TEAM_POS_LABEL[pos], enterI++));
       starters.forEach((slot) => {
         rows.push(teamFilledRowHTML(slot, enterI++));
       });
@@ -7121,9 +7209,7 @@
     if (!rows.length) {
       rows.push(teamEmptyRowHTML("GK", true, enterI++));
     }
-    rows.push(
-      `<tr class="section-row team-section-row team-bench-divider" style="--enter-i:${enterI++}"><th colspan="${teamDataColCount()}">Bench</th></tr>`
-    );
+    rows.push(teamSectionRowHTML("Bench", enterI++, "team-bench-divider"));
     const bench = sortTeamSlots(state.teamSquad.filter((s) => !s.starter));
     if (!state.teamSortKey) bench.sort((a, b) => (a.benchOrder || 0) - (b.benchOrder || 0));
     bench.forEach((slot) => {
@@ -7134,8 +7220,7 @@
     });
     if (el.teamSquadHead) {
       el.teamSquadHead.innerHTML = teamHeadRowsHTML(
-        `${teamSortTh("player", "Player", "col-player")}${teamMetricHeadHTML()}${heatHead}`,
-        { noSections: true }
+        `${teamSortTh("player", "Player", "col-player")}${teamMetricHeadHTML()}${heatHead}`
       );
     }
     if (el.teamSquadBody) el.teamSquadBody.innerHTML = rows.join("");
@@ -7151,11 +7236,15 @@
     if (el.teamPickerHead) {
       el.teamPickerHead.innerHTML = teamHeadRowsHTML(
         `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num team-price sec-divider")}${teamSortTh("owned", "Own%", "col-num col-team-owned", "Current FPL ownership")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
-        { price: true, ownership: true, setPieces: true, noSections: true }
+        { price: true, ownership: true, setPieces: true }
       );
     }
     if (!rows.length) {
-      el.teamPickerBody.innerHTML = `<tr class="team-empty-row"><td class="col-player" colspan="${teamDataColCount({ price: true, ownership: true, setPieces: true })}">No players match the current filters.</td></tr>`;
+      el.teamPickerBody.innerHTML = teamMessageRowHTML(
+        "No players match the current filters.",
+        "team-empty-row",
+        { price: true, ownership: true, setPieces: true }
+      );
       return;
     }
     el.teamPickerBody.innerHTML = rows
@@ -7205,7 +7294,6 @@
       renderTeamSquadTables();
     }
     upgradeNativeTitles(el.teamPage);
-    syncTeamGwAnchorLine();
     paintTeamCompareWinners();
   }
 
@@ -7280,6 +7368,13 @@
       renderTeam();
       return;
     }
+    const sparkHit = e.target.closest("td.col-team-spark, th.col-team-spark");
+    if (sparkHit) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleTeamSparkMetric();
+      return;
+    }
     const searchPinRow = e.target.closest("#team-search-results tr.team-search-row[data-team-code]");
     if (searchPinRow) {
       e.preventDefault();
@@ -7346,7 +7441,7 @@
       }
     }
     const filled = teamSquadPlayerRowFromNode(e.target);
-    if (filled && teamRowMenuAllowed() && !hasFineHover()) {
+    if (filled && teamRowMenuAllowed() && preferMobileSheet()) {
       e.stopPropagation();
       if (teamRowMenuIsOpen() && teamRowMenuRow === filled) closeTeamRowMenu({ force: true });
       else openTeamRowMenuAt(filled, e);
@@ -7377,6 +7472,9 @@
     el.teamPage.addEventListener("click", handleTeamUiClick);
     el.teamPage.addEventListener("keydown", handleTeamUiKeydown);
   }
+  if (el.teamToolbarControls) {
+    el.teamToolbarControls.addEventListener("click", handleTeamUiClick);
+  }
   if (el.teamRowMenu) {
     el.teamRowMenu.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -7402,6 +7500,7 @@
   });
   document.addEventListener("click", (e) => {
     if (el.teamRowMenu && el.teamRowMenu.contains(e.target)) return;
+    if (el.mobileSheet && el.mobileSheet.contains(e.target)) return;
     closeTeamRowMenu();
   });
   document.addEventListener(
@@ -7409,6 +7508,8 @@
     (e) => {
       if (teamRowMenuIsOpen()) {
         if (el.teamRowMenu && e.target && el.teamRowMenu.contains(e.target)) return;
+        if (el.mobileSheet && e.target && el.mobileSheet.contains(e.target)) return;
+        if (mobileSheetOpen && mobileSheetKey === "team-row") return;
         closeTeamRowMenu({ force: true });
       }
       if (el.noteContextMenu && el.noteContextMenu.classList.contains("open")) {
@@ -7419,7 +7520,9 @@
     true
   );
   window.addEventListener("resize", () => {
-    closeTeamRowMenu({ force: true });
+    if (!(mobileSheetOpen && mobileSheetKey === "team-row")) {
+      closeTeamRowMenu({ force: true });
+    }
     closeNoteContextMenu();
   });
   if (el.teamSquadView) {
@@ -11069,11 +11172,7 @@ python3 site/annotate_social.py</pre>
   function tabMenuNeedsFixedPosition() {
     // Absolute menus under a scrollable tab strip force overflow:visible,
     // which resets scrollLeft and makes the rightmost tab (Markets) jump away.
-    return (
-      !hasFineHover() ||
-      pageTabsAreScrollable() ||
-      window.matchMedia("(max-width: 1100px)").matches
-    );
+    return !hasFineHover() || pageTabsAreScrollable();
   }
 
   function syncPageTabsScrollHints() {
@@ -12535,6 +12634,9 @@ python3 site/annotate_social.py</pre>
     }
     el.prefsPanel.classList.toggle("open", open);
     el.prefsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      requestAnimationFrame(() => syncThemeSeg(currentThemeMode()));
+    }
   }
 
   function syncColumnsPanelHost() {
@@ -12796,25 +12898,32 @@ python3 site/annotate_social.py</pre>
     upgradeNativeTitles();
     renderPriceIssuesPanel();
     loadNotes();
-    await restoreManagerId();
     // Filters start closed on every page and viewport; the toolbar button opens them.
     el.sidebar.classList.add("collapsed");
     el.sidebarToggle.classList.remove("on");
     el.sidebarToggle.setAttribute("aria-pressed", "false");
+    // Paint Statistics immediately. Manager sync is networked and used to
+    // block this, so first open showed an empty header bar until Players was tapped.
     setView("players");
     buildExpectedCatMenu();
-    // setView renders the OPTA table, so restoring the page comes last.
     setPage(storedPage());
     // Position sliding thumbs after layout (sidebar/page visibility settled).
+    // Rebuild the landing table after the first layout: WebKit often leaves a
+    // sticky-header-only paint until tbody is recreated while the wrap is sized.
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
       syncPageTabsScrollHints();
+      if (state.page === "opta") renderTable();
       requestAnimationFrame(() => {
         syncAllSegThumbs({ animate: false });
         syncPageTabsScrollHints();
+        if (state.page === "opta") renderTable();
       });
     });
-    window.addEventListener("load", () => syncAllSegThumbs({ animate: false }), { once: true });
+    window.addEventListener("load", () => {
+      syncAllSegThumbs({ animate: false });
+      if (state.page === "opta") renderTable();
+    }, { once: true });
     window.addEventListener("pageshow", () => {
       if (el.optaPage) el.optaPage.classList.remove("is-entering", "is-enter-pending");
       syncAllSegThumbs({ animate: false });
@@ -12849,6 +12958,12 @@ python3 site/annotate_social.py</pre>
       });
     }
     bindAllNameColumnSimplifies();
+    try {
+      await restoreManagerId();
+    } catch {
+      syncFplIdStatus();
+    }
+    renderTable();
   }
 
   init();

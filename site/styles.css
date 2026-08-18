@@ -276,7 +276,7 @@ a { color: var(--blue); }
   position: sticky;
   top: 0;
   z-index: 32;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   box-shadow: var(--shadow-sm);
 }
 
@@ -323,91 +323,70 @@ a { color: var(--blue); }
   text-overflow: ellipsis;
 }
 
-/* The brand and action cluster flex equally so the tab group stays optically
-   centred. min-width: max-content is the stopping condition — sides never
-   crush under the tabs; when the row can't fit, tabs wrap (see below). */
+/* Tabs stay on the brand/settings row and scroll under the action cluster
+   instead of wrapping onto a second line. */
 .page-tabs-clip {
-  display: contents;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  align-self: stretch;
+}
+.page-tabs-clip::before,
+.page-tabs-clip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.page-tabs-clip::before {
+  left: 0;
+  background: linear-gradient(
+    to right,
+    hsl(var(--card)) 18%,
+    hsl(var(--card) / 0)
+  );
+}
+.page-tabs-clip::after {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    hsl(var(--card)) 18%,
+    hsl(var(--card) / 0)
+  );
+}
+.page-tabs-clip.has-more-left::before,
+.page-tabs-clip.has-more-right::after {
+  opacity: 1;
 }
 .page-tabs {
   display: flex;
   align-items: stretch;
-  justify-content: center;
+  justify-content: flex-start;
   align-self: stretch;
   gap: 8px;
-  flex: 0 0 auto;
-  min-width: max-content;
-  padding-bottom: 0;
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding-inline: 0 8px;
+  scroll-padding-inline: 12px;
+  touch-action: pan-x;
 }
-@media (max-width: 1100px) {
-  .page-tabs-clip {
-    display: block;
-    order: 3;
-    flex: 1 0 100%;
-    min-width: 0;
-    position: relative;
-  }
-  .page-tabs-clip::before,
-  .page-tabs-clip::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 28px;
-    pointer-events: none;
-    z-index: 3;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-  .page-tabs-clip::before {
-    left: 0;
-    background: linear-gradient(
-      to right,
-      hsl(var(--card)) 18%,
-      hsl(var(--card) / 0)
-    );
-  }
-  .page-tabs-clip::after {
-    right: 0;
-    background: linear-gradient(
-      to left,
-      hsl(var(--card)) 18%,
-      hsl(var(--card) / 0)
-    );
-  }
-  .page-tabs-clip.has-more-left::before,
-  .page-tabs-clip.has-more-right::after {
-    opacity: 1;
-  }
-  .page-tabs {
-    order: unset;
-    flex: none;
-    width: 100%;
-    min-width: 0;
-    justify-content: flex-start;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    margin-bottom: 0;
-    /* Extra end inset so Markets (last tab) can sit fully on-screen and
-       remain tappable instead of flush against the clip edge. */
-    padding-inline: 0 20px;
-    padding-bottom: 0;
-    scroll-padding-inline: 12px;
-    touch-action: pan-x;
-  }
-  .page-tabs .page-tab-btn {
-    touch-action: manipulation;
-  }
-  .page-tabs::-webkit-scrollbar {
-    display: none;
-  }
-  /* Tabs wrap under brand — sticky chrome must clear both rows. */
-  .topbar {
-    top: 104px;
-  }
+.page-tabs .page-tab-btn {
+  touch-action: manipulation;
+}
+.page-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 @media (max-width: 560px) {
@@ -543,9 +522,20 @@ a { color: var(--blue); }
   flex-direction: column;
   gap: 2px;
 }
-.mobile-sheet-body .mobile-sheet-cat-list .page-tab-menu-item {
-  padding: 12px 10px;
-  font-size: 14px;
+.mobile-sheet-body .team-row-sheet-sub {
+  margin: 0 2px 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+}
+.mobile-sheet-body .team-row-menu-body {
+  margin: 0 -14px;
+  padding: 0;
+}
+.mobile-sheet-body .team-row-menu-item {
+  min-height: 44px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 /* Mobile xData: category control lives in the toolbar, left of Search. */
@@ -666,8 +656,7 @@ a { color: var(--blue); }
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 1 1 0;
-  /* Never shrink below brand + season — forces wrap instead of overlap. */
+  flex: none;
   min-width: max-content;
 }
 
@@ -703,11 +692,18 @@ a { color: var(--blue); }
   transition: color 0.15s ease;
 }
 .season-select {
-  width: 102px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: calc(7.5ch + 36px);
+  min-width: 6.75rem;
   height: 28px;
-  padding: 0 22px 0 8px;
+  padding: 0 26px 0 10px;
   color: var(--text-dim);
-  background: hsl(var(--background));
+  background-color: hsl(var(--background));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
   font: inherit;
@@ -715,6 +711,7 @@ a { color: var(--blue); }
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .season-select:hover {
@@ -820,18 +817,12 @@ a { color: var(--blue); }
   color: var(--text-faint);
   line-height: 1.35;
 }
-/* Theme picker is mobile-only (desktop keeps the nav cycle button).
-   Accent swatches stay available in prefs on every viewport. */
-@media (max-width: 720px) {
-  #theme-cycle-btn {
-    display: none !important;
-  }
-  .prefs-tooltips-section {
-    display: none;
-  }
+/* Theme lives in Preferences on every viewport. */
+#theme-cycle-btn {
+  display: none !important;
 }
-@media (min-width: 721px) {
-  .prefs-theme-field {
+@media (max-width: 720px) {
+  .prefs-tooltips-section {
     display: none;
   }
 }
@@ -1180,8 +1171,14 @@ a { color: var(--blue); }
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex: 1 1 0;
+  flex: none;
   min-width: max-content;
+  position: relative;
+  z-index: 4;
+  background: hsl(var(--card));
+  margin-left: -4px;
+  padding-left: 12px;
+  box-shadow: -18px 0 14px -6px hsl(var(--card));
 }
 
 .icon-btn, .ghost-btn {
@@ -1774,13 +1771,16 @@ a { color: var(--blue); }
     order: 4;
     flex: none;
     margin-left: 0;
+    padding-left: 0;
+    box-shadow: none;
   }
   .season-select {
     order: 3;
     margin-left: auto;
     height: 32px;
     font-size: 12px;
-    width: 92px;
+    width: calc(7.5ch + 38px);
+    min-width: 7.25rem;
   }
   .page-tray-btn {
     display: inline-flex;
@@ -2029,14 +2029,13 @@ a { color: var(--blue); }
 #opta-page.is-enter-pending > .compare-wrap {
   opacity: 1;
 }
-#opta-page.is-entering .table-wrap > table > tbody > tr,
-#opta-page .table-wrap > table > tbody > tr {
-  animation: none;
-  opacity: 1;
-  transform: none;
+/* Never put opacity/transform on <tr> — WebKit takes transformed rows out of
+   table layout, which paints as a header-only line until the tbody is rebuilt. */
+#opta-page.is-entering .table-wrap > table > tbody > tr {
+  animation: none !important;
 }
 
-.page-pane.is-entering .table-wrap > table > tbody > tr,
+.page-pane:not(#opta-page).is-entering .table-wrap > table > tbody > tr,
 .page-pane.is-entering .barbell-body > .barbell-row,
 .page-pane.is-entering .barbell-body > .barbell-group,
 .page-pane.is-entering .schedule-grid > .schedule-card,
@@ -2372,20 +2371,19 @@ a { color: var(--blue); }
 
 @media (max-width: 720px) {
   .table-wrap {
-    max-height: calc(100vh - 180px);
-    --name-col-w: 118px;
-    --crest-size: 14px;
-    --badge-size: 14px;
+    max-height: none;
+    --name-col-w: 136px;
+    --crest-size: 22px;
+    --badge-size: 22px;
   }
   .table-wrap > table {
     font-size: 10px;
   }
-  #opta-page.is-enter-pending > .table-wrap,
-  #opta-page.is-entering .table-wrap > table > tbody > tr,
-  #opta-page .table-wrap > table > tbody > tr {
-    animation: none;
+  #opta-page.is-enter-pending > .table-wrap {
     opacity: 1;
-    transform: none;
+  }
+  #opta-page.is-entering .table-wrap > table > tbody > tr {
+    animation: none !important;
   }
   .table-wrap > table > thead tr.section-row th {
     height: 16px;
@@ -2418,7 +2416,7 @@ a { color: var(--blue); }
     font-size: 11.5px;
   }
   .table-wrap .player-cell {
-    --crest-gap: 6px;
+    --crest-gap: 8px;
   }
   .table-wrap .player-cell-sub,
   .table-wrap .player-cell-sub .team-tag {
@@ -2432,8 +2430,8 @@ a { color: var(--blue); }
     font-size: 10px;
   }
   .table-wrap .team-tag .badge-img {
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -2529,7 +2527,8 @@ tbody td.col-player {
 .table-wrap > table > thead tr:not(.section-row) th.col-player,
 .table-wrap > table > thead tr:not(.section-row) th.col-name,
 .table-wrap > table > tbody td.col-player,
-.table-wrap > table > tbody td.col-name {
+.table-wrap > table > tbody td.col-name,
+.table-wrap > table > tbody th.col-player {
   position: sticky;
   left: 0;
   z-index: 4;
@@ -4028,6 +4027,10 @@ html[data-page="ownership"] .layout .main {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  #rankings-page {
+    --badge-size: 22px;
+  }
+
   .rankings-card {
     padding: 12px 12px 8px;
   }
@@ -4600,7 +4603,7 @@ html[data-page="ownership"] .layout .main {
    of restacking the track under Diff (which caused overlap). */
 @media (max-width: 720px) {
   .barbell-scroll {
-    max-height: calc(100vh - 280px);
+    max-height: none;
   }
   .barbell-wrap {
     --barbell-name-w: 120px;
@@ -8490,7 +8493,7 @@ html[data-page="team"] .layout .main {
   gap: 2px;
 }
 .team-gw-range {
-  min-width: 7.6em;
+  min-width: 3.2em;
   padding: 0 4px;
   text-align: center;
   font-size: 13px;
@@ -8642,18 +8645,33 @@ html[data-page="team"] .layout .main {
   order: 2;
 }
 #team-squad-view {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
   max-width: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: none;
   touch-action: pan-x pan-y;
   padding-bottom: 8px;
 }
+#team-squad-view[hidden],
+#team-page.is-picking #team-squad-view {
+  display: none !important;
+}
 #team-search-results {
+  flex: 0 0 auto;
+  min-height: min-content;
   margin-bottom: 12px;
+}
+#team-squad-view:has(#team-search-results:not([hidden])) {
+  overflow-y: auto;
+}
+#team-squad-view:has(#team-search-results:not([hidden])) > .team-table-wrap {
+  flex: 0 0 auto;
+  min-height: auto;
 }
 #team-search-results[hidden] {
   display: none !important;
@@ -8663,6 +8681,9 @@ html[data-page="team"] .layout .main {
   border: none;
   box-shadow: none;
   background: transparent;
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
 }
 #team-search-results .table-wrap > table > thead {
   position: static;
@@ -8697,7 +8718,8 @@ html[data-page="team"] .layout .main {
 #team-search-results.is-pin-stash .compare-header {
   background: hsl(var(--blue-hsl) / 0.18);
 }
-#team-search-results tbody tr.team-section-row.is-pinned-section th {
+#team-search-results tbody tr.team-section-row.is-pinned-section th.col-player,
+#team-search-results tbody tr.team-section-row.is-pinned-section td.team-section-fill {
   background: hsl(var(--blue-hsl) / 0.16);
   color: hsl(var(--blue-hsl));
   font-weight: 700;
@@ -8778,23 +8800,27 @@ html[data-page="team"] .layout .main {
 }
 #team-page .team-table-wrap {
   position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
   max-height: none;
-  overflow: visible;
-  width: max-content;
-  min-width: 100%;
+  overflow: auto;
   margin-bottom: 0;
 }
-#team-page .team-table-wrap.has-gw-line::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--team-gw-line-x);
-  width: 2px;
-  margin-left: -2px;
-  background: color-mix(in srgb, var(--text) 32%, hsl(var(--card)));
-  pointer-events: none;
-  z-index: 1;
+#team-page #team-search-results .team-table-wrap,
+#team-page #team-compare-wrap .team-table-wrap {
+  flex: none;
+  min-height: auto;
+  max-height: none;
+  height: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+#team-page .team-table-wrap > table {
+  width: max-content;
+  min-width: 100%;
 }
 #team-page .player-cell {
   --crest-size: 28px;
@@ -8820,6 +8846,29 @@ html[data-page="team"] .layout .main {
   padding-bottom: 0;
   overflow: hidden;
   z-index: 5;
+}
+#team-page tbody td.col-player,
+#team-page thead th.col-player,
+#team-page tbody tr.team-section-row th.col-player,
+#team-picker-view tbody td.col-player {
+  box-shadow: none;
+}
+#team-page tbody td.col-player::after,
+#team-page thead tr:not(.section-row) th.col-player::after,
+#team-page tbody tr.team-section-row th.col-player::after,
+#team-page thead tr.section-row th.sec-sticky-lead::after,
+#team-picker-view tbody td.col-player::after,
+#team-picker-view thead tr:not(.section-row) th.col-player::after,
+#team-picker-view thead tr.section-row th.sec-sticky-lead::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+  z-index: 1;
 }
 #team-page thead th.col-player {
   z-index: 8;
@@ -8970,10 +9019,13 @@ html[data-page="team"] .layout .main {
   background: hsl(var(--muted));
   color: var(--text-dim);
 }
-#team-page tbody tr.team-section-row th {
+#team-page tbody tr.team-section-row th.col-player {
   position: sticky;
   left: 0;
-  z-index: 3;
+  z-index: 5;
+  width: var(--name-col-w, 170px);
+  min-width: var(--name-col-w, 170px);
+  max-width: var(--name-col-w, 170px);
   height: 28px;
   padding: 6px 16px;
   background: color-mix(in srgb, hsl(var(--muted)) 72%, hsl(var(--card)));
@@ -8985,16 +9037,26 @@ html[data-page="team"] .layout .main {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border-bottom: 1px solid var(--border);
+  box-shadow: none;
+  cursor: default;
+}
+#team-page tbody tr.team-section-row td.team-section-fill {
+  position: relative;
+  z-index: 0;
+  padding: 0;
+  height: 28px;
+  background: color-mix(in srgb, hsl(var(--muted)) 72%, hsl(var(--card)));
+  border-bottom: 1px solid var(--border);
   cursor: default;
 }
 #team-page thead tr.section-row th.sec-sticky-lead {
-  padding: 4px 16px;
-  text-align: left;
+  padding: 0;
+  box-shadow: none;
 }
-#team-page tbody tr.team-bench-divider th {
+#team-page tbody tr.team-bench-divider th.col-player,
+#team-page tbody tr.team-bench-divider td.team-section-fill {
   height: 32px;
   padding-top: 10px;
-  margin-top: 0;
   background: hsl(var(--muted) / 0.72);
   color: var(--text);
   border-top: 2px solid var(--border);
@@ -9082,11 +9144,14 @@ html[data-page="team"] .layout .main {
   text-align: center;
   padding-left: 8px;
   padding-right: 8px;
-  cursor: default;
-}
-#team-page thead th.col-team-spark,
-#team-picker-view thead th.col-team-spark {
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.team-spark-empty {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 .team-spark {
   display: block;
@@ -9150,30 +9215,44 @@ html[data-page="team"] .layout .main {
   cursor: pointer;
 }
 #team-page .team-empty-row td.col-player {
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  position: static;
-  box-shadow: none;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background-color: hsl(var(--card));
   padding: 0 16px;
+  height: var(--team-row-h);
+  overflow: hidden;
+}
+.team-add-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.team-add-slot > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#team-page tbody tr.team-empty-row td.team-section-fill,
+#team-page tbody tr.team-search-empty td.team-section-fill,
+#team-picker-view tbody tr.team-empty-row td.team-section-fill {
+  padding: 0;
   height: var(--team-row-h);
 }
 #team-page .team-empty-row:focus-visible,
 #team-picker-view .team-picker-row:focus-visible {
   outline: none;
 }
-#team-page .team-empty-row:focus-visible td,
+#team-page .team-empty-row:focus-visible td.col-player,
 #team-picker-view .team-picker-row:focus-visible td.col-player {
   box-shadow: var(--focus-ring);
-}
-.team-add-slot {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-dim);
-  font-family: var(--sans);
-  font-size: 13.5px;
-  font-weight: 550;
 }
 .team-add-slot .icon {
   width: 16px;
@@ -9184,7 +9263,7 @@ html[data-page="team"] .layout .main {
   color: var(--text);
 }
 #team-picker-view {
-  --name-col-w: 240px;
+  --name-col-w: 172px;
   --crest-size: 28px;
   display: flex;
   flex-direction: column;
@@ -9193,7 +9272,7 @@ html[data-page="team"] .layout .main {
   width: 100%;
   max-width: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
@@ -9203,21 +9282,25 @@ html[data-page="team"] .layout .main {
 #team-page.is-picking .team-header h2 {
   color: var(--text);
 }
+#team-page.is-picking #team-compare-wrap,
+#team-page.is-picking #team-sub-bar {
+  display: none !important;
+}
 #team-picker-view .team-table-wrap.team-picker-table-wrap {
-  --name-col-w: 240px;
+  --name-col-w: 172px;
   --crest-size: 28px;
   --team-price-w: 44px;
   --team-owned-w: 54px;
-  flex: none;
+  flex: 1 1 auto;
   min-height: 0;
   max-height: none;
   margin-bottom: 0;
-  /* Don't stretch to the pane — fixed metric cols stay tight. */
-  width: max-content;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  overflow: auto;
 }
-#team-picker-view .team-picker-table-wrap > table {
+#team-picker-view .team-table-wrap.team-picker-table-wrap > table {
   table-layout: fixed;
   width: max-content;
   min-width: 0;
@@ -9233,11 +9316,43 @@ html[data-page="team"] .layout .main {
   font-size: 13.5px;
 }
 @media (max-width: 720px) {
+  /* Title + subtitle scroll away under the sticky nav/toolbar; the table
+     then sits where the heading was. Nested max-height scrollers would
+     freeze that chrome in place. */
+  html[data-page="team"] .layout .main {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
   #team-page {
     --name-col-w: 180px;
     --crest-size: 22px;
     --crest-gap: 8px;
     --team-row-h: 42px;
+    overflow: visible;
+    flex: 1 0 auto;
+    min-height: min-content;
+    height: auto;
+  }
+  #team-page .page-header,
+  #team-page .team-budget-bar {
+    flex: 0 0 auto;
+  }
+  #team-squad-view,
+  #team-picker-view {
+    overflow: visible;
+    flex: 1 0 auto;
+    min-height: min-content;
+  }
+  #team-squad-view:has(#team-search-results:not([hidden])) {
+    overflow: visible;
+  }
+  #team-page .team-table-wrap,
+  #team-picker-view .team-table-wrap.team-picker-table-wrap {
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
   }
   #team-page .player-cell {
     --crest-size: 22px;
@@ -9247,7 +9362,7 @@ html[data-page="team"] .layout .main {
   }
   #team-picker-view,
   .team-picker-table-wrap {
-    --name-col-w: 160px;
+    --name-col-w: 128px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
