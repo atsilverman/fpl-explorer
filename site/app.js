@@ -10305,7 +10305,7 @@ python3 site/annotate_social.py</pre>
     // iOS/WebKit often applies tr { opacity:0 } from animation-fill backwards
     // and never plays the animation, so Statistics stays blank until a
     // Teams/Players re-render recreates the rows.
-    if (pane.id === "opta-page" && NARROW_MQ.matches) return;
+    if (pane.id === "opta-page" && (NARROW_MQ.matches || preferMobileSheet())) return;
 
     const slowEnter = pane.id === "schedule-page";
     const rankingsEnter = pane.id === "rankings-page";
@@ -12647,7 +12647,17 @@ python3 site/annotate_social.py</pre>
     const active = container.querySelector(":scope > .tab-btn.active, :scope > button.active");
     if (!active || !active.offsetWidth) {
       thumb.classList.remove("is-ready");
+      const visible = !!(container.offsetWidth && container.offsetParent);
+      if (!visible || container._thumbRetry) return;
+      container._thumbRetry = requestAnimationFrame(() => {
+        container._thumbRetry = 0;
+        syncSegThumb(container, { animate: false });
+      });
       return;
+    }
+    if (container._thumbRetry) {
+      cancelAnimationFrame(container._thumbRetry);
+      container._thumbRetry = 0;
     }
 
     // Use offset* (layout CSS px) — getBoundingClientRect drifts under html zoom.
@@ -12703,6 +12713,14 @@ python3 site/annotate_social.py</pre>
         syncAllSegThumbs({ animate: false });
         syncPageTabsScrollHints();
       });
+    });
+    window.addEventListener("load", () => syncAllSegThumbs({ animate: false }), { once: true });
+    window.addEventListener("pageshow", () => {
+      if (el.optaPage) el.optaPage.classList.remove("is-entering", "is-enter-pending");
+      syncAllSegThumbs({ animate: false });
+    });
+    [50, 250].forEach((ms) => {
+      window.setTimeout(() => syncAllSegThumbs({ animate: false }), ms);
     });
     if (typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(() => syncAllSegThumbs({ animate: false }));

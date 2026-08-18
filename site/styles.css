@@ -934,12 +934,15 @@ a { color: var(--blue); }
   transition: color 0.18s ease;
 }
 .tab-btn.active {
-  background: transparent;
+  background: hsl(var(--blue-hsl) / 0.12);
   color: hsl(var(--blue-hsl) / 0.95);
   box-shadow: none;
 }
 .tab-btn.active .icon {
   color: hsl(var(--blue-hsl) / 0.95);
+}
+.tabs:has(.seg-thumb.is-ready) .tab-btn.active {
+  background: transparent;
 }
 
 .segmented {
@@ -978,12 +981,15 @@ a { color: var(--blue); }
   transition: color 0.18s ease;
 }
 .segmented button.active {
-  background: transparent;
+  background: hsl(var(--blue-hsl) / 0.12);
   color: hsl(var(--blue-hsl) / 0.95);
   box-shadow: none;
 }
 .segmented button.active .icon {
   color: hsl(var(--blue-hsl) / 0.95);
+}
+.segmented:has(.seg-thumb.is-ready) button.active {
+  background: transparent;
 }
 .segmented button:focus {
   outline: none;
@@ -2322,7 +2328,8 @@ a { color: var(--blue); }
     font-size: 10.5px;
   }
   #opta-page.is-enter-pending > .table-wrap,
-  #opta-page.is-entering .table-wrap > table > tbody > tr {
+  #opta-page.is-entering .table-wrap > table > tbody > tr,
+  #opta-page .table-wrap > table > tbody > tr {
     animation: none;
     opacity: 1;
     transform: none;
