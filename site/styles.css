@@ -189,12 +189,12 @@ html, body {
 
 @media (max-width: 720px) {
   html, body {
-    font-size: 12.5px;
+    font-size: 12px;
     overflow-x: clip;
     overscroll-behavior-x: none;
   }
   :root {
-    --badge-size: 18px;
+    --badge-size: 16px;
   }
 }
 
@@ -1770,6 +1770,9 @@ a { color: var(--blue); }
     display: inline-flex;
     height: 32px;
   }
+  #page-notes {
+    display: none !important;
+  }
   .page-nav .icon-only-btn {
     width: 32px;
     height: 32px;
@@ -2325,7 +2328,7 @@ a { color: var(--blue); }
     --badge-size: 14px;
   }
   .table-wrap > table {
-    font-size: 10.5px;
+    font-size: 10px;
   }
   #opta-page.is-enter-pending > .table-wrap,
   #opta-page.is-entering .table-wrap > table > tbody > tr,
@@ -2335,14 +2338,14 @@ a { color: var(--blue); }
     transform: none;
   }
   .table-wrap > table > thead tr.section-row th {
-    height: 18px;
-    padding: 2px 6px;
-    font-size: 9px;
+    height: 16px;
+    padding: 2px 5px;
+    font-size: 8.5px;
     letter-spacing: 0.05em;
   }
   .table-wrap > table > thead tr:not(.section-row) th {
-    padding: 6px 6px;
-    font-size: 10.5px;
+    padding: 5px 5px;
+    font-size: 10px;
   }
   .table-wrap > table > thead tr:not(.section-row) th,
   .table-wrap > table > tbody td {
@@ -2350,8 +2353,8 @@ a { color: var(--blue); }
     padding-right: 6px;
   }
   .table-wrap > table > tbody td {
-    padding-top: 7px;
-    padding-bottom: 7px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
   .table-wrap > table > thead tr:not(.section-row) th.col-name,
   .table-wrap > table > thead tr:not(.section-row) th.col-team,
@@ -2362,14 +2365,14 @@ a { color: var(--blue); }
     padding-left: 10px;
   }
   .table-wrap .player-name {
-    font-size: 12px;
+    font-size: 11.5px;
   }
   .table-wrap .player-cell {
     --crest-gap: 6px;
   }
   .table-wrap .player-cell-sub,
   .table-wrap .player-cell-sub .team-tag {
-    font-size: 9.5px;
+    font-size: 9px;
   }
   .table-wrap .pos-badge {
     font-size: 9px;
@@ -3232,6 +3235,16 @@ html[data-page="ownership"] .layout .main {
 .ownership-trending-toggle .btn-label {
   display: inline;
 }
+.ownership-trend-window-seg {
+  width: 100%;
+  margin-top: 10px;
+}
+.ownership-trend-window-seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+}
 .ownership-trend-threshold-values {
   margin-top: 10px;
 }
@@ -3385,16 +3398,11 @@ html[data-page="ownership"] .layout .main {
 }
 .ownership-line {
   fill: none;
-  stroke: var(--text-dim);
-  stroke-width: 1.35;
+  stroke: var(--text-faint);
+  stroke-width: 1.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.55;
-  pointer-events: none;
-}
-.ownership-dot {
-  fill: var(--text-dim);
-  opacity: 0.55;
+  opacity: 0.28;
   pointer-events: none;
 }
 .ownership-line.is-active {
@@ -3402,33 +3410,19 @@ html[data-page="ownership"] .layout .main {
   stroke-width: 2.4;
   opacity: 1;
 }
-.ownership-dot.is-active {
-  fill: var(--ownership-accent, hsl(var(--blue-hsl)));
-  opacity: 1;
-}
 .ownership-chart-wrap.is-trending .ownership-line.is-riser {
   stroke: hsl(var(--positive));
-  opacity: 0.85;
-}
-.ownership-chart-wrap.is-trending .ownership-dot.is-riser {
-  fill: hsl(var(--positive));
   opacity: 0.85;
 }
 .ownership-chart-wrap.is-trending .ownership-line.is-faller {
   stroke: hsl(var(--negative));
   opacity: 0.85;
 }
-.ownership-chart-wrap.is-trending .ownership-dot.is-faller {
-  fill: hsl(var(--negative));
-  opacity: 0.85;
+.ownership-chart-wrap.is-trending .ownership-line.is-flat-trend {
+  opacity: 0.16;
 }
-.ownership-chart-wrap.is-trending .ownership-line.is-flat-trend,
-.ownership-chart-wrap.is-trending .ownership-dot.is-flat-trend {
-  opacity: 0.22;
-}
-.ownership-line.is-dim,
-.ownership-dot.is-dim {
-  opacity: 0.12;
+.ownership-line.is-dim {
+  opacity: 0.1;
 }
 .ownership-hover-guide {
   stroke: var(--text-faint);
@@ -9155,7 +9149,7 @@ html[data-page="team"] .layout .main {
     --crest-size: 22px;
   }
   #team-page .player-cell .player-name {
-    font-size: 12.5px;
+    font-size: 12px;
   }
   #team-picker-view,
   .team-picker-table-wrap {

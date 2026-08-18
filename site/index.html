@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=412" />
+<link rel="stylesheet" href="styles.css?v=415" />
 <script>
 (() => {
   try {
@@ -605,11 +605,16 @@
 
     <div class="filter-group" id="ownership-trending-group" style="display:none;">
       <h3>Trend colors</h3>
-      <button id="ownership-trending-toggle" class="ghost-btn icon-label-btn ownership-trending-toggle" type="button"
-        title="Color ownership lines by rising or falling trend" aria-label="Trending" aria-pressed="false">
+      <button id="ownership-trending-toggle" class="ghost-btn icon-label-btn ownership-trending-toggle on" type="button"
+        title="Color ownership lines by rising or falling trend" aria-label="Trending" aria-pressed="true">
         <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
         <span class="btn-label">Trending</span>
       </button>
+      <div class="segmented ownership-trend-window-seg" id="ownership-trend-window-seg" role="group" aria-label="Trend window">
+        <button type="button" data-trend-window="1" class="active" title="Change since the last check-in (will be ~24h once daily snapshots exist)">Last</button>
+        <button type="button" data-trend-window="3" title="Change over the last 3 check-ins">Last 3</button>
+        <button type="button" data-trend-window="7" title="Change over the last 7 check-ins">Last 7</button>
+      </div>
       <div class="slider-values ownership-trend-threshold-values">
         <span id="ownership-trend-threshold-label"></span>
       </div>
@@ -1110,10 +1115,10 @@
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
 <script src="data.js?v=28"></script>
-<script src="social_data.js?v=13"></script>
-<script src="markets_data.js?v=5"></script>
-<script src="ownership_data.js?v=2"></script>
-<script src="app.js?v=419"></script>
+<script src="social_data.js?v=14"></script>
+<script src="markets_data.js?v=6"></script>
+<script src="ownership_data.js?v=3"></script>
+<script src="app.js?v=422"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

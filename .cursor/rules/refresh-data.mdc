@@ -1,0 +1,26 @@
+---
+description: When the user says refresh data, pull Ownership, Feed, and Markets caches
+alwaysApply: true
+---
+
+# Refresh data
+
+If the user says **refresh data** (or "check in", "refresh ownership/feed/markets"), run the live cache pulls. Do not wait for extra confirmation.
+
+Default **refresh data** = all three, in parallel where possible:
+
+```bash
+python3 site/fetch_ownership.py
+python3 site/fetch_social.py && python3 site/annotate_social.py
+python3 site/fetch_markets.py
+```
+
+Scripts load API keys from the project-root `.env` (`X_BEARER_TOKEN`, `ODDS_API_KEY`, LLM keys). Need network. Annotate only after social fetch succeeds.
+
+Then bump the matching cache-bust query params in `site/index.html` (`social_data.js?v=`, `markets_data.js?v=`, `ownership_data.js?v=`). Do not bump `app.js` / `styles.css` unless those files also changed.
+
+Do **not**:
+- Run `site/build.py` unless they also want a CSV/Statistics rebuild
+- Commit or deploy unless they ask
+
+Subset phrases: "refresh ownership" / "refresh feed" / "refresh markets" run only that pipeline.

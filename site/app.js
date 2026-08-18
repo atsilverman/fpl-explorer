@@ -72,6 +72,8 @@
   const OWNERSHIP_FILTER_MAX = 100;
   const OWNERSHIP_TREND_THRESHOLD_DEFAULT = 0.5;
   const OWNERSHIP_TREND_THRESHOLD_MAX = 5;
+  // Lookback in check-ins (1 / 3 / 7). Maps to ~1 / 3 / 7 days once snapshots are daily.
+  const OWNERSHIP_TREND_WINDOW_DEFAULT = 1;
   // Statistics-page fixture tooltip shading — wider than the players Enhance
   // default (10%) so tough/soft opponents read clearly in fixture tips.
   const FIXTURE_TT_ENHANCE_PCT = 30;
@@ -540,8 +542,9 @@
     teamHoverCompareCode: null,
     teamSearchActiveCode: null,
     teamMode: "planner", // planner | actual
-    ownershipTrending: false,
+    ownershipTrending: true,
     ownershipTrendThreshold: OWNERSHIP_TREND_THRESHOLD_DEFAULT,
+    ownershipTrendWindow: OWNERSHIP_TREND_WINDOW_DEFAULT,
     actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
     notes: [],
     notesGroupBy: "none", // none | player | team
@@ -675,6 +678,7 @@
     ownershipCountLabel: $("#ownership-count-label"),
     ownershipTrendingGroup: $("#ownership-trending-group"),
     ownershipTrendingToggle: $("#ownership-trending-toggle"),
+    ownershipTrendWindowSeg: $("#ownership-trend-window-seg"),
     ownershipTrendThreshold: $("#ownership-trend-threshold"),
     ownershipTrendThresholdFill: $("#ownership-trend-threshold-fill"),
     ownershipTrendThresholdLabel: $("#ownership-trend-threshold-label"),
@@ -945,6 +949,7 @@
     if (state.priceMin !== defaultMinPrice() || state.priceMax !== bounds.price.max) return true;
     if (state.ownedMin !== OWNERSHIP_FILTER_DEFAULT) return true;
     if (state.ownershipTrendThreshold !== OWNERSHIP_TREND_THRESHOLD_DEFAULT) return true;
+    if (state.ownershipTrendWindow !== OWNERSHIP_TREND_WINDOW_DEFAULT) return true;
     if (state.minsMin !== defaultMinMinutes() || state.minsMax !== bounds.mins.max) return true;
     if (!state.hideDeparted) return true;
     if (state.setPieceTakersOnly) return true;
@@ -975,6 +980,8 @@
     state.priceMax = bounds.price.max;
     state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
     state.ownershipTrendThreshold = OWNERSHIP_TREND_THRESHOLD_DEFAULT;
+    state.ownershipTrendWindow = OWNERSHIP_TREND_WINDOW_DEFAULT;
+    syncOwnershipTrendWindowUI();
     state.minsMin = defaultMinMinutes();
     state.minsMax = bounds.mins.max;
     state.search = "";
@@ -3137,7 +3144,7 @@
       const reading = [
         spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines; hover colorizes the club."),
         spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
-        spitRow(spitRank("Trending"), "Toolbar toggle colors lines by ownership rise/fall and lists Risers / Fallers above the chart."),
+        spitRow(spitRank("Trending"), "Filters → Trend colors. Window is last check-in, last 3, or last 7 (will be ~days once snapshots are daily). Colors lines and lists Risers / Fallers by change over that window."),
         spitRow(spitRank("Axis"), "X is a manual snapshot date, not a gameweek. Run python3 site/fetch_ownership.py to add a check-in."),
         spitRow(spitRank(mobile ? "Tap" : "Hover"), mobile
           ? "Tap a line for the player/club card (photo, badge, price, owned %, change)."
@@ -9154,6 +9161,11 @@ python3 site/annotate_social.py</pre>
     return Math.round((Number(curr) - Number(prev)) * 10) / 10;
   }
 
+  function ownershipTrendWindowSpan() {
+    const n = Number(state.ownershipTrendWindow);
+    return n === 3 || n === 7 ? n : 1;
+  }
+
   function ownershipTrendScore(series) {
     const owned = (series.points || [])
       .filter((pt) => pt && pt.owned != null && !Number.isNaN(Number(pt.owned)))
@@ -9166,16 +9178,16 @@ python3 site/annotate_social.py</pre>
         current: owned.length ? owned[owned.length - 1] : null,
       };
     }
-    const recent = Math.round((owned[owned.length - 1] - owned[owned.length - 2]) * 10) / 10;
-    const net = Math.round((owned[owned.length - 1] - owned[0]) * 10) / 10;
-    const current = owned[owned.length - 1];
-    const recentThreshold = state.ownershipTrendThreshold;
-    const netThreshold = recentThreshold * 2;
+    const last = owned[owned.length - 1];
+    const span = ownershipTrendWindowSpan();
+    const fromIdx = Math.max(0, owned.length - 1 - span);
+    const recent = Math.round((last - owned[fromIdx]) * 10) / 10;
+    const net = Math.round((last - owned[0]) * 10) / 10;
+    const current = last;
+    const threshold = state.ownershipTrendThreshold;
     let kind = "flat";
-    if (recent >= recentThreshold) kind = "riser";
-    else if (recent <= -recentThreshold) kind = "faller";
-    else if (Math.abs(recent) < recentThreshold && net >= netThreshold) kind = "riser";
-    else if (Math.abs(recent) < recentThreshold && net <= -netThreshold) kind = "faller";
+    if (recent >= threshold) kind = "riser";
+    else if (recent <= -threshold) kind = "faller";
     return { kind, recent, net, current };
   }
 
@@ -9229,6 +9241,16 @@ python3 site/annotate_social.py</pre>
     if (el.ownershipTrendCards) {
       el.ownershipTrendCards.hidden = state.page !== "ownership";
     }
+    syncOwnershipTrendWindowUI();
+  }
+
+  function syncOwnershipTrendWindowUI({ animate = false } = {}) {
+    if (!el.ownershipTrendWindowSeg) return;
+    const cur = String(ownershipTrendWindowSpan());
+    el.ownershipTrendWindowSeg.querySelectorAll("[data-trend-window]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.trendWindow === cur);
+    });
+    syncSegThumb(el.ownershipTrendWindowSeg, { animate });
   }
 
   function renderOwnershipTrendCards(series) {
@@ -9611,25 +9633,17 @@ python3 site/annotate_social.py</pre>
     ownershipHoverIndex = index;
     if (!el.ownershipChart) return;
     const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
-    const trending = !!state.ownershipTrending;
     const accent = ownershipAccentForSeries(series);
-    el.ownershipChart.querySelectorAll(".ownership-line, .ownership-dot").forEach((node) => {
+    el.ownershipChart.querySelectorAll(".ownership-line").forEach((node) => {
       const match = node.getAttribute("data-key") === key;
       node.classList.toggle("is-active", !!key && match);
       node.classList.toggle("is-dim", !!key && !match);
       if (match && accent) {
         node.style.setProperty("--ownership-accent", accent);
-        if (node.tagName.toLowerCase() === "path") node.style.stroke = accent;
-        else node.style.fill = accent;
-      } else if (!trending) {
-        node.style.removeProperty("--ownership-accent");
-        node.style.stroke = "";
-        node.style.fill = "";
+        node.style.stroke = accent;
       } else {
-        // Keep CSS trend classes; clear hover overrides when not the active series.
         node.style.removeProperty("--ownership-accent");
         node.style.stroke = "";
-        node.style.fill = "";
       }
     });
     if (el.ownershipTrendCards) {
@@ -9639,7 +9653,7 @@ python3 site/annotate_social.py</pre>
     }
     const svg = el.ownershipChart.querySelector("svg");
     if (svg && key) {
-      svg.querySelectorAll(`.ownership-line[data-key="${key}"], .ownership-dot[data-key="${key}"]`).forEach((node) => {
+      svg.querySelectorAll(`.ownership-line[data-key="${key}"]`).forEach((node) => {
         svg.appendChild(node);
       });
     }
@@ -9654,13 +9668,11 @@ python3 site/annotate_social.py</pre>
     }
   }
 
-  function hitTestOwnership(px, py) {
-    const series = ownershipSeriesCache;
-    const layout = ownershipLayout;
-    if (!series.length || !layout) return null;
+  function hitTestOwnershipAmong(candidates, px, py) {
+    if (!candidates.length || !ownershipLayout) return null;
     let bestPoint = null;
     let bestPointD = OWNERSHIP_POINT_HIT;
-    series.forEach((s) => {
+    candidates.forEach((s) => {
       (s._drawn || []).forEach((line) => {
         line.forEach((pt) => {
           const d = Math.hypot(px - pt.x, py - pt.y);
@@ -9674,7 +9686,7 @@ python3 site/annotate_social.py</pre>
     if (bestPoint) return bestPoint;
     let bestLine = null;
     let bestLineD = OWNERSHIP_LINE_HIT;
-    series.forEach((s) => {
+    candidates.forEach((s) => {
       (s._drawn || []).forEach((line) => {
         for (let i = 1; i < line.length; i++) {
           const a = line[i - 1];
@@ -9696,6 +9708,17 @@ python3 site/annotate_social.py</pre>
       });
     });
     return bestLine;
+  }
+
+  function hitTestOwnership(px, py) {
+    const series = ownershipSeriesCache;
+    if (!series.length || !ownershipLayout) return null;
+    if (state.ownershipTrending) {
+      const trend = series.filter((s) => s._trendCard);
+      const hit = hitTestOwnershipAmong(trend, px, py);
+      if (hit) return hit;
+    }
+    return hitTestOwnershipAmong(series, px, py);
   }
 
   function ownershipPointerToSvg(evt) {
@@ -9845,34 +9868,27 @@ python3 site/annotate_social.py</pre>
       return " is-flat-trend";
     };
 
-    const lines = series
-      .map((s) =>
-        s._drawn
-          .map((line) => {
-            if (line.length === 1) return "";
-            return `<path class="ownership-line${trendClass(s)}" data-key="${escapeHtml(s.key)}" d="${pathFromPts(line)}" />`;
-          })
-          .join("")
-      )
-      .join("");
+    const lineMarkup = (list) =>
+      list
+        .map((s) =>
+          (s._drawn || [])
+            .map((line) => {
+              if (line.length === 1) return "";
+              return `<path class="ownership-line${trendClass(s)}" data-key="${escapeHtml(s.key)}" d="${pathFromPts(line)}" />`;
+            })
+            .join("")
+        )
+        .join("");
 
-    const dots = series
-      .map((s) =>
-        s._drawn
-          .flat()
-          .map(
-            (pt) =>
-              `<circle class="ownership-dot${trendClass(s)}" data-key="${escapeHtml(s.key)}" cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="2.1" />`
-          )
-          .join("")
-      )
-      .join("");
+    const trendingOn = !!state.ownershipTrending;
+    const fieldSeries = trendingOn ? series.filter((s) => !s._trendCard) : series;
+    const trendSeries = trendingOn ? series.filter((s) => s._trendCard) : [];
+    const lines = lineMarkup(fieldSeries) + lineMarkup(trendSeries);
 
     el.ownershipChart.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" aria-hidden="true">
         ${grid}
         <line class="ownership-hover-guide" x1="0" x2="0" y1="${pad.top}" y2="${h - pad.bottom}" style="display:none" />
         ${lines}
-        ${dots}
         ${xLabels}
       </svg>`;
 
@@ -10274,7 +10290,9 @@ python3 site/annotate_social.py</pre>
   function storedPage() {
     try {
       const saved = localStorage.getItem(PAGE_KEY);
-      return PAGES.includes(saved) ? saved : "opta";
+      const page = PAGES.includes(saved) ? saved : "opta";
+      if (page === "notes" && NARROW_MQ.matches) return "opta";
+      return page;
     } catch {
       return "opta";
     }
@@ -10538,6 +10556,7 @@ python3 site/annotate_social.py</pre>
   }
 
   function setPage(page) {
+    if (page === "notes" && NARROW_MQ.matches) page = "opta";
     const prev = state.page;
     state.page = page;
     try {
@@ -10581,6 +10600,7 @@ python3 site/annotate_social.py</pre>
     document.documentElement.dataset.page = page;
     syncPageTrayTrigger();
     setPageTrayOpen(false);
+    if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
@@ -10733,6 +10753,20 @@ python3 site/annotate_social.py</pre>
     el.ownershipTrendingToggle.addEventListener("click", () => {
       state.ownershipTrending = !state.ownershipTrending;
       syncOwnershipTrendingUI();
+      if (state.page === "ownership") renderOwnership();
+    });
+  }
+  if (el.ownershipTrendWindowSeg) {
+    el.ownershipTrendWindowSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-trend-window]");
+      if (!btn) return;
+      const next = Number(btn.dataset.trendWindow);
+      if (next !== 1 && next !== 3 && next !== 7) return;
+      if (next === state.ownershipTrendWindow) return;
+      state.ownershipTrendWindow = next;
+      syncOwnershipTrendWindowUI({ animate: true });
+      updateOwnershipTrendThresholdSlider();
+      syncFiltersResetUI();
       if (state.page === "ownership") renderOwnership();
     });
   }
@@ -11622,8 +11656,11 @@ python3 site/annotate_social.py</pre>
     set: (value) => {
       state.ownershipTrendThreshold = value;
     },
-    format: (value) =>
-      `${value.toFixed(1)} pp recent · ${(value * 2).toFixed(1)} pp net`,
+    format: (value) => {
+      const span = ownershipTrendWindowSpan();
+      const windowLabel = span === 1 ? "last update" : `last ${span} updates`;
+      return `${value.toFixed(1)} pp · ${windowLabel}`;
+    },
     onInput: renderOwnership,
   });
 
@@ -12515,6 +12552,8 @@ python3 site/annotate_social.py</pre>
     syncMarketsViewControls();
     setPageTrayOpen(false);
     syncPageTrayTrigger();
+    if (state.page === "notes" && NARROW_MQ.matches) setPage("opta");
+    if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
   syncColumnsPanelHost();
