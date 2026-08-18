@@ -81,7 +81,9 @@
   --row-divider: hsl(var(--border-hsl) / 0.7);
   /* Shared club crest size for Statistics + Rankings identity cells */
   --badge-size: 22px;
-  /* Check glyph on filled set-piece / owned pins — white on light, black on dark. */
+  --metric-col-w: 52px;
+  --check-col-w: 36px;
+  /* Check glyph on filled set-piece / owned pins — white on light, dark on dark. */
   --check-on-fill: #fff;
 }
 
@@ -195,6 +197,8 @@ html, body {
   }
   :root {
     --badge-size: 16px;
+    --metric-col-w: 44px;
+    --check-col-w: 32px;
   }
 }
 
@@ -1714,9 +1718,25 @@ a { color: var(--blue); }
 
 @media (max-width: 720px) {
   .main {
-    padding: 10px 8px 28px;
+    --main-pad-x: 8px;
+    --main-pad-top: 10px;
+    --table-sticky-max: calc(100dvh - 8.5rem);
+    padding: var(--main-pad-top) var(--main-pad-x) 28px;
     overflow-x: hidden;
-    overscroll-behavior-x: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Title stays in the page scroll; wide tables pan inside the card so the
+     rounded frame and left border never slide off. */
+  .page-header,
+  .team-budget-bar,
+  .compare-header,
+  .rankings-pin-bar {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background: var(--bg);
   }
 
   .topbar {
@@ -1726,10 +1746,9 @@ a { color: var(--blue); }
     flex-wrap: nowrap;
     align-items: center;
   }
-  /* Keep the button row intact; expanded search sits in reserved space below. */
+  /* Keep the button row intact; expanded search covers this same row. */
   .topbar:has(#search-wrap.search-open) {
     flex-wrap: nowrap;
-    padding-bottom: 48px;
   }
   /* Mobile: [filter + players/teams] left · all action icons grouped right */
   .topbar-view-cluster {
@@ -1851,7 +1870,7 @@ a { color: var(--blue); }
     touch-action: pan-x;
   }
   html[data-page="team"] #subtoolbar:has(#search-wrap.search-open) {
-    overflow: visible;
+    overflow-x: hidden;
     touch-action: auto;
   }
   html[data-page="team"] #subtoolbar .team-toolbar-mode,
@@ -1882,17 +1901,32 @@ a { color: var(--blue); }
     font-size: 15px;
   }
 
-  /* Search expands full-width on a row below; action icons keep order
-     (only a minor left shift from the collapsed search slot leaving flow). */
+  /* Search expands in-row and covers the other toolbar buttons. */
+  #subtoolbar:has(#search-wrap.search-open) .topbar-view-cluster,
+  #subtoolbar:has(#search-wrap.search-open) .topbar-data-cluster,
+  #subtoolbar:has(#search-wrap.search-open) .team-toolbar-controls,
+  #subtoolbar:has(#search-wrap.search-open) #compare-toggle,
+  #subtoolbar:has(#search-wrap.search-open) #columns-btn,
+  #subtoolbar:has(#search-wrap.search-open) #expected-cat-toolbar,
+  #subtoolbar:has(#search-wrap.search-open) #markets-view-toolbar {
+    display: none !important;
+  }
+  #subtoolbar:has(#search-wrap.search-open) .topbar-actions-cluster,
+  #subtoolbar:has(#search-wrap.search-open) .topbar-end-cluster {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    margin-left: 0;
+  }
   #subtoolbar #search-wrap.search-open {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 10px;
+    position: relative;
+    inset: auto;
+    flex: 1 1 auto;
     width: auto;
     max-width: none;
+    min-width: 0;
     height: 32px;
-    flex: none;
     overflow: visible;
     z-index: 2;
   }
@@ -2371,10 +2405,19 @@ a { color: var(--blue); }
 
 @media (max-width: 720px) {
   .table-wrap {
-    max-height: none;
+    /* Pin the card under the padded .main top — not flush with the toolbar.
+       Overflow auto clips rows/columns to the radius so they cannot leak. */
+    position: sticky;
+    top: 0;
+    overflow: auto;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    max-height: var(--table-sticky-max, calc(100dvh - 8.5rem));
     --name-col-w: 136px;
     --crest-size: 22px;
     --badge-size: 22px;
+    --table-sec-h: 16px;
   }
   .table-wrap > table {
     font-size: 10px;
@@ -2397,8 +2440,8 @@ a { color: var(--blue); }
   }
   .table-wrap > table > thead tr:not(.section-row) th,
   .table-wrap > table > tbody td {
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-left: 4px;
+    padding-right: 4px;
   }
   .table-wrap > table > tbody td {
     padding-top: 6px;
@@ -2446,6 +2489,9 @@ table {
   width: 100%;
   font-size: 13px;
 }
+.table-wrap > table {
+  width: max-content;
+}
 .table-wrap > table > thead {
   position: sticky;
   top: 0;
@@ -2484,8 +2530,9 @@ table {
   position: static;
   background: hsl(var(--muted));
   color: var(--text-dim);
-  text-align: right;
-  padding: 8px 10px;
+  text-align: center;
+  vertical-align: middle;
+  padding: 8px 4px;
   font-weight: 500;
   font-size: 12px;
   letter-spacing: 0.2px;
@@ -2514,6 +2561,22 @@ thead th.col-player, tbody td.col-player {
   width: var(--name-col-w, 170px);
   min-width: var(--name-col-w, 170px);
   max-width: var(--name-col-w, 170px);
+}
+thead th.col-num, tbody td.col-num {
+  width: var(--metric-col-w, 52px);
+  min-width: var(--metric-col-w, 52px);
+  max-width: var(--metric-col-w, 52px);
+  padding-left: 4px;
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+thead th.col-check, tbody td.col-check {
+  width: var(--check-col-w, 36px);
+  min-width: var(--check-col-w, 36px);
+  max-width: var(--check-col-w, 36px);
+  padding-left: 4px;
+  padding-right: 4px;
+  box-sizing: border-box;
 }
 tbody td.col-name,
 tbody td.col-team,
@@ -2585,6 +2648,37 @@ tbody td.col-player.has-update-change {
     1px 0 0 var(--border);
 }
 
+@media (max-width: 720px) {
+  /* Pin table chrome to the card (the wrap is the scrollport). Must follow
+     the base `th { position: static }` rules and live on <th>, not <thead>. */
+  .table-wrap > table > thead {
+    position: static;
+    isolation: auto;
+  }
+  .table-wrap > table > thead tr.section-row th {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+  }
+  .table-wrap > table > thead tr.section-row th.sec-sticky-lead {
+    top: 0;
+    left: 0;
+    z-index: 11;
+  }
+  .table-wrap > table > thead tr:not(.section-row) th {
+    position: sticky;
+    top: var(--table-sec-h, 16px);
+    z-index: 7;
+  }
+  .table-wrap > table > thead tr:not(.section-row) th.col-name,
+  .table-wrap > table > thead tr:not(.section-row) th.col-team,
+  .table-wrap > table > thead tr:not(.section-row) th.col-player {
+    top: var(--table-sec-h, 16px);
+    left: 0;
+    z-index: 10;
+  }
+}
+
 thead th .arrow {
   display: inline-flex;
   align-items: center;
@@ -2610,10 +2704,10 @@ thead th.sec-divider { border-left: 1px solid var(--border); }
 tbody td.sec-divider { border-left: 1px solid var(--row-divider); }
 
 tbody td {
-  padding: 10px 10px;
+  padding: 10px 4px;
   vertical-align: middle;
   border-bottom: 1px solid var(--row-divider);
-  text-align: right;
+  text-align: center;
   font-family: var(--mono);
   white-space: nowrap;
   transition: background-color 0.15s ease;
@@ -4150,7 +4244,7 @@ html[data-page="ownership"] .layout .main {
   grid-template-columns: var(--barbell-cols-compare);
 }
 .barbell-head-cell {
-  text-align: right;
+  text-align: center;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -4536,7 +4630,7 @@ html[data-page="ownership"] .layout .main {
 
 .barbell-value {
   align-self: center;
-  text-align: right;
+  text-align: center;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);
@@ -4602,10 +4696,14 @@ html[data-page="ownership"] .layout .main {
 /* Narrow: keep the desktop column layout and swipe horizontally instead
    of restacking the track under Diff (which caused overlap). */
 @media (max-width: 720px) {
-  .barbell-scroll {
-    max-height: none;
-  }
   .barbell-wrap {
+    position: sticky;
+    top: 0;
+    overflow: hidden;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    max-height: var(--table-sticky-max, calc(100dvh - 8.5rem));
     --barbell-name-w: 120px;
     --barbell-name-w-compare: 112px;
     --barbell-head-h: 32px;
@@ -4619,6 +4717,10 @@ html[data-page="ownership"] .layout .main {
     --barbell-gap: 6px;
     --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
     --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(140px, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+  }
+  .barbell-scroll {
+    overflow: auto;
+    max-height: 100%;
   }
   .barbell-head {
     padding: 7px 10px;
@@ -4851,7 +4953,7 @@ html[data-page="ownership"] .layout .main {
 }
 .cell-inline.align-end {
   width: 100%;
-  justify-content: flex-end;
+  justify-content: center;
 }
 .change-arrow {
   display: inline-flex;
@@ -8446,10 +8548,10 @@ html[data-page="team"] .layout .main {
   --name-col-w: 280px;
   --crest-size: 28px;
   --crest-gap: 10px;
-  --team-price-w: 48px;
-  --team-owned-w: 56px;
-  --team-stat-w: 52px;
-  --team-setpiece-w: 36px;
+  --team-price-w: var(--metric-col-w, 52px);
+  --team-owned-w: var(--metric-col-w, 52px);
+  --team-stat-w: var(--metric-col-w, 52px);
+  --team-setpiece-w: var(--check-col-w, 36px);
   --team-row-h: 48px;
   display: flex;
   flex-direction: column;
@@ -9071,18 +9173,18 @@ html[data-page="team"] .layout .main {
   max-width: var(--team-price-w, 48px);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  text-align: right;
-  padding-inline: 8px;
+  text-align: center;
+  padding-inline: 4px;
 }
 #team-picker-view thead th.col-team-owned,
 #team-picker-view tbody td.col-team-owned {
-  width: var(--team-owned-w, 56px);
-  min-width: var(--team-owned-w, 56px);
-  max-width: var(--team-owned-w, 56px);
+  width: var(--team-owned-w, 52px);
+  min-width: var(--team-owned-w, 52px);
+  max-width: var(--team-owned-w, 52px);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  text-align: right;
-  padding-inline: 8px;
+  text-align: center;
+  padding-inline: 4px;
 }
 #team-page thead th.col-team-stat,
 #team-page tbody td.col-team-stat,
@@ -9289,8 +9391,8 @@ html[data-page="team"] .layout .main {
 #team-picker-view .team-table-wrap.team-picker-table-wrap {
   --name-col-w: 172px;
   --crest-size: 28px;
-  --team-price-w: 44px;
-  --team-owned-w: 54px;
+  --team-price-w: var(--metric-col-w, 52px);
+  --team-owned-w: var(--metric-col-w, 52px);
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
@@ -9316,12 +9418,10 @@ html[data-page="team"] .layout .main {
   font-size: 13.5px;
 }
 @media (max-width: 720px) {
-  /* Title + subtitle scroll away under the sticky nav/toolbar; the table
-     then sits where the heading was. Nested max-height scrollers would
-     freeze that chrome in place. */
+  /* Title + subtitle scroll away; the squad card then pins with padding.
+     Inner overflow clips to the rounded frame so columns cannot leak. */
   html[data-page="team"] .layout .main {
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: auto;
   }
   #team-page {
     --name-col-w: 180px;
@@ -9346,13 +9446,23 @@ html[data-page="team"] .layout .main {
   #team-squad-view:has(#team-search-results:not([hidden])) {
     overflow: visible;
   }
+  #team-search-results,
+  #team-compare-wrap {
+    overflow: visible;
+  }
   #team-page .team-table-wrap,
+  #team-page #team-search-results .team-table-wrap,
+  #team-page #team-compare-wrap .team-table-wrap,
   #team-picker-view .team-table-wrap.team-picker-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: visible;
+    max-height: var(--table-sticky-max, calc(100dvh - 8.5rem));
+    overflow: auto;
+    position: sticky;
+    top: 0;
+  }
+  #team-search-results .table-wrap > table > thead {
+    position: static;
   }
   #team-page .player-cell {
     --crest-size: 22px;

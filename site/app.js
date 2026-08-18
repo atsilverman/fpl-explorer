@@ -257,7 +257,7 @@
   const PLAYER_COLS = [
     { key: "player", label: "Player", type: "player", pin: true },
     { key: "price", label: "£m", decimals: 1, group: "Core", title: "Price (£m)" },
-    { key: "owned", label: "Own%", decimals: 1, group: "Core", title: "Current FPL ownership" },
+    { key: "owned", label: "TSB%", decimals: 1, group: "Core", title: "FPL selected-by-% (TSB)" },
     { key: "apps", label: "Apps", decimals: 0, group: "Core", title: "Appearances" },
     { key: "mins", label: "Mins", decimals: 0, group: "Core", title: "Minutes played" },
     { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
@@ -1703,7 +1703,7 @@
     return maps;
   }
 
-  // Price and Own% are excluded from the top/bottom% Enhance system (levels,
+  // Price and TSB% are excluded from the top/bottom% Enhance system (levels,
   // not rate stats — tinting “most expensive/owned” isn’t useful).
 
   // ---------------------------------------------------------------------
@@ -1716,7 +1716,12 @@
   function fmtNum(v, decimals) {
     if (v === undefined || v === null || Number.isNaN(v)) return "–";
     const n = Number(v);
-    if (decimals === 0) return Math.round(n).toLocaleString();
+    const abs = Math.abs(n);
+    if (abs >= 1000) {
+      const signed = n < 0 ? "-" : "";
+      return `${signed}${(abs / 1000).toFixed(1)}k`;
+    }
+    if (decimals === 0) return String(Math.round(n));
     return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   }
 
@@ -3088,8 +3093,8 @@
         spitRow(spitRank("Trending"), "Filters → Trend colors. Window is last check-in, last 3, or last 7 (will be ~days once snapshots are daily). Colors lines and lists Risers / Fallers by change over that window."),
         spitRow(spitRank("Axis"), "X is a manual snapshot date, not a gameweek. Run python3 site/fetch_ownership.py to add a check-in."),
         spitRow(spitRank(mobile ? "Tap" : "Hover"), mobile
-          ? "Tap a line for the player/club card (photo, badge, price, owned %, change)."
-          : "Hover a line for the player/club card (photo, badge, price, owned %, change)."),
+          ? "Tap a line for the player/club card (photo, badge, price, TSB%, change)."
+          : "Hover a line for the player/club card (photo, badge, price, TSB%, change)."),
       ];
       return `${spitHead("trending-up", "How Ownership works")}
         ${spitIntro("FPL selected-by-% over the check-ins saved in this repo.")}
@@ -7235,7 +7240,7 @@
     const heatHead = teamHeatHeadHTML();
     if (el.teamPickerHead) {
       el.teamPickerHead.innerHTML = teamHeadRowsHTML(
-        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num team-price sec-divider")}${teamSortTh("owned", "Own%", "col-num col-team-owned", "Current FPL ownership")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
+        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num team-price sec-divider")}${teamSortTh("owned", "TSB%", "col-num col-team-owned", "FPL selected-by-% (TSB)")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
         { price: true, ownership: true, setPieces: true }
       );
     }
@@ -9315,8 +9320,7 @@ python3 site/annotate_social.py</pre>
 
   function fmtOwnedPct(v) {
     if (v == null || Number.isNaN(v)) return "—";
-    const n = Number(v);
-    return `${n.toFixed(n >= 10 || n === 0 ? 1 : 1)}%`;
+    return Number(v).toFixed(1);
   }
 
   function ownershipDelta(curr, prev) {
@@ -9700,7 +9704,7 @@ python3 site/annotate_social.py</pre>
             <div class="tt-meta"><span>Top ${OWNERSHIP_TEAM_TOP_N} avg</span></div>
           </div>
         </div>
-        <div class="tt-row"><span>Owned</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
+        <div class="tt-row"><span>TSB%</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
         <div class="tt-row"><span>vs last</span><b class="tt-delta ${deltaCls}">${escapeHtml(deltaTxt)}</b></div>
         ${trendRow}
         <div class="tt-checkin">${escapeHtml(when)}</div>`;
@@ -9722,7 +9726,7 @@ python3 site/annotate_social.py</pre>
           <div class="tt-meta">${metaBits.join("")}</div>
         </div>
       </div>
-      <div class="tt-row"><span>Owned</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
+      <div class="tt-row"><span>TSB%</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
       <div class="tt-row"><span>vs last</span><b class="tt-delta ${deltaCls}">${escapeHtml(deltaTxt)}</b></div>
       ${trendRow}
       <div class="tt-checkin">${escapeHtml(when)}</div>`;
@@ -11475,12 +11479,17 @@ python3 site/annotate_social.py</pre>
   }
 
   function clearMainSearch() {
-    if (el.search) {
+    if (preferMobileSheet() && !mainSearchAlwaysOpen()) {
+      closeMobileSearch({ clear: true });
+    } else if (el.search) {
       el.search.value = "";
       el.search.focus({ preventScroll: true });
+      state.search = "";
+      syncSearchClearBtns();
+    } else {
+      state.search = "";
+      syncSearchClearBtns();
     }
-    state.search = "";
-    syncSearchClearBtns();
     if (state.page === "team") renderTeam();
     else if (state.page !== "rankings") renderTable();
   }
@@ -11724,7 +11733,7 @@ python3 site/annotate_social.py</pre>
       state.minsMin = lo;
       state.minsMax = hi;
     },
-    format: (v) => Math.round(v).toLocaleString(),
+    format: (v) => fmtNum(v, 0),
   });
 
   const updateScheduleGwSlider = setupDualSlider({
@@ -11801,7 +11810,7 @@ python3 site/annotate_social.py</pre>
     set: (value) => {
       state.ownedMin = value;
     },
-    format: (value) => `${value.toFixed(1)}%+`,
+    format: (value) => `${value.toFixed(1)}+`,
   });
 
   const updateOwnershipTrendThresholdSlider = setupSingleSlider({
