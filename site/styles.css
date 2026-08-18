@@ -1982,6 +1982,19 @@ a { color: var(--blue); }
   opacity: 0;
 }
 
+/* Statistics is the landing page — never hold the table invisible. */
+#opta-page.is-enter-pending > .page-header,
+#opta-page.is-enter-pending > .table-wrap,
+#opta-page.is-enter-pending > .compare-wrap {
+  opacity: 1;
+}
+#opta-page.is-entering .table-wrap > table > tbody > tr,
+#opta-page .table-wrap > table > tbody > tr {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
 .page-pane.is-entering .table-wrap > table > tbody > tr,
 .page-pane.is-entering .barbell-body > .barbell-row,
 .page-pane.is-entering .barbell-body > .barbell-group,
@@ -2016,10 +2029,6 @@ a { color: var(--blue); }
 /* Statistics: rows cascade top → bottom like Rankings lists. */
 #opta-page.is-entering > .page-header {
   animation-duration: 0.55s;
-}
-#opta-page.is-entering .table-wrap > table > tbody > tr {
-  animation: page-enter-item 0.4s var(--ease-out) both;
-  animation-delay: calc(0.14s + (min(var(--enter-i, 0), 24) * 0.032s));
 }
 
 /* Expected Data: names/rows cascade first; barbells wipe in shortly after. */

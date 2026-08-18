@@ -10320,10 +10320,10 @@ python3 site/annotate_social.py</pre>
       pane._countUpRaf = 0;
     }
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    // iOS/WebKit often applies tr { opacity:0 } from animation-fill backwards
-    // and never plays the animation, so Statistics stays blank until a
-    // Teams/Players re-render recreates the rows.
-    if (pane.id === "opta-page" && (NARROW_MQ.matches || preferMobileSheet())) return;
+    // Never animate Statistics table rows. Opacity/transform on <tr> with
+    // fill-mode `both` sticks at 0 in WebKit (and some Chromium), so the
+    // landing page shows only the header bar until a view toggle recreates rows.
+    if (pane.id === "opta-page") return;
 
     const slowEnter = pane.id === "schedule-page";
     const rankingsEnter = pane.id === "rankings-page";
