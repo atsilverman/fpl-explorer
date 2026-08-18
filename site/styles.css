@@ -1760,15 +1760,60 @@ a { color: var(--blue); }
     overflow: visible;
   }
   .brand-group {
+    display: contents;
+  }
+  .brand {
+    order: 1;
     flex: none;
   }
+  .brand h1 {
+    font-size: 15px;
+    gap: 6px;
+  }
   .page-nav-actions {
-    flex: 0 0 auto;
+    order: 4;
+    flex: none;
+    margin-left: 0;
+  }
+  .season-select {
+    order: 3;
     margin-left: auto;
+    height: 32px;
+    font-size: 12px;
+    width: 92px;
   }
   .page-tray-btn {
     display: inline-flex;
+    order: 2;
     height: 32px;
+    max-width: min(34vw, 148px);
+    padding: 0 2px 0 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .page-tray-btn::before {
+    content: "";
+    width: 1px;
+    height: 14px;
+    margin: 0 8px 0 6px;
+    background: var(--border);
+    flex: none;
+    align-self: center;
+  }
+  .page-tray-btn > .icon:not(.page-tab-caret) {
+    display: none;
+  }
+  .page-tray-btn .page-tab-caret {
+    margin-left: 2px;
+    opacity: 0.55;
+  }
+  .page-tray-btn:hover,
+  .page-tray-btn:active {
+    background: transparent;
   }
   #page-notes {
     display: none !important;
@@ -1781,10 +1826,6 @@ a { color: var(--blue); }
     width: 15px;
     height: 15px;
     font-size: 15px;
-  }
-  .season-select {
-    height: 32px;
-    font-size: 12px;
   }
   /* Tab scroller stays out of the nav; the tray button opens the bottom sheet. */
   .page-tabs-clip {
@@ -8457,6 +8498,50 @@ html[data-page="team"] .layout .main {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: var(--text);
+}
+.team-gw-select-btn {
+  height: 32px;
+  padding: 0 8px 0 10px;
+  gap: 4px;
+}
+.team-gw-select-btn .team-gw-range {
+  min-width: 0;
+  padding: 0;
+}
+.team-gw-select-btn .page-tab-caret {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.team-gw-select-btn[aria-expanded="true"] .page-tab-caret {
+  transform: rotate(180deg);
+}
+.team-gw-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  padding: 2px 0 8px;
+}
+.team-gw-sheet-cell {
+  appearance: none;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  background: hsl(var(--card));
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.team-gw-sheet-cell.is-in-window {
+  background: hsl(var(--blue-hsl) / 0.1);
+}
+.team-gw-sheet-cell.is-start {
+  background: hsl(var(--blue-hsl) / 0.18);
+  border-color: hsl(var(--blue-hsl) / 0.5);
+  color: hsl(var(--blue-hsl));
 }
 .team-sub-bar {
   display: flex;

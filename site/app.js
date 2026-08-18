@@ -2154,6 +2154,10 @@
     if (el.expectedCatBtn && closingKey === "expected-cats") {
       el.expectedCatBtn.setAttribute("aria-expanded", "false");
     }
+    const teamGwSelect = $("#team-gw-select");
+    if (teamGwSelect && closingKey === "team-gw") {
+      teamGwSelect.setAttribute("aria-expanded", "false");
+    }
     if (el.marketsViewToolbarBtn && closingKey === "markets-view") {
       el.marketsViewToolbarBtn.setAttribute("aria-expanded", "false");
     }
@@ -6684,13 +6688,64 @@
     if (!el.teamGwNav) return;
     const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
     state.teamGwStart = start;
-    const end = start + TEAM_HEAT_N - 1;
+    const end = Math.min(SCHEDULE_GW_MAX, start + TEAM_HEAT_N - 1);
     const minStart = SCHEDULE_GW_MIN;
     const maxStart = Math.max(SCHEDULE_GW_MIN, SCHEDULE_GW_MAX - TEAM_HEAT_N + 1);
+    const range = `GW${start}–GW${end}`;
+    if (NARROW_MQ.matches) {
+      const open = !!(mobileSheetOpen && mobileSheetKey === "team-gw");
+      el.teamGwNav.innerHTML = `
+        <button type="button" class="ghost-btn team-gw-select-btn" id="team-gw-select"
+          aria-haspopup="dialog" aria-expanded="${open ? "true" : "false"}"
+          aria-label="Gameweek window, ${range}">
+          <span class="team-gw-range">${range}</span>
+          ${iconHTML("chevron-down", "page-tab-caret")}
+        </button>`;
+      return;
+    }
     el.teamGwNav.innerHTML = `
       <button type="button" class="ghost-btn icon-only-btn" id="team-gw-prev" ${start <= minStart ? "disabled" : ""} aria-label="Previous gameweek">${iconHTML("chevron-left")}</button>
-      <span class="team-gw-range">GW${start}–GW${end}</span>
+      <span class="team-gw-range">${range}</span>
       <button type="button" class="ghost-btn icon-only-btn" id="team-gw-next" ${start >= maxStart ? "disabled" : ""} aria-label="Next gameweek">${iconHTML("chevron-right")}</button>`;
+  }
+
+  function openTeamGwSheet() {
+    const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
+    const windowGws = new Set(teamHeatGws());
+    const cells = [];
+    for (let gw = SCHEDULE_GW_MIN; gw <= SCHEDULE_GW_MAX; gw++) {
+      const cls = [
+        "team-gw-sheet-cell",
+        gw === start ? "is-start" : "",
+        windowGws.has(gw) ? "is-in-window" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      cells.push(
+        `<button type="button" class="${cls}" data-team-gw="${gw}" aria-current="${
+          gw === start ? "true" : "false"
+        }">${gw}</button>`
+      );
+    }
+    openMobileSheet({
+      title: "Gameweek",
+      html: `<div class="team-gw-sheet-grid" role="listbox" aria-label="Gameweeks">${cells.join("")}</div>`,
+      key: "team-gw",
+    });
+    const selectBtn = $("#team-gw-select");
+    if (selectBtn) selectBtn.setAttribute("aria-expanded", "true");
+    if (!el.mobileSheetBody) return;
+    el.mobileSheetBody.querySelectorAll("[data-team-gw]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gw = Number(btn.getAttribute("data-team-gw"));
+        if (!Number.isFinite(gw)) return;
+        const next = teamClampGwStart(gw);
+        closeMobileSheet();
+        if (next === state.teamGwStart) return;
+        state.teamGwStart = next;
+        renderTeam();
+      });
+    });
   }
 
   function renderTeamBudgetBar() {
@@ -7187,6 +7242,11 @@
     }
     if (e.target.closest("#team-gw-next")) {
       teamShiftGw(1);
+      return;
+    }
+    if (e.target.closest("#team-gw-select")) {
+      if (mobileSheetOpen && mobileSheetKey === "team-gw") closeMobileSheet();
+      else openTeamGwSheet();
       return;
     }
     if (e.target.closest("#team-compare-btn")) {
@@ -12554,6 +12614,7 @@ python3 site/annotate_social.py</pre>
     syncPageTrayTrigger();
     if (state.page === "notes" && NARROW_MQ.matches) setPage("opta");
     if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
+    if (state.page === "team") renderTeam();
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
   syncColumnsPanelHost();
