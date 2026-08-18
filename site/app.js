@@ -2125,6 +2125,9 @@
       button.setAttribute("aria-expanded", "false");
     });
     if (el.prefsBtn && closingKey === "prefs") el.prefsBtn.setAttribute("aria-expanded", "false");
+    if (el.pageTrayBtn && closingKey === "pages") {
+      el.pageTrayBtn.setAttribute("aria-expanded", "false");
+    }
     if (el.sidebarToggle && closingKey === "filters") {
       el.sidebarToggle.classList.remove("on");
       el.sidebarToggle.setAttribute("aria-pressed", "false");
@@ -10299,6 +10302,10 @@ python3 site/annotate_social.py</pre>
       pane._countUpRaf = 0;
     }
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // iOS/WebKit often applies tr { opacity:0 } from animation-fill backwards
+    // and never plays the animation, so Statistics stays blank until a
+    // Teams/Players re-render recreates the rows.
+    if (pane.id === "opta-page" && NARROW_MQ.matches) return;
 
     const slowEnter = pane.id === "schedule-page";
     const rankingsEnter = pane.id === "rankings-page";
@@ -10486,14 +10493,31 @@ python3 site/annotate_social.py</pre>
   }
 
   function pageTrayIsOpen() {
-    return !!(el.pageNav && el.pageNav.classList.contains("is-page-tray-open"));
+    return !!(mobileSheetOpen && mobileSheetKey === "pages");
   }
 
   function setPageTrayOpen(open) {
-    if (!el.pageNav || !el.pageTrayBtn) return;
-    if (!NARROW_MQ.matches) open = false;
-    el.pageNav.classList.toggle("is-page-tray-open", !!open);
-    el.pageTrayBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (!el.pageTrayBtn || !el.pageTabs) return;
+    if (!NARROW_MQ.matches) {
+      if (mobileSheetOpen && mobileSheetKey === "pages") closeMobileSheet();
+      el.pageTrayBtn.setAttribute("aria-expanded", "false");
+      return;
+    }
+    if (open) {
+      openMobileSheetHost({
+        title: "Pages",
+        key: "pages",
+        hostEl: el.pageTabs,
+      });
+      el.pageTrayBtn.setAttribute(
+        "aria-expanded",
+        mobileSheetOpen && mobileSheetKey === "pages" ? "true" : "false"
+      );
+    } else if (mobileSheetKey === "pages") {
+      closeMobileSheet();
+    } else {
+      el.pageTrayBtn.setAttribute("aria-expanded", "false");
+    }
   }
 
   function syncPageTrayTrigger() {
@@ -10790,17 +10814,6 @@ python3 site/annotate_social.py</pre>
       setPageTrayOpen(!pageTrayIsOpen());
     });
   }
-  document.addEventListener("click", (e) => {
-    if (!pageTrayIsOpen()) return;
-    if (el.pageTrayBtn && el.pageTrayBtn.contains(e.target)) return;
-    if (el.pageTabs && el.pageTabs.contains(e.target)) return;
-    setPageTrayOpen(false);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || !pageTrayIsOpen()) return;
-    e.preventDefault();
-    setPageTrayOpen(false);
-  });
   let marketsMenuCloseTimer = 0;
   function cancelMarketsMenuClose() {
     window.clearTimeout(marketsMenuCloseTimer);

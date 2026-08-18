@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=407" />
+<link rel="stylesheet" href="styles.css?v=411" />
 <script>
 (() => {
   try {
@@ -410,7 +410,7 @@
 
 <div class="topbar" id="subtoolbar">
   <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
-    <button id="sidebar-toggle" class="ghost-btn icon-only-btn on" type="button" title="Hide/show filters" aria-label="Hide/show filters" aria-pressed="true">
+    <button id="sidebar-toggle" class="ghost-btn icon-only-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters" aria-pressed="false">
       <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
     </button>
     <div class="tabs">
@@ -687,12 +687,12 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics<button class="page-info-btn" type="button" aria-label="How Statistics works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="count-label"></span>
           </div>
         </div>
-        <p class="page-subtitle">Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.</p>
       </div>
 
       <div class="compare-wrap" id="compare-wrap" style="display:none;">
@@ -721,12 +721,12 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-trending-up"/></svg>Ownership<button class="page-info-btn" type="button" aria-label="How Ownership works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">FPL selected-by-% across manual check-ins — grey lines for the field, hover to colorize a player or club.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="ownership-count-label"></span>
           </div>
         </div>
-        <p class="page-subtitle">FPL selected-by-% across manual check-ins — grey lines for the field, hover to colorize a player or club.</p>
       </div>
       <div id="ownership-trend-cards" class="ownership-trend-cards">
         <div class="ownership-trend-col is-risers">
@@ -1113,7 +1113,7 @@
 <script src="social_data.js?v=13"></script>
 <script src="markets_data.js?v=5"></script>
 <script src="ownership_data.js?v=2"></script>
-<script src="app.js?v=416"></script>
+<script src="app.js?v=418"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

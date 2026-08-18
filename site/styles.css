@@ -309,7 +309,8 @@ a { color: var(--blue); }
   font-size: 13px;
   opacity: 0.7;
 }
-.page-nav.is-page-tray-open .page-tray-btn .page-tab-caret {
+.page-nav.is-page-tray-open .page-tray-btn .page-tab-caret,
+.page-tray-btn[aria-expanded="true"] .page-tab-caret {
   transform: rotate(180deg);
 }
 .page-tray-btn:focus-visible {
@@ -1761,62 +1762,31 @@ a { color: var(--blue); }
   }
   .page-tray-btn {
     display: inline-flex;
+    height: 32px;
   }
-  /* Collapse the 1100px second-row tab scroller into a dropdown tray. */
+  .page-nav .icon-only-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .page-nav .icon-only-btn .icon {
+    width: 15px;
+    height: 15px;
+    font-size: 15px;
+  }
+  .season-select {
+    height: 32px;
+    font-size: 12px;
+  }
+  /* Tab scroller stays out of the nav; the tray button opens the bottom sheet. */
   .page-tabs-clip {
     display: none;
     order: unset;
     flex: none;
-    width: auto;
-    min-width: 0;
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 10px;
-    right: 10px;
-    z-index: 50;
   }
   .page-tabs-clip::before,
   .page-tabs-clip::after {
     content: none;
     display: none;
-  }
-  .page-nav.is-page-tray-open {
-    z-index: 40;
-  }
-  .page-nav.is-page-tray-open .page-tabs-clip {
-    display: block;
-  }
-  .page-nav.is-page-tray-open .page-tabs {
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-    flex-wrap: nowrap;
-    overflow: visible;
-    width: 100%;
-    min-width: 0;
-    gap: 2px;
-    margin: 0;
-    padding: 6px;
-    background: var(--glass-bg);
-    color: hsl(var(--popover-foreground));
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    touch-action: manipulation;
-  }
-  .page-nav.is-page-tray-open .page-tab-dropdown {
-    display: block;
-    width: 100%;
-  }
-  .page-nav.is-page-tray-open .page-tab-btn {
-    width: 100%;
-    justify-content: flex-start;
-    padding: 10px 12px;
-  }
-  .page-nav.is-page-tray-open .page-tab-btn.active {
-    background: hsl(var(--accent-hsl));
   }
 
   /* Team: pan the toolbar sideways so search is reachable; don't freeze it. */
@@ -1901,9 +1871,28 @@ a { color: var(--blue); }
   .page-header > div:first-child {
     flex: 1 1 100%;
     min-width: 0;
+    max-width: 100%;
   }
-  .page-subtitle {
+  /* Column headers (Statistics / Ownership): don't let flex-basis 100%
+     steal the pane height — that overlaps the subtitle onto the title
+     and shoves the table below the fold. */
+  .opta-header,
+  .ownership-header {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .opta-header > .opta-header-top {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+  }
+  .opta-header-text .page-subtitle {
+    display: block;
+    width: 100%;
     max-width: none;
+    margin: 0;
   }
   .page-header-meta {
     margin-left: auto;
@@ -2331,6 +2320,12 @@ a { color: var(--blue); }
   }
   .table-wrap > table {
     font-size: 10.5px;
+  }
+  #opta-page.is-enter-pending > .table-wrap,
+  #opta-page.is-entering .table-wrap > table > tbody > tr {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
   .table-wrap > table > thead tr.section-row th {
     height: 18px;
@@ -3138,6 +3133,7 @@ tbody tr.row-selected td:first-child {
 .opta-header {
   display: flex;
   flex-direction: column;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 0;
 }
@@ -3152,8 +3148,11 @@ tbody tr.row-selected td:first-child {
   min-width: 0;
   flex: 1;
 }
-.opta-header .page-subtitle {
+.opta-header-text .page-subtitle {
+  display: block;
+  width: 100%;
   max-width: none;
+  margin: 0;
 }
 .opta-header .page-header-meta {
   flex: none;
@@ -8268,6 +8267,29 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   z-index: auto !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+.mobile-sheet-body > .page-tabs.mobile-sheet-hosted {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-dropdown {
+  display: block;
+  width: 100%;
+}
+.mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-btn {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 12px 10px;
+  font-size: 14px;
+}
+.mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-btn.active {
+  background: hsl(var(--accent-hsl));
+  color: var(--text);
+  font-weight: 600;
 }
 .mobile-sheet-body > .sidebar.mobile-sheet-hosted {
   display: flex !important;
