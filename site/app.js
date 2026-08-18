@@ -641,6 +641,10 @@
     pageExpected: $("#page-expected"),
     pageTabs: $("#page-tabs"),
     pageTabsClip: $("#page-tabs-clip"),
+    pageNav: document.querySelector(".page-nav"),
+    pageTrayBtn: $("#page-tray-btn"),
+    pageTrayLabel: $("#page-tray-label"),
+    pageTrayIconUse: $("#page-tray-icon-use"),
     expectedTabWrap: $("#expected-tab-wrap"),
     expectedCatMenu: $("#expected-cat-menu"),
     expectedCatToolbar: $("#expected-cat-toolbar"),
@@ -10481,6 +10485,34 @@ python3 site/annotate_social.py</pre>
     }
   }
 
+  function pageTrayIsOpen() {
+    return !!(el.pageNav && el.pageNav.classList.contains("is-page-tray-open"));
+  }
+
+  function setPageTrayOpen(open) {
+    if (!el.pageNav || !el.pageTrayBtn) return;
+    if (!NARROW_MQ.matches) open = false;
+    el.pageNav.classList.toggle("is-page-tray-open", !!open);
+    el.pageTrayBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function syncPageTrayTrigger() {
+    if (!el.pageTrayBtn) return;
+    const btn = el.pageTabs && el.pageTabs.querySelector(".page-tab-btn.active");
+    const useEl = btn && btn.querySelector("svg.icon:not(.page-tab-caret) use");
+    const href = useEl && (useEl.getAttribute("href") || useEl.getAttribute("xlink:href"));
+    if (href && el.pageTrayIconUse) el.pageTrayIconUse.setAttribute("href", href);
+    const label = btn
+      ? Array.from(btn.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE)
+          .map((n) => n.textContent.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(" ")
+      : "";
+    if (el.pageTrayLabel && label) el.pageTrayLabel.textContent = label;
+    el.pageTrayBtn.setAttribute("aria-label", label ? `Pages, ${label}` : "Pages");
+  }
+
   function setPage(page) {
     const prev = state.page;
     state.page = page;
@@ -10523,6 +10555,8 @@ python3 site/annotate_social.py</pre>
     if (el.pageTeam) el.pageTeam.classList.toggle("active", page === "team");
     if (el.pageNotes) el.pageNotes.classList.toggle("active", page === "notes");
     document.documentElement.dataset.page = page;
+    syncPageTrayTrigger();
+    setPageTrayOpen(false);
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
@@ -10749,6 +10783,24 @@ python3 site/annotate_social.py</pre>
   }
   el.pageSchedule.addEventListener("click", () => setPage("schedule"));
   if (el.pageFeed) el.pageFeed.addEventListener("click", () => setPage("feed"));
+  if (el.pageTrayBtn) {
+    el.pageTrayBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setPageTrayOpen(!pageTrayIsOpen());
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!pageTrayIsOpen()) return;
+    if (el.pageTrayBtn && el.pageTrayBtn.contains(e.target)) return;
+    if (el.pageTabs && el.pageTabs.contains(e.target)) return;
+    setPageTrayOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !pageTrayIsOpen()) return;
+    e.preventDefault();
+    setPageTrayOpen(false);
+  });
   let marketsMenuCloseTimer = 0;
   function cancelMarketsMenuClose() {
     window.clearTimeout(marketsMenuCloseTimer);
@@ -10886,7 +10938,7 @@ python3 site/annotate_social.py</pre>
 
   function pageTabsAreScrollable() {
     const tabs = el.pageTabs;
-    if (!tabs) return false;
+    if (!tabs || NARROW_MQ.matches) return false;
     return tabs.scrollWidth > tabs.clientWidth + 2;
   }
 
@@ -12448,6 +12500,8 @@ python3 site/annotate_social.py</pre>
     syncAllNameColumnSimplifies();
     syncExpectedCatToolbar();
     syncMarketsViewControls();
+    setPageTrayOpen(false);
+    syncPageTrayTrigger();
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
   syncColumnsPanelHost();
