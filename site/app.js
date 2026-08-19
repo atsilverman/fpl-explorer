@@ -1918,9 +1918,11 @@
     return preferMobileSheet() || COLUMNS_IN_FILTERS_MQ.matches;
   }
 
-  // Nested table/barbell scrollers capture the swipe. While the inner
-  // scroller is at the top, drive `.main` first so the page title hides on
-  // the way down and can come back on the way up.
+  // Nested table/barbell scrollers can eat the swipe. On mobile they only
+  // pan horizontally; vertical flicks must stay on `.main` so iOS keeps
+  // native momentum (Rankings already does this). Don't preventDefault on
+  // touchmove — that makes Statistics feel sticky. Wheel still forwards
+  // when an inner pane is actually a vertical scroller.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -1932,8 +1934,6 @@
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
-      let lastX = 0;
-      let lastY = 0;
 
       inner.addEventListener("wheel", (e) => {
         if (!NARROW_MQ.matches) return;
@@ -1945,31 +1945,6 @@
         } else if (e.deltaY < 0 && main.scrollTop > 0) {
           main.scrollTop += e.deltaY;
           e.preventDefault();
-        }
-      }, { passive: false });
-
-      inner.addEventListener("touchstart", (e) => {
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-      }, { passive: true });
-
-      inner.addEventListener("touchmove", (e) => {
-        if (!NARROW_MQ.matches) return;
-        const x = e.touches[0].clientX;
-        const y = e.touches[0].clientY;
-        const dx = x - lastX;
-        const dy = y - lastY;
-        lastX = x;
-        lastY = y;
-        if (Math.abs(dx) > Math.abs(dy)) return;
-        if (inner.scrollTop > 1) return;
-        const max = mainMax();
-        if (dy < 0 && main.scrollTop < max - 1) {
-          main.scrollTop -= dy;
-          if (e.cancelable) e.preventDefault();
-        } else if (dy > 0 && main.scrollTop > 0) {
-          main.scrollTop -= dy;
-          if (e.cancelable) e.preventDefault();
         }
       }, { passive: false });
     });
@@ -3888,7 +3863,7 @@
   }
 
   function activePageInfoBtn() {
-    if (preferMobileSheet() && el.pageInfoNavBtn) return el.pageInfoNavBtn;
+    if (el.pageInfoNavBtn) return el.pageInfoNavBtn;
     const pane = typeof pagePaneFor === "function" ? pagePaneFor(state.page) : null;
     if (pane) {
       const btn = pane.querySelector(".page-info-btn");
@@ -10985,7 +10960,9 @@ python3 site/annotate_social.py</pre>
 
   function syncPageTrayTrigger() {
     if (!el.pageTrayBtn) return;
-    const btn = el.pageTabs && el.pageTabs.querySelector(".page-tab-btn.active");
+    const btn =
+      (el.pageTabs && el.pageTabs.querySelector(".page-tab-btn.active[id]")) ||
+      (el.pageTabs && el.pageTabs.querySelector(".page-tab-btn.active"));
     const useEl = btn && btn.querySelector("svg.icon:not(.page-tab-caret) use");
     const href = useEl && (useEl.getAttribute("href") || useEl.getAttribute("xlink:href"));
     if (href && el.pageTrayIconUse) el.pageTrayIconUse.setAttribute("href", href);
@@ -11042,6 +11019,7 @@ python3 site/annotate_social.py</pre>
     if (el.pageMarkets) el.pageMarkets.classList.toggle("active", page === "markets");
     if (el.pageTeam) el.pageTeam.classList.toggle("active", page === "team");
     if (el.pageNotes) el.pageNotes.classList.toggle("active", page === "notes");
+    syncPageTabCloneActive(page);
     document.documentElement.dataset.page = page;
     syncPageTrayTrigger();
     setPageTrayOpen(false);
@@ -11445,26 +11423,217 @@ python3 site/annotate_social.py</pre>
     true
   );
 
+  let pageTabWheelBuilt = false;
+  let pageTabWheelLock = false;
+  let pageTabWheelUnlockTimer = 0;
+  let pageTabWheelGen = 0;
+
+  function pageTabWheelEnabled() {
+    return !!(el.pageTabs && !NARROW_MQ.matches);
+  }
+
+  function pageKeyFromTabBtn(btn) {
+    if (!btn) return null;
+    const id = btn.id || "";
+    if (id === "page-opta") return "opta";
+    if (id === "page-rankings") return "rankings";
+    if (id === "page-ownership") return "ownership";
+    if (id === "page-team") return "team";
+    if (id === "page-notes") return "notes";
+    if (id === "page-expected") return "expected";
+    if (id === "page-schedule") return "schedule";
+    if (id === "page-feed") return "feed";
+    if (id === "page-markets") return "markets";
+    const host = btn.closest("[data-page-clone]");
+    return host ? host.getAttribute("data-page-clone") : null;
+  }
+
+  function clonePageTabNode(node) {
+    const clone = node.cloneNode(true);
+    clone.classList.add("page-tab-clone");
+    clone.removeAttribute("id");
+    clone.setAttribute("aria-hidden", "true");
+    clone.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+    clone.querySelectorAll("[aria-controls]").forEach((n) => n.removeAttribute("aria-controls"));
+    clone.querySelectorAll(".dropdown-panel, .page-tab-menu").forEach((n) => n.remove());
+    clone.querySelectorAll(".page-tab-btn").forEach((btn) => {
+      btn.removeAttribute("id");
+      btn.setAttribute("tabindex", "-1");
+      btn.setAttribute("aria-hidden", "true");
+    });
+    const origBtn = node.matches(".page-tab-btn") ? node : node.querySelector(".page-tab-btn");
+    const page = pageKeyFromTabBtn(origBtn);
+    if (page) clone.setAttribute("data-page-clone", page);
+    if (clone.matches(".page-tab-btn")) clone.setAttribute("tabindex", "-1");
+    return clone;
+  }
+
+  function pageTabOrigins() {
+    if (!el.pageTabs) return [];
+    return [...el.pageTabs.children].filter((n) => n.hasAttribute("data-page-tab-origin"));
+  }
+
+  function pageTabSetWidth() {
+    const tabs = el.pageTabs;
+    const origins = pageTabOrigins();
+    if (!tabs || !origins.length) return 0;
+    const first = origins[0];
+    const last = origins[origins.length - 1];
+    const gap = parseFloat(getComputedStyle(tabs).columnGap || getComputedStyle(tabs).gap) || 0;
+    return last.offsetLeft + last.offsetWidth + gap - first.offsetLeft;
+  }
+
+  function wrapPageTabsScroll() {
+    const tabs = el.pageTabs;
+    if (!tabs || !pageTabWheelBuilt || pageTabWheelLock) return;
+    const w = pageTabSetWidth();
+    if (w < 8) return;
+    let sl = tabs.scrollLeft;
+    let guard = 0;
+    while (sl < w * 0.5 && guard < 4) {
+      sl += w;
+      guard += 1;
+    }
+    while (sl >= w * 1.5 && guard < 4) {
+      sl -= w;
+      guard += 1;
+    }
+    if (Math.abs(sl - tabs.scrollLeft) > 1) tabs.scrollLeft = sl;
+  }
+
+  function syncPageTabCloneActive(page) {
+    if (!el.pageTabs) return;
+    el.pageTabs.querySelectorAll("[data-page-clone]").forEach((node) => {
+      const btn = node.matches(".page-tab-btn") ? node : node.querySelector(".page-tab-btn");
+      if (btn) btn.classList.toggle("active", node.getAttribute("data-page-clone") === page);
+    });
+  }
+
+  function teardownPageTabWheel() {
+    if (!el.pageTabs) return;
+    el.pageTabs.querySelectorAll(".page-tab-clone").forEach((n) => n.remove());
+    pageTabOrigins().forEach((n) => n.removeAttribute("data-page-tab-origin"));
+    el.pageTabs.classList.remove("is-wheel");
+    pageTabWheelBuilt = false;
+    pageTabWheelLock = false;
+  }
+
+  function buildPageTabWheel() {
+    const tabs = el.pageTabs;
+    if (!tabs || pageTabWheelBuilt) return;
+    const originals = [...tabs.children];
+    if (!originals.length) return;
+    originals.forEach((n) => n.setAttribute("data-page-tab-origin", "1"));
+    const before = document.createDocumentFragment();
+    const after = document.createDocumentFragment();
+    originals.forEach((n) => before.appendChild(clonePageTabNode(n)));
+    originals.forEach((n) => after.appendChild(clonePageTabNode(n)));
+    tabs.insertBefore(before, tabs.firstChild);
+    tabs.appendChild(after);
+    tabs.classList.add("is-wheel");
+    pageTabWheelBuilt = true;
+    syncPageTabCloneActive(state.page);
+    const w = pageTabSetWidth();
+    if (w) tabs.scrollLeft = w;
+  }
+
+  function syncPageTabWheel() {
+    if (pageTabWheelEnabled()) {
+      const was = pageTabWheelBuilt;
+      buildPageTabWheel();
+      if (!was && pageTabWheelBuilt) {
+        requestAnimationFrame(() => {
+          const w = pageTabSetWidth();
+          if (w) el.pageTabs.scrollLeft = w;
+          scrollActivePageTabIntoView({ instant: true });
+        });
+      }
+    } else {
+      teardownPageTabWheel();
+    }
+    if (el.pageTabsClip) el.pageTabsClip.classList.toggle("is-wheel", pageTabWheelBuilt);
+  }
+
   function pageTabsAreScrollable() {
     const tabs = el.pageTabs;
     if (!tabs || NARROW_MQ.matches) return false;
+    if (pageTabWheelBuilt) return true;
     return tabs.scrollWidth > tabs.clientWidth + 2;
   }
 
-  function scrollActivePageTabIntoView() {
+  function unlockPageTabWheel() {
+    if (!pageTabWheelLock) return;
+    pageTabWheelLock = false;
+    wrapPageTabsScroll();
+    syncPageTabsScrollHints();
+  }
+
+  function centerPageTabEl(target, { instant = false } = {}) {
     const tabs = el.pageTabs;
-    if (!tabs || !pageTabsAreScrollable()) return;
-    const activeBtn = tabs.querySelector(".page-tab-btn.active");
-    if (!activeBtn) return;
-    const target = activeBtn.closest(".page-tab-dropdown") || activeBtn;
+    if (!tabs || !target) return;
     const tabsRect = tabs.getBoundingClientRect();
     const tabRect = target.getBoundingClientRect();
-    const pad = 12;
-    if (tabRect.left < tabsRect.left + pad) {
-      tabs.scrollLeft -= tabsRect.left + pad - tabRect.left;
-    } else if (tabRect.right > tabsRect.right - pad) {
-      tabs.scrollLeft += tabRect.right - (tabsRect.right - pad);
+    const next = tabs.scrollLeft + (tabRect.left + tabRect.width / 2) - (tabsRect.left + tabsRect.width / 2);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (instant || reduce || typeof tabs.scrollTo !== "function") {
+      tabs.scrollLeft = next;
+      wrapPageTabsScroll();
+      return;
     }
+    pageTabWheelLock = true;
+    window.clearTimeout(pageTabWheelUnlockTimer);
+    const gen = ++pageTabWheelGen;
+    tabs.scrollTo({ left: next, behavior: "smooth" });
+    const done = () => {
+      if (gen !== pageTabWheelGen) return;
+      tabs.removeEventListener("scrollend", done);
+      unlockPageTabWheel();
+    };
+    tabs.addEventListener("scrollend", done, { once: true });
+    pageTabWheelUnlockTimer = window.setTimeout(done, 520);
+  }
+
+  function scrollActivePageTabIntoView(opts = {}) {
+    const tabs = el.pageTabs;
+    if (!tabs) return;
+    if (!pageTabWheelEnabled()) {
+      if (!pageTabsAreScrollable()) return;
+      const activeBtn = tabs.querySelector(".page-tab-btn.active[id]") || tabs.querySelector(".page-tab-btn.active");
+      if (!activeBtn) return;
+      const target = activeBtn.closest(".page-tab-dropdown") || activeBtn;
+      const tabsRect = tabs.getBoundingClientRect();
+      const tabRect = target.getBoundingClientRect();
+      const pad = 12;
+      if (tabRect.left < tabsRect.left + pad) {
+        tabs.scrollLeft -= tabsRect.left + pad - tabRect.left;
+      } else if (tabRect.right > tabsRect.right - pad) {
+        tabs.scrollLeft += tabRect.right - (tabsRect.right - pad);
+      }
+      syncPageTabsScrollHints();
+      return;
+    }
+    if (!pageTabWheelBuilt) buildPageTabWheel();
+    const page = state.page;
+    const targets = [];
+    const originBtn = tabs.querySelector(".page-tab-btn.active[id]");
+    if (originBtn && tabs.contains(originBtn)) {
+      targets.push(originBtn.closest(".page-tab-dropdown") || originBtn);
+    }
+    tabs.querySelectorAll(`[data-page-clone="${page}"]`).forEach((n) => targets.push(n));
+    if (!targets.length) return;
+    const tabsRect = tabs.getBoundingClientRect();
+    const mid = tabsRect.left + tabsRect.width / 2;
+    let best = targets[0];
+    let bestDist = Infinity;
+    targets.forEach((t) => {
+      const r = t.getBoundingClientRect();
+      const d = Math.abs(r.left + r.width / 2 - mid);
+      if (d < bestDist) {
+        bestDist = d;
+        best = t;
+      }
+    });
+    centerPageTabEl(best, opts);
     syncPageTabsScrollHints();
   }
 
@@ -11478,6 +11647,10 @@ python3 site/annotate_social.py</pre>
     const tabs = el.pageTabs;
     const clip = el.pageTabsClip;
     if (!tabs || !clip) return;
+    if (pageTabWheelBuilt) {
+      clip.classList.add("has-more-left", "has-more-right");
+      return;
+    }
     const maxScroll = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
     if (maxScroll < 2) {
       clip.classList.remove("has-more-left", "has-more-right");
@@ -11490,12 +11663,44 @@ python3 site/annotate_social.py</pre>
   }
 
   if (el.pageTabs) {
-    el.pageTabs.addEventListener("scroll", syncPageTabsScrollHints, { passive: true });
+    el.pageTabs.addEventListener("scroll", () => {
+      wrapPageTabsScroll();
+      syncPageTabsScrollHints();
+    }, { passive: true });
+    el.pageTabs.addEventListener(
+      "click",
+      (e) => {
+        const host = e.target.closest("[data-page-clone]");
+        if (!host || !el.pageTabs.contains(host)) return;
+        const page = host.getAttribute("data-page-clone");
+        if (!page) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setPage(page);
+      },
+      true
+    );
+    el.pageTabs.addEventListener(
+      "wheel",
+      (e) => {
+        if (!pageTabWheelEnabled()) return;
+        if (e.ctrlKey) return;
+        const dx = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+        if (!dx) return;
+        e.preventDefault();
+        el.pageTabs.scrollLeft += dx;
+      },
+      { passive: false }
+    );
     if (typeof ResizeObserver !== "undefined") {
-      const tabsRo = new ResizeObserver(() => syncPageTabsScrollHints());
+      const tabsRo = new ResizeObserver(() => {
+        wrapPageTabsScroll();
+        syncPageTabsScrollHints();
+      });
       tabsRo.observe(el.pageTabs);
       if (el.pageTabsClip) tabsRo.observe(el.pageTabsClip);
     }
+    syncPageTabWheel();
   }
 
   // Brand mark always returns to OPTA (home) with a full refresh so filters
@@ -13035,6 +13240,7 @@ python3 site/annotate_social.py</pre>
     syncMarketsViewControls();
     setPageTrayOpen(false);
     syncPageTrayTrigger();
+    syncPageTabWheel();
     if (state.page === "notes" && NARROW_MQ.matches) setPage("opta");
     if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
     if (state.page === "team") renderTeam();

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=455" />
+<link rel="stylesheet" href="styles.css?v=458" />
 <script>
 (() => {
   try {
@@ -248,17 +248,6 @@
     </select>
   </div>
 
-  <div class="page-nav-center">
-    <button type="button" class="page-tray-btn" id="page-tray-btn"
-      aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Statistics">
-      <svg class="icon" aria-hidden="true"><use id="page-tray-icon-use" href="#i-table"/></svg>
-      <span class="page-tray-current">
-        <span id="page-tray-label">Statistics</span>
-        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-      </span>
-    </button>
-  </div>
-
   <div class="page-tabs-clip" id="page-tabs-clip">
   <nav class="page-tabs" id="page-tabs" aria-label="Pages">
     <button id="page-opta" class="page-tab-btn active" type="button">
@@ -310,11 +299,22 @@
   </nav>
   </div>
 
-  <div class="page-nav-actions">
+  <div class="page-nav-center">
+    <button type="button" class="page-tray-btn" id="page-tray-btn"
+      aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Statistics">
+      <svg class="icon" aria-hidden="true"><use id="page-tray-icon-use" href="#i-table"/></svg>
+      <span class="page-tray-current">
+        <span id="page-tray-label">Statistics</span>
+        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </span>
+    </button>
     <button class="page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
       aria-label="How Statistics works" aria-describedby="page-info-tooltip" aria-expanded="false">
       <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
     </button>
+  </div>
+
+  <div class="page-nav-actions">
     <button id="theme-cycle-btn" class="icon-btn icon-only-btn" type="button"
       title="Theme: Device" aria-label="Theme: Device">
       <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
@@ -1144,7 +1144,7 @@
 <script src="social_data.js?v=14"></script>
 <script src="markets_data.js?v=6"></script>
 <script src="ownership_data.js?v=3"></script>
-<script src="app.js?v=449"></script>
+<script src="app.js?v=452"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
