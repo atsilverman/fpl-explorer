@@ -678,6 +678,7 @@
     pageTabs: $("#page-tabs"),
     pageTabsClip: $("#page-tabs-clip"),
     pageNav: document.querySelector(".page-nav"),
+    pageNavCenter: $(".page-nav-center"),
     pageInfoNavBtn: $("#page-info-nav-btn"),
     pageTrayBtn: $("#page-tray-btn"),
     pageTrayLabel: $("#page-tray-label"),
@@ -2181,10 +2182,9 @@
     }
   }
 
-  // Horizontal tables/barbells are overflow-x scrollers, so iOS would otherwise
-  // swallow vertical flicks (only the 8px page padding would move). Drive
-  // `.main` for vertical, keep native horizontal pan, no post-lift fling
-  // (fling past scroll edges caused the page to snap back from the top).
+  // Horizontal tables/barbells are overflow-x scrollers on mobile; vertical
+  // scroll lives on `.main`. Wheel on narrow viewports still chains vertically
+  // (trackpad / mouse); touch uses CSS touch-action: pan-x on the inner scroller.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -2196,10 +2196,6 @@
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
-      let lastX = 0;
-      let lastY = 0;
-      let lastT = 0;
-      let axis = null;
 
       inner.addEventListener("wheel", (e) => {
         if (!NARROW_MQ.matches) return;
@@ -2212,41 +2208,6 @@
           main.scrollTop += e.deltaY;
           e.preventDefault();
         }
-      }, { passive: false });
-
-      inner.addEventListener("touchstart", (e) => {
-        const t = e.touches[0];
-        lastX = t.clientX;
-        lastY = t.clientY;
-        lastT = e.timeStamp;
-        axis = null;
-      }, { passive: true });
-
-      inner.addEventListener("touchmove", (e) => {
-        if (!NARROW_MQ.matches) return;
-        const t = e.touches[0];
-        const x = t.clientX;
-        const y = t.clientY;
-        const dx = x - lastX;
-        const dy = y - lastY;
-        const now = e.timeStamp;
-        if (!axis) {
-          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-          axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-        }
-        lastX = x;
-        lastY = y;
-        if (axis !== "y") {
-          lastT = now;
-          return;
-        }
-        const max = mainMax();
-        const next = Math.max(0, Math.min(max, main.scrollTop - dy));
-        if (next === main.scrollTop) return;
-        const dt = Math.max(8, now - lastT);
-        lastT = now;
-        main.scrollTop = next;
-        if (e.cancelable) e.preventDefault();
       }, { passive: false });
     });
   }
@@ -11142,6 +11103,25 @@ python3 site/annotate_social.py</pre>
     }
   }
 
+  function syncPageNavLabelCenter() {
+    const cluster = el.pageNavCenter;
+    const label = el.pageTrayLabel;
+    const nav = el.pageNav;
+    if (!cluster || !label || !nav) return;
+    if (!preferMobileSheet()) {
+      cluster.style.removeProperty("--page-nav-label-offset");
+      return;
+    }
+    cluster.style.setProperty("--page-nav-label-offset", "0px");
+    requestAnimationFrame(() => {
+      const navRect = nav.getBoundingClientRect();
+      const navMid = navRect.left + navRect.width / 2;
+      const labelRect = label.getBoundingClientRect();
+      const labelMid = labelRect.left + labelRect.width / 2;
+      cluster.style.setProperty("--page-nav-label-offset", `${navMid - labelMid}px`);
+    });
+  }
+
   function syncPageTrayTrigger() {
     if (!el.pageTrayBtn) return;
     const btn =
@@ -11159,6 +11139,7 @@ python3 site/annotate_social.py</pre>
       : "";
     if (el.pageTrayLabel && label) el.pageTrayLabel.textContent = label;
     el.pageTrayBtn.setAttribute("aria-label", label ? `Pages, ${label}` : "Pages");
+    syncPageNavLabelCenter();
   }
 
   function setPage(page) {
@@ -13598,6 +13579,7 @@ python3 site/annotate_social.py</pre>
       syncFeedSearchLayout();
       syncTeamSearchHost();
       syncPageTabsScrollHints();
+      syncPageNavLabelCenter();
       refreshNameSimplifyOrigins();
     });
     if (typeof NARROW_MQ.addEventListener === "function") {
@@ -13605,12 +13587,14 @@ python3 site/annotate_social.py</pre>
         syncFeedSearchLayout();
         syncTeamSearchHost();
         syncTeamPickerCancelHost();
+        syncPageNavLabelCenter();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
         syncFeedSearchLayout();
         syncTeamSearchHost();
         syncTeamPickerCancelHost();
+        syncPageNavLabelCenter();
       });
     }
     bindAllNameColumnSimplifies();
