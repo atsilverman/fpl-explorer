@@ -1912,6 +1912,63 @@
     return preferMobileSheet() || COLUMNS_IN_FILTERS_MQ.matches;
   }
 
+  // Nested table/barbell scrollers capture the swipe. While the inner
+  // scroller is at the top, drive `.main` first so the page title hides on
+  // the way down and can come back on the way up.
+  function bindNestedTableScroll() {
+    const main = document.querySelector("main.main");
+    if (!main) return;
+
+    function mainMax() {
+      return Math.max(0, main.scrollHeight - main.clientHeight);
+    }
+
+    document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
+      if (inner.dataset.scrollChain === "1") return;
+      inner.dataset.scrollChain = "1";
+      let lastX = 0;
+      let lastY = 0;
+
+      inner.addEventListener("wheel", (e) => {
+        if (!NARROW_MQ.matches) return;
+        if (inner.scrollTop > 0) return;
+        const max = mainMax();
+        if (e.deltaY > 0 && main.scrollTop < max - 1) {
+          main.scrollTop += e.deltaY;
+          e.preventDefault();
+        } else if (e.deltaY < 0 && main.scrollTop > 0) {
+          main.scrollTop += e.deltaY;
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      inner.addEventListener("touchstart", (e) => {
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }, { passive: true });
+
+      inner.addEventListener("touchmove", (e) => {
+        if (!NARROW_MQ.matches) return;
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        const dx = x - lastX;
+        const dy = y - lastY;
+        lastX = x;
+        lastY = y;
+        if (Math.abs(dx) > Math.abs(dy)) return;
+        if (inner.scrollTop > 1) return;
+        const max = mainMax();
+        if (dy < 0 && main.scrollTop < max - 1) {
+          main.scrollTop -= dy;
+          if (e.cancelable) e.preventDefault();
+        } else if (dy > 0 && main.scrollTop > 0) {
+          main.scrollTop -= dy;
+          if (e.cancelable) e.preventDefault();
+        }
+      }, { passive: false });
+    });
+  }
+
   // Mobile Statistics name-column scroll morph — disabled for now.
   function nameSimplifyWraps() {
     const wraps = [];
@@ -12967,6 +13024,7 @@ python3 site/annotate_social.py</pre>
       });
     }
     bindAllNameColumnSimplifies();
+    bindNestedTableScroll();
     try {
       await restoreManagerId();
     } catch {

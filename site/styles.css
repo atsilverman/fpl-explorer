@@ -1719,7 +1719,7 @@ a { color: var(--blue); }
 @media (max-width: 720px) {
   .main {
     --main-pad-x: 8px;
-    --main-pad-top: 10px;
+    --main-pad-top: 8px;
     --table-sticky-max: calc(100dvh - 8.5rem);
     padding: var(--main-pad-top) var(--main-pad-x) 28px;
     overflow-x: hidden;
@@ -2405,15 +2405,18 @@ a { color: var(--blue); }
 
 @media (max-width: 720px) {
   .table-wrap {
-    /* Pin the card under the padded .main top — not flush with the toolbar.
-       Overflow auto clips rows/columns to the radius so they cannot leak. */
-    position: sticky;
-    top: 0;
-    overflow: auto;
+    /* Page (.main) is the vertical scroller so the title can hide and return.
+       The wrap only pans horizontally and clips to the rounded frame. */
+    position: relative;
+    top: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
     width: auto;
     min-width: 0;
     max-width: 100%;
-    max-height: var(--table-sticky-max, calc(100dvh - 8.5rem));
+    max-height: none;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
     --name-col-w: 136px;
     --crest-size: 22px;
     --badge-size: 22px;
@@ -4324,6 +4327,18 @@ html[data-page="ownership"] .layout .main {
   color: var(--text-faint);
   white-space: nowrap;
 }
+/* Inset 0 / max so the labels (and end ticks) sit off the Player rail
+   and the xG divider. Mid ticks stay centered on their values. */
+.barbell-scale-tick:first-child {
+  transform: none;
+  align-items: flex-start;
+  padding-left: 6px;
+}
+.barbell-scale-tick:last-child {
+  transform: translateX(-100%);
+  align-items: flex-end;
+  padding-right: 8px;
+}
 
 .barbell-body {
   /* Vertical + horizontal scroll live on .barbell-scroll so sticky
@@ -4697,30 +4712,34 @@ html[data-page="ownership"] .layout .main {
    of restacking the track under Diff (which caused overlap). */
 @media (max-width: 720px) {
   .barbell-wrap {
-    position: sticky;
-    top: 0;
+    position: relative;
+    top: auto;
     overflow: hidden;
     width: auto;
     min-width: 0;
     max-width: 100%;
-    max-height: var(--table-sticky-max, calc(100dvh - 8.5rem));
+    max-height: none;
     --barbell-name-w: 120px;
     --barbell-name-w-compare: 112px;
     --barbell-head-h: 32px;
     --crest-size: 16px;
     --badge-size: 16px;
     /* Keep head / scale / rows on the same width — mismatched min-widths
-       left a blank strip past Diff when scrolled right. */
-    --barbell-min-w: 520px;
-    --barbell-track-min: 150px;
+       left a blank strip past Diff when scrolled right. Give the track
+       more length; xG / Goals / Diff sit off to the right. */
+    --barbell-min-w: 680px;
+    --barbell-track-min: 280px;
     --barbell-num-w: 52px;
     --barbell-gap: 6px;
     --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
-    --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(140px, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
   }
   .barbell-scroll {
-    overflow: auto;
-    max-height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: none;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
   }
   .barbell-head {
     padding: 7px 10px;
@@ -9456,10 +9475,11 @@ html[data-page="team"] .layout .main {
   #team-picker-view .team-table-wrap.team-picker-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
-    max-height: var(--table-sticky-max, calc(100dvh - 8.5rem));
-    overflow: auto;
-    position: sticky;
-    top: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    top: auto;
   }
   #team-search-results .table-wrap > table > thead {
     position: static;
