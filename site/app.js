@@ -2199,199 +2199,12 @@
     });
   }
 
-  // Mobile row swipe-to-compare (entire row slides on name-cell drag).
-  const ROW_SWIPE_ACTION_W = 68;
-  const ROW_SWIPE_SNAP = 36;
-  const ROW_SWIPE_AUTO = 72;
-  const ROW_SWIPE_AXIS = 8;
-  let rowSwipeOpenEl = null;
-  let rowSwipeDrag = null;
-
-  function optaSwipeCompareEnabled() {
-    return preferMobileSheet() && state.page === "opta" && state.view === "players";
-  }
-
-  function teamPickerSwipeCompareEnabled() {
-    return preferMobileSheet() && state.page === "team" && !!state.teamPickerSlot && teamIsEditable();
-  }
-
   function comparePanelVisible() {
-    const set = compareSet();
-    if (preferMobileSheet()) {
-      return state.page === "opta" && state.view === "players" && set.size >= 2;
-    }
-    return state.compareMode && set.size >= 2;
+    return state.compareMode && compareSet().size >= 2;
   }
 
   function teamComparePanelVisible() {
-    if (preferMobileSheet()) {
-      return teamPickerSwipeCompareEnabled() && state.teamCompareCodes.length >= 2;
-    }
     return state.teamCompareMode && state.teamCompareCodes.length >= 2;
-  }
-
-  function rowSwipeCurrentOffset(host) {
-    if (!host) return 0;
-    const raw = host.style.getPropertyValue("--row-swipe-x");
-    if (raw) return parseFloat(raw) || 0;
-    return host.classList.contains("is-open") ? ROW_SWIPE_ACTION_W : 0;
-  }
-
-  function rowSwipeSetOffset(host, x, { animate = false, open = false } = {}) {
-    if (!host) return;
-    const clamped = Math.max(0, Math.min(ROW_SWIPE_ACTION_W, x));
-    host.style.setProperty("--row-swipe-x", `${clamped}px`);
-    host.classList.toggle("is-dragging", !animate && clamped > 0);
-    host.classList.toggle("is-open", open);
-    const action = host.querySelector(".row-swipe-action");
-    const btn = host.querySelector(".row-swipe-btn");
-    if (action) action.setAttribute("aria-hidden", open ? "false" : "true");
-    if (btn) btn.tabIndex = open ? 0 : -1;
-    if (open) rowSwipeOpenEl = host;
-    else if (rowSwipeOpenEl === host) rowSwipeOpenEl = null;
-  }
-
-  function rowSwipeCloseAll(except) {
-    document.querySelectorAll("tr.row-swipe-host.is-open, tr.row-swipe-host.is-dragging").forEach((el) => {
-      if (el !== except) rowSwipeSetOffset(el, 0, { animate: true, open: false });
-    });
-    if (!except) rowSwipeOpenEl = null;
-  }
-
-  function rowSwipeActionHTML({ name, selected }) {
-    const label = selected ? "Remove" : "Compare";
-    const aria = selected ? `Remove ${name} from compare` : `Compare ${name}`;
-    return `<div class="row-swipe-action" aria-hidden="true">
-      <button type="button" class="row-swipe-btn" tabindex="-1" aria-label="${escapeHtml(aria)}">${escapeHtml(label)}</button>
-    </div>`;
-  }
-
-  function bindRowSwipeCompare({ root, isEnabled, onToggle }) {
-    if (!root || root.dataset.rowSwipeBound === "1") return;
-    root.dataset.rowSwipeBound = "1";
-
-    root.addEventListener("click", (e) => {
-      const btn = e.target.closest(".row-swipe-btn");
-      if (!btn || !root.contains(btn)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const host = btn.closest("tr.row-swipe-host");
-      if (!host || !isEnabled()) return;
-      const key = host.dataset.swipeKey;
-      if (key == null || key === "") return;
-      onToggle(key);
-      rowSwipeCloseAll();
-    });
-
-    root.addEventListener(
-      "touchstart",
-      (e) => {
-        if (!isEnabled()) return;
-        if (e.target.closest("a, button, [data-tip], [data-tip-html]")) return;
-        const nameCell = e.target.closest("td.col-player, td.col-name");
-        if (!nameCell || !root.contains(nameCell)) return;
-        const host = nameCell.closest("tr.row-swipe-host");
-        if (!host) return;
-        const touch = e.touches[0];
-        if (!touch) return;
-        rowSwipeDrag = {
-          host,
-          startX: touch.clientX,
-          startY: touch.clientY,
-          startOffset: rowSwipeCurrentOffset(host),
-        };
-      },
-      { passive: true }
-    );
-
-    root.addEventListener(
-      "touchmove",
-      (e) => {
-        if (!rowSwipeDrag || !isEnabled()) return;
-        if (!rowSwipeDrag.axis) {
-          const touch = e.touches[0];
-          if (!touch) return;
-          const dx = touch.clientX - rowSwipeDrag.startX;
-          const dy = touch.clientY - rowSwipeDrag.startY;
-          if (Math.abs(dx) < ROW_SWIPE_AXIS && Math.abs(dy) < ROW_SWIPE_AXIS) return;
-          rowSwipeDrag.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-          if (rowSwipeDrag.axis === "y") {
-            rowSwipeDrag = null;
-            return;
-          }
-          if (dx <= 0 && rowSwipeDrag.startOffset <= 0) {
-            rowSwipeDrag = null;
-            return;
-          }
-          rowSwipeCloseAll(rowSwipeDrag.host);
-        }
-        if (rowSwipeDrag.axis !== "x") return;
-        const touch = e.touches[0];
-        if (!touch) return;
-        const dx = touch.clientX - rowSwipeDrag.startX;
-        const offset = Math.max(0, Math.min(ROW_SWIPE_ACTION_W, rowSwipeDrag.startOffset + dx));
-        rowSwipeSetOffset(rowSwipeDrag.host, offset, { animate: false, open: false });
-        if (e.cancelable) e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    const onTouchEnd = () => {
-      if (!rowSwipeDrag) return;
-      const { host } = rowSwipeDrag;
-      const x = rowSwipeCurrentOffset(host);
-      rowSwipeDrag = null;
-      if (x >= ROW_SWIPE_AUTO) {
-        const key = host.dataset.swipeKey;
-        if (key != null && key !== "") onToggle(key);
-        rowSwipeSetOffset(host, 0, { animate: true, open: false });
-        if (navigator.vibrate) {
-          try {
-            navigator.vibrate(10);
-          } catch {
-            /* unsupported */
-          }
-        }
-        return;
-      }
-      if (x >= ROW_SWIPE_SNAP) {
-        rowSwipeSetOffset(host, ROW_SWIPE_ACTION_W, { animate: true, open: true });
-        return;
-      }
-      rowSwipeSetOffset(host, 0, { animate: true, open: false });
-    };
-
-    root.addEventListener("touchend", onTouchEnd);
-    root.addEventListener("touchcancel", onTouchEnd);
-  }
-
-  function bindRowSwipeDismiss() {
-    if (document.documentElement.dataset.rowSwipeDismiss === "1") return;
-    document.documentElement.dataset.rowSwipeDismiss = "1";
-    document.addEventListener("click", (e) => {
-      if (!rowSwipeOpenEl) return;
-      if (e.target.closest("tr.row-swipe-host.is-open")) return;
-      rowSwipeCloseAll();
-    });
-    document.addEventListener(
-      "touchstart",
-      (e) => {
-        if (!rowSwipeOpenEl) return;
-        if (e.target.closest("tr.row-swipe-host.is-open")) return;
-        rowSwipeCloseAll();
-      },
-      { passive: true }
-    );
-    const main = document.querySelector("main.main");
-    if (main) {
-      main.addEventListener(
-        "scroll",
-        () => {
-          if (rowSwipeOpenEl) rowSwipeCloseAll();
-        },
-        { passive: true }
-      );
-    }
   }
 
   // Statistics table: scroll-linked Player/Team name morph (full ↔ compact).
@@ -3033,19 +2846,11 @@
     if (r.code != null) tr.dataset.playerCode = String(r.code);
     tr.dataset.rowKey = String(key);
     const inCompareSet = compareSet().has(key);
-    const mobileSwipe = optaSwipeCompareEnabled();
-    if (mobileSwipe) {
-      tr.classList.add("row-swipe-host");
-      tr.dataset.swipeKey = String(key);
-    }
-    if (state.compareMode && !preferMobileSheet()) {
+    if (state.compareMode) {
       tr.classList.add("row-selectable");
       if (inCompareSet) tr.classList.add("row-selected");
       tr.setAttribute("aria-selected", inCompareSet ? "true" : "false");
       tr.addEventListener("click", () => toggleCompareRow(key));
-    } else if (mobileSwipe && inCompareSet) {
-      tr.classList.add("row-selected");
-      tr.setAttribute("aria-selected", "true");
     }
     vcols.forEach((c, i) => {
       const td = document.createElement("td");
@@ -3060,9 +2865,6 @@
         td.classList.add("has-update-change");
       }
       let inner = cellHTML(r, c);
-      if (mobileSwipe && (c.key === "player" || c.key === "name")) {
-        inner = rowSwipeActionHTML({ name: r.name || "", selected: inCompareSet }) + inner;
-      }
       td.innerHTML = inner;
       if (isNumericCol(c)) {
         if (!isStatApplicable(r, c)) {
@@ -3122,7 +2924,6 @@
   }
 
   function renderTable() {
-    rowSwipeCloseAll();
     clearTimeout(fixtureTtTimer);
     hideFixtureTooltip();
     if (state.page === "ownership") {
@@ -3813,7 +3614,7 @@
     // Statistics (default)
     const iconRows = [
       spitRow(iconHTML("refresh-ccw-dot"), "2026/27 matched price, club, and position on 2025/26 rows"),
-      spitRow(iconHTML("scale"), mobile ? "Swipe a name cell right to compare (up to five)" : "Compare — up to five rows side by side"),
+      spitRow(iconHTML("scale"), "Compare — tap the toolbar button, then pick up to five rows"),
     ];
     iconRows.push(
       spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)"),
@@ -4689,16 +4490,8 @@
     if (set.has(key)) {
       set.delete(key);
     } else if (set.size < MAX_COMPARE) {
-      const wasEmpty = set.size === 0;
       set.add(key);
       hideToast();
-      if (optaSwipeCompareEnabled() && wasEmpty) {
-        showToast({
-          title: "Compare",
-          message: "Swipe more players to compare side by side.",
-          icon: "scale",
-        });
-      }
     } else {
       showToast({
         title: "Compare",
@@ -6369,19 +6162,13 @@
     el.teamPage.querySelectorAll("tr[data-team-code]").forEach((tr) => {
       if (tr.closest("#team-search-results, #team-compare-wrap")) {
         tr.classList.remove("row-selected");
-        if (state.teamCompareMode && !preferMobileSheet()) tr.classList.add("row-selectable");
+        if (state.teamCompareMode) tr.classList.add("row-selectable");
         else tr.classList.remove("row-selectable");
-        return;
-      }
-      if (tr.closest("#team-picker-body") && teamPickerSwipeCompareEnabled()) {
-        const selected = teamCompareHas(tr.dataset.teamCode);
-        tr.classList.toggle("row-selected", selected);
-        tr.classList.remove("row-selectable");
         return;
       }
       const selected = teamCompareHas(tr.dataset.teamCode);
       tr.classList.toggle("row-selected", selected);
-      if (state.teamCompareMode && !preferMobileSheet()) tr.classList.add("row-selectable");
+      if (state.teamCompareMode) tr.classList.add("row-selectable");
       else if (!selected) tr.classList.remove("row-selectable");
     });
   }
@@ -6911,6 +6698,28 @@
     }
   }
 
+  function syncTeamCompareHost() {
+    if (!el.teamCompareBtn || !el.teamToolbarControls) return;
+    const mobile = preferMobileSheet();
+    const picking = state.page === "team" && !!state.teamPickerSlot;
+    if (mobile && picking && el.statsToolbarActions) {
+      const anchor =
+        el.searchWrap && el.searchWrap.parentElement === el.statsToolbarActions
+          ? el.searchWrap
+          : el.teamPickerCancel && el.teamPickerCancel.parentElement === el.statsToolbarActions
+            ? el.teamPickerCancel.nextElementSibling
+            : null;
+      if (el.teamCompareBtn.parentElement !== el.statsToolbarActions) {
+        if (anchor) el.statsToolbarActions.insertBefore(el.teamCompareBtn, anchor);
+        else el.statsToolbarActions.appendChild(el.teamCompareBtn);
+      } else if (anchor && el.teamCompareBtn.nextElementSibling !== anchor) {
+        el.statsToolbarActions.insertBefore(el.teamCompareBtn, anchor);
+      }
+    } else if (el.teamCompareBtn.parentElement !== el.teamToolbarControls) {
+      el.teamToolbarControls.insertBefore(el.teamCompareBtn, el.teamToolbarControls.firstChild);
+    }
+  }
+
   function syncTeamPickerCancelHost() {
     if (!el.teamPickerCancel) return;
     const mobile = preferMobileSheet();
@@ -6942,6 +6751,7 @@
     if (el.teamSquadView) el.teamSquadView.hidden = picking;
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
     syncTeamSearchHost();
+    syncTeamCompareHost();
     const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "feed" || (state.page === "team" && !picking);
     if (el.sidebar) el.sidebar.style.display = hideSidebar ? "none" : "";
     if (el.sidebarToggle) {
@@ -7854,15 +7664,9 @@
         const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
         const selected = teamCompareHas(row.code);
         const selectedCls = selected ? " row-selected" : "";
-        const swipeEnabled = teamPickerSwipeCompareEnabled();
         const identity = playerIdentityHTML(crest, nameHTML, sub);
-        const playerCell = swipeEnabled
-          ? rowSwipeActionHTML({ name: row.name || "", selected }) + identity
-          : identity;
-        const swipeHostCls = swipeEnabled ? " row-swipe-host" : "";
-        const swipeKeyAttr = swipeEnabled ? ` data-swipe-key="${escapeHtml(String(row.code))}"` : "";
-        return `<tr class="team-picker-row${swipeHostCls}${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}"${swipeKeyAttr} role="button" tabindex="0">
-          <td class="col-player">${playerCell}</td>
+        return `<tr class="team-picker-row${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
+          <td class="col-player">${identity}</td>
           <td class="col-num team-price sec-divider">${Number(row.price).toFixed(1)}</td>
           <td class="col-num col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
           ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
@@ -7878,7 +7682,6 @@
 
   function renderTeam() {
     if (!el.teamPage) return;
-    rowSwipeCloseAll();
     if (state.teamGwStart == null) state.teamGwStart = teamClampGwStart(teamCurrentGw());
     normalizeTeamRoles();
     state.teamHoverCompareCode = null;
@@ -7887,8 +7690,7 @@
     const picking = !!state.teamPickerSlot;
     el.teamPage.classList.toggle(
       "is-comparing",
-      !!state.teamCompareMode ||
-        (teamPickerSwipeCompareEnabled() && state.teamCompareCodes.length > 0)
+      !!state.teamCompareMode || state.teamCompareCodes.length > 0
     );
     syncTeamCompareBtn();
     syncTeamPickerChrome();
@@ -7953,7 +7755,6 @@
       return;
     }
     if (e.target.closest("#team-compare-btn")) {
-      if (preferMobileSheet()) return;
       if (!teamIsEditable()) {
         showToast({ title: "Actual is read-only", message: "Switch to Planner to compare and edit.", icon: "info" });
         return;
@@ -8001,7 +7802,7 @@
       focusTeamSearchInput();
       return;
     }
-    if (state.teamCompareMode && !preferMobileSheet()) {
+    if (state.teamCompareMode) {
       const selectable = e.target.closest(
         "tr.team-player-row[data-team-code], tr.team-search-row[data-team-code], tr.team-picker-row[data-team-code]"
       );
@@ -8015,7 +7816,7 @@
         return;
       }
     }
-    if (preferMobileSheet() && e.target.closest("#team-compare-wrap tr[data-team-code]")) {
+    if (e.target.closest("#team-compare-wrap tr[data-team-code]")) {
       const compareRow = e.target.closest("#team-compare-wrap tr[data-team-code]");
       if (compareRow) {
         toggleTeamCompareCode(compareRow.dataset.teamCode);
@@ -8041,7 +7842,7 @@
     }
     const pick = e.target.closest("[data-team-pick]");
     if (pick) {
-      if (e.target.closest(".row-swipe-action, .row-swipe-btn, tr.row-swipe-host.is-open")) return;
+      if (e.target.closest("#team-compare-wrap")) return;
       const row = teamPlayerByCode(Number(pick.dataset.teamPick) || pick.dataset.teamPick);
       const slot = state.teamPickerSlot;
       if (row && slot && addTeamPlayer(row, { starter: slot.starter, replaceCode: slot.replaceCode })) {
@@ -11396,6 +11197,7 @@ python3 site/annotate_social.py</pre>
     if (page === "feed") syncFeedSearchLayout();
     if (page !== "team" && el.subtoolbar) el.subtoolbar.classList.remove("is-team-picking");
     syncTeamSearchHost();
+    syncTeamCompareHost();
     syncSearchClearBtns();
     syncPageInfoButton();
     syncAllNameColumnSimplifies();
@@ -11430,6 +11232,7 @@ python3 site/annotate_social.py</pre>
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
     el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
     el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
+    el.subtoolbar.classList.toggle("is-opta-mobile", page === "opta" && preferMobileSheet());
     el.sidebar.style.display =
       page === "schedule" || isMarkets || isFeed || (page === "team" && !state.teamPickerSlot)
         ? "none"
@@ -11461,8 +11264,7 @@ python3 site/annotate_social.py</pre>
     el.tableOnlyToggles.style.display = "none";
     if (el.newpriceWrap) el.newpriceWrap.style.display = "none";
     if (el.compareToggle) {
-      el.compareToggle.style.display =
-        page === "opta" && !preferMobileSheet() ? "" : "none";
+      el.compareToggle.style.display = page === "opta" ? "" : "none";
     }
     if (el.columnsBtn) el.columnsBtn.style.display = "none";
     syncColumnsPanelHost();
@@ -13291,7 +13093,6 @@ python3 site/annotate_social.py</pre>
   }
 
   el.compareToggle.addEventListener("click", () => {
-    if (preferMobileSheet()) return;
     state.compareMode = !state.compareMode;
     el.compareToggle.classList.toggle("on", state.compareMode);
     if (state.compareMode) {
@@ -13787,6 +13588,7 @@ python3 site/annotate_social.py</pre>
       syncAllSegThumbs({ animate: false });
       syncFeedSearchLayout();
       syncTeamSearchHost();
+      syncTeamCompareHost();
       syncPageTabsScrollHints();
       syncPageNavLabelCenter();
       refreshNameSimplifyOrigins();
@@ -13795,6 +13597,7 @@ python3 site/annotate_social.py</pre>
       NARROW_MQ.addEventListener("change", () => {
         syncFeedSearchLayout();
         syncTeamSearchHost();
+        syncTeamCompareHost();
         syncTeamPickerCancelHost();
         syncPageNavLabelCenter();
       });
@@ -13802,6 +13605,7 @@ python3 site/annotate_social.py</pre>
       NARROW_MQ.addListener(() => {
         syncFeedSearchLayout();
         syncTeamSearchHost();
+        syncTeamCompareHost();
         syncTeamPickerCancelHost();
         syncPageNavLabelCenter();
       });
@@ -13809,28 +13613,6 @@ python3 site/annotate_social.py</pre>
     bindAllNameColumnSimplifies();
     bindNestedTableScroll();
     bindMobileChromeScrollHide();
-    bindRowSwipeDismiss();
-    bindRowSwipeCompare({
-      root: el.tableBody,
-      isEnabled: optaSwipeCompareEnabled,
-      onToggle: (key) => toggleCompareRow(key),
-    });
-    bindRowSwipeCompare({
-      root: el.teamPickerBody,
-      isEnabled: teamPickerSwipeCompareEnabled,
-      onToggle: (key) => {
-        const wasEmpty = !state.teamCompareCodes.length;
-        if (!toggleTeamCompareCode(key)) return;
-        if (teamPickerSwipeCompareEnabled() && wasEmpty && state.teamCompareCodes.length === 1) {
-          showToast({
-            title: "Compare",
-            message: "Swipe more players to compare side by side.",
-            icon: "scale",
-          });
-        }
-        renderTeam();
-      },
-    });
     try {
       await restoreManagerId();
     } catch {

@@ -1989,11 +1989,6 @@ a { color: var(--blue); }
     height: 15px;
     font-size: 15px;
   }
-  #compare-toggle,
-  #team-compare-btn {
-    display: none !important;
-  }
-
   .icon-label-btn {
     width: 32px;
     height: 32px;
@@ -2036,21 +2031,34 @@ a { color: var(--blue); }
     min-width: 0;
   }
 
-  /* Statistics: always-expanded search fills the bar on mobile. */
-  html[data-page="opta"] #subtoolbar #stats-toolbar-actions {
-    width: 100%;
+  /* Statistics mobile: Compare left, search expanded (same pattern as xData). */
+  html[data-page="opta"] #subtoolbar.is-opta-mobile {
+    flex-wrap: nowrap;
+    gap: 8px;
   }
-  html[data-page="opta"] #subtoolbar .topbar-data-cluster {
-    display: none;
-  }
-  html[data-page="opta"] #subtoolbar .topbar-end-cluster {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #stats-toolbar-actions {
     display: flex;
     flex: 1 1 auto;
     width: 100%;
+    margin-left: 0;
+    min-width: 0;
+  }
+  html[data-page="opta"] #subtoolbar.is-opta-mobile .topbar-data-cluster {
+    display: none;
+  }
+  html[data-page="opta"] #subtoolbar.is-opta-mobile .topbar-end-cluster {
+    display: flex;
+    flex: 1 1 auto;
     min-width: 0;
     align-items: center;
+    gap: 8px;
   }
-  html[data-page="opta"] #subtoolbar #search-wrap.search-open {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #compare-toggle {
+    order: 1;
+    flex: none;
+  }
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #search-wrap.search-open {
+    order: 2;
     flex: 1 1 auto;
     width: auto;
     max-width: none;
@@ -2804,11 +2812,6 @@ a { color: var(--blue); }
     animation: none !important;
   }
 
-  tbody td.col-player:has(.row-swipe-action),
-  tbody td.col-name:has(.row-swipe-action) {
-    overflow: hidden;
-  }
-
   .table-wrap > table > thead tr.section-row th {
     height: 16px;
     padding: 2px 5px;
@@ -3477,75 +3480,6 @@ tbody tr.row-selected td:first-child {
   box-shadow:
     inset 3px 0 0 hsl(var(--primary)),
     1px 0 0 var(--border);
-}
-
-/* Swipe-to-compare: entire row slides on mobile (drag starts on name cell). */
-tr.row-swipe-host {
-  --row-swipe-action-w: 68px;
-  --row-swipe-x: 0px;
-}
-tr.row-swipe-host > td {
-  transform: translateX(var(--row-swipe-x));
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-tr.row-swipe-host.is-dragging > td {
-  transition: none;
-}
-tr.row-swipe-host > td.col-player,
-tr.row-swipe-host > td.col-name {
-  overflow: hidden;
-}
-tr.row-swipe-host .row-swipe-action {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 0;
-  width: var(--row-swipe-action-w);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  box-sizing: border-box;
-  background: hsl(var(--blue-hsl) / 0.14);
-  color: hsl(var(--blue-hsl));
-  transform: translateX(calc(-1 * var(--row-swipe-x)));
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.16s ease;
-  opacity: 0;
-  pointer-events: none;
-}
-tr.row-swipe-host.is-open .row-swipe-action,
-tr.row-swipe-host.is-dragging .row-swipe-action {
-  opacity: 1;
-  pointer-events: auto;
-}
-tr.row-swipe-host.is-dragging .row-swipe-action {
-  transition: none;
-}
-.row-swipe-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.15;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  touch-action: manipulation;
-}
-html[data-pointer="coarse"] .row-swipe-btn:hover {
-  background: transparent;
-  color: inherit;
-}
-#team-picker-view tbody tr.row-swipe-host > td.col-player {
-  position: relative;
-  overflow: hidden;
 }
 
 /* Viewer-owned: red flag beside the player name (all player list UIs) */
@@ -9493,18 +9427,22 @@ html[data-page="team"] .layout .main {
   }
   #subtoolbar.is-team-picking .topbar-data-cluster,
   #subtoolbar.is-team-picking .topbar-end-cluster,
-  #subtoolbar.is-team-picking .team-toolbar-controls,
   #subtoolbar.is-team-picking #compare-toggle,
   #subtoolbar.is-team-picking #columns-btn,
   #subtoolbar.is-team-picking #expected-cat-toolbar,
   #subtoolbar.is-team-picking #markets-view-toolbar {
     display: none !important;
   }
+  #subtoolbar.is-team-picking #team-compare-btn {
+    flex: none;
+    order: 1;
+  }
   #subtoolbar.is-team-picking #team-picker-cancel {
     flex: none;
     order: -1;
   }
   #subtoolbar.is-team-picking #search-wrap {
+    order: 2;
     flex: 1 1 auto;
     width: auto !important;
     max-width: none !important;
