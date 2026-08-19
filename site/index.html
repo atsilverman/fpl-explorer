@@ -6,8 +6,8 @@
 <title>FPL Explorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=480" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="styles.css?v=490" />
 <script>
 (() => {
   try {
@@ -17,6 +17,8 @@
     const accents = {
       blue: { light: "217 91% 60%", dark: "217 91% 60%" },
       teal: { light: "173 80% 36%", dark: "172 66% 50%" },
+      emerald: { light: "160 84% 39%", dark: "160 70% 45%" },
+      indigo: { light: "239 84% 67%", dark: "239 84% 72%" },
       violet: { light: "262 72% 50%", dark: "263 70% 65%" },
       rose: { light: "346 77% 50%", dark: "347 77% 60%" },
       amber: { light: "32 95% 44%", dark: "38 92% 50%" },
@@ -354,53 +356,12 @@
             </div>
           </section>
           <section class="settings-section">
-            <div class="settings-section-label">Squad</div>
+            <div class="settings-section-label">Planner</div>
             <div class="prefs-field">
-              <p class="prefs-field-hint">Remove every player from the Planner draft. Actual is unchanged.</p>
-              <button type="button" class="ghost-btn prefs-action-btn confirm-modal-danger" id="team-clear-btn">Clear planner</button>
-            </div>
-          </section>
-          <section class="settings-section">
-            <div class="settings-section-label">Fonts</div>
-            <div class="prefs-field">
-              <label class="prefs-field-label" for="font-pair-select">Type pair</label>
-              <select id="font-pair-select" class="font-pair-select prefs-font-select" aria-label="Font pair">
-                <option value="system">System · SF Pro / SF Mono</option>
-                <option value="inter-jb">Inter · JetBrains Mono</option>
-                <option value="plex">IBM Plex Sans · Plex Mono</option>
-                <option value="jakarta-jb">Plus Jakarta · JetBrains</option>
-                <option value="source">Source Sans 3 · Source Code</option>
-                <option value="dm">DM Sans · DM Mono</option>
-                <option value="manrope-fira" selected>Manrope · Fira Code</option>
-                <option value="figtree-plex">Figtree · Plex Mono</option>
-                <option value="sora-jb">Sora · JetBrains Mono</option>
-                <option value="space">Space Grotesk · Space Mono</option>
-              </select>
-            </div>
-          </section>
-          <section class="settings-section">
-            <div class="settings-section-label">Time</div>
-            <div class="prefs-field">
-              <label class="prefs-field-label" for="clock-format-select">Clock</label>
-              <select id="clock-format-select" class="font-pair-select prefs-font-select" aria-label="Clock format">
-                <option value="12">12-hour · 2:00 PM</option>
-                <option value="24">24-hour · 14:00</option>
-              </select>
-            </div>
-          </section>
-          <section class="settings-section prefs-tooltips-section">
-            <div class="settings-section-label">Popups</div>
-            <div class="prefs-field">
-              <div class="prefs-slider-head">
-                <label class="prefs-field-label" for="fixture-tt-delay">Popup delay</label>
-                <span id="fixture-tt-delay-label" class="prefs-slider-value">1.0s</span>
-              </div>
-              <p class="prefs-field-hint">How long to hover before popups appear on desktop</p>
-              <div class="dual-slider single-slider prefs-slider">
-                <div class="slider-track"></div>
-                <div class="slider-fill" id="fixture-tt-delay-fill"></div>
-                <input type="range" id="fixture-tt-delay" step="0.1" min="0.5" max="5"
-                  aria-label="Popup delay in seconds" />
+              <p class="prefs-field-hint">Resync copies your linked Actual FPL squad into the Planner draft. Clear removes every Planner pick; Actual is unchanged.</p>
+              <div class="prefs-action-row">
+                <button type="button" class="ghost-btn prefs-action-btn" id="team-resync-btn">Resync from Actual</button>
+                <button type="button" class="ghost-btn prefs-action-btn confirm-modal-danger" id="team-clear-btn">Clear planner</button>
               </div>
             </div>
           </section>
@@ -430,11 +391,6 @@
         <button type="button" data-team-mode="actual" id="team-mode-actual">Actual</button>
         <button type="button" data-team-mode="planner" id="team-mode-planner" class="active">Planner</button>
       </div>
-      <button type="button" class="ghost-btn icon-label-btn" id="team-resync-btn"
-        title="Replace planner with your linked FPL squad" hidden>
-        <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
-        <span class="btn-label">Resync</span>
-      </button>
     </div>
   </div>
 
@@ -484,10 +440,7 @@
           <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
         </button>
       </div>
-      <button type="button" class="ghost-btn icon-label-btn team-picker-cancel" id="team-picker-cancel" hidden aria-label="Back to squad">
-        <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
-        <span class="btn-label">Back</span>
-      </button>
+
       <div class="search-wrap" id="search-wrap">
         <button id="search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button" title="Search" aria-label="Search" aria-expanded="false" aria-controls="search-input">
           <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -533,7 +486,7 @@
     </div>
 
     <div class="filter-group" id="split-group">
-      <h3>Fixture Location</h3>
+      <h3>Locations</h3>
       <div class="segmented segmented-block" id="split-seg">
         <button data-split="combined" class="active" type="button" title="Home and away combined">Total</button>
         <button data-split="home" type="button" title="Home fixtures only">
@@ -548,7 +501,7 @@
     </div>
 
     <div class="filter-group" id="expected-split-group" style="display:none;">
-      <h3>Fixture Location</h3>
+      <h3>Locations</h3>
       <div class="segmented segmented-grid" id="expected-split-seg">
         <button data-split="combined" class="active" type="button" title="Home and away combined">Total</button>
         <button data-split="compare" type="button" title="Home and away side by side">Compare</button>
@@ -566,14 +519,6 @@
     <div class="filter-group" id="position-filter-group">
       <h3>Position</h3>
       <div class="chip-row" id="pos-filters"></div>
-    </div>
-
-    <div class="filter-group" id="setpiece-filter-group">
-      <h3>Set Pieces</h3>
-      <label class="check-row-block">
-        <span class="check-row-line"><input type="checkbox" id="setpiece-takers-check" /> Set piece takers only</span>
-        <span class="check-row-note">FPL #1 for PK, FK, or CK (green check)</span>
-      </label>
     </div>
 
     <div class="filter-group" id="team-affordable-group" style="display:none;">
@@ -611,12 +556,7 @@
     </div>
 
     <div class="filter-group" id="ownership-trending-group" style="display:none;">
-      <h3>Trend colors</h3>
-      <button id="ownership-trending-toggle" class="ghost-btn icon-label-btn ownership-trending-toggle on" type="button"
-        title="Color ownership lines by rising or falling trend" aria-label="Trending" aria-pressed="true">
-        <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
-        <span class="btn-label">Trending</span>
-      </button>
+      <h3>Trend</h3>
       <div class="segmented ownership-trend-window-seg" id="ownership-trend-window-seg" role="group" aria-label="Trend window">
         <button type="button" data-trend-window="1" class="active" title="Change since the last check-in (will be ~24h once daily snapshots exist)">Last</button>
         <button type="button" data-trend-window="3" title="Change over the last 3 check-ins">Last 3</button>
@@ -654,11 +594,11 @@
       </div>
     </div>
 
-    <div class="filter-group" id="inactive-filter-group" style="display:none;">
-      <h3>2026/27 Squad Status</h3>
+    <div class="filter-group" id="setpiece-filter-group">
+      <h3>Set Pieces</h3>
       <label class="check-row-block">
-        <span class="check-row-line"><input type="checkbox" id="show-departed-check" /> Include departed players</span>
-        <span class="check-row-note">Not found in the 2026/27 FPL list (e.g. Salah) — hidden by default</span>
+        <span class="check-row-line"><input type="checkbox" id="setpiece-takers-check" /> Set piece takers only</span>
+        <span class="check-row-note">FPL #1 for PK, FK, or CK (green check)</span>
       </label>
     </div>
 
@@ -733,7 +673,7 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-trending-up"/></svg>Ownership<button class="page-info-btn" type="button" aria-label="How Ownership works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle">FPL selected-by-% across manual check-ins — grey lines for the field, hover to colorize a player or club.</p>
+            <p class="page-subtitle">FPL selected-by-% across manual check-ins — movers that meet the trend window and threshold color green or red.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="ownership-count-label"></span>
@@ -761,6 +701,9 @@
         </div>
       </div>
       <div class="ownership-chart-wrap" id="ownership-chart-wrap">
+        <div class="ownership-chart-head">
+          <h3 class="ownership-chart-title" id="ownership-chart-title">Selected-by %</h3>
+        </div>
         <div id="ownership-chart" class="ownership-chart" role="img" aria-label="Ownership line chart"></div>
         <div id="ownership-tooltip" class="chart-tooltip ownership-tooltip" style="display:none;"></div>
       </div>
@@ -782,9 +725,15 @@
 
     <div id="team-page" class="page-pane" style="display:none;">
       <div class="page-header team-header">
-        <div>
+        <div class="team-header-text">
           <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Team<button class="page-info-btn" type="button" aria-label="How Team works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
           <p class="page-subtitle" id="team-page-subtitle">Build a 15-man FPL squad within £100.0m — last-season stats, set pieces, and six fixtures from the selected gameweek.</p>
+        </div>
+        <div class="page-header-meta team-picker-header-actions" id="team-picker-header-actions">
+          <button type="button" class="ghost-btn icon-label-btn team-picker-cancel" id="team-picker-cancel" hidden aria-label="Back to squad">
+            <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+            <span class="btn-label">Back</span>
+          </button>
         </div>
       </div>
       <div class="team-budget-bar" id="team-budget-bar"></div>
@@ -835,13 +784,13 @@
     </div>
 
     <div id="expected-page" class="page-pane" style="display:none;">
-      <div class="page-header expected-header" hidden>
-        <div class="expected-header-top">
-          <div class="expected-header-text">
+      <div class="page-header opta-header expected-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
             <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">Expected Data</span><button class="page-info-btn" type="button" aria-label="How Expected Data works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p id="expected-sub" class="page-subtitle">Compare expected (x) stats with what actually happened — who overperformed or underperformed.</p>
           </div>
         </div>
-        <p id="expected-sub" class="page-subtitle"></p>
       </div>
 
       <div class="barbell-wrap" id="barbell-wrap">
@@ -1096,10 +1045,10 @@
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
 <script src="data.js?v=28"></script>
-<script src="social_data.js?v=14"></script>
-<script src="markets_data.js?v=6"></script>
-<script src="ownership_data.js?v=3"></script>
-<script src="app.js?v=478"></script>
+<script src="social_data.js?v=15"></script>
+<script src="markets_data.js?v=7"></script>
+<script src="ownership_data.js?v=4"></script>
+<script src="app.js?v=491"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

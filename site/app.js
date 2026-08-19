@@ -62,11 +62,7 @@
     away: Object.fromEntries((DATA.teams.away || []).map((t) => [t.team, t])),
     combined: Object.fromEntries((DATA.teams.combined || []).map((t) => [t.team, t])),
   };
-  const FIXTURE_TT_DELAY_KEY = "fpl-explorer-fixture-tt-delay";
-  const CLOCK_FORMAT_KEY = "fpl-explorer-clock-format";
-  const FIXTURE_TT_DELAY_SEC_MIN = 0.5;
-  const FIXTURE_TT_DELAY_SEC_MAX = 5;
-  const FIXTURE_TT_DELAY_SEC_DEFAULT = 1;
+  const FIXTURE_TT_DELAY_MS = 1000;
   const FIXTURE_TT_COUNT = 7;
   const OWNERSHIP_FILTER_DEFAULT = 5;
   const OWNERSHIP_FILTER_MAX = 100;
@@ -83,11 +79,13 @@
     .filter(Number.isFinite);
   const SCHEDULE_GW_MIN = FIXTURE_GAMEWEEKS.length ? Math.min(...FIXTURE_GAMEWEEKS) : 1;
   const SCHEDULE_GW_MAX = FIXTURE_GAMEWEEKS.length ? Math.max(...FIXTURE_GAMEWEEKS) : 38;
-  // Whether build.py's 2026/27 price match ran at all — gates the "Include
-  // departed players" filter, since without it price2627 is undefined for
-  // everyone and there'd be nothing to distinguish "departed" from "just
-  // not matched yet".
+  // Whether build.py's 2026/27 price match ran — used to exclude players with
+  // no price2627 (departed / not on the current FPL list).
   const HAS_PRICE_DATA = !!(DATA.newSeasonPriceMeta && DATA.newSeasonPriceMeta.source);
+
+  function excludeDepartedPlayer(row) {
+    return !isNextSeason() && HAS_PRICE_DATA && row && row.price2627 == null;
+  }
 
   // Tall shield SVGs (Hull, Arsenal, Villa, …) fill the full crest-box height
   // while roundels leave side slack, so they read larger at the same CSS size.
@@ -500,7 +498,6 @@
     minsMax: null,
     valueMode: "total", // total | per90 | perM
     showNewPrice: false,
-    hideDeparted: true,
     setPieceTakersOnly: false,
     // Always-on top/bottom % cell tint vs the full Players/Teams view
     // (raw values stay in the cells; filters don't shrink the bands).
@@ -545,7 +542,6 @@
     teamSearchActiveCode: null,
     teamMode: "planner", // planner | actual
     teamSparkMetric: "form", // form | owned
-    ownershipTrending: true,
     ownershipTrendThreshold: OWNERSHIP_TREND_THRESHOLD_DEFAULT,
     ownershipTrendWindow: OWNERSHIP_TREND_WINDOW_DEFAULT,
     ownershipRisersCollapsed: false,
@@ -712,10 +708,10 @@
     ownershipPage: $("#ownership-page"),
     ownershipChart: $("#ownership-chart"),
     ownershipChartWrap: $("#ownership-chart-wrap"),
+    ownershipChartTitle: $("#ownership-chart-title"),
     ownershipTooltip: $("#ownership-tooltip"),
     ownershipCountLabel: $("#ownership-count-label"),
     ownershipTrendingGroup: $("#ownership-trending-group"),
-    ownershipTrendingToggle: $("#ownership-trending-toggle"),
     ownershipTrendWindowSeg: $("#ownership-trend-window-seg"),
     ownershipTrendThreshold: $("#ownership-trend-threshold"),
     ownershipTrendThresholdFill: $("#ownership-trend-threshold-fill"),
@@ -753,6 +749,7 @@
     teamCompareBody: $("#team-compare-body"),
     teamToolbarControls: $("#team-toolbar-controls"),
     teamToolbarMode: $("#team-toolbar-mode"),
+    teamPickerHeaderActions: $("#team-picker-header-actions"),
     teamPickerCancel: $("#team-picker-cancel"),
     searchHome: $(".topbar-end-cluster"),
     expectedPage: $("#expected-page"),
@@ -851,11 +848,6 @@
     fplIdSave: $("#fpl-id-save"),
     fplIdClear: $("#fpl-id-clear"),
     fplIdStatus: $("#fpl-id-status"),
-    fontPairSelect: $("#font-pair-select"),
-    clockFormatSelect: $("#clock-format-select"),
-    fixtureTtDelay: $("#fixture-tt-delay"),
-    fixtureTtDelayFill: $("#fixture-tt-delay-fill"),
-    fixtureTtDelayLabel: $("#fixture-tt-delay-label"),
     posFilters: $("#pos-filters"),
     teamFilters: $("#team-filters"),
     priceMin: $("#price-min"),
@@ -908,8 +900,6 @@
     minutesFilterGroup: $("#minutes-filter-group"),
     priceFilterGroup: $("#price-filter-group"),
     ownedFilterGroup: $("#owned-filter-group"),
-    inactiveFilterGroup: $("#inactive-filter-group"),
-    showDepartedCheck: $("#show-departed-check"),
   };
 
   // ---------------------------------------------------------------------
@@ -977,14 +967,13 @@
   function filtersAreDirty() {
     if (state.posFilter.size) return true;
     if (state.teamFilter.size) return true;
-    if (state.search.trim()) return true;
+    if (state.search.trim() && !(state.page === "team" && !state.teamPickerSlot)) return true;
     const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
     if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
     if (state.ownedMin !== coreDefaults.ownedMin) return true;
     if (state.minsMin !== coreDefaults.minsMin || state.minsMax !== coreDefaults.minsMax) return true;
     if (state.ownershipTrendThreshold !== OWNERSHIP_TREND_THRESHOLD_DEFAULT) return true;
     if (state.ownershipTrendWindow !== OWNERSHIP_TREND_WINDOW_DEFAULT) return true;
-    if (!state.hideDeparted) return true;
     if (state.setPieceTakersOnly) return true;
     if (state.page === "team" && state.teamAffordableOnly) return true;
     if (state.valueMode !== "total") return true;
@@ -1023,8 +1012,6 @@
     if (el.searchWrap) el.searchWrap.classList.remove("search-open");
     if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     syncSearchClearBtns();
-    state.hideDeparted = true;
-    if (el.showDepartedCheck) el.showDepartedCheck.checked = false;
     state.setPieceTakersOnly = false;
     if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
     state.teamAffordableOnly = false;
@@ -1091,7 +1078,7 @@
     const q = state.page === "rankings" ? "" : state.search.trim().toLowerCase();
     return rows.filter((r) => {
       if (state.view === "players") {
-        if (!isNextSeason() && HAS_PRICE_DATA && state.hideDeparted && r.price2627 == null) return false;
+        if (excludeDepartedPlayer(r)) return false;
         if (state.setPieceTakersOnly && !isSetPieceTaker(r)) return false;
         if (state.posFilter.size && !state.posFilter.has(r.position)) return false;
         if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
@@ -1391,6 +1378,7 @@
     if (!el.fplIdStatus) return;
     if (!savedManagerId) {
       el.fplIdStatus.textContent = "No manager ID saved.";
+      syncTeamPlannerPrefsBtns();
       return;
     }
     const n = ownedCodes.size;
@@ -1402,6 +1390,7 @@
     else if (meta && meta.hasPicks === false) bits.push("no published picks yet");
     else bits.push("not synced");
     el.fplIdStatus.textContent = bits.join(" · ");
+    syncTeamPlannerPrefsBtns();
   }
 
   function syncTeamModeUI() {
@@ -1415,16 +1404,24 @@
       });
       syncSegThumb(el.teamModeSeg, { animate: false });
     }
-    if (el.teamResyncBtn) {
-      el.teamResyncBtn.hidden = !savedManagerId || state.teamMode !== "planner";
-    }
     if (el.teamPageSubtitle) {
       el.teamPageSubtitle.textContent =
         state.teamMode === "actual"
           ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
-          : "Editable planner squad (£100.0m). Resync replaces this with your linked Actual team.";
+          : "Editable planner squad (£100.0m). Resync from Preferences replaces this with your linked Actual team.";
     }
-    syncTeamClearBtn();
+    syncTeamPlannerPrefsBtns();
+  }
+
+  function syncTeamPlannerPrefsBtns() {
+    if (el.teamClearBtn) {
+      el.teamClearBtn.disabled = !teamIsEditable() || !state.teamSquad.length;
+    }
+    if (el.teamResyncBtn) {
+      const enabled = !!savedManagerId && state.teamMode === "planner";
+      el.teamResyncBtn.hidden = !enabled;
+      el.teamResyncBtn.disabled = !enabled;
+    }
   }
 
   function setTeamMode(mode, { render = true, persist = true } = {}) {
@@ -1949,14 +1946,15 @@
 
   function syncMobileChromeFade() {
     const fade = el.mobileChromeFade;
-    if (!fade) return;
     const show =
       preferMobileSheet() &&
       ((!el.mobileFilterDock || !el.mobileFilterDock.hidden) ||
         (!el.mobileViewDock || !el.mobileViewDock.hidden));
-    fade.hidden = !show;
-    fade.setAttribute("aria-hidden", show ? "false" : "true");
-    document.documentElement.classList.toggle("has-mobile-chrome-fade", show);
+    if (fade) {
+      fade.hidden = true;
+      fade.setAttribute("aria-hidden", "true");
+    }
+    document.documentElement.classList.toggle("has-mobile-bottom-dock", show);
     if (!show) resetMobileChromeScrollHide();
   }
 
@@ -1965,9 +1963,10 @@
   let mobileChromeScrollHidden = false;
 
   function mobileChromeScrollActive() {
+    if (state.page === "ownership") return false;
     return (
       preferMobileSheet() &&
-      (document.documentElement.classList.contains("has-mobile-chrome-fade") ||
+      (document.documentElement.classList.contains("has-mobile-bottom-dock") ||
         document.documentElement.classList.contains("has-mobile-filter-fab") ||
         document.documentElement.classList.contains("has-mobile-view-dock"))
     );
@@ -3578,7 +3577,7 @@
       const reading = [
         spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines until you pick one."),
         spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
-        spitRow(spitRank("Trending"), "Window is last check-in, last 3, or last 7. Colors Risers / Fallers and their lines (green up, red down) until you select one."),
+        spitRow(spitRank("Trend"), "Window and minimum change (pp) in Filters. Lines that qualify color green (up) or red (down); the rest stay grey."),
         spitRow(spitRank("Axis"), "X is a snapshot date, not a gameweek. Y zooms to the lines on screen."),
         spitRow(spitRank(mobile ? "Tap" : "Select"), mobile
           ? "Tap a line or a Riser/Faller to pin it in club color; other lines go faint. Tap again or empty space to unpin."
@@ -3617,12 +3616,11 @@
             ? "Tap a planner player for captain, vice, bench, replace, or remove."
             : "Right-click a planner player for captain, vice, bench, replace, or remove."
         ),
-        spitRow(iconHTML("refresh-ccw-dot"), "Resync — replace Planner with the linked Actual FPL squad (confirm first)"),
-        spitRow(iconHTML("scale"), "Compare — pick up to 5 players in the squad, search, or picker"),
+        spitRow(iconHTML("scale"), "Compare — pick up to 5 players in the squad or picker"),
       ];
       const reading = [
         spitRow(spitRank("Actual"), "Read-only copy of your linked manager squad from the FPL API."),
-        spitRow(spitRank("Planner"), "Editable local draft. Survives refresh. Resync overwrites it from Actual."),
+        spitRow(spitRank("Planner"), "Editable local draft. Survives refresh. Resync in Preferences overwrites it from Actual."),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Faint rank is among that position last season. New signings show –."),
@@ -3632,20 +3630,20 @@
         spitRow(
           spitRank("Select"),
           mobile
-            ? "Empty slot or Replace opens the player list. Back (same row as search) or Escape returns to the squad. Budget stats hide while picking."
-            : "Empty slot or Replace opens the player list. Filters (including Affordable) open then. Back or Escape returns to the squad."
+            ? "Empty slot or Replace opens the player list and search. Back or Escape returns to the squad. Budget stats hide while picking."
+            : "Empty slot or Replace opens the player list and search. Filters (including Affordable) open then. Back or Escape returns to the squad."
         ),
         spitRow(spitRank("Affordable"), "In Filters while picking — hides anyone above remaining Bank. Replace credits the outgoing player's price."),
-        spitRow(spitRank("Squad"), "Preferences → Clear planner removes every Planner pick. Actual is unchanged."),
+        spitRow(spitRank("Squad"), "Preferences → Resync or Clear planner. Actual is unchanged by Clear."),
         spitRow(spitRank("Pins"), mobile
-          ? "Search, then tap a row to pin (up to 5). Pins clear the search; Compare mode is off while pins exist."
-          : "Search, then ↑↓ and Enter or click a row to pin (up to 5). Pins clear the search; Compare mode is off while pins exist."),
+          ? "Compare mode — tap squad or picker rows to pin up to 5. Compare mode is off while pins exist."
+          : "Compare mode — click squad or picker rows to pin up to 5. Compare mode is off while pins exist."),
         spitRow(spitRank("Compare"), "With no pins, Compare mode selects instead of add/replace. Hover a squad or result row to highlight stat winners."),
         spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager ID to import Actual."),
       ];
       const intro = state.teamMode === "actual"
         ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
-        : "Editable 15-man planner within £100.0m. Resync replaces this with your linked Actual team.";
+        : "Editable 15-man planner within £100.0m. Resync in Preferences replaces this with your linked Actual team.";
       return `${spitHead("shirt", "How Team works")}
         ${spitIntro(intro)}
         ${spitSection("Icons", iconRows)}
@@ -3830,28 +3828,8 @@
         : `GW${state.scheduleGwMin}–GW${state.scheduleGwMax}`;
   }
 
-  function clampFixtureTtDelaySec(v) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return FIXTURE_TT_DELAY_SEC_DEFAULT;
-    return Math.min(
-      FIXTURE_TT_DELAY_SEC_MAX,
-      Math.max(FIXTURE_TT_DELAY_SEC_MIN, Math.round(n * 10) / 10)
-    );
-  }
-
-  function loadFixtureTtDelaySec() {
-    try {
-      const raw = localStorage.getItem(FIXTURE_TT_DELAY_KEY);
-      if (raw == null || raw === "") return FIXTURE_TT_DELAY_SEC_DEFAULT;
-      return clampFixtureTtDelaySec(raw);
-    } catch {
-      return FIXTURE_TT_DELAY_SEC_DEFAULT;
-    }
-  }
-
-  let fixtureTtDelaySec = loadFixtureTtDelaySec();
   function popupDelayMs() {
-    return Math.round(fixtureTtDelaySec * 1000);
+    return FIXTURE_TT_DELAY_MS;
   }
   let fixtureTtTimer = null;
   let fixtureTtActiveTeam = null;
@@ -6373,11 +6351,6 @@
     el.teamAffordableCheck.checked = !!state.teamAffordableOnly;
   }
 
-  function syncTeamClearBtn() {
-    if (!el.teamClearBtn) return;
-    el.teamClearBtn.disabled = !teamIsEditable() || !state.teamSquad.length;
-  }
-
   function teamClubCounts(ignoreCode) {
     const counts = new Map();
     for (const slot of state.teamSquad) {
@@ -6774,6 +6747,9 @@
 
   function closeTeamPicker({ silent } = {}) {
     state.teamPickerSlot = null;
+    state.search = "";
+    if (el.search) el.search.value = "";
+    syncSearchClearBtns();
     if (!silent) {
       syncFilterChipUI();
       renderTeam();
@@ -6782,10 +6758,28 @@
     }
   }
 
+  function syncTeamPickerCancelHost() {
+    if (!el.teamPickerCancel) return;
+    const mobile = preferMobileSheet();
+    const headerHost = el.teamPickerHeaderActions;
+    const subEnd = el.subtoolbar && el.subtoolbar.querySelector(".topbar-end-cluster");
+    if (mobile && subEnd && el.searchWrap) {
+      if (el.teamPickerCancel.parentElement !== subEnd) {
+        subEnd.insertBefore(el.teamPickerCancel, el.searchWrap);
+      }
+    } else if (headerHost && el.teamPickerCancel.parentElement !== headerHost) {
+      headerHost.appendChild(el.teamPickerCancel);
+    }
+  }
+
   function syncTeamPickerChrome() {
     const picking = state.page === "team" && !!state.teamPickerSlot;
+    syncTeamPickerCancelHost();
     if (el.teamPage) el.teamPage.classList.toggle("is-picking", picking);
     if (el.teamPickerCancel) el.teamPickerCancel.hidden = !picking;
+    if (el.teamPickerHeaderActions) {
+      el.teamPickerHeaderActions.hidden = !picking || preferMobileSheet();
+    }
     if (el.teamBudgetBar) el.teamBudgetBar.hidden = picking;
     if (el.teamSquadView) el.teamSquadView.hidden = picking;
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
@@ -6812,6 +6806,7 @@
     const replaceCode = state.teamPickerSlot && state.teamPickerSlot.replaceCode;
     return rows.filter((r) => {
       if (r.code == null) return false;
+      if (excludeDepartedPlayer(r)) return false;
       if (inSquad.has(r.code) && r.code !== replaceCode) return false;
       if (lock && r.position !== lock) return false;
       if (!lock && state.posFilter.size && !state.posFilter.has(r.position)) return false;
@@ -7455,18 +7450,11 @@
 
   function syncTeamSearchCombobox() {
     if (!el.search) return;
-    if (state.page === "team" && !state.teamPickerSlot) {
-      el.search.setAttribute("role", "combobox");
-      el.search.setAttribute("aria-autocomplete", "list");
-      el.search.setAttribute("aria-controls", "team-search-body");
-      el.search.setAttribute("aria-expanded", teamSearchCardOpen() ? "true" : "false");
-    } else {
-      el.search.removeAttribute("role");
-      el.search.removeAttribute("aria-autocomplete");
-      el.search.removeAttribute("aria-controls");
-      el.search.removeAttribute("aria-expanded");
-      el.search.removeAttribute("aria-activedescendant");
-    }
+    el.search.removeAttribute("role");
+    el.search.removeAttribute("aria-autocomplete");
+    el.search.removeAttribute("aria-controls");
+    el.search.removeAttribute("aria-expanded");
+    el.search.removeAttribute("aria-activedescendant");
   }
 
   function applyTeamSearchActive(code, { scroll = false } = {}) {
@@ -7560,6 +7548,7 @@
     const val = el.search.value;
     if (state.search === val) return;
     state.search = val;
+    if (state.page === "team" && !state.teamPickerSlot) return;
     if (state.page === "team") renderTeam();
   }
 
@@ -7733,7 +7722,7 @@
     syncTeamCompareBtn();
     syncTeamPickerChrome();
     syncTeamAffordableCheck();
-    syncTeamClearBtn();
+    syncTeamPlannerPrefsBtns();
     renderTeamGwNav();
     renderTeamBudgetBar();
     renderTeamSubBar();
@@ -7741,7 +7730,11 @@
     syncTeamPickerChips();
     if (picking) renderTeamPicker();
     else {
-      renderTeamSearchResults();
+      if (el.teamSearchResults) {
+        el.teamSearchResults.hidden = true;
+        el.teamSearchResults.classList.remove("is-pin-stash");
+      }
+      state.teamSearchActiveCode = null;
       renderTeamSquadTables();
     }
     upgradeNativeTitles(el.teamPage);
@@ -8060,7 +8053,7 @@
   });
 
   loadTeamDraft();
-  syncTeamClearBtn();
+  syncTeamPlannerPrefsBtns();
 
   // ---------------------------------------------------------------------
   // Feed page — player-mention cards from annotated social_data.js
@@ -8299,17 +8292,7 @@
     }
   }
 
-  function loadClockFormat() {
-    try {
-      const raw = localStorage.getItem(CLOCK_FORMAT_KEY);
-      if (raw === "12" || raw === "24") return raw;
-    } catch {
-      /* private browsing */
-    }
-    return detectLocaleClockFormat();
-  }
-
-  let clockFormat = loadClockFormat();
+  const clockFormat = detectLocaleClockFormat();
 
   function localeTimeOptions() {
     if (clockFormat === "24") {
@@ -8358,43 +8341,105 @@
     return n.toFixed(decimals);
   }
 
-  function feedPosStatSpecs(position) {
+  function feedPosStatSpecs(position, { detail = false } = {}) {
     const pos = String(position || "").toUpperCase();
-    if (pos === "GK") {
-      return [
+    const compact = {
+      GK: [
         { key: "saves", label: "Saves", decimals: 0 },
         { key: "cleanSheets", label: "CS", decimals: 0 },
         { key: "goalsConceded", label: "GC", decimals: 0 },
-      ];
-    }
-    if (pos === "DEF") {
-      return [
+      ],
+      DEF: [
         { key: "cleanSheets", label: "CS", decimals: 0 },
         { key: "goalsConceded", label: "GC", decimals: 0 },
         { key: "defCon", label: "DC", decimals: 0 },
         { key: "__gi", label: "G+A", decimals: 0 },
-      ];
-    }
-    if (pos === "MID") {
-      return [
+      ],
+      MID: [
         { key: "goals", label: "G", decimals: 0 },
         { key: "assists", label: "A", decimals: 0 },
         { key: "xgi", label: "xGI", decimals: 1 },
         { key: "defCon", label: "DC", decimals: 0 },
-      ];
-    }
-    // FWD (default)
-    return [
-      { key: "goals", label: "G", decimals: 0 },
-      { key: "assists", label: "A", decimals: 0 },
-      { key: "xg", label: "xG", decimals: 1 },
-      { key: "xa", label: "xA", decimals: 1 },
-    ];
+      ],
+      FWD: [
+        { key: "goals", label: "G", decimals: 0 },
+        { key: "assists", label: "A", decimals: 0 },
+        { key: "xg", label: "xG", decimals: 1 },
+        { key: "xa", label: "xA", decimals: 1 },
+      ],
+    };
+    const expanded = {
+      GK: [
+        ...compact.GK,
+        { key: "xgc", label: "xGC", decimals: 1 },
+        { key: "mins", label: "Mins", decimals: 0 },
+        { key: "pts", label: "Pts", decimals: 0 },
+        { key: "xPts", label: "xPts", decimals: 1 },
+        { key: "owned", label: "TSB%", decimals: 1 },
+      ],
+      DEF: [
+        ...compact.DEF,
+        { key: "xgc", label: "xGC", decimals: 1 },
+        { key: "xgi", label: "xGI", decimals: 1 },
+        { key: "mins", label: "Mins", decimals: 0 },
+        { key: "pts", label: "Pts", decimals: 0 },
+        { key: "xPts", label: "xPts", decimals: 1 },
+        { key: "owned", label: "TSB%", decimals: 1 },
+      ],
+      MID: [
+        { key: "goals", label: "G", decimals: 0 },
+        { key: "assists", label: "A", decimals: 0 },
+        { key: "xgi", label: "xGI", decimals: 1 },
+        { key: "xg", label: "xG", decimals: 1 },
+        { key: "xa", label: "xA", decimals: 1 },
+        { key: "defCon", label: "DC", decimals: 0 },
+        { key: "keyPasses", label: "KP", decimals: 0 },
+        { key: "mins", label: "Mins", decimals: 0 },
+        { key: "pts", label: "Pts", decimals: 0 },
+        { key: "xPts", label: "xPts", decimals: 1 },
+        { key: "owned", label: "TSB%", decimals: 1 },
+      ],
+      FWD: [
+        ...compact.FWD,
+        { key: "xgi", label: "xGI", decimals: 1 },
+        { key: "shots", label: "S", decimals: 0 },
+        { key: "mins", label: "Mins", decimals: 0 },
+        { key: "pts", label: "Pts", decimals: 0 },
+        { key: "xPts", label: "xPts", decimals: 1 },
+        { key: "owned", label: "TSB%", decimals: 1 },
+      ],
+    };
+    const list = detail ? expanded[pos] || expanded.FWD : compact[pos] || compact.FWD;
+    return detail ? list : list.slice(0, 4);
+  }
+
+  function feedPlayerStatsHTML(card, { detail = false } = {}) {
+    const rankMaps = feedStatRankMaps(card.position, { detail });
+    const posLabel = String(card.position || "").toUpperCase();
+    return feedPosStatSpecs(card.position, { detail })
+      .map((spec) => {
+        const raw = feedRowStatValue(card.row, spec.key);
+        const shown = feedStatDisplay(raw, spec.decimals);
+        const rankInfo = rankMaps[spec.key];
+        const rank =
+          card.code != null && rankInfo ? rankInfo.ranks.get(String(card.code)) : null;
+        const rankHtml =
+          rank != null
+            ? `<span class="feed-player-stat-rank" title="Rank among ${escapeHtml(posLabel)}s (${rank} of ${rankInfo.n})">#${rank}</span>`
+            : "";
+        return `<div class="feed-player-stat">
+          <span class="feed-player-stat-label">${escapeHtml(spec.label)}</span>
+          <span class="feed-player-stat-value">${escapeHtml(shown)}</span>
+          ${rankHtml}
+        </div>`;
+      })
+      .join("");
   }
 
   function feedRowStatValue(row, key) {
     if (!row) return null;
     if (key === "__gi") return (Number(row.goals) || 0) + (Number(row.assists) || 0);
+    if (key === "owned") return currentOwnership(row.code);
     const v = row[key];
     return v == null ? null : v;
   }
@@ -8403,17 +8448,18 @@
   // per position for the Feed stat chips.
   let feedStatRankCache = null;
 
-  function feedStatRankMaps(position) {
+  function feedStatRankMaps(position, { detail = false } = {}) {
     const pos = String(position || "").toUpperCase();
     if (!pos) return {};
+    const cacheKey = `${pos}:${detail ? "detail" : "compact"}`;
     if (!feedStatRankCache) feedStatRankCache = new Map();
-    if (feedStatRankCache.has(pos)) return feedStatRankCache.get(pos);
+    if (feedStatRankCache.has(cacheKey)) return feedStatRankCache.get(cacheKey);
 
     const pool = ((DATA.players && DATA.players.combined) || []).filter(
       (r) => String(r.position || "").toUpperCase() === pos
     );
     const maps = {};
-    for (const spec of feedPosStatSpecs(pos)) {
+    for (const spec of feedPosStatSpecs(pos, { detail })) {
       const lowerBetter = LOWER_BETTER.has(spec.key);
       const entries = pool
         .map((r) => {
@@ -8434,7 +8480,7 @@
       }
       maps[spec.key] = { ranks, n: entries.length };
     }
-    feedStatRankCache.set(pos, maps);
+    feedStatRankCache.set(cacheKey, maps);
     return maps;
   }
 
@@ -8661,7 +8707,7 @@
       .join("");
   }
 
-  function feedPlayerCardHTML(card, postsById, enterIndex) {
+  function feedPlayerCardHTML(card, postsById, enterIndex, { detail = false } = {}) {
     const initials = String(card.name || "?")
       .split(/[\s.]+/)
       .filter(Boolean)
@@ -8680,38 +8726,21 @@
     const metaBits = [];
     if (card.position) metaBits.push(posBadgeHTML(card.position));
     if (card.price != null) metaBits.push(`<span>£${Number(card.price).toFixed(1)}m</span>`);
-    if (card.pts != null) metaBits.push(`<span>${Number(card.pts)} Pts</span>`);
-    const rankMaps = feedStatRankMaps(card.position);
-    const posLabel = String(card.position || "").toUpperCase();
-    const stats = feedPosStatSpecs(card.position)
-      .map((spec) => {
-        const raw = feedRowStatValue(card.row, spec.key);
-        const shown = feedStatDisplay(raw, spec.decimals);
-        const rankInfo = rankMaps[spec.key];
-        const rank =
-          card.code != null && rankInfo
-            ? rankInfo.ranks.get(String(card.code))
-            : null;
-        const rankHtml =
-          rank != null
-            ? `<span class="feed-player-stat-rank" title="Rank among ${escapeHtml(posLabel)}s (${rank} of ${rankInfo.n})">#${rank}</span>`
-            : "";
-        return `<div class="feed-player-stat">
-          <span class="feed-player-stat-label">${escapeHtml(spec.label)}</span>
-          <span class="feed-player-stat-value">${escapeHtml(shown)}</span>
-          ${rankHtml}
-        </div>`;
-      })
-      .join("");
+    if (!detail && card.pts != null) metaBits.push(`<span>${Number(card.pts)} Pts</span>`);
+    if (detail) {
+      const postN = Number(card.posts) || (card.postIds && card.postIds.length) || 0;
+      if (postN) metaBits.push(`<span>${postN} post${postN === 1 ? "" : "s"}</span>`);
+    }
+    const stats = feedPlayerStatsHTML(card, { detail });
+    const photoSize = detail ? 80 : 72;
     const photoBlock = photo
-      ? `<img class="feed-player-photo" src="${escapeHtml(photo)}" alt="" width="72" height="72" loading="lazy" data-initials="${escapeHtml(initials)}" />`
+      ? `<img class="feed-player-photo" src="${escapeHtml(photo)}" alt="" width="${photoSize}" height="${photoSize}" loading="lazy" data-initials="${escapeHtml(initials)}" />`
       : `<span class="feed-player-photo feed-player-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[card.team] || "";
     const accentStyle = teamAccent ? `--feed-team-accent:${teamAccent};` : "";
-
-    return `<article class="rankings-card feed-player-card" id="feed-card-${escapeHtml(String(card.code))}" data-feed-code="${escapeHtml(String(card.code))}" data-team="${escapeHtml(String(card.team || ""))}" style="--enter-i:${enterIndex};${accentStyle}">
-      <div class="feed-player-card-top">
-        <div class="feed-player-identity">
+    const cardId = `feed-card-${escapeHtml(String(card.code))}`;
+    const cardData = `id="${cardId}" data-feed-code="${escapeHtml(String(card.code))}" data-team="${escapeHtml(String(card.team || ""))}" style="--enter-i:${enterIndex};${accentStyle}"`;
+    const identityHTML = `<div class="feed-player-identity">
           <div class="feed-player-photo-wrap">
             ${photoBlock}
             ${badge}
@@ -8720,10 +8749,25 @@
             <h3 class="feed-player-name"><span class="feed-player-name-text">${escapeHtml(card.name)}</span></h3>
             <p class="feed-player-meta">${metaBits.join("")}</p>
           </div>
-        </div>
+        </div>`;
+    const quotesHTML = feedQuoteRowsHTML(card.postIds, postsById, card);
+
+    if (detail) {
+      return `<section class="feed-player-detail" ${cardData}>
+      <header class="feed-player-detail-header feed-player-card-top">
+        ${identityHTML}
+        <div class="feed-player-stats feed-player-detail-stats">${stats}</div>
+      </header>
+      <div class="feed-source-list feed-player-detail-posts">${quotesHTML}</div>
+    </section>`;
+    }
+
+    return `<article class="rankings-card feed-player-card" ${cardData}>
+      <div class="feed-player-card-top">
+        ${identityHTML}
         <div class="feed-player-stats">${stats}</div>
       </div>
-      <div class="feed-source-list feed-player-quotes">${feedQuoteRowsHTML(card.postIds, postsById, card)}</div>
+      <div class="feed-source-list feed-player-quotes">${quotesHTML}</div>
     </article>`;
   }
 
@@ -9633,6 +9677,7 @@
   function renderFeed() {
     const root = el.feedTrending || el.feedList;
     if (!root) return;
+    if (el.feedTrending) el.feedTrending.classList.remove("is-player-selected");
     syncFeedRangeSeg();
     syncFeedFiltersToggle();
     const posts = SOCIAL.posts || [];
@@ -9703,11 +9748,20 @@ python3 site/annotate_social.py</pre>
         ? filtered.filter((c) => String(c.code) === String(state.feedSelectedCode))
         : filtered;
 
-    const cards = cardsForList
-      .map((card, i) => feedPlayerCardHTML(card, postsById, i))
-      .join("");
+    const playerSelected =
+      state.feedSelectedCode != null && !feedTreemapIsCompact();
+    if (el.feedTrending) {
+      el.feedTrending.classList.toggle("is-player-selected", playerSelected);
+    }
 
-    root.innerHTML = `<div class="rankings-grid feed-player-grid">${cards}</div>`;
+    if (playerSelected && cardsForList.length === 1) {
+      root.innerHTML = feedPlayerCardHTML(cardsForList[0], postsById, 0, { detail: true });
+    } else {
+      const cards = cardsForList
+        .map((card, i) => feedPlayerCardHTML(card, postsById, i))
+        .join("");
+      root.innerHTML = `<div class="rankings-grid feed-player-grid">${cards}</div>`;
+    }
 
     root.querySelectorAll("img.feed-player-photo").forEach((img) => {
       img.addEventListener("error", () => {
@@ -9849,12 +9903,16 @@ python3 site/annotate_social.py</pre>
     return (b.trend.current || 0) - (a.trend.current || 0);
   }
 
+  function ownershipSeriesTrend(series) {
+    return series && (series._trend || ownershipTrendScore(series));
+  }
+
+  function ownershipSeriesTrendQualifies(series) {
+    const trend = ownershipSeriesTrend(series);
+    return !!(trend && trend.kind !== "flat");
+  }
+
   function syncOwnershipTrendingUI() {
-    const on = !!state.ownershipTrending;
-    if (el.ownershipTrendingToggle) {
-      el.ownershipTrendingToggle.classList.toggle("on", on);
-      el.ownershipTrendingToggle.setAttribute("aria-pressed", on ? "true" : "false");
-    }
     if (el.ownershipTrendCards) {
       el.ownershipTrendCards.hidden = state.page !== "ownership";
     }
@@ -9923,9 +9981,9 @@ python3 site/annotate_social.py</pre>
     const price = Number(p.price);
     if (Number.isFinite(price) && (price < state.priceMin || price > state.priceMax)) return false;
     if (!Number.isFinite(Number(p.owned)) || Number(p.owned) < state.ownedMin) return false;
-    if (!isNextSeason() && HAS_PRICE_DATA && state.hideDeparted) {
+    if (!isNextSeason() && HAS_PRICE_DATA) {
       const row = catalog.get(Number(p.code));
-      if (row && row.price2627 == null) return false;
+      if (excludeDepartedPlayer(row)) return false;
     }
     const q = state.search.trim().toLowerCase();
     if (q) {
@@ -10158,8 +10216,7 @@ python3 site/annotate_social.py</pre>
       }
     }
     const delta = ownershipDelta(pt.owned, prev && prev.owned);
-    const trend =
-      state.ownershipTrending && series._trendCard ? ownershipTrendScore(series) : null;
+    const trend = ownershipSeriesTrendQualifies(series) ? ownershipSeriesTrend(series) : null;
     const deltaCls =
       trend && trend.kind === "riser"
         ? "is-up"
@@ -10461,8 +10518,8 @@ python3 site/annotate_social.py</pre>
   function hitTestOwnership(px, py) {
     const series = ownershipSeriesCache;
     if (!series.length || !ownershipLayout) return null;
-    if (state.ownershipTrending) {
-      const trend = series.filter((s) => s._trendCard);
+    if (state.page === "ownership") {
+      const trend = series.filter((s) => ownershipSeriesTrendQualifies(s));
       const hit = hitTestOwnershipAmong(trend, px, py);
       if (hit) return hit;
     }
@@ -10558,11 +10615,34 @@ python3 site/annotate_social.py</pre>
     showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
   }
 
+  function ownershipChartTitleText() {
+    const base =
+      state.view === "teams" ? "Club average selected-by %" : "Selected-by % over check-ins";
+    const windowLabel =
+      state.ownershipTrendWindow === 1
+        ? "last check-in"
+        : state.ownershipTrendWindow === 3
+          ? "last 3 check-ins"
+          : "last 7 check-ins";
+    const threshold = Number(state.ownershipTrendThreshold).toFixed(1);
+    return `${base} · ${windowLabel}, ≥${threshold} pp`;
+  }
+
+  function syncOwnershipChartTitle() {
+    if (!el.ownershipChartTitle) return;
+    const title = ownershipChartTitleText();
+    el.ownershipChartTitle.textContent = title;
+    if (el.ownershipChart) {
+      el.ownershipChart.setAttribute("aria-label", title);
+    }
+  }
+
   let ownershipLastSize = "";
 
   function renderOwnership() {
     if (!el.ownershipChart) return;
     hideOwnershipTooltip();
+    syncOwnershipChartTitle();
     const checkIns = ownershipCheckIns();
     const series =
       state.view === "teams" ? buildOwnershipTeamSeries() : buildOwnershipPlayerSeries();
@@ -10572,7 +10652,7 @@ python3 site/annotate_social.py</pre>
     ownershipSeriesCache = series;
     renderOwnershipTrendCards(series);
     if (el.ownershipChartWrap) {
-      el.ownershipChartWrap.classList.toggle("is-trending", !!state.ownershipTrending);
+      el.ownershipChartWrap.classList.add("is-trending");
     }
 
     if (el.ownershipCountLabel) {
@@ -10587,11 +10667,14 @@ python3 site/annotate_social.py</pre>
     }
 
     const wrap = el.ownershipChartWrap || el.ownershipChart;
+    const chartBox = el.ownershipChart || wrap;
     const w = Math.max(320, wrap.clientWidth || 640);
-    const h = Math.max(260, wrap.clientHeight || 420);
-    ownershipLastSize = `${wrap.clientWidth}x${wrap.clientHeight}`;
+    const mobileChart = NARROW_MQ.matches;
+    const measuredH = chartBox.clientHeight || Math.max(0, wrap.clientHeight - 42);
+    const h = mobileChart ? Math.max(240, measuredH || 280) : Math.max(260, measuredH || 380);
+    ownershipLastSize = `${wrap.clientWidth}x${chartBox.clientHeight || measuredH}`;
     const pad = { ...OWNERSHIP_PAD };
-    if (NARROW_MQ.matches) pad.bottom = 52;
+    if (mobileChart) pad.bottom = 56;
     const innerW = Math.max(40, w - pad.left - pad.right);
     const innerH = Math.max(40, h - pad.top - pad.bottom);
     const n = checkIns.length;
@@ -10636,10 +10719,11 @@ python3 site/annotate_social.py</pre>
       .join("");
 
     const trendClass = (s) => {
-      if (!state.ownershipTrending || !s._trendCard || !s._trend) return "";
-      if (s._trend.kind === "riser") return " is-riser";
-      if (s._trend.kind === "faller") return " is-faller";
-      return " is-flat-trend";
+      const trend = ownershipSeriesTrend(s);
+      if (!ownershipSeriesTrendQualifies(s) || !trend) return "";
+      if (trend.kind === "riser") return " is-riser";
+      if (trend.kind === "faller") return " is-faller";
+      return "";
     };
 
     const lineMarkup = (list) =>
@@ -10654,9 +10738,8 @@ python3 site/annotate_social.py</pre>
         )
         .join("");
 
-    const trendingOn = !!state.ownershipTrending;
-    const fieldSeries = trendingOn ? series.filter((s) => !s._trendCard) : series;
-    const trendSeries = trendingOn ? series.filter((s) => s._trendCard) : [];
+    const fieldSeries = series.filter((s) => !ownershipSeriesTrendQualifies(s));
+    const trendSeries = series.filter((s) => ownershipSeriesTrendQualifies(s));
     const lines = lineMarkup(fieldSeries) + lineMarkup(trendSeries);
 
     el.ownershipChart.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" aria-hidden="true">
@@ -10822,6 +10905,7 @@ python3 site/annotate_social.py</pre>
       ".feed-treemap-head",
       ".feed-treemap-cell",
       ".feed-trending .feed-player-card",
+      ".feed-trending .feed-player-detail",
       ".feed-trending .feed-source-row",
       ".team-player-row",
       ".team-empty-row",
@@ -10851,7 +10935,7 @@ python3 site/annotate_social.py</pre>
       pane.querySelectorAll(".feed-treemap-cell").forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
       });
-      pane.querySelectorAll(".feed-trending .feed-player-card").forEach((node, i) => {
+      pane.querySelectorAll(".feed-trending .feed-player-card, .feed-trending .feed-player-detail").forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
       });
     }
@@ -11204,7 +11288,6 @@ python3 site/annotate_social.py</pre>
       }
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
-      el.inactiveFilterGroup.style.display = "none";
       el.positionFilterGroup.style.display = "";
       el.priceFilterGroup.style.display = "";
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "";
@@ -11220,8 +11303,6 @@ python3 site/annotate_social.py</pre>
         el.setpieceFilterGroup.style.display = state.view === "players" ? "" : "none";
       }
       if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "none";
-      el.inactiveFilterGroup.style.display =
-        state.view === "players" && HAS_PRICE_DATA && !isNextSeason() ? "" : "none";
     }
     if (page === "ownership") {
       el.valueModeGroup.style.display = "none";
@@ -11275,17 +11356,6 @@ python3 site/annotate_social.py</pre>
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
-  if (el.ownershipTrendingToggle) {
-    el.ownershipTrendingToggle.addEventListener("click", () => {
-      state.ownershipTrending = !state.ownershipTrending;
-      if (!state.ownershipTrending) {
-        ownershipPinnedKey = null;
-        ownershipPinnedFromChart = false;
-      }
-      syncOwnershipTrendingUI();
-      if (state.page === "ownership") renderOwnership();
-    });
-  }
   if (el.ownershipTrendWindowSeg) {
     el.ownershipTrendWindowSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-trend-window]");
@@ -11924,8 +11994,6 @@ python3 site/annotate_social.py</pre>
     el.minutesFilterGroup.style.display = view === "players" ? "" : "none";
     el.priceFilterGroup.style.display = view === "players" ? "" : "none";
     if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = view === "players" ? "" : "none";
-    el.inactiveFilterGroup.style.display =
-      view === "players" && HAS_PRICE_DATA && !isNextSeason() ? "" : "none";
     el.valueModeGroup.style.display = view === "players" ? "" : "none";
     el.newpriceWrap.style.display = view === "players" && !isNextSeason() ? "" : "none";
     if (state.page === "ownership") {
@@ -12176,8 +12244,10 @@ python3 site/annotate_social.py</pre>
       state.search = "";
       syncSearchClearBtns();
     }
-    if (state.page === "team") renderTeam();
-    else if (state.page !== "rankings") renderTable();
+    if (state.page === "team") {
+      if (!state.teamPickerSlot) return;
+      renderTeam();
+    } else if (state.page !== "rankings") renderTable();
   }
 
   function clearFeedSearchInput() {
@@ -12190,11 +12260,12 @@ python3 site/annotate_social.py</pre>
   }
 
   function teamSearchAlwaysOpen() {
-    return state.page === "team" && !preferMobileSheet();
+    return state.page === "team" && !!state.teamPickerSlot && !preferMobileSheet();
   }
 
   function mainSearchAlwaysOpen() {
-    return (state.page === "team" || state.page === "opta") && !preferMobileSheet();
+    if (state.page === "team") return teamSearchAlwaysOpen();
+    return state.page === "opta" && !preferMobileSheet();
   }
 
   function mobileSearchAlwaysOpen() {
@@ -12206,7 +12277,11 @@ python3 site/annotate_social.py</pre>
     const home = el.searchHome;
     if (home && el.searchWrap.parentElement !== home) home.appendChild(el.searchWrap);
     // Rankings: no search — hide the control entirely.
-    el.searchWrap.style.display = state.page === "rankings" ? "none" : "";
+    // Team squad view: search only while picking a player.
+    const hideSearch =
+      state.page === "rankings" ||
+      (state.page === "team" && !state.teamPickerSlot);
+    el.searchWrap.style.display = hideSearch ? "none" : "";
     el.searchWrap.classList.toggle("team-search-always-open", teamSearchAlwaysOpen());
     el.searchWrap.classList.toggle(
       "stats-search-always-open",
@@ -12292,8 +12367,12 @@ python3 site/annotate_social.py</pre>
     searchTimer = setTimeout(() => {
       state.search = val;
       if (state.page === "rankings") return;
-      if (state.page === "team") renderTeam();
-      else renderTable();
+      if (state.page === "team") {
+        if (!state.teamPickerSlot) return;
+        renderTeam();
+        return;
+      }
+      renderTable();
     }, 120);
   });
 
@@ -12578,28 +12657,6 @@ python3 site/annotate_social.py</pre>
     onInput: renderSchedule,
   });
 
-  if (el.fixtureTtDelay && el.fixtureTtDelayFill && el.fixtureTtDelayLabel) {
-    setupSingleSlider({
-      input: el.fixtureTtDelay,
-      fillEl: el.fixtureTtDelayFill,
-      labelEl: el.fixtureTtDelayLabel,
-      boundsMin: FIXTURE_TT_DELAY_SEC_MIN,
-      boundsMax: FIXTURE_TT_DELAY_SEC_MAX,
-      step: 0.1,
-      get: () => fixtureTtDelaySec,
-      set: (v) => {
-        fixtureTtDelaySec = clampFixtureTtDelaySec(v);
-        try {
-          localStorage.setItem(FIXTURE_TT_DELAY_KEY, String(fixtureTtDelaySec));
-        } catch {
-          /* private browsing */
-        }
-      },
-      format: (v) => `${clampFixtureTtDelaySec(v).toFixed(1)}s`,
-      onInput: () => {},
-    });
-  }
-
   const scheduleEdgeMinInfo = $("#schedule-edge-min-info");
   if (scheduleEdgeMinInfo) {
     scheduleEdgeMinInfo.setAttribute(
@@ -12833,18 +12890,13 @@ python3 site/annotate_social.py</pre>
   if (el.resetFilters) el.resetFilters.addEventListener("click", onResetFiltersClick);
   if (el.mobileSheetReset) el.mobileSheetReset.addEventListener("click", onResetFiltersClick);
 
-  if (HAS_PRICE_DATA) {
-    el.showDepartedCheck.addEventListener("change", () => {
-      state.hideDeparted = !el.showDepartedCheck.checked;
-      renderTable();
-    });
-  }
-
   if (el.setpieceTakersCheck) {
     el.setpieceTakersCheck.addEventListener("change", () => {
       state.setPieceTakersOnly = !!el.setpieceTakersCheck.checked;
       syncFiltersResetUI();
-      renderTable();
+      if (state.page === "team") renderTeam();
+      else if (state.page === "ownership") renderOwnership();
+      else renderTable();
     });
   }
 
@@ -12904,8 +12956,6 @@ python3 site/annotate_social.py</pre>
     }
     syncSeasonSeg();
     el.newpriceWrap.style.display = state.view === "players" && !next ? "" : "none";
-    el.inactiveFilterGroup.style.display =
-      state.view === "players" && HAS_PRICE_DATA && !next ? "" : "none";
     if (next) {
       state.showNewPrice = false;
       el.newpriceIssuesPanel.classList.remove("open");
@@ -13100,6 +13150,8 @@ python3 site/annotate_social.py</pre>
   const ACCENT_OPTIONS = [
     { id: "blue", label: "Blue", light: "217 91% 60%", dark: "217 91% 60%", swatch: "217 91% 60%" },
     { id: "teal", label: "Teal", light: "173 80% 36%", dark: "172 66% 50%", swatch: "172 66% 45%" },
+    { id: "emerald", label: "Emerald", light: "160 84% 39%", dark: "160 70% 45%", swatch: "160 72% 40%" },
+    { id: "indigo", label: "Indigo", light: "239 84% 67%", dark: "239 84% 72%", swatch: "239 84% 67%" },
     { id: "violet", label: "Violet", light: "262 72% 50%", dark: "263 70% 65%", swatch: "262 72% 58%" },
     { id: "rose", label: "Rose", light: "346 77% 50%", dark: "347 77% 60%", swatch: "346 77% 55%" },
     { id: "amber", label: "Amber", light: "32 95% 44%", dark: "38 92% 50%", swatch: "32 95% 48%" },
@@ -13226,115 +13278,23 @@ python3 site/annotate_social.py</pre>
   applyTheme(currentThemeMode());
   applyAccent(currentAccentId());
 
-  // ---------------------------------------------------------------------
-  // TEMP font lab — swap --sans / --mono across the app while evaluating pairs
-  // ---------------------------------------------------------------------
-  const FONT_PAIR_KEY = "fpl-explorer-font-pair-v2";
-  const FONT_PAIR_DEFAULT = "manrope-fira";
-  const FONT_PAIRS = {
-    system: {
-      sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-      mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-    },
-    "inter-jb": {
-      sans: '"Inter", ui-sans-serif, system-ui, sans-serif',
-      mono: '"JetBrains Mono", ui-monospace, monospace',
-    },
-    plex: {
-      sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
-      mono: '"IBM Plex Mono", ui-monospace, monospace',
-    },
-    "jakarta-jb": {
-      sans: '"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif',
-      mono: '"JetBrains Mono", ui-monospace, monospace',
-    },
-    source: {
-      sans: '"Source Sans 3", ui-sans-serif, system-ui, sans-serif',
-      mono: '"Source Code Pro", ui-monospace, monospace',
-    },
-    dm: {
-      sans: '"DM Sans", ui-sans-serif, system-ui, sans-serif',
-      mono: '"DM Mono", ui-monospace, monospace',
-    },
-    "manrope-fira": {
-      sans: '"Manrope", ui-sans-serif, system-ui, sans-serif',
-      mono: '"Fira Code", ui-monospace, monospace',
-    },
-    "figtree-plex": {
-      sans: '"Figtree", ui-sans-serif, system-ui, sans-serif',
-      mono: '"IBM Plex Mono", ui-monospace, monospace',
-    },
-    "sora-jb": {
-      sans: '"Sora", ui-sans-serif, system-ui, sans-serif',
-      mono: '"JetBrains Mono", ui-monospace, monospace',
-    },
-    space: {
-      sans: '"Space Grotesk", ui-sans-serif, system-ui, sans-serif',
-      mono: '"Space Mono", ui-monospace, monospace',
-    },
-  };
-
-  function applyFontPair(id) {
-    const resolved = id in FONT_PAIRS ? id : FONT_PAIR_DEFAULT;
-    const pair = FONT_PAIRS[resolved];
-    const root = document.documentElement;
-    root.style.setProperty("--sans", pair.sans);
-    root.style.setProperty("--mono", pair.mono);
-    root.setAttribute("data-font-pair", resolved);
-    try {
-      localStorage.setItem(FONT_PAIR_KEY, resolved);
-    } catch {
-      /* private browsing */
-    }
-    if (el.fontPairSelect) el.fontPairSelect.value = resolved;
-  }
-
-  if (el.fontPairSelect) {
-    let saved = FONT_PAIR_DEFAULT;
-    try {
-      saved = localStorage.getItem(FONT_PAIR_KEY) || FONT_PAIR_DEFAULT;
-    } catch {
-      saved = FONT_PAIR_DEFAULT;
-    }
-    applyFontPair(saved);
-    el.fontPairSelect.addEventListener("change", () => {
-      applyFontPair(el.fontPairSelect.value);
-    });
-  }
-
   // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
   try {
     localStorage.removeItem("fpl-explorer-ui-scale");
     localStorage.removeItem("fpl-explorer-font-pair");
+    localStorage.removeItem("fpl-explorer-font-pair-v2");
+    localStorage.removeItem("fpl-explorer-clock-format");
+    localStorage.removeItem("fpl-explorer-fixture-tt-delay");
   } catch {
     /* private browsing */
   }
   document.documentElement.style.removeProperty("--ui-scale");
 
-  function applyClockFormat(value) {
-    clockFormat = value === "24" ? "24" : "12";
-    try {
-      localStorage.setItem(CLOCK_FORMAT_KEY, clockFormat);
-    } catch {
-      /* private browsing */
-    }
-    if (el.clockFormatSelect) el.clockFormatSelect.value = clockFormat;
-    if (typeof renderMarkets === "function") renderMarkets();
-    if (typeof renderFeed === "function" && state.page === "feed") renderFeed();
-  }
-
-  if (el.clockFormatSelect) {
-    el.clockFormatSelect.value = clockFormat;
-    el.clockFormatSelect.addEventListener("change", () => {
-      applyClockFormat(el.clockFormatSelect.value);
-    });
-  }
-
   syncPageInfoButton();
 
   function setPrefsOpen(open) {
     if (!el.prefsPanel || !el.prefsBtn) return;
-    if (open) syncTeamClearBtn();
+    if (open) syncTeamPlannerPrefsBtns();
     if (!hasFineHover()) {
       if (open) {
         openMobileSheetHost({
@@ -13440,6 +13400,7 @@ python3 site/annotate_social.py</pre>
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncMobileChrome();
+    syncTeamPickerCancelHost();
     setPageTrayOpen(false);
     syncPageTrayTrigger();
     syncPageTabWheel();
@@ -13496,7 +13457,10 @@ python3 site/annotate_social.py</pre>
     });
   }
   if (el.teamResyncBtn) {
-    el.teamResyncBtn.addEventListener("click", () => requestResyncPlanner());
+    el.teamResyncBtn.addEventListener("click", () => {
+      setPrefsOpen(false);
+      requestResyncPlanner();
+    });
   }
   if (el.teamClearBtn) {
     el.teamClearBtn.addEventListener("click", () => {
@@ -13640,11 +13604,13 @@ python3 site/annotate_social.py</pre>
       NARROW_MQ.addEventListener("change", () => {
         syncFeedSearchLayout();
         syncTeamSearchHost();
+        syncTeamPickerCancelHost();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
         syncFeedSearchLayout();
         syncTeamSearchHost();
+        syncTeamPickerCancelHost();
       });
     }
     bindAllNameColumnSimplifies();
