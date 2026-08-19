@@ -2798,10 +2798,53 @@ a { color: var(--blue); }
        horizontal column scroll on this element. */
     touch-action: pan-x;
     --name-col-w: 118px;
-    --crest-size: 18px;
-    --badge-size: 18px;
+    --crest-size: 21px;
+    --badge-size: 21px;
     --table-sec-h: 16px;
   }
+  .table-wrap.name-simplify-ready {
+    --name-col-compact-players: 72px;
+    --name-col-compact-teams: 40px;
+  }
+
+  /* Statistics: table card is the scrollport again (vertical + horizontal).
+     The split .main vertical / .table-wrap horizontal-only model blocks
+     touch scroll when the table fills the viewport. */
+  html[data-page="opta"] .main {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  html[data-page="opta"] #opta-page {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  html[data-page="opta"] #opta-page > .table-wrap,
+  html[data-page="opta"] #opta-page .compare-table-wrap {
+    overflow: auto;
+    overflow-y: auto;
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+  html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
+    flex: 0 1 clamp(140px, 38vh, 320px);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  html[data-page="opta"] #opta-page.has-compare .compare-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
   .table-wrap > table {
     font-size: 10px;
   }
@@ -2864,8 +2907,8 @@ a { color: var(--blue); }
     font-size: 10px;
   }
   .table-wrap .team-tag .badge-img {
-    width: 16px;
-    height: 16px;
+    width: 19px;
+    height: 19px;
   }
 }
 
@@ -3176,7 +3219,9 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   display: none;
 }
 
-/* Scroll-linked Statistics name morph (Players + Teams). */
+/* Scroll-linked Statistics name clip (Players + Teams). Column width morphs
+   narrower as you scroll; pos badge and row height stay put — names clip
+   from the right with no blur. */
 .table-wrap.name-simplify-ready {
   --name-col-full: var(--name-col-w, 170px);
   --name-col-compact-players: 76px;
@@ -3198,47 +3243,17 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   min-width: var(--name-col-w-morph);
   max-width: var(--name-col-w-morph);
 }
-.table-wrap.name-simplify-ready .player-cell-sub {
-  opacity: calc(1 - var(--name-collapse));
-  max-height: calc(1.35em * (1 - var(--name-collapse) * 0.95));
-  overflow: hidden;
-  margin-top: calc(var(--name-collapse) * -2px);
-}
-/* Players: keep crest + first four letters; blur/fade the remainder.
-   At collapse 0 the mask is fully opaque so names stay whole. */
-.table-wrap.name-simplify-ready[data-view="players"] .player-name-rest {
-  filter: blur(calc(var(--name-collapse) * 6px));
-  opacity: calc(1 - var(--name-collapse) * 0.35);
-  -webkit-mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    #000 calc(100% - var(--name-collapse) * 72%),
-    transparent calc(110% - var(--name-collapse) * 38%)
-  );
-  mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    #000 calc(100% - var(--name-collapse) * 72%),
-    transparent calc(110% - var(--name-collapse) * 38%)
-  );
-}
-.table-wrap.name-simplify-ready[data-view="players"].is-name-simplifying .player-name-icons {
-  opacity: calc(1 - var(--name-collapse) * 0.65);
-  max-width: calc((1 - var(--name-collapse)) * 24px);
-  overflow: hidden;
-}
-/* Teams: dissolve name + league rank; crest stays. */
-.table-wrap.name-simplify-ready[data-view="teams"] .col-name .player-name,
-.table-wrap.name-simplify-ready[data-view="teams"] .col-name .team-league-pos {
-  opacity: calc(1 - var(--name-collapse));
-  filter: blur(calc(var(--name-collapse) * 5px));
-  transform: translateX(calc(var(--name-collapse) * -6px));
-  max-width: calc((1 - var(--name-collapse)) * 100%);
+.table-wrap.name-simplify-ready[data-view="players"] .player-name-line > .player-name,
+.table-wrap.name-simplify-ready[data-view="teams"] .col-name .player-name-line > .player-name {
+  display: block;
   overflow: hidden;
   white-space: nowrap;
+  min-width: 0;
 }
-.table-wrap.name-simplify-ready[data-view="teams"].is-name-simplifying .col-name .player-name-line {
-  justify-content: flex-start;
+.table-wrap.name-simplify-ready[data-view="teams"] .col-name .team-league-pos {
+  opacity: 1;
+  filter: none;
+  transform: none;
 }
 
 /* Identity: crest left of name/POS. Flat grid — crest column always hugs the badge. */
@@ -10135,9 +10150,16 @@ html[data-page="team"] .layout .main {
 #team-page.is-picking .team-header h2 {
   color: var(--text);
 }
-#team-page.is-picking #team-compare-wrap,
 #team-page.is-picking #team-sub-bar {
   display: none !important;
+}
+html[data-page="team"]:not(.is-team-picking) #team-compare-btn,
+#team-page:not(.is-picking) #team-compare-wrap,
+#team-page:not(.is-picking) #team-compare-btn {
+  display: none !important;
+}
+html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
+  display: inline-flex;
 }
 #team-picker-view .team-table-wrap.team-picker-table-wrap {
   --name-col-w: 172px;
