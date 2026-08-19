@@ -1912,6 +1912,7 @@
   // coarse remaps tips / rankings cross-highlight to taps.
   const FINE_HOVER_MQ = window.matchMedia("(hover: hover) and (pointer: fine)");
   const NARROW_MQ = window.matchMedia("(max-width: 720px)");
+  const TEAM_LANDSCAPE_MQ = window.matchMedia("(orientation: landscape) and (max-height: 520px)");
 
   function syncMobileLayoutClass() {
     document.documentElement.classList.toggle("is-mobile-layout", NARROW_MQ.matches);
@@ -2278,21 +2279,13 @@
   function applyCompareScrollFrom(source, target) {
     if (!source || !target) return;
     const left = source.scrollLeft;
-    if (NARROW_MQ.matches) {
-      const table = target.querySelector(":scope > table");
-      if (table) {
-        table.style.transform = left > 0 ? `translate3d(${-left}px, 0, 0)` : "";
-      }
-      if (target.scrollLeft !== 0) target.scrollLeft = 0;
-    } else {
-      clearCompareMirror(target);
-      if (Math.abs(target.scrollLeft - left) > 0.5) {
-        compareScrollSuppress = target;
-        target.scrollLeft = left;
-        requestAnimationFrame(() => {
-          if (compareScrollSuppress === target) compareScrollSuppress = null;
-        });
-      }
+    clearCompareMirror(target);
+    if (Math.abs(target.scrollLeft - left) > 0.5) {
+      compareScrollSuppress = target;
+      target.scrollLeft = left;
+      requestAnimationFrame(() => {
+        if (compareScrollSuppress === target) compareScrollSuppress = null;
+      });
     }
     if (nameSimplifyActive()) {
       updateNameColumnSimplify(source, left);
@@ -2342,13 +2335,7 @@
     a.dataset.compareScrollBound = "1";
     b.dataset.compareScrollBound = "1";
     a.addEventListener("scroll", () => scheduleCompareScrollSync(a, b), { passive: true });
-    b.addEventListener(
-      "scroll",
-      () => {
-        if (!NARROW_MQ.matches) scheduleCompareScrollSync(b, a);
-      },
-      { passive: true }
-    );
+    b.addEventListener("scroll", () => scheduleCompareScrollSync(b, a), { passive: true });
     bindCompareTouchScroll(b, a);
     applyCompareScrollFrom(a, b);
   }
@@ -3101,6 +3088,87 @@
     const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
     if (compare) wraps.push(compare);
     return wraps;
+  }
+
+  function teamLandscapeSquadWrap() {
+    return el.teamSquadView && el.teamSquadView.querySelector(":scope > .team-table-wrap");
+  }
+
+  function teamLandscapeActive() {
+    return (
+      TEAM_LANDSCAPE_MQ.matches &&
+      state.page === "team" &&
+      !state.teamPickerSlot &&
+      !state.teamCompareMode &&
+      state.teamCompareCodes.length === 0 &&
+      (!el.teamSearchResults || el.teamSearchResults.hidden) &&
+      el.teamPage &&
+      el.teamPage.style.display !== "none"
+    );
+  }
+
+  let teamLandscapeFitRaf = 0;
+
+  function clearTeamLandscapeFit() {
+    const wrap = teamLandscapeSquadWrap();
+    if (!wrap) return;
+    ["transform", "transform-origin", "width", "height", "left", "top", "position"].forEach(
+      (prop) => wrap.style.removeProperty(prop)
+    );
+  }
+
+  function fitTeamLandscapeTable() {
+    if (!teamLandscapeActive()) {
+      clearTeamLandscapeFit();
+      return;
+    }
+    const wrap = teamLandscapeSquadWrap();
+    const table = wrap && wrap.querySelector(":scope > table");
+    if (!wrap || !table) return;
+
+    clearTeamLandscapeFit();
+
+    const pad = 6;
+    const vv = window.visualViewport;
+    const viewW = vv ? vv.width : window.innerWidth;
+    const viewH = vv ? vv.height : window.innerHeight;
+    const availW = Math.max(0, viewW - pad * 2);
+    const availH = Math.max(0, viewH - pad * 2);
+
+    const naturalW = table.offsetWidth;
+    const naturalH = table.offsetHeight;
+    if (!naturalW || !naturalH) return;
+
+    const scale = Math.min(availW / naturalW, availH / naturalH, 1);
+    const scaledW = naturalW * scale;
+    const scaledH = naturalH * scale;
+
+    wrap.style.position = "absolute";
+    wrap.style.width = `${naturalW}px`;
+    wrap.style.height = `${naturalH}px`;
+    wrap.style.transformOrigin = "top left";
+    wrap.style.transform = `scale(${scale})`;
+    wrap.style.left = `${Math.max(0, (availW - scaledW) / 2) + pad}px`;
+    wrap.style.top = `${Math.max(0, (availH - scaledH) / 2) + pad}px`;
+  }
+
+  function scheduleTeamLandscapeFit() {
+    if (teamLandscapeFitRaf) cancelAnimationFrame(teamLandscapeFitRaf);
+    teamLandscapeFitRaf = requestAnimationFrame(() => {
+      teamLandscapeFitRaf = 0;
+      fitTeamLandscapeTable();
+    });
+  }
+
+  function syncTeamLandscapeMode() {
+    const active = teamLandscapeActive();
+    document.documentElement.classList.toggle("is-team-landscape", active);
+    if (!active) {
+      clearTeamLandscapeFit();
+      return;
+    }
+    if (mobileSheetOpen) closeMobileSheet();
+    scheduleTeamLandscapeFit();
   }
 
   function teamTableScrollWraps() {
@@ -8121,8 +8189,10 @@
     requestAnimationFrame(() => {
       if (opts.resetScroll) resetScrollWraps(teamTableScrollWraps());
       refreshNameSimplifyOrigins();
+      syncTeamLandscapeMode();
     });
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
+    syncTeamLandscapeMode();
   }
 
   function applyTeamPageBounds() {
@@ -11606,6 +11676,7 @@ python3 site/annotate_social.py</pre>
     if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
     if (el.teamPage) el.teamPage.style.display = page === "team" ? "" : "none";
+    syncTeamLandscapeMode();
     const isMarkets = page === "markets";
     // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
     const hideSubtoolbar =
@@ -13801,6 +13872,15 @@ python3 site/annotate_social.py</pre>
     }
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
+  bindMqChange(TEAM_LANDSCAPE_MQ, () => {
+    syncTeamLandscapeMode();
+    if (state.page === "team") scheduleTeamLandscapeFit();
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", scheduleTeamLandscapeFit);
+    window.visualViewport.addEventListener("scroll", scheduleTeamLandscapeFit);
+  }
+  window.addEventListener("resize", scheduleTeamLandscapeFit);
   syncColumnsPanelHost();
 
   if (el.prefsBtn && el.prefsPanel) {

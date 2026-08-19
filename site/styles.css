@@ -2874,7 +2874,7 @@ a { color: var(--blue); }
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;
     margin-bottom: 8px;
   }
 
@@ -3615,12 +3615,25 @@ tbody tr.row-selected td:first-child {
 }
 
 .compare-wrap {
+  position: relative;
   border: 1px solid hsl(var(--blue-hsl) / 0.32);
   border-radius: var(--radius);
   margin-bottom: 14px;
-  overflow: visible;
+  overflow: hidden;
   background: hsl(var(--card));
-  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
+}
+.compare-wrap::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: hsl(var(--blue-hsl));
+  border-bottom-left-radius: var(--radius);
+  border-top-left-radius: var(--radius);
+  z-index: 12;
+  pointer-events: none;
 }
 .compare-header {
   display: flex;
@@ -3643,6 +3656,12 @@ tbody tr.row-selected td:first-child {
   background: transparent;
   overflow-x: auto;
   overflow-y: visible;
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
+}
+.compare-wrap > .compare-table-wrap:last-child {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
 }
 .compare-table-wrap > table > thead {
   /* Match main table sticky header stacking inside the compare card. */
@@ -3657,7 +3676,7 @@ tbody tr.row-selected td:first-child {
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
     margin-bottom: 8px;
@@ -3669,15 +3688,11 @@ tbody tr.row-selected td:first-child {
     min-height: auto;
     height: auto;
     max-height: none;
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: visible;
     overscroll-behavior-x: none;
-    touch-action: pan-y pinch-zoom;
-  }
-  html[data-page="opta"] #opta-page.has-compare .compare-table-wrap > table,
-  #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap > table,
-  #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap > table {
-    will-change: transform;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
   }
 }
 /* Aux tables (compare / search / pins) don't use main-table selection bars —
@@ -10035,6 +10050,11 @@ html[data-page="team"] .layout .main {
   padding: 0;
   box-shadow: none;
 }
+/* sec-sticky-lead ::after already draws the player-column rule — drop the
+   extra border-left on Statistics or it reads as a double/thick divider. */
+#team-page thead tr.section-row th.sec-sticky-lead + th.sec-divider {
+  border-left: none;
+}
 #team-page tbody tr.team-bench-divider th.col-player,
 #team-page tbody tr.team-bench-divider td.team-section-fill {
   height: 32px;
@@ -10185,8 +10205,23 @@ html[data-page="team"] .layout .main {
 #team-page thead th.col-heat.is-anchor,
 #team-page tbody td.team-heat-cell.is-anchor,
 #team-picker-view thead th.col-heat.is-anchor,
-#team-picker-view tbody td.team-heat-cell.is-anchor {
-  box-shadow: inset -2px 0 0 hsl(var(--foreground) / 0.22);
+#team-picker-view tbody td.team-heat-cell.is-anchor,
+#team-compare-wrap thead th.col-heat.is-anchor,
+#team-compare-wrap tbody td.team-heat-cell.is-anchor {
+  box-shadow: none;
+  border-right: 6px solid hsl(var(--card));
+}
+#team-page thead th.col-heat.is-anchor,
+#team-picker-view thead th.col-heat.is-anchor,
+#team-compare-wrap thead th.col-heat.is-anchor {
+  border-right-color: hsl(var(--muted));
+}
+#team-page tbody tr.team-section-row td.team-heat-cell.is-anchor,
+#team-picker-view tbody tr.team-section-row td.team-heat-cell.is-anchor {
+  border-right-color: color-mix(in srgb, hsl(var(--muted)) 72%, hsl(var(--card)));
+}
+#team-page tbody tr.team-bench-divider td.team-heat-cell.is-anchor {
+  border-right-color: hsl(var(--muted) / 0.72);
 }
 .team-heat-label {
   display: inline-block;
@@ -10262,7 +10297,7 @@ html[data-page="team"] .layout .main {
 #team-picker-view #team-compare-wrap:not([hidden]) {
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   flex: 0 0 auto;
   margin-bottom: 8px;
 }
@@ -10270,9 +10305,11 @@ html[data-page="team"] .layout .main {
   flex: 0 0 auto;
   min-height: auto;
   max-height: none;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: visible;
-  touch-action: pan-y pinch-zoom;
+  overscroll-behavior-x: none;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
 }
 #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
   flex: 1 1 auto;
@@ -10377,16 +10414,18 @@ html[data-page="team"] .layout .main {
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;
     margin-bottom: 8px;
   }
   #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
     max-height: none;
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: visible;
-    touch-action: pan-y pinch-zoom;
+    overscroll-behavior-x: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
   }
   #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
     flex: 1 1 auto;
@@ -10397,16 +10436,18 @@ html[data-page="team"] .layout .main {
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;
     margin-bottom: 8px;
   }
   #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
     max-height: none;
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: visible;
-    touch-action: pan-y pinch-zoom;
+    overscroll-behavior-x: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
   }
   #team-squad-view:has(#team-search-results:not([hidden])) > .team-table-wrap {
     flex: 1 1 auto;
@@ -10460,6 +10501,178 @@ html[data-page="team"] .layout .main {
 @media (hover: hover) and (pointer: fine) and (min-width: 721px) {
   .mobile-sheet {
     display: none !important;
+  }
+}
+
+/* ---- Team mobile landscape: full squad board, no chrome, scale-to-fit ---- */
+@media (orientation: landscape) and (max-height: 520px) {
+  html.is-team-landscape[data-page="team"],
+  html.is-team-landscape[data-page="team"] body {
+    overflow: hidden;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+  html.is-team-landscape .page-nav,
+  html.is-team-landscape #subtoolbar,
+  html.is-team-landscape .mobile-view-dock,
+  html.is-team-landscape .mobile-filter-dock,
+  html.is-team-landscape .mobile-chrome-fade,
+  html.is-team-landscape .sidebar,
+  html.is-team-landscape #team-page .page-header,
+  html.is-team-landscape #team-page .team-budget-bar,
+  html.is-team-landscape #team-compare-wrap,
+  html.is-team-landscape #team-picker-view,
+  html.is-team-landscape #team-search-results,
+  html.is-team-landscape #team-sub-bar {
+    display: none !important;
+  }
+  html.is-team-landscape .layout {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+  html.is-team-landscape .layout .main {
+    padding: 0 !important;
+    margin: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
+  html.is-team-landscape #team-page {
+    --name-col-w: 72px;
+    --team-row-h: 17px;
+    --team-stat-w: 26px;
+    --team-owned-w: 26px;
+    --team-price-w: 26px;
+    --team-setpiece-w: 22px;
+    --crest-size: 11px;
+    --badge-size: 11px;
+    --crest-gap: 3px;
+    --table-sec-h: 0px;
+    --metric-col-w: 26px;
+    --check-col-w: 22px;
+    height: 100%;
+    min-height: 0;
+    max-height: 100dvh;
+    padding:
+      max(2px, env(safe-area-inset-top, 0px))
+      max(2px, env(safe-area-inset-right, 0px))
+      max(2px, env(safe-area-inset-bottom, 0px))
+      max(2px, env(safe-area-inset-left, 0px));
+  }
+  html.is-team-landscape #team-squad-view {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    display: block;
+  }
+  html.is-team-landscape #team-squad-view > .team-table-wrap {
+    overflow: hidden !important;
+    touch-action: none;
+    max-height: none;
+    flex: none;
+    border-radius: calc(var(--radius) - 2px);
+    box-shadow: var(--shadow-sm);
+  }
+  html.is-team-landscape #team-squad-view thead tr.section-row,
+  html.is-team-landscape #team-squad-body tr.team-section-row {
+    display: none;
+  }
+  html.is-team-landscape #team-page .table-wrap > table > thead {
+    position: static;
+  }
+  html.is-team-landscape #team-page thead tr:not(.section-row) th {
+    position: static;
+    top: auto;
+    left: auto;
+    padding: 1px 2px;
+    font-size: 7.5px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  html.is-team-landscape #team-page thead th.col-player {
+    padding-left: 4px;
+    z-index: auto;
+  }
+  html.is-team-landscape #team-page tbody tr.team-player-row > td,
+  html.is-team-landscape #team-page tbody tr.team-empty-row > td {
+    height: var(--team-row-h);
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 8px;
+    line-height: 1.1;
+  }
+  html.is-team-landscape #team-page tbody td.col-player,
+  html.is-team-landscape #team-page thead th.col-player {
+    position: static;
+    box-shadow: none;
+    padding-left: 4px;
+    padding-right: 2px;
+    z-index: auto;
+  }
+  html.is-team-landscape #team-page tbody td.col-player::after,
+  html.is-team-landscape #team-page thead th.col-player::after {
+    display: none;
+  }
+  html.is-team-landscape #team-page .player-cell .player-name {
+    font-size: 8px;
+    font-weight: 650;
+    line-height: 1.15;
+  }
+  html.is-team-landscape #team-page .player-cell-sub {
+    display: none;
+  }
+  html.is-team-landscape #team-page .team-role-badge {
+    min-width: 10px;
+    height: 10px;
+    padding: 0 2px;
+    font-size: 7px;
+    line-height: 10px;
+  }
+  html.is-team-landscape #team-page .team-add-slot {
+    font-size: 8px;
+    gap: 4px;
+  }
+  html.is-team-landscape #team-page .team-add-slot .icon {
+    width: 10px;
+    height: 10px;
+    font-size: 10px;
+  }
+  html.is-team-landscape #team-page thead th.col-team-stat,
+  html.is-team-landscape #team-page tbody td.col-team-stat,
+  html.is-team-landscape #team-page thead th.team-price,
+  html.is-team-landscape #team-page tbody td.team-price {
+    padding-inline: 1px;
+    font-size: 8px;
+  }
+  html.is-team-landscape #team-page thead th.col-team-spark,
+  html.is-team-landscape #team-page tbody td.col-team-spark {
+    width: 34px;
+    min-width: 34px;
+    max-width: 34px;
+    padding-inline: 2px;
+  }
+  html.is-team-landscape #team-page .team-spark {
+    width: 28px;
+    height: 12px;
+  }
+  html.is-team-landscape #team-page thead th.col-heat,
+  html.is-team-landscape #team-page tbody td.team-heat-cell {
+    min-width: 34px;
+    width: 34px;
+    max-width: 34px;
+    padding: 0 1px;
+    font-size: 7.5px;
+    font-weight: 600;
+  }
+  html.is-team-landscape #team-page tbody td.team-heat-cell.is-anchor {
+    border-right-width: 3px;
+  }
+  html.is-team-landscape #team-page tbody td,
+  html.is-team-landscape #team-page thead th {
+    border-bottom-width: 1px;
   }
 }
 
