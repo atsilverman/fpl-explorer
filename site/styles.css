@@ -2075,7 +2075,7 @@ a { color: var(--blue); }
   #newprice-wrap {
     display: none !important;
   }
-  html.is-mobile-layout[data-page="opta"] #sidebar-toggle,
+  html.is-mobile-layout[data-page="opta"] #stats-toolbar-start #sidebar-toggle,
   html.is-mobile-layout[data-page="opta"] #stats-toolbar-start > .tabs {
     display: none !important;
   }
@@ -3669,10 +3669,15 @@ tbody tr.row-selected td:first-child {
     min-height: auto;
     height: auto;
     max-height: none;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: visible;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: none;
+    touch-action: pan-y pinch-zoom;
+  }
+  html[data-page="opta"] #opta-page.has-compare .compare-table-wrap > table,
+  #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap > table,
+  #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap > table {
+    will-change: transform;
   }
 }
 /* Aux tables (compare / search / pins) don't use main-table selection bars —
@@ -10265,8 +10270,9 @@ html[data-page="team"] .layout .main {
   flex: 0 0 auto;
   min-height: auto;
   max-height: none;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: visible;
+  touch-action: pan-y pinch-zoom;
 }
 #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
   flex: 1 1 auto;
@@ -10378,8 +10384,9 @@ html[data-page="team"] .layout .main {
     flex: 0 0 auto;
     min-height: auto;
     max-height: none;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: visible;
+    touch-action: pan-y pinch-zoom;
   }
   #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
     flex: 1 1 auto;
@@ -10397,8 +10404,9 @@ html[data-page="team"] .layout .main {
     flex: 0 0 auto;
     min-height: auto;
     max-height: none;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: visible;
+    touch-action: pan-y pinch-zoom;
   }
   #team-squad-view:has(#team-search-results:not([hidden])) > .team-table-wrap {
     flex: 1 1 auto;

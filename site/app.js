@@ -2260,49 +2260,127 @@
     );
   }
 
-  let compareScrollSyncing = false;
+  let compareScrollSuppress = null;
+  let compareScrollRaf = 0;
+  let compareScrollPending = null;
 
-  function syncCompareScrollPair(source, target) {
-    if (!source || !target || compareScrollSyncing) return;
-    compareScrollSyncing = true;
-    if (Math.abs(target.scrollLeft - source.scrollLeft) > 0.5) {
-      target.scrollLeft = source.scrollLeft;
+  function clearCompareMirror(wrap) {
+    const table = wrap && wrap.querySelector(":scope > table");
+    if (table) table.style.removeProperty("transform");
+  }
+
+  function clearAllCompareMirrors() {
+    document
+      .querySelectorAll(".compare-table-wrap, #team-compare-wrap .team-table-wrap")
+      .forEach(clearCompareMirror);
+  }
+
+  function applyCompareScrollFrom(source, target) {
+    if (!source || !target) return;
+    const left = source.scrollLeft;
+    if (NARROW_MQ.matches) {
+      const table = target.querySelector(":scope > table");
+      if (table) {
+        table.style.transform = left > 0 ? `translate3d(${-left}px, 0, 0)` : "";
+      }
+      if (target.scrollLeft !== 0) target.scrollLeft = 0;
+    } else {
+      clearCompareMirror(target);
+      if (Math.abs(target.scrollLeft - left) > 0.5) {
+        compareScrollSuppress = target;
+        target.scrollLeft = left;
+        requestAnimationFrame(() => {
+          if (compareScrollSuppress === target) compareScrollSuppress = null;
+        });
+      }
     }
     if (nameSimplifyActive()) {
-      updateNameColumnSimplify(source);
-      updateNameColumnSimplify(target);
+      updateNameColumnSimplify(source, left);
+      updateNameColumnSimplify(target, left);
     }
-    requestAnimationFrame(() => {
-      compareScrollSyncing = false;
+  }
+
+  function scheduleCompareScrollSync(source, target) {
+    if (source === compareScrollSuppress) return;
+    compareScrollPending = { source, target };
+    if (compareScrollRaf) return;
+    compareScrollRaf = requestAnimationFrame(() => {
+      compareScrollRaf = 0;
+      const job = compareScrollPending;
+      compareScrollPending = null;
+      if (!job) return;
+      applyCompareScrollFrom(job.source, job.target);
     });
+  }
+
+  function bindCompareTouchScroll(mirrorWrap, scrollWrap) {
+    if (!mirrorWrap || mirrorWrap.dataset.compareTouchBound === "1") return;
+    mirrorWrap.dataset.compareTouchBound = "1";
+    let startX = 0;
+    let startScroll = 0;
+    mirrorWrap.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+        startX = e.touches[0].clientX;
+        startScroll = scrollWrap.scrollLeft;
+      },
+      { passive: true }
+    );
+    mirrorWrap.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+        scrollWrap.scrollLeft = startScroll + (startX - e.touches[0].clientX);
+      },
+      { passive: true }
+    );
   }
 
   function attachCompareScrollPair(a, b) {
     if (!a || !b || a.dataset.compareScrollBound === "1") return;
     a.dataset.compareScrollBound = "1";
     b.dataset.compareScrollBound = "1";
-    a.addEventListener("scroll", () => syncCompareScrollPair(a, b), { passive: true });
-    b.addEventListener("scroll", () => syncCompareScrollPair(b, a), { passive: true });
+    a.addEventListener("scroll", () => scheduleCompareScrollSync(a, b), { passive: true });
+    b.addEventListener(
+      "scroll",
+      () => {
+        if (!NARROW_MQ.matches) scheduleCompareScrollSync(b, a);
+      },
+      { passive: true }
+    );
+    bindCompareTouchScroll(b, a);
+    applyCompareScrollFrom(a, b);
   }
 
-  function bindCompareScrollSync() {
+  function refreshCompareScrollMirrorMode() {
+    clearAllCompareMirrors();
     if (comparePanelVisible() && state.page === "opta") {
       const main = el.tableBody && el.tableBody.closest(".table-wrap");
       const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
-      if (main && compare) {
-        attachCompareScrollPair(main, compare);
-        compare.scrollLeft = main.scrollLeft;
-      }
+      if (main && compare) applyCompareScrollFrom(main, compare);
     }
     if (teamComparePanelVisible()) {
       const picker =
         el.teamPickerView && el.teamPickerView.querySelector(".team-picker-table-wrap");
       const teamCompare =
         el.teamCompareWrap && el.teamCompareWrap.querySelector(".team-table-wrap");
-      if (picker && teamCompare) {
-        attachCompareScrollPair(picker, teamCompare);
-        teamCompare.scrollLeft = picker.scrollLeft;
-      }
+      if (picker && teamCompare) applyCompareScrollFrom(picker, teamCompare);
+    }
+  }
+
+  function bindCompareScrollSync() {
+    if (comparePanelVisible() && state.page === "opta") {
+      const main = el.tableBody && el.tableBody.closest(".table-wrap");
+      const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
+      if (main && compare) attachCompareScrollPair(main, compare);
+    }
+    if (teamComparePanelVisible()) {
+      const picker =
+        el.teamPickerView && el.teamPickerView.querySelector(".team-picker-table-wrap");
+      const teamCompare =
+        el.teamCompareWrap && el.teamCompareWrap.querySelector(".team-table-wrap");
+      if (picker && teamCompare) attachCompareScrollPair(picker, teamCompare);
     }
   }
 
@@ -2403,12 +2481,13 @@
     invalidateNameSimplifyOrigin(wrap);
   }
 
-  function updateNameColumnSimplify(wrap) {
+  function updateNameColumnSimplify(wrap, scrollLeftOverride) {
     if (!wrap || !nameSimplifyActive()) {
       clearNameColumnSimplify(wrap);
       return;
     }
-    const t = nameSimplifyProgress(wrap.scrollLeft, nameSimplifyOrigin(wrap));
+    const scrollLeft = scrollLeftOverride != null ? scrollLeftOverride : wrap.scrollLeft;
+    const t = nameSimplifyProgress(scrollLeft, nameSimplifyOrigin(wrap));
     wrap.classList.add("name-simplify-ready");
     wrap.dataset.view = state.page === "team" ? "players" : state.view;
     wrap.style.setProperty("--name-collapse", String(t));
@@ -13928,6 +14007,7 @@ python3 site/annotate_social.py</pre>
         syncTeamPickerCoreUnder();
         bindAllNameColumnSimplifies();
         refreshNameSimplifyOrigins();
+        refreshCompareScrollMirrorMode();
         bindMobileChromeScrollHide();
         syncMobileScrollportHeight();
       });
@@ -13943,6 +14023,7 @@ python3 site/annotate_social.py</pre>
         syncTeamPickerCoreUnder();
         bindAllNameColumnSimplifies();
         refreshNameSimplifyOrigins();
+        refreshCompareScrollMirrorMode();
         bindMobileChromeScrollHide();
         syncMobileScrollportHeight();
       });
