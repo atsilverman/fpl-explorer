@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=527" />
+<link rel="stylesheet" href="styles.css?v=533" />
 <script>
 (() => {
   try {
@@ -423,7 +423,7 @@
 
     <div class="topbar-cluster topbar-end-cluster">
       <div class="team-toolbar-controls" id="team-toolbar-controls" hidden>
-        <button type="button" class="ghost-btn icon-label-btn" id="team-compare-btn"
+        <button type="button" class="ghost-btn icon-label-btn" id="team-compare-btn" hidden
           aria-pressed="false" title="Click up to 5 players to compare">
           <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
           <span class="btn-label">Compare</span>
@@ -730,7 +730,10 @@
     <div id="team-page" class="page-pane" style="display:none;">
       <div class="page-header team-header">
         <div class="team-header-text">
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Team<button class="page-info-btn" type="button" aria-label="How Team works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+          <div class="team-header-title-row">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Team<button class="page-info-btn" type="button" aria-label="How Team works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <div class="team-header-inline-actions" id="team-header-inline-actions"></div>
+          </div>
           <p class="page-subtitle" id="team-page-subtitle">Build a 15-man FPL squad within £100.0m — last-season stats, set pieces, and six fixtures from the selected gameweek.</p>
         </div>
         <div class="page-header-meta team-picker-header-actions" id="team-picker-header-actions">
@@ -1061,7 +1064,7 @@
 <script src="social_data.js?v=15"></script>
 <script src="markets_data.js?v=7"></script>
 <script src="ownership_data.js?v=4"></script>
-<script src="app.js?v=527"></script>
+<script src="app.js?v=533"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

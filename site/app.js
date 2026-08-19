@@ -746,6 +746,7 @@
     teamCompareHead: $("#team-compare-head"),
     teamCompareBody: $("#team-compare-body"),
     teamToolbarControls: $("#team-toolbar-controls"),
+    teamHeaderInlineActions: $("#team-header-inline-actions"),
     teamToolbarMode: $("#team-toolbar-mode"),
     teamPickerHeaderActions: $("#team-picker-header-actions"),
     teamPickerCancel: $("#team-picker-cancel"),
@@ -1912,7 +1913,14 @@
   // coarse remaps tips / rankings cross-highlight to taps.
   const FINE_HOVER_MQ = window.matchMedia("(hover: hover) and (pointer: fine)");
   const NARROW_MQ = window.matchMedia("(max-width: 720px)");
-  const TEAM_LANDSCAPE_MQ = window.matchMedia("(orientation: landscape) and (max-height: 520px)");
+
+  function teamLandscapeViewport() {
+    const vv = window.visualViewport;
+    const w = vv ? vv.width : window.innerWidth;
+    const h = vv ? vv.height : window.innerHeight;
+    if (w <= h || h > 580) return false;
+    return !hasFineHover() || w <= 1024;
+  }
 
   function syncMobileLayoutClass() {
     document.documentElement.classList.toggle("is-mobile-layout", NARROW_MQ.matches);
@@ -3096,7 +3104,7 @@
 
   function teamLandscapeActive() {
     return (
-      TEAM_LANDSCAPE_MQ.matches &&
+      teamLandscapeViewport() &&
       state.page === "team" &&
       !state.teamPickerSlot &&
       !state.teamCompareMode &&
@@ -3107,68 +3115,104 @@
     );
   }
 
-  let teamLandscapeFitRaf = 0;
+  const TEAM_LANDSCAPE_VARS = [
+    "--team-landscape-name-w",
+    "--team-landscape-stat-w",
+    "--team-landscape-spark-w",
+    "--team-landscape-heat-w",
+  ];
 
-  function clearTeamLandscapeFit() {
-    const wrap = teamLandscapeSquadWrap();
-    if (!wrap) return;
-    ["transform", "transform-origin", "width", "height", "left", "top", "position"].forEach(
-      (prop) => wrap.style.removeProperty(prop)
-    );
+  function clearTeamLandscapeLayout() {
+    const root = document.documentElement;
+    TEAM_LANDSCAPE_VARS.forEach((v) => root.style.removeProperty(v));
   }
 
-  function fitTeamLandscapeTable() {
+  function syncTeamLandscapeLayout() {
     if (!teamLandscapeActive()) {
-      clearTeamLandscapeFit();
+      clearTeamLandscapeLayout();
       return;
     }
-    const wrap = teamLandscapeSquadWrap();
-    const table = wrap && wrap.querySelector(":scope > table");
-    if (!wrap || !table) return;
-
-    clearTeamLandscapeFit();
-
-    const pad = 6;
     const vv = window.visualViewport;
-    const viewW = vv ? vv.width : window.innerWidth;
-    const viewH = vv ? vv.height : window.innerHeight;
-    const availW = Math.max(0, viewW - pad * 2);
-    const availH = Math.max(0, viewH - pad * 2);
-
-    const naturalW = table.offsetWidth;
-    const naturalH = table.offsetHeight;
-    if (!naturalW || !naturalH) return;
-
-    const scale = Math.min(availW / naturalW, availH / naturalH, 1);
-    const scaledW = naturalW * scale;
-    const scaledH = naturalH * scale;
-
-    wrap.style.position = "absolute";
-    wrap.style.width = `${naturalW}px`;
-    wrap.style.height = `${naturalH}px`;
-    wrap.style.transformOrigin = "top left";
-    wrap.style.transform = `scale(${scale})`;
-    wrap.style.left = `${Math.max(0, (availW - scaledW) / 2) + pad}px`;
-    wrap.style.top = `${Math.max(0, (availH - scaledH) / 2) + pad}px`;
+    const w = vv ? vv.width : window.innerWidth;
+    const pad = 10;
+    const usable = Math.max(320, w - pad * 2);
+    const nameW = Math.round(Math.min(148, Math.max(92, usable * 0.135)));
+    const statW = Math.round(Math.min(44, Math.max(28, usable * 0.05)));
+    const sparkW = Math.round(Math.min(58, Math.max(36, usable * 0.068)));
+    const fixed = nameW + 5 * statW + sparkW;
+    const heatW = Math.max(36, Math.floor((usable - fixed) / 6));
+    const root = document.documentElement;
+    root.style.setProperty("--team-landscape-name-w", `${nameW}px`);
+    root.style.setProperty("--team-landscape-stat-w", `${statW}px`);
+    root.style.setProperty("--team-landscape-spark-w", `${sparkW}px`);
+    root.style.setProperty("--team-landscape-heat-w", `${heatW}px`);
   }
 
-  function scheduleTeamLandscapeFit() {
-    if (teamLandscapeFitRaf) cancelAnimationFrame(teamLandscapeFitRaf);
-    teamLandscapeFitRaf = requestAnimationFrame(() => {
-      teamLandscapeFitRaf = 0;
-      fitTeamLandscapeTable();
+  function tableHeadSplitStickyActive() {
+    return NARROW_MQ.matches || teamLandscapeActive();
+  }
+
+  function syncTableHeadHeights(wrap) {
+    if (!wrap) return;
+    if (!tableHeadSplitStickyActive()) {
+      wrap.classList.remove("is-head-h-synced");
+      wrap.style.removeProperty("--table-sec-h");
+      wrap.style.removeProperty("--table-head-h");
+      return;
+    }
+    const secRow = wrap.querySelector("thead tr.section-row");
+    if (!secRow) return;
+    wrap.classList.remove("is-head-h-synced");
+    const secH = Math.ceil(secRow.getBoundingClientRect().height);
+    const headRow = wrap.querySelector("thead tr:not(.section-row)");
+    const headH = headRow ? Math.ceil(headRow.getBoundingClientRect().height) : 0;
+    if (secH > 0) wrap.style.setProperty("--table-sec-h", `${secH}px`);
+    if (headH > 0) wrap.style.setProperty("--table-head-h", `${headH}px`);
+    wrap.classList.add("is-head-h-synced");
+  }
+
+  function syncTeamTableHeadHeights() {
+    if (state.page !== "team" || !el.teamPage) return;
+    el.teamPage.querySelectorAll(".table-wrap.team-table-wrap").forEach(syncTableHeadHeights);
+  }
+
+  let teamHeadHeightSyncRaf = 0;
+  function scheduleTeamTableHeadHeightSync() {
+    if (teamHeadHeightSyncRaf) cancelAnimationFrame(teamHeadHeightSyncRaf);
+    teamHeadHeightSyncRaf = requestAnimationFrame(() => {
+      teamHeadHeightSyncRaf = requestAnimationFrame(() => {
+        teamHeadHeightSyncRaf = 0;
+        syncTeamTableHeadHeights();
+      });
+    });
+  }
+
+  let teamLandscapeSyncRaf = 0;
+  let teamLandscapeWasActive = false;
+
+  function scheduleTeamLandscapeSync() {
+    if (teamLandscapeSyncRaf) cancelAnimationFrame(teamLandscapeSyncRaf);
+    teamLandscapeSyncRaf = requestAnimationFrame(() => {
+      teamLandscapeSyncRaf = 0;
+      syncTeamLandscapeMode();
     });
   }
 
   function syncTeamLandscapeMode() {
     const active = teamLandscapeActive();
+    const entering = active && !teamLandscapeWasActive;
+    teamLandscapeWasActive = active;
     document.documentElement.classList.toggle("is-team-landscape", active);
     if (!active) {
-      clearTeamLandscapeFit();
+      clearTeamLandscapeLayout();
+      scheduleTeamTableHeadHeightSync();
       return;
     }
     if (mobileSheetOpen) closeMobileSheet();
-    scheduleTeamLandscapeFit();
+    syncTeamLandscapeLayout();
+    const wrap = teamLandscapeSquadWrap();
+    if (entering && wrap) wrap.scrollTop = 0;
+    scheduleTeamTableHeadHeightSync();
   }
 
   function teamTableScrollWraps() {
@@ -6524,6 +6568,7 @@
     const picking = !!state.teamPickerSlot;
     if (!picking) {
       if (state.teamCompareMode) state.teamCompareMode = false;
+      if (state.teamCompareCodes.length) clearTeamCompareSelection();
       el.teamCompareBtn.hidden = true;
       return;
     }
@@ -7077,6 +7122,10 @@
     if (mobile && el.statsToolbarActions) {
       if (el.teamCompareBtn.parentElement !== el.statsToolbarActions) {
         el.statsToolbarActions.appendChild(el.teamCompareBtn);
+      }
+    } else if (el.teamHeaderInlineActions) {
+      if (el.teamCompareBtn.parentElement !== el.teamHeaderInlineActions) {
+        el.teamHeaderInlineActions.appendChild(el.teamCompareBtn);
       }
     } else if (el.teamCompareBtn.parentElement !== el.teamToolbarControls) {
       el.teamToolbarControls.insertBefore(el.teamCompareBtn, el.teamToolbarControls.firstChild);
@@ -8162,7 +8211,7 @@
     const picking = !!state.teamPickerSlot;
     el.teamPage.classList.toggle(
       "is-comparing",
-      !!state.teamCompareMode || state.teamCompareCodes.length > 0
+      picking && (!!state.teamCompareMode || state.teamCompareCodes.length > 0)
     );
     syncTeamCompareBtn();
     syncTeamPickerChrome();
@@ -8190,9 +8239,11 @@
       if (opts.resetScroll) resetScrollWraps(teamTableScrollWraps());
       refreshNameSimplifyOrigins();
       syncTeamLandscapeMode();
+      scheduleTeamTableHeadHeightSync();
     });
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     syncTeamLandscapeMode();
+    scheduleTeamTableHeadHeightSync();
   }
 
   function applyTeamPageBounds() {
@@ -10225,6 +10276,7 @@ python3 site/annotate_social.py</pre>
 
   let ownershipHoverKey = null;
   let ownershipHoverIndex = null;
+  let ownershipTipStats = null;
   let ownershipPinnedKey = null;
   let ownershipPinnedFromChart = false;
   let ownershipTipTimer = null;
@@ -10309,11 +10361,7 @@ python3 site/annotate_social.py</pre>
     const deltaCls =
       trend.kind === "riser" ? "is-up" : trend.kind === "faller" ? "is-down" : "is-flat";
     const meta =
-      series.kind === "team"
-        ? `Top ${OWNERSHIP_TEAM_TOP_N} avg`
-        : series.position
-          ? series.position
-          : "";
+      series.kind === "team" ? "" : series.position ? series.position : "";
     const owned = Number(trend.current);
     const recent = Number(trend.recent);
     const ownedAttr = Number.isFinite(owned)
@@ -10324,7 +10372,7 @@ python3 site/annotate_social.py</pre>
       : "";
     return `<button type="button" class="ownership-trend-row" data-ownership-key="${escapeHtml(series.key)}">
       <span class="ownership-trend-identity">${badge}<span class="ownership-trend-name">${escapeHtml(series.name || "")}</span></span>
-      <span class="ownership-trend-meta">${escapeHtml(meta)}</span>
+      ${meta ? `<span class="ownership-trend-meta">${escapeHtml(meta)}</span>` : ""}
       <span class="ownership-trend-owned"${ownedAttr}>${escapeHtml(fmtOwnedPct(trend.current))}</span>
       <span class="ownership-trend-delta ${deltaCls}"${deltaAttr}>${escapeHtml(fmtOwnershipTrendDelta(trend.recent))}</span>
     </button>`;
@@ -10617,6 +10665,7 @@ python3 site/annotate_social.py</pre>
   function hideOwnershipTooltip() {
     clearTimeout(ownershipTipTimer);
     ownershipTipTimer = null;
+    ownershipTipStats = null;
     if (!el.ownershipTooltip) return;
     el.ownershipTooltip.style.display = "none";
   }
@@ -10631,7 +10680,201 @@ python3 site/annotate_social.py</pre>
       .toUpperCase() || "?";
   }
 
-  function ownershipTooltipHTML(series, ptIndex) {
+  function ownershipTooltipDeltaMeta(delta) {
+    if (delta == null) {
+      return { label: "Change", value: "First snapshot", cls: "is-flat", numeric: null };
+    }
+    const cls = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
+    const sign = delta > 0 ? "+" : "";
+    return { label: "vs last check-in", value: `${sign}${delta.toFixed(1)} pp`, cls, numeric: delta };
+  }
+
+  function statRollFormat(value, decimals, signed) {
+    if (!Number.isFinite(Number(value))) return "";
+    let n = Number(value);
+    let sign = "";
+    if (signed) {
+      if (n > 0) sign = "+";
+      else if (n < 0) sign = "-";
+      n = Math.abs(n);
+    } else if (n < 0) {
+      sign = "-";
+      n = Math.abs(n);
+    }
+    return `${sign}${n.toFixed(decimals)}`;
+  }
+
+  function statRollSpan(to, opts = {}) {
+    const {
+      from = null,
+      decimals = 0,
+      signed = false,
+      suffix = "",
+      className = "",
+      textFallback = "—",
+    } = opts;
+    if (to == null || Number.isNaN(Number(to))) {
+      return `<span class="${className}">${escapeHtml(textFallback)}</span>`;
+    }
+    const attrs = [
+      `class="stat-roll${className ? ` ${className}` : ""}"`,
+      `data-count-to="${Number(to)}"`,
+      `data-count-decimals="${decimals}"`,
+    ];
+    if (signed) attrs.push('data-count-signed="1"');
+    if (suffix) attrs.push(`data-count-suffix="${suffix}"`);
+    if (from != null && Number.isFinite(Number(from))) attrs.push(`data-count-from="${Number(from)}"`);
+    return `<span ${attrs.join(" ")}></span>`;
+  }
+
+  function statRollAlignChars(fromVal, toVal, decimals, signed) {
+    const fromStr = statRollFormat(fromVal, decimals, signed);
+    const toStr = statRollFormat(toVal, decimals, signed);
+    const len = Math.max(fromStr.length, toStr.length);
+    const chars = [];
+    for (let i = 0; i < len; i++) {
+      const fromCh = fromStr.padStart(len, " ")[i];
+      const toCh = toStr.padStart(len, " ")[i];
+      if (toCh === " " && fromCh === " ") continue;
+      chars.push({ from: fromCh, to: toCh });
+    }
+    return chars;
+  }
+
+  function buildStatRollDigitWheel(fromDigit, toDigit) {
+    const wheel = document.createElement("span");
+    wheel.className = "stat-roll-digit";
+    const strip = document.createElement("span");
+    strip.className = "stat-roll-strip";
+    for (let cycle = 0; cycle < 2; cycle++) {
+      for (let d = 0; d <= 9; d++) {
+        const cell = document.createElement("span");
+        cell.textContent = String(d);
+        strip.appendChild(cell);
+      }
+    }
+    wheel.appendChild(strip);
+    const h = () => wheel.clientHeight || parseFloat(getComputedStyle(wheel).fontSize) || 16;
+    const setDigit = (digit, extraRows) => {
+      const row = Number(digit) + (extraRows || 0) * 10;
+      strip.style.transform = `translateY(${-row * h()}px)`;
+    };
+    setDigit(fromDigit);
+    wheel._statRollStrip = strip;
+    wheel._statRollSet = setDigit;
+    wheel._statRollHeight = h;
+    return wheel;
+  }
+
+  function animateStatRollDigitWheel(wheel, fromDigit, toDigit, duration) {
+    const strip = wheel._statRollStrip;
+    if (!strip) return;
+    const h = wheel._statRollHeight();
+    let fromIdx = Number(fromDigit);
+    let toIdx = Number(toDigit);
+    if (toIdx < fromIdx) toIdx += 10;
+    strip.style.transition = "none";
+    strip.style.transform = `translateY(${-fromIdx * h}px)`;
+    void strip.offsetHeight;
+    strip.style.transition = `transform ${duration}ms cubic-bezier(0.16, 1, 0.3, 1)`;
+    strip.style.transform = `translateY(${-toIdx * h}px)`;
+    const settle = () => {
+      strip.style.transition = "none";
+      strip.style.transform = `translateY(${-Number(toDigit) * h}px)`;
+    };
+    strip.addEventListener("transitionend", (evt) => {
+      if (evt.propertyName !== "transform") return;
+      settle();
+    }, { once: true });
+    window.setTimeout(settle, duration + 60);
+  }
+
+  function renderStatRollNode(node, fromVal, toVal, opts = {}) {
+    const decimals = Number(opts.decimals) || 0;
+    const signed = !!opts.signed;
+    const suffix = opts.suffix || "";
+    const chars = statRollAlignChars(fromVal, toVal, decimals, signed);
+    node.textContent = "";
+    node.setAttribute("aria-label", `${statRollFormat(toVal, decimals, signed)}${suffix}`);
+    chars.forEach(({ from, to }) => {
+      if (to >= "0" && to <= "9" && from >= "0" && from <= "9") {
+        node.appendChild(buildStatRollDigitWheel(from, to));
+        return;
+      }
+      const span = document.createElement("span");
+      span.className = "stat-roll-static";
+      span.textContent = to === " " ? "" : to;
+      node.appendChild(span);
+    });
+    if (suffix) {
+      const suf = document.createElement("span");
+      suf.className = "stat-roll-static stat-roll-suffix";
+      suf.textContent = suffix;
+      node.appendChild(suf);
+    }
+  }
+
+  function finishStatRollNode(node) {
+    const to = Number(node.dataset.countTo);
+    const decimals = Number(node.dataset.countDecimals) || 0;
+    const signed = node.dataset.countSigned === "1";
+    const suffix = node.dataset.countSuffix || "";
+    if (!Number.isFinite(to)) {
+      node.textContent = "—";
+      return;
+    }
+    renderStatRollNode(node, to, to, { decimals, signed, suffix });
+  }
+
+  function animateStatRollNode(node, opts = {}) {
+    const to = Number(node.dataset.countTo);
+    if (!Number.isFinite(to)) return;
+    const from =
+      node.dataset.countFrom != null && Number.isFinite(Number(node.dataset.countFrom))
+        ? Number(node.dataset.countFrom)
+        : to;
+    const decimals = Number(node.dataset.countDecimals) || 0;
+    const signed = node.dataset.countSigned === "1";
+    const suffix = node.dataset.countSuffix || "";
+    const duration = opts.duration != null ? opts.duration : 520;
+    renderStatRollNode(node, from, to, { decimals, signed, suffix });
+    const chars = statRollAlignChars(from, to, decimals, signed);
+    let digitIdx = 0;
+    chars.forEach(({ from: fromCh, to: toCh }) => {
+      if (!(toCh >= "0" && toCh <= "9" && fromCh >= "0" && fromCh <= "9")) return;
+      const wheel = node.querySelectorAll(".stat-roll-digit")[digitIdx];
+      digitIdx += 1;
+      if (wheel) animateStatRollDigitWheel(wheel, fromCh, toCh, duration);
+    });
+  }
+
+  function mountAndAnimateStatRolls(root, opts = {}) {
+    if (!root) return;
+    const duration = opts.duration != null ? opts.duration : 520;
+    const run = () => {
+      const nodes = [...root.querySelectorAll(".stat-roll[data-count-to]")];
+      if (!nodes.length) return;
+      if (prefersReducedMotion()) {
+        nodes.forEach(finishStatRollNode);
+        return;
+      }
+      nodes.forEach((node) => animateStatRollNode(node, { duration }));
+    };
+    requestAnimationFrame(run);
+  }
+
+  function snapshotOwnershipTipStats(series, ptIndex, pt, delta, trend) {
+    return {
+      key: series.key,
+      index: ptIndex,
+      owned: pt && pt.owned != null ? Number(pt.owned) : null,
+      delta: delta != null ? Number(delta) : null,
+      trendRecent: trend && trend.kind !== "flat" ? Number(trend.recent) : null,
+      trendNet: trend && trend.kind !== "flat" ? Number(trend.net) : null,
+    };
+  }
+
+  function ownershipTooltipPointData(series, ptIndex) {
     const pts = series.points || [];
     let idx = ptIndex;
     if (idx == null || !pts[idx] || pts[idx].owned == null) {
@@ -10644,7 +10887,7 @@ python3 site/annotate_social.py</pre>
       }
     }
     const pt = pts[idx];
-    if (!pt) return "";
+    if (!pt) return null;
     let prev = null;
     for (let i = idx - 1; i >= 0; i--) {
       if (pts[i] && pts[i].owned != null) {
@@ -10654,70 +10897,126 @@ python3 site/annotate_social.py</pre>
     }
     const delta = ownershipDelta(pt.owned, prev && prev.owned);
     const trend = ownershipSeriesTrendQualifies(series) ? ownershipSeriesTrend(series) : null;
-    const deltaCls =
+    return { pt, idx, delta, trend };
+  }
+
+  function ownershipTooltipHTML(series, ptIndex, rollFrom) {
+    const data = ownershipTooltipPointData(series, ptIndex);
+    if (!data) return "";
+    const { pt, delta, trend } = data;
+    const deltaMeta = ownershipTooltipDeltaMeta(delta);
+    const trendCls =
       trend && trend.kind === "riser"
         ? "is-up"
         : trend && trend.kind === "faller"
           ? "is-down"
-          : delta == null
-            ? "is-flat"
-            : delta > 0
-              ? "is-up"
-              : delta < 0
-                ? "is-down"
-                : "is-flat";
-    const deltaTxt =
-      delta == null ? "first check-in" : delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1);
+          : "is-flat";
     const when = fmtOwnershipDate(pt.checkedAt);
-    const trendRow =
+    const ownedRoll = statRollSpan(pt.owned, {
+      ...(rollFrom && rollFrom.key === series.key && rollFrom.owned != null
+        ? { from: rollFrom.owned }
+        : {}),
+      decimals: 1,
+      className: "own-tip-owned-roll",
+    });
+    const deltaRoll =
+      deltaMeta.numeric != null
+        ? statRollSpan(deltaMeta.numeric, {
+            ...(rollFrom && rollFrom.key === series.key && rollFrom.delta != null
+              ? { from: rollFrom.delta }
+              : {}),
+            decimals: 1,
+            signed: true,
+            suffix: " pp",
+            className: "own-tip-change-roll",
+          })
+        : `<span class="own-tip-change-roll is-text">${escapeHtml(deltaMeta.value)}</span>`;
+    const trendBlock =
       trend && trend.kind !== "flat"
-        ? `<div class="tt-row"><span>Trend</span><b class="tt-delta ${deltaCls}">${escapeHtml(
-            `${fmtOwnershipTrendDelta(trend.recent)} recent · ${fmtOwnershipTrendDelta(trend.net)} net`
-          )}</b></div>`
+        ? `<div class="own-tip-trend ${trendCls}"><span class="own-tip-trend-label">Trend window</span><span class="own-tip-trend-val">${statRollSpan(
+            trend.recent,
+            {
+              ...(rollFrom && rollFrom.key === series.key && rollFrom.trendRecent != null
+                ? { from: rollFrom.trendRecent }
+                : {}),
+              decimals: 1,
+              signed: true,
+            }
+          )}<span class="stat-roll-static"> pp recent · </span>${statRollSpan(trend.net, {
+            ...(rollFrom && rollFrom.key === series.key && rollFrom.trendNet != null
+              ? { from: rollFrom.trendNet }
+              : {}),
+            decimals: 1,
+            signed: true,
+          })}<span class="stat-roll-static"> pp net</span></span></div>`
         : "";
+
     if (series.kind === "team") {
       const badge = series.team ? badgeHTML(series.team) : "";
-      return `<div class="tt-identity">
-          <div class="tt-title">
-            <div class="tt-name">${badge}${escapeHtml(series.name)}</div>
-            <div class="tt-meta"><span>Top ${OWNERSHIP_TEAM_TOP_N} avg</span></div>
+      return `<div class="own-tip">
+        <div class="own-tip-head">
+          <div class="own-tip-id">
+            <div class="own-tip-name">${badge}${escapeHtml(series.name)}</div>
           </div>
         </div>
-        <div class="tt-row"><span>TSB%</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
-        <div class="tt-row"><span>vs last</span><b class="tt-delta ${deltaCls}">${escapeHtml(deltaTxt)}</b></div>
-        ${trendRow}
-        <div class="tt-checkin">${escapeHtml(when)}</div>`;
+        <div class="own-tip-stat">
+          <div class="own-tip-owned-block">
+            <span class="own-tip-owned">${ownedRoll}<span class="own-tip-unit">%</span></span>
+            <span class="own-tip-owned-label">TSB at snapshot</span>
+          </div>
+          <div class="own-tip-change ${deltaMeta.cls}">
+            <span class="own-tip-change-val">${deltaRoll}</span>
+            <span class="own-tip-change-label">${escapeHtml(deltaMeta.label)}</span>
+          </div>
+        </div>
+        ${trendBlock}
+        <div class="own-tip-when">${escapeHtml(when)}</div>
+      </div>`;
     }
+
     const player = pt.player || series;
     const photo = feedPlayerPhotoUrl(series.code);
     const initials = ownershipInitials(player.name || series.name);
     const photoBlock = photo
-      ? `<img class="tt-photo" src="${escapeHtml(photo)}" alt="" width="44" height="56" data-initials="${escapeHtml(initials)}" />`
-      : `<span class="tt-photo tt-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+      ? `<img class="own-tip-photo" src="${escapeHtml(photo)}" alt="" width="40" height="50" data-initials="${escapeHtml(initials)}" />`
+      : `<span class="own-tip-photo own-tip-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
     const badge = player.team ? badgeHTML(player.team) : "";
     const metaBits = [];
     if (player.position) metaBits.push(posBadgeHTML(player.position));
     if (player.price != null) metaBits.push(`<span>£${Number(player.price).toFixed(1)}m</span>`);
-    return `<div class="tt-identity">
+    return `<div class="own-tip">
+      <div class="own-tip-head">
         ${photoBlock}
-        <div class="tt-title">
-          <div class="tt-name">${badge}${escapeHtml(player.name || series.name)}</div>
-          <div class="tt-meta">${metaBits.join("")}</div>
+        <div class="own-tip-id">
+          <div class="own-tip-name">${badge}${escapeHtml(player.name || series.name)}</div>
+          ${metaBits.length ? `<div class="own-tip-sub">${metaBits.join("")}</div>` : ""}
         </div>
       </div>
-      <div class="tt-row"><span>TSB%</span><b class="tt-owned">${escapeHtml(fmtOwnedPct(pt.owned))}</b></div>
-      <div class="tt-row"><span>vs last</span><b class="tt-delta ${deltaCls}">${escapeHtml(deltaTxt)}</b></div>
-      ${trendRow}
-      <div class="tt-checkin">${escapeHtml(when)}</div>`;
+      <div class="own-tip-stat">
+        <div class="own-tip-owned-block">
+          <span class="own-tip-owned">${ownedRoll}<span class="own-tip-unit">%</span></span>
+          <span class="own-tip-owned-label">TSB at snapshot</span>
+        </div>
+        <div class="own-tip-change ${deltaMeta.cls}">
+          <span class="own-tip-change-val">${deltaRoll}</span>
+          <span class="own-tip-change-label">${escapeHtml(deltaMeta.label)}</span>
+        </div>
+      </div>
+      ${trendBlock}
+      <div class="own-tip-when">${escapeHtml(when)}</div>
+    </div>`;
   }
 
-  function showOwnershipTooltip(clientX, clientY, html) {
-    if (!el.ownershipTooltip || !el.ownershipChartWrap) return;
+  function showOwnershipTooltip(clientX, clientY, series, ptIndex) {
+    if (!el.ownershipTooltip || !el.ownershipChartWrap || !series) return;
+    const rollFrom = ownershipTipStats && ownershipTipStats.key === series.key ? ownershipTipStats : null;
+    const html = ownershipTooltipHTML(series, ptIndex, rollFrom);
+    if (!html) return;
     el.ownershipTooltip.innerHTML = html;
-    el.ownershipTooltip.querySelectorAll("img.tt-photo").forEach((img) => {
+    el.ownershipTooltip.querySelectorAll("img.own-tip-photo").forEach((img) => {
       img.addEventListener("error", () => {
         const fallback = document.createElement("span");
-        fallback.className = "tt-photo tt-photo-fallback";
+        fallback.className = "own-tip-photo own-tip-photo-fallback";
         fallback.setAttribute("aria-hidden", "true");
         fallback.textContent = img.getAttribute("data-initials") || "?";
         img.replaceWith(fallback);
@@ -10725,6 +11024,11 @@ python3 site/annotate_social.py</pre>
     });
     el.ownershipTooltip.style.display = "block";
     positionOwnershipTooltip(clientX, clientY);
+    mountAndAnimateStatRolls(el.ownershipTooltip, { duration: hasFineHover() ? 520 : 720 });
+    const data = ownershipTooltipPointData(series, ptIndex);
+    if (data) {
+      ownershipTipStats = snapshotOwnershipTipStats(series, data.idx, data.pt, data.delta, data.trend);
+    }
   }
 
   function positionOwnershipTooltip(clientX, clientY) {
@@ -10782,7 +11086,7 @@ python3 site/annotate_social.py</pre>
   function showOwnershipTooltipForSeries(series, ptIndex) {
     const pt = ownershipSeriesPointClient(series, ptIndex);
     if (!pt) return;
-    showOwnershipTooltip(pt.clientX, pt.clientY, ownershipTooltipHTML(series, pt.index));
+    showOwnershipTooltip(pt.clientX, pt.clientY, series, pt.index);
   }
 
   function scrollOwnershipChartIntoView(afterScroll) {
@@ -10830,7 +11134,7 @@ python3 site/annotate_social.py</pre>
     const idx = index != null ? index : ownershipLastOwnedIndex(series);
     setOwnershipHover(key, idx, { fromChart });
     if (showTip && tipClientX != null && tipClientY != null) {
-      showOwnershipTooltip(tipClientX, tipClientY, ownershipTooltipHTML(series, idx));
+      showOwnershipTooltip(tipClientX, tipClientY, series, idx);
     }
   }
 
@@ -10999,9 +11303,8 @@ python3 site/annotate_social.py</pre>
     setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
     if (hasFineHover()) {
       clearTimeout(ownershipTipTimer);
-      const html = ownershipTooltipHTML(hit.series, hit.index);
       if (changed || !el.ownershipTooltip || el.ownershipTooltip.style.display === "none") {
-        showOwnershipTooltip(evt.clientX, evt.clientY, html);
+        showOwnershipTooltip(evt.clientX, evt.clientY, hit.series, hit.index);
       } else {
         positionOwnershipTooltip(evt.clientX, evt.clientY);
       }
@@ -11030,7 +11333,7 @@ python3 site/annotate_social.py</pre>
       const pinned = pinOwnershipSeries(hit.series.key, { fromChart: true });
       if (pinned) {
         setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
-        showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
+        showOwnershipTooltip(evt.clientX, evt.clientY, hit.series, hit.index);
       }
       return;
     }
@@ -11049,7 +11352,7 @@ python3 site/annotate_social.py</pre>
     ownershipPinnedKey = hit.series.key;
     ownershipPinnedFromChart = true;
     setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
-    showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
+    showOwnershipTooltip(evt.clientX, evt.clientY, hit.series, hit.index);
   }
 
   function ownershipChartTitleText() {
@@ -11461,48 +11764,15 @@ python3 site/annotate_social.py</pre>
   function startStatCountUp(pane, selector) {
     const nodes = [...pane.querySelectorAll(selector)];
     if (!nodes.length) return;
-    const duration = 2000;
-    const easeOut = (t) => 1 - (1 - t) ** 3;
-    const fmt = (node, value) => {
-      const dec = node._countDecimals;
-      const suffix = node._countSuffix || "";
-      const signed = !!node._countSigned;
-      const sign = signed && value > 0 ? "+" : "";
-      return `${sign}${value.toFixed(dec)}${suffix}`;
-    };
     nodes.forEach((node) => {
       const target = Number(node.dataset.countTo);
-      const decimals = Number(node.dataset.countDecimals);
-      const suffix = node.dataset.countSuffix || "";
       if (!Number.isFinite(target)) return;
-      const dec = Number.isFinite(decimals) ? decimals : 0;
-      node._countTarget = target;
-      node._countDecimals = dec;
-      node._countSuffix = suffix;
-      node._countSigned = node.dataset.countSigned === "1";
-      node.textContent = fmt(node, 0);
+      if (!node.dataset.countDecimals) node.dataset.countDecimals = "1";
+      node.classList.add("stat-roll");
+      node.dataset.countFrom = "0";
+      node.textContent = "";
     });
-
-    const start = performance.now();
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / duration);
-      const p = easeOut(t);
-      nodes.forEach((node) => {
-        const target = node._countTarget;
-        if (!Number.isFinite(target)) return;
-        node.textContent = fmt(node, target * p);
-      });
-      if (t < 1) {
-        pane._countUpRaf = requestAnimationFrame(tick);
-      } else {
-        nodes.forEach((node) => {
-          if (!Number.isFinite(node._countTarget)) return;
-          node.textContent = fmt(node, node._countTarget);
-        });
-        pane._countUpRaf = 0;
-      }
-    };
-    pane._countUpRaf = requestAnimationFrame(tick);
+    mountAndAnimateStatRolls(pane, { duration: 2000 });
   }
 
   function resetSearchAndFiltersForNavigation({ rerender = false } = {}) {
@@ -13872,15 +14142,12 @@ python3 site/annotate_social.py</pre>
     }
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
-  bindMqChange(TEAM_LANDSCAPE_MQ, () => {
-    syncTeamLandscapeMode();
-    if (state.page === "team") scheduleTeamLandscapeFit();
-  });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", scheduleTeamLandscapeFit);
-    window.visualViewport.addEventListener("scroll", scheduleTeamLandscapeFit);
+    window.visualViewport.addEventListener("resize", scheduleTeamLandscapeSync);
+    window.visualViewport.addEventListener("scroll", scheduleTeamLandscapeSync);
   }
-  window.addEventListener("resize", scheduleTeamLandscapeFit);
+  window.addEventListener("resize", scheduleTeamLandscapeSync);
+  window.addEventListener("orientationchange", scheduleTeamLandscapeSync);
   syncColumnsPanelHost();
 
   if (el.prefsBtn && el.prefsPanel) {
@@ -14086,6 +14353,7 @@ python3 site/annotate_social.py</pre>
         refreshCompareScrollMirrorMode();
         bindMobileChromeScrollHide();
         syncMobileScrollportHeight();
+        scheduleTeamTableHeadHeightSync();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
@@ -14102,6 +14370,7 @@ python3 site/annotate_social.py</pre>
         refreshCompareScrollMirrorMode();
         bindMobileChromeScrollHide();
         syncMobileScrollportHeight();
+        scheduleTeamTableHeadHeightSync();
       });
     }
     bindAllNameColumnSimplifies();

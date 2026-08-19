@@ -2921,10 +2921,13 @@ a { color: var(--blue); }
   }
 
   .table-wrap > table > thead tr.section-row th {
-    height: 16px;
+    min-height: 16px;
     padding: 2px 5px;
     font-size: 8.5px;
     letter-spacing: 0.05em;
+    line-height: 1.1;
+    vertical-align: middle;
+    white-space: nowrap;
   }
   .table-wrap > table > thead tr:not(.section-row) th {
     padding: 5px 5px;
@@ -3188,6 +3191,17 @@ tbody td.col-player.has-update-change {
     top: var(--table-sec-h, 16px);
     left: 0;
     z-index: 10;
+  }
+  .table-wrap.is-head-h-synced > table > thead tr.section-row th {
+    height: var(--table-sec-h);
+    min-height: var(--table-sec-h);
+    max-height: var(--table-sec-h);
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .table-wrap.is-head-h-synced > table > thead tr:not(.section-row) th {
+    min-height: var(--table-head-h);
+    box-sizing: border-box;
   }
 }
 
@@ -3671,7 +3685,7 @@ tbody tr.row-selected td:first-child {
   /* Compare cards grow with selected rows — no inner vertical scroll. */
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap,
   #team-picker-view #team-compare-wrap:not([hidden]),
-  #team-page.is-comparing #team-compare-wrap:not([hidden]) {
+  #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) {
     flex: 0 0 auto;
     min-height: auto;
     display: flex;
@@ -3683,7 +3697,7 @@ tbody tr.row-selected td:first-child {
   }
   html[data-page="opta"] #opta-page.has-compare .compare-table-wrap,
   #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap,
-  #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
+  #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
     height: auto;
@@ -3997,6 +4011,58 @@ tbody tr.row-selected td:first-child {
 }
 .chart-tooltip .tt-row b { color: var(--text); font-weight: 700; }
 
+.stat-roll {
+  display: inline-flex;
+  align-items: baseline;
+  vertical-align: baseline;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.stat-roll-digit {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  vertical-align: baseline;
+  line-height: 1;
+}
+.stat-roll-strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+.stat-roll-strip > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1em;
+  line-height: 1;
+}
+.stat-roll-static {
+  display: inline-block;
+}
+.stat-roll-suffix {
+  margin-left: 0;
+}
+.ownership-trend-owned.stat-roll,
+.ownership-trend-delta.stat-roll {
+  min-width: 2.8em;
+  justify-content: flex-end;
+}
+.ownership-tooltip .own-tip-owned .stat-roll {
+  font-size: inherit;
+  font-weight: inherit;
+}
+.ownership-tooltip .own-tip-change-val .stat-roll {
+  font-size: inherit;
+  font-weight: inherit;
+}
+.ownership-tooltip .own-tip-change-roll.is-text {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
 html[data-page="ownership"] .layout .main {
   display: flex;
   flex-direction: column;
@@ -4163,6 +4229,9 @@ html[data-page="ownership"] .layout .main {
   font-weight: 600;
   font-size: 12px;
 }
+.ownership-trend-row:not(:has(.ownership-trend-meta)) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
 .ownership-trend-meta {
   color: var(--text-faint);
   font-size: 11px;
@@ -4306,69 +4375,154 @@ html[data-page="ownership"] .layout .main {
   text-align: center;
 }
 .ownership-tooltip {
-  max-width: 280px;
-  padding: 10px 12px;
+  max-width: 260px;
+  padding: 0;
   pointer-events: none;
 }
-.ownership-tooltip .tt-identity {
+.ownership-tooltip .own-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.ownership-tooltip .own-tip-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 9px;
+  min-width: 0;
 }
-.ownership-tooltip .tt-photo {
-  width: 44px;
-  height: 56px;
+.ownership-tooltip .own-tip-photo {
+  width: 40px;
+  height: 50px;
   object-fit: cover;
   object-position: top center;
   border-radius: 6px;
   background: hsl(var(--muted));
   flex: none;
 }
-.ownership-tooltip .tt-photo-fallback {
+.ownership-tooltip .own-tip-photo-fallback {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-dim);
 }
-.ownership-tooltip .tt-title {
+.ownership-tooltip .own-tip-id {
   min-width: 0;
   flex: 1;
 }
-.ownership-tooltip .tt-name {
-  margin-bottom: 3px;
+.ownership-tooltip .own-tip-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--text);
 }
-.ownership-tooltip .tt-name .badge-img {
-  width: 16px;
-  height: 16px;
+.ownership-tooltip .own-tip-name .badge-img {
+  width: 15px;
+  height: 15px;
 }
-.ownership-tooltip .tt-meta {
+.ownership-tooltip .own-tip-sub {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 0;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--text-dim);
 }
-.ownership-tooltip .tt-owned {
+.ownership-tooltip .own-tip-stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  align-items: end;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) - 4px);
+  background: hsl(var(--muted) / 0.45);
+  border: 1px solid hsl(var(--border-hsl) / 0.55);
+}
+.ownership-tooltip .own-tip-owned-block {
+  min-width: 0;
+}
+.ownership-tooltip .own-tip-owned {
+  display: block;
   font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
-.ownership-tooltip .tt-delta {
-  font-family: var(--mono);
-  font-size: 11px;
+.ownership-tooltip .own-tip-unit {
+  font-size: 14px;
   font-weight: 650;
+  color: var(--text-dim);
+  margin-left: 1px;
 }
-.ownership-tooltip .tt-delta.is-up { color: hsl(var(--positive)); }
-.ownership-tooltip .tt-delta.is-down { color: hsl(var(--negative)); }
-.ownership-tooltip .tt-delta.is-flat { color: var(--text-faint); }
-.ownership-tooltip .tt-checkin {
+.ownership-tooltip .own-tip-owned-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 550;
   color: var(--text-faint);
-  font-size: 11px;
-  margin-top: 4px;
+  letter-spacing: 0.01em;
+}
+.ownership-tooltip .own-tip-change {
+  text-align: right;
+}
+.ownership-tooltip .own-tip-change-val {
+  display: block;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+.ownership-tooltip .own-tip-change-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 550;
+  color: var(--text-faint);
+}
+.ownership-tooltip .own-tip-change.is-up .own-tip-change-val { color: hsl(var(--positive)); }
+.ownership-tooltip .own-tip-change.is-down .own-tip-change-val { color: hsl(var(--negative)); }
+.ownership-tooltip .own-tip-change.is-flat .own-tip-change-val { color: var(--text-dim); }
+.ownership-tooltip .own-tip-trend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 6px 8px;
+  border-radius: calc(var(--radius) - 4px);
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+.ownership-tooltip .own-tip-trend.is-up {
+  background: hsl(var(--positive) / 0.1);
+  color: hsl(var(--positive));
+}
+.ownership-tooltip .own-tip-trend.is-down {
+  background: hsl(var(--negative) / 0.1);
+  color: hsl(var(--negative));
+}
+.ownership-tooltip .own-tip-trend-label {
+  font-weight: 600;
+  opacity: 0.85;
+}
+.ownership-tooltip .own-tip-trend-val {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+.ownership-tooltip .own-tip-when {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 550;
+  text-align: center;
+  padding-top: 1px;
 }
 
 @media (max-width: 720px) {
@@ -9362,6 +9516,33 @@ html[data-page="team"] .layout .main {
   align-items: center;
   margin-bottom: 12px;
 }
+.team-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.team-header-title-row h2 {
+  margin-bottom: 0;
+}
+.team-header-inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+#team-page:not(.is-picking) .team-header-inline-actions {
+  display: none;
+}
+#team-page .team-header-inline-actions #team-compare-btn {
+  height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+}
+#team-page .team-header-inline-actions #team-compare-btn .btn-label {
+  display: inline;
+}
 #team-page .team-header .team-picker-cancel {
   width: auto;
   height: 32px;
@@ -10321,11 +10502,16 @@ html[data-page="team"] .layout .main {
 #team-page.is-picking #team-sub-bar {
   display: none !important;
 }
-#team-page:not(.is-picking) #team-compare-wrap,
-#team-page:not(.is-picking) #team-compare-btn {
+/* Compare lives in subtoolbar (picker) or picker view — not squad toolbar. */
+html[data-page="team"]:not(.is-team-picking) #team-compare-btn,
+#team-compare-btn[hidden] {
   display: none !important;
 }
-#team-page.is-picking #team-compare-btn:not([hidden]) {
+html[data-page="team"]:not(.is-team-picking) #team-compare-wrap,
+#team-page:not(.is-picking) #team-compare-wrap {
+  display: none !important;
+}
+html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   display: inline-flex;
 }
 #team-picker-view .team-table-wrap.team-picker-table-wrap {
@@ -10431,7 +10617,7 @@ html[data-page="team"] .layout .main {
     flex: 1 1 auto;
     min-height: 0;
   }
-  #team-page.is-comparing #team-compare-wrap:not([hidden]) {
+  #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) {
     flex: 0 0 auto;
     min-height: auto;
     display: flex;
@@ -10439,7 +10625,7 @@ html[data-page="team"] .layout .main {
     overflow: hidden;
     margin-bottom: 8px;
   }
-  #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
+  #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
     max-height: none;
@@ -10504,176 +10690,228 @@ html[data-page="team"] .layout .main {
   }
 }
 
-/* ---- Team mobile landscape: full squad board, no chrome, scale-to-fit ---- */
-@media (orientation: landscape) and (max-height: 520px) {
-  html.is-team-landscape[data-page="team"],
-  html.is-team-landscape[data-page="team"] body {
-    overflow: hidden;
-    height: 100dvh;
-    max-height: 100dvh;
-  }
-  html.is-team-landscape .page-nav,
-  html.is-team-landscape #subtoolbar,
-  html.is-team-landscape .mobile-view-dock,
-  html.is-team-landscape .mobile-filter-dock,
-  html.is-team-landscape .mobile-chrome-fade,
-  html.is-team-landscape .sidebar,
-  html.is-team-landscape #team-page .page-header,
-  html.is-team-landscape #team-page .team-budget-bar,
-  html.is-team-landscape #team-compare-wrap,
-  html.is-team-landscape #team-picker-view,
-  html.is-team-landscape #team-search-results,
-  html.is-team-landscape #team-sub-bar {
-    display: none !important;
-  }
-  html.is-team-landscape .layout {
-    min-height: 100dvh;
-    height: 100dvh;
-  }
-  html.is-team-landscape .layout .main {
-    padding: 0 !important;
-    margin: 0;
-    height: 100dvh;
-    max-height: 100dvh;
-    overflow: hidden !important;
-    overscroll-behavior: none;
-  }
-  html.is-team-landscape #team-page {
-    --name-col-w: 72px;
-    --team-row-h: 17px;
-    --team-stat-w: 26px;
-    --team-owned-w: 26px;
-    --team-price-w: 26px;
-    --team-setpiece-w: 22px;
-    --crest-size: 11px;
-    --badge-size: 11px;
-    --crest-gap: 3px;
-    --table-sec-h: 0px;
-    --metric-col-w: 26px;
-    --check-col-w: 22px;
-    height: 100%;
-    min-height: 0;
-    max-height: 100dvh;
-    padding:
-      max(2px, env(safe-area-inset-top, 0px))
-      max(2px, env(safe-area-inset-right, 0px))
-      max(2px, env(safe-area-inset-bottom, 0px))
-      max(2px, env(safe-area-inset-left, 0px));
-  }
-  html.is-team-landscape #team-squad-view {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    height: 100%;
-    overflow: hidden;
-    display: block;
-  }
-  html.is-team-landscape #team-squad-view > .team-table-wrap {
-    overflow: hidden !important;
-    touch-action: none;
-    max-height: none;
-    flex: none;
-    border-radius: calc(var(--radius) - 2px);
-    box-shadow: var(--shadow-sm);
-  }
-  html.is-team-landscape #team-squad-view thead tr.section-row,
-  html.is-team-landscape #team-squad-body tr.team-section-row {
-    display: none;
-  }
-  html.is-team-landscape #team-page .table-wrap > table > thead {
-    position: static;
-  }
-  html.is-team-landscape #team-page thead tr:not(.section-row) th {
-    position: static;
-    top: auto;
-    left: auto;
-    padding: 1px 2px;
-    font-size: 7.5px;
-    line-height: 1.1;
-    white-space: nowrap;
-  }
-  html.is-team-landscape #team-page thead th.col-player {
-    padding-left: 4px;
-    z-index: auto;
-  }
-  html.is-team-landscape #team-page tbody tr.team-player-row > td,
-  html.is-team-landscape #team-page tbody tr.team-empty-row > td {
-    height: var(--team-row-h);
-    padding-top: 0;
-    padding-bottom: 0;
-    font-size: 8px;
-    line-height: 1.1;
-  }
-  html.is-team-landscape #team-page tbody td.col-player,
-  html.is-team-landscape #team-page thead th.col-player {
-    position: static;
-    box-shadow: none;
-    padding-left: 4px;
-    padding-right: 2px;
-    z-index: auto;
-  }
-  html.is-team-landscape #team-page tbody td.col-player::after,
-  html.is-team-landscape #team-page thead th.col-player::after {
-    display: none;
-  }
-  html.is-team-landscape #team-page .player-cell .player-name {
-    font-size: 8px;
-    font-weight: 650;
-    line-height: 1.15;
-  }
-  html.is-team-landscape #team-page .player-cell-sub {
-    display: none;
-  }
-  html.is-team-landscape #team-page .team-role-badge {
-    min-width: 10px;
-    height: 10px;
-    padding: 0 2px;
-    font-size: 7px;
-    line-height: 10px;
-  }
-  html.is-team-landscape #team-page .team-add-slot {
-    font-size: 8px;
-    gap: 4px;
-  }
-  html.is-team-landscape #team-page .team-add-slot .icon {
-    width: 10px;
-    height: 10px;
-    font-size: 10px;
-  }
-  html.is-team-landscape #team-page thead th.col-team-stat,
-  html.is-team-landscape #team-page tbody td.col-team-stat,
-  html.is-team-landscape #team-page thead th.team-price,
-  html.is-team-landscape #team-page tbody td.team-price {
-    padding-inline: 1px;
-    font-size: 8px;
-  }
-  html.is-team-landscape #team-page thead th.col-team-spark,
-  html.is-team-landscape #team-page tbody td.col-team-spark {
-    width: 34px;
-    min-width: 34px;
-    max-width: 34px;
-    padding-inline: 2px;
-  }
-  html.is-team-landscape #team-page .team-spark {
-    width: 28px;
-    height: 12px;
-  }
-  html.is-team-landscape #team-page thead th.col-heat,
-  html.is-team-landscape #team-page tbody td.team-heat-cell {
-    min-width: 34px;
-    width: 34px;
-    max-width: 34px;
-    padding: 0 1px;
-    font-size: 7.5px;
-    font-weight: 600;
-  }
-  html.is-team-landscape #team-page tbody td.team-heat-cell.is-anchor {
-    border-right-width: 3px;
-  }
-  html.is-team-landscape #team-page tbody td,
-  html.is-team-landscape #team-page thead th {
-    border-bottom-width: 1px;
-  }
+/* ---- Team mobile landscape: chrome-free squad board, portrait structure ---- */
+html.is-team-landscape[data-page="team"],
+html.is-team-landscape[data-page="team"] body {
+  overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+html.is-team-landscape .page-nav,
+html.is-team-landscape #subtoolbar,
+html.is-team-landscape .mobile-view-dock,
+html.is-team-landscape .mobile-filter-dock,
+html.is-team-landscape .mobile-chrome-fade,
+html.is-team-landscape .sidebar,
+html.is-team-landscape #team-page .page-header,
+html.is-team-landscape #team-page .team-budget-bar,
+html.is-team-landscape #team-compare-wrap,
+html.is-team-landscape #team-picker-view,
+html.is-team-landscape #team-search-results,
+html.is-team-landscape #team-sub-bar {
+  display: none !important;
+}
+html.is-team-landscape .layout {
+  min-height: 100dvh;
+  height: 100dvh;
+}
+html.is-team-landscape[data-page="team"] .layout .main {
+  padding: 0 !important;
+  margin: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: none;
+}
+html.is-team-landscape #team-page {
+  --name-col-w: var(--team-landscape-name-w, 108px);
+  --team-stat-w: var(--team-landscape-stat-w, 32px);
+  --team-row-h: 28px;
+  --table-sec-h: 14px;
+  --crest-size: 16px;
+  --badge-size: 16px;
+  --crest-gap: 5px;
+  --metric-col-w: var(--team-landscape-stat-w, 32px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding:
+    max(2px, env(safe-area-inset-top, 0px))
+    max(2px, env(safe-area-inset-right, 0px))
+    max(2px, env(safe-area-inset-bottom, 0px))
+    max(2px, env(safe-area-inset-left, 0px));
+}
+html.is-team-landscape #team-squad-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+html.is-team-landscape #team-squad-view > .team-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  position: relative;
+  top: auto;
+  border-radius: calc(var(--radius) - 2px);
+  box-shadow: var(--shadow-sm);
+}
+/* Sticky header stack — same pattern as portrait mobile (width may exceed 720px). */
+html.is-team-landscape #team-page .table-wrap > table > thead {
+  position: static;
+  isolation: auto;
+}
+html.is-team-landscape #team-page .table-wrap > table > thead tr.section-row th {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  min-height: var(--table-sec-h, 14px);
+  padding: 2px 6px;
+  font-size: 8.5px;
+  line-height: 1.1;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+html.is-team-landscape #team-page .table-wrap.is-head-h-synced > table > thead tr.section-row th {
+  height: var(--table-sec-h);
+  max-height: var(--table-sec-h);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+html.is-team-landscape #team-page .table-wrap.is-head-h-synced > table > thead tr:not(.section-row) th {
+  min-height: var(--table-head-h);
+  box-sizing: border-box;
+}
+html.is-team-landscape #team-page .table-wrap > table > thead tr.section-row th.sec-sticky-lead {
+  top: 0;
+  left: 0;
+  z-index: 11;
+}
+html.is-team-landscape #team-page .table-wrap > table > thead tr:not(.section-row) th {
+  position: sticky;
+  top: var(--table-sec-h, 14px);
+  z-index: 7;
+  padding: 3px 2px;
+  font-size: 9px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+html.is-team-landscape #team-page .table-wrap > table > thead tr:not(.section-row) th.col-player {
+  top: var(--table-sec-h, 14px);
+  left: 0;
+  z-index: 10;
+  padding-left: 8px;
+}
+html.is-team-landscape #team-page tbody tr.team-player-row > td,
+html.is-team-landscape #team-page tbody tr.team-empty-row > td {
+  height: var(--team-row-h);
+  padding-top: 1px;
+  padding-bottom: 1px;
+  font-size: 9.5px;
+  line-height: 1.15;
+}
+html.is-team-landscape #team-page tbody td.col-player,
+html.is-team-landscape #team-page thead th.col-player {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background-color: hsl(var(--card));
+  box-shadow: none;
+  padding-left: 8px;
+}
+html.is-team-landscape #team-page thead th.col-player {
+  z-index: 10;
+  background-color: hsl(var(--muted));
+}
+html.is-team-landscape #team-page tbody td.col-player::after,
+html.is-team-landscape #team-page thead tr:not(.section-row) th.col-player::after,
+html.is-team-landscape #team-page thead tr.section-row th.sec-sticky-lead::after {
+  display: block;
+}
+html.is-team-landscape #team-page .player-cell .player-name {
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+html.is-team-landscape #team-page .player-cell-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  line-height: 1.1;
+}
+html.is-team-landscape #team-page .team-role-badge {
+  min-width: 11px;
+  height: 11px;
+  padding: 0 2px;
+  font-size: 7.5px;
+  line-height: 11px;
+}
+html.is-team-landscape #team-page tbody tr.team-section-row th.col-player {
+  height: 20px;
+  padding: 2px 8px;
+  font-size: 9px;
+  z-index: 6;
+}
+html.is-team-landscape #team-page tbody tr.team-section-row td.team-section-fill {
+  height: 20px;
+}
+html.is-team-landscape #team-page tbody tr.team-bench-divider th.col-player,
+html.is-team-landscape #team-page tbody tr.team-bench-divider td.team-section-fill {
+  height: 24px;
+  padding-top: 4px;
+}
+html.is-team-landscape #team-page thead th.col-team-stat,
+html.is-team-landscape #team-page tbody td.col-team-stat {
+  width: var(--team-landscape-stat-w, 32px);
+  min-width: var(--team-landscape-stat-w, 32px);
+  max-width: var(--team-landscape-stat-w, 32px);
+  padding-inline: 2px;
+  font-size: 9px;
+}
+html.is-team-landscape #team-page thead th.col-team-spark,
+html.is-team-landscape #team-page tbody td.col-team-spark {
+  width: var(--team-landscape-spark-w, 44px);
+  min-width: var(--team-landscape-spark-w, 44px);
+  max-width: var(--team-landscape-spark-w, 44px);
+  padding-inline: 3px;
+}
+html.is-team-landscape #team-page .team-spark {
+  width: calc(var(--team-landscape-spark-w, 44px) - 8px);
+  height: 14px;
+}
+html.is-team-landscape #team-page thead th.col-heat,
+html.is-team-landscape #team-page tbody td.team-heat-cell {
+  min-width: var(--team-landscape-heat-w, 44px);
+  width: var(--team-landscape-heat-w, 44px);
+  max-width: var(--team-landscape-heat-w, 44px);
+  padding: 1px 2px;
+  font-size: 9px;
+  font-weight: 600;
+}
+html.is-team-landscape #team-page tbody td.team-heat-cell.is-anchor {
+  border-right-width: 4px;
+}
+html.is-team-landscape #team-page .team-add-slot {
+  font-size: 9.5px;
+  gap: 5px;
+}
+html.is-team-landscape #team-page .team-add-slot .icon {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
 }
 
 /* ---- Team Actual / Planner mode ---- */
