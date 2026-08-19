@@ -497,7 +497,7 @@
     minsMin: null,
     minsMax: null,
     valueMode: "total", // total | per90 | perM
-    showNewPrice: false,
+    showNewPrice: true,
     setPieceTakersOnly: false,
     // Always-on top/bottom % cell tint vs the full Players/Teams view
     // (raw values stay in the cells; filters don't shrink the bands).
@@ -560,9 +560,9 @@
     return state.season === "2026-27";
   }
 
-  // Updates chrome (arrows / ±) only on 2025/26 data.
+  // Updates chrome (arrows / ±) on 2025/26 data — always uses matched 2026/27 price/team/pos.
   function updatesOverlayOn() {
-    return !isNextSeason() && state.showNewPrice;
+    return !isNextSeason();
   }
 
   function computeBounds(season = state.season) {
@@ -1740,6 +1740,7 @@
   // Rendering
   // ---------------------------------------------------------------------
   function visibleColumns() {
+    if (state.page === "opta") return cols();
     return cols().filter((c) => c.pin || !state.hiddenCols.has(c.key));
   }
 
@@ -1870,9 +1871,7 @@
       return playerIdentityHTML(playerCrestHTML(row.team), name, "");
     }
     if (col.key === "price") {
-      const val = fmtDisplayValue(displayValue(row, col), col);
-      const delta = priceDeltaHTML(row);
-      return delta ? `<span class="cell-inline align-end">${val}${delta}</span>` : val;
+      return fmtDisplayValue(displayValue(row, col), col);
     }
     if (col.key === "owned") {
       return fmtOwnedPct(currentOwnership(row.code));
@@ -1894,18 +1893,6 @@
     const defconDot = col.key === "__cbitr" ? defconDotHTML(row) : "";
     const text = fmtDisplayValue(val, col);
     return defconDot ? `<span class="cell-inline align-end">${text}${defconDot}</span>` : text;
-  }
-
-  // Green/red ± beside the replacement price while Updates is on (2025/26 only).
-  // Matched at build time in site/build.py (match_new_season_prices).
-  function priceDeltaHTML(row) {
-    if (!updatesOverlayOn() || row.price2627 == null) return "";
-    const delta = row.priceDelta || 0;
-    if (Math.abs(delta) < 1e-9) return "";
-    const cls = delta > 0 ? "price-up" : "price-down";
-    const deltaText = delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1);
-    const title = `Was £${row.price.toFixed(1)}m`;
-    return `<span class="price-arrow-delta ${cls}"${tipAttr(title)}>${deltaText}</span>`;
   }
 
   function ordinalSuffix(n) {
@@ -2212,8 +2199,8 @@
     });
   }
 
-  // Mobile row swipe-to-compare (name cell only).
-  const ROW_SWIPE_ACTION_W = 72;
+  // Mobile row swipe-to-compare (entire row slides on name-cell drag).
+  const ROW_SWIPE_ACTION_W = 68;
   const ROW_SWIPE_SNAP = 36;
   const ROW_SWIPE_AUTO = 72;
   const ROW_SWIPE_AXIS = 8;
@@ -2243,45 +2230,39 @@
     return state.teamCompareMode && state.teamCompareCodes.length >= 2;
   }
 
-  function rowSwipeCurrentOffset(swipeEl) {
-    if (!swipeEl) return 0;
-    const raw = swipeEl.style.getPropertyValue("--row-swipe-x");
+  function rowSwipeCurrentOffset(host) {
+    if (!host) return 0;
+    const raw = host.style.getPropertyValue("--row-swipe-x");
     if (raw) return parseFloat(raw) || 0;
-    return swipeEl.classList.contains("is-open") ? ROW_SWIPE_ACTION_W : 0;
+    return host.classList.contains("is-open") ? ROW_SWIPE_ACTION_W : 0;
   }
 
-  function rowSwipeSetOffset(swipeEl, x, { animate = false, open = false } = {}) {
-    if (!swipeEl) return;
+  function rowSwipeSetOffset(host, x, { animate = false, open = false } = {}) {
+    if (!host) return;
     const clamped = Math.max(0, Math.min(ROW_SWIPE_ACTION_W, x));
-    swipeEl.style.setProperty("--row-swipe-x", `${clamped}px`);
-    swipeEl.classList.toggle("is-dragging", !animate && clamped > 0);
-    swipeEl.classList.toggle("is-open", open);
-    const action = swipeEl.querySelector(".row-swipe-action");
-    const btn = swipeEl.querySelector(".row-swipe-btn");
+    host.style.setProperty("--row-swipe-x", `${clamped}px`);
+    host.classList.toggle("is-dragging", !animate && clamped > 0);
+    host.classList.toggle("is-open", open);
+    const action = host.querySelector(".row-swipe-action");
+    const btn = host.querySelector(".row-swipe-btn");
     if (action) action.setAttribute("aria-hidden", open ? "false" : "true");
     if (btn) btn.tabIndex = open ? 0 : -1;
-    if (open) rowSwipeOpenEl = swipeEl;
-    else if (rowSwipeOpenEl === swipeEl) rowSwipeOpenEl = null;
+    if (open) rowSwipeOpenEl = host;
+    else if (rowSwipeOpenEl === host) rowSwipeOpenEl = null;
   }
 
   function rowSwipeCloseAll(except) {
-    document.querySelectorAll(".row-swipe.is-open, .row-swipe.is-dragging").forEach((el) => {
+    document.querySelectorAll("tr.row-swipe-host.is-open, tr.row-swipe-host.is-dragging").forEach((el) => {
       if (el !== except) rowSwipeSetOffset(el, 0, { animate: true, open: false });
     });
     if (!except) rowSwipeOpenEl = null;
   }
 
-  function rowSwipeWrapHTML(innerHTML, { key, name, selected }) {
+  function rowSwipeActionHTML({ name, selected }) {
     const label = selected ? "Remove" : "Compare";
     const aria = selected ? `Remove ${name} from compare` : `Compare ${name}`;
-    return `<div class="row-swipe" data-swipe-key="${escapeHtml(String(key))}">
-      <div class="row-swipe-action" aria-hidden="true">
-        <button type="button" class="row-swipe-btn" tabindex="-1" aria-label="${escapeHtml(aria)}">
-          ${iconHTML("scale", "row-swipe-icon")}
-          <span class="row-swipe-label">${label}</span>
-        </button>
-      </div>
-      <div class="row-swipe-content">${innerHTML}</div>
+    return `<div class="row-swipe-action" aria-hidden="true">
+      <button type="button" class="row-swipe-btn" tabindex="-1" aria-label="${escapeHtml(aria)}">${escapeHtml(label)}</button>
     </div>`;
   }
 
@@ -2294,9 +2275,9 @@
       if (!btn || !root.contains(btn)) return;
       e.preventDefault();
       e.stopPropagation();
-      const swipe = btn.closest(".row-swipe");
-      if (!swipe || !isEnabled()) return;
-      const key = swipe.dataset.swipeKey;
+      const host = btn.closest("tr.row-swipe-host");
+      if (!host || !isEnabled()) return;
+      const key = host.dataset.swipeKey;
       if (key == null || key === "") return;
       onToggle(key);
       rowSwipeCloseAll();
@@ -2309,15 +2290,15 @@
         if (e.target.closest("a, button, [data-tip], [data-tip-html]")) return;
         const nameCell = e.target.closest("td.col-player, td.col-name");
         if (!nameCell || !root.contains(nameCell)) return;
-        const swipe = nameCell.querySelector(".row-swipe");
-        if (!swipe) return;
+        const host = nameCell.closest("tr.row-swipe-host");
+        if (!host) return;
         const touch = e.touches[0];
         if (!touch) return;
         rowSwipeDrag = {
-          swipe,
+          host,
           startX: touch.clientX,
           startY: touch.clientY,
-          startOffset: rowSwipeCurrentOffset(swipe),
+          startOffset: rowSwipeCurrentOffset(host),
         };
       },
       { passive: true }
@@ -2342,14 +2323,14 @@
             rowSwipeDrag = null;
             return;
           }
-          rowSwipeCloseAll(rowSwipeDrag.swipe);
+          rowSwipeCloseAll(rowSwipeDrag.host);
         }
         if (rowSwipeDrag.axis !== "x") return;
         const touch = e.touches[0];
         if (!touch) return;
         const dx = touch.clientX - rowSwipeDrag.startX;
         const offset = Math.max(0, Math.min(ROW_SWIPE_ACTION_W, rowSwipeDrag.startOffset + dx));
-        rowSwipeSetOffset(rowSwipeDrag.swipe, offset, { animate: false, open: false });
+        rowSwipeSetOffset(rowSwipeDrag.host, offset, { animate: false, open: false });
         if (e.cancelable) e.preventDefault();
       },
       { passive: false }
@@ -2357,13 +2338,13 @@
 
     const onTouchEnd = () => {
       if (!rowSwipeDrag) return;
-      const { swipe } = rowSwipeDrag;
-      const x = rowSwipeCurrentOffset(swipe);
+      const { host } = rowSwipeDrag;
+      const x = rowSwipeCurrentOffset(host);
       rowSwipeDrag = null;
       if (x >= ROW_SWIPE_AUTO) {
-        const key = swipe.dataset.swipeKey;
+        const key = host.dataset.swipeKey;
         if (key != null && key !== "") onToggle(key);
-        rowSwipeSetOffset(swipe, 0, { animate: true, open: false });
+        rowSwipeSetOffset(host, 0, { animate: true, open: false });
         if (navigator.vibrate) {
           try {
             navigator.vibrate(10);
@@ -2374,10 +2355,10 @@
         return;
       }
       if (x >= ROW_SWIPE_SNAP) {
-        rowSwipeSetOffset(swipe, ROW_SWIPE_ACTION_W, { animate: true, open: true });
+        rowSwipeSetOffset(host, ROW_SWIPE_ACTION_W, { animate: true, open: true });
         return;
       }
-      rowSwipeSetOffset(swipe, 0, { animate: true, open: false });
+      rowSwipeSetOffset(host, 0, { animate: true, open: false });
     };
 
     root.addEventListener("touchend", onTouchEnd);
@@ -2389,14 +2370,14 @@
     document.documentElement.dataset.rowSwipeDismiss = "1";
     document.addEventListener("click", (e) => {
       if (!rowSwipeOpenEl) return;
-      if (e.target.closest(".row-swipe.is-open")) return;
+      if (e.target.closest("tr.row-swipe-host.is-open")) return;
       rowSwipeCloseAll();
     });
     document.addEventListener(
       "touchstart",
       (e) => {
         if (!rowSwipeOpenEl) return;
-        if (e.target.closest(".row-swipe")) return;
+        if (e.target.closest("tr.row-swipe-host.is-open")) return;
         rowSwipeCloseAll();
       },
       { passive: true }
@@ -3053,6 +3034,10 @@
     tr.dataset.rowKey = String(key);
     const inCompareSet = compareSet().has(key);
     const mobileSwipe = optaSwipeCompareEnabled();
+    if (mobileSwipe) {
+      tr.classList.add("row-swipe-host");
+      tr.dataset.swipeKey = String(key);
+    }
     if (state.compareMode && !preferMobileSheet()) {
       tr.classList.add("row-selectable");
       if (inCompareSet) tr.classList.add("row-selected");
@@ -3076,7 +3061,7 @@
       }
       let inner = cellHTML(r, c);
       if (mobileSwipe && (c.key === "player" || c.key === "name")) {
-        inner = rowSwipeWrapHTML(inner, { key, name: r.name || "", selected: inCompareSet });
+        inner = rowSwipeActionHTML({ name: r.name || "", selected: inCompareSet }) + inner;
       }
       td.innerHTML = inner;
       if (isNumericCol(c)) {
@@ -3827,12 +3812,9 @@
 
     // Statistics (default)
     const iconRows = [
-      spitRow(iconHTML("refresh-ccw-dot"), "Updates — matched 2026/27 price, club, position"),
-      spitRow(iconHTML("scale"), "Compare — up to five rows side by side"),
+      spitRow(iconHTML("refresh-ccw-dot"), "2026/27 matched price, club, and position on 2025/26 rows"),
+      spitRow(iconHTML("scale"), mobile ? "Swipe a name cell right to compare (up to five)" : "Compare — up to five rows side by side"),
     ];
-    if (!mobile) {
-      iconRows.push(spitRow(iconHTML("columns"), "Show/hide metric columns — toolbar"));
-    }
     iconRows.push(
       spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)"),
       spitRow(
@@ -4819,58 +4801,7 @@
   function renderColumnsPanel() {
     if (!el.columnsList) return;
     el.columnsList.innerHTML = "";
-    el.columnsList.className = "columns-list";
-    if (state.page !== "opta") return;
-
-    const groupOrder = [];
-    const groups = new Map();
-    cols().forEach((c) => {
-      if (c.pin) return;
-      const g = c.group || "Other";
-      if (!groups.has(g)) {
-        groups.set(g, []);
-        groupOrder.push(g);
-      }
-      groups.get(g).push(c);
-    });
-    groupOrder.forEach((g) => {
-      const section = document.createElement("section");
-      section.className = "columns-section";
-      const heading = document.createElement("h3");
-      heading.className = "columns-section-label";
-      heading.innerHTML = `<span>${escapeHtml(g)}</span>`;
-      section.appendChild(heading);
-      const grid = document.createElement("div");
-      grid.className = "columns-switch-grid";
-      groups.get(g).forEach((c) => {
-        const row = document.createElement("label");
-        row.className = "settings-switch-row";
-        const title = metricDisplayTitle(c);
-        const text = document.createElement("span");
-        text.className = "settings-switch-text";
-        text.innerHTML = `<span class="settings-switch-label">${escapeHtml(title)}</span><span class="settings-switch-meta">${escapeHtml(c.label)}</span>`;
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = !state.hiddenCols.has(c.key);
-        input.setAttribute("aria-label", `Show ${title}`);
-        input.addEventListener("change", () => {
-          if (input.checked) state.hiddenCols.delete(c.key);
-          else state.hiddenCols.add(c.key);
-          syncFiltersResetUI();
-          renderTable();
-        });
-        const track = document.createElement("span");
-        track.className = "switch-track";
-        track.setAttribute("aria-hidden", "true");
-        track.innerHTML = `<span class="switch-thumb"></span>`;
-        row.appendChild(text);
-        row.appendChild(input);
-        row.appendChild(track);
-        grid.appendChild(row);
-      });
-      section.appendChild(grid);
-      el.columnsList.appendChild(section);
-    });
+    // Statistics shows all columns; no toggle UI.
   }
 
   // ---------------------------------------------------------------------
@@ -7926,9 +7857,11 @@
         const swipeEnabled = teamPickerSwipeCompareEnabled();
         const identity = playerIdentityHTML(crest, nameHTML, sub);
         const playerCell = swipeEnabled
-          ? rowSwipeWrapHTML(identity, { key: row.code, name: row.name || "", selected })
+          ? rowSwipeActionHTML({ name: row.name || "", selected }) + identity
           : identity;
-        return `<tr class="team-picker-row${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
+        const swipeHostCls = swipeEnabled ? " row-swipe-host" : "";
+        const swipeKeyAttr = swipeEnabled ? ` data-swipe-key="${escapeHtml(String(row.code))}"` : "";
+        return `<tr class="team-picker-row${swipeHostCls}${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}"${swipeKeyAttr} role="button" tabindex="0">
           <td class="col-player">${playerCell}</td>
           <td class="col-num team-price sec-divider">${Number(row.price).toFixed(1)}</td>
           <td class="col-num col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
@@ -8108,7 +8041,7 @@
     }
     const pick = e.target.closest("[data-team-pick]");
     if (pick) {
-      if (e.target.closest(".row-swipe")) return;
+      if (e.target.closest(".row-swipe-action, .row-swipe-btn, tr.row-swipe-host.is-open")) return;
       const row = teamPlayerByCode(Number(pick.dataset.teamPick) || pick.dataset.teamPick);
       const slot = state.teamPickerSlot;
       if (row && slot && addTeamPlayer(row, { starter: slot.starter, replaceCode: slot.replaceCode })) {
@@ -11523,20 +11456,15 @@ python3 site/annotate_social.py</pre>
       }
     }
     if (el.columnsSidebar) {
-      // Right rail is desktop-only; mid-width embeds columns in Filters.
-      // Mobile Statistics has no column toggles.
-      el.columnsSidebar.style.display =
-        page === "opta" && !columnsLiveInFilters() && !preferMobileSheet() ? "" : "none";
+      el.columnsSidebar.style.display = "none";
     }
-    el.tableOnlyToggles.style.display = page === "opta" ? "" : "none";
+    el.tableOnlyToggles.style.display = "none";
+    if (el.newpriceWrap) el.newpriceWrap.style.display = "none";
     if (el.compareToggle) {
       el.compareToggle.style.display =
         page === "opta" && !preferMobileSheet() ? "" : "none";
     }
-    if (el.columnsBtn) {
-      el.columnsBtn.style.display =
-        page === "opta" && !columnsLiveInFilters() && !preferMobileSheet() ? "" : "none";
-    }
+    if (el.columnsBtn) el.columnsBtn.style.display = "none";
     syncColumnsPanelHost();
     syncHighlightUI();
     renderColumnsPanel();
@@ -12267,23 +12195,16 @@ python3 site/annotate_social.py</pre>
     el.priceFilterGroup.style.display = view === "players" ? "" : "none";
     if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = view === "players" ? "" : "none";
     el.valueModeGroup.style.display = view === "players" ? "" : "none";
-    el.newpriceWrap.style.display = view === "players" && !isNextSeason() ? "" : "none";
     if (state.page === "ownership") {
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
-      el.newpriceWrap.style.display = "none";
     }
     state.enhancePct = view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
     updateEnhancePctSlider();
     syncHighlightUI();
     if (view !== "players" && state.valueMode !== "total") {
       setValueMode("total", { rerender: false });
-    }
-    if ((view !== "players" || isNextSeason()) && state.showNewPrice) {
-      state.showNewPrice = false;
-      el.newpriceIssuesPanel.classList.remove("open");
-      syncShowNewPriceUI();
     }
     renderColumnsPanel();
     if (state.page === "expected") renderExpected();
@@ -12541,7 +12462,7 @@ python3 site/annotate_social.py</pre>
   }
 
   function mobileSearchAlwaysOpen() {
-    return preferMobileSheet() && (state.page === "ownership" || state.page === "expected");
+    return preferMobileSheet() && (state.page === "ownership" || state.page === "expected" || state.page === "opta");
   }
 
   function syncTeamSearchHost() {
@@ -13237,12 +13158,7 @@ python3 site/annotate_social.py</pre>
       el.seasonSelect.value = state.season;
     }
     syncSeasonSeg();
-    el.newpriceWrap.style.display = state.view === "players" && !next ? "" : "none";
-    if (next) {
-      state.showNewPrice = false;
-      el.newpriceIssuesPanel.classList.remove("open");
-      syncShowNewPriceUI();
-    }
+    if (el.newpriceWrap) el.newpriceWrap.style.display = "none";
   }
 
   function setSeason(season, { rerender = true } = {}) {
@@ -13298,20 +13214,22 @@ python3 site/annotate_social.py</pre>
   // price show up in DATA.priceMatchIssues rather than being guessed at.
   // ---------------------------------------------------------------------
   function syncShowNewPriceUI() {
-    el.newpriceToggle.classList.toggle("on", state.showNewPrice);
+    if (el.newpriceToggle) el.newpriceToggle.classList.toggle("on", updatesOverlayOn());
   }
 
-  el.newpriceToggle.addEventListener("click", () => {
-    if (isNextSeason()) return;
-    state.showNewPrice = !state.showNewPrice;
-    syncShowNewPriceUI();
-    showToast({
-      title: state.showNewPrice ? "Enabled" : "Disabled",
-      message: "new season price, Position, Teams",
-      icon: "refresh-ccw-dot",
+  if (el.newpriceToggle) {
+    el.newpriceToggle.addEventListener("click", () => {
+      if (isNextSeason()) return;
+      state.showNewPrice = !state.showNewPrice;
+      syncShowNewPriceUI();
+      showToast({
+        title: state.showNewPrice ? "Enabled" : "Disabled",
+        message: "new season price, Position, Teams",
+        icon: "refresh-ccw-dot",
+      });
+      renderTable();
     });
-    renderTable();
-  });
+  }
 
   syncShowNewPriceUI();
   syncSeasonChrome();
@@ -13347,13 +13265,20 @@ python3 site/annotate_social.py</pre>
     `;
   }
 
-  el.newpriceIssuesBadge.addEventListener("click", () => {
-    el.newpriceIssuesPanel.classList.toggle("open");
-  });
+  if (el.newpriceIssuesBadge) {
+    el.newpriceIssuesBadge.addEventListener("click", () => {
+      el.newpriceIssuesPanel.classList.toggle("open");
+    });
+  }
   document.addEventListener("click", (e) => {
-    if (!el.newpriceIssuesPanel.contains(e.target) && !el.newpriceIssuesBadge.contains(e.target)) {
-      el.newpriceIssuesPanel.classList.remove("open");
+    if (
+      !el.newpriceIssuesPanel ||
+      el.newpriceIssuesPanel.contains(e.target) ||
+      (el.newpriceIssuesBadge && el.newpriceIssuesBadge.contains(e.target))
+    ) {
+      return;
     }
+    el.newpriceIssuesPanel.classList.remove("open");
   });
 
   // Highlight Top/Bottom % is always on for Statistics; show the slider
@@ -13609,35 +13534,17 @@ python3 site/annotate_social.py</pre>
 
   function syncColumnsPanelHost() {
     if (!el.columnsList) return;
-    const inFilters = columnsLiveInFilters();
-    const mobile = preferMobileSheet();
-    // Statistics column toggles stay out of the mobile Filters sheet — no
-    // Columns toolbar icon there either. Mid-width desktop still embeds them.
-    const optaInFilters = state.page === "opta" && inFilters && !mobile;
-    const host = optaInFilters ? el.sidebarColumnsHost : el.columnsSidebar;
-    if (host && el.columnsList.parentElement !== host) {
-      host.appendChild(el.columnsList);
-    }
-    if (el.sidebarColumnsHost) {
-      el.sidebarColumnsHost.hidden = !optaInFilters;
-    }
+    if (el.sidebarColumnsHost) el.sidebarColumnsHost.hidden = true;
     if (el.columnsBtn) {
-      el.columnsBtn.style.display =
-        state.page === "opta" && !inFilters && !mobile ? "" : "none";
-      if (inFilters || mobile) {
-        el.columnsBtn.setAttribute("aria-expanded", "false");
-        el.columnsBtn.classList.remove("on");
-      }
+      el.columnsBtn.style.display = "none";
+      el.columnsBtn.setAttribute("aria-expanded", "false");
+      el.columnsBtn.classList.remove("on");
     }
     if (el.columnsSidebar) {
-      el.columnsSidebar.style.display =
-        state.page === "opta" && !inFilters && !mobile ? "" : "none";
-      if (inFilters || mobile) el.columnsSidebar.classList.add("collapsed");
+      el.columnsSidebar.style.display = "none";
+      el.columnsSidebar.classList.add("collapsed");
     }
-    // Close a leftover Columns sheet if the layout flipped to in-filters.
-    if ((inFilters || mobile) && mobileSheetOpen && mobileSheetKey === "columns") {
-      closeMobileSheet();
-    }
+    if (mobileSheetOpen && mobileSheetKey === "columns") closeMobileSheet();
   }
 
   function setColumnsOpen(open) {

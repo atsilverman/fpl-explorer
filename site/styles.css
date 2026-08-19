@@ -2036,6 +2036,31 @@ a { color: var(--blue); }
     min-width: 0;
   }
 
+  /* Statistics: always-expanded search fills the bar on mobile. */
+  html[data-page="opta"] #subtoolbar #stats-toolbar-actions {
+    width: 100%;
+  }
+  html[data-page="opta"] #subtoolbar .topbar-data-cluster {
+    display: none;
+  }
+  html[data-page="opta"] #subtoolbar .topbar-end-cluster {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+  }
+  html[data-page="opta"] #subtoolbar #search-wrap.search-open {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+  html[data-page="opta"] #columns-btn,
+  html[data-page="opta"] #table-only-toggles {
+    display: none !important;
+  }
+
   /* xData mobile: category left, search expanded; legend centered below nav. */
   html[data-page="expected"] #subtoolbar.is-expected-mobile {
     flex-wrap: nowrap;
@@ -2197,15 +2222,20 @@ a { color: var(--blue); }
     position: relative;
     align-items: stretch;
     box-sizing: border-box;
-    background: hsl(var(--muted) / 0.52);
+    background: hsl(var(--card));
     border: 1px solid var(--mobile-dock-border);
     border-radius: var(--mobile-dock-radius);
     box-shadow: var(--mobile-dock-shadow);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .mobile-view-dock .tabs .seg-thumb {
-    display: none;
+    border-radius: calc(var(--mobile-dock-radius) - 5px);
+    background: hsl(var(--blue-hsl) / 0.16);
   }
   .mobile-view-dock .tab-btn {
+    position: relative;
+    z-index: 1;
     width: var(--mobile-dock-btn-size);
     height: auto;
     min-height: 0;
@@ -2217,37 +2247,36 @@ a { color: var(--blue); }
     border-radius: calc(var(--mobile-dock-radius) - 5px);
     background: transparent;
     box-shadow: none;
-    color: hsl(var(--muted-foreground));
+    color: hsl(var(--blue-hsl) / 0.48);
     touch-action: manipulation;
     transition:
-      background-color 0.16s ease,
       color 0.16s ease,
-      box-shadow 0.16s ease,
       transform 0.14s var(--ease-out);
   }
   .mobile-view-dock .tab-btn .icon {
     width: 21px;
     height: 21px;
     font-size: 21px;
+    color: inherit;
   }
   .mobile-view-dock .tab-btn.active {
-    background: hsl(var(--card));
-    color: hsl(var(--foreground));
-    box-shadow: 0 1px 2px hsl(240 6% 10% / 0.08);
+    background: transparent;
+    color: hsl(var(--blue-hsl));
+    box-shadow: none;
   }
   .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
-    background: hsl(var(--card));
-    color: hsl(var(--foreground));
-    box-shadow: 0 1px 2px hsl(240 6% 10% / 0.08);
+    background: transparent;
+    color: hsl(var(--blue-hsl));
+    box-shadow: none;
   }
   :root[data-theme="dark"] .mobile-view-dock .tab-btn.active,
   :root[data-theme="dark"] .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
-    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.35);
+    box-shadow: none;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .mobile-view-dock .tab-btn.active,
     :root:not([data-theme="light"]) .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
-      box-shadow: 0 1px 3px hsl(0 0% 0% / 0.35);
+      box-shadow: none;
     }
   }
   .mobile-view-dock .tab-btn:active:not(:disabled) {
@@ -2775,17 +2804,9 @@ a { color: var(--blue); }
     animation: none !important;
   }
 
-  tbody td.col-player:has(.row-swipe),
-  tbody td.col-name:has(.row-swipe) {
+  tbody td.col-player:has(.row-swipe-action),
+  tbody td.col-name:has(.row-swipe-action) {
     overflow: hidden;
-    padding-left: 0;
-  }
-  tbody td.col-player .row-swipe-content,
-  tbody td.col-name .row-swipe-content {
-    padding-left: 8px;
-  }
-  #team-picker-view tbody td.col-player:has(.row-swipe) {
-    padding-left: 0;
   }
 
   .table-wrap > table > thead tr.section-row th {
@@ -3458,18 +3479,23 @@ tbody tr.row-selected td:first-child {
     1px 0 0 var(--border);
 }
 
-/* Swipe-to-compare on name cells (mobile DOM only). */
-.row-swipe {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-  isolation: isolate;
-  --row-swipe-action-w: 72px;
+/* Swipe-to-compare: entire row slides on mobile (drag starts on name cell). */
+tr.row-swipe-host {
+  --row-swipe-action-w: 68px;
+  --row-swipe-x: 0px;
 }
-.row-swipe-action {
+tr.row-swipe-host > td {
+  transform: translateX(var(--row-swipe-x));
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+tr.row-swipe-host.is-dragging > td {
+  transition: none;
+}
+tr.row-swipe-host > td.col-player,
+tr.row-swipe-host > td.col-name {
+  overflow: hidden;
+}
+tr.row-swipe-host .row-swipe-action {
   position: absolute;
   top: 0;
   left: 0;
@@ -3479,94 +3505,47 @@ tbody tr.row-selected td:first-child {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0 4px;
+  box-sizing: border-box;
   background: hsl(var(--blue-hsl) / 0.14);
   color: hsl(var(--blue-hsl));
+  transform: translateX(calc(-1 * var(--row-swipe-x)));
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.16s ease;
   opacity: 0;
   pointer-events: none;
 }
-.row-swipe.is-open .row-swipe-action,
-.row-swipe.is-dragging .row-swipe-action {
+tr.row-swipe-host.is-open .row-swipe-action,
+tr.row-swipe-host.is-dragging .row-swipe-action {
   opacity: 1;
   pointer-events: auto;
 }
+tr.row-swipe-host.is-dragging .row-swipe-action {
+  transition: none;
+}
 .row-swipe-btn {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
   min-width: 0;
-  padding: 0 4px;
+  padding: 0;
   border: none;
   background: transparent;
   color: inherit;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: 0.01em;
-  touch-action: manipulation;
-}
-.row-swipe-icon {
-  width: 16px;
-  height: 16px;
-  font-size: 16px;
-  flex: none;
-}
-.row-swipe-label {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-}
-.row-swipe-content {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 100%;
-  background-color: hsl(var(--card));
-  transform: translateX(var(--row-swipe-x, 0px));
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  touch-action: pan-y;
-}
-.row-swipe.is-dragging .row-swipe-content {
-  transition: none;
-}
-.table-wrap > table > tbody tr.row-selected > td.col-player .row-swipe-content,
-.table-wrap > table > tbody tr.row-selected > td.col-name .row-swipe-content,
-#team-picker-view tbody tr.row-selected > td.col-player .row-swipe-content {
-  background-color: hsl(var(--card));
-  background-image: linear-gradient(
-    hsl(var(--primary) / 0.08),
-    hsl(var(--primary) / 0.08)
-  );
-}
-.table-wrap > table > tbody tr.row-selected:hover > td.col-player .row-swipe-content,
-.table-wrap > table > tbody tr.row-selected:hover > td.col-name .row-swipe-content,
-#team-picker-view tbody tr.row-selected:hover > td.col-player .row-swipe-content {
-  background-color: hsl(var(--card));
-  background-image: linear-gradient(
-    hsl(var(--primary) / 0.12),
-    hsl(var(--primary) / 0.12)
-  );
+  touch-action: manipulation;
 }
 html[data-pointer="coarse"] .row-swipe-btn:hover {
   background: transparent;
   color: inherit;
 }
-#team-picker-view .team-picker-row td.col-player:has(.row-swipe) {
-  padding: 0;
+#team-picker-view tbody tr.row-swipe-host > td.col-player {
+  position: relative;
   overflow: hidden;
-}
-#team-picker-view tbody td.col-player .row-swipe {
-  min-height: var(--team-row-h, 42px);
-}
-#team-picker-view tbody td.col-player .row-swipe-content {
-  display: flex;
-  align-items: center;
-  min-height: var(--team-row-h, 42px);
-  padding: 4px 8px;
 }
 
 /* Viewer-owned: red flag beside the player name (all player list UIs) */
@@ -3880,8 +3859,7 @@ html[data-pointer="coarse"] .row-swipe-btn:hover {
   padding-top: 0;
 }
 
-/* Statistics: title/subtitle left, count upper-right. Columns control lives
-   in the subtoolbar (desktop) or inside Filters (narrow / sheet). */
+/* Statistics: title/subtitle left, count upper-right. All metric columns shown by default. */
 .opta-header {
   display: flex;
   flex-direction: column;
