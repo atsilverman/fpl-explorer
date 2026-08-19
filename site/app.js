@@ -602,10 +602,44 @@
   function defaultMinMinutes() {
     return isNextSeason() ? 0 : Math.min(1000, bounds.mins.max);
   }
-  state.priceMin = defaultMinPrice();
-  state.priceMax = bounds.price.max;
-  state.minsMin = defaultMinMinutes();
-  state.minsMax = bounds.mins.max;
+
+  function statisticsCoreFilterDefaults(mode = state.valueMode) {
+    if (mode === "total") {
+      return {
+        priceMin: bounds.price.min,
+        priceMax: bounds.price.max,
+        ownedMin: 0,
+        minsMin: bounds.mins.min,
+        minsMax: bounds.mins.max,
+      };
+    }
+    return {
+      priceMin: defaultMinPrice(),
+      priceMax: bounds.price.max,
+      ownedMin: OWNERSHIP_FILTER_DEFAULT,
+      minsMin: defaultMinMinutes(),
+      minsMax: bounds.mins.max,
+    };
+  }
+
+  function applyStatisticsCoreFilterDefaults(mode = state.valueMode) {
+    const d = statisticsCoreFilterDefaults(mode);
+    state.priceMin = d.priceMin;
+    state.priceMax = d.priceMax;
+    state.ownedMin = d.ownedMin;
+    state.minsMin = d.minsMin;
+    state.minsMax = d.minsMax;
+    if (typeof updatePriceSlider === "function") updatePriceSlider();
+    if (typeof updateOwnedSlider === "function") updateOwnedSlider();
+    if (typeof updateMinsSlider === "function") updateMinsSlider();
+  }
+
+  const statsCoreDefaults = statisticsCoreFilterDefaults("total");
+  state.priceMin = statsCoreDefaults.priceMin;
+  state.priceMax = statsCoreDefaults.priceMax;
+  state.ownedMin = statsCoreDefaults.ownedMin;
+  state.minsMin = statsCoreDefaults.minsMin;
+  state.minsMax = statsCoreDefaults.minsMax;
 
   function cols() {
     return state.view === "players" ? PLAYER_COLS : TEAM_COLS;
@@ -628,6 +662,7 @@
   }
 
   function passesOwnershipFilter(row) {
+    if (state.ownedMin <= 0) return true;
     const owned = currentOwnership(row && row.code);
     return owned != null && owned >= state.ownedMin;
   }
@@ -943,11 +978,12 @@
     if (state.posFilter.size) return true;
     if (state.teamFilter.size) return true;
     if (state.search.trim()) return true;
-    if (state.priceMin !== defaultMinPrice() || state.priceMax !== bounds.price.max) return true;
-    if (state.ownedMin !== OWNERSHIP_FILTER_DEFAULT) return true;
+    const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
+    if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
+    if (state.ownedMin !== coreDefaults.ownedMin) return true;
+    if (state.minsMin !== coreDefaults.minsMin || state.minsMax !== coreDefaults.minsMax) return true;
     if (state.ownershipTrendThreshold !== OWNERSHIP_TREND_THRESHOLD_DEFAULT) return true;
     if (state.ownershipTrendWindow !== OWNERSHIP_TREND_WINDOW_DEFAULT) return true;
-    if (state.minsMin !== defaultMinMinutes() || state.minsMax !== bounds.mins.max) return true;
     if (!state.hideDeparted) return true;
     if (state.setPieceTakersOnly) return true;
     if (state.page === "team" && state.teamAffordableOnly) return true;
@@ -973,14 +1009,15 @@
   function resetFiltersToDefault() {
     state.posFilter.clear();
     state.teamFilter.clear();
-    state.priceMin = defaultMinPrice();
-    state.priceMax = bounds.price.max;
-    state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
+    const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
+    state.priceMin = coreDefaults.priceMin;
+    state.priceMax = coreDefaults.priceMax;
+    state.ownedMin = coreDefaults.ownedMin;
+    state.minsMin = coreDefaults.minsMin;
+    state.minsMax = coreDefaults.minsMax;
     state.ownershipTrendThreshold = OWNERSHIP_TREND_THRESHOLD_DEFAULT;
     state.ownershipTrendWindow = OWNERSHIP_TREND_WINDOW_DEFAULT;
     syncOwnershipTrendWindowUI();
-    state.minsMin = defaultMinMinutes();
-    state.minsMax = bounds.mins.max;
     state.search = "";
     if (el.search) el.search.value = "";
     if (el.searchWrap) el.searchWrap.classList.remove("search-open");
@@ -1946,6 +1983,13 @@
     const main = document.querySelector("main.main");
     mobileChromeScrollLast = main ? main.scrollTop : 0;
     setMobileChromeScrollHidden(false);
+  }
+
+  function scrollPageContentToTop() {
+    const main = document.querySelector("main.main");
+    if (!main) return;
+    main.scrollTop = 0;
+    main.scrollLeft = 0;
   }
 
   function onMobileChromeScroll() {
@@ -9181,7 +9225,10 @@
       if (tabMenuNeedsFixedPosition()) {
         requestAnimationFrame(() => {
           positionMarketsViewMenuFixed();
-          requestAnimationFrame(positionMarketsViewMenuFixed);
+          requestAnimationFrame(() => {
+            positionMarketsViewMenuFixed();
+            if (state.page === "markets") scrollActivePageTabIntoView({ instant: true });
+          });
         });
       } else {
         clearMarketsViewMenuPosition();
@@ -9688,6 +9735,7 @@ python3 site/annotate_social.py</pre>
   let ownershipHoverKey = null;
   let ownershipHoverIndex = null;
   let ownershipPinnedKey = null;
+  let ownershipPinnedFromChart = false;
   let ownershipTipTimer = null;
   let ownershipSeriesCache = [];
   let ownershipLayout = null;
@@ -10206,12 +10254,79 @@ python3 site/annotate_social.py</pre>
     return null;
   }
 
+  function ownershipSeriesPointClient(series, ptIndex) {
+    if (!series || ptIndex == null) return null;
+    const svg = el.ownershipChart && el.ownershipChart.querySelector("svg");
+    if (!svg) return null;
+    const svgRect = svg.getBoundingClientRect();
+    if (!svgRect.width || !svgRect.height) return null;
+    let svgX = null;
+    let svgY = null;
+    (series._drawn || []).forEach((line) => {
+      if (svgX != null) return;
+      const pt = line.find((p) => p.i === ptIndex);
+      if (pt) {
+        svgX = pt.x;
+        svgY = pt.y;
+      }
+    });
+    if (svgX == null && ownershipLayout) {
+      const pt = series.points && series.points[ptIndex];
+      if (!pt || pt.owned == null) return null;
+      svgX = ownershipLayout.xAt(ptIndex);
+      svgY = ownershipLayout.yAt(pt.owned);
+    }
+    if (svgX == null) return null;
+    const vb = svg.viewBox.baseVal;
+    return {
+      clientX: svgRect.left + (svgX / vb.width) * svgRect.width,
+      clientY: svgRect.top + (svgY / vb.height) * svgRect.height,
+      index: ptIndex,
+    };
+  }
+
+  function showOwnershipTooltipForSeries(series, ptIndex) {
+    const pt = ownershipSeriesPointClient(series, ptIndex);
+    if (!pt) return;
+    showOwnershipTooltip(pt.clientX, pt.clientY, ownershipTooltipHTML(series, pt.index));
+  }
+
+  function scrollOwnershipChartIntoView(afterScroll) {
+    if (hasFineHover()) return;
+    const wrap = el.ownershipChartWrap;
+    if (!wrap) return;
+    const main = document.querySelector("main.main");
+    const behavior = prefersReducedMotion() ? "auto" : "smooth";
+    const done = () => {
+      if (typeof afterScroll === "function") afterScroll();
+    };
+    if (main) {
+      const wrapRect = wrap.getBoundingClientRect();
+      const mainRect = main.getBoundingClientRect();
+      const topGap = 12;
+      if (wrapRect.top < mainRect.top + topGap || wrapRect.bottom > mainRect.bottom - 8) {
+        main.scrollTo({
+          top: Math.max(0, main.scrollTop + wrapRect.top - mainRect.top - topGap),
+          behavior,
+        });
+        if (behavior === "auto") done();
+        else setTimeout(done, 400);
+      } else {
+        done();
+      }
+    } else {
+      wrap.scrollIntoView({ behavior, block: "start" });
+      if (behavior === "auto") done();
+      else setTimeout(done, 400);
+    }
+  }
+
   function ownershipAccentForSeries(series) {
     if (!series) return "";
     return TEAM_SCATTER_ACCENT[series.team] || "";
   }
 
-  function hoverOwnershipSeries(key, { index = null, showTip = false, tipClientX, tipClientY } = {}) {
+  function hoverOwnershipSeries(key, { index = null, showTip = false, tipClientX, tipClientY, fromChart = false } = {}) {
     const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
     if (!series) {
       setOwnershipHover(null, null);
@@ -10219,8 +10334,8 @@ python3 site/annotate_social.py</pre>
       return;
     }
     const idx = index != null ? index : ownershipLastOwnedIndex(series);
-    setOwnershipHover(key, idx);
-    if (showTip && hasFineHover() && tipClientX != null && tipClientY != null) {
+    setOwnershipHover(key, idx, { fromChart });
+    if (showTip && tipClientX != null && tipClientY != null) {
       showOwnershipTooltip(tipClientX, tipClientY, ownershipTooltipHTML(series, idx));
     }
   }
@@ -10234,26 +10349,29 @@ python3 site/annotate_social.py</pre>
     const series = ownershipSeriesCache.find((s) => s.key === ownershipPinnedKey);
     if (!series) {
       ownershipPinnedKey = null;
+      ownershipPinnedFromChart = false;
       setOwnershipHover(null, null);
       hideOwnershipTooltip();
       return;
     }
-    hoverOwnershipSeries(ownershipPinnedKey);
+    hoverOwnershipSeries(ownershipPinnedKey, { fromChart: ownershipPinnedFromChart });
   }
 
-  function pinOwnershipSeries(key) {
+  function pinOwnershipSeries(key, { fromChart = false } = {}) {
     if (!key || ownershipPinnedKey === key) {
       ownershipPinnedKey = null;
+      ownershipPinnedFromChart = false;
       setOwnershipHover(null, null);
       hideOwnershipTooltip();
       return false;
     }
     ownershipPinnedKey = key;
-    hoverOwnershipSeries(key);
+    ownershipPinnedFromChart = fromChart;
+    hoverOwnershipSeries(key, { fromChart });
     return true;
   }
 
-  function setOwnershipHover(key, index) {
+  function setOwnershipHover(key, index, { fromChart = false } = {}) {
     ownershipHoverKey = key;
     ownershipHoverIndex = index;
     if (el.ownershipChartWrap) {
@@ -10264,9 +10382,11 @@ python3 site/annotate_social.py</pre>
     const accent = ownershipAccentForSeries(series);
     el.ownershipChart.querySelectorAll(".ownership-line").forEach((node) => {
       const match = node.getAttribute("data-key") === key;
+      const isTrendLine = node.classList.contains("is-riser") || node.classList.contains("is-faller");
       node.classList.toggle("is-active", !!key && match);
       node.classList.toggle("is-dim", !!key && !match);
-      if (match && accent) {
+      node.classList.toggle("is-chart-selected", !!key && match && fromChart);
+      if (match && fromChart && accent && !isTrendLine) {
         node.style.setProperty("--ownership-accent", accent);
         node.style.stroke = accent;
       } else {
@@ -10382,7 +10502,7 @@ python3 site/annotate_social.py</pre>
       return;
     }
     const changed = ownershipHoverKey !== hit.series.key || ownershipHoverIndex !== hit.index;
-    setOwnershipHover(hit.series.key, hit.index);
+    setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
     if (hasFineHover()) {
       clearTimeout(ownershipTipTimer);
       const html = ownershipTooltipHTML(hit.series, hit.index);
@@ -10406,15 +10526,16 @@ python3 site/annotate_social.py</pre>
     if (!hit) {
       if (ownershipPinnedKey) {
         ownershipPinnedKey = null;
+        ownershipPinnedFromChart = false;
         setOwnershipHover(null, null);
       }
       hideOwnershipTooltip();
       return;
     }
     if (hasFineHover()) {
-      const pinned = pinOwnershipSeries(hit.series.key);
+      const pinned = pinOwnershipSeries(hit.series.key, { fromChart: true });
       if (pinned) {
-        setOwnershipHover(hit.series.key, hit.index);
+        setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
         showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
       }
       return;
@@ -10426,12 +10547,14 @@ python3 site/annotate_social.py</pre>
       ownershipHoverIndex === hit.index
     ) {
       ownershipPinnedKey = null;
+      ownershipPinnedFromChart = false;
       hideOwnershipTooltip();
       setOwnershipHover(null, null);
       return;
     }
     ownershipPinnedKey = hit.series.key;
-    setOwnershipHover(hit.series.key, hit.index);
+    ownershipPinnedFromChart = true;
+    setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
     showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
   }
 
@@ -10467,7 +10590,8 @@ python3 site/annotate_social.py</pre>
     const w = Math.max(320, wrap.clientWidth || 640);
     const h = Math.max(260, wrap.clientHeight || 420);
     ownershipLastSize = `${wrap.clientWidth}x${wrap.clientHeight}`;
-    const pad = OWNERSHIP_PAD;
+    const pad = { ...OWNERSHIP_PAD };
+    if (NARROW_MQ.matches) pad.bottom = 52;
     const innerW = Math.max(40, w - pad.left - pad.right);
     const innerH = Math.max(40, h - pad.top - pad.bottom);
     const n = checkIns.length;
@@ -10557,13 +10681,18 @@ python3 site/annotate_social.py</pre>
 
     if (ownershipPinnedKey && !series.some((s) => s.key === ownershipPinnedKey)) {
       ownershipPinnedKey = null;
+      ownershipPinnedFromChart = false;
     }
     const focusKey = ownershipPinnedKey || ownershipHoverKey;
     if (focusKey) {
       const still = series.find((s) => s.key === focusKey);
-      if (still) setOwnershipHover(still.key, ownershipHoverIndex);
+      if (still) {
+        const fromChart = ownershipPinnedKey ? ownershipPinnedFromChart : false;
+        setOwnershipHover(still.key, ownershipHoverIndex, { fromChart });
+      }
       else {
         ownershipPinnedKey = null;
+        ownershipPinnedFromChart = false;
         setOwnershipHover(null, null);
       }
     } else if (el.ownershipChartWrap) {
@@ -10867,11 +10996,12 @@ python3 site/annotate_social.py</pre>
     if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
     state.teamAffordableOnly = false;
     if (el.teamAffordableCheck) el.teamAffordableCheck.checked = false;
-    state.priceMin = defaultMinPrice();
-    state.priceMax = bounds.price.max;
-    state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
-    state.minsMin = defaultMinMinutes();
-    state.minsMax = bounds.mins.max;
+    const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
+    state.priceMin = coreDefaults.priceMin;
+    state.priceMax = coreDefaults.priceMax;
+    state.ownedMin = coreDefaults.ownedMin;
+    state.minsMin = coreDefaults.minsMin;
+    state.minsMax = coreDefaults.minsMax;
     if (typeof syncFilterChipUI === "function") syncFilterChipUI();
     if (typeof updatePriceSlider === "function") updatePriceSlider();
     if (typeof updateOwnedSlider === "function") updateOwnedSlider();
@@ -10951,7 +11081,10 @@ python3 site/annotate_social.py</pre>
     if (page === "notes") page = "opta";
     const prev = state.page;
     state.page = page;
-    if (prev !== page) resetMobileChromeScrollHide();
+    if (prev !== page) {
+      scrollPageContentToTop();
+      resetMobileChromeScrollHide();
+    }
     try {
       localStorage.setItem(PAGE_KEY, page);
     } catch {
@@ -11129,13 +11262,14 @@ python3 site/annotate_social.py</pre>
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
       requestAnimationFrame(() => {
-        scrollActivePageTabIntoView();
+        scrollActivePageTabIntoView({ instant: true });
       });
       if (page === "ownership") renderOwnership();
     });
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncMobileChrome();
+    if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
   el.pageOpta.addEventListener("click", () => setPage("opta"));
@@ -11144,7 +11278,10 @@ python3 site/annotate_social.py</pre>
   if (el.ownershipTrendingToggle) {
     el.ownershipTrendingToggle.addEventListener("click", () => {
       state.ownershipTrending = !state.ownershipTrending;
-      if (!state.ownershipTrending) ownershipPinnedKey = null;
+      if (!state.ownershipTrending) {
+        ownershipPinnedKey = null;
+        ownershipPinnedFromChart = false;
+      }
       syncOwnershipTrendingUI();
       if (state.page === "ownership") renderOwnership();
     });
@@ -11172,7 +11309,9 @@ python3 site/annotate_social.py</pre>
       if (e.relatedTarget && row.contains(e.relatedTarget)) return;
       const key = row.getAttribute("data-ownership-key");
       if (!key || ownershipHoverKey === key) return;
-      hoverOwnershipSeries(key);
+      const series = ownershipSeriesCache.find((s) => s.key === key);
+      hoverOwnershipSeries(key, { fromChart: false });
+      if (series) showOwnershipTooltipForSeries(series, ownershipLastOwnedIndex(series));
     });
     // Clear only when the pointer leaves the cards entirely — clearing per row
     // would blink the chart while scrubbing between names.
@@ -11202,19 +11341,12 @@ python3 site/annotate_social.py</pre>
       const key = row.getAttribute("data-ownership-key");
       const series = ownershipSeriesCache.find((s) => s.key === key);
       if (!series) return;
-      const pinned = pinOwnershipSeries(key);
+      const pinned = pinOwnershipSeries(key, { fromChart: false });
       if (!pinned) return;
       const lastIdx = ownershipLastOwnedIndex(series);
-      if (hasFineHover()) {
-        const wrap = el.ownershipChartWrap && el.ownershipChartWrap.getBoundingClientRect();
-        if (wrap) {
-          showOwnershipTooltip(
-            wrap.left + wrap.width * 0.72,
-            wrap.top + wrap.height * 0.28,
-            ownershipTooltipHTML(series, lastIdx)
-          );
-        }
-      }
+      const showTip = () => showOwnershipTooltipForSeries(series, lastIdx);
+      showTip();
+      scrollOwnershipChartIntoView(showTip);
     });
   }
   if (el.pageTeam) el.pageTeam.addEventListener("click", () => setPage("team"));
@@ -11273,11 +11405,11 @@ python3 site/annotate_social.py</pre>
     el.pageMarkets.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (el.marketsTabWrap) pageTabFocusEl = el.marketsTabWrap;
       // Mobile / narrow: plain page tab — view picker lives in the toolbar.
       if (preferMobileSheet()) {
         setMarketsViewMenuOpen(false);
         setPage("markets");
-        requestAnimationFrame(scrollActivePageTabIntoView);
         return;
       }
       // Desktop: same as xData — toggle the view menu and land on Markets.
@@ -11286,7 +11418,6 @@ python3 site/annotate_social.py</pre>
       const willOpen = !el.marketsTabWrap?.classList.contains("open");
       setMarketsViewMenuOpen(willOpen);
       setPage("markets");
-      requestAnimationFrame(scrollActivePageTabIntoView);
     });
   }
   // Mobile: also accept taps on the wrap (caret/gap) so the last tab isn't missed.
@@ -11298,9 +11429,9 @@ python3 site/annotate_social.py</pre>
         if (e.target.closest("#page-markets")) return; // button handler already ran
         e.preventDefault();
         e.stopPropagation();
+        pageTabFocusEl = el.marketsTabWrap;
         setMarketsViewMenuOpen(false);
         setPage("markets");
-        requestAnimationFrame(scrollActivePageTabIntoView);
       },
       true
     );
@@ -11358,8 +11489,7 @@ python3 site/annotate_social.py</pre>
   });
   window.addEventListener("resize", () => {
     syncPageTabsScrollHints();
-    if (pageTabWheelEnabled()) {
-      wrapPageTabsScroll();
+    if (pageTabWheelEnabled() && pageTabWheelBuilt) {
       scrollActivePageTabIntoView({ instant: true });
     }
     syncExpectedCatToolbar();
@@ -11400,6 +11530,7 @@ python3 site/annotate_social.py</pre>
   let pageTabWheelUnlockTimer = 0;
   let pageTabWheelGen = 0;
   let pageTabFocusEl = null;
+  let pageTabWheelBooted = false;
 
   function pageTabWheelEnabled() {
     return !!(el.pageTabs && !NARROW_MQ.matches);
@@ -11424,6 +11555,7 @@ python3 site/annotate_social.py</pre>
     const clone = node.cloneNode(true);
     clone.classList.add("page-tab-clone");
     clone.removeAttribute("id");
+    clone.removeAttribute("data-page-tab-origin");
     clone.setAttribute("aria-hidden", "true");
     clone.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
     clone.querySelectorAll("[aria-controls]").forEach((n) => n.removeAttribute("aria-controls"));
@@ -11442,7 +11574,57 @@ python3 site/annotate_social.py</pre>
 
   function pageTabOrigins() {
     if (!el.pageTabs) return [];
-    return [...el.pageTabs.children].filter((n) => n.hasAttribute("data-page-tab-origin"));
+    return [...el.pageTabs.children].filter(
+      (n) => n.hasAttribute("data-page-tab-origin") && !n.classList.contains("page-tab-clone")
+    );
+  }
+
+  function pageTabHostsForPage(page) {
+    const tabs = el.pageTabs;
+    if (!tabs || !page) return [];
+    const hosts = [];
+    tabs.querySelectorAll(`[data-page-clone="${page}"]`).forEach((node) => hosts.push(node));
+    const idByPage = {
+      opta: "page-opta",
+      rankings: "page-rankings",
+      ownership: "page-ownership",
+      team: "page-team",
+      expected: "page-expected",
+      schedule: "page-schedule",
+      feed: "page-feed",
+      markets: "page-markets",
+    };
+    const btn = idByPage[page] ? tabs.querySelector(`#${idByPage[page]}`) : null;
+    if (btn && tabs.contains(btn)) hosts.push(btn.closest(".page-tab-dropdown") || btn);
+    return hosts;
+  }
+
+  function scrollLeftToCenterHost(host) {
+    if (!host || !el.pageTabs) return 0;
+    return el.pageTabs.scrollLeft + pageTabDeltaToCenter(host);
+  }
+
+  function bestPageTabCenterHost(page) {
+    const tabs = el.pageTabs;
+    const w = pageTabSetWidth();
+    const hosts = pageTabHostsForPage(page);
+    if (!tabs || !hosts.length) return null;
+    if (!pageTabWheelBuilt || w < 8) {
+      const originBtn = tabs.querySelector(".page-tab-btn.active[id]");
+      if (originBtn && tabs.contains(originBtn)) {
+        return originBtn.closest(".page-tab-dropdown") || originBtn;
+      }
+      return hosts[0];
+    }
+    const inBand = hosts.filter((host) => {
+      const sl = scrollLeftToCenterHost(host);
+      return sl >= w - 2 && sl < 2 * w - 2;
+    });
+    const pool = inBand.length ? inBand : hosts;
+    return pool.reduce((best, host) => {
+      if (!best) return host;
+      return Math.abs(pageTabDeltaToCenter(host)) < Math.abs(pageTabDeltaToCenter(best)) ? host : best;
+    }, null);
   }
 
   function pageTabSetWidth() {
@@ -11462,11 +11644,11 @@ python3 site/annotate_social.py</pre>
     if (w < 8) return;
     let sl = tabs.scrollLeft;
     let guard = 0;
-    while (sl < w * 0.5 && guard < 4) {
+    while (sl < w && guard < 4) {
       sl += w;
       guard += 1;
     }
-    while (sl >= w * 1.5 && guard < 4) {
+    while (sl >= 2 * w && guard < 4) {
       sl -= w;
       guard += 1;
     }
@@ -11505,8 +11687,6 @@ python3 site/annotate_social.py</pre>
     tabs.classList.add("is-wheel");
     pageTabWheelBuilt = true;
     syncPageTabCloneActive(state.page);
-    const w = pageTabSetWidth();
-    if (w) tabs.scrollLeft = w;
   }
 
   function syncPageTabWheel() {
@@ -11515,8 +11695,6 @@ python3 site/annotate_social.py</pre>
       buildPageTabWheel();
       if (!was && pageTabWheelBuilt) {
         requestAnimationFrame(() => {
-          const w = pageTabSetWidth();
-          if (w) el.pageTabs.scrollLeft = w;
           scrollActivePageTabIntoView({ instant: true });
         });
       }
@@ -11524,6 +11702,11 @@ python3 site/annotate_social.py</pre>
       teardownPageTabWheel();
     }
     if (el.pageTabsClip) el.pageTabsClip.classList.toggle("is-wheel", pageTabWheelBuilt);
+    if (el.pageTabsClip && !pageTabWheelBuilt) el.pageTabsClip.classList.remove("is-ready");
+  }
+
+  function markPageTabsReady() {
+    if (el.pageTabsClip && pageTabWheelBuilt) el.pageTabsClip.classList.add("is-ready");
   }
 
   function pageTabsAreScrollable() {
@@ -11555,45 +11738,24 @@ python3 site/annotate_social.py</pre>
     return originBtn.closest(".page-tab-dropdown") || originBtn;
   }
 
-  function centerPageTabEl(target, { instant = false } = {}) {
+  function centerPageTabEl(target) {
     const tabs = el.pageTabs;
     if (!tabs || !target) return;
-    const delta = pageTabDeltaToCenter(target);
+    let host = target;
+    let delta = pageTabDeltaToCenter(host);
     if (Math.abs(delta) < 0.5) {
       wrapPageTabsScroll();
       return;
     }
-    const next = tabs.scrollLeft + delta;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (instant || reduce || typeof tabs.scrollTo !== "function") {
-      tabs.scrollLeft = next;
-      wrapPageTabsScroll();
-      return;
-    }
-    pageTabWheelLock = true;
-    window.clearTimeout(pageTabWheelUnlockTimer);
-    const gen = ++pageTabWheelGen;
-    tabs.scrollTo({ left: next, behavior: "smooth" });
-    const done = () => {
-      if (gen !== pageTabWheelGen) return;
-      tabs.removeEventListener("scrollend", done);
-      unlockPageTabWheel();
-      const origin = originActivePageTabHost();
-      let snap = target;
-      if (origin && tabs.contains(target)) {
-        if (Math.abs(pageTabDeltaToCenter(origin)) < Math.abs(pageTabDeltaToCenter(target))) {
-          snap = origin;
-        }
-      } else if (origin) {
-        snap = origin;
-      }
-      const correct = pageTabDeltaToCenter(snap);
-      if (Math.abs(correct) >= 0.5) tabs.scrollLeft += correct;
-      wrapPageTabsScroll();
-      syncPageTabsScrollHints();
-    };
-    tabs.addEventListener("scrollend", done, { once: true });
-    pageTabWheelUnlockTimer = window.setTimeout(done, 780);
+    tabs.scrollLeft += delta;
+    wrapPageTabsScroll();
+    host = bestPageTabCenterHost(state.page) || host;
+    delta = pageTabDeltaToCenter(host);
+    if (Math.abs(delta) >= 0.5) tabs.scrollLeft += delta;
+    wrapPageTabsScroll();
+    host = bestPageTabCenterHost(state.page) || host;
+    delta = pageTabDeltaToCenter(host);
+    if (Math.abs(delta) >= 0.5) tabs.scrollLeft += delta;
   }
 
   function pageTabHostFromNode(node) {
@@ -11610,6 +11772,7 @@ python3 site/annotate_social.py</pre>
   function scrollActivePageTabIntoView(opts = {}) {
     const tabs = el.pageTabs;
     if (!tabs) return;
+    if (!pageTabWheelBooted) opts = { ...opts, instant: true };
     if (!pageTabWheelEnabled()) {
       if (!pageTabsAreScrollable()) return;
       const activeBtn = tabs.querySelector(".page-tab-btn.active[id]") || tabs.querySelector(".page-tab-btn.active");
@@ -11627,17 +11790,27 @@ python3 site/annotate_social.py</pre>
       return;
     }
     if (!pageTabWheelBuilt) buildPageTabWheel();
-    let target = pageTabFocusEl && tabs.contains(pageTabFocusEl) ? pageTabFocusEl : null;
-    pageTabFocusEl = null;
-    if (!target) {
-      const originBtn = tabs.querySelector(".page-tab-btn.active[id]");
-      if (originBtn && tabs.contains(originBtn)) {
-        target = originBtn.closest(".page-tab-dropdown") || originBtn;
+    let target = null;
+    const w = pageTabSetWidth();
+    if (pageTabFocusEl && tabs.contains(pageTabFocusEl)) {
+      const focusSl = scrollLeftToCenterHost(pageTabFocusEl);
+      if (!pageTabWheelBuilt || w < 8 || (focusSl >= w - 2 && focusSl < 2 * w - 2)) {
+        target = pageTabFocusEl;
       }
     }
+    pageTabFocusEl = null;
+    if (!target) target = bestPageTabCenterHost(state.page);
     if (!target) return;
-    centerPageTabEl(target, opts);
+    centerPageTabEl(target);
     syncPageTabsScrollHints();
+    markPageTabsReady();
+  }
+
+  function recenterActivePageTabSoon() {
+    requestAnimationFrame(() => {
+      scrollActivePageTabIntoView({ instant: true });
+      requestAnimationFrame(() => scrollActivePageTabIntoView({ instant: true }));
+    });
   }
 
   function tabMenuNeedsFixedPosition() {
@@ -11667,7 +11840,7 @@ python3 site/annotate_social.py</pre>
 
   if (el.pageTabs) {
     el.pageTabs.addEventListener("scroll", () => {
-      wrapPageTabsScroll();
+      if (!pageTabWheelLock) wrapPageTabsScroll();
       syncPageTabsScrollHints();
     }, { passive: true });
     el.pageTabs.addEventListener(
@@ -11701,7 +11874,6 @@ python3 site/annotate_social.py</pre>
     );
     if (typeof ResizeObserver !== "undefined") {
       const tabsRo = new ResizeObserver(() => {
-        wrapPageTabsScroll();
         syncPageTabsScrollHints();
         if (pageTabWheelBuilt) scrollActivePageTabIntoView({ instant: true });
       });
@@ -12692,6 +12864,10 @@ python3 site/annotate_social.py</pre>
       b.classList.toggle("active", b.dataset.valueMode === mode)
     );
     syncSegThumb(el.valueModeSeg);
+    if (state.page === "opta" && state.view === "players") {
+      applyStatisticsCoreFilterDefaults(mode);
+      syncFiltersResetUI();
+    }
     if (rerender) renderTable();
   }
 
@@ -12710,14 +12886,7 @@ python3 site/annotate_social.py</pre>
     bounds.price.max = next.price.max;
     bounds.mins.min = next.mins.min;
     bounds.mins.max = next.mins.max;
-    state.priceMin = defaultMinPrice();
-    state.priceMax = bounds.price.max;
-    state.ownedMin = OWNERSHIP_FILTER_DEFAULT;
-    state.minsMin = defaultMinMinutes();
-    state.minsMax = bounds.mins.max;
-    updatePriceSlider();
-    updateOwnedSlider();
-    updateMinsSlider();
+    applyStatisticsCoreFilterDefaults(state.valueMode);
   }
 
   function syncSeasonSeg() {
@@ -13427,20 +13596,27 @@ python3 site/annotate_social.py</pre>
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
       syncPageTabsScrollHints();
+      scrollActivePageTabIntoView({ instant: true });
       if (state.page === "opta") renderTable();
       requestAnimationFrame(() => {
         syncAllSegThumbs({ animate: false });
         syncPageTabsScrollHints();
+        scrollActivePageTabIntoView({ instant: true });
         if (state.page === "opta") renderTable();
       });
     });
     window.addEventListener("load", () => {
       syncAllSegThumbs({ animate: false });
+      scrollActivePageTabIntoView({ instant: true });
       if (state.page === "opta") renderTable();
+      requestAnimationFrame(() => {
+        pageTabWheelBooted = true;
+      });
     }, { once: true });
     window.addEventListener("pageshow", () => {
       if (el.optaPage) el.optaPage.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
       syncAllSegThumbs({ animate: false });
+      scrollActivePageTabIntoView({ instant: true });
     });
     [50, 250].forEach((ms) => {
       window.setTimeout(() => syncAllSegThumbs({ animate: false }), ms);

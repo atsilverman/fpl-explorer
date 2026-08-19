@@ -439,6 +439,9 @@ a { color: var(--blue); }
   overflow: hidden;
   z-index: 3;
 }
+.page-tabs-clip.is-wheel:not(.is-ready) {
+  visibility: hidden;
+}
 .page-tabs-clip.is-wheel::before,
 .page-tabs-clip.is-wheel::after {
   width: 72px;
@@ -4032,7 +4035,15 @@ html[data-page="ownership"] .layout .main {
   stroke: var(--text-faint);
   opacity: 0.1;
 }
-.ownership-chart-wrap.is-trending .ownership-line.is-active {
+.ownership-chart-wrap.is-trending .ownership-line.is-active.is-riser {
+  stroke: hsl(var(--positive));
+  opacity: 1;
+}
+.ownership-chart-wrap.is-trending .ownership-line.is-active.is-faller {
+  stroke: hsl(var(--negative));
+  opacity: 1;
+}
+.ownership-chart-wrap.is-trending .ownership-line.is-active.is-chart-selected:not(.is-riser):not(.is-faller) {
   stroke: var(--ownership-accent, hsl(var(--blue-hsl)));
   opacity: 1;
 }
@@ -4128,6 +4139,7 @@ html[data-page="ownership"] .layout .main {
   #ownership-page {
     min-width: 0;
     min-height: 0;
+    padding-bottom: 16px;
   }
   .ownership-trend-cards {
     grid-template-columns: 1fr;
@@ -4137,6 +4149,7 @@ html[data-page="ownership"] .layout .main {
     min-height: 320px;
     min-width: 0;
     overflow-x: auto;
+    margin-bottom: 28px;
   }
 }
 
