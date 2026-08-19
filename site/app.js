@@ -1831,7 +1831,7 @@
           state.sortKey = c.key;
           state.sortDir = c.type && c.type !== "check" ? "asc" : "desc";
         }
-        renderTable({ resetScroll: true });
+        renderTable({ preserveOptaScroll: true });
       });
       tr.appendChild(th);
     });
@@ -6099,12 +6099,11 @@
 
   function teamMetricHeadHTML(opts) {
     const plain = !!(opts && opts.plain);
-    const divideFirst = !(opts && opts.price);
     const stats = TEAM_STAT_COLS.map((col, i) =>
       teamSortTh(
         col.key,
         col.label,
-        `col-num col-team-stat${divideFirst && i === 0 ? " sec-divider" : ""}`,
+        "col-num col-team-stat",
         `${col.title} · 2025/26`,
         { plain }
       )
@@ -6335,10 +6334,7 @@
 
   function teamMetricCellsHTML(row, opts) {
     const prior = teamPriorRow(row.code);
-    const divideFirst = !(opts && opts.price);
-    const stats = TEAM_STAT_COLS.map((col, i) =>
-      teamStatCellHTML(prior, row.position, col, divideFirst && i === 0 ? "sec-divider" : "")
-    ).join("");
+    const stats = TEAM_STAT_COLS.map((col) => teamStatCellHTML(prior, row.position, col)).join("");
     const spark = teamSparkCellHTML(row);
     const setp =
       opts && opts.setPieces
@@ -6493,7 +6489,7 @@
     const colOpts = { price: true, ownership: true, setPieces: true };
     if (el.teamCompareHead) {
       el.teamCompareHead.innerHTML = teamHeadRowsHTML(
-        `${teamSortTh("player", "Player", "col-player", "Player", { plain: true })}${teamSortTh("price", "£m", "col-num col-core team-price sec-divider", "Price (£m)", { plain: true })}${teamSortTh("owned", "TSB%", "col-num col-core col-team-owned", "FPL selected-by-% (TSB)", { plain: true })}${teamMetricHeadHTML({ plain: true, setPieces: true, price: true })}${heatHead}`,
+        `${teamSortTh("player", "Player", "col-player", "Player", { plain: true })}${teamSortTh("price", "£m", "col-num col-core team-price", "Price (£m)", { plain: true })}${teamSortTh("owned", "TSB%", "col-num col-core col-team-owned", "FPL selected-by-% (TSB)", { plain: true })}${teamMetricHeadHTML({ plain: true, setPieces: true, price: true })}${heatHead}`,
         colOpts
       );
     }
@@ -6506,7 +6502,7 @@
           const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
           return `<tr class="row-selectable" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}">
             <td class="col-player">${playerIdentityHTML(crest, nameHTML, sub)}</td>
-            <td class="col-num col-core team-price sec-divider">${Number(row.price).toFixed(1)}</td>
+            <td class="col-num col-core team-price">${Number(row.price).toFixed(1)}</td>
             <td class="col-num col-core col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
             ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
             ${heat}
@@ -7556,7 +7552,7 @@
   function teamEmptyRowHTML(pos, starter, enterI) {
     const label = starter ? `Add ${TEAM_POS_LABEL[pos]}` : `Add ${TEAM_POS_LABEL[pos]} to bench`;
     const metrics = TEAM_STAT_COLS.map(
-      (col, i) => `<td class="col-num col-team-stat${i === 0 ? " sec-divider" : ""} is-blank"></td>`
+      (col) => `<td class="col-num col-team-stat is-blank"></td>`
     ).join("");
     const spark = `<td class="col-team-spark is-blank" data-team-spark-toggle="1"></td>`;
     const heat = teamHeatGws()
@@ -8051,7 +8047,7 @@
     const heatHead = teamHeatHeadHTML();
     if (el.teamPickerHead) {
       el.teamPickerHead.innerHTML = teamHeadRowsHTML(
-        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num col-core team-price sec-divider")}${teamSortTh("owned", "TSB%", "col-num col-core col-team-owned", "FPL selected-by-% (TSB)")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
+        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num col-core team-price")}${teamSortTh("owned", "TSB%", "col-num col-core col-team-owned", "FPL selected-by-% (TSB)")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
         { price: true, ownership: true, setPieces: true }
       );
     }
@@ -8075,7 +8071,7 @@
         const identity = playerIdentityHTML(crest, nameHTML, sub);
         return `<tr class="team-picker-row${selectableCls}${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
           <td class="col-player">${identity}</td>
-          <td class="col-num col-core team-price sec-divider">${Number(row.price).toFixed(1)}</td>
+          <td class="col-num col-core team-price">${Number(row.price).toFixed(1)}</td>
           <td class="col-num col-core col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
           ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
           ${heat}
