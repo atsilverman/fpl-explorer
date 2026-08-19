@@ -341,6 +341,7 @@
   ]);
   // Columns exempt from Enhance ranking even though they're numeric.
   const ENHANCE_EXCLUDE = new Set(["price", "owned", "apps", "gp"]);
+  const CORE_COL_KEYS = new Set(["price", "owned", "apps", "mins", "gp"]);
   const ENHANCE_PCT_MIN = 2;
   const ENHANCE_PCT_MAX = 40;
   const ENHANCE_PCT_PLAYERS = 5;
@@ -546,6 +547,8 @@
     ownershipTrending: true,
     ownershipTrendThreshold: OWNERSHIP_TREND_THRESHOLD_DEFAULT,
     ownershipTrendWindow: OWNERSHIP_TREND_WINDOW_DEFAULT,
+    ownershipRisersCollapsed: false,
+    ownershipFallersCollapsed: false,
     actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
     notes: [],
     notesGroupBy: "none", // none | player | team
@@ -646,6 +649,7 @@
     pageTabs: $("#page-tabs"),
     pageTabsClip: $("#page-tabs-clip"),
     pageNav: document.querySelector(".page-nav"),
+    pageInfoNavBtn: $("#page-info-nav-btn"),
     pageTrayBtn: $("#page-tray-btn"),
     pageTrayLabel: $("#page-tray-label"),
     pageTrayIconUse: $("#page-tray-icon-use"),
@@ -799,6 +803,7 @@
     barbellBody: $("#barbell-body"),
     expectedTooltip: $("#expected-tooltip"),
     seasonSelect: $("#season-select"),
+    seasonSeg: $("#season-seg"),
     tableOnlyToggles: $("#table-only-toggles"),
     columnsSidebar: $("#columns-sidebar"),
     tabPlayers: $("#tab-players"),
@@ -1787,6 +1792,7 @@
         th.appendChild(star);
       }
       th.classList.add("col-" + (c.type || "num"));
+      if (CORE_COL_KEYS.has(c.key)) th.classList.add("col-core");
       if (isSectionBoundary(vcols, i)) th.classList.add("sec-divider");
       if (state.sortKey === c.key) {
         th.classList.add("sorted");
@@ -1836,9 +1842,8 @@
       const posHTML = pos != null
         ? `<span class="team-league-pos"${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`
         : "";
-      const sub = posHTML ? `<div class="player-cell-sub">${posHTML}</div>` : "";
-      const name = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
-      return playerIdentityHTML(playerCrestHTML(row.team), name, sub);
+      const name = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${posHTML}</div>`;
+      return playerIdentityHTML(playerCrestHTML(row.team), name, "");
     }
     if (col.key === "price") {
       const val = fmtDisplayValue(displayValue(row, col), col);
@@ -2517,6 +2522,7 @@
     vcols.forEach((c, i) => {
       const td = document.createElement("td");
       td.classList.add("col-" + (c.type || "num"));
+      if (CORE_COL_KEYS.has(c.key)) td.classList.add("col-core");
       if (isSectionBoundary(vcols, i)) td.classList.add("sec-divider");
       if (
         c.key === "player" &&
@@ -2552,6 +2558,45 @@
     return tr;
   }
 
+  function optaTableWraps() {
+    const wraps = [];
+    const main = el.tableBody && el.tableBody.closest(".table-wrap");
+    if (main) wraps.push(main);
+    const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
+    if (compare) wraps.push(compare);
+    return wraps;
+  }
+
+  function visibleCoreCount() {
+    return visibleColumns().filter((c) => CORE_COL_KEYS.has(c.key)).length;
+  }
+
+  function syncCoreUnderName() {
+    const under = visibleCoreCount() > 0 && NARROW_MQ.matches && state.page === "opta";
+    optaTableWraps().forEach((wrap) => {
+      wrap.classList.toggle("is-core-under", under);
+    });
+  }
+
+  function snapOptaToGameStats() {
+    optaTableWraps().forEach((wrap) => {
+      if (!wrap.classList.contains("is-core-under")) {
+        if (!NARROW_MQ.matches) wrap.scrollLeft = 0;
+        return;
+      }
+      const headRow = wrap.querySelector("thead tr:not(.section-row)");
+      const pin = headRow && headRow.querySelector("th.col-player, th.col-name");
+      const firstGame =
+        headRow && headRow.querySelector("th.col-num:not(.col-core), th.col-check:not(.col-core)");
+      if (!pin || !firstGame) {
+        wrap.scrollLeft = pin ? Math.round(pin.getBoundingClientRect().width) : 0;
+        return;
+      }
+      const delta = firstGame.getBoundingClientRect().left - pin.getBoundingClientRect().right;
+      wrap.scrollLeft = Math.max(0, Math.round(wrap.scrollLeft + delta));
+    });
+  }
+
   function renderTable() {
     clearTimeout(fixtureTtTimer);
     hideFixtureTooltip();
@@ -2575,6 +2620,11 @@
     if (state.page === "rankings") renderRankings();
     bindAllNameColumnSimplifies();
     syncFiltersResetUI();
+    syncCoreUnderName();
+    requestAnimationFrame(() => {
+      snapOptaToGameStats();
+      requestAnimationFrame(snapOptaToGameStats);
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -3050,7 +3100,7 @@
     }
     // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
     return `${spitHead("calendar-days", "How Matchups works")}
-      ${spitIntro("Soft upcoming runs for attack and/or defence — edges, ranks, and schedule balance.")}
+      ${spitIntro("Find clubs with a soft upcoming run for attack and/or defence.")}
       ${spitSection("Icons", iconRows)}
       <div class="spit-annotate">
         <p class="spit-annotate-lead">Fixture card key</p>
@@ -3094,7 +3144,7 @@
         ),
       ];
       return `${spitHead("podium", "How Rankings works")}
-        ${spitIntro("Top 10 leaderboards for OPTA and FPL metrics.")}
+        ${spitIntro("Top 10 boards for OPTA and FPL metrics, grouped Key Stats, Attacking, and Defending.")}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}`;
     }
@@ -3112,14 +3162,20 @@
         );
       }
       const reading = [
+        ...(state.expectedSplit === "compare"
+          ? [spitRow(spitRank("Split"), "Home and away side by side for the same players or teams.")]
+          : []),
         spitRow(spitRank("Bar"), "Expected → actual. Moving dashes show the gap direction."),
         spitRow(
           spitRank("Diff"),
           "Actual − expected. Pill intensity scales with gap size. For xGC, a negative Diff can still be green (conceded less than expected)."
         ),
       ];
+      const intro = isNextSeason()
+        ? "Expected vs actual isn’t published for 2026/27 yet. Switch Data season in Preferences to 2025/26."
+        : "Expected (x) vs actual — who over- or underperformed.";
       return `${spitHead("chart-gantt", "How Expected Data works")}
-        ${spitIntro("Expected (x) vs actual — who over- or underperformed.")}
+        ${spitIntro(intro)}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}
         ${spitNote("Green/red here is over/under vs expectation — not Matchups fixture difficulty. Soft green is quieter in dark mode.")}`;
@@ -3138,41 +3194,33 @@
         spitRow(spitRank("Order"), "Most mentions first, then newest."),
       ];
       return `${spitHead("rss", "How Social Media Feed works")}
-        ${spitIntro("Player-mention cards from curated X accounts.")}
+        ${spitIntro("Player-mention cards from curated X accounts — filter by date, creator, and post type.")}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}
-        ${spitNote("Refreshing the page never calls X — it only reads the local cache.")}`;
+        ${spitNote("Refreshing never calls X — it only reads the local cache.")}`;
     }
 
     if (state.page === "ownership") {
       const reading = [
-        spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines; hover colorizes the club."),
+        spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines until you pick one."),
         spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
-        spitRow(spitRank("Trending"), "Filters → Trend colors. Window is last check-in, last 3, or last 7 (will be ~days once snapshots are daily). Colors lines and lists Risers / Fallers by change over that window."),
-        spitRow(spitRank("Axis"), "X is a manual snapshot date, not a gameweek. Run python3 site/fetch_ownership.py to add a check-in."),
-        spitRow(spitRank(mobile ? "Tap" : "Hover"), mobile
-          ? "Tap a line for the player/club card (photo, badge, price, TSB%, change)."
-          : "Hover a line for the player/club card (photo, badge, price, TSB%, change)."),
+        spitRow(spitRank("Trending"), "Window is last check-in, last 3, or last 7. Colors Risers / Fallers and their lines (green up, red down) until you select one."),
+        spitRow(spitRank("Axis"), "X is a snapshot date, not a gameweek. Y zooms to the lines on screen."),
+        spitRow(spitRank(mobile ? "Tap" : "Select"), mobile
+          ? "Tap a line or a Riser/Faller to pin it in club color; other lines go faint. Tap again or empty space to unpin."
+          : "Click a Riser/Faller (or a line) to pin it in club color; other lines go faint. Click again or empty space to unpin. Hover a line for the player/club card."),
       ];
       return `${spitHead("trending-up", "How Ownership works")}
-        ${spitIntro("FPL selected-by-% over the check-ins saved in this repo.")}
+        ${spitIntro("FPL selected-by% (TSB%) across saved check-ins.")}
         ${spitSection("Reading", reading)}
-        ${spitNote("The page never calls the FPL API — it only reads ownership_data.js.")}`;
+        ${spitNote("This page reads the saved ownership cache — it does not call the FPL API live.")}`;
     }
 
     if (state.page === "markets") {
-      const iconRows = [];
-      if (mobile) {
-        iconRows.push(
-          spitRow(spitRank("View"), "Goals and CS% or Scoreline — toolbar dropdown"),
-          spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window")
-        );
-      } else {
-        iconRows.push(
-          spitRow(spitRank("View"), "Goals and CS% or Scoreline — Markets tab menu"),
-          spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window")
-        );
-      }
+      const iconRows = [
+        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — toolbar dropdown" : "Goals and CS% or Scoreline — Markets tab menu"),
+        spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window"),
+      ];
       const reading = [
         spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
         spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
@@ -3181,7 +3229,7 @@
         spitRow(spitRank("Compare"), "Last run or Last 72 hr — movement vs prior odds pull."),
       ];
       return `${spitHead("candlestick", "How Markets works")}
-        ${spitIntro("Projected goals, clean-sheet %, and scorelines from bookmaker odds.")}
+        ${spitIntro("Upcoming PL fixtures: projected goals, clean-sheet %, and likely scorelines from bookmaker odds.")}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}`;
     }
@@ -3189,41 +3237,61 @@
     if (state.page === "team") {
       const iconRows = [
         spitRow(iconHTML("plus"), "Empty row — add a player of that position (Planner only)"),
-        spitRow(spitRank("Row"), "Right-click a planner player for captain, vice, bench, replace, remove, or Add note."),
+        spitRow(
+          spitRank("Row"),
+          mobile
+            ? "Tap a planner player for captain, vice, bench, replace, remove, or Add note."
+            : "Right-click a planner player for captain, vice, bench, replace, remove, or Add note."
+        ),
         spitRow(iconHTML("refresh-ccw-dot"), "Resync — replace Planner with the linked Actual FPL squad (confirm first)"),
-        spitRow(iconHTML("scale"), "Compare — click up to 5 players in the squad, search, or picker"),
+        spitRow(iconHTML("scale"), "Compare — pick up to 5 players in the squad, search, or picker"),
       ];
       const reading = [
         spitRow(spitRank("Actual"), "Read-only copy of your linked manager squad from the FPL API."),
-        spitRow(spitRank("Planner"), "Editable local draft (one team). Survives refresh. Resync overwrites it from Actual."),
+        spitRow(spitRank("Planner"), "Editable local draft. Survives refresh. Resync overwrites it from Actual."),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Faint rank is among that position last season. New signings show –."),
-        spitRow(spitRank("Form"), "Sparkline of mock recent form. Click or tap it (or the column header) to switch to TSB% from ownership check-ins."),
+        spitRow(spitRank("Form"), "Sparkline of mock recent form. Tap it (or the column header) to switch to TSB% from ownership check-ins."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (green check). FK/CK also show #2."),
-        spitRow(spitRank("Heat"), "Always six fixture columns from the selected gameweek (left of the line). Pick GW2 to shift the run forward so GW2 is current."),
-        spitRow(spitRank("Select"), "Empty slot or Replace opens the player list. Filters (including Affordable) open then. Back or Escape returns to the squad."),
+        spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Pick GW2 to shift the run so GW2 is current."),
+        spitRow(
+          spitRank("Select"),
+          mobile
+            ? "Empty slot or Replace opens the player list. Back (same row as search) or Escape returns to the squad. Budget stats hide while picking."
+            : "Empty slot or Replace opens the player list. Filters (including Affordable) open then. Back or Escape returns to the squad."
+        ),
         spitRow(spitRank("Affordable"), "In Filters while picking — hides anyone above remaining Bank. Replace credits the outgoing player's price."),
         spitRow(spitRank("Squad"), "Preferences → Clear planner removes every Planner pick. Actual is unchanged."),
-        spitRow(spitRank("Compare"), "Search, then ↑↓ and Enter or click a row to pin (up to 5). Pinning clears the search and keeps the pin list — Compare mode is disabled while pins exist. Hover a squad or search-result row to highlight stat winners. With no pins, Compare mode click-selects instead of add/replace."),
+        spitRow(spitRank("Pins"), mobile
+          ? "Search, then tap a row to pin (up to 5). Pins clear the search; Compare mode is off while pins exist."
+          : "Search, then ↑↓ and Enter or click a row to pin (up to 5). Pins clear the search; Compare mode is off while pins exist."),
+        spitRow(spitRank("Compare"), "With no pins, Compare mode selects instead of add/replace. Hover a squad or result row to highlight stat winners."),
         spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager ID to import Actual."),
       ];
+      const intro = state.teamMode === "actual"
+        ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
+        : "Editable 15-man planner within £100.0m. Resync replaces this with your linked Actual team.";
       return `${spitHead("shirt", "How Team works")}
-        ${spitIntro("Actual is your live FPL squad; Planner is the editable draft you keep locally.")}
+        ${spitIntro(intro)}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}`;
     }
 
     if (state.page === "notes") {
       return `${spitHead("sticky-note", "How Notes works")}
-        ${spitIntro("Freeform comments on players and clubs, saved with the current gameweek (or Preseason).")}
+        ${spitIntro("Freeform comments on players and clubs — newest first, saved with the current gameweek (or Preseason).")}
         ${spitSection("Icons", [
-          spitRow(iconHTML("notebook-pen"), "Right-click a player, crest, or team surface → Add note"),
+          spitRow(
+            iconHTML("notebook-pen"),
+            mobile
+              ? "Long-press a player, crest, or team row → Add note"
+              : "Right-click a player, crest, or team surface → Add note"
+          ),
           spitRow(spitRank("Group"), "All · By player · By team"),
         ])}
         ${spitSection("Reading", [
-          spitRow(spitRank("Sort"), "Newest notes first."),
-          spitRow(spitRank("Confirm"), "Player and club are saved automatically from what you clicked — no picker."),
+          spitRow(spitRank("Confirm"), "Player and club are saved automatically from what you opened — no picker."),
         ])}`;
     }
 
@@ -3252,6 +3320,7 @@
       spitRow(iconHTML("triangle-alert", "source-unsupported"), "Source can’t fill this cell")
     );
     const reading = [
+      spitRow(spitRank("TSB%"), "FPL selected-by-% from the latest ownership check-in."),
       spitRow(
         spitRank("Tint"),
         "Green/red Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them. Soft green fills use a quieter tone in dark mode."
@@ -3265,7 +3334,7 @@
       spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
     ];
     return `${spitHead("table", "How Statistics works")}
-      ${spitIntro("Season OPTA and FPL stats — filter, sort, and compare.")}
+      ${spitIntro("Season OPTA and FPL stats — filter, sort, and compare Players or Teams.")}
       ${spitSection("Icons", iconRows)}
       ${spitSection("Reading", reading)}`;
   }
@@ -3819,6 +3888,7 @@
   }
 
   function activePageInfoBtn() {
+    if (preferMobileSheet() && el.pageInfoNavBtn) return el.pageInfoNavBtn;
     const pane = typeof pagePaneFor === "function" ? pagePaneFor(state.page) : null;
     if (pane) {
       const btn = pane.querySelector(".page-info-btn");
@@ -4192,6 +4262,7 @@
       vcols.forEach((c, i) => {
         const td = document.createElement("td");
         td.classList.add("col-" + (c.type || "num"));
+        if (CORE_COL_KEYS.has(c.key)) td.classList.add("col-core");
         if (isSectionBoundary(vcols, i)) td.classList.add("sec-divider");
         if (
           c.key === "player" &&
@@ -9351,6 +9422,7 @@ python3 site/annotate_social.py</pre>
 
   let ownershipHoverKey = null;
   let ownershipHoverIndex = null;
+  let ownershipPinnedKey = null;
   let ownershipTipTimer = null;
   let ownershipSeriesCache = [];
   let ownershipLayout = null;
@@ -9421,12 +9493,6 @@ python3 site/annotate_social.py</pre>
     return { kind, recent, net, current };
   }
 
-  function ownershipTrendAccent(kind) {
-    if (kind === "riser") return "hsl(var(--positive))";
-    if (kind === "faller") return "hsl(var(--negative))";
-    return "";
-  }
-
   function fmtOwnershipTrendDelta(delta) {
     if (delta == null || Number.isNaN(delta)) return "—";
     const n = Number(delta);
@@ -9444,11 +9510,19 @@ python3 site/annotate_social.py</pre>
         : series.position
           ? series.position
           : "";
+    const owned = Number(trend.current);
+    const recent = Number(trend.recent);
+    const ownedAttr = Number.isFinite(owned)
+      ? ` data-count-to="${owned}" data-count-decimals="1"`
+      : "";
+    const deltaAttr = Number.isFinite(recent)
+      ? ` data-count-to="${recent}" data-count-decimals="1" data-count-signed="1"`
+      : "";
     return `<button type="button" class="ownership-trend-row" data-ownership-key="${escapeHtml(series.key)}">
       <span class="ownership-trend-identity">${badge}<span class="ownership-trend-name">${escapeHtml(series.name || "")}</span></span>
       <span class="ownership-trend-meta">${escapeHtml(meta)}</span>
-      <span class="ownership-trend-owned">${escapeHtml(fmtOwnedPct(trend.current))}</span>
-      <span class="ownership-trend-delta ${deltaCls}">${escapeHtml(fmtOwnershipTrendDelta(trend.recent))}</span>
+      <span class="ownership-trend-owned"${ownedAttr}>${escapeHtml(fmtOwnedPct(trend.current))}</span>
+      <span class="ownership-trend-delta ${deltaCls}"${deltaAttr}>${escapeHtml(fmtOwnershipTrendDelta(trend.recent))}</span>
     </button>`;
   }
 
@@ -9511,7 +9585,23 @@ python3 site/annotate_social.py</pre>
     el.ownershipTrendFallers.innerHTML = fallers.length
       ? fallers.map((x) => ownershipTrendCardHTML(x.series, x.trend)).join("")
       : empty;
+    syncOwnershipTrendCollapse();
     syncOwnershipTrendingUI();
+  }
+
+  function syncOwnershipTrendCollapse() {
+    const riserCol = el.ownershipTrendCards && el.ownershipTrendCards.querySelector(".ownership-trend-col.is-risers");
+    const fallerCol = el.ownershipTrendCards && el.ownershipTrendCards.querySelector(".ownership-trend-col.is-fallers");
+    if (riserCol) {
+      riserCol.classList.toggle("is-collapsed", !!state.ownershipRisersCollapsed);
+      const btn = riserCol.querySelector("[data-ownership-collapse='risers']");
+      if (btn) btn.setAttribute("aria-expanded", state.ownershipRisersCollapsed ? "false" : "true");
+    }
+    if (fallerCol) {
+      fallerCol.classList.toggle("is-collapsed", !!state.ownershipFallersCollapsed);
+      const btn = fallerCol.querySelector("[data-ownership-collapse='fallers']");
+      if (btn) btn.setAttribute("aria-expanded", state.ownershipFallersCollapsed ? "false" : "true");
+    }
   }
 
   function ownershipPlayerPassesFilters(p, catalog) {
@@ -9550,16 +9640,19 @@ python3 site/annotate_social.py</pre>
     return { owned: Math.round((sum / n) * 10) / 10, n, sample: top[0] };
   }
 
-  function ownershipScaleMax(series) {
-    const max = Math.max(
-      0,
-      ...(series || []).flatMap((item) =>
-        (item.points || [])
-          .map((point) => Number(point && point.owned))
-          .filter(Number.isFinite)
-      )
+  function ownershipOwnedValues(series) {
+    return (series || []).flatMap((item) =>
+      (item.points || [])
+        .map((point) => Number(point && point.owned))
+        .filter(Number.isFinite)
     );
-    return niceOwnershipMax(max);
+  }
+
+  function ownershipScaleRange(series) {
+    const values = ownershipOwnedValues(series);
+    const dataMax = values.length ? Math.max(...values) : 10;
+    const dataMin = values.length ? Math.min(...values) : 0;
+    return niceOwnershipRange(dataMin, dataMax);
   }
 
   function buildOwnershipPlayerSeries() {
@@ -9690,11 +9783,27 @@ python3 site/annotate_social.py</pre>
     return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
   }
 
-  function niceOwnershipMax(raw) {
-    const v = Math.max(10, Number(raw) || 10);
-    const padded = v * 1.08;
-    const step = padded <= 20 ? 5 : 10;
-    return Math.ceil(padded / step) * step;
+  function niceOwnershipStep(range) {
+    const span = Math.max(0, Number(range) || 0);
+    if (span <= 8) return 1;
+    if (span <= 16) return 2;
+    if (span <= 40) return 5;
+    return 10;
+  }
+
+  function niceOwnershipRange(rawMin, rawMax) {
+    const dataMax = Math.max(0, Number(rawMax) || 0);
+    const dataMin = Math.max(0, Number(rawMin) || 0);
+    const span = Math.max(dataMax - dataMin, 4);
+    const pad = Math.max(span * 0.06, 0.6);
+    let yMin = Math.max(0, dataMin - pad);
+    let yMax = Math.min(100, dataMax + pad);
+    if (yMax <= yMin) yMax = Math.min(100, yMin + span);
+    const step = niceOwnershipStep(yMax - yMin);
+    yMin = Math.floor(yMin / step) * step;
+    yMax = Math.ceil(yMax / step) * step;
+    if (yMax <= yMin) yMax = yMin + step;
+    return { yMin, yMax, step };
   }
 
   function hideOwnershipTooltip() {
@@ -9834,13 +9943,6 @@ python3 site/annotate_social.py</pre>
 
   function ownershipAccentForSeries(series) {
     if (!series) return "";
-    if (state.ownershipTrending && series._trendCard && series._trend) {
-      return (
-        ownershipTrendAccent(series._trend.kind) ||
-        TEAM_SCATTER_ACCENT[series.team] ||
-        ""
-      );
-    }
     return TEAM_SCATTER_ACCENT[series.team] || "";
   }
 
@@ -9858,9 +9960,40 @@ python3 site/annotate_social.py</pre>
     }
   }
 
+  function restoreOwnershipPin() {
+    if (!ownershipPinnedKey) {
+      setOwnershipHover(null, null);
+      hideOwnershipTooltip();
+      return;
+    }
+    const series = ownershipSeriesCache.find((s) => s.key === ownershipPinnedKey);
+    if (!series) {
+      ownershipPinnedKey = null;
+      setOwnershipHover(null, null);
+      hideOwnershipTooltip();
+      return;
+    }
+    hoverOwnershipSeries(ownershipPinnedKey);
+  }
+
+  function pinOwnershipSeries(key) {
+    if (!key || ownershipPinnedKey === key) {
+      ownershipPinnedKey = null;
+      setOwnershipHover(null, null);
+      hideOwnershipTooltip();
+      return false;
+    }
+    ownershipPinnedKey = key;
+    hoverOwnershipSeries(key);
+    return true;
+  }
+
   function setOwnershipHover(key, index) {
     ownershipHoverKey = key;
     ownershipHoverIndex = index;
+    if (el.ownershipChartWrap) {
+      el.ownershipChartWrap.classList.toggle("is-focused", !!key);
+    }
     if (!el.ownershipChart) return;
     const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
     const accent = ownershipAccentForSeries(series);
@@ -9965,8 +10098,18 @@ python3 site/annotate_social.py</pre>
   function onOwnershipPointerMove(evt) {
     const pt = ownershipPointerToSvg(evt);
     if (!pt) return;
-    const hit = hitTestOwnership(pt.x, pt.y);
+    const hit = ownershipPinnedKey
+      ? hitTestOwnershipAmong(
+          ownershipSeriesCache.filter((s) => s.key === ownershipPinnedKey),
+          pt.x,
+          pt.y
+        )
+      : hitTestOwnership(pt.x, pt.y);
     if (!hit) {
+      if (ownershipPinnedKey) {
+        hideOwnershipTooltip();
+        return;
+      }
       if (ownershipHoverKey) {
         setOwnershipHover(null, null);
         hideOwnershipTooltip();
@@ -9987,18 +10130,28 @@ python3 site/annotate_social.py</pre>
   }
 
   function onOwnershipPointerLeave() {
-    setOwnershipHover(null, null);
     hideOwnershipTooltip();
+    restoreOwnershipPin();
   }
 
   function onOwnershipClick(evt) {
-    if (hasFineHover()) return;
     const pt = ownershipPointerToSvg(evt);
     if (!pt) return;
     const hit = hitTestOwnership(pt.x, pt.y);
     if (!hit) {
-      setOwnershipHover(null, null);
+      if (ownershipPinnedKey) {
+        ownershipPinnedKey = null;
+        setOwnershipHover(null, null);
+      }
       hideOwnershipTooltip();
+      return;
+    }
+    if (hasFineHover()) {
+      const pinned = pinOwnershipSeries(hit.series.key);
+      if (pinned) {
+        setOwnershipHover(hit.series.key, hit.index);
+        showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
+      }
       return;
     }
     if (
@@ -10007,10 +10160,12 @@ python3 site/annotate_social.py</pre>
       ownershipHoverKey === hit.series.key &&
       ownershipHoverIndex === hit.index
     ) {
+      ownershipPinnedKey = null;
       hideOwnershipTooltip();
       setOwnershipHover(null, null);
       return;
     }
+    ownershipPinnedKey = hit.series.key;
     setOwnershipHover(hit.series.key, hit.index);
     showOwnershipTooltip(evt.clientX, evt.clientY, ownershipTooltipHTML(hit.series, hit.index));
   }
@@ -10055,9 +10210,10 @@ python3 site/annotate_social.py</pre>
       if (n <= 1) return pad.left + innerW / 2;
       return pad.left + (i / (n - 1)) * innerW;
     };
-    const yMax = ownershipScaleMax(series);
-    const yAt = (owned) => pad.top + (1 - owned / yMax) * innerH;
-    ownershipLayout = { w, h, pad, innerW, innerH, xAt, yAt, yMax, n };
+    const { yMin, yMax, step: tickStep } = ownershipScaleRange(series);
+    const ySpan = Math.max(yMax - yMin, 1e-6);
+    const yAt = (owned) => pad.top + (1 - (owned - yMin) / ySpan) * innerH;
+    ownershipLayout = { w, h, pad, innerW, innerH, xAt, yAt, yMin, yMax, n };
 
     if (!checkIns.length) {
       el.ownershipChart.innerHTML = `<div class="ownership-empty">No ownership check-ins yet. Run <code>python3 site/fetch_ownership.py</code> to capture the current FPL selected-by-%.</div>`;
@@ -10068,9 +10224,8 @@ python3 site/annotate_social.py</pre>
       return;
     }
 
-    const tickStep = yMax <= 20 ? 5 : 10;
     const yTicks = [];
-    for (let v = 0; v <= yMax + 1e-6; v += tickStep) yTicks.push(v);
+    for (let v = yMin; v <= yMax + 1e-6; v += tickStep) yTicks.push(v);
 
     series.forEach((s) => {
       s._drawn = ownershipPolylines(s.points, xAt, yAt);
@@ -10080,7 +10235,7 @@ python3 site/annotate_social.py</pre>
       .map((v) => {
         const y = yAt(v);
         return `<line class="ownership-grid-line" x1="${pad.left}" x2="${w - pad.right}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" />
-          <text class="ownership-axis-label is-y" x="${pad.left - 8}" y="${(y + 3).toFixed(1)}">${v}%</text>`;
+          <text class="ownership-axis-label is-y" x="${pad.left - 8}" y="${(y + 3).toFixed(1)}">${Number.isInteger(v) ? v : v.toFixed(1)}%</text>`;
       })
       .join("");
 
@@ -10135,10 +10290,19 @@ python3 site/annotate_social.py</pre>
       svg.addEventListener("click", onOwnershipClick);
     }
 
-    if (ownershipHoverKey) {
-      const still = series.find((s) => s.key === ownershipHoverKey);
+    if (ownershipPinnedKey && !series.some((s) => s.key === ownershipPinnedKey)) {
+      ownershipPinnedKey = null;
+    }
+    const focusKey = ownershipPinnedKey || ownershipHoverKey;
+    if (focusKey) {
+      const still = series.find((s) => s.key === focusKey);
       if (still) setOwnershipHover(still.key, ownershipHoverIndex);
-      else setOwnershipHover(null, null);
+      else {
+        ownershipPinnedKey = null;
+        setOwnershipHover(null, null);
+      }
+    } else if (el.ownershipChartWrap) {
+      el.ownershipChartWrap.classList.remove("is-focused");
     }
 
     if (typeof ResizeObserver !== "undefined" && wrap && !ownershipRo) {
@@ -10153,6 +10317,46 @@ python3 site/annotate_social.py</pre>
     }
 
     syncFiltersResetUI();
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function animateOwnershipLines() {
+    if (!el.ownershipChart || prefersReducedMotion()) return;
+    const paths = [...el.ownershipChart.querySelectorAll("path.ownership-line")];
+    paths.forEach((path, i) => {
+      let len = 0;
+      try {
+        len = path.getTotalLength();
+      } catch {
+        return;
+      }
+      if (!Number.isFinite(len) || len < 2) return;
+      path.style.strokeDasharray = `${len}`;
+      path.style.strokeDashoffset = `${len}`;
+      path.style.transition = "none";
+      void path.getBoundingClientRect();
+      const delay = Math.min(i, 28) * 0.012;
+      path.style.transition = `stroke-dashoffset 0.95s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) ${delay}s`;
+      path.style.strokeDashoffset = "0";
+      const clear = () => {
+        path.style.strokeDasharray = "";
+        path.style.strokeDashoffset = "";
+        path.style.transition = "";
+      };
+      path.addEventListener("transitionend", (evt) => {
+        if (evt.propertyName !== "stroke-dashoffset") return;
+        clear();
+      }, { once: true });
+      window.setTimeout(clear, 1400 + delay * 1000);
+    });
+  }
+
+  function startOwnershipEnterMotion(pane) {
+    animateOwnershipLines();
+    startStatCountUp(pane, ".ownership-trend-owned[data-count-to], .ownership-trend-delta[data-count-to]");
   }
 
 
@@ -10559,6 +10763,7 @@ python3 site/annotate_social.py</pre>
     const rankingsEnter = pane.id === "rankings-page";
     const expectedEnter = pane.id === "expected-page";
     const marketsEnter = pane.id === "markets-page";
+    const ownershipEnter = pane.id === "ownership-page";
     const optaEnter = pane.id === "opta-page";
 
     // Stamp stagger indices before the class is applied so delayed rows /
@@ -10636,7 +10841,8 @@ python3 site/annotate_social.py</pre>
         void pane.offsetWidth;
         pane.classList.remove("is-enter-pending");
         pane.classList.add("is-entering");
-        if (marketsEnter) startMarketsStatCountUp(pane);
+        if (marketsEnter) startStatCountUp(pane, ".markets-stat-value[data-count-to]");
+        if (ownershipEnter) startOwnershipEnterMotion(pane);
         if (rankingsEnter) animateRankingsBars();
         // Matchups cards cascade with scatter (no wait for scatter to finish).
         const clearMs = expectedEnter
@@ -10647,29 +10853,39 @@ python3 site/annotate_social.py</pre>
               ? 1800
               : marketsEnter
                 ? 3200
-                : optaEnter
-                  ? 1600
-                  : 1500;
+                : ownershipEnter
+                  ? 2400
+                  : optaEnter
+                    ? 1600
+                    : 1500;
         pane._enterClear = setTimeout(() => pane.classList.remove("is-entering"), clearMs);
       });
     });
   }
 
-  function startMarketsStatCountUp(pane) {
-    const nodes = [...pane.querySelectorAll(".markets-stat-value[data-count-to]")];
+  function startStatCountUp(pane, selector) {
+    const nodes = [...pane.querySelectorAll(selector)];
     if (!nodes.length) return;
     const duration = 2000;
     const easeOut = (t) => 1 - (1 - t) ** 3;
+    const fmt = (node, value) => {
+      const dec = node._countDecimals;
+      const suffix = node._countSuffix || "";
+      const signed = !!node._countSigned;
+      const sign = signed && value > 0 ? "+" : "";
+      return `${sign}${value.toFixed(dec)}${suffix}`;
+    };
     nodes.forEach((node) => {
       const target = Number(node.dataset.countTo);
       const decimals = Number(node.dataset.countDecimals);
       const suffix = node.dataset.countSuffix || "";
       if (!Number.isFinite(target)) return;
       const dec = Number.isFinite(decimals) ? decimals : 0;
-      node.textContent = `${(0).toFixed(dec)}${suffix}`;
       node._countTarget = target;
       node._countDecimals = dec;
       node._countSuffix = suffix;
+      node._countSigned = node.dataset.countSigned === "1";
+      node.textContent = fmt(node, 0);
     });
 
     const start = performance.now();
@@ -10679,15 +10895,14 @@ python3 site/annotate_social.py</pre>
       nodes.forEach((node) => {
         const target = node._countTarget;
         if (!Number.isFinite(target)) return;
-        const value = target * p;
-        node.textContent = `${value.toFixed(node._countDecimals)}${node._countSuffix || ""}`;
+        node.textContent = fmt(node, target * p);
       });
       if (t < 1) {
         pane._countUpRaf = requestAnimationFrame(tick);
       } else {
         nodes.forEach((node) => {
           if (!Number.isFinite(node._countTarget)) return;
-          node.textContent = `${Number(node._countTarget).toFixed(node._countDecimals)}${node._countSuffix || ""}`;
+          node.textContent = fmt(node, node._countTarget);
         });
         pane._countUpRaf = 0;
       }
@@ -10982,6 +11197,7 @@ python3 site/annotate_social.py</pre>
   if (el.ownershipTrendingToggle) {
     el.ownershipTrendingToggle.addEventListener("click", () => {
       state.ownershipTrending = !state.ownershipTrending;
+      if (!state.ownershipTrending) ownershipPinnedKey = null;
       syncOwnershipTrendingUI();
       if (state.page === "ownership") renderOwnership();
     });
@@ -11003,6 +11219,7 @@ python3 site/annotate_social.py</pre>
   if (el.ownershipTrendCards) {
     el.ownershipTrendCards.addEventListener("pointerover", (e) => {
       if (!hasFineHover()) return;
+      if (ownershipPinnedKey) return;
       const row = e.target.closest("[data-ownership-key]");
       if (!row || !el.ownershipTrendCards.contains(row)) return;
       if (e.relatedTarget && row.contains(e.relatedTarget)) return;
@@ -11014,18 +11231,33 @@ python3 site/annotate_social.py</pre>
     // would blink the chart while scrubbing between names.
     el.ownershipTrendCards.addEventListener("pointerleave", () => {
       if (!hasFineHover()) return;
+      if (ownershipPinnedKey) {
+        restoreOwnershipPin();
+        return;
+      }
       if (!ownershipHoverKey) return;
       setOwnershipHover(null, null);
       hideOwnershipTooltip();
     });
     el.ownershipTrendCards.addEventListener("click", (e) => {
+      const toggle = e.target.closest("[data-ownership-collapse]");
+      if (toggle && el.ownershipTrendCards.contains(toggle)) {
+        e.preventDefault();
+        const which = toggle.getAttribute("data-ownership-collapse");
+        if (which === "risers") state.ownershipRisersCollapsed = !state.ownershipRisersCollapsed;
+        else if (which === "fallers") state.ownershipFallersCollapsed = !state.ownershipFallersCollapsed;
+        else return;
+        syncOwnershipTrendCollapse();
+        return;
+      }
       const row = e.target.closest("[data-ownership-key]");
       if (!row) return;
       const key = row.getAttribute("data-ownership-key");
       const series = ownershipSeriesCache.find((s) => s.key === key);
       if (!series) return;
+      const pinned = pinOwnershipSeries(key);
+      if (!pinned) return;
       const lastIdx = ownershipLastOwnedIndex(series);
-      setOwnershipHover(key, lastIdx);
       if (hasFineHover()) {
         const wrap = el.ownershipChartWrap && el.ownershipChartWrap.getBoundingClientRect();
         if (wrap) {
@@ -12253,11 +12485,20 @@ python3 site/annotate_social.py</pre>
     updateMinsSlider();
   }
 
+  function syncSeasonSeg() {
+    if (!el.seasonSeg) return;
+    Array.from(el.seasonSeg.querySelectorAll("button[data-season]")).forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.season === state.season);
+    });
+    if (typeof syncSegThumb === "function") syncSegThumb(el.seasonSeg, { animate: false });
+  }
+
   function syncSeasonChrome() {
     const next = isNextSeason();
     if (el.seasonSelect && el.seasonSelect.value !== state.season) {
       el.seasonSelect.value = state.season;
     }
+    syncSeasonSeg();
     el.newpriceWrap.style.display = state.view === "players" && !next ? "" : "none";
     el.inactiveFilterGroup.style.display =
       state.view === "players" && HAS_PRICE_DATA && !next ? "" : "none";
@@ -12303,6 +12544,14 @@ python3 site/annotate_social.py</pre>
   if (el.seasonSelect) {
     el.seasonSelect.addEventListener("change", () => {
       setSeason(el.seasonSelect.value);
+    });
+  }
+  if (el.seasonSeg) {
+    el.seasonSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-season]");
+      if (!btn || !el.seasonSeg.contains(btn)) return;
+      setSeason(btn.dataset.season);
+      btn.blur();
     });
   }
 
@@ -12789,6 +13038,13 @@ python3 site/annotate_social.py</pre>
     if (state.page === "notes" && NARROW_MQ.matches) setPage("opta");
     if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
     if (state.page === "team") renderTeam();
+    if (state.page === "opta") {
+      syncCoreUnderName();
+      requestAnimationFrame(() => {
+        snapOptaToGameStats();
+        requestAnimationFrame(snapOptaToGameStats);
+      });
+    }
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
   syncColumnsPanelHost();

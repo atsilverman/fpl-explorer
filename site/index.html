@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=445" />
+<link rel="stylesheet" href="styles.css?v=455" />
 <script>
 (() => {
   try {
@@ -248,12 +248,16 @@
     </select>
   </div>
 
-  <button type="button" class="page-tray-btn" id="page-tray-btn"
-    aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Statistics">
-    <svg class="icon" aria-hidden="true"><use id="page-tray-icon-use" href="#i-table"/></svg>
-    <span id="page-tray-label">Statistics</span>
-    <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-  </button>
+  <div class="page-nav-center">
+    <button type="button" class="page-tray-btn" id="page-tray-btn"
+      aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Statistics">
+      <svg class="icon" aria-hidden="true"><use id="page-tray-icon-use" href="#i-table"/></svg>
+      <span class="page-tray-current">
+        <span id="page-tray-label">Statistics</span>
+        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </span>
+    </button>
+  </div>
 
   <div class="page-tabs-clip" id="page-tabs-clip">
   <nav class="page-tabs" id="page-tabs" aria-label="Pages">
@@ -307,6 +311,10 @@
   </div>
 
   <div class="page-nav-actions">
+    <button class="page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
+      aria-label="How Statistics works" aria-describedby="page-info-tooltip" aria-expanded="false">
+      <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+    </button>
     <button id="theme-cycle-btn" class="icon-btn icon-only-btn" type="button"
       title="Theme: Device" aria-label="Theme: Device">
       <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
@@ -335,6 +343,16 @@
             <div class="prefs-field">
               <span class="prefs-field-label" id="accent-swatch-label">Accent</span>
               <div class="prefs-accent-swatches" id="accent-swatches" role="radiogroup" aria-labelledby="accent-swatch-label"></div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-label">Season</div>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="season-seg-label">Data season</span>
+              <div class="segmented segmented-block" id="season-seg" role="group" aria-labelledby="season-seg-label">
+                <button type="button" data-season="2025-26" class="active">2025/26</button>
+                <button type="button" data-season="2026-27">2026/27</button>
+              </div>
             </div>
           </section>
           <section class="settings-section">
@@ -739,17 +757,21 @@
       </div>
       <div id="ownership-trend-cards" class="ownership-trend-cards">
         <div class="ownership-trend-col is-risers">
-          <h3 class="ownership-trend-heading">
+          <button type="button" class="ownership-trend-heading" data-ownership-collapse="risers"
+            aria-expanded="true" aria-controls="ownership-trend-risers">
             <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
             Risers
-          </h3>
+            <svg class="icon ownership-trend-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
           <div class="ownership-trend-list" id="ownership-trend-risers"></div>
         </div>
         <div class="ownership-trend-col is-fallers">
-          <h3 class="ownership-trend-heading">
+          <button type="button" class="ownership-trend-heading" data-ownership-collapse="fallers"
+            aria-expanded="true" aria-controls="ownership-trend-fallers">
             <svg class="icon" aria-hidden="true"><use href="#i-trending-down"/></svg>
             Fallers
-          </h3>
+            <svg class="icon ownership-trend-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
           <div class="ownership-trend-list" id="ownership-trend-fallers"></div>
         </div>
       </div>
@@ -1122,7 +1144,7 @@
 <script src="social_data.js?v=14"></script>
 <script src="markets_data.js?v=6"></script>
 <script src="ownership_data.js?v=3"></script>
-<script src="app.js?v=441"></script>
+<script src="app.js?v=449"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

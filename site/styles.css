@@ -284,6 +284,11 @@ a { color: var(--blue); }
   box-shadow: var(--shadow-sm);
 }
 
+.page-nav-center,
+.page-info-nav-btn {
+  display: none;
+}
+
 .page-tray-btn {
   display: none;
   appearance: none;
@@ -307,6 +312,12 @@ a { color: var(--blue); }
 .page-tray-btn .icon {
   font-size: 15px;
   flex: none;
+}
+.page-tray-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
 }
 .page-tray-btn .page-tab-caret {
   margin-left: auto;
@@ -1781,6 +1792,8 @@ a { color: var(--blue); }
   .brand {
     order: 1;
     flex: none;
+    position: relative;
+    z-index: 5;
   }
   .brand h1 {
     font-size: 15px;
@@ -1789,50 +1802,82 @@ a { color: var(--blue); }
   .page-nav-actions {
     order: 4;
     flex: none;
-    margin-left: 0;
+    margin-left: auto;
     padding-left: 0;
     box-shadow: none;
+    z-index: 5;
   }
   .season-select {
-    order: 3;
-    margin-left: auto;
+    display: none;
+  }
+  .page-nav-center {
+    display: inline-flex;
+    align-items: center;
+    order: 2;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    max-width: min(52vw, 220px);
+  }
+  .page-info-btn.page-info-nav-btn {
+    display: inline-flex;
+    width: 32px;
     height: 32px;
-    font-size: 12px;
-    width: calc(7.5ch + 38px);
-    min-width: 7.25rem;
+    margin: 0;
+    color: var(--text-faint);
+  }
+  .page-info-btn.page-info-nav-btn .icon {
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+  }
+  .page-info-btn.page-info-nav-btn:hover,
+  .page-info-btn.page-info-nav-btn:focus-visible {
+    color: var(--text-dim);
+    background: hsl(var(--muted-foreground) / 0.08);
+  }
+  .page-header .page-info-btn {
+    display: none;
   }
   .page-tray-btn {
     display: inline-flex;
-    order: 2;
+    position: static;
+    left: auto;
+    transform: none;
+    justify-content: center;
     height: 32px;
-    max-width: min(34vw, 148px);
-    padding: 0 2px 0 0;
+    max-width: min(52vw, 220px);
+    padding: 0 4px;
     border: none;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
     font-size: 14px;
     font-weight: 600;
+    color: hsl(var(--blue-hsl) / 0.9);
+    gap: 5px;
   }
   .page-tray-btn::before {
-    content: "";
-    width: 1px;
-    height: 14px;
-    margin: 0 8px 0 6px;
-    background: var(--border);
-    flex: none;
-    align-self: center;
-  }
-  .page-tray-btn > .icon:not(.page-tab-caret) {
+    content: none;
     display: none;
   }
+  .page-tray-btn > .icon:not(.page-tab-caret) {
+    display: block;
+    width: 15px;
+    height: 15px;
+    font-size: 15px;
+    color: inherit;
+  }
   .page-tray-btn .page-tab-caret {
-    margin-left: 2px;
-    opacity: 0.55;
+    margin-left: 0;
+    opacity: 1;
+    color: inherit;
   }
   .page-tray-btn:hover,
   .page-tray-btn:active {
     background: transparent;
+    color: hsl(var(--blue-hsl));
   }
   #page-notes {
     display: none !important;
@@ -1878,10 +1923,6 @@ a { color: var(--blue); }
   html[data-page="team"] #subtoolbar #search-wrap {
     flex: none;
     flex-wrap: nowrap;
-  }
-
-  .expected-header-top {
-    flex-wrap: wrap;
   }
 
   .btn-label {
@@ -1948,35 +1989,36 @@ a { color: var(--blue); }
     font-size: 13px;
   }
 
-  .page-header {
-    flex-wrap: wrap;
-    gap: 10px 12px;
+  .page-header h2,
+  .page-subtitle,
+  .expected-header-top,
+  .schedule-header-text,
+  .markets-header-text,
+  .notes-header > div:first-child {
+    display: none;
   }
-  .page-header > div:first-child {
-    flex: 1 1 100%;
-    min-width: 0;
-    max-width: 100%;
+  #opta-page .page-header,
+  #rankings-page .page-header,
+  #ownership-page .page-header,
+  #team-page .page-header,
+  #feed-page .page-header {
+    display: none;
   }
-  /* Column headers (Statistics / Ownership): don't let flex-basis 100%
-     steal the pane height — that overlaps the subtitle onto the title
-     and shoves the table below the fold. */
-  .opta-header,
-  .ownership-header {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    gap: 6px;
+  #expected-page .page-header,
+  #schedule-page .page-header,
+  #markets-page .page-header,
+  #notes-page .page-header {
+    margin-bottom: 10px;
   }
-  .opta-header > .opta-header-top {
-    flex: none;
-    width: 100%;
-    max-width: 100%;
+  #expected-page .expected-legend-inline {
+    margin-top: 0;
   }
-  .opta-header-text .page-subtitle {
-    display: block;
-    width: 100%;
-    max-width: none;
-    margin: 0;
+  #schedule-page .schedule-header-top,
+  #markets-page .markets-header-top {
+    justify-content: flex-end;
+  }
+  #notes-page .notes-header-actions {
+    margin-left: auto;
   }
   .page-header-meta {
     margin-left: auto;
@@ -2417,9 +2459,9 @@ a { color: var(--blue); }
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    --name-col-w: 136px;
-    --crest-size: 22px;
-    --badge-size: 22px;
+    --name-col-w: 118px;
+    --crest-size: 18px;
+    --badge-size: 18px;
     --table-sec-h: 16px;
   }
   .table-wrap > table {
@@ -2456,13 +2498,20 @@ a { color: var(--blue); }
   .table-wrap > table > tbody td.col-name,
   .table-wrap > table > tbody td.col-team,
   .table-wrap > table > tbody td.col-player {
-    padding-left: 10px;
+    padding-left: 8px;
   }
+  .table-wrap .player-cell .player-name,
   .table-wrap .player-name {
-    font-size: 11.5px;
+    font-size: 11px;
   }
   .table-wrap .player-cell {
-    --crest-gap: 8px;
+    --crest-gap: 6px;
+  }
+  /* Keep Core metric widths (44px) so £m / TSB% / Apps / Mins / GP stay
+     readable. Snap is measured in JS from those real widths, not by
+     compressing them under the name column. */
+  .table-wrap.is-core-under td.col-core .price-arrow-delta {
+    display: none;
   }
   .table-wrap .player-cell-sub,
   .table-wrap .player-cell-sub .team-tag {
@@ -2766,6 +2815,12 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 .player-cell:not(:has(.player-cell-crest)) {
   grid-template-columns: minmax(0, 1fr);
+}
+.player-cell:not(:has(.player-cell-sub)) {
+  grid-template-rows: auto;
+}
+.player-cell:not(:has(.player-cell-sub)) > .player-cell-crest {
+  grid-row: 1;
 }
 .player-cell-crest {
   --crest-box: var(--crest-size, var(--badge-size));
@@ -3413,15 +3468,32 @@ html[data-page="ownership"] .layout .main {
   min-width: 0;
 }
 .ownership-trend-heading {
+  -webkit-appearance: none;
+  appearance: none;
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   margin: 0 0 8px;
+  padding: 6px 2px 6px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-dim);
+  text-align: left;
+  cursor: pointer;
+}
+.ownership-trend-heading:focus {
+  outline: none;
+}
+.ownership-trend-heading:focus-visible {
+  outline: 2px solid hsl(var(--blue-hsl) / 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .ownership-trend-col.is-risers .ownership-trend-heading {
   color: hsl(var(--positive));
@@ -3433,6 +3505,21 @@ html[data-page="ownership"] .layout .main {
   width: 14px;
   height: 14px;
 }
+.ownership-trend-heading .ownership-trend-caret {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  opacity: 0.42;
+  color: currentColor;
+  flex-shrink: 0;
+  transition: transform 0.22s var(--ease-out);
+}
+.ownership-trend-col.is-collapsed .ownership-trend-caret {
+  transform: rotate(-90deg);
+}
+.ownership-trend-col.is-collapsed .ownership-trend-heading {
+  margin-bottom: 0;
+}
 .ownership-trend-list {
   display: flex;
   flex-direction: column;
@@ -3440,6 +3527,20 @@ html[data-page="ownership"] .layout .main {
   gap: 0;
   max-height: 168px;
   overflow: auto;
+  transition: max-height 0.28s ease, opacity 0.2s ease, margin 0.22s ease;
+}
+.ownership-trend-col.is-collapsed .ownership-trend-list {
+  max-height: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ownership-trend-caret,
+  .ownership-trend-list {
+    transition: none;
+  }
 }
 .ownership-trend-row {
   display: grid;
@@ -3569,6 +3670,16 @@ html[data-page="ownership"] .layout .main {
 }
 .ownership-line.is-dim {
   opacity: 0.1;
+}
+.ownership-chart-wrap.is-trending.is-focused .ownership-line.is-riser:not(.is-active),
+.ownership-chart-wrap.is-trending.is-focused .ownership-line.is-faller:not(.is-active),
+.ownership-chart-wrap.is-trending .ownership-line.is-dim {
+  stroke: var(--text-faint);
+  opacity: 0.1;
+}
+.ownership-chart-wrap.is-trending .ownership-line.is-active {
+  stroke: var(--ownership-accent, hsl(var(--blue-hsl)));
+  opacity: 1;
 }
 .ownership-hover-guide {
   stroke: var(--text-faint);
@@ -4144,7 +4255,7 @@ html[data-page="ownership"] .layout .main {
     padding: 0 6px;
   }
 
-  .rankings-value {
+  .rankings-name {
     font-size: 11px;
   }
 
@@ -4783,7 +4894,7 @@ html[data-page="ownership"] .layout .main {
   }
   .barbell-group-identity .player-name,
   .barbell-label .player-name {
-    font-size: 12px;
+    font-size: 11px;
   }
   .barbell-value {
     font-size: 10.5px;
@@ -7316,6 +7427,9 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   .feed-player-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .feed-player-name {
+    font-size: 14px;
+  }
 }
 
 .feed-player-card {
@@ -9505,7 +9619,7 @@ html[data-page="team"] .layout .main {
     --crest-size: 22px;
   }
   #team-page .player-cell .player-name {
-    font-size: 12px;
+    font-size: 11px;
   }
   #team-picker-view,
   .team-picker-table-wrap {
