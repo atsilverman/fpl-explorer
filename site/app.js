@@ -1983,10 +1983,19 @@
     const sources = [];
     const main = document.querySelector("main.main");
     if (main) sources.push(main);
-    if (state.page === "opta" && NARROW_MQ.matches) {
-      optaTableWraps().forEach((wrap) => {
-        if (wrap && !sources.includes(wrap)) sources.push(wrap);
-      });
+    if (NARROW_MQ.matches) {
+      if (state.page === "opta") {
+        optaTableWraps().forEach((wrap) => {
+          if (wrap && !sources.includes(wrap)) sources.push(wrap);
+        });
+      } else if (state.page === "team") {
+        teamTableScrollWraps().forEach((wrap) => {
+          if (wrap && !sources.includes(wrap)) sources.push(wrap);
+        });
+      } else if (state.page === "expected") {
+        const barbell = expectedScrollWrap();
+        if (barbell && !sources.includes(barbell)) sources.push(barbell);
+      }
     }
     return sources;
   }
@@ -2221,7 +2230,7 @@
     return (
       !!state.teamPickerSlot &&
       state.teamCompareMode &&
-      state.teamCompareCodes.length >= 2
+      state.teamCompareCodes.length >= 1
     );
   }
 
@@ -2279,15 +2288,31 @@
 
   function nameSimplifyWraps() {
     const wraps = [];
-    const main = el.tableBody && el.tableBody.closest(".table-wrap");
-    if (main) wraps.push(main);
-    const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
-    if (compare) wraps.push(compare);
+    if (state.page === "opta") {
+      const main = el.tableBody && el.tableBody.closest(".table-wrap");
+      if (main) wraps.push(main);
+      const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
+      if (compare) wraps.push(compare);
+    }
+    if (state.page === "team" && state.teamPickerSlot) {
+      const picker =
+        el.teamPickerView && el.teamPickerView.querySelector(".team-picker-table-wrap");
+      if (picker) wraps.push(picker);
+      const teamCompare =
+        el.teamCompareWrap &&
+        !el.teamCompareWrap.hidden &&
+        el.teamCompareWrap.querySelector(".team-table-wrap");
+      if (teamCompare) wraps.push(teamCompare);
+    }
     return wraps;
   }
 
   function nameSimplifyActive() {
-    return state.page === "opta" && (NARROW_MQ.matches || !hasFineHover());
+    if (NARROW_MQ.matches || !hasFineHover()) {
+      if (state.page === "opta") return true;
+      if (state.page === "team" && state.teamPickerSlot) return true;
+    }
+    return false;
   }
 
   function nameSimplifyProgress(scrollLeft, origin = 0) {
@@ -2316,7 +2341,8 @@
       const headRow = wrap.querySelector("thead tr:not(.section-row)");
       const pin = headRow && headRow.querySelector("th.col-player, th.col-name");
       const firstStat =
-        headRow && headRow.querySelector("th.col-num:not(.col-core), th.col-check:not(.col-core)");
+        headRow &&
+        headRow.querySelector("th.col-num:not(.col-core), th.col-check:not(.col-core)");
       if (!pin || !firstStat) return 0;
       const delta = firstStat.getBoundingClientRect().left - pin.getBoundingClientRect().right;
       return Math.max(0, Math.round(wrap.scrollLeft + delta));
@@ -2358,7 +2384,7 @@
     }
     const t = nameSimplifyProgress(wrap.scrollLeft, nameSimplifyOrigin(wrap));
     wrap.classList.add("name-simplify-ready");
-    wrap.dataset.view = state.view;
+    wrap.dataset.view = state.page === "team" ? "players" : state.view;
     wrap.style.setProperty("--name-collapse", String(t));
     wrap.classList.toggle("is-name-simplifying", t > 0.02);
   }
@@ -2965,8 +2991,54 @@
     return wraps;
   }
 
+  function teamTableScrollWraps() {
+    const wraps = [];
+    if (state.teamPickerSlot) {
+      const picker =
+        el.teamPickerView && el.teamPickerView.querySelector(".team-picker-table-wrap");
+      if (picker) wraps.push(picker);
+      const compare =
+        el.teamCompareWrap &&
+        !el.teamCompareWrap.hidden &&
+        el.teamCompareWrap.querySelector(".team-table-wrap");
+      if (compare) wraps.push(compare);
+    } else {
+      const squad =
+        el.teamSquadView && el.teamSquadView.querySelector(":scope > .team-table-wrap");
+      if (squad) wraps.push(squad);
+      const search =
+        el.teamSearchResults &&
+        !el.teamSearchResults.hidden &&
+        el.teamSearchResults.querySelector(".team-table-wrap");
+      if (search) wraps.push(search);
+    }
+    return wraps;
+  }
+
+  function expectedScrollWrap() {
+    return el.barbellWrap && el.barbellWrap.querySelector(".barbell-scroll");
+  }
+
   function visibleCoreCount() {
     return visibleColumns().filter((c) => CORE_COL_KEYS.has(c.key)).length;
+  }
+
+  function syncTeamPickerCoreUnder() {
+    const under = state.page === "team" && !!state.teamPickerSlot && NARROW_MQ.matches;
+    const picker =
+      el.teamPickerView && el.teamPickerView.querySelector(".team-picker-table-wrap");
+    if (picker) {
+      picker.classList.toggle("is-core-under", under);
+      invalidateNameSimplifyOrigin(picker);
+    }
+    const teamCompare =
+      el.teamCompareWrap &&
+      !el.teamCompareWrap.hidden &&
+      el.teamCompareWrap.querySelector(".team-table-wrap");
+    if (teamCompare) {
+      teamCompare.classList.toggle("is-core-under", under);
+      invalidateNameSimplifyOrigin(teamCompare);
+    }
   }
 
   function syncCoreUnderName() {
@@ -4595,12 +4667,24 @@
     return maps;
   }
 
+  function syncComparePanelRows(wrap, body, rowSelector = "tbody tr") {
+    if (!wrap) return;
+    if (!body) {
+      wrap.style.removeProperty("--compare-rows");
+      return;
+    }
+    const count = body.querySelectorAll(rowSelector).length;
+    if (count > 0) wrap.style.setProperty("--compare-rows", String(count));
+    else wrap.style.removeProperty("--compare-rows");
+  }
+
   function renderCompareTable() {
     const set = compareSet();
     const compareOn = comparePanelVisible();
     if (el.optaPage) el.optaPage.classList.toggle("has-compare", compareOn);
     if (!compareOn) {
       el.compareWrap.style.display = "none";
+      syncComparePanelRows(el.compareWrap, null);
       return;
     }
     el.compareWrap.style.display = "";
@@ -4660,6 +4744,7 @@
       });
       el.compareBody.appendChild(tr);
     });
+    syncComparePanelRows(el.compareWrap, el.compareBody);
     bindCompareScrollSync();
   }
 
@@ -5261,6 +5346,7 @@
         <p>No expected data for 2026/27.</p>
         <p class="expected-empty-hint">xG, xA, and other expected stats aren’t published for the new season yet. Switch the data season to <strong>2025/26</strong> to browse last year’s expected vs actual.</p>`;
       el.barbellBody.appendChild(empty);
+      if (NARROW_MQ.matches) bindMobileChromeScrollHide();
       return;
     }
 
@@ -5288,6 +5374,7 @@
       empty.className = "empty-state";
       empty.textContent = "No rows match the current filters.";
       el.barbellBody.appendChild(empty);
+      if (NARROW_MQ.matches) bindMobileChromeScrollHide();
       return;
     }
 
@@ -5307,6 +5394,7 @@
         );
       });
     }
+    if (NARROW_MQ.matches) bindMobileChromeScrollHide();
   }
 
   // ---------------------------------------------------------------------
@@ -6274,6 +6362,7 @@
     if (!state.teamPickerSlot || !teamComparePanelVisible()) {
       el.teamCompareWrap.hidden = true;
       if (el.teamCompareBody) el.teamCompareBody.innerHTML = "";
+      syncComparePanelRows(el.teamCompareWrap, null);
       return;
     }
     const rows = state.teamCompareCodes.map((code) => teamPlayerByCode(code)).filter(Boolean);
@@ -6303,6 +6392,7 @@
         })
         .join("");
     }
+    syncComparePanelRows(el.teamCompareWrap, el.teamCompareBody);
     bindCompareScrollSync();
   }
 
@@ -6779,6 +6869,14 @@
     }
   }
 
+  function syncTeamPickingClass() {
+    const picking = state.page === "team" && !!state.teamPickerSlot;
+    document.documentElement.classList.toggle("is-team-picking", picking);
+    if (el.subtoolbar && state.page === "team") {
+      el.subtoolbar.classList.toggle("is-team-picking", picking && preferMobileSheet());
+    }
+  }
+
   function syncTeamCompareHost() {
     if (!el.teamCompareBtn || !el.teamToolbarControls) return;
     const mobile = preferMobileSheet();
@@ -6791,21 +6889,113 @@
       return;
     }
     if (mobile && el.statsToolbarActions) {
-      const anchor =
-        el.searchWrap && el.searchWrap.parentElement === el.statsToolbarActions
-          ? el.searchWrap
-          : el.teamPickerCancel && el.teamPickerCancel.parentElement === el.statsToolbarActions
-            ? el.teamPickerCancel.nextElementSibling
-            : null;
       if (el.teamCompareBtn.parentElement !== el.statsToolbarActions) {
-        if (anchor) el.statsToolbarActions.insertBefore(el.teamCompareBtn, anchor);
-        else el.statsToolbarActions.appendChild(el.teamCompareBtn);
-      } else if (anchor && el.teamCompareBtn.nextElementSibling !== anchor) {
-        el.statsToolbarActions.insertBefore(el.teamCompareBtn, anchor);
+        el.statsToolbarActions.appendChild(el.teamCompareBtn);
       }
     } else if (el.teamCompareBtn.parentElement !== el.teamToolbarControls) {
       el.teamToolbarControls.insertBefore(el.teamCompareBtn, el.teamToolbarControls.firstChild);
     }
+  }
+
+  function syncTeamPickerToolbarOrder() {
+    if (!preferMobileSheet() || state.page !== "team" || !state.teamPickerSlot || !el.statsToolbarActions) {
+      return;
+    }
+    const bar = el.statsToolbarActions;
+    if (el.teamPickerCancel && el.teamPickerCancel.parentElement === bar) {
+      bar.insertBefore(el.teamPickerCancel, bar.firstChild);
+    }
+    if (el.teamCompareBtn && el.teamCompareBtn.parentElement === bar) {
+      const beforeSearch =
+        el.searchWrap && el.searchWrap.parentElement === bar ? el.searchWrap : null;
+      if (el.teamCompareBtn !== beforeSearch) {
+        bar.insertBefore(el.teamCompareBtn, beforeSearch);
+      }
+    }
+    if (el.searchWrap && el.searchWrap.parentElement === bar) {
+      bar.appendChild(el.searchWrap);
+    }
+  }
+
+  let teamPickerPickGuard = 0;
+
+  function commitTeamPickerSelection(code, event) {
+    if (!state.teamPickerSlot) return false;
+    if (event) {
+      if (event.target.closest("th[data-team-sort], td.col-team-spark, th.col-team-spark")) {
+        return false;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const now = Date.now();
+    if (now - teamPickerPickGuard < 450) return false;
+    if (state.teamCompareMode) {
+      toggleTeamCompareCode(code);
+      renderTeam();
+      teamPickerPickGuard = now;
+      return true;
+    }
+    const row = teamPlayerByCode(code);
+    const slot = state.teamPickerSlot;
+    if (!row || !slot) return false;
+    if (!addTeamPlayer(row, { starter: slot.starter, replaceCode: slot.replaceCode })) {
+      return false;
+    }
+    teamPickerPickGuard = now;
+    closeTeamPicker();
+    return true;
+  }
+
+  function bindTeamPickerSelection() {
+    if (!el.teamPickerView || el.teamPickerView.dataset.pickBound === "1") return;
+    el.teamPickerView.dataset.pickBound = "1";
+    let tap = null;
+
+    el.teamPickerView.addEventListener(
+      "click",
+      (e) => {
+        if (!state.teamPickerSlot) return;
+        const pickRow = e.target.closest("tr.team-picker-row[data-team-pick]");
+        if (!pickRow || !el.teamPickerView.contains(pickRow)) return;
+        commitTeamPickerSelection(pickRow.dataset.teamPick, e);
+      },
+      true
+    );
+
+    el.teamPickerView.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (!state.teamPickerSlot) return;
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        const pickRow = e.target.closest("tr.team-picker-row[data-team-pick]");
+        if (!pickRow || !el.teamPickerView.contains(pickRow)) {
+          tap = null;
+          return;
+        }
+        tap = { x: e.clientX, y: e.clientY, code: pickRow.dataset.teamPick, id: e.pointerId };
+      },
+      { passive: true, capture: true }
+    );
+
+    el.teamPickerView.addEventListener(
+      "pointerup",
+      (e) => {
+        if (!tap || e.pointerId !== tap.id) return;
+        const pickRow = e.target.closest("tr.team-picker-row[data-team-pick]");
+        if (!pickRow || pickRow.dataset.teamPick !== tap.code) {
+          tap = null;
+          return;
+        }
+        const dx = Math.abs(e.clientX - tap.x);
+        const dy = Math.abs(e.clientY - tap.y);
+        tap = null;
+        if (dx > 14 || dy > 14) return;
+        if (!(preferMobileSheet() || !hasFineHover())) return;
+        commitTeamPickerSelection(pickRow.dataset.teamPick, e);
+      },
+      true
+    );
   }
 
   function syncTeamPickerCancelHost() {
@@ -6818,7 +7008,13 @@
       if (el.teamPickerCancel.parentElement !== el.statsToolbarActions) {
         el.statsToolbarActions.insertBefore(el.teamPickerCancel, el.statsToolbarActions.firstChild);
       }
-    } else if (mobile && subEnd && el.searchWrap) {
+    } else if (
+      mobile &&
+      picking &&
+      subEnd &&
+      el.searchWrap &&
+      el.searchWrap.parentElement === subEnd
+    ) {
       if (el.teamPickerCancel.parentElement !== subEnd) {
         subEnd.insertBefore(el.teamPickerCancel, el.searchWrap);
       }
@@ -6827,10 +7023,25 @@
     }
   }
 
+  function syncTeamCompareWrapHost() {
+    if (!el.teamCompareWrap || !el.teamPage) return;
+    const picking = !!state.teamPickerSlot;
+    const squadHome = el.teamSubBar || el.teamSquadView;
+    if (picking && el.teamPickerView) {
+      if (el.teamCompareWrap.parentElement !== el.teamPickerView) {
+        el.teamPickerView.insertBefore(el.teamCompareWrap, el.teamPickerView.firstChild);
+      }
+    } else if (squadHome && el.teamCompareWrap.parentElement !== el.teamPage) {
+      el.teamPage.insertBefore(el.teamCompareWrap, squadHome);
+    }
+  }
+
   function syncTeamPickerChrome() {
     const picking = state.page === "team" && !!state.teamPickerSlot;
-    document.documentElement.classList.toggle("is-team-picking", picking);
+    syncTeamPickingClass();
+    syncTeamSearchHost();
     syncTeamPickerCancelHost();
+    syncTeamCompareWrapHost();
     if (el.teamPage) el.teamPage.classList.toggle("is-picking", picking);
     if (el.teamPickerCancel) el.teamPickerCancel.hidden = !picking;
     if (el.teamPickerHeaderActions) {
@@ -6839,8 +7050,8 @@
     if (el.teamBudgetBar) el.teamBudgetBar.hidden = picking;
     if (el.teamSquadView) el.teamSquadView.hidden = picking;
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
-    syncTeamSearchHost();
     syncTeamCompareHost();
+    syncTeamPickerToolbarOrder();
     const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "feed" || (state.page === "team" && !picking);
     if (el.sidebar) el.sidebar.style.display = hideSidebar ? "none" : "";
     if (el.sidebarToggle) {
@@ -6849,7 +7060,6 @@
     if (el.subtoolbar && state.page === "team") {
       el.subtoolbar.style.display = "";
       el.subtoolbar.classList.remove("is-markets-mobile");
-      el.subtoolbar.classList.toggle("is-team-picking", picking && preferMobileSheet());
     }
     if (state.page === "team" && el.ownedFilterGroup) {
       el.ownedFilterGroup.style.display = picking ? "none" : "";
@@ -7733,7 +7943,7 @@
     const heatHead = teamHeatHeadHTML();
     if (el.teamPickerHead) {
       el.teamPickerHead.innerHTML = teamHeadRowsHTML(
-        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num team-price sec-divider")}${teamSortTh("owned", "TSB%", "col-num col-team-owned", "FPL selected-by-% (TSB)")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
+        `${teamSortTh("player", "Player", "col-player")}${teamSortTh("price", "£m", "col-num col-core team-price sec-divider")}${teamSortTh("owned", "TSB%", "col-num col-core col-team-owned", "FPL selected-by-% (TSB)")}${teamMetricHeadHTML({ setPieces: true, price: true })}${heatHead}`,
         { price: true, ownership: true, setPieces: true }
       );
     }
@@ -7757,8 +7967,8 @@
         const identity = playerIdentityHTML(crest, nameHTML, sub);
         return `<tr class="team-picker-row${selectableCls}${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
           <td class="col-player">${identity}</td>
-          <td class="col-num team-price sec-divider">${Number(row.price).toFixed(1)}</td>
-          <td class="col-num col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
+          <td class="col-num col-core team-price sec-divider">${Number(row.price).toFixed(1)}</td>
+          <td class="col-num col-core col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
           ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
           ${heat}
         </tr>`;
@@ -7802,6 +8012,10 @@
     }
     upgradeNativeTitles(el.teamPage);
     paintTeamCompareWinners();
+    bindAllNameColumnSimplifies();
+    syncTeamPickerCoreUnder();
+    requestAnimationFrame(() => refreshNameSimplifyOrigins());
+    if (NARROW_MQ.matches) bindMobileChromeScrollHide();
   }
 
   function applyTeamPageBounds() {
@@ -7828,6 +8042,8 @@
 
   function handleTeamUiClick(e) {
     if (e.target.closest("#team-picker-cancel")) {
+      e.preventDefault();
+      e.stopPropagation();
       closeTeamPicker();
       return;
     }
@@ -7845,6 +8061,8 @@
       return;
     }
     if (e.target.closest("#team-compare-btn")) {
+      e.preventDefault();
+      e.stopPropagation();
       if (!state.teamPickerSlot) return;
       if (!teamIsEditable()) {
         showToast({ title: "Actual is read-only", message: "Switch to Planner to compare and edit.", icon: "info" });
@@ -7925,8 +8143,8 @@
     }
     const pick = e.target.closest("[data-team-pick]");
     if (pick) {
-      if (state.teamCompareMode && state.teamPickerSlot) return;
       if (e.target.closest("#team-compare-wrap")) return;
+      if (pick.closest("#team-picker-view")) return;
       const row = teamPlayerByCode(Number(pick.dataset.teamPick) || pick.dataset.teamPick);
       const slot = state.teamPickerSlot;
       if (row && slot && addTeamPlayer(row, { starter: slot.starter, replaceCode: slot.replaceCode })) {
@@ -7987,18 +8205,14 @@
   }
   if (el.teamCompareBtn) {
     el.teamCompareBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       handleTeamUiClick(e);
-    });
-  }
-  if (el.statsToolbarActions) {
-    el.statsToolbarActions.addEventListener("click", (e) => {
-      if (state.page !== "team") return;
-      if (e.target.closest("#team-compare-btn")) handleTeamUiClick(e);
     });
   }
   if (el.teamPickerCancel) {
     el.teamPickerCancel.addEventListener("click", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       closeTeamPicker();
     });
   }
@@ -8131,6 +8345,7 @@
 
   loadTeamDraft();
   syncTeamPlannerPrefsBtns();
+  bindTeamPickerSelection();
 
   // ---------------------------------------------------------------------
   // Feed page — player-mention cards from annotated social_data.js
@@ -11291,7 +11506,6 @@ python3 site/annotate_social.py</pre>
     }
     if (page === "feed") syncFeedSearchLayout();
     if (page !== "team" && el.subtoolbar) el.subtoolbar.classList.remove("is-team-picking");
-    document.documentElement.classList.toggle("is-team-picking", page === "team" && !!state.teamPickerSlot);
     syncTeamSearchHost();
     syncTeamCompareHost();
     syncSearchClearBtns();
@@ -11436,6 +11650,7 @@ python3 site/annotate_social.py</pre>
     } else if (page === "team") {
       renderTeam();
     }
+    syncTeamPickingClass();
     // Enter after content is in the DOM so the animation covers real layout.
     playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => {
@@ -12368,7 +12583,13 @@ python3 site/annotate_social.py</pre>
   }
 
   function mobileSearchAlwaysOpen() {
-    return preferMobileSheet() && (state.page === "ownership" || state.page === "expected" || state.page === "opta");
+    return (
+      preferMobileSheet() &&
+      (state.page === "ownership" ||
+        state.page === "expected" ||
+        state.page === "opta" ||
+        (state.page === "team" && !!state.teamPickerSlot))
+    );
   }
 
   function syncTeamSearchHost() {
@@ -12376,11 +12597,9 @@ python3 site/annotate_social.py</pre>
     const pickingMobile =
       preferMobileSheet() && state.page === "team" && !!state.teamPickerSlot;
     const home = el.searchHome;
-    if (pickingMobile && el.statsToolbarActions && el.teamPickerCancel) {
+    if (pickingMobile && el.statsToolbarActions) {
       if (el.searchWrap.parentElement !== el.statsToolbarActions) {
-        el.statsToolbarActions.insertBefore(el.searchWrap, el.teamPickerCancel.nextSibling);
-      } else if (el.searchWrap.previousElementSibling !== el.teamPickerCancel) {
-        el.statsToolbarActions.insertBefore(el.searchWrap, el.teamPickerCancel.nextSibling);
+        el.statsToolbarActions.appendChild(el.searchWrap);
       }
     } else if (home && el.searchWrap.parentElement !== home) {
       home.appendChild(el.searchWrap);
@@ -13702,6 +13921,10 @@ python3 site/annotate_social.py</pre>
         syncTeamCompareHost();
         syncTeamPickerCancelHost();
         syncPageNavLabelCenter();
+        syncCoreUnderName();
+        syncTeamPickerCoreUnder();
+        bindAllNameColumnSimplifies();
+        refreshNameSimplifyOrigins();
         bindMobileChromeScrollHide();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
@@ -13711,6 +13934,10 @@ python3 site/annotate_social.py</pre>
         syncTeamCompareHost();
         syncTeamPickerCancelHost();
         syncPageNavLabelCenter();
+        syncCoreUnderName();
+        syncTeamPickerCoreUnder();
+        bindAllNameColumnSimplifies();
+        refreshNameSimplifyOrigins();
         bindMobileChromeScrollHide();
       });
     }

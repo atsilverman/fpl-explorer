@@ -2821,8 +2821,7 @@ a { color: var(--blue); }
     display: flex;
     flex-direction: column;
   }
-  html[data-page="opta"] #opta-page > .table-wrap,
-  html[data-page="opta"] #opta-page .compare-table-wrap {
+  html[data-page="opta"] #opta-page > .table-wrap {
     overflow: auto;
     overflow-y: auto;
     max-height: none;
@@ -2833,16 +2832,44 @@ a { color: var(--blue); }
     touch-action: pan-x pan-y;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
-    flex: 0 1 clamp(140px, 38vh, 320px);
-    min-height: 0;
+    flex: 0 0 auto;
+    min-height: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     margin-bottom: 8px;
   }
-  html[data-page="opta"] #opta-page.has-compare .compare-table-wrap {
+
+  /* Expected Data: barbell card is the scrollport on mobile. */
+  html[data-page="expected"] .main {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  html[data-page="expected"] #expected-page {
     flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  html[data-page="expected"] #expected-page .barbell-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: none;
+  }
+  html[data-page="expected"] #expected-page .barbell-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overflow-y: auto;
+    max-height: none;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
   }
 
   .table-wrap > table {
@@ -3238,6 +3265,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 .table-wrap.name-simplify-ready thead th.col-player,
 .table-wrap.name-simplify-ready tbody td.col-name,
 .table-wrap.name-simplify-ready tbody td.col-player,
+.table-wrap.name-simplify-ready tbody th.col-player,
 .table-wrap.name-simplify-ready thead tr.section-row th.sec-sticky-lead {
   width: var(--name-col-w-morph);
   min-width: var(--name-col-w-morph);
@@ -3555,6 +3583,8 @@ tbody tr.row-selected td:first-child {
   overflow: hidden;
   background: hsl(var(--card));
   box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
+  --compare-row-h: 40px;
+  --compare-table-head-h: 52px;
 }
 .compare-header {
   display: flex;
@@ -3579,6 +3609,44 @@ tbody tr.row-selected td:first-child {
 .compare-table-wrap > table > thead {
   /* Match main table sticky header stacking inside the compare card. */
   top: 0;
+}
+@media (max-width: 720px) {
+  /* Compare cards size to selected row count; scroll inside the table wrap when capped. */
+  html[data-page="opta"] #opta-page.has-compare > .compare-wrap,
+  #team-picker-view #team-compare-wrap:not([hidden]),
+  #team-page.is-comparing #team-compare-wrap:not([hidden]) {
+    flex: 0 0 auto;
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
+    --compare-row-h: 38px;
+    --compare-table-head-h: 52px;
+    margin-bottom: 8px;
+  }
+  #team-picker-view #team-compare-wrap:not([hidden]),
+  #team-page.is-comparing #team-compare-wrap:not([hidden]) {
+    --compare-row-h: 44px;
+    --compare-table-head-h: 56px;
+  }
+  html[data-page="opta"] #opta-page.has-compare .compare-table-wrap,
+  #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap,
+  #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
+    flex: 0 0 auto;
+    min-height: auto;
+    height: auto;
+    max-height: min(
+      calc(var(--compare-table-head-h) + var(--compare-rows, 1) * var(--compare-row-h)),
+      42vh
+    );
+    overflow: auto;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 }
 /* Aux tables (compare / search / pins) don't use main-table selection bars —
    the blue card chrome already marks the working set. */
@@ -5326,14 +5394,12 @@ html[data-page="ownership"] .layout .main {
     --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
   }
   .barbell-scroll {
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto;
+    overflow-y: auto;
     max-height: none;
-    overscroll-behavior-x: none;
-    overscroll-behavior-y: auto;
-    /* Vertical flicks chain to .main with native iOS momentum; pan-x keeps
-       horizontal column scroll on this element. */
-    touch-action: pan-x;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
   }
   .barbell-head {
     padding: 7px 10px;
@@ -9468,6 +9534,14 @@ html[data-page="team"] .layout .main {
     width: auto !important;
     max-width: none !important;
   }
+  /* Picker toolbar stays expanded — never collapse to the icon-only control. */
+  #subtoolbar.is-team-picking #search-wrap > .search-toggle {
+    display: none !important;
+  }
+  #subtoolbar.is-team-picking #search-wrap .search-field-icon,
+  #subtoolbar.is-team-picking #search-wrap input {
+    display: block !important;
+  }
 }
 
 .team-budget-bar.is-picking,
@@ -9679,12 +9753,11 @@ html[data-page="team"] .layout .main {
 }
 #team-page #team-search-results .team-table-wrap,
 #team-page #team-compare-wrap .team-table-wrap {
-  flex: none;
-  min-height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: none;
-  height: auto;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
+  overflow-y: auto;
 }
 #team-page .team-table-wrap > table {
   width: max-content;
@@ -10131,8 +10204,6 @@ html[data-page="team"] .layout .main {
   color: var(--text);
 }
 #team-picker-view {
-  --name-col-w: 172px;
-  --crest-size: 28px;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -10147,23 +10218,36 @@ html[data-page="team"] .layout .main {
 #team-picker-view[hidden] {
   display: none !important;
 }
+#team-picker-view #team-compare-wrap:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+#team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: auto;
+}
+#team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 #team-page.is-picking .team-header h2 {
   color: var(--text);
 }
 #team-page.is-picking #team-sub-bar {
   display: none !important;
 }
-html[data-page="team"]:not(.is-team-picking) #team-compare-btn,
 #team-page:not(.is-picking) #team-compare-wrap,
 #team-page:not(.is-picking) #team-compare-btn {
   display: none !important;
 }
-html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
+#team-page.is-picking #team-compare-btn:not([hidden]) {
   display: inline-flex;
 }
 #team-picker-view .team-table-wrap.team-picker-table-wrap {
-  --name-col-w: 172px;
-  --crest-size: 28px;
   --team-price-w: var(--metric-col-w, 52px);
   --team-owned-w: var(--metric-col-w, 52px);
   flex: 1 1 auto;
@@ -10176,35 +10260,38 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   overflow: auto;
 }
 #team-picker-view .team-table-wrap.team-picker-table-wrap > table {
-  table-layout: fixed;
   width: max-content;
-  min-width: 0;
-}
-.team-picker-table-wrap .player-cell {
-  --crest-size: 28px;
+  min-width: 100%;
 }
 .team-picker-row td.col-player {
   padding-top: 8px;
   padding-bottom: 8px;
 }
+.team-picker-row {
+  cursor: pointer;
+  touch-action: manipulation;
+}
 .team-picker-row .player-cell .player-name {
   font-size: 13.5px;
 }
 @media (max-width: 720px) {
-  /* Title + subtitle scroll away; the squad card then pins with padding.
-     Inner overflow clips to the rounded frame so columns cannot leak. */
+  /* Squad/picker tables are the scrollport (same pattern as Statistics). */
   html[data-page="team"] .layout .main {
-    overflow: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
   #team-page {
-    --name-col-w: 180px;
-    --crest-size: 22px;
-    --crest-gap: 8px;
+    --name-col-w: 118px;
+    --crest-size: 21px;
+    --badge-size: 21px;
+    --crest-gap: 6px;
     --team-row-h: 42px;
-    overflow: visible;
-    flex: 1 0 auto;
-    min-height: min-content;
-    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
   #team-page .page-header,
   #team-page .team-budget-bar {
@@ -10230,26 +10317,66 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   }
   #team-squad-view,
   #team-picker-view {
-    overflow: visible;
-    flex: 1 0 auto;
-    min-height: min-content;
-  }
-  #team-squad-view:has(#team-search-results:not([hidden])) {
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
   #team-search-results,
-  #team-compare-wrap {
-    overflow: visible;
+  #team-page:not(.is-picking) #team-compare-wrap {
+    flex: 0 0 auto;
+    min-height: 0;
   }
-  #team-page .team-table-wrap,
-  #team-page #team-search-results .team-table-wrap,
-  #team-page #team-compare-wrap .team-table-wrap,
-  #team-picker-view .team-table-wrap.team-picker-table-wrap {
+  #team-picker-view #team-compare-wrap:not([hidden]) {
     flex: 0 0 auto;
     min-height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: auto;
+    overflow-y: auto;
+  }
+  #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #team-page.is-comparing #team-compare-wrap:not([hidden]) {
+    flex: 0 0 auto;
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
+    flex: 0 0 auto;
+    min-height: auto;
+  }
+  #team-squad-view:has(#team-search-results:not([hidden])) > .team-table-wrap {
+    flex: 1 1 auto;
+    min-height: 160px;
+  }
+  #team-squad-view:has(#team-search-results:not([hidden])) #team-search-results .team-table-wrap {
+    flex: 0 1 min(40vh, 280px);
+    min-height: 120px;
+  }
+  #team-page .team-table-wrap,
+  #team-picker-view .team-table-wrap.team-picker-table-wrap,
+  #team-page #team-search-results .team-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
     max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
     position: relative;
     top: auto;
   }
@@ -10257,14 +10384,14 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
     position: static;
   }
   #team-page .player-cell {
-    --crest-size: 22px;
+    --crest-size: 21px;
   }
   #team-page .player-cell .player-name {
     font-size: 11px;
   }
-  #team-picker-view,
-  .team-picker-table-wrap {
-    --name-col-w: 128px;
+  #team-picker-view .team-table-wrap.team-picker-table-wrap {
+    --name-col-w: 118px;
+    --name-col-compact-players: 72px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
