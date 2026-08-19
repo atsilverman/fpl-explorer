@@ -726,6 +726,7 @@
     teamCompareBody: $("#team-compare-body"),
     teamToolbarControls: $("#team-toolbar-controls"),
     teamToolbarMode: $("#team-toolbar-mode"),
+    teamPickerCancel: $("#team-picker-cancel"),
     searchHome: $(".topbar-end-cluster"),
     expectedPage: $("#expected-page"),
     schedulePage: $("#schedule-page"),
@@ -6369,6 +6370,8 @@
   function syncTeamPickerChrome() {
     const picking = state.page === "team" && !!state.teamPickerSlot;
     if (el.teamPage) el.teamPage.classList.toggle("is-picking", picking);
+    if (el.teamPickerCancel) el.teamPickerCancel.hidden = !picking;
+    if (el.teamBudgetBar) el.teamBudgetBar.hidden = picking;
     if (el.teamSquadView) el.teamSquadView.hidden = picking;
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
     syncTeamSearchHost();
@@ -6917,13 +6920,18 @@
     const bankTone = itb < -1e-9 ? "is-neg" : itb > 1e-9 ? "is-pos" : "";
     const picking = !!state.teamPickerSlot;
     el.teamBudgetBar.classList.toggle("is-picking", picking);
+    el.teamBudgetBar.hidden = picking;
+    if (picking) {
+      el.teamBudgetBar.innerHTML = "";
+      return;
+    }
     el.teamBudgetBar.classList.remove("is-over", "is-low");
     el.teamBudgetBar.innerHTML = `
       <div class="team-budget-stat${bankTone ? ` ${bankTone}` : ""}">
         <span class="team-budget-label">Bank</span>
         <strong>£${itb.toFixed(1)}m</strong>
       </div>
-      <div class="team-budget-stat">
+      <div class="team-budget-stat team-budget-spent">
         <span class="team-budget-label">Spent</span>
         <strong>£${spent.toFixed(1)}m</strong>
       </div>
@@ -6931,7 +6939,7 @@
         <span class="team-budget-label">Squad</span>
         <strong>${n}/15</strong>
       </div>
-      <div class="team-budget-stat">
+      <div class="team-budget-stat team-budget-formation">
         <span class="team-budget-label">Formation</span>
         <strong>${escapeHtml(teamFormationLabel())}</strong>
       </div>
@@ -6942,14 +6950,6 @@
       ${
         overClub.length
           ? `<div class="team-budget-warn">${overClub.map(([t, c]) => `${t} ${c}/${TEAM_CLUB_MAX}`).join(" · ")}</div>`
-          : ""
-      }
-      ${
-        picking
-          ? `<button type="button" class="ghost-btn icon-label-btn team-picker-cancel" id="team-picker-cancel" aria-label="Back to squad">
-              <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
-              <span class="btn-label">Back</span>
-            </button>`
           : ""
       }`;
   }
@@ -7536,6 +7536,12 @@
   }
   if (el.teamToolbarControls) {
     el.teamToolbarControls.addEventListener("click", handleTeamUiClick);
+  }
+  if (el.teamPickerCancel) {
+    el.teamPickerCancel.addEventListener("click", (e) => {
+      e.preventDefault();
+      closeTeamPicker();
+    });
   }
   if (el.teamRowMenu) {
     el.teamRowMenu.addEventListener("click", (e) => {
@@ -11582,7 +11588,7 @@ python3 site/annotate_social.py</pre>
     if (state.page === "rankings") {
       el.searchWrap.classList.remove("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
-    } else if (mainSearchAlwaysOpen()) {
+    } else if (mainSearchAlwaysOpen() || (state.page === "team" && state.teamPickerSlot)) {
       el.searchWrap.classList.add("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "true");
     } else if (!(el.search && el.search.value.trim())) {
@@ -11595,7 +11601,7 @@ python3 site/annotate_social.py</pre>
 
   function closeMobileSearch({ clear = false } = {}) {
     if (!el.searchWrap) return;
-    if (mainSearchAlwaysOpen() && !clear) return;
+    if ((mainSearchAlwaysOpen() || (state.page === "team" && state.teamPickerSlot)) && !clear) return;
     el.searchWrap.classList.remove("search-open");
     if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     if (clear) {

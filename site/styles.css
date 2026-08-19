@@ -8721,11 +8721,28 @@ html[data-page="team"] .layout .main {
   box-shadow: var(--shadow-sm);
 }
 .team-budget-bar .team-picker-cancel {
-  margin-left: auto;
+  margin-left: 0;
   flex: none;
 }
 .team-budget-bar .team-picker-cancel .btn-label {
   display: inline;
+}
+#team-picker-cancel[hidden] {
+  display: none !important;
+}
+#subtoolbar .team-picker-cancel {
+  width: auto;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  gap: 6px;
+  flex: none;
+}
+#subtoolbar .team-picker-cancel .btn-label {
+  display: inline;
+}
+.team-budget-bar.is-picking,
+.team-budget-bar[hidden] {
+  display: none !important;
 }
 .team-budget-stat {
   display: flex;
