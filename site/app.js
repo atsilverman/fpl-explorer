@@ -486,7 +486,7 @@
   // State
   // ---------------------------------------------------------------------
   const state = {
-    page: "opta", // opta | rankings | ownership | expected | schedule | feed | markets | team | notes
+    page: "opta", // opta | rankings | ownership | expected | schedule | feed | markets | team
     season: "2025-26", // 2025-26 | 2026-27
     view: "players", // players | teams
     split: "combined", // combined | home | away
@@ -551,8 +551,6 @@
     ownershipRisersCollapsed: false,
     ownershipFallersCollapsed: false,
     actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
-    notes: [],
-    notesGroupBy: "none", // none | player | team
   };
   state.teamSearchPins = state.teamCompareCodes;
 
@@ -645,7 +643,6 @@
     pageRankings: $("#page-rankings"),
     pageOwnership: $("#page-ownership"),
     pageTeam: $("#page-team"),
-    pageNotes: $("#page-notes"),
     pageExpected: $("#page-expected"),
     pageTabs: $("#page-tabs"),
     pageTabsClip: $("#page-tabs-clip"),
@@ -696,16 +693,6 @@
     teamModeSeg: $("#team-mode-seg"),
     teamResyncBtn: $("#team-resync-btn"),
     teamRowMenu: $("#team-row-menu"),
-    notesPage: $("#notes-page"),
-    notesCollage: $("#notes-collage"),
-    notesCountLabel: $("#notes-count-label"),
-    notesGroupSeg: $("#notes-group-seg"),
-    noteContextMenu: $("#note-context-menu"),
-    noteModal: $("#note-modal"),
-    noteModalTitle: $("#note-modal-title"),
-    noteModalSub: $("#note-modal-sub"),
-    noteTextInput: $("#note-text-input"),
-    noteModalSave: $("#note-modal-save"),
     teamBudgetBar: $("#team-budget-bar"),
     teamSubBar: $("#team-sub-bar"),
     teamGwNav: $("#team-gw-nav"),
@@ -771,6 +758,9 @@
     mobileSheetBody: $("#mobile-sheet-body"),
     mobileSheetPanel: document.querySelector("#mobile-sheet .mobile-sheet-panel"),
     mobileSheetReset: $("#mobile-sheet-reset"),
+    mobileFilterDock: $("#mobile-filter-dock"),
+    mobileViewDock: $("#mobile-view-dock"),
+    mobileChromeFade: $("#mobile-chrome-fade"),
     filtersResetRow: $("#filters-reset-row"),
     searchClearBtn: $("#search-clear-btn"),
     feedSearchClearBtn: $("#feed-search-clear-btn"),
@@ -797,7 +787,6 @@
     expectedSub: $("#expected-sub"),
     expectedSplitGroup: $("#expected-split-group"),
     expectedSplitSeg: $("#expected-split-seg"),
-    expectedLegend: $("#expected-legend"),
     barbellWrap: $("#barbell-wrap"),
     barbellHead: $("#barbell-head"),
     barbellScale: $("#barbell-scale"),
@@ -1274,12 +1263,8 @@
   const FPL_ID_KEY = "fpl-explorer-manager-id";
   const TEAM_MODE_KEY = "fpl-explorer-team-mode";
   const TEAM_ACTUAL_KEY = "fpl-explorer-team-actual";
-  const NOTES_KEY = "fpl-explorer-notes-v1";
   let ownedCodes = new Set();
   let savedManagerId = null;
-  let noteMenuOpenedAt = 0;
-  let noteDraft = null;
-
   async function fetchManagerSquad(managerId) {
     const url = `/api/fpl/squad?id=${encodeURIComponent(managerId)}`;
     const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -1623,7 +1608,10 @@
 
   function playerNameHTML(row) {
     const icons = ownedFlagHTML(row);
-    return `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span><span class="player-name-icons">${icons}</span></div>`;
+    const name = String(row.name || "");
+    const prefix = name.slice(0, 4);
+    const rest = name.slice(4);
+    return `<div class="player-name-line"><span class="player-name"><span class="player-name-prefix">${escapeHtml(prefix)}</span><span class="player-name-rest">${escapeHtml(rest)}</span></span><span class="player-name-icons">${icons}</span></div>`;
   }
 
   function playerCrestHTML(teamCode, tip) {
@@ -1919,44 +1907,247 @@
     return preferMobileSheet() || COLUMNS_IN_FILTERS_MQ.matches;
   }
 
+  const mobileFilterHomes = new Map();
+  const mobileViewHomes = new Map();
+
+  function syncMobileChromeFade() {
+    const fade = el.mobileChromeFade;
+    if (!fade) return;
+    const show =
+      preferMobileSheet() &&
+      ((!el.mobileFilterDock || !el.mobileFilterDock.hidden) ||
+        (!el.mobileViewDock || !el.mobileViewDock.hidden));
+    fade.hidden = !show;
+    fade.setAttribute("aria-hidden", show ? "false" : "true");
+    document.documentElement.classList.toggle("has-mobile-chrome-fade", show);
+    if (!show) resetMobileChromeScrollHide();
+  }
+
+  let mobileChromeScrollLast = 0;
+  let mobileChromeScrollTicking = false;
+  let mobileChromeScrollHidden = false;
+
+  function mobileChromeScrollActive() {
+    return (
+      preferMobileSheet() &&
+      (document.documentElement.classList.contains("has-mobile-chrome-fade") ||
+        document.documentElement.classList.contains("has-mobile-filter-fab") ||
+        document.documentElement.classList.contains("has-mobile-view-dock"))
+    );
+  }
+
+  function setMobileChromeScrollHidden(hidden) {
+    if (mobileChromeScrollHidden === hidden) return;
+    mobileChromeScrollHidden = hidden;
+    document.documentElement.classList.toggle("mobile-chrome-scroll-hidden", hidden);
+  }
+
+  function resetMobileChromeScrollHide() {
+    const main = document.querySelector("main.main");
+    mobileChromeScrollLast = main ? main.scrollTop : 0;
+    setMobileChromeScrollHidden(false);
+  }
+
+  function onMobileChromeScroll() {
+    if (!mobileChromeScrollActive()) {
+      resetMobileChromeScrollHide();
+      return;
+    }
+    const main = document.querySelector("main.main");
+    if (!main) return;
+    const y = main.scrollTop;
+    const dy = y - mobileChromeScrollLast;
+    if (y <= 16) {
+      setMobileChromeScrollHidden(false);
+    } else if (dy > 10) {
+      setMobileChromeScrollHidden(true);
+    } else if (dy < -6) {
+      setMobileChromeScrollHidden(false);
+    }
+    mobileChromeScrollLast = y;
+  }
+
+  function bindMobileChromeScrollHide() {
+    const main = document.querySelector("main.main");
+    if (!main || main.dataset.mobileChromeScroll === "1") return;
+    main.dataset.mobileChromeScroll = "1";
+    mobileChromeScrollLast = main.scrollTop;
+    main.addEventListener(
+      "scroll",
+      () => {
+        if (mobileChromeScrollTicking) return;
+        mobileChromeScrollTicking = true;
+        requestAnimationFrame(() => {
+          mobileChromeScrollTicking = false;
+          onMobileChromeScroll();
+        });
+      },
+      { passive: true }
+    );
+  }
+
+  function rememberMobileFilterHome(btn) {
+    if (!btn || mobileFilterHomes.has(btn)) return;
+    mobileFilterHomes.set(btn, {
+      parent: btn.parentElement,
+      next: btn.nextElementSibling,
+    });
+  }
+
+  function restoreMobileFilterHome(btn) {
+    if (!btn) return;
+    btn.classList.remove("mobile-filter-fab");
+    const home = mobileFilterHomes.get(btn);
+    if (!home || !home.parent || !document.contains(home.parent)) return;
+    if (home.next && home.next.parentElement === home.parent) {
+      home.parent.insertBefore(btn, home.next);
+    } else {
+      home.parent.appendChild(btn);
+    }
+  }
+
+  function restoreAllMobileFilterButtons() {
+    [
+      el.sidebarToggle,
+      el.feedFiltersToggle,
+      el.marketsSlidersToggle,
+      el.scheduleSlidersToggle,
+    ].forEach(restoreMobileFilterHome);
+  }
+
+  function mobileFilterButtonForPage() {
+    const page = state.page;
+    if (page === "feed") return el.feedFiltersToggle || null;
+    if (page === "markets") return el.marketsSlidersToggle || null;
+    if (page === "schedule") return el.scheduleSlidersToggle || null;
+    if (page === "team" && !state.teamPickerSlot) return null;
+    if (el.sidebar && el.sidebar.style.display === "none") return null;
+    if (el.sidebarToggle && el.sidebarToggle.style.display === "none") return null;
+    return el.sidebarToggle || null;
+  }
+
+  function mobileViewTabsEl() {
+    return el.tabPlayers ? el.tabPlayers.closest(".tabs") : null;
+  }
+
+  function mobileViewTabsVisible() {
+    const page = state.page;
+    if (page === "team" || page === "feed" || page === "markets" || page === "schedule") {
+      return false;
+    }
+    const tabs = mobileViewTabsEl();
+    if (!tabs || tabs.style.display === "none") return false;
+    return true;
+  }
+
+  function rememberMobileViewHome(tabs) {
+    if (!tabs || mobileViewHomes.has(tabs)) return;
+    mobileViewHomes.set(tabs, {
+      parent: tabs.parentElement,
+      next: tabs.nextElementSibling,
+    });
+  }
+
+  function restoreMobileViewHome(tabs) {
+    if (!tabs) return;
+    tabs.classList.remove("mobile-view-tabs");
+    const home = mobileViewHomes.get(tabs);
+    if (!home || !home.parent || !document.contains(home.parent)) {
+      if (el.statsToolbarStart) {
+        if (el.sidebarToggle && el.sidebarToggle.parentElement === el.statsToolbarStart) {
+          el.sidebarToggle.insertAdjacentElement("afterend", tabs);
+        } else {
+          el.statsToolbarStart.prepend(tabs);
+        }
+      }
+      return;
+    }
+    if (home.next && home.next.parentElement === home.parent) {
+      home.parent.insertBefore(tabs, home.next);
+    } else {
+      home.parent.appendChild(tabs);
+    }
+  }
+
+  function syncMobileViewDock() {
+    const dock = el.mobileViewDock;
+    const tabs = mobileViewTabsEl();
+    if (!dock || !tabs) return;
+    if (!preferMobileSheet() || !mobileViewTabsVisible()) {
+      restoreMobileViewHome(tabs);
+      dock.hidden = true;
+      dock.setAttribute("aria-hidden", "true");
+      document.documentElement.classList.remove("has-mobile-view-dock");
+      syncMobileChromeFade();
+      return;
+    }
+    rememberMobileViewHome(tabs);
+    if (tabs.parentElement !== dock) dock.appendChild(tabs);
+    tabs.classList.add("mobile-view-tabs");
+    dock.hidden = false;
+    dock.setAttribute("aria-hidden", "false");
+    document.documentElement.classList.add("has-mobile-view-dock");
+    requestAnimationFrame(() => syncSegThumb(tabs, { animate: false }));
+    syncMobileChromeFade();
+  }
+
+  function syncMobileFilterDock() {
+    const dock = el.mobileFilterDock;
+    const buttons = [
+      el.sidebarToggle,
+      el.feedFiltersToggle,
+      el.marketsSlidersToggle,
+      el.scheduleSlidersToggle,
+    ].filter(Boolean);
+    if (!dock) return;
+    if (!preferMobileSheet()) {
+      restoreAllMobileFilterButtons();
+      dock.hidden = true;
+      dock.setAttribute("aria-hidden", "true");
+      document.documentElement.classList.remove("has-mobile-filter-fab");
+      syncMobileChromeFade();
+      return;
+    }
+    const active = mobileFilterButtonForPage();
+    buttons.forEach((btn) => {
+      if (btn !== active) restoreMobileFilterHome(btn);
+    });
+    if (!active) {
+      dock.hidden = true;
+      dock.setAttribute("aria-hidden", "true");
+      document.documentElement.classList.remove("has-mobile-filter-fab");
+      syncMobileChromeFade();
+      return;
+    }
+    rememberMobileFilterHome(active);
+    if (active.parentElement !== dock) dock.appendChild(active);
+    active.classList.add("mobile-filter-fab");
+    dock.hidden = false;
+    dock.setAttribute("aria-hidden", "false");
+    document.documentElement.classList.add("has-mobile-filter-fab");
+    syncMobileChromeFade();
+  }
+
+  function syncMobileChrome() {
+    syncMobileFilterDock();
+    syncMobileViewDock();
+    if (!mobileChromeScrollActive()) resetMobileChromeScrollHide();
+    else {
+      const main = document.querySelector("main.main");
+      mobileChromeScrollLast = main ? main.scrollTop : 0;
+    }
+  }
+
   // Horizontal tables/barbells are overflow-x scrollers, so iOS would otherwise
   // swallow vertical flicks (only the 8px page padding would move). Drive
-  // `.main` for vertical, keep native horizontal pan, and coast after lift.
+  // `.main` for vertical, keep native horizontal pan, no post-lift fling
+  // (fling past scroll edges caused the page to snap back from the top).
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
 
     function mainMax() {
       return Math.max(0, main.scrollHeight - main.clientHeight);
-    }
-
-    let flingRaf = 0;
-    function stopFling() {
-      if (flingRaf) cancelAnimationFrame(flingRaf);
-      flingRaf = 0;
-    }
-
-    function flingMain(velocity) {
-      stopFling();
-      let v = velocity;
-      if (!NARROW_MQ.matches || Math.abs(v) < 0.12) return;
-      v = Math.max(-3.4, Math.min(3.4, v));
-      let last = performance.now();
-      const step = (now) => {
-        const dt = Math.min(32, now - last);
-        last = now;
-        v *= Math.exp(-0.0022 * dt);
-        const max = mainMax();
-        const next = Math.max(0, Math.min(max, main.scrollTop + v * dt));
-        main.scrollTop = next;
-        const atEdge = (v < 0 && next <= 0) || (v > 0 && next >= max);
-        if (atEdge || Math.abs(v) < 0.04) {
-          flingRaf = 0;
-          return;
-        }
-        flingRaf = requestAnimationFrame(step);
-      };
-      flingRaf = requestAnimationFrame(step);
     }
 
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
@@ -1966,7 +2157,6 @@
       let lastY = 0;
       let lastT = 0;
       let axis = null;
-      let scrollV = 0;
 
       inner.addEventListener("wheel", (e) => {
         if (!NARROW_MQ.matches) return;
@@ -1987,8 +2177,6 @@
         lastY = t.clientY;
         lastT = e.timeStamp;
         axis = null;
-        scrollV = 0;
-        stopFling();
       }, { passive: true });
 
       inner.addEventListener("touchmove", (e) => {
@@ -2009,25 +2197,23 @@
           lastT = now;
           return;
         }
-        const dt = Math.max(8, now - lastT);
-        lastT = now;
-        scrollV = -dy / dt;
         const max = mainMax();
         const next = Math.max(0, Math.min(max, main.scrollTop - dy));
         if (next === main.scrollTop) return;
+        const dt = Math.max(8, now - lastT);
+        lastT = now;
         main.scrollTop = next;
         if (e.cancelable) e.preventDefault();
       }, { passive: false });
-
-      inner.addEventListener("touchend", () => {
-        if (!NARROW_MQ.matches || axis !== "y") return;
-        flingMain(scrollV);
-      }, { passive: true });
-      inner.addEventListener("touchcancel", stopFling, { passive: true });
     });
   }
 
-  // Mobile Statistics name-column scroll morph — disabled for now.
+  // Statistics table: scroll-linked Player/Team name morph (full ↔ compact).
+  // Dead zone after the default (Price/GW) origin so the landing view stays full.
+  const NAME_SIMPLIFY_START = 24;
+  const NAME_SIMPLIFY_END = 140;
+  const nameSimplifyRafs = new WeakMap();
+
   function nameSimplifyWraps() {
     const wraps = [];
     const main = el.tableBody && el.tableBody.closest(".table-wrap");
@@ -2037,18 +2223,113 @@
     return wraps;
   }
 
+  function nameSimplifyActive() {
+    return state.page === "opta" && (NARROW_MQ.matches || !hasFineHover());
+  }
+
+  function nameSimplifyProgress(scrollLeft, origin = 0) {
+    const rel = Math.max(0, scrollLeft - origin);
+    if (rel <= NAME_SIMPLIFY_START) return 0;
+    return Math.min(1, (rel - NAME_SIMPLIFY_START) / (NAME_SIMPLIFY_END - NAME_SIMPLIFY_START));
+  }
+
+  function withFullNameColumn(wrap, fn) {
+    const prev = wrap.style.getPropertyValue("--name-collapse");
+    wrap.style.setProperty("--name-collapse", "0");
+    wrap.classList.remove("is-name-simplifying");
+    void wrap.offsetWidth;
+    const result = fn();
+    if (prev) wrap.style.setProperty("--name-collapse", prev);
+    else wrap.style.removeProperty("--name-collapse");
+    return result;
+  }
+
+  // Default view origin = Price/GW snap (desktop 0; mobile core-under). Morph
+  // only after panning further right. Measure with the name column at full width
+  // so shrinking names cannot pull the origin left.
+  function computeNameSimplifyOrigin(wrap) {
+    if (!wrap || !wrap.classList.contains("is-core-under")) return 0;
+    return withFullNameColumn(wrap, () => {
+      const headRow = wrap.querySelector("thead tr:not(.section-row)");
+      const pin = headRow && headRow.querySelector("th.col-player, th.col-name");
+      const firstStat =
+        headRow && headRow.querySelector("th.col-num:not(.col-core), th.col-check:not(.col-core)");
+      if (!pin || !firstStat) return 0;
+      const delta = firstStat.getBoundingClientRect().left - pin.getBoundingClientRect().right;
+      return Math.max(0, Math.round(wrap.scrollLeft + delta));
+    });
+  }
+
+  function invalidateNameSimplifyOrigin(wrap) {
+    if (wrap) delete wrap.dataset.nameSimplifyOrigin;
+  }
+
+  function nameSimplifyOrigin(wrap) {
+    if (!wrap) return 0;
+    const stored = wrap.dataset.nameSimplifyOrigin;
+    if (stored != null && stored !== "") return Number(stored);
+    const origin = computeNameSimplifyOrigin(wrap);
+    wrap.dataset.nameSimplifyOrigin = String(origin);
+    return origin;
+  }
+
+  function refreshNameSimplifyOrigins() {
+    nameSimplifyWraps().forEach((wrap) => {
+      invalidateNameSimplifyOrigin(wrap);
+      updateNameColumnSimplify(wrap);
+    });
+  }
+
   function clearNameColumnSimplify(wrap) {
     if (!wrap) return;
     wrap.classList.remove("name-simplify-ready", "is-name-simplifying");
     wrap.style.removeProperty("--name-collapse");
+    wrap.removeAttribute("data-view");
+    invalidateNameSimplifyOrigin(wrap);
+  }
+
+  function updateNameColumnSimplify(wrap) {
+    if (!wrap || !nameSimplifyActive()) {
+      clearNameColumnSimplify(wrap);
+      return;
+    }
+    const t = nameSimplifyProgress(wrap.scrollLeft, nameSimplifyOrigin(wrap));
+    wrap.classList.add("name-simplify-ready");
+    wrap.dataset.view = state.view;
+    wrap.style.setProperty("--name-collapse", String(t));
+    wrap.classList.toggle("is-name-simplifying", t > 0.02);
+  }
+
+  function bindNameColumnSimplify(wrap) {
+    if (!wrap || wrap.dataset.nameSimplifyBound === "1") return;
+    wrap.dataset.nameSimplifyBound = "1";
+    wrap.addEventListener(
+      "scroll",
+      () => {
+        if (nameSimplifyRafs.has(wrap)) return;
+        nameSimplifyRafs.set(
+          wrap,
+          requestAnimationFrame(() => {
+            nameSimplifyRafs.delete(wrap);
+            updateNameColumnSimplify(wrap);
+          })
+        );
+      },
+      { passive: true }
+    );
+    updateNameColumnSimplify(wrap);
   }
 
   function syncAllNameColumnSimplifies() {
-    nameSimplifyWraps().forEach(clearNameColumnSimplify);
+    nameSimplifyWraps().forEach((wrap) => updateNameColumnSimplify(wrap));
   }
 
   function bindAllNameColumnSimplifies() {
-    syncAllNameColumnSimplifies();
+    if (!nameSimplifyActive()) {
+      nameSimplifyWraps().forEach(clearNameColumnSimplify);
+      return;
+    }
+    nameSimplifyWraps().forEach(bindNameColumnSimplify);
   }
 
   function syncPointerMode() {
@@ -2246,6 +2527,7 @@
   function beginMobileSheetShell({ title = "", titleHtml = "", key = null } = {}) {
     if (!el.mobileSheet || !el.mobileSheetPanel || !el.mobileSheetBody) return false;
     if (!preferMobileSheet()) return false;
+    resetMobileChromeScrollHide();
     if (key && mobileSheetOpen && mobileSheetKey === key) {
       closeMobileSheet();
       return false;
@@ -2627,6 +2909,7 @@
     const under = visibleCoreCount() > 0 && NARROW_MQ.matches && state.page === "opta";
     optaTableWraps().forEach((wrap) => {
       wrap.classList.toggle("is-core-under", under);
+      invalidateNameSimplifyOrigin(wrap);
     });
   }
 
@@ -2636,16 +2919,7 @@
         if (!NARROW_MQ.matches) wrap.scrollLeft = 0;
         return;
       }
-      const headRow = wrap.querySelector("thead tr:not(.section-row)");
-      const pin = headRow && headRow.querySelector("th.col-player, th.col-name");
-      const firstGame =
-        headRow && headRow.querySelector("th.col-num:not(.col-core), th.col-check:not(.col-core)");
-      if (!pin || !firstGame) {
-        wrap.scrollLeft = pin ? Math.round(pin.getBoundingClientRect().width) : 0;
-        return;
-      }
-      const delta = firstGame.getBoundingClientRect().left - pin.getBoundingClientRect().right;
-      wrap.scrollLeft = Math.max(0, Math.round(wrap.scrollLeft + delta));
+      wrap.scrollLeft = computeNameSimplifyOrigin(wrap);
     });
   }
 
@@ -2675,7 +2949,10 @@
     syncCoreUnderName();
     requestAnimationFrame(() => {
       snapOptaToGameStats();
-      requestAnimationFrame(snapOptaToGameStats);
+      requestAnimationFrame(() => {
+        snapOptaToGameStats();
+        refreshNameSimplifyOrigins();
+      });
     });
   }
 
@@ -3203,6 +3480,7 @@
 
     if (state.page === "expected") {
       const iconRows = [
+        spitRow(`<i class="spit-expected"></i>`, "Expected value on the track"),
         spitRow(`<i class="spit-easy"></i>`, "Outperforming expectation"),
         spitRow(`<i class="spit-tough"></i>`, "Underperforming expectation"),
         spitRow(`<i class="spit-even"></i>`, "Even — actual ≈ expected"),
@@ -3292,8 +3570,8 @@
         spitRow(
           spitRank("Row"),
           mobile
-            ? "Tap a planner player for captain, vice, bench, replace, remove, or Add note."
-            : "Right-click a planner player for captain, vice, bench, replace, remove, or Add note."
+            ? "Tap a planner player for captain, vice, bench, replace, or remove."
+            : "Right-click a planner player for captain, vice, bench, replace, or remove."
         ),
         spitRow(iconHTML("refresh-ccw-dot"), "Resync — replace Planner with the linked Actual FPL squad (confirm first)"),
         spitRow(iconHTML("scale"), "Compare — pick up to 5 players in the squad, search, or picker"),
@@ -3328,23 +3606,6 @@
         ${spitIntro(intro)}
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}`;
-    }
-
-    if (state.page === "notes") {
-      return `${spitHead("sticky-note", "How Notes works")}
-        ${spitIntro("Freeform comments on players and clubs — newest first, saved with the current gameweek (or Preseason).")}
-        ${spitSection("Icons", [
-          spitRow(
-            iconHTML("notebook-pen"),
-            mobile
-              ? "Long-press a player, crest, or team row → Add note"
-              : "Right-click a player, crest, or team surface → Add note"
-          ),
-          spitRow(spitRank("Group"), "All · By player · By team"),
-        ])}
-        ${spitSection("Reading", [
-          spitRow(spitRank("Confirm"), "Player and club are saved automatically from what you opened — no picker."),
-        ])}`;
     }
 
     if (state.page === "schedule") {
@@ -3997,7 +4258,6 @@
       ownership: "How Ownership works",
       markets: "How Markets works",
       team: "How Team works",
-      notes: "How Notes works",
     };
     pageInfoButtons().forEach((btn) => {
       const pane = btn.closest(".page-pane");
@@ -4011,7 +4271,6 @@
         else if (pane.id === "ownership-page") page = "ownership";
         else if (pane.id === "markets-page") page = "markets";
         else if (pane.id === "team-page") page = "team";
-        else if (pane.id === "notes-page") page = "notes";
       }
       const label = labels[page] || "How this page works";
       btn.removeAttribute("title");
@@ -4588,15 +4847,6 @@
     return map;
   }
 
-  function renderExpectedLegend() {
-    el.expectedLegend.innerHTML = `
-      <span class="legend-item"><span class="legend-dot" style="background:var(--text-faint)"></span>Expected</span>
-      <span class="legend-item"><span class="legend-dot" style="background:hsl(var(--positive))"></span>Outperforming</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--blue)"></span>Even</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Underperforming</span>
-    `;
-  }
-
   // Scale sticks just under the head; keep --barbell-head-h in sync so they
   // abut with no gap (and no overlap that would clip axis labels).
   function syncBarbellHeadHeight() {
@@ -4997,7 +5247,6 @@
       el.barbellHead.innerHTML = "";
       el.barbellScale.innerHTML = "";
       el.barbellBody.innerHTML = "";
-      if (el.expectedLegend) el.expectedLegend.innerHTML = "";
       const empty = document.createElement("div");
       empty.className = "empty-state expected-empty";
       empty.innerHTML = `
@@ -5007,7 +5256,6 @@
       return;
     }
 
-    renderExpectedLegend();
     el.expectedSub.textContent = compareMode
       ? "Home and away side by side for the same players or teams."
       : "Compare expected (x) stats with what actually happened — who overperformed or underperformed.";
@@ -6510,6 +6758,7 @@
     if (state.page === "team" && el.ownedFilterGroup) {
       el.ownedFilterGroup.style.display = picking ? "none" : "";
     }
+    syncMobileChrome();
   }
 
   function applyTeamPickerFilters(rows) {
@@ -6634,7 +6883,7 @@
     </button>`;
   }
 
-  function teamRowMenuItemsHTML(row, slot, { note = true } = {}) {
+  function teamRowMenuItemsHTML(row, slot) {
     const code = escapeHtml(String(row.code));
     const isC = state.teamCaptainCode === row.code;
     const isV = state.teamViceCode === row.code;
@@ -6669,24 +6918,13 @@
         icon: iconHTML("refresh-ccw-dot"),
         label: "Replace",
       }),
-    ];
-    if (note) {
-      squadItems.push(
-        teamRowMenuItemHTML({
-          attrs: `data-team-note="${code}"`,
-          icon: iconHTML("notebook-pen"),
-          label: "Add note",
-        })
-      );
-    }
-    squadItems.push(
       teamRowMenuItemHTML({
         attrs: `data-team-remove="${code}"`,
         icon: iconHTML("x"),
         label: "Remove",
         danger: true,
-      })
-    );
+      }),
+    ];
     return `<section class="settings-section">
           <div class="settings-section-label">Role</div>
           ${roleItems}
@@ -6703,7 +6941,7 @@
         <p class="settings-panel-sub">${escapeHtml(TEAM_POS_LABEL[row.position] || row.position)} · ${escapeHtml(teamNameForSeason(row.team))} · £${Number(row.price).toFixed(1)}m</p>
       </div>
       <div class="settings-panel-body team-row-menu-body">
-        ${teamRowMenuItemsHTML(row, slot, { note: true })}
+        ${teamRowMenuItemsHTML(row, slot)}
       </div>`;
   }
 
@@ -6795,7 +7033,7 @@
     openMobileSheet({
       title: row.name,
       html: `<p class="team-row-sheet-sub">${escapeHtml(sub)}</p>
-        <div class="team-row-menu-body">${teamRowMenuItemsHTML(row, slot, { note: false })}</div>`,
+        <div class="team-row-menu-body">${teamRowMenuItemsHTML(row, slot)}</div>`,
       key: "team-row",
     });
     if (!el.mobileSheetBody) return;
@@ -6877,22 +7115,6 @@
     if (toggle) {
       closeTeamRowMenu({ force: true });
       toggleTeamStarter(Number(toggle.dataset.teamToggleXi) || toggle.dataset.teamToggleXi);
-      return true;
-    }
-    const note = target.closest("[data-team-note]");
-    if (note) {
-      closeTeamRowMenu({ force: true });
-      const code = Number(note.dataset.teamNote) || note.dataset.teamNote;
-      const row = teamPlayerByCode(code);
-      if (row) {
-        openNoteModal({
-          entityType: "player",
-          playerCode: row.code,
-          playerName: row.name,
-          teamCode: row.team,
-          teamName: teamNameForSeason(row.team) || row.team,
-        });
-      }
       return true;
     }
     return false;
@@ -7066,7 +7288,7 @@
         <span class="team-budget-label">Formation</span>
         <strong>${escapeHtml(teamFormationLabel())}</strong>
       </div>
-      <div class="team-budget-stat">
+      <div class="team-budget-stat team-budget-cap-vice">
         <span class="team-budget-label">C / V</span>
         <strong>${cap ? escapeHtml(cap.name) : "–"} / ${vice ? escapeHtml(vice.name) : "–"}</strong>
       </div>
@@ -7674,20 +7896,14 @@
     el.teamRowMenu.addEventListener("contextmenu", (e) => e.preventDefault());
   }
   document.addEventListener("contextmenu", (e) => {
-    if (e.target.closest("#note-modal, #confirm-modal, #team-row-menu, #note-context-menu, input, textarea, select")) {
+    if (e.target.closest("#confirm-modal, #team-row-menu, input, textarea, select")) {
       return;
     }
     const squadRow = teamSquadPlayerRowFromNode(e.target);
     if (squadRow && state.page === "team" && teamRowMenuAllowed()) {
       e.preventDefault();
-      closeNoteContextMenu();
       openTeamRowMenuAt(squadRow, e);
-      return;
     }
-    const target = resolveNoteTargetFromNode(e.target);
-    if (!target) return;
-    e.preventDefault();
-    openNoteContextMenuAt(target, e.clientX, e.clientY);
   });
   document.addEventListener("click", (e) => {
     if (el.teamRowMenu && el.teamRowMenu.contains(e.target)) return;
@@ -7703,10 +7919,6 @@
         if (mobileSheetOpen && mobileSheetKey === "team-row") return;
         closeTeamRowMenu({ force: true });
       }
-      if (el.noteContextMenu && el.noteContextMenu.classList.contains("open")) {
-        if (el.noteContextMenu.contains(e.target)) return;
-        closeNoteContextMenu();
-      }
     },
     true
   );
@@ -7714,7 +7926,6 @@
     if (!(mobileSheetOpen && mobileSheetKey === "team-row")) {
       closeTeamRowMenu({ force: true });
     }
-    closeNoteContextMenu();
   });
   if (el.teamSquadView) {
     el.teamSquadView.addEventListener("pointerover", (e) => {
@@ -8913,13 +9124,14 @@
     if (el.marketsViewToolbar) {
       el.marketsViewToolbar.hidden = !marketsMobile;
     }
-    // Sliders live under Markets only: header on desktop, right of the
-    // mobile view dropdown. Always park back in the Markets header when
-    // leaving the page so it cannot leak into xData / other toolbars.
+    // Sliders live under Markets only: header on desktop; mobile FAB dock.
     if (el.marketsSlidersToggle && el.marketsHeaderActions) {
-      if (marketsMobile && el.marketsViewToolbar) {
-        if (el.marketsSlidersToggle.previousElementSibling !== el.marketsViewToolbar) {
-          el.marketsViewToolbar.after(el.marketsSlidersToggle);
+      if (marketsMobile) {
+        if (
+          el.marketsSlidersToggle.parentElement !== el.marketsHeaderActions &&
+          el.marketsSlidersToggle.parentElement !== el.mobileFilterDock
+        ) {
+          el.marketsHeaderActions.appendChild(el.marketsSlidersToggle);
         }
         el.marketsSlidersToggle.hidden = false;
       } else {
@@ -8939,6 +9151,7 @@
       }
     }
     buildMarketsViewMenu();
+    syncMobileChrome();
   }
 
   function clearMarketsViewMenuPosition() {
@@ -10413,371 +10626,13 @@ python3 site/annotate_social.py</pre>
 
 
   const PAGE_KEY = "fpl-explorer-page";
-  const PAGES = ["opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team", "notes"];
-
-  // ---------------------------------------------------------------------
-  // Notes (right-click → freeform comments)
-  // ---------------------------------------------------------------------
-  function noteGwMeta() {
-    const gw = teamCurrentGw();
-    const label =
-      (state.actualMeta && state.actualMeta.gwLabel) ||
-      (DATA.fixturesMeta && Number(DATA.fixturesMeta.currentGw) <= 1 ? "Preseason" : null) ||
-      `Gameweek ${gw}`;
-    const isPreseason = /preseason/i.test(String(label)) || Number(gw) <= 1;
-    return { gw, gwLabel: isPreseason ? "Preseason" : label };
-  }
-
-  function loadNotes() {
-    try {
-      const raw = localStorage.getItem(NOTES_KEY);
-      if (!raw) {
-        state.notes = [];
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      state.notes = Array.isArray(parsed && parsed.notes) ? parsed.notes.filter((n) => n && n.id && n.text) : [];
-    } catch {
-      state.notes = [];
-    }
-  }
-
-  function saveNotes() {
-    try {
-      localStorage.setItem(NOTES_KEY, JSON.stringify({ version: 1, notes: state.notes }));
-    } catch {
-      /* private browsing */
-    }
-  }
-
-  function newNoteId() {
-    return `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  function findPlayerRowByKey(key) {
-    if (key == null || key === "") return null;
-    const pools = [teamCatalog(), (DATA.players && DATA.players.combined) || []];
-    for (const pool of pools) {
-      const hit = pool.find(
-        (p) => p && (teamCodeEq(p.code, key) || String(p.id) === String(key) || String(p.name) === String(key))
-      );
-      if (hit) return hit;
-    }
-    return null;
-  }
-
-  function noteTargetFromPlayer(row) {
-    if (!row) return null;
-    const team = currentTeamCode(row) || row.team;
-    return {
-      entityType: "player",
-      playerCode: row.code != null ? row.code : null,
-      playerName: row.name || null,
-      teamCode: team || null,
-      teamName: team ? teamNameForSeason(team) || TEAM_NAMES[team] || team : null,
-      position: row.position || null,
-    };
-  }
-
-  function noteTargetFromTeam(teamCode) {
-    if (!teamCode) return null;
-    const code = String(teamCode);
-    const known =
-      TEAM_NAMES[code] ||
-      (DATA.teamNames && DATA.teamNames[code]) ||
-      (DATA.fixtureTeamNames && DATA.fixtureTeamNames[code]) ||
-      /^[A-Z]{3}$/.test(code);
-    if (!known) return null;
-    return {
-      entityType: "team",
-      teamCode: code,
-      teamName: teamNameForSeason(code) || TEAM_NAMES[code] || code,
-    };
-  }
-
-  function resolveNoteTargetFromNode(node) {
-    if (!node || !node.closest) return null;
-
-    const playerCodeEl = node.closest("[data-player-code]");
-    if (playerCodeEl && playerCodeEl.dataset.playerCode) {
-      const row = findPlayerRowByKey(playerCodeEl.dataset.playerCode);
-      if (row) return noteTargetFromPlayer(row);
-    }
-
-    const teamCodeProp = node.closest("[data-team-code]");
-    if (teamCodeProp && teamCodeProp.dataset.teamCode) {
-      const row = findPlayerRowByKey(teamCodeProp.dataset.teamCode);
-      if (row) return noteTargetFromPlayer(row);
-    }
-
-    const feedCard = node.closest("[data-feed-code], [data-feed-card], .feed-player-card");
-    if (feedCard) {
-      const code = feedCard.dataset.feedCode || feedCard.dataset.feedCard || feedCard.dataset.code || null;
-      if (code != null) {
-        const row = findPlayerRowByKey(code);
-        if (row) return noteTargetFromPlayer(row);
-      }
-    }
-
-    const pinChip = node.closest("[data-pin-key]");
-    if (pinChip && pinChip.dataset.pinKey) {
-      const key = pinChip.dataset.pinKey;
-      const player = findPlayerRowByKey(key);
-      if (player) return noteTargetFromPlayer(player);
-      const team = noteTargetFromTeam(key);
-      if (team) return team;
-    }
-
-    const rankRow = node.closest("[data-row-key]");
-    if (rankRow && rankRow.dataset.rowKey) {
-      const key = rankRow.dataset.rowKey;
-      const player = findPlayerRowByKey(key);
-      if (player) return noteTargetFromPlayer(player);
-      const team = noteTargetFromTeam(key);
-      if (team) return team;
-    }
-
-    const namedTeamEl = node.closest("[data-team][data-row-name], tr[data-team][data-row-name]");
-    if (namedTeamEl && namedTeamEl.dataset.team && namedTeamEl.dataset.rowName) {
-      const team = namedTeamEl.dataset.team;
-      const rowName = namedTeamEl.dataset.rowName.trim();
-      if (namedTeamEl.dataset.playerCode) {
-        const byCode = findPlayerRowByKey(namedTeamEl.dataset.playerCode);
-        if (byCode) return noteTargetFromPlayer(byCode);
-      }
-      const pools = [];
-      try {
-        pools.push(getRows() || []);
-      } catch {
-        /* ignore */
-      }
-      pools.push(teamCatalog(), (DATA.players && DATA.players.combined) || []);
-      for (const pool of pools) {
-        const match = (pool || []).find(
-          (r) =>
-            r &&
-            r.name === rowName &&
-            (currentTeamCode(r) === team || r.team === team || !team)
-        );
-        if (match && match.code != null) return noteTargetFromPlayer(match);
-      }
-    }
-
-    const teamEl = node.closest("[data-team]");
-    if (teamEl && teamEl.dataset.team) {
-      if (teamEl.dataset.playerCode) {
-        const row = findPlayerRowByKey(teamEl.dataset.playerCode);
-        if (row) return noteTargetFromPlayer(row);
-      }
-      const team = noteTargetFromTeam(teamEl.dataset.team);
-      if (team) return team;
-    }
-
-    const crest = node.closest(
-      ".player-cell-crest, .badge-img, .feed-player-team-badge, .markets-team-cell, .player-cell, .rankings-identity"
-    );
-    if (crest) {
-      const host =
-        crest.closest(
-          "[data-player-code], [data-team-code], [data-row-key], [data-team], [data-feed-code], [data-pin-key], .rankings-row, .barbell-label, .barbell-group-identity, .markets-team-row, .schedule-card, .feed-player-card, tr.team-search-row, tr.team-picker-row, tr.team-player-row"
-        ) || crest.parentElement;
-      if (host && host !== node) return resolveNoteTargetFromNode(host);
-    }
-
-    return null;
-  }
-
-  function noteContextTitle(target) {
-    if (target.playerCode != null || target.playerName) return target.playerName || "Player";
-    return target.teamName || target.teamCode || "Team";
-  }
-
-  function noteContextSub(target) {
-    if (target.playerCode != null || target.playerName) {
-      const bits = [];
-      const pos = target.position || (findPlayerRowByKey(target.playerCode) || {}).position;
-      if (pos) bits.push(TEAM_POS_LABEL[pos] || pos);
-      if (target.teamName || target.teamCode) bits.push(target.teamName || target.teamCode);
-      return bits.join(" · ") || "Player";
-    }
-    return "Club";
-  }
-
-  function closeNoteContextMenu() {
-    if (!el.noteContextMenu) return;
-    el.noteContextMenu.classList.remove("open");
-    el.noteContextMenu.setAttribute("aria-hidden", "true");
-    el.noteContextMenu.innerHTML = "";
-  }
-
-  function openNoteContextMenuAt(target, x, y) {
-    if (!el.noteContextMenu || !target) return;
-    closeTeamRowMenu({ force: true });
-    hideUiTooltip();
-    const title = noteContextTitle(target);
-    const sub = noteContextSub(target);
-    const crest = target.teamCode ? playerCrestHTML(target.teamCode) : "";
-    el.noteContextMenu.innerHTML = `<div class="settings-panel-head">
-        <h4 id="note-context-menu-title">${crest ? `<span class="note-context-crest">${crest}</span>` : ""}${escapeHtml(title)}</h4>
-        <p class="settings-panel-sub">${escapeHtml(sub)}</p>
-      </div>
-      <div class="settings-panel-body team-row-menu-body">
-        <section class="settings-section">
-          <div class="settings-section-label">Notes</div>
-          <button type="button" class="settings-switch-row team-row-menu-item" role="menuitem" data-note-add>
-            <span class="team-row-menu-icon" aria-hidden="true">${iconHTML("notebook-pen")}</span>
-            <span class="settings-switch-text"><span class="settings-switch-label">Add note</span></span>
-          </button>
-        </section>
-      </div>`;
-    el.noteContextMenu.classList.add("open");
-    el.noteContextMenu.setAttribute("aria-hidden", "false");
-    el.noteContextMenu.setAttribute("aria-labelledby", "note-context-menu-title");
-    noteMenuOpenedAt = Date.now();
-    noteDraft = { target, x, y };
-    const pad = 8;
-    const w = el.noteContextMenu.offsetWidth || 260;
-    const h = el.noteContextMenu.offsetHeight || 160;
-    let left = x;
-    let top = y;
-    if (left + w > window.innerWidth - pad) left = x - w;
-    if (top + h > window.innerHeight - pad) top = y - h;
-    left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
-    top = Math.max(pad, Math.min(top, window.innerHeight - h - pad));
-    el.noteContextMenu.style.left = `${left}px`;
-    el.noteContextMenu.style.top = `${top}px`;
-    requestAnimationFrame(() => {
-      if (!el.noteContextMenu.classList.contains("open")) return;
-      const first = el.noteContextMenu.querySelector("[role=menuitem]");
-      if (first) first.focus({ preventScroll: true });
-    });
-  }
-
-  function closeNoteModal() {
-    if (!el.noteModal) return;
-    el.noteModal.hidden = true;
-    noteDraft = null;
-    if (el.noteTextInput) el.noteTextInput.value = "";
-  }
-
-  function openNoteModal(target) {
-    if (!el.noteModal || !target) return;
-    closeNoteContextMenu();
-    if (!target.playerCode && !target.playerName && !target.teamCode) return;
-    noteDraft = { target };
-    if (el.noteModalSub) {
-      el.noteModalSub.textContent = noteContextSub(target)
-        ? `${noteContextTitle(target)} · ${noteContextSub(target)}`
-        : noteContextTitle(target);
-    }
-    if (el.noteTextInput) el.noteTextInput.value = "";
-    el.noteModal.hidden = false;
-    requestAnimationFrame(() => el.noteTextInput && el.noteTextInput.focus());
-  }
-
-  function saveNoteFromModal() {
-    if (!noteDraft || !noteDraft.target) return;
-    const text = (el.noteTextInput && el.noteTextInput.value || "").trim();
-    if (!text) {
-      showToast({ title: "Empty note", message: "Write a comment before saving.", icon: "triangle-alert" });
-      return;
-    }
-    const target = noteDraft.target;
-    const gw = noteGwMeta();
-    const hasPlayer = target.playerCode != null || !!target.playerName;
-    state.notes.unshift({
-      id: newNoteId(),
-      text,
-      createdAt: new Date().toISOString(),
-      gw: gw.gw,
-      gwLabel: gw.gwLabel,
-      entityType: hasPlayer ? "player" : "team",
-      playerCode: target.playerCode ?? null,
-      playerName: target.playerName || null,
-      teamCode: target.teamCode || null,
-      teamName: target.teamName || null,
-    });
-    saveNotes();
-    closeNoteModal();
-    showToast({
-      title: "Note saved",
-      message: noteContextTitle(target),
-      icon: "circle-check",
-    });
-    if (state.page === "notes") renderNotes();
-  }
-
-  function deleteNote(id) {
-    state.notes = state.notes.filter((n) => n.id !== id);
-    saveNotes();
-    renderNotes();
-  }
-
-  function noteCardHTML(note) {
-    const title =
-      note.entityType === "player"
-        ? note.playerName || "Player"
-        : note.teamName || note.teamCode || "Team";
-    const crest = note.teamCode ? playerCrestHTML(note.teamCode) : "";
-    const when = note.createdAt ? new Date(note.createdAt).toLocaleString() : "";
-    return `<article class="note-card" data-note-id="${escapeHtml(note.id)}">
-      <div class="note-card-head">${crest}<div class="note-card-title">${escapeHtml(title)}</div></div>
-      <div class="note-card-meta"><span>${escapeHtml(note.gwLabel || `GW ${note.gw}`)}</span><span>${escapeHtml(when)}</span></div>
-      <div class="note-card-body">${escapeHtml(note.text)}</div>
-      <div class="note-card-actions"><button type="button" class="ghost-btn" data-note-delete="${escapeHtml(note.id)}">Delete</button></div>
-    </article>`;
-  }
-
-  function renderNotes() {
-    if (!el.notesCollage) return;
-    const notes = state.notes.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    if (el.notesCountLabel) el.notesCountLabel.textContent = `${notes.length} note${notes.length === 1 ? "" : "s"}`;
-    if (el.notesGroupSeg) {
-      el.notesGroupSeg.querySelectorAll("[data-notes-group]").forEach((btn) => {
-        btn.classList.toggle("active", btn.getAttribute("data-notes-group") === state.notesGroupBy);
-      });
-      syncSegThumb(el.notesGroupSeg, { animate: false });
-    }
-    if (!notes.length) {
-      el.notesCollage.innerHTML = `<div class="notes-empty">No notes yet. Right-click a player, crest, or team row and choose Add note.</div>`;
-      return;
-    }
-    if (state.notesGroupBy === "none") {
-      el.notesCollage.innerHTML = notes.map(noteCardHTML).join("");
-      return;
-    }
-    const groups = new Map();
-    notes.forEach((n) => {
-      const key =
-        state.notesGroupBy === "player"
-          ? n.entityType === "player"
-            ? `p:${n.playerCode || n.playerName}`
-            : `t:${n.teamCode}`
-          : `t:${n.teamCode || "unknown"}`;
-      const label =
-        state.notesGroupBy === "player"
-          ? n.entityType === "player"
-            ? n.playerName || "Player"
-            : n.teamName || n.teamCode || "Team"
-          : n.teamName || n.teamCode || "Team";
-      if (!groups.has(key)) groups.set(key, { label, items: [] });
-      groups.get(key).items.push(n);
-    });
-    el.notesCollage.innerHTML = [...groups.values()]
-      .map(
-        (g) =>
-          `<section class="notes-group-block"><h3 class="notes-group-title">${escapeHtml(g.label)}</h3>${g.items
-            .map(noteCardHTML)
-            .join("")}</section>`
-      )
-      .join("");
-  }
+  const PAGES = ["opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team"];
 
   function storedPage() {
     try {
       const saved = localStorage.getItem(PAGE_KEY);
+      if (saved === "notes") return "opta";
       const page = PAGES.includes(saved) ? saved : "opta";
-      if (page === "notes" && NARROW_MQ.matches) return "opta";
       return page;
     } catch {
       return "opta";
@@ -10793,7 +10648,6 @@ python3 site/annotate_social.py</pre>
     if (page === "feed") return el.feedPage;
     if (page === "markets") return el.marketsPage;
     if (page === "team") return el.teamPage;
-    if (page === "notes") return el.notesPage;
     return null;
   }
 
@@ -10926,6 +10780,15 @@ python3 site/annotate_social.py</pre>
 
   function startOptaHighlightEnter(pane) {
     if (!pane) return;
+    if (pane._hlEnterRaf) {
+      cancelAnimationFrame(pane._hlEnterRaf);
+      pane._hlEnterRaf = 0;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      pane.classList.remove("is-hl-entering");
+      pane.style.setProperty("--hl-sat", "1");
+      return;
+    }
     pane.classList.add("is-hl-entering");
     pane.style.setProperty("--hl-sat", "0");
     const duration = 2500;
@@ -11085,9 +10948,10 @@ python3 site/annotate_social.py</pre>
   }
 
   function setPage(page) {
-    if (page === "notes" && NARROW_MQ.matches) page = "opta";
+    if (page === "notes") page = "opta";
     const prev = state.page;
     state.page = page;
+    if (prev !== page) resetMobileChromeScrollHide();
     try {
       localStorage.setItem(PAGE_KEY, page);
     } catch {
@@ -11098,7 +10962,6 @@ python3 site/annotate_social.py</pre>
     hideOwnershipTooltip();
     hidePageInfoTooltip();
     hideTeamRowActionsPopup();
-    closeNoteContextMenu();
     closeMobileSheet();
     if (prev !== page) {
       if (prev === "team") {
@@ -11125,12 +10988,10 @@ python3 site/annotate_social.py</pre>
     if (el.pageFeed) el.pageFeed.classList.toggle("active", page === "feed");
     if (el.pageMarkets) el.pageMarkets.classList.toggle("active", page === "markets");
     if (el.pageTeam) el.pageTeam.classList.toggle("active", page === "team");
-    if (el.pageNotes) el.pageNotes.classList.toggle("active", page === "notes");
     syncPageTabCloneActive(page);
     document.documentElement.dataset.page = page;
     syncPageTrayTrigger();
     setPageTrayOpen(false);
-    if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
@@ -11139,27 +11000,27 @@ python3 site/annotate_social.py</pre>
     if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
     if (el.teamPage) el.teamPage.style.display = page === "team" ? "" : "none";
-    if (el.notesPage) el.notesPage.style.display = page === "notes" ? "" : "none";
     const isMarkets = page === "markets";
     // Schedule has no subtoolbar. Markets hides it on desktop, but keeps a
     // minimal mobile bar for the G+CS% / Scoreline picker (like xData).
     const hideSubtoolbar =
       page === "schedule" ||
-      page === "notes" ||
+      (preferMobileSheet() && page === "rankings") ||
       (isMarkets && !preferMobileSheet());
     const isFeed = page === "feed";
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
     el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
+    el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
     el.sidebar.style.display =
-      page === "schedule" || isMarkets || isFeed || page === "notes" || (page === "team" && !state.teamPickerSlot)
+      page === "schedule" || isMarkets || isFeed || (page === "team" && !state.teamPickerSlot)
         ? "none"
         : "";
     if (el.sidebarToggle) {
       el.sidebarToggle.style.display =
-        page === "team" && !state.teamPickerSlot ? "none" : page === "notes" ? "none" : "";
+        page === "team" && !state.teamPickerSlot ? "none" : "";
     }
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets || page === "notes" ? "none" : "";
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed || page === "notes" ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
     if (el.teamToolbarMode) el.teamToolbarMode.hidden = page !== "team";
     if (el.feedToolbarStart) el.feedToolbarStart.style.display = isFeed ? "" : "none";
@@ -11196,12 +11057,12 @@ python3 site/annotate_social.py</pre>
     // Expected Data keeps its own Fixture Location control (adds Compare),
     // swapped into the same sidebar slot as the shared Total/Home/Away group.
     el.splitGroup.style.display =
-      page === "expected" || page === "team" || page === "notes" || page === "ownership" ? "none" : "";
+      page === "expected" || page === "team" || page === "ownership" ? "none" : "";
     if (el.expectedSplitGroup) {
       el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
     }
     const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
-    if (viewTabs) viewTabs.style.display = page === "team" || page === "notes" ? "none" : "";
+    if (viewTabs) viewTabs.style.display = page === "team" ? "none" : "";
     if (page === "team") {
       if (state.view !== "players") {
         state.view = "players";
@@ -11262,8 +11123,6 @@ python3 site/annotate_social.py</pre>
       renderTable();
     } else if (page === "team") {
       renderTeam();
-    } else if (page === "notes") {
-      renderNotes();
     }
     // Enter after content is in the DOM so the animation covers real layout.
     playPageEnter(pagePaneFor(page));
@@ -11276,6 +11135,7 @@ python3 site/annotate_social.py</pre>
     });
     syncExpectedCatToolbar();
     syncMarketsViewControls();
+    syncMobileChrome();
   }
 
   el.pageOpta.addEventListener("click", () => setPage("opta"));
@@ -11358,7 +11218,6 @@ python3 site/annotate_social.py</pre>
     });
   }
   if (el.pageTeam) el.pageTeam.addEventListener("click", () => setPage("team"));
-  if (el.pageNotes) el.pageNotes.addEventListener("click", () => setPage("notes"));
   el.pageExpected.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -11553,7 +11412,6 @@ python3 site/annotate_social.py</pre>
     if (id === "page-rankings") return "rankings";
     if (id === "page-ownership") return "ownership";
     if (id === "page-team") return "team";
-    if (id === "page-notes") return "notes";
     if (id === "page-expected") return "expected";
     if (id === "page-schedule") return "schedule";
     if (id === "page-feed") return "feed";
@@ -11683,11 +11541,10 @@ python3 site/annotate_social.py</pre>
   }
 
   function pageTabDeltaToCenter(target) {
-    const tabs = el.pageTabs;
-    if (!tabs || !target) return 0;
-    const tabsRect = tabs.getBoundingClientRect();
+    if (!target) return 0;
     const tabRect = target.getBoundingClientRect();
-    return (tabRect.left + tabRect.width / 2) - (tabsRect.left + tabsRect.width / 2);
+    const screenMid = window.innerWidth / 2;
+    return tabRect.left + tabRect.width / 2 - screenMid;
   }
 
   function originActivePageTabHost() {
@@ -11846,6 +11703,7 @@ python3 site/annotate_social.py</pre>
       const tabsRo = new ResizeObserver(() => {
         wrapPageTabsScroll();
         syncPageTabsScrollHints();
+        if (pageTabWheelBuilt) scrollActivePageTabIntoView({ instant: true });
       });
       tabsRo.observe(el.pageTabs);
       if (el.pageTabsClip) tabsRo.observe(el.pageTabsClip);
@@ -11873,6 +11731,7 @@ python3 site/annotate_social.py</pre>
   // ---------------------------------------------------------------------
   function setView(view) {
     state.view = view;
+    document.documentElement.dataset.view = view;
     state.sortKey = view === "players" && isNextSeason() ? "price" : "pts";
     state.sortDir = "desc";
     state.hiddenCols = new Set();
@@ -11921,9 +11780,14 @@ python3 site/annotate_social.py</pre>
       syncExpectedCatToolbar();
     }
     renderTable();
+    if (state.page === "opta" && el.optaPage) {
+      requestAnimationFrame(() => startOptaHighlightEnter(el.optaPage));
+    }
+    syncAllNameColumnSimplifies();
     if (view === "players") {
       requestAnimationFrame(() => syncSegThumb(el.valueModeSeg, { animate: false }));
     }
+    syncMobileChrome();
   }
 
   el.tabPlayers.addEventListener("click", () => setView("players"));
@@ -12129,7 +11993,7 @@ python3 site/annotate_social.py</pre>
   }
 
   function clearMainSearch() {
-    if (preferMobileSheet() && !mainSearchAlwaysOpen()) {
+    if (preferMobileSheet() && !mainSearchAlwaysOpen() && !mobileSearchAlwaysOpen()) {
       closeMobileSearch({ clear: true });
     } else if (el.search) {
       el.search.value = "";
@@ -12161,6 +12025,10 @@ python3 site/annotate_social.py</pre>
     return (state.page === "team" || state.page === "opta") && !preferMobileSheet();
   }
 
+  function mobileSearchAlwaysOpen() {
+    return preferMobileSheet() && (state.page === "ownership" || state.page === "expected");
+  }
+
   function syncTeamSearchHost() {
     if (!el.searchWrap) return;
     const home = el.searchHome;
@@ -12172,10 +12040,15 @@ python3 site/annotate_social.py</pre>
       "stats-search-always-open",
       state.page === "opta" && !preferMobileSheet()
     );
+    el.searchWrap.classList.toggle("mobile-search-always-open", mobileSearchAlwaysOpen());
     if (state.page === "rankings") {
       el.searchWrap.classList.remove("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
-    } else if (mainSearchAlwaysOpen() || (state.page === "team" && state.teamPickerSlot)) {
+    } else if (
+      mainSearchAlwaysOpen() ||
+      mobileSearchAlwaysOpen() ||
+      (state.page === "team" && state.teamPickerSlot)
+    ) {
       el.searchWrap.classList.add("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "true");
     } else if (!(el.search && el.search.value.trim())) {
@@ -12188,13 +12061,19 @@ python3 site/annotate_social.py</pre>
 
   function closeMobileSearch({ clear = false } = {}) {
     if (!el.searchWrap) return;
-    if ((mainSearchAlwaysOpen() || (state.page === "team" && state.teamPickerSlot)) && !clear) return;
-    el.searchWrap.classList.remove("search-open");
-    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    const alwaysOpen =
+      mainSearchAlwaysOpen() ||
+      mobileSearchAlwaysOpen() ||
+      (state.page === "team" && state.teamPickerSlot);
+    if (alwaysOpen && !clear) return;
     if (clear) {
       if (el.search) el.search.value = "";
       state.search = "";
+      syncSearchClearBtns();
+      if (alwaysOpen) return;
     }
+    el.searchWrap.classList.remove("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     syncSearchClearBtns();
   }
 
@@ -12638,6 +12517,7 @@ python3 site/annotate_social.py</pre>
   }
   buildMarketsViewMenu();
   syncMarketsViewControls();
+  syncMobileChrome();
 
   function setMarketsSlidersOpen(open) {
     if (!el.marketsControls || !el.marketsSlidersToggle) return;
@@ -13379,26 +13259,30 @@ python3 site/annotate_social.py</pre>
   bindMqChange(FINE_HOVER_MQ, () => {
     syncPointerMode();
     syncColumnsPanelHost();
-    syncAllNameColumnSimplifies();
+    refreshNameSimplifyOrigins();
     syncExpectedCatToolbar();
     syncMarketsViewControls();
+    syncMobileChrome();
   });
   bindMqChange(NARROW_MQ, () => {
     syncColumnsPanelHost();
-    syncAllNameColumnSimplifies();
+    refreshNameSimplifyOrigins();
+    resetMobileChromeScrollHide();
     syncExpectedCatToolbar();
     syncMarketsViewControls();
+    syncMobileChrome();
     setPageTrayOpen(false);
     syncPageTrayTrigger();
     syncPageTabWheel();
-    if (state.page === "notes" && NARROW_MQ.matches) setPage("opta");
-    if (el.pageNotes) el.pageNotes.hidden = NARROW_MQ.matches;
     if (state.page === "team") renderTeam();
     if (state.page === "opta") {
       syncCoreUnderName();
       requestAnimationFrame(() => {
         snapOptaToGameStats();
-        requestAnimationFrame(snapOptaToGameStats);
+        requestAnimationFrame(() => {
+          snapOptaToGameStats();
+          refreshNameSimplifyOrigins();
+        });
       });
     }
   });
@@ -13445,59 +13329,6 @@ python3 site/annotate_social.py</pre>
   if (el.teamResyncBtn) {
     el.teamResyncBtn.addEventListener("click", () => requestResyncPlanner());
   }
-  if (el.notesGroupSeg) {
-    el.notesGroupSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-notes-group]");
-      if (!btn) return;
-      state.notesGroupBy = btn.getAttribute("data-notes-group") || "none";
-      renderNotes();
-    });
-  }
-  if (el.notesCollage) {
-    el.notesCollage.addEventListener("click", (e) => {
-      const del = e.target.closest("[data-note-delete]");
-      if (!del) return;
-      const id = del.getAttribute("data-note-delete");
-      openConfirmModal({
-        title: "Delete note?",
-        message: "This removes the comment permanently from this browser.",
-        okLabel: "Delete",
-      }).then((ok) => {
-        if (ok) deleteNote(id);
-      });
-    });
-  }
-  if (el.noteModal) {
-    el.noteModal.addEventListener("click", (e) => {
-      if (e.target.closest("[data-note-cancel]")) {
-        closeNoteModal();
-        return;
-      }
-      if (e.target.closest("#note-modal-save")) saveNoteFromModal();
-    });
-  }
-  if (el.noteContextMenu) {
-    el.noteContextMenu.addEventListener("click", (e) => {
-      if (e.target.closest("[data-note-add]") && noteDraft && noteDraft.target) {
-        openNoteModal(noteDraft.target);
-      }
-    });
-    el.noteContextMenu.addEventListener("contextmenu", (e) => e.preventDefault());
-  }
-  document.addEventListener("pointerdown", (e) => {
-    if (!el.noteContextMenu || !el.noteContextMenu.classList.contains("open")) return;
-    if (Date.now() - noteMenuOpenedAt < 350) return;
-    if (e.target.closest("#note-context-menu")) return;
-    closeNoteContextMenu();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (el.noteModal && !el.noteModal.hidden) {
-      closeNoteModal();
-      return;
-    }
-    closeNoteContextMenu();
-  });
   if (el.teamClearBtn) {
     el.teamClearBtn.addEventListener("click", () => {
       setPrefsOpen(false);
@@ -13581,7 +13412,6 @@ python3 site/annotate_social.py</pre>
     syncFeedSearchLayout();
     upgradeNativeTitles();
     renderPriceIssuesPanel();
-    loadNotes();
     // Filters start closed on every page and viewport; the toolbar button opens them.
     el.sidebar.classList.add("collapsed");
     el.sidebarToggle.classList.remove("on");
@@ -13628,7 +13458,7 @@ python3 site/annotate_social.py</pre>
       syncFeedSearchLayout();
       syncTeamSearchHost();
       syncPageTabsScrollHints();
-      syncAllNameColumnSimplifies();
+      refreshNameSimplifyOrigins();
     });
     if (typeof NARROW_MQ.addEventListener === "function") {
       NARROW_MQ.addEventListener("change", () => {
@@ -13643,6 +13473,7 @@ python3 site/annotate_social.py</pre>
     }
     bindAllNameColumnSimplifies();
     bindNestedTableScroll();
+    bindMobileChromeScrollHide();
     try {
       await restoreManagerId();
     } catch {

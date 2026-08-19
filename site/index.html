@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;0,600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=461" />
+<link rel="stylesheet" href="styles.css?v=478" />
 <script>
 (() => {
   try {
@@ -58,8 +58,8 @@
   <symbol id="i-columns" viewBox="0 0 24 24">
     <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>
   </symbol>
-  <symbol id="i-list-filter" viewBox="0 0 24 24">
-    <path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/>
+  <symbol id="i-funnel" viewBox="0 0 24 24">
+    <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>
   </symbol>
   <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
     <path d="M21 4H14"/><path d="M10 4H3"/><path d="M21 12H12"/><path d="M8 12H3"/>
@@ -193,18 +193,6 @@
   <symbol id="i-shirt" viewBox="0 0 24 24">
     <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>
   </symbol>
-  <symbol id="i-sticky-note" viewBox="0 0 24 24">
-    <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/>
-    <path d="M15 3v5h5"/>
-  </symbol>
-  <symbol id="i-notebook-pen" viewBox="0 0 24 24">
-    <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/>
-    <path d="M2 6h4"/>
-    <path d="M2 10h4"/>
-    <path d="M2 14h4"/>
-    <path d="M2 18h4"/>
-    <path d="m21.378 5.626-1.004-1.004a2.12 2.12 0 0 0-3 0L12 9.996V13h3.004l6.374-6.374a2.12 2.12 0 0 0 0-3z"/>
-  </symbol>
   <symbol id="i-users" viewBox="0 0 24 24">
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
@@ -265,10 +253,6 @@
     <button id="page-team" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
       Team
-    </button>
-    <button id="page-notes" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-sticky-note"/></svg>
-      Notes
     </button>
     <div class="page-tab-dropdown" id="expected-tab-wrap">
       <button id="page-expected" class="page-tab-btn" type="button"
@@ -429,14 +413,14 @@
 <div class="topbar" id="subtoolbar">
   <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
     <button id="sidebar-toggle" class="ghost-btn icon-only-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters" aria-pressed="false">
-      <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
+      <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
     </button>
     <div class="tabs">
-      <button id="tab-players" class="tab-btn active" type="button">
+      <button id="tab-players" class="tab-btn active" type="button" aria-label="Players">
         <svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>
         Players
       </button>
-      <button id="tab-teams" class="tab-btn" type="button">
+      <button id="tab-teams" class="tab-btn" type="button" aria-label="Teams">
         <svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>
         Teams
       </button>
@@ -482,8 +466,9 @@
         <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
         <span class="btn-label">Compare</span>
       </button>
-      <button id="columns-btn" class="ghost-btn icon-only-btn" type="button" title="Columns" aria-label="Columns" aria-expanded="false" aria-controls="columns-sidebar">
+      <button id="columns-btn" class="ghost-btn icon-label-btn" type="button" title="Columns" aria-label="Columns" aria-expanded="false" aria-controls="columns-sidebar">
         <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
+        <span class="btn-label">Columns</span>
       </button>
       <div class="dropdown-wrap expected-cat-toolbar" id="expected-cat-toolbar" hidden>
         <button id="expected-cat-btn" class="ghost-btn expected-cat-btn" type="button"
@@ -517,7 +502,7 @@
   <div class="topbar-cluster topbar-feed-start" id="feed-toolbar-start" style="display:none;">
     <button id="feed-filters-toggle" class="ghost-btn icon-only-btn" type="button"
       title="Show feed filters" aria-label="Show feed filters" aria-expanded="false" aria-controls="feed-controls">
-      <svg class="icon" aria-hidden="true"><use href="#i-list-filter"/></svg>
+      <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
     </button>
   </div>
   <div class="topbar-cluster topbar-feed-end" id="feed-toolbar-end" style="display:none;">
@@ -849,33 +834,14 @@
       </div>
     </div>
 
-    <div id="notes-page" class="page-pane" style="display:none;">
-      <div class="page-header notes-header">
-        <div>
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-sticky-note"/></svg>Notes<button class="page-info-btn" type="button" aria-label="How Notes works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-          <p class="page-subtitle">Freeform comments on players and teams — newest first. Right-click almost anywhere to add one.</p>
-        </div>
-        <div class="notes-header-actions">
-          <span class="count-label" id="notes-count-label"></span>
-          <div class="segmented notes-group-seg" id="notes-group-seg" role="group" aria-label="Group notes">
-            <button type="button" data-notes-group="none" class="active">All</button>
-            <button type="button" data-notes-group="player">By player</button>
-            <button type="button" data-notes-group="team">By team</button>
-          </div>
-        </div>
-      </div>
-      <div class="notes-collage" id="notes-collage"></div>
-    </div>
-
     <div id="expected-page" class="page-pane" style="display:none;">
-      <div class="page-header expected-header">
+      <div class="page-header expected-header" hidden>
         <div class="expected-header-top">
           <div class="expected-header-text">
             <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">Expected Data</span><button class="page-info-btn" type="button" aria-label="How Expected Data works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
           </div>
         </div>
         <p id="expected-sub" class="page-subtitle"></p>
-        <div class="expected-legend-inline" id="expected-legend"></div>
       </div>
 
       <div class="barbell-wrap" id="barbell-wrap">
@@ -1098,20 +1064,9 @@
 <div id="schedule-scatter-tooltip" class="fixture-tooltip schedule-scatter-tooltip" role="tooltip" style="display:none;"></div>
 <div id="page-info-tooltip" class="fixture-tooltip page-info-tooltip" role="tooltip" style="display:none;"></div>
 <div id="team-row-menu" class="dropdown-panel settings-panel team-row-menu" role="menu" aria-labelledby="team-row-menu-title" aria-hidden="true" tabindex="-1"></div>
-<div id="note-context-menu" class="dropdown-panel settings-panel note-context-menu" role="menu" aria-hidden="true" tabindex="-1"></div>
-<div id="note-modal" class="confirm-modal note-modal" hidden>
-  <div class="confirm-modal-backdrop" data-note-cancel></div>
-  <div class="confirm-modal-panel note-modal-panel" role="dialog" aria-modal="true" aria-labelledby="note-modal-title">
-    <h3 id="note-modal-title">Add note</h3>
-    <p class="note-modal-sub" id="note-modal-sub"></p>
-    <label class="prefs-field-label" for="note-text-input">Comment</label>
-    <textarea id="note-text-input" class="note-text-input" rows="5" placeholder="What are you thinking about this pick or club?"></textarea>
-    <div class="confirm-modal-actions">
-      <button type="button" class="ghost-btn" data-note-cancel>Cancel</button>
-      <button type="button" class="ghost-btn" id="note-modal-save">Save note</button>
-    </div>
-  </div>
-</div>
+<div id="mobile-chrome-fade" class="mobile-chrome-fade" hidden aria-hidden="true"></div>
+<div id="mobile-view-dock" class="mobile-view-dock" hidden aria-hidden="true"></div>
+<div id="mobile-filter-dock" class="mobile-filter-dock" hidden aria-hidden="true"></div>
 <div id="mobile-sheet" class="mobile-sheet" hidden aria-hidden="true">
   <div class="mobile-sheet-backdrop" data-sheet-dismiss></div>
   <div class="mobile-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-sheet-title">
@@ -1144,7 +1099,7 @@
 <script src="social_data.js?v=14"></script>
 <script src="markets_data.js?v=6"></script>
 <script src="ownership_data.js?v=3"></script>
-<script src="app.js?v=455"></script>
+<script src="app.js?v=470"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -192,8 +192,18 @@ html, body {
 @media (max-width: 720px) {
   html, body {
     font-size: 12px;
-    overflow-x: clip;
-    overscroll-behavior-x: none;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+  .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
   }
   :root {
     --badge-size: 16px;
@@ -289,6 +299,9 @@ a { color: var(--blue); }
   align-items: center;
   gap: 2px;
   flex: none;
+  margin-left: auto;
+  position: relative;
+  z-index: 5;
 }
 
 .page-tray-btn {
@@ -417,11 +430,18 @@ a { color: var(--blue); }
   font-weight: 600;
 }
 .page-tabs-clip.is-wheel {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  flex: none;
+  width: min(760px, calc(100vw - 380px));
+  max-width: min(760px, calc(100vw - 380px));
   overflow: hidden;
+  z-index: 3;
 }
 .page-tabs-clip.is-wheel::before,
 .page-tabs-clip.is-wheel::after {
-  width: 84px;
+  width: 72px;
   opacity: 1;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -721,6 +741,8 @@ a { color: var(--blue); }
   gap: 9px;
   flex: none;
   min-width: max-content;
+  position: relative;
+  z-index: 5;
 }
 
 .brand {
@@ -1739,19 +1761,23 @@ a { color: var(--blue); }
 .main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 20px 20px 48px;
 }
 
 @media (max-width: 720px) {
   .main {
+    flex: 1 1 auto;
+    min-height: 0;
     --main-pad-x: 8px;
     --main-pad-top: 8px;
     --table-sticky-max: calc(100dvh - 8.5rem);
     padding: var(--main-pad-top) var(--main-pad-x) 28px;
     overflow-x: hidden;
     overflow-y: auto;
-    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Title stays in the page scroll; wide tables pan inside the card so the
@@ -1878,9 +1904,6 @@ a { color: var(--blue); }
     background: transparent;
     color: hsl(var(--blue-hsl));
   }
-  #page-notes {
-    display: none !important;
-  }
   .page-nav .icon-only-btn {
     width: 32px;
     height: 32px;
@@ -1928,6 +1951,26 @@ a { color: var(--blue); }
     display: none;
   }
 
+  /* Subtoolbar action buttons keep text labels; search stays icon-only unless always-open. */
+  #subtoolbar .icon-label-btn {
+    width: auto;
+    height: 32px;
+    padding: 0 10px;
+    justify-content: center;
+    gap: 6px;
+  }
+  #subtoolbar .icon-label-btn .btn-label {
+    display: inline;
+    font-size: 12.5px;
+    font-weight: 550;
+    letter-spacing: 0.01em;
+  }
+  #subtoolbar .icon-label-btn .icon {
+    width: 15px;
+    height: 15px;
+    font-size: 15px;
+  }
+
   .icon-label-btn {
     width: 32px;
     height: 32px;
@@ -1941,14 +1984,76 @@ a { color: var(--blue); }
     font-size: 15px;
   }
 
+  /* Floating docks leave the start cluster empty — collapse it. */
+  html.has-mobile-view-dock #stats-toolbar-start:not(:has(.team-toolbar-mode:not([hidden]))) {
+    display: none !important;
+  }
+  html.has-mobile-view-dock #stats-toolbar-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 0;
+  }
+  html.has-mobile-view-dock #stats-toolbar-actions .topbar-end-cluster {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  /* Ownership: always-expanded search fills the bar. */
+  html[data-page="ownership"] #subtoolbar #stats-toolbar-actions {
+    width: 100%;
+  }
+  html[data-page="ownership"] #subtoolbar #search-wrap.search-open {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  /* xData mobile: category left, search expanded; legend centered below nav. */
+  html[data-page="expected"] #subtoolbar.is-expected-mobile {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  html[data-page="expected"] #subtoolbar.is-expected-mobile #stats-toolbar-actions {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    margin-left: 0;
+    min-width: 0;
+  }
+  html[data-page="expected"] #subtoolbar.is-expected-mobile .topbar-data-cluster {
+    display: none;
+  }
+  html[data-page="expected"] #subtoolbar.is-expected-mobile .topbar-end-cluster {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+  html[data-page="expected"] #subtoolbar.is-expected-mobile #expected-cat-toolbar {
+    order: 1;
+    flex: none;
+  }
+  html[data-page="expected"] #subtoolbar.is-expected-mobile #search-wrap.search-open {
+    order: 2;
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
   /* Search expands in-row and covers the other toolbar buttons. */
-  #subtoolbar:has(#search-wrap.search-open) .topbar-view-cluster,
-  #subtoolbar:has(#search-wrap.search-open) .topbar-data-cluster,
-  #subtoolbar:has(#search-wrap.search-open) .team-toolbar-controls,
-  #subtoolbar:has(#search-wrap.search-open) #compare-toggle,
-  #subtoolbar:has(#search-wrap.search-open) #columns-btn,
-  #subtoolbar:has(#search-wrap.search-open) #expected-cat-toolbar,
-  #subtoolbar:has(#search-wrap.search-open) #markets-view-toolbar {
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) .topbar-view-cluster,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) .topbar-data-cluster,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) .team-toolbar-controls,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #compare-toggle,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #columns-btn,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #expected-cat-toolbar,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #markets-view-toolbar {
     display: none !important;
   }
   #subtoolbar:has(#search-wrap.search-open) .topbar-actions-cluster,
@@ -1992,38 +2097,172 @@ a { color: var(--blue); }
   .page-subtitle,
   .expected-header-top,
   .schedule-header-text,
-  .markets-header-text,
-  .notes-header > div:first-child {
+  .markets-header-text {
     display: none;
   }
   #opta-page .page-header,
   #rankings-page .page-header,
   #ownership-page .page-header,
   #team-page .page-header,
-  #feed-page .page-header {
+  #feed-page .page-header,
+  #expected-page .page-header {
     display: none;
   }
-  #expected-page .page-header,
   #schedule-page .page-header,
-  #markets-page .page-header,
-  #notes-page .page-header {
+  #markets-page .page-header {
     margin-bottom: 10px;
-  }
-  #expected-page .expected-legend-inline {
-    margin-top: 0;
   }
   #schedule-page .schedule-header-top,
   #markets-page .markets-header-top {
     justify-content: flex-end;
-  }
-  #notes-page .notes-header-actions {
-    margin-left: auto;
   }
   .page-header-meta {
     margin-left: auto;
   }
   .count-label {
     display: none;
+  }
+
+  /* Mobile bottom chrome: subtle fade over content + floating docks. */
+  .mobile-chrome-fade,
+  .mobile-view-dock,
+  .mobile-filter-dock {
+    transition:
+      transform 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.42s ease;
+    will-change: transform;
+  }
+  .mobile-chrome-fade {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(104px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
+    z-index: 43;
+    background: linear-gradient(
+      to top,
+      hsl(var(--background) / 0.94) 0%,
+      hsl(var(--background) / 0.72) 34%,
+      hsl(var(--background) / 0.28) 62%,
+      hsl(var(--background) / 0) 100%
+    );
+  }
+  .mobile-view-dock {
+    position: fixed;
+    left: max(16px, env(safe-area-inset-left));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 44;
+    pointer-events: none;
+  }
+  .mobile-view-dock:not([hidden]) {
+    pointer-events: auto;
+  }
+  .mobile-view-dock .tabs {
+    display: inline-flex;
+    gap: 2px;
+    height: 56px;
+    padding: 4px;
+    position: relative;
+    align-items: stretch;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.85);
+    border-radius: 16px;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+  .mobile-view-dock .tabs .seg-thumb {
+    border-radius: 12px;
+    background: hsl(var(--blue-hsl) / 0.16);
+  }
+  .mobile-view-dock .tab-btn {
+    width: 48px;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    line-height: 0;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-dim);
+    touch-action: manipulation;
+  }
+  .mobile-view-dock .tab-btn .icon {
+    width: 22px;
+    height: 22px;
+    font-size: 22px;
+  }
+  .mobile-view-dock .tab-btn.active {
+    background: transparent;
+    border-color: transparent;
+    color: hsl(var(--blue-hsl));
+    box-shadow: none;
+  }
+  .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
+    background: transparent;
+  }
+  .mobile-view-dock .tab-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  .mobile-filter-dock {
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 44;
+    pointer-events: none;
+  }
+  .mobile-filter-dock:not([hidden]) {
+    pointer-events: auto;
+  }
+  .mobile-filter-fab {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 16px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.85);
+    box-shadow: none;
+    color: hsl(var(--blue-hsl));
+    touch-action: manipulation;
+  }
+  .mobile-filter-fab .icon {
+    width: 22px;
+    height: 22px;
+    font-size: 22px;
+  }
+  .mobile-filter-fab.on,
+  .mobile-filter-fab[aria-expanded="true"],
+  .mobile-filter-fab[aria-pressed="true"] {
+    background: hsl(var(--blue-hsl) / 0.16);
+    border-color: hsl(var(--blue-hsl) / 0.38);
+    color: hsl(var(--blue-hsl));
+    box-shadow: none;
+  }
+  .mobile-filter-fab:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  html.has-mobile-filter-fab #feed-toolbar-start,
+  html.has-mobile-filter-fab #schedule-page .page-header,
+  html.has-mobile-filter-fab #markets-page .page-header {
+    display: none !important;
+  }
+  html.has-mobile-chrome-fade .main {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    transition: padding-bottom 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html.mobile-chrome-scroll-hidden .mobile-chrome-fade:not([hidden]),
+  html.mobile-chrome-scroll-hidden .mobile-view-dock:not([hidden]),
+  html.mobile-chrome-scroll-hidden .mobile-filter-dock:not([hidden]) {
+    transform: translateY(calc(100% + 36px + env(safe-area-inset-bottom, 0px)));
+    opacity: 0;
+    pointer-events: none;
+  }
+  html.mobile-chrome-scroll-hidden.has-mobile-chrome-fade .main {
+    padding-bottom: 28px;
   }
 }
 
@@ -2438,6 +2677,7 @@ a { color: var(--blue); }
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
   --name-col-w: 170px;
+  --name-collapse: 0;
 }
 .table-wrap img,
 .table-wrap svg {
@@ -2458,7 +2698,7 @@ a { color: var(--blue); }
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    touch-action: manipulation;
+    touch-action: pan-x pan-y;
     --name-col-w: 118px;
     --crest-size: 18px;
     --badge-size: 18px;
@@ -2621,6 +2861,19 @@ thead th.col-num, tbody td.col-num {
   padding-left: 4px;
   padding-right: 4px;
   box-sizing: border-box;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
+  html[data-page="opta"][data-view="teams"] .table-wrap > table {
+    width: 100%;
+    min-width: 100%;
+  }
+  html[data-page="opta"][data-view="teams"] thead th.col-num,
+  html[data-page="opta"][data-view="teams"] tbody td.col-num {
+    width: auto;
+    min-width: var(--metric-col-w, 52px);
+    max-width: none;
+  }
 }
 thead th.col-check, tbody td.col-check {
   width: var(--check-col-w, 36px);
@@ -2816,6 +3069,78 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 
 .player-name { font-weight: 700; font-size: 13.5px; }
+.player-name-prefix,
+.player-name-rest {
+  display: inline;
+}
+.player-name-rest:empty {
+  display: none;
+}
+
+/* Scroll-linked Statistics name morph (Players + Teams). */
+.table-wrap.name-simplify-ready {
+  --name-col-full: var(--name-col-w, 170px);
+  --name-col-compact-players: 76px;
+  --name-col-compact-teams: 34px;
+  --name-col-compact: var(--name-col-compact-players);
+  --name-col-w-morph: calc(
+    var(--name-col-full) - var(--name-collapse) * (var(--name-col-full) - var(--name-col-compact))
+  );
+}
+.table-wrap.name-simplify-ready[data-view="teams"] {
+  --name-col-compact: var(--name-col-compact-teams);
+}
+.table-wrap.name-simplify-ready thead th.col-name,
+.table-wrap.name-simplify-ready thead th.col-player,
+.table-wrap.name-simplify-ready tbody td.col-name,
+.table-wrap.name-simplify-ready tbody td.col-player,
+.table-wrap.name-simplify-ready thead tr.section-row th.sec-sticky-lead {
+  width: var(--name-col-w-morph);
+  min-width: var(--name-col-w-morph);
+  max-width: var(--name-col-w-morph);
+}
+.table-wrap.name-simplify-ready .player-cell-sub {
+  opacity: calc(1 - var(--name-collapse));
+  max-height: calc(1.35em * (1 - var(--name-collapse) * 0.95));
+  overflow: hidden;
+  margin-top: calc(var(--name-collapse) * -2px);
+}
+/* Players: keep crest + first four letters; blur/fade the remainder.
+   At collapse 0 the mask is fully opaque so names stay whole. */
+.table-wrap.name-simplify-ready[data-view="players"] .player-name-rest {
+  filter: blur(calc(var(--name-collapse) * 6px));
+  opacity: calc(1 - var(--name-collapse) * 0.35);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(100% - var(--name-collapse) * 72%),
+    transparent calc(110% - var(--name-collapse) * 38%)
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(100% - var(--name-collapse) * 72%),
+    transparent calc(110% - var(--name-collapse) * 38%)
+  );
+}
+.table-wrap.name-simplify-ready[data-view="players"].is-name-simplifying .player-name-icons {
+  opacity: calc(1 - var(--name-collapse) * 0.65);
+  max-width: calc((1 - var(--name-collapse)) * 24px);
+  overflow: hidden;
+}
+/* Teams: dissolve name + league rank; crest stays. */
+.table-wrap.name-simplify-ready[data-view="teams"] .col-name .player-name,
+.table-wrap.name-simplify-ready[data-view="teams"] .col-name .team-league-pos {
+  opacity: calc(1 - var(--name-collapse));
+  filter: blur(calc(var(--name-collapse) * 5px));
+  transform: translateX(calc(var(--name-collapse) * -6px));
+  max-width: calc((1 - var(--name-collapse)) * 100%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.table-wrap.name-simplify-ready[data-view="teams"].is-name-simplifying .col-name .player-name-line {
+  justify-content: flex-start;
+}
 
 /* Identity: crest left of name/POS. Flat grid — crest column always hugs the badge. */
 .player-cell {
@@ -4302,11 +4627,10 @@ html[data-page="ownership"] .layout .main {
   gap: 0;
 }
 .expected-header-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
+  display: none;
+}
+#expected-page .page-header {
+  display: none !important;
 }
 .expected-header-text {
   min-width: 0;
@@ -4320,8 +4644,8 @@ html[data-page="ownership"] .layout .main {
   gap: 14px;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
-  margin-top: 8px;
+  justify-content: center;
+  margin-top: 0;
   font-size: 11.5px;
   color: var(--text-dim);
 }
@@ -4881,7 +5205,7 @@ html[data-page="ownership"] .layout .main {
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    touch-action: manipulation;
+    touch-action: pan-x pan-y;
   }
   .barbell-head {
     padding: 7px 10px;
@@ -5708,6 +6032,14 @@ html[data-page="ownership"] .layout .main {
   margin-top: 2px;
   border-radius: 3px;
   background: hsl(var(--negative) / 0.42);
+}
+
+.spit-expected {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--text-faint);
 }
 
 .spit-easy {
@@ -7953,8 +8285,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   margin-left: auto;
   gap: 8px;
 }
-#subtoolbar.is-markets-mobile .markets-view-toolbar,
-#subtoolbar.is-markets-mobile .markets-sliders-toggle {
+#subtoolbar.is-markets-mobile .markets-view-toolbar {
   display: block;
 }
 
@@ -9620,6 +9951,24 @@ html[data-page="team"] .layout .main {
   #team-page .page-header,
   #team-page .team-budget-bar {
     flex: 0 0 auto;
+  }
+  #team-page .team-budget-bar {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 10px 8px;
+  }
+  #team-page .team-budget-cap-vice {
+    display: none;
+  }
+  #team-page .team-budget-stat {
+    flex: 1 1 0;
+    align-items: center;
+    text-align: center;
+  }
+  #team-page .team-budget-stat strong {
+    max-width: none;
+    font-size: 12.5px;
   }
   #team-squad-view,
   #team-picker-view {
