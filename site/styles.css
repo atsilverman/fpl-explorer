@@ -273,7 +273,7 @@ a { color: var(--blue); }
   --page-nav-pad-y: 12px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   padding: var(--page-nav-pad-y) 18px;
   background: hsl(var(--card));
   border-bottom: 1px solid var(--border);
@@ -344,7 +344,7 @@ a { color: var(--blue); }
    instead of wrapping onto a second line. */
 .page-tabs-clip {
   display: block;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   position: relative;
   align-self: stretch;
@@ -399,17 +399,54 @@ a { color: var(--blue); }
   scroll-padding-inline: 12px;
   touch-action: pan-x;
 }
+.page-tabs::-webkit-scrollbar {
+  display: none;
+}
 .page-tabs .page-tab-btn {
   touch-action: manipulation;
 }
 .page-tabs.is-wheel {
+  gap: 20px;
   padding-inline: 0;
   scroll-padding-inline: 0;
 }
+.page-tabs.is-wheel .page-tab-btn {
+  padding: 8px 6px;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.page-tabs-clip.is-wheel {
+  overflow: hidden;
+}
 .page-tabs-clip.is-wheel::before,
 .page-tabs-clip.is-wheel::after {
-  width: 40px;
+  width: 84px;
   opacity: 1;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.page-tabs-clip.is-wheel::before {
+  background: linear-gradient(
+    to right,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.92) 28%,
+    hsl(var(--card) / 0.55) 58%,
+    hsl(var(--card) / 0)
+  );
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 22%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 22%, transparent 100%);
+}
+.page-tabs-clip.is-wheel::after {
+  background: linear-gradient(
+    to left,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.92) 28%,
+    hsl(var(--card) / 0.55) 58%,
+    hsl(var(--card) / 0)
+  );
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 22%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 0%, #000 22%, transparent 100%);
 }
 .page-tab-clone {
   cursor: pointer;
@@ -1170,9 +1207,9 @@ a { color: var(--blue); }
   position: relative;
   z-index: 4;
   background: hsl(var(--card));
-  margin-left: -4px;
-  padding-left: 12px;
-  box-shadow: -18px 0 14px -6px hsl(var(--card));
+  margin-left: 0;
+  padding-left: 4px;
+  box-shadow: none;
 }
 
 .icon-btn, .ghost-btn {
@@ -2421,7 +2458,7 @@ a { color: var(--blue); }
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    touch-action: pan-x;
+    touch-action: manipulation;
     --name-col-w: 118px;
     --crest-size: 18px;
     --badge-size: 18px;
@@ -2731,6 +2768,22 @@ tbody td.zero-val { color: var(--text-faint); }
 tbody td.highlight-top,
 tbody td.highlight-bottom { font-weight: 700; color: var(--text); }
 tbody td.highlight-strong { color: #fff; }
+tbody td.is-enhanced {
+  position: relative;
+  isolation: isolate;
+}
+tbody td.is-enhanced::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--hl-fill);
+  opacity: var(--hl-sat, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+#opta-page.is-hl-entering tbody td.is-enhanced.highlight-strong {
+  color: color-mix(in srgb, #fff calc(var(--hl-sat, 1) * 100%), var(--text));
+}
 tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; font-family: var(--sans); }
 tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 
@@ -4828,7 +4881,7 @@ html[data-page="ownership"] .layout .main {
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    touch-action: pan-x;
+    touch-action: manipulation;
   }
   .barbell-head {
     padding: 7px 10px;

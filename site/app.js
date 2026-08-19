@@ -216,13 +216,14 @@
   function applyEnhanceHighlight(td, kind, intensity) {
     const paint = enhanceHighlightPaint(kind, intensity);
     if (paint.skip) return;
+    td.classList.add("is-enhanced");
     if (paint.emphasize || paint.strong) {
       td.classList.add(kind === "top" ? "highlight-top" : "highlight-bottom");
     }
     td.classList.toggle("highlight-strong", paint.strong);
-    td.style.backgroundColor = paint.backgroundColor;
-    if (paint.color) td.style.color = paint.color;
-    else td.style.removeProperty("color");
+    td.style.setProperty("--hl-fill", paint.backgroundColor);
+    td.style.removeProperty("background-color");
+    td.style.removeProperty("color");
   }
 
   function enhanceHighlightInlineStyle(kind, intensity) {
@@ -1918,11 +1919,9 @@
     return preferMobileSheet() || COLUMNS_IN_FILTERS_MQ.matches;
   }
 
-  // Nested table/barbell scrollers can eat the swipe. On mobile they only
-  // pan horizontally; vertical flicks must stay on `.main` so iOS keeps
-  // native momentum (Rankings already does this). Don't preventDefault on
-  // touchmove — that makes Statistics feel sticky. Wheel still forwards
-  // when an inner pane is actually a vertical scroller.
+  // Horizontal tables/barbells are overflow-x scrollers, so iOS would otherwise
+  // swallow vertical flicks (only the 8px page padding would move). Drive
+  // `.main` for vertical, keep native horizontal pan, and coast after lift.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -1931,9 +1930,43 @@
       return Math.max(0, main.scrollHeight - main.clientHeight);
     }
 
+    let flingRaf = 0;
+    function stopFling() {
+      if (flingRaf) cancelAnimationFrame(flingRaf);
+      flingRaf = 0;
+    }
+
+    function flingMain(velocity) {
+      stopFling();
+      let v = velocity;
+      if (!NARROW_MQ.matches || Math.abs(v) < 0.12) return;
+      v = Math.max(-3.4, Math.min(3.4, v));
+      let last = performance.now();
+      const step = (now) => {
+        const dt = Math.min(32, now - last);
+        last = now;
+        v *= Math.exp(-0.0022 * dt);
+        const max = mainMax();
+        const next = Math.max(0, Math.min(max, main.scrollTop + v * dt));
+        main.scrollTop = next;
+        const atEdge = (v < 0 && next <= 0) || (v > 0 && next >= max);
+        if (atEdge || Math.abs(v) < 0.04) {
+          flingRaf = 0;
+          return;
+        }
+        flingRaf = requestAnimationFrame(step);
+      };
+      flingRaf = requestAnimationFrame(step);
+    }
+
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
+      let lastX = 0;
+      let lastY = 0;
+      let lastT = 0;
+      let axis = null;
+      let scrollV = 0;
 
       inner.addEventListener("wheel", (e) => {
         if (!NARROW_MQ.matches) return;
@@ -1947,6 +1980,50 @@
           e.preventDefault();
         }
       }, { passive: false });
+
+      inner.addEventListener("touchstart", (e) => {
+        const t = e.touches[0];
+        lastX = t.clientX;
+        lastY = t.clientY;
+        lastT = e.timeStamp;
+        axis = null;
+        scrollV = 0;
+        stopFling();
+      }, { passive: true });
+
+      inner.addEventListener("touchmove", (e) => {
+        if (!NARROW_MQ.matches) return;
+        const t = e.touches[0];
+        const x = t.clientX;
+        const y = t.clientY;
+        const dx = x - lastX;
+        const dy = y - lastY;
+        const now = e.timeStamp;
+        if (!axis) {
+          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+        }
+        lastX = x;
+        lastY = y;
+        if (axis !== "y") {
+          lastT = now;
+          return;
+        }
+        const dt = Math.max(8, now - lastT);
+        lastT = now;
+        scrollV = -dy / dt;
+        const max = mainMax();
+        const next = Math.max(0, Math.min(max, main.scrollTop - dy));
+        if (next === main.scrollTop) return;
+        main.scrollTop = next;
+        if (e.cancelable) e.preventDefault();
+      }, { passive: false });
+
+      inner.addEventListener("touchend", () => {
+        if (!NARROW_MQ.matches || axis !== "y") return;
+        flingMain(scrollV);
+      }, { passive: true });
+      inner.addEventListener("touchcancel", stopFling, { passive: true });
     });
   }
 
@@ -10722,17 +10799,26 @@ python3 site/annotate_social.py</pre>
 
   function playPageEnter(pane) {
     if (!pane) return;
-    pane.classList.remove("is-entering", "is-enter-pending");
+    pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
     clearTimeout(pane._enterClear);
     if (pane._countUpRaf) {
       cancelAnimationFrame(pane._countUpRaf);
       pane._countUpRaf = 0;
     }
+    if (pane._hlEnterRaf) {
+      cancelAnimationFrame(pane._hlEnterRaf);
+      pane._hlEnterRaf = 0;
+    }
+    if (pane.id === "opta-page") pane.style.removeProperty("--hl-sat");
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     // Never animate Statistics table rows. Opacity/transform on <tr> with
     // fill-mode `both` sticks at 0 in WebKit (and some Chromium), so the
     // landing page shows only the header bar until a view toggle recreates rows.
-    if (pane.id === "opta-page") return;
+    // Highlight fills still ease in (see startOptaHighlightEnter).
+    if (pane.id === "opta-page") {
+      startOptaHighlightEnter(pane);
+      return;
+    }
 
     const slowEnter = pane.id === "schedule-page";
     const rankingsEnter = pane.id === "rankings-page";
@@ -10836,6 +10922,27 @@ python3 site/annotate_social.py</pre>
         pane._enterClear = setTimeout(() => pane.classList.remove("is-entering"), clearMs);
       });
     });
+  }
+
+  function startOptaHighlightEnter(pane) {
+    if (!pane) return;
+    pane.classList.add("is-hl-entering");
+    pane.style.setProperty("--hl-sat", "0");
+    const duration = 2500;
+    const ease = (t) => t * t * (3 - 2 * t);
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      pane.style.setProperty("--hl-sat", String(ease(t)));
+      if (t < 1) {
+        pane._hlEnterRaf = requestAnimationFrame(tick);
+        return;
+      }
+      pane.style.setProperty("--hl-sat", "1");
+      pane.classList.remove("is-hl-entering");
+      pane._hlEnterRaf = 0;
+    };
+    pane._hlEnterRaf = requestAnimationFrame(tick);
   }
 
   function startStatCountUp(pane, selector) {
@@ -11162,7 +11269,9 @@ python3 site/annotate_social.py</pre>
     playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
-      scrollActivePageTabIntoView();
+      requestAnimationFrame(() => {
+        scrollActivePageTabIntoView();
+      });
       if (page === "ownership") renderOwnership();
     });
     syncExpectedCatToolbar();
@@ -11390,6 +11499,10 @@ python3 site/annotate_social.py</pre>
   });
   window.addEventListener("resize", () => {
     syncPageTabsScrollHints();
+    if (pageTabWheelEnabled()) {
+      wrapPageTabsScroll();
+      scrollActivePageTabIntoView({ instant: true });
+    }
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncBarbellHeadHeight();
@@ -11427,6 +11540,7 @@ python3 site/annotate_social.py</pre>
   let pageTabWheelLock = false;
   let pageTabWheelUnlockTimer = 0;
   let pageTabWheelGen = 0;
+  let pageTabFocusEl = null;
 
   function pageTabWheelEnabled() {
     return !!(el.pageTabs && !NARROW_MQ.matches);
@@ -11568,12 +11682,31 @@ python3 site/annotate_social.py</pre>
     syncPageTabsScrollHints();
   }
 
+  function pageTabDeltaToCenter(target) {
+    const tabs = el.pageTabs;
+    if (!tabs || !target) return 0;
+    const tabsRect = tabs.getBoundingClientRect();
+    const tabRect = target.getBoundingClientRect();
+    return (tabRect.left + tabRect.width / 2) - (tabsRect.left + tabsRect.width / 2);
+  }
+
+  function originActivePageTabHost() {
+    const tabs = el.pageTabs;
+    if (!tabs) return null;
+    const originBtn = tabs.querySelector(".page-tab-btn.active[id]");
+    if (!originBtn || !tabs.contains(originBtn)) return null;
+    return originBtn.closest(".page-tab-dropdown") || originBtn;
+  }
+
   function centerPageTabEl(target, { instant = false } = {}) {
     const tabs = el.pageTabs;
     if (!tabs || !target) return;
-    const tabsRect = tabs.getBoundingClientRect();
-    const tabRect = target.getBoundingClientRect();
-    const next = tabs.scrollLeft + (tabRect.left + tabRect.width / 2) - (tabsRect.left + tabsRect.width / 2);
+    const delta = pageTabDeltaToCenter(target);
+    if (Math.abs(delta) < 0.5) {
+      wrapPageTabsScroll();
+      return;
+    }
+    const next = tabs.scrollLeft + delta;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (instant || reduce || typeof tabs.scrollTo !== "function") {
       tabs.scrollLeft = next;
@@ -11588,9 +11721,33 @@ python3 site/annotate_social.py</pre>
       if (gen !== pageTabWheelGen) return;
       tabs.removeEventListener("scrollend", done);
       unlockPageTabWheel();
+      const origin = originActivePageTabHost();
+      let snap = target;
+      if (origin && tabs.contains(target)) {
+        if (Math.abs(pageTabDeltaToCenter(origin)) < Math.abs(pageTabDeltaToCenter(target))) {
+          snap = origin;
+        }
+      } else if (origin) {
+        snap = origin;
+      }
+      const correct = pageTabDeltaToCenter(snap);
+      if (Math.abs(correct) >= 0.5) tabs.scrollLeft += correct;
+      wrapPageTabsScroll();
+      syncPageTabsScrollHints();
     };
     tabs.addEventListener("scrollend", done, { once: true });
-    pageTabWheelUnlockTimer = window.setTimeout(done, 520);
+    pageTabWheelUnlockTimer = window.setTimeout(done, 780);
+  }
+
+  function pageTabHostFromNode(node) {
+    if (!node || !el.pageTabs || !el.pageTabs.contains(node)) return null;
+    const clone = node.closest("[data-page-clone]");
+    if (clone) return clone;
+    const origin = node.closest("[data-page-tab-origin]");
+    if (origin) return origin.closest(".page-tab-dropdown") || origin;
+    const btn = node.closest(".page-tab-btn");
+    if (btn) return btn.closest(".page-tab-dropdown") || btn;
+    return null;
   }
 
   function scrollActivePageTabIntoView(opts = {}) {
@@ -11613,27 +11770,16 @@ python3 site/annotate_social.py</pre>
       return;
     }
     if (!pageTabWheelBuilt) buildPageTabWheel();
-    const page = state.page;
-    const targets = [];
-    const originBtn = tabs.querySelector(".page-tab-btn.active[id]");
-    if (originBtn && tabs.contains(originBtn)) {
-      targets.push(originBtn.closest(".page-tab-dropdown") || originBtn);
-    }
-    tabs.querySelectorAll(`[data-page-clone="${page}"]`).forEach((n) => targets.push(n));
-    if (!targets.length) return;
-    const tabsRect = tabs.getBoundingClientRect();
-    const mid = tabsRect.left + tabsRect.width / 2;
-    let best = targets[0];
-    let bestDist = Infinity;
-    targets.forEach((t) => {
-      const r = t.getBoundingClientRect();
-      const d = Math.abs(r.left + r.width / 2 - mid);
-      if (d < bestDist) {
-        bestDist = d;
-        best = t;
+    let target = pageTabFocusEl && tabs.contains(pageTabFocusEl) ? pageTabFocusEl : null;
+    pageTabFocusEl = null;
+    if (!target) {
+      const originBtn = tabs.querySelector(".page-tab-btn.active[id]");
+      if (originBtn && tabs.contains(originBtn)) {
+        target = originBtn.closest(".page-tab-dropdown") || originBtn;
       }
-    });
-    centerPageTabEl(best, opts);
+    }
+    if (!target) return;
+    centerPageTabEl(target, opts);
     syncPageTabsScrollHints();
   }
 
@@ -11670,9 +11816,13 @@ python3 site/annotate_social.py</pre>
     el.pageTabs.addEventListener(
       "click",
       (e) => {
-        const host = e.target.closest("[data-page-clone]");
-        if (!host || !el.pageTabs.contains(host)) return;
-        const page = host.getAttribute("data-page-clone");
+        if (!e.target.closest(".dropdown-panel, .page-tab-menu")) {
+          const host = pageTabHostFromNode(e.target);
+          if (host) pageTabFocusEl = host;
+        }
+        const clone = e.target.closest("[data-page-clone]");
+        if (!clone || !el.pageTabs.contains(clone)) return;
+        const page = clone.getAttribute("data-page-clone");
         if (!page) return;
         e.preventDefault();
         e.stopPropagation();
@@ -13459,7 +13609,7 @@ python3 site/annotate_social.py</pre>
       if (state.page === "opta") renderTable();
     }, { once: true });
     window.addEventListener("pageshow", () => {
-      if (el.optaPage) el.optaPage.classList.remove("is-entering", "is-enter-pending");
+      if (el.optaPage) el.optaPage.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
       syncAllSegThumbs({ animate: false });
     });
     [50, 250].forEach((ms) => {
