@@ -2032,32 +2032,38 @@ a { color: var(--blue); }
   }
 
   /* Statistics mobile: Compare left, search expanded (same pattern as xData). */
-  html[data-page="opta"] #subtoolbar.is-opta-mobile {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar {
     flex-wrap: nowrap;
     gap: 8px;
   }
-  html[data-page="opta"] #subtoolbar.is-opta-mobile #stats-toolbar-actions {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #stats-toolbar-actions,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar #stats-toolbar-actions {
     display: flex;
     flex: 1 1 auto;
     width: 100%;
     margin-left: 0;
     min-width: 0;
   }
-  html[data-page="opta"] #subtoolbar.is-opta-mobile .topbar-data-cluster {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile .topbar-data-cluster,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar .topbar-data-cluster {
     display: none;
   }
-  html[data-page="opta"] #subtoolbar.is-opta-mobile .topbar-end-cluster {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile .topbar-end-cluster,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar .topbar-end-cluster {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
     align-items: center;
     gap: 8px;
   }
-  html[data-page="opta"] #subtoolbar.is-opta-mobile #compare-toggle {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #compare-toggle,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar #compare-toggle {
     order: 1;
     flex: none;
   }
-  html[data-page="opta"] #subtoolbar.is-opta-mobile #search-wrap.search-open {
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #search-wrap.search-open,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar #search-wrap.search-open {
     order: 2;
     flex: 1 1 auto;
     width: auto;
@@ -2065,7 +2071,15 @@ a { color: var(--blue); }
     min-width: 0;
   }
   html[data-page="opta"] #columns-btn,
-  html[data-page="opta"] #table-only-toggles {
+  html[data-page="opta"] #table-only-toggles,
+  #newprice-wrap {
+    display: none !important;
+  }
+  html.is-mobile-layout[data-page="opta"] #sidebar-toggle,
+  html.is-mobile-layout[data-page="opta"] #stats-toolbar-start > .tabs {
+    display: none !important;
+  }
+  html:not([data-page="opta"]) #compare-toggle {
     display: none !important;
   }
 
@@ -2108,8 +2122,7 @@ a { color: var(--blue); }
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) .team-toolbar-controls,
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #compare-toggle,
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #columns-btn,
-  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #expected-cat-toolbar,
-  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #markets-view-toolbar {
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #expected-cat-toolbar {
     display: none !important;
   }
   #subtoolbar:has(#search-wrap.search-open) .topbar-actions-cluster,
@@ -2183,6 +2196,11 @@ a { color: var(--blue); }
      accent fill only for “on” (filter open / active affordance). */
   .mobile-chrome-fade {
     display: none !important;
+  }
+  :root {
+    --mobile-dock-size: 52px;
+    --mobile-dock-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    --mobile-dock-clearance: calc(var(--mobile-dock-size) + var(--mobile-dock-bottom) + 14px);
   }
   .mobile-view-dock,
   .mobile-filter-dock {
@@ -2350,7 +2368,22 @@ a { color: var(--blue); }
     display: none !important;
   }
   html.has-mobile-bottom-dock .main {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--mobile-dock-clearance);
+  }
+  /* Statistics / Expected: the table card is the scrollport — extend it under
+     the floating docks instead of shrinking the flex area and leaving a gap. */
+  html.has-mobile-bottom-dock[data-page="opta"] .main,
+  html.has-mobile-bottom-dock[data-page="expected"] .main {
+    padding-bottom: var(--main-pad-x, 8px);
+  }
+  html.has-mobile-bottom-dock[data-page="opta"] #opta-page > .table-wrap,
+  html.has-mobile-bottom-dock[data-page="expected"] #expected-page .barbell-wrap {
+    margin-bottom: calc(-1 * var(--mobile-dock-clearance) + var(--main-pad-x, 8px));
+  }
+  html.has-mobile-bottom-dock[data-page="opta"] #opta-page > .table-wrap,
+  html.has-mobile-bottom-dock[data-page="expected"] #expected-page .barbell-scroll {
+    padding-bottom: var(--mobile-dock-clearance);
+    scroll-padding-bottom: var(--mobile-dock-clearance);
   }
   html.mobile-chrome-scroll-hidden .mobile-view-dock:not([hidden]),
   html.mobile-chrome-scroll-hidden .mobile-filter-dock:not([hidden]) {
@@ -2810,6 +2843,11 @@ a { color: var(--blue); }
   /* Statistics: table card is the scrollport again (vertical + horizontal).
      The split .main vertical / .table-wrap horizontal-only model blocks
      touch scroll when the table fills the viewport. */
+  html[data-page="opta"] .main,
+  html[data-page="expected"] .main {
+    padding-bottom: var(--main-pad-x, 8px);
+  }
+
   html[data-page="opta"] .main {
     overflow: hidden;
     display: flex;
@@ -2826,7 +2864,7 @@ a { color: var(--blue); }
     overflow-y: auto;
     max-height: none;
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: var(--mobile-scrollport-min-h, 0px);
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
@@ -2836,7 +2874,7 @@ a { color: var(--blue); }
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     margin-bottom: 8px;
   }
 
@@ -2855,7 +2893,7 @@ a { color: var(--blue); }
   }
   html[data-page="expected"] #expected-page .barbell-wrap {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: var(--mobile-scrollport-min-h, 0px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -3580,11 +3618,9 @@ tbody tr.row-selected td:first-child {
   border: 1px solid hsl(var(--blue-hsl) / 0.32);
   border-radius: var(--radius);
   margin-bottom: 14px;
-  overflow: hidden;
+  overflow: visible;
   background: hsl(var(--card));
   box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
-  --compare-row-h: 40px;
-  --compare-table-head-h: 52px;
 }
 .compare-header {
   display: flex;
@@ -3605,13 +3641,15 @@ tbody tr.row-selected td:first-child {
   max-height: none;
   box-shadow: none;
   background: transparent;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 .compare-table-wrap > table > thead {
   /* Match main table sticky header stacking inside the compare card. */
   top: 0;
 }
 @media (max-width: 720px) {
-  /* Compare cards size to selected row count; scroll inside the table wrap when capped. */
+  /* Compare cards grow with selected rows — no inner vertical scroll. */
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap,
   #team-picker-view #team-compare-wrap:not([hidden]),
   #team-page.is-comparing #team-compare-wrap:not([hidden]) {
@@ -3619,17 +3657,10 @@ tbody tr.row-selected td:first-child {
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
-    --compare-row-h: 38px;
-    --compare-table-head-h: 52px;
     margin-bottom: 8px;
-  }
-  #team-picker-view #team-compare-wrap:not([hidden]),
-  #team-page.is-comparing #team-compare-wrap:not([hidden]) {
-    --compare-row-h: 44px;
-    --compare-table-head-h: 56px;
   }
   html[data-page="opta"] #opta-page.has-compare .compare-table-wrap,
   #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap,
@@ -3637,15 +3668,11 @@ tbody tr.row-selected td:first-child {
     flex: 0 0 auto;
     min-height: auto;
     height: auto;
-    max-height: min(
-      calc(var(--compare-table-head-h) + var(--compare-rows, 1) * var(--compare-row-h)),
-      42vh
-    );
-    overflow: auto;
+    max-height: none;
     overflow-x: auto;
-    overflow-y: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
   }
 }
 /* Aux tables (compare / search / pins) don't use main-table selection bars —
@@ -8361,6 +8388,19 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   padding: 0 6px;
   font-size: 12px;
 }
+.markets-view-seg {
+  width: 100%;
+}
+.markets-view-seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+}
+.markets-controls.is-scoreline-view .markets-control-compare,
+.markets-controls.is-scoreline-view .markets-control:not(.markets-control-view) {
+  display: none;
+}
 
 @media (max-width: 900px) {
   .markets-controls {
@@ -8525,25 +8565,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   max-width: none;
   width: 100%;
 }
-/* Markets mobile: subtoolbar hosts view picker + filter sliders. */
-#subtoolbar.is-markets-mobile {
-  justify-content: flex-end;
-}
-#subtoolbar.is-markets-mobile .topbar-data-cluster,
-#subtoolbar.is-markets-mobile #compare-toggle,
-#subtoolbar.is-markets-mobile #columns-btn,
-#subtoolbar.is-markets-mobile #search-wrap,
-#subtoolbar.is-markets-mobile #expected-cat-toolbar {
-  display: none !important;
-}
-#subtoolbar.is-markets-mobile .topbar-end-cluster {
-  margin-left: auto;
-  gap: 8px;
-}
-#subtoolbar.is-markets-mobile .markets-view-toolbar {
-  display: block;
-}
-
+/* Markets mobile: filter FAB only — card view lives in the filter sheet. */
 .markets-teams {
   display: grid;
   grid-template-rows: 1fr 1fr;
@@ -9510,8 +9532,7 @@ html[data-page="team"] .layout .main {
   #subtoolbar.is-team-picking .topbar-end-cluster,
   #subtoolbar.is-team-picking #compare-toggle,
   #subtoolbar.is-team-picking #columns-btn,
-  #subtoolbar.is-team-picking #expected-cat-toolbar,
-  #subtoolbar.is-team-picking #markets-view-toolbar {
+  #subtoolbar.is-team-picking #expected-cat-toolbar {
     display: none !important;
   }
   #subtoolbar.is-team-picking #team-compare-btn {
@@ -9618,14 +9639,23 @@ html[data-page="team"] .layout .main {
 #team-search-results[hidden] {
   display: none !important;
 }
-#team-search-results .team-table-wrap,
-#team-compare-wrap .team-table-wrap {
+#team-search-results .team-table-wrap {
   border: none;
   box-shadow: none;
   background: transparent;
   width: 100%;
   max-width: 100%;
   overflow: auto;
+}
+#team-compare-wrap .team-table-wrap {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  width: 100%;
+  max-width: 100%;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 #team-search-results .table-wrap > table > thead {
   position: static;
@@ -9751,13 +9781,19 @@ html[data-page="team"] .layout .main {
   overflow: auto;
   margin-bottom: 0;
 }
-#team-page #team-search-results .team-table-wrap,
-#team-page #team-compare-wrap .team-table-wrap {
+#team-page #team-search-results .team-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
   overflow: auto;
   overflow-y: auto;
+}
+#team-page #team-compare-wrap .team-table-wrap {
+  flex: 0 0 auto;
+  min-height: auto;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 #team-page .team-table-wrap > table {
   width: max-content;
@@ -10221,14 +10257,16 @@ html[data-page="team"] .layout .main {
 #team-picker-view #team-compare-wrap:not([hidden]) {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   flex: 0 0 auto;
   margin-bottom: 8px;
 }
 #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap {
   flex: 0 0 auto;
   min-height: auto;
-  overflow: auto;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
   flex: 1 1 auto;
@@ -10333,14 +10371,15 @@ html[data-page="team"] .layout .main {
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     margin-bottom: 8px;
   }
   #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
-    overflow: auto;
-    overflow-y: auto;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
   }
   #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
     flex: 1 1 auto;
@@ -10351,12 +10390,15 @@ html[data-page="team"] .layout .main {
     min-height: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     margin-bottom: 8px;
   }
   #team-page.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
     flex: 0 0 auto;
     min-height: auto;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
   }
   #team-squad-view:has(#team-search-results:not([hidden])) > .team-table-wrap {
     flex: 1 1 auto;

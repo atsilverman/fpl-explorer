@@ -693,9 +693,6 @@
     pageMarkets: $("#page-markets"),
     marketsTabWrap: $("#markets-tab-wrap"),
     marketsViewMenu: $("#markets-view-menu"),
-    marketsViewToolbar: $("#markets-view-toolbar"),
-    marketsViewToolbarBtn: $("#markets-view-toolbar-btn"),
-    marketsViewToolbarLabel: $("#markets-view-toolbar-label"),
     subtoolbar: $("#subtoolbar"),
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
@@ -782,6 +779,7 @@
     marketsHeatCsFill: $("#markets-heat-cs-fill"),
     marketsHeatCsLabel: $("#markets-heat-cs-label"),
     marketsCompareSeg: $("#markets-compare-seg"),
+    marketsViewSeg: $("#markets-view-seg"),
     marketsHeaderActions: $("#markets-header-actions"),
     scheduleScatter: $("#schedule-scatter"),
     scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
@@ -1833,7 +1831,7 @@
           state.sortKey = c.key;
           state.sortDir = c.type && c.type !== "check" ? "asc" : "desc";
         }
-        renderTable();
+        renderTable({ resetScroll: true });
       });
       tr.appendChild(th);
     });
@@ -1914,6 +1912,11 @@
   // coarse remaps tips / rankings cross-highlight to taps.
   const FINE_HOVER_MQ = window.matchMedia("(hover: hover) and (pointer: fine)");
   const NARROW_MQ = window.matchMedia("(max-width: 720px)");
+
+  function syncMobileLayoutClass() {
+    document.documentElement.classList.toggle("is-mobile-layout", NARROW_MQ.matches);
+  }
+  syncMobileLayoutClass();
   function hasFineHover() {
     return FINE_HOVER_MQ.matches;
   }
@@ -1944,6 +1947,28 @@
     }
     document.documentElement.classList.toggle("has-mobile-bottom-dock", show);
     if (!show) resetMobileChromeScrollHide();
+    syncMobileScrollportHeight();
+  }
+
+  function syncMobileScrollportHeight() {
+    const root = document.documentElement;
+    if (!NARROW_MQ.matches || (state.page !== "opta" && state.page !== "expected")) {
+      root.style.removeProperty("--mobile-scrollport-min-h");
+      return;
+    }
+    const scrollport =
+      state.page === "opta"
+        ? document.querySelector("#opta-page > .table-wrap")
+        : document.querySelector("#expected-page .barbell-wrap");
+    if (!scrollport || scrollport.offsetParent === null) {
+      root.style.removeProperty("--mobile-scrollport-min-h");
+      return;
+    }
+    const vv = window.visualViewport;
+    const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const top = scrollport.getBoundingClientRect().top;
+    const minH = Math.max(180, Math.floor(viewportBottom - top));
+    root.style.setProperty("--mobile-scrollport-min-h", `${minH}px`);
   }
 
   let mobileChromeScrollLast = 0;
@@ -2190,6 +2215,7 @@
       const main = document.querySelector("main.main");
       mobileChromeScrollLast = main ? main.scrollTop : 0;
     }
+    requestAnimationFrame(() => syncMobileScrollportHeight());
   }
 
   // Horizontal tables/barbells are overflow-x scrollers on mobile; vertical
@@ -2585,9 +2611,6 @@
       teamRowMenuRow = null;
       if (typeof clearTeamRowActions === "function") clearTeamRowActions();
     }
-    if (el.marketsViewToolbarBtn && closingKey === "markets-view") {
-      el.marketsViewToolbarBtn.setAttribute("aria-expanded", "false");
-    }
     if (el.feedFiltersToggle && closingKey === "feed-filters") {
       el.feedFiltersToggle.setAttribute("aria-expanded", "false");
       const active = feedFiltersActive();
@@ -2815,7 +2838,16 @@
     if (!node || !node.closest) return null;
     // Rich Matchups tips own these targets — skip the compact ui-tooltip.
     if (node.closest(".ftt-verdict-tip, .team-rank-info, .page-info-btn")) return null;
+    if (isTeamFixtureFormTipTarget(node)) return null;
     return node.closest("[data-tip], [data-tip-html]");
+  }
+
+  function isTeamFixtureFormTipTarget(node) {
+    return !!node.closest(
+      "#team-page td.col-team-spark, #team-page td.team-heat-cell, #team-page th.col-team-spark, " +
+        "#team-picker-view td.col-team-spark, #team-picker-view td.team-heat-cell, #team-picker-view th.col-team-spark, " +
+        "#team-compare-wrap td.col-team-spark, #team-compare-wrap td.team-heat-cell"
+    );
   }
 
   document.addEventListener("mouseover", (event) => {
@@ -2870,9 +2902,10 @@
       const identityTip = isIdentityChromeTipTarget(target);
       if (
         !identityTip &&
-        target.closest(
-          "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .feed-treemap-cell, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
-        )
+        (isTeamFixtureFormTipTarget(target) ||
+          target.closest(
+            "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .feed-treemap-cell, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
+          ))
       ) {
         return;
       }
@@ -3059,6 +3092,14 @@
     });
   }
 
+  function resetScrollWraps(wraps) {
+    wraps.forEach((wrap) => {
+      if (!wrap) return;
+      wrap.scrollLeft = 0;
+      invalidateNameSimplifyOrigin(wrap);
+    });
+  }
+
   function renderTable(opts = {}) {
     const preserveOptaScroll = !!opts.preserveOptaScroll;
     clearTimeout(fixtureTtTimer);
@@ -3088,7 +3129,10 @@
     syncCoreUnderName();
     syncTeamSearchHost();
     requestAnimationFrame(() => {
-      if (preserveOptaScroll) {
+      if (opts.resetScroll) {
+        resetScrollWraps(optaTableWraps());
+        refreshNameSimplifyOrigins();
+      } else if (preserveOptaScroll) {
         refreshNameSimplifyOrigins();
       } else {
         snapOptaToGameStats();
@@ -3097,6 +3141,7 @@
           refreshNameSimplifyOrigins();
         });
       }
+      syncMobileScrollportHeight();
     });
   }
 
@@ -4978,7 +5023,7 @@
             state.expectedSortKey = s.key;
             state.expectedSortDir = s.key === "name" ? "asc" : "desc";
           }
-          renderExpected();
+          renderExpected({ resetScroll: true });
         });
       }
       el.barbellHead.appendChild(div);
@@ -5325,7 +5370,7 @@
     syncSegThumb(el.expectedSplitSeg);
   }
 
-  function renderExpected() {
+  function renderExpected(opts = {}) {
     const cat = currentExpectedCat();
     updateExpectedSplitAvailability(cat);
     const compareMode = state.expectedSplit === "compare";
@@ -5395,6 +5440,13 @@
       });
     }
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
+    if (opts.resetScroll) {
+      requestAnimationFrame(() => {
+        const scroll = expectedScrollWrap();
+        if (scroll) scroll.scrollLeft = 0;
+      });
+    }
+    requestAnimationFrame(() => syncMobileScrollportHeight());
   }
 
   // ---------------------------------------------------------------------
@@ -5955,13 +6007,10 @@
   function teamSparkHeadHTML(opts) {
     const owned = teamSparkMetricIsOwned();
     const label = owned ? "TSB%" : "Form";
-    const title = owned
-      ? "Selected-by-% across ownership check-ins. Click a sparkline to show Form."
-      : "Recent form (mock). Click a sparkline to show TSB%.";
     if (opts && opts.plain) {
-      return `<th class="col-team-spark"${tipAttr(title)}>${escapeHtml(label)}</th>`;
+      return `<th class="col-team-spark">${escapeHtml(label)}</th>`;
     }
-    return `<th class="col-team-spark" data-team-spark-toggle="1"${tipAttr(title)}>${escapeHtml(label)}</th>`;
+    return `<th class="col-team-spark" data-team-spark-toggle="1">${escapeHtml(label)}</th>`;
   }
 
   function toggleTeamSparkMetric() {
@@ -6113,25 +6162,16 @@
   }
 
   function teamSparkCellHTML(row) {
-    const owned = teamSparkMetricIsOwned();
     const series = teamSparkSeries(row);
-    const next = owned ? "Form" : "TSB%";
     if (!series.length) {
-      const tip = owned
-        ? `No TSB% history yet · click to show ${next}`
-        : `No form yet · click to show ${next}`;
-      return `<td class="col-team-spark is-blank" data-team-spark-toggle="1"${tipAttr(tip)}><span class="team-spark-empty">–</span></td>`;
+      return `<td class="col-team-spark is-blank" data-team-spark-toggle="1"><span class="team-spark-empty">–</span></td>`;
     }
     const first = series[0];
     const last = series[series.length - 1];
     const delta = last - first;
     const span = Math.max(...series) - Math.min(...series) || 1;
     const tone = series.length < 2 || Math.abs(delta) < span * 0.12 ? "is-flat" : delta > 0 ? "is-up" : "is-down";
-    const deltaTxt = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}`;
-    const tip = owned
-      ? `TSB% · ${fmtOwnedPct(last)} · ${deltaTxt} over ${series.length} check-ins · click to show ${next}`
-      : `Form · ${deltaTxt} over ${series.length} weeks · click to show ${next}`;
-    return `<td class="col-team-spark" data-team-spark-toggle="1"${tipAttr(tip)}>${teamSparkSvg(series, tone)}</td>`;
+    return `<td class="col-team-spark" data-team-spark-toggle="1">${teamSparkSvg(series, tone)}</td>`;
   }
 
   function teamSortValue(row, key) {
@@ -6370,11 +6410,12 @@
     if (el.teamCompareTitle) {
       el.teamCompareTitle.textContent = `Comparing ${rows.length} player${rows.length === 1 ? "" : "s"}`;
     }
-    const heatHead = teamHeatHeadHTML({ plain: true });
+    const heatHead = teamHeatHeadHTML();
+    const colOpts = { price: true, ownership: true, setPieces: true };
     if (el.teamCompareHead) {
       el.teamCompareHead.innerHTML = teamHeadRowsHTML(
-        `${teamSortTh("player", "Player", "col-player", "Player", { plain: true })}${teamMetricHeadHTML({ plain: true })}${heatHead}`,
-        { plain: true }
+        `${teamSortTh("player", "Player", "col-player", "Player", { plain: true })}${teamSortTh("price", "£m", "col-num col-core team-price sec-divider", "Price (£m)", { plain: true })}${teamSortTh("owned", "TSB%", "col-num col-core col-team-owned", "FPL selected-by-% (TSB)", { plain: true })}${teamMetricHeadHTML({ plain: true, setPieces: true, price: true })}${heatHead}`,
+        colOpts
       );
     }
     if (el.teamCompareBody) {
@@ -6386,7 +6427,9 @@
           const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
           return `<tr class="row-selectable" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}">
             <td class="col-player">${playerIdentityHTML(crest, nameHTML, sub)}</td>
-            ${teamMetricCellsHTML(row)}
+            <td class="col-num col-core team-price sec-divider">${Number(row.price).toFixed(1)}</td>
+            <td class="col-num col-core col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
+            ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
             ${heat}
           </tr>`;
         })
@@ -7137,21 +7180,7 @@
       style = ` style="${paint.style}"`;
       extraClass += paint.strongClass;
     }
-    const fdrWord = fdr == null ? null : ["", "easiest", "easier", "average", "tougher", "toughest"][fdr];
-    const extraTip = fixtures.slice(1).map((other) => {
-      const od = Number(other.difficulty);
-      const word = Number.isFinite(od) ? ` FDR ${od}` : "";
-      const loc = other.ha === "H" ? "Home" : "Away";
-      return `${other.opp} (${loc})${word}`;
-    });
-    const tip = [
-      `GW${gw} ${fx.ha === "H" ? "Home" : "Away"} vs ${teamNameForSeason(fx.opp) || fx.opp}`,
-      fdr != null ? `FPL difficulty ${fdr} (${fdrWord})` : "No FPL difficulty",
-      extraTip.length ? `Also ${extraTip.join(", ")}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    return `<td class="team-heat-cell${extraClass}${divide}${teamHeatAnchorClass(gw)}"${style}${tipAttr(tip)}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
+    return `<td class="team-heat-cell${extraClass}${divide}${teamHeatAnchorClass(gw)}"${style}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
   }
 
   function teamHeatHeadHTML() {
@@ -7980,7 +8009,7 @@
     syncFilterChipUI();
   }
 
-  function renderTeam() {
+  function renderTeam(opts = {}) {
     if (!el.teamPage) return;
     if (state.teamGwStart == null) state.teamGwStart = teamClampGwStart(teamCurrentGw());
     normalizeTeamRoles();
@@ -8014,7 +8043,10 @@
     paintTeamCompareWinners();
     bindAllNameColumnSimplifies();
     syncTeamPickerCoreUnder();
-    requestAnimationFrame(() => refreshNameSimplifyOrigins());
+    requestAnimationFrame(() => {
+      if (opts.resetScroll) resetScrollWraps(teamTableScrollWraps());
+      refreshNameSimplifyOrigins();
+    });
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
   }
 
@@ -8087,7 +8119,7 @@
       return;
     }
     const sparkHit = e.target.closest("td.col-team-spark, th.col-team-spark");
-    if (sparkHit) {
+    if (sparkHit && (sparkHit.matches("th.col-team-spark") || hasFineHover())) {
       e.preventDefault();
       e.stopPropagation();
       toggleTeamSparkMetric();
@@ -8138,7 +8170,7 @@
         state.teamSortKey = key;
         state.teamSortDir = teamDefaultSortDir(key);
       }
-      renderTeam();
+      renderTeam({ resetScroll: true });
       return;
     }
     const pick = e.target.closest("[data-team-pick]");
@@ -9484,9 +9516,6 @@
   }
 
   function syncMarketsViewControls() {
-    const view = currentMarketsCardView();
-    const label = view.label;
-    const sheetOpen = mobileSheetOpen && mobileSheetKey === "markets-view";
     const marketsMobile = preferMobileSheet() && state.page === "markets";
     const marketsDesktop = !preferMobileSheet() && state.page === "markets";
     if (el.pageMarkets) {
@@ -9495,15 +9524,7 @@
         el.marketsTabWrap?.classList.contains("open") ? "true" : "false"
       );
     }
-    if (el.marketsViewToolbarLabel) el.marketsViewToolbarLabel.textContent = label;
-    if (el.marketsViewToolbarBtn) {
-      el.marketsViewToolbarBtn.title = label;
-      el.marketsViewToolbarBtn.setAttribute("aria-label", `Matchup card view: ${label}`);
-      el.marketsViewToolbarBtn.setAttribute("aria-expanded", sheetOpen ? "true" : "false");
-    }
-    if (el.marketsViewToolbar) {
-      el.marketsViewToolbar.hidden = !marketsMobile;
-    }
+    syncMarketsViewSeg();
     // Sliders live under Markets only: header on desktop; mobile FAB dock.
     if (el.marketsSlidersToggle && el.marketsHeaderActions) {
       if (marketsMobile) {
@@ -9519,15 +9540,6 @@
           el.marketsHeaderActions.appendChild(el.marketsSlidersToggle);
         }
         el.marketsSlidersToggle.hidden = !marketsDesktop;
-      }
-    }
-    // Keep Markets mobile chrome in sync on resize / pointer changes.
-    if (el.subtoolbar && state.page === "markets") {
-      el.subtoolbar.style.display = preferMobileSheet() ? "" : "none";
-      el.subtoolbar.classList.toggle("is-markets-mobile", preferMobileSheet());
-      if (el.statsToolbarStart) el.statsToolbarStart.style.display = "none";
-      if (el.statsToolbarActions) {
-        el.statsToolbarActions.style.display = preferMobileSheet() ? "" : "none";
       }
     }
     buildMarketsViewMenu();
@@ -9593,30 +9605,6 @@
         setPage("markets");
       });
       el.marketsViewMenu.appendChild(btn);
-    });
-  }
-
-  function openMarketsViewSheet() {
-    const views = marketsCardViews();
-    const active = currentMarketsCardView();
-    const html = `<div class="mobile-sheet-cat-list" role="menu" aria-label="Matchup card view">${views
-      .map(
-        (v) =>
-          `<button type="button" role="menuitem" class="page-tab-menu-item${
-            v.key === active.key ? " active" : ""
-          }" data-markets-view="${escapeHtml(v.key)}">${escapeHtml(v.label)}</button>`
-      )
-      .join("")}</div>`;
-    openMobileSheet({ title: "Matchup view", html, key: "markets-view" });
-    if (el.marketsViewToolbarBtn) el.marketsViewToolbarBtn.setAttribute("aria-expanded", "true");
-    if (!el.mobileSheetBody) return;
-    el.mobileSheetBody.querySelectorAll("[data-markets-view]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const key = btn.getAttribute("data-markets-view");
-        if (!key) return;
-        closeMobileSheet();
-        setMarketsCardView(key);
-      });
     });
   }
 
@@ -9694,11 +9682,23 @@
     syncSegThumb(el.marketsCompareSeg, { animate: false });
   }
 
+  function syncMarketsViewSeg() {
+    if (!el.marketsViewSeg) return;
+    $$("#markets-view-seg button[data-markets-view]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.marketsView === state.marketsCardView);
+    });
+    syncSegThumb(el.marketsViewSeg, { animate: false });
+    if (el.marketsControls) {
+      el.marketsControls.classList.toggle("is-scoreline-view", state.marketsCardView === "scoreline");
+    }
+  }
+
   function renderMarkets() {
     const root = el.marketsGrid;
     if (!root) return;
     const fixtures = MARKETS.fixtures || [];
     syncMarketsCompareSeg();
+    syncMarketsViewSeg();
     syncMarketsAttribution();
     if (!fixtures.length) {
       root.innerHTML = `<div class="empty-state markets-empty">
@@ -11532,12 +11532,11 @@ python3 site/annotate_social.py</pre>
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
     if (el.teamPage) el.teamPage.style.display = page === "team" ? "" : "none";
     const isMarkets = page === "markets";
-    // Schedule has no subtoolbar. Markets hides it on desktop, but keeps a
-    // minimal mobile bar for the G+CS% / Scoreline picker (like xData).
+    // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
     const hideSubtoolbar =
       page === "schedule" ||
-      (preferMobileSheet() && page === "rankings") ||
-      (isMarkets && !preferMobileSheet());
+      isMarkets ||
+      (preferMobileSheet() && page === "rankings");
     const isFeed = page === "feed";
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
     el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
@@ -11789,7 +11788,7 @@ python3 site/annotate_social.py</pre>
       e.preventDefault();
       e.stopPropagation();
       if (el.marketsTabWrap) pageTabFocusEl = el.marketsTabWrap;
-      // Mobile / narrow: plain page tab — view picker lives in the toolbar.
+      // Mobile / narrow: plain page tab — card view lives in the filter panel.
       if (preferMobileSheet()) {
         setMarketsViewMenuOpen(false);
         setPage("markets");
@@ -13055,20 +13054,16 @@ python3 site/annotate_social.py</pre>
     });
   }
 
-  if (el.marketsViewToolbarBtn) {
-    el.marketsViewToolbarBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!preferMobileSheet() || state.page !== "markets") return;
-      if (mobileSheetOpen && mobileSheetKey === "markets-view") {
-        closeMobileSheet();
-        syncMarketsViewControls();
-        return;
-      }
-      openMarketsViewSheet();
-      syncMarketsViewControls();
+  if (el.marketsViewSeg) {
+    el.marketsViewSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-markets-view]");
+      if (!btn || !el.marketsViewSeg.contains(btn)) return;
+      const key = btn.dataset.marketsView;
+      if (key !== "stats" && key !== "scoreline") return;
+      setMarketsCardView(key);
     });
   }
+
   buildMarketsViewMenu();
   syncMarketsViewControls();
   syncMobileChrome();
@@ -13098,6 +13093,7 @@ python3 site/annotate_social.py</pre>
           updateMarketsHeatGoalsSlider();
           updateMarketsHeatCsSlider();
           syncMarketsCompareSeg();
+          syncMarketsViewSeg();
         });
       } else if (mobileSheetKey === "markets-filters") {
         closeMobileSheet();
@@ -13125,6 +13121,7 @@ python3 site/annotate_social.py</pre>
         updateMarketsHeatGoalsSlider();
         updateMarketsHeatCsSlider();
         syncMarketsCompareSeg();
+        syncMarketsViewSeg();
       });
     }
   }
@@ -13913,9 +13910,15 @@ python3 site/annotate_social.py</pre>
       syncPageTabsScrollHints();
       syncPageNavLabelCenter();
       refreshNameSimplifyOrigins();
+      syncMobileScrollportHeight();
     });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", syncMobileScrollportHeight);
+      window.visualViewport.addEventListener("scroll", syncMobileScrollportHeight);
+    }
     if (typeof NARROW_MQ.addEventListener === "function") {
       NARROW_MQ.addEventListener("change", () => {
+        syncMobileLayoutClass();
         syncFeedSearchLayout();
         syncTeamSearchHost();
         syncTeamCompareHost();
@@ -13926,9 +13929,11 @@ python3 site/annotate_social.py</pre>
         bindAllNameColumnSimplifies();
         refreshNameSimplifyOrigins();
         bindMobileChromeScrollHide();
+        syncMobileScrollportHeight();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
+        syncMobileLayoutClass();
         syncFeedSearchLayout();
         syncTeamSearchHost();
         syncTeamCompareHost();
@@ -13939,6 +13944,7 @@ python3 site/annotate_social.py</pre>
         bindAllNameColumnSimplifies();
         refreshNameSimplifyOrigins();
         bindMobileChromeScrollHide();
+        syncMobileScrollportHeight();
       });
     }
     bindAllNameColumnSimplifies();

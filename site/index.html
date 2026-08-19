@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=514" />
+<link rel="stylesheet" href="styles.css?v=518" />
 <script>
 (() => {
   try {
@@ -29,6 +29,18 @@
       theme === "dark" ||
       (theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     root.style.setProperty("--blue-hsl", dark ? accent.dark : accent.light);
+    const PAGE_KEY = "fpl-explorer-page";
+    const PAGES = ["opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team"];
+    let page = "opta";
+    try {
+      const saved = localStorage.getItem(PAGE_KEY);
+      if (saved === "notes") page = "opta";
+      else if (PAGES.includes(saved)) page = saved;
+    } catch (_) {}
+    root.dataset.page = page;
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      root.classList.add("is-mobile-layout");
+    }
   } catch (_) {}
 })();
 </script>
@@ -397,7 +409,7 @@
   <div class="topbar-actions-cluster" id="stats-toolbar-actions">
     <div class="topbar-cluster topbar-data-cluster">
       <div class="toggle-group" id="table-only-toggles">
-        <div class="newprice-wrap" id="newprice-wrap">
+        <div class="newprice-wrap" id="newprice-wrap" hidden>
           <button id="newprice-toggle" class="ghost-btn icon-label-btn" type="button" title="Use matched 2026/27 price, team, and position" aria-label="Updates">
             <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
             <span class="btn-label">Updates</span>
@@ -422,7 +434,7 @@
         <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
         <span class="btn-label">Compare</span>
       </button>
-      <button id="columns-btn" class="ghost-btn icon-label-btn" type="button" title="Columns" aria-label="Columns" aria-expanded="false" aria-controls="columns-sidebar">
+      <button id="columns-btn" class="ghost-btn icon-label-btn" type="button" title="Columns" aria-label="Columns" aria-expanded="false" aria-controls="columns-sidebar" hidden>
         <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
         <span class="btn-label">Columns</span>
       </button>
@@ -433,14 +445,6 @@
           <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
         </button>
       </div>
-      <div class="dropdown-wrap expected-cat-toolbar markets-view-toolbar" id="markets-view-toolbar" hidden>
-        <button id="markets-view-toolbar-btn" class="ghost-btn expected-cat-btn" type="button"
-          title="Matchup card view" aria-label="Matchup card view" aria-haspopup="true" aria-expanded="false">
-          <span id="markets-view-toolbar-label" class="expected-cat-label">Goals and CS%</span>
-          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-        </button>
-      </div>
-
       <div class="search-wrap" id="search-wrap">
         <button id="search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button" title="Search" aria-label="Search" aria-expanded="false" aria-controls="search-input">
           <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -936,6 +940,15 @@
         </div>
 
         <div class="markets-controls is-collapsed" id="markets-controls" hidden>
+          <div class="markets-control markets-control-view">
+            <div class="schedule-control-head">
+              <strong>Card view</strong>
+            </div>
+            <div class="segmented markets-view-seg" id="markets-view-seg" role="group" aria-label="Matchup card view">
+              <button type="button" data-markets-view="stats" class="active">Goals and CS%</button>
+              <button type="button" data-markets-view="scoreline">Scoreline</button>
+            </div>
+          </div>
           <div class="markets-control markets-control-compare">
             <div class="schedule-control-head">
               <strong>Compare
@@ -1048,7 +1061,7 @@
 <script src="social_data.js?v=15"></script>
 <script src="markets_data.js?v=7"></script>
 <script src="ownership_data.js?v=4"></script>
-<script src="app.js?v=514"></script>
+<script src="app.js?v=520"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
