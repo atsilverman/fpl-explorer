@@ -3066,12 +3066,12 @@ thead th.col-num, tbody td.col-num {
 }
 
 @media (hover: hover) and (pointer: fine) and (min-width: 721px) {
-  html[data-page="opta"][data-view="teams"] .table-wrap > table {
+  html[data-page="opta"] .table-wrap > table {
     width: 100%;
     min-width: 100%;
   }
-  html[data-page="opta"][data-view="teams"] thead th.col-num,
-  html[data-page="opta"][data-view="teams"] tbody td.col-num {
+  html[data-page="opta"] thead th.col-num,
+  html[data-page="opta"] tbody td.col-num {
     width: auto;
     min-width: var(--metric-col-w, 52px);
     max-width: none;
