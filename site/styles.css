@@ -624,7 +624,7 @@ a { color: var(--blue); }
   padding-bottom: 10px;
 }
 
-/* Mobile xData: category control lives in the toolbar, left of Search. */
+/* Mobile xData: category control lives next to Players/Teams. */
 .expected-cat-toolbar {
   flex: none;
 }
@@ -652,23 +652,15 @@ a { color: var(--blue); }
 .expected-cat-btn[aria-expanded="true"] .page-tab-caret {
   transform: rotate(180deg);
 }
-@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
-  .expected-cat-toolbar {
-    display: none !important;
-  }
+.expected-cat-menu {
+  left: 0;
+  right: auto;
+  min-width: 176px;
+  padding: 6px;
+  z-index: 45;
 }
-@media (max-width: 720px), (hover: none), (pointer: coarse) {
-  .page-tab-dropdown .page-tab-caret {
-    display: none;
-  }
-  #expected-cat-menu,
-  #markets-view-menu {
-    display: none !important;
-  }
-  .page-tab-dropdown.open .page-tab-menu,
-  .page-tab-dropdown:hover .page-tab-menu {
-    display: none !important;
-  }
+.expected-cat-menu .page-tab-menu-item {
+  width: 100%;
 }
 
 /* ---------- Top bar (per-page toolbar) ---------- */
@@ -3299,9 +3291,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   display: none;
 }
 
-/* Scroll-linked Statistics name clip (Players + Teams). Column width morphs
-   narrower as you scroll; pos badge and row height stay put — names clip
-   from the right with no blur. */
+/* Scroll-linked team-picker name clip. Column width morphs narrower as you
+   scroll; pos badge and row height stay put — names clip from the right. */
 .table-wrap.name-simplify-ready {
   --name-col-full: var(--name-col-w, 170px);
   --name-col-compact-players: 76px;
@@ -8529,9 +8520,34 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 .markets-header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 10px;
   flex-shrink: 0;
   padding-top: 2px;
+}
+.markets-header-actions .markets-control-view {
+  padding: 0;
+  border: none;
+  flex: none;
+}
+.markets-header-actions .markets-control-view .schedule-control-head {
+  display: none;
+}
+.markets-header-actions .markets-view-seg {
+  width: auto;
+  min-width: 228px;
+  flex: none;
+}
+.markets-header-actions .markets-sliders-toggle {
+  flex: none;
+}
+@media (max-width: 720px), (hover: none), (pointer: coarse) {
+  .expected-cat-menu {
+    display: none !important;
+  }
+  .markets-header-actions .markets-control-view {
+    display: none;
+  }
 }
 
 .markets-controls {

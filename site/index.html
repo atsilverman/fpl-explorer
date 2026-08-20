@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=539" />
+<link rel="stylesheet" href="styles.css?v=542" />
 <script>
 (() => {
   try {
@@ -268,15 +268,10 @@
       <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
       Team
     </button>
-    <div class="page-tab-dropdown" id="expected-tab-wrap">
-      <button id="page-expected" class="page-tab-btn" type="button"
-        aria-haspopup="true" aria-expanded="false" aria-controls="expected-cat-menu">
-        <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
-        xData
-        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-      </button>
-      <div id="expected-cat-menu" class="dropdown-panel page-tab-menu" role="menu" aria-label="xData categories"></div>
-    </div>
+    <button id="page-expected" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
+      xData
+    </button>
     <button id="page-schedule" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
       Matchups
@@ -285,15 +280,10 @@
       <svg class="icon" aria-hidden="true"><use href="#i-rss"/></svg>
       Feed
     </button>
-    <div class="page-tab-dropdown" id="markets-tab-wrap">
-      <button id="page-markets" class="page-tab-btn" type="button"
-        aria-haspopup="true" aria-expanded="false" aria-controls="markets-view-menu">
-        <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
-        Markets
-        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-      </button>
-      <div id="markets-view-menu" class="dropdown-panel page-tab-menu" role="menu" aria-label="Matchup card view"></div>
-    </div>
+    <button id="page-markets" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
+      Markets
+    </button>
   </nav>
   </div>
 
@@ -398,6 +388,15 @@
         Teams
       </button>
     </div>
+    <div class="dropdown-wrap expected-cat-toolbar" id="expected-cat-toolbar" hidden>
+      <button id="expected-cat-btn" class="ghost-btn expected-cat-btn" type="button"
+        title="xData category" aria-label="xData category" aria-haspopup="true" aria-expanded="false"
+        aria-controls="expected-cat-menu">
+        <span id="expected-cat-label" class="expected-cat-label">Category</span>
+        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </button>
+      <div id="expected-cat-menu" class="dropdown-panel expected-cat-menu" role="menu" aria-label="xData categories"></div>
+    </div>
     <div class="team-toolbar-mode" id="team-toolbar-mode" hidden>
       <div class="team-mode-seg segmented" id="team-mode-seg" role="group" aria-label="Team mode">
         <button type="button" data-team-mode="actual" id="team-mode-actual">Actual</button>
@@ -438,13 +437,6 @@
         <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
         <span class="btn-label">Columns</span>
       </button>
-      <div class="dropdown-wrap expected-cat-toolbar" id="expected-cat-toolbar" hidden>
-        <button id="expected-cat-btn" class="ghost-btn expected-cat-btn" type="button"
-          title="xData category" aria-label="xData category" aria-haspopup="true" aria-expanded="false">
-          <span id="expected-cat-label" class="expected-cat-label">Category</span>
-          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-        </button>
-      </div>
       <div class="search-wrap" id="search-wrap">
         <button id="search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button" title="Search" aria-label="Search" aria-expanded="false" aria-controls="search-input">
           <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -935,6 +927,15 @@
             <p class="page-subtitle">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
           </div>
           <div class="markets-header-actions" id="markets-header-actions">
+            <div class="markets-control markets-control-view" id="markets-view-control">
+              <div class="schedule-control-head">
+                <strong>Card view</strong>
+              </div>
+              <div class="segmented markets-view-seg" id="markets-view-seg" role="group" aria-label="Matchup card view">
+                <button type="button" data-markets-view="stats" class="active">Goals and CS%</button>
+                <button type="button" data-markets-view="scoreline">Scoreline</button>
+              </div>
+            </div>
             <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
               title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls">
               <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
@@ -943,15 +944,6 @@
         </div>
 
         <div class="markets-controls is-collapsed" id="markets-controls" hidden>
-          <div class="markets-control markets-control-view">
-            <div class="schedule-control-head">
-              <strong>Card view</strong>
-            </div>
-            <div class="segmented markets-view-seg" id="markets-view-seg" role="group" aria-label="Matchup card view">
-              <button type="button" data-markets-view="stats" class="active">Goals and CS%</button>
-              <button type="button" data-markets-view="scoreline">Scoreline</button>
-            </div>
-          </div>
           <div class="markets-control markets-control-compare">
             <div class="schedule-control-head">
               <strong>Compare
@@ -1064,7 +1056,7 @@
 <script src="social_data.js?v=15"></script>
 <script src="markets_data.js?v=7"></script>
 <script src="ownership_data.js?v=4"></script>
-<script src="app.js?v=536"></script>
+<script src="app.js?v=541"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

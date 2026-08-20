@@ -683,7 +683,6 @@
     pageTrayBtn: $("#page-tray-btn"),
     pageTrayLabel: $("#page-tray-label"),
     pageTrayIconUse: $("#page-tray-icon-use"),
-    expectedTabWrap: $("#expected-tab-wrap"),
     expectedCatMenu: $("#expected-cat-menu"),
     expectedCatToolbar: $("#expected-cat-toolbar"),
     expectedCatBtn: $("#expected-cat-btn"),
@@ -691,8 +690,6 @@
     pageSchedule: $("#page-schedule"),
     pageFeed: $("#page-feed"),
     pageMarkets: $("#page-markets"),
-    marketsTabWrap: $("#markets-tab-wrap"),
-    marketsViewMenu: $("#markets-view-menu"),
     subtoolbar: $("#subtoolbar"),
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
@@ -781,6 +778,7 @@
     marketsHeatCsLabel: $("#markets-heat-cs-label"),
     marketsCompareSeg: $("#markets-compare-seg"),
     marketsViewSeg: $("#markets-view-seg"),
+    marketsViewControl: $("#markets-view-control"),
     marketsHeaderActions: $("#markets-header-actions"),
     scheduleScatter: $("#schedule-scatter"),
     scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
@@ -1957,6 +1955,7 @@
     document.documentElement.classList.toggle("has-mobile-bottom-dock", show);
     if (!show) resetMobileChromeScrollHide();
     syncMobileScrollportHeight();
+    scheduleOptaMobileNameColWidth();
   }
 
   function syncMobileScrollportHeight() {
@@ -2379,7 +2378,7 @@
     }
   }
 
-  // Statistics table: scroll-linked Player/Team name morph (full ↔ compact).
+  // Team picker table: scroll-linked Player name morph (full ↔ compact).
   // Dead zone after the default (Price/GW) origin so the landing view stays full.
   const NAME_SIMPLIFY_START = 24;
   const NAME_SIMPLIFY_END = 140;
@@ -2408,10 +2407,44 @@
 
   function nameSimplifyActive() {
     if (NARROW_MQ.matches || !hasFineHover()) {
-      if (state.page === "opta") return true;
       if (state.page === "team" && state.teamPickerSlot) return true;
     }
     return false;
+  }
+
+  let optaMobileNameColW = null;
+  let optaMobileNameColRaf = 0;
+
+  function syncOptaMobileNameColWidth() {
+    const wraps = optaTableWraps();
+    if (!NARROW_MQ.matches || state.page !== "opta") {
+      optaMobileNameColW = null;
+      wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
+      return;
+    }
+    const compareBtn = el.compareToggle;
+    const mainWrap = wraps[0];
+    if (compareBtn && mainWrap && compareBtn.offsetParent !== null) {
+      const width = Math.max(
+        72,
+        Math.round(compareBtn.getBoundingClientRect().right - mainWrap.getBoundingClientRect().left)
+      );
+      optaMobileNameColW = width;
+    }
+    if (optaMobileNameColW == null) return;
+    const prev = mainWrap && mainWrap.style.getPropertyValue("--name-col-w");
+    wraps.forEach((wrap) => wrap.style.setProperty("--name-col-w", `${optaMobileNameColW}px`));
+    if (prev !== `${optaMobileNameColW}px`) {
+      wraps.forEach(invalidateNameSimplifyOrigin);
+    }
+  }
+
+  function scheduleOptaMobileNameColWidth() {
+    if (optaMobileNameColRaf) cancelAnimationFrame(optaMobileNameColRaf);
+    optaMobileNameColRaf = requestAnimationFrame(() => {
+      optaMobileNameColRaf = 0;
+      syncOptaMobileNameColWidth();
+    });
   }
 
   function nameSimplifyProgress(scrollLeft, origin = 0) {
@@ -3333,6 +3366,7 @@
         });
       }
       syncMobileScrollportHeight();
+      scheduleOptaMobileNameColWidth();
     });
   }
 
@@ -3860,17 +3894,13 @@
 
     if (state.page === "expected") {
       const iconRows = [
+        spitRow(spitRank("Cat"), "Category — toolbar dropdown"),
         spitRow(`<i class="spit-expected"></i>`, "Expected value on the track"),
         spitRow(`<i class="spit-easy"></i>`, "Outperforming expectation"),
         spitRow(`<i class="spit-tough"></i>`, "Underperforming expectation"),
         spitRow(`<i class="spit-even"></i>`, "Even — actual ≈ expected"),
         spitRow(spitOwnedPinHTML(), "In your FPL squad"),
       ];
-      if (mobile) {
-        iconRows.unshift(
-          spitRow(spitRank("Cat"), "Category — toolbar dropdown")
-        );
-      }
       const reading = [
         ...(state.expectedSplit === "compare"
           ? [spitRow(spitRank("Split"), "Home and away side by side for the same players or teams.")]
@@ -3928,7 +3958,7 @@
 
     if (state.page === "markets") {
       const iconRows = [
-        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — toolbar dropdown" : "Goals and CS% or Scoreline — Markets tab menu"),
+        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — in Markets filters" : "Goals and CS% or Scoreline — next to the slider button"),
         spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window"),
       ];
       const reading = [
@@ -4254,6 +4284,7 @@
     tbody.addEventListener("mousemove", (e) => {
       if (!hasFineHover()) return;
       if (el.fixtureTooltip.style.display === "none") return;
+      if (!fixtureTtActiveTr || !fixtureTtActiveTr.contains(e.target)) return;
       if (
         isSourceWarningTarget(e.target) ||
         isFixtureTtNameColumnTarget(e.target) ||
@@ -4263,6 +4294,15 @@
       }
       fixtureTtPointer = { x: e.clientX, y: e.clientY };
       if (fixtureTtActiveTeam) positionFixtureTooltip();
+    });
+    tbody.addEventListener("mouseout", (e) => {
+      if (!hasFineHover()) return;
+      if (!fixtureTtActiveTr || el.fixtureTooltip.style.display === "none") return;
+      const fromRow = e.target.closest("tbody tr[data-team]");
+      if (fromRow !== fixtureTtActiveTr) return;
+      const to = e.relatedTarget;
+      if (to instanceof Node && fixtureTtActiveTr.contains(to)) return;
+      hideFixtureTooltip();
     });
     tbody.addEventListener("click", (e) => {
       if (state.page !== "opta") return;
@@ -5062,59 +5102,30 @@
     });
   }
 
-  function clearExpectedCatMenuPosition() {
-    if (!el.expectedCatMenu) return;
-    el.expectedCatMenu.classList.remove("is-fixed");
-    el.expectedCatMenu.style.left = "";
-    el.expectedCatMenu.style.top = "";
-    el.expectedCatMenu.style.minWidth = "";
-  }
-
-  function positionExpectedCatMenuFixed() {
-    if (!el.expectedCatMenu || !el.pageExpected) return;
-    const r = el.pageExpected.getBoundingClientRect();
-    const menuWidth = Math.max(176, el.expectedCatMenu.offsetWidth || 176);
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8));
-    el.expectedCatMenu.classList.add("is-fixed");
-    el.expectedCatMenu.style.left = `${left}px`;
-    el.expectedCatMenu.style.top = `${r.bottom + 6}px`;
-    el.expectedCatMenu.style.minWidth = `${Math.max(menuWidth, r.width)}px`;
-  }
-
   function setExpectedCatMenuOpen(open) {
-    if (!el.expectedTabWrap || !el.pageExpected) return;
-    el.expectedTabWrap.classList.toggle("open", open);
-    el.pageExpected.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      if (tabMenuNeedsFixedPosition()) {
-        requestAnimationFrame(() => {
-          positionExpectedCatMenuFixed();
-          requestAnimationFrame(positionExpectedCatMenuFixed);
-        });
-      } else {
-        clearExpectedCatMenuPosition();
-      }
-    } else {
-      clearExpectedCatMenuPosition();
-    }
+    if (!el.expectedCatToolbar || !el.expectedCatBtn || !el.expectedCatMenu) return;
+    if (preferMobileSheet()) open = false;
+    el.expectedCatToolbar.classList.toggle("open", open);
+    el.expectedCatMenu.classList.toggle("open", open);
+    el.expectedCatBtn.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
   function syncExpectedCatToolbar() {
     if (!el.expectedCatToolbar || !el.expectedCatBtn || !el.expectedCatLabel) return;
-    const show = preferMobileSheet() && state.page === "expected";
+    const show = state.page === "expected";
     el.expectedCatToolbar.hidden = !show;
     if (!show) {
-      el.expectedCatBtn.setAttribute("aria-expanded", "false");
+      setExpectedCatMenuOpen(false);
       return;
     }
     const cat = currentExpectedCat();
     el.expectedCatLabel.textContent = cat.label;
     el.expectedCatBtn.title = cat.label;
     el.expectedCatBtn.setAttribute("aria-label", `xData category: ${cat.label}`);
-    el.expectedCatBtn.setAttribute(
-      "aria-expanded",
-      mobileSheetOpen && mobileSheetKey === "expected-cats" ? "true" : "false"
-    );
+    const expanded = preferMobileSheet()
+      ? mobileSheetOpen && mobileSheetKey === "expected-cats"
+      : el.expectedCatMenu?.classList.contains("open");
+    el.expectedCatBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
   }
 
   function buildExpectedCatMenu() {
@@ -5133,7 +5144,9 @@
         e.stopPropagation();
         state.expectedCat = c.key;
         setExpectedCatMenuOpen(false);
-        setPage("expected");
+        if (state.page === "expected") renderExpected();
+        else setPage("expected");
+        syncExpectedCatToolbar();
       });
       el.expectedCatMenu.appendChild(btn);
     });
@@ -9718,13 +9731,20 @@
   function syncMarketsViewControls() {
     const marketsMobile = preferMobileSheet() && state.page === "markets";
     const marketsDesktop = !preferMobileSheet() && state.page === "markets";
-    if (el.pageMarkets) {
-      el.pageMarkets.setAttribute(
-        "aria-expanded",
-        el.marketsTabWrap?.classList.contains("open") ? "true" : "false"
-      );
-    }
     syncMarketsViewSeg();
+    const viewControl = el.marketsViewControl;
+    if (viewControl && el.marketsHeaderActions && el.marketsControls) {
+      if (preferMobileSheet()) {
+        if (viewControl.parentElement !== el.marketsControls) {
+          el.marketsControls.insertBefore(viewControl, el.marketsControls.firstChild);
+        }
+      } else if (viewControl.parentElement !== el.marketsHeaderActions) {
+        el.marketsHeaderActions.insertBefore(
+          viewControl,
+          el.marketsSlidersToggle || el.marketsHeaderActions.firstChild
+        );
+      }
+    }
     // Sliders live under Markets only: header on desktop; mobile FAB dock.
     if (el.marketsSlidersToggle && el.marketsHeaderActions) {
       if (marketsMobile) {
@@ -9742,70 +9762,7 @@
         el.marketsSlidersToggle.hidden = !marketsDesktop;
       }
     }
-    buildMarketsViewMenu();
     syncMobileChrome();
-  }
-
-  function clearMarketsViewMenuPosition() {
-    if (!el.marketsViewMenu) return;
-    el.marketsViewMenu.classList.remove("is-fixed");
-    el.marketsViewMenu.style.left = "";
-    el.marketsViewMenu.style.top = "";
-    el.marketsViewMenu.style.minWidth = "";
-  }
-
-  function positionMarketsViewMenuFixed() {
-    if (!el.marketsViewMenu || !el.pageMarkets) return;
-    const r = el.pageMarkets.getBoundingClientRect();
-    const menuWidth = Math.max(148, el.marketsViewMenu.offsetWidth || 148);
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8));
-    el.marketsViewMenu.classList.add("is-fixed");
-    el.marketsViewMenu.style.left = `${left}px`;
-    el.marketsViewMenu.style.top = `${r.bottom + 6}px`;
-    el.marketsViewMenu.style.minWidth = `${Math.max(menuWidth, r.width)}px`;
-  }
-
-  function setMarketsViewMenuOpen(open) {
-    if (!el.marketsTabWrap || !el.pageMarkets) return;
-    el.marketsTabWrap.classList.toggle("open", open);
-    el.pageMarkets.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      if (tabMenuNeedsFixedPosition()) {
-        requestAnimationFrame(() => {
-          positionMarketsViewMenuFixed();
-          requestAnimationFrame(() => {
-            positionMarketsViewMenuFixed();
-            if (state.page === "markets") scrollActivePageTabIntoView({ instant: true });
-          });
-        });
-      } else {
-        clearMarketsViewMenuPosition();
-      }
-    } else {
-      clearMarketsViewMenuPosition();
-    }
-  }
-
-  function buildMarketsViewMenu() {
-    if (!el.marketsViewMenu) return;
-    const views = marketsCardViews();
-    const active = currentMarketsCardView();
-    el.marketsViewMenu.innerHTML = "";
-    views.forEach((v) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.setAttribute("role", "menuitem");
-      btn.className = "page-tab-menu-item";
-      btn.textContent = v.label;
-      btn.classList.toggle("active", v.key === active.key);
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        setMarketsViewMenuOpen(false);
-        setMarketsCardView(v.key, { rerender: false });
-        setPage("markets");
-      });
-      el.marketsViewMenu.appendChild(btn);
-    });
   }
 
   function marketsCardHTML(fx, baseline) {
@@ -12051,7 +12008,6 @@ python3 site/annotate_social.py</pre>
       syncOwnershipTrendingUI();
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
-    if (page !== "markets") setMarketsViewMenuOpen(false);
     if (page === "rankings") {
       renderRankings();
     } else if (page === "ownership") {
@@ -12152,33 +12108,24 @@ python3 site/annotate_social.py</pre>
     });
   }
   if (el.pageTeam) el.pageTeam.addEventListener("click", () => setPage("team"));
-  el.pageExpected.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Mobile / narrow: plain page tab — category lives in the toolbar.
-    if (preferMobileSheet()) {
-      setExpectedCatMenuOpen(false);
-      setPage("expected");
-      return;
-    }
-    // Desktop wide: toggle the category menu. Hover still opens via CSS + mouseenter.
-    buildExpectedCatMenu();
-    const willOpen = !el.expectedTabWrap.classList.contains("open");
-    setExpectedCatMenuOpen(willOpen);
-    setPage("expected");
-  });
+  el.pageExpected.addEventListener("click", () => setPage("expected"));
   if (el.expectedCatBtn) {
     el.expectedCatBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!preferMobileSheet() || state.page !== "expected") return;
-      if (mobileSheetOpen && mobileSheetKey === "expected-cats") {
-        closeMobileSheet();
+      if (state.page !== "expected") return;
+      if (preferMobileSheet()) {
+        if (mobileSheetOpen && mobileSheetKey === "expected-cats") {
+          closeMobileSheet();
+          syncExpectedCatToolbar();
+          return;
+        }
+        openExpectedCatSheet();
         syncExpectedCatToolbar();
         return;
       }
-      openExpectedCatSheet();
-      syncExpectedCatToolbar();
+      buildExpectedCatMenu();
+      setExpectedCatMenuOpen(!el.expectedCatMenu?.classList.contains("open"));
     });
   }
   el.pageSchedule.addEventListener("click", () => setPage("schedule"));
@@ -12190,104 +12137,14 @@ python3 site/annotate_social.py</pre>
       setPageTrayOpen(!pageTrayIsOpen());
     });
   }
-  let marketsMenuCloseTimer = 0;
-  function cancelMarketsMenuClose() {
-    window.clearTimeout(marketsMenuCloseTimer);
-  }
-  function armMarketsMenuClose() {
-    cancelMarketsMenuClose();
-    marketsMenuCloseTimer = window.setTimeout(() => {
-      if (el.marketsTabWrap?.matches(":hover")) return;
-      if (el.marketsViewMenu?.matches(":hover")) return;
-      setMarketsViewMenuOpen(false);
-    }, 180);
-  }
-
   if (el.pageMarkets) {
-    el.pageMarkets.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (el.marketsTabWrap) pageTabFocusEl = el.marketsTabWrap;
-      // Mobile / narrow: plain page tab — card view lives in the filter panel.
-      if (preferMobileSheet()) {
-        setMarketsViewMenuOpen(false);
-        setPage("markets");
-        return;
-      }
-      // Desktop: same as xData — toggle the view menu and land on Markets.
-      cancelMarketsMenuClose();
-      buildMarketsViewMenu();
-      const willOpen = !el.marketsTabWrap?.classList.contains("open");
-      setMarketsViewMenuOpen(willOpen);
-      setPage("markets");
-    });
-  }
-  // Mobile: also accept taps on the wrap (caret/gap) so the last tab isn't missed.
-  if (el.marketsTabWrap) {
-    el.marketsTabWrap.addEventListener(
-      "click",
-      (e) => {
-        if (!preferMobileSheet()) return;
-        if (e.target.closest("#page-markets")) return; // button handler already ran
-        e.preventDefault();
-        e.stopPropagation();
-        pageTabFocusEl = el.marketsTabWrap;
-        setMarketsViewMenuOpen(false);
-        setPage("markets");
-      },
-      true
-    );
-  }
-  if (el.marketsTabWrap) {
-    el.marketsTabWrap.addEventListener("mouseenter", () => {
-      if (preferMobileSheet()) return;
-      if (!hasFineHover()) return;
-      cancelMarketsMenuClose();
-      buildMarketsViewMenu();
-      setMarketsViewMenuOpen(true);
-    });
-    el.marketsTabWrap.addEventListener("mouseleave", () => {
-      if (preferMobileSheet()) return;
-      if (!hasFineHover()) return;
-      armMarketsMenuClose();
-    });
-  }
-  if (el.marketsViewMenu) {
-    el.marketsViewMenu.addEventListener("mouseenter", () => {
-      if (preferMobileSheet()) return;
-      if (!hasFineHover()) return;
-      cancelMarketsMenuClose();
-    });
-    el.marketsViewMenu.addEventListener("mouseleave", () => {
-      if (preferMobileSheet()) return;
-      if (!hasFineHover()) return;
-      armMarketsMenuClose();
-    });
-  }
-  if (el.expectedTabWrap) {
-    el.expectedTabWrap.addEventListener("mouseenter", () => {
-      if (preferMobileSheet()) return;
-      if (!hasFineHover()) return;
-      buildExpectedCatMenu();
-      setExpectedCatMenuOpen(true);
-    });
-    el.expectedTabWrap.addEventListener("mouseleave", () => {
-      if (preferMobileSheet()) return;
-      if (!hasFineHover()) return;
-      setExpectedCatMenuOpen(false);
-    });
+    el.pageMarkets.addEventListener("click", () => setPage("markets"));
   }
   document.addEventListener("click", (e) => {
     if (preferMobileSheet()) return;
-    if (!hasFineHover()) return;
-    if (!el.expectedTabWrap || !el.expectedTabWrap.classList.contains("open")) return;
-    if (!el.expectedTabWrap.contains(e.target)) setExpectedCatMenuOpen(false);
-  });
-  document.addEventListener("click", (e) => {
-    if (preferMobileSheet()) return;
-    if (!hasFineHover()) return;
-    if (!el.marketsTabWrap || !el.marketsTabWrap.classList.contains("open")) return;
-    if (!el.marketsTabWrap.contains(e.target)) setMarketsViewMenuOpen(false);
+    if (!el.expectedCatMenu?.classList.contains("open")) return;
+    if (el.expectedCatToolbar?.contains(e.target)) return;
+    setExpectedCatMenuOpen(false);
   });
   window.addEventListener("resize", () => {
     syncPageTabsScrollHints();
@@ -12297,35 +12154,8 @@ python3 site/annotate_social.py</pre>
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncBarbellHeadHeight();
-    if (preferMobileSheet()) {
-      setExpectedCatMenuOpen(false);
-      setMarketsViewMenuOpen(false);
-      return;
-    }
-    if (!hasFineHover()) return;
-    if (el.expectedTabWrap?.classList.contains("open")) {
-      if (tabMenuNeedsFixedPosition()) {
-        positionExpectedCatMenuFixed();
-      } else {
-        clearExpectedCatMenuPosition();
-      }
-    }
-    if (el.marketsTabWrap?.classList.contains("open")) {
-      if (tabMenuNeedsFixedPosition()) {
-        positionMarketsViewMenuFixed();
-      } else {
-        clearMarketsViewMenuPosition();
-      }
-    }
+    if (preferMobileSheet()) setExpectedCatMenuOpen(false);
   });
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (!hasFineHover()) return;
-      if (el.expectedTabWrap?.classList.contains("open")) setExpectedCatMenuOpen(false);
-    },
-    true
-  );
 
   let pageTabWheelBuilt = false;
   let pageTabWheelLock = false;
@@ -12615,12 +12445,6 @@ python3 site/annotate_social.py</pre>
     });
   }
 
-  function tabMenuNeedsFixedPosition() {
-    // Absolute menus under a scrollable tab strip force overflow:visible,
-    // which resets scrollLeft and makes the rightmost tab (Markets) jump away.
-    return !hasFineHover() || pageTabsAreScrollable();
-  }
-
   function syncPageTabsScrollHints() {
     const tabs = el.pageTabs;
     const clip = el.pageTabsClip;
@@ -12658,6 +12482,7 @@ python3 site/annotate_social.py</pre>
         if (!page) return;
         e.preventDefault();
         e.stopPropagation();
+        pageTabFocusEl = clone;
         setPage(page);
       },
       true
@@ -13051,6 +12876,7 @@ python3 site/annotate_social.py</pre>
     }
     syncSearchClearBtns();
     syncTeamSearchCombobox();
+    if (state.page === "opta") scheduleOptaMobileNameColWidth();
   }
 
   function closeMobileSearch({ clear = false } = {}) {
@@ -13484,7 +13310,6 @@ python3 site/annotate_social.py</pre>
     });
   }
 
-  buildMarketsViewMenu();
   syncMarketsViewControls();
   syncMobileChrome();
 
@@ -14136,6 +13961,7 @@ python3 site/annotate_social.py</pre>
     if (state.page === "team") renderTeam();
     if (state.page === "opta") {
       syncCoreUnderName();
+      scheduleOptaMobileNameColWidth();
       requestAnimationFrame(() => {
         snapOptaToGameStats();
         requestAnimationFrame(() => {
@@ -14337,9 +14163,13 @@ python3 site/annotate_social.py</pre>
       syncPageNavLabelCenter();
       refreshNameSimplifyOrigins();
       syncMobileScrollportHeight();
+      scheduleOptaMobileNameColWidth();
     });
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", syncMobileScrollportHeight);
+      window.visualViewport.addEventListener("resize", () => {
+        syncMobileScrollportHeight();
+        scheduleOptaMobileNameColWidth();
+      });
       window.visualViewport.addEventListener("scroll", syncMobileScrollportHeight);
     }
     if (typeof NARROW_MQ.addEventListener === "function") {
@@ -14357,6 +14187,7 @@ python3 site/annotate_social.py</pre>
         refreshCompareScrollMirrorMode();
         bindMobileChromeScrollHide();
         syncMobileScrollportHeight();
+        scheduleOptaMobileNameColWidth();
         scheduleTeamTableHeadHeightSync();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
@@ -14374,6 +14205,7 @@ python3 site/annotate_social.py</pre>
         refreshCompareScrollMirrorMode();
         bindMobileChromeScrollHide();
         syncMobileScrollportHeight();
+        scheduleOptaMobileNameColWidth();
         scheduleTeamTableHeadHeightSync();
       });
     }
