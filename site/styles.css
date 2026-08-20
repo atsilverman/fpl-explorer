@@ -3255,7 +3255,8 @@ tbody td.is-enhanced::before {
   pointer-events: none;
   z-index: -1;
 }
-#opta-page.is-hl-entering tbody td.is-enhanced.highlight-strong {
+#opta-page.is-hl-entering tbody td.is-enhanced.highlight-strong,
+#team-page.is-hl-entering tbody td.is-enhanced.highlight-strong {
   color: color-mix(in srgb, #fff calc(var(--hl-sat, 1) * 100%), var(--text));
 }
 tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; font-family: var(--sans); }
@@ -3500,12 +3501,15 @@ thead th.col-check, tbody td.col-check { text-align: center; }
   display: inline-flex;
   align-items: center;
   color: var(--blue);
-  margin-left: 4px;
+  margin-left: 0;
   cursor: help;
 }
 .threshold-dot .check-mark-icon {
   width: 12px;
   height: 12px;
+}
+.cell-inline:has(.threshold-dot) {
+  gap: 2px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -3758,6 +3762,14 @@ tbody tr.row-selected td:first-child {
 }
 .page-header .page-info-btn {
   display: none;
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
+  .page-header .page-info-btn {
+    display: inline-flex;
+  }
+  .page-info-btn.page-info-nav-btn {
+    display: none !important;
+  }
 }
 .page-info-btn {
   appearance: none;
@@ -5582,8 +5594,8 @@ html[data-page="ownership"] .layout .main {
     --barbell-name-w: 120px;
     --barbell-name-w-compare: 112px;
     --barbell-head-h: 32px;
-    --crest-size: 16px;
-    --badge-size: 16px;
+    --crest-size: 21px;
+    --badge-size: 21px;
     /* Keep head / scale / rows on the same width — mismatched min-widths
        left a blank strip past Diff when scrolled right. Give the track
        more length; xG / Goals / Diff sit off to the right. */
@@ -7041,6 +7053,7 @@ html[data-page="ownership"] .layout .main {
   padding: 5px 7px;
   white-space: nowrap;
   border-bottom: 1px solid var(--row-divider);
+  vertical-align: middle;
 }
 .ftt-table tr:last-child td { border-bottom: none; }
 /* Subtle rule between attack (xG, G) and defence (xGC, GC, CS). */
@@ -7095,24 +7108,30 @@ html[data-page="ownership"] .layout .main {
   text-align: left !important;
   color: var(--text) !important;
   font-weight: 600;
+  line-height: 1;
 }
 .ftt-opp span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  line-height: 1;
+  vertical-align: middle;
 }
 .ftt-opp .badge-img {
   width: 16px;
   height: 16px;
   object-fit: contain;
-  vertical-align: -2px;
-  margin-right: 4px;
+  object-position: center;
+  display: block;
+  flex: none;
 }
 .ftt-ha {
   text-align: left !important;
   color: var(--text-faint) !important;
   font-size: 12px;
   width: 30px;
+  line-height: 1;
+  vertical-align: middle;
 }
 /* Home fixtures carry a filled star so a run of home games is scannable
    down the column without reading each H/A letter. */
@@ -10283,21 +10302,9 @@ html[data-page="team"] .layout .main {
 #team-picker-view tbody td.col-team-stat {
   line-height: 1.15;
 }
-.team-stat-val,
-.team-stat-rank {
-  display: block;
-  text-align: center;
-}
-.team-stat-rank {
-  margin-top: 1px;
-  font-size: 9.5px;
-  font-weight: 500;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-.team-stat-rank.is-top {
-  color: hsl(var(--positive));
-  font-weight: 650;
+#team-page tbody td.col-team-stat.is-compare-win,
+#team-picker-view tbody td.col-team-stat.is-compare-win {
+  font-weight: 700;
 }
 #team-page tbody td.col-team-stat.is-blank,
 #team-picker-view tbody td.col-team-stat.is-blank {

@@ -3960,7 +3960,7 @@
         spitRow(spitRank("Planner"), "Editable local draft. Survives refresh. Resync in Preferences overwrites it from Actual."),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
-        spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Faint rank is among that position last season. New signings show –."),
+        spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Green cell wash is last-season rank among that position (same top-% band as Statistics Enhance). New signings show –."),
         spitRow(spitRank("Form"), "Sparkline of mock recent form. Tap it (or the column header) to switch to TSB% from ownership check-ins."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (green check). FK/CK also show #2."),
         spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Pick GW2 to shift the run so GW2 is current."),
@@ -4557,10 +4557,14 @@
   }
 
   function activePageInfoBtn() {
-    if (el.pageInfoNavBtn) return el.pageInfoNavBtn;
     const pane = typeof pagePaneFor === "function" ? pagePaneFor(state.page) : null;
+    if (!preferMobileSheet() && pane) {
+      const btn = pane.querySelector(".page-info-btn:not(.page-info-nav-btn)");
+      if (btn) return btn;
+    }
+    if (el.pageInfoNavBtn) return el.pageInfoNavBtn;
     if (pane) {
-      const btn = pane.querySelector(".page-info-btn");
+      const btn = pane.querySelector(".page-info-btn:not(.page-info-nav-btn)");
       if (btn) return btn;
     }
     return pageInfoButtons()[0] || null;
@@ -6401,22 +6405,23 @@
     return slots.slice().sort((a, b) => compareTeamRows(teamPlayerByCode(a.code), teamPlayerByCode(b.code)));
   }
 
-  const TEAM_STAT_RANK_FADE = 35;
-  const TEAM_STAT_RANK_MAX = 50;
+  function teamRankLabel(rank) {
+    if (rank == null || !Number.isFinite(Number(rank))) return "";
+    return `#${Number(rank)}`;
+  }
 
-  function teamStatRankHTML(rank) {
-    if (rank == null || rank > TEAM_STAT_RANK_MAX) return "";
-    const label = `${rank}${ordinalSuffix(rank)}`;
-    if (rank > TEAM_STAT_RANK_FADE) {
-      return `<span class="team-stat-rank">${escapeHtml(label)}</span>`;
-    }
-    const t = rankBandIntensity(rank - 1, TEAM_STAT_RANK_FADE);
-    if (t < 0.04) {
-      return `<span class="team-stat-rank">${escapeHtml(label)}</span>`;
-    }
-    const mix = Math.max(0, Math.min(100, Math.round(t * 100)));
-    const weight = t >= 0.5 ? 650 : 500;
-    return `<span class="team-stat-rank is-top" style="color:color-mix(in srgb, hsl(var(--positive)) ${mix}%, var(--text-faint));font-weight:${weight}">${escapeHtml(label)}</span>`;
+  function teamStatEnhance(rank, pos, col) {
+    const rankMap = teamPosRankMaps()[col.key] && teamPosRankMaps()[col.key][pos];
+    if (!rankMap || rank == null) return { cls: "", style: "" };
+    const n = rankMap.size;
+    const band = Math.max(1, Math.round((n * ENHANCE_PCT_PLAYERS) / 100));
+    if (rank > band) return { cls: "", style: "" };
+    const paint = enhanceHighlightPaint("top", rankBandIntensity(rank - 1, band));
+    if (paint.skip) return { cls: "", style: "" };
+    let extra = " is-enhanced";
+    if (paint.emphasize || paint.strong) extra += " highlight-top";
+    if (paint.strong) extra += " highlight-strong";
+    return { cls: extra, style: `--hl-fill:${paint.backgroundColor}` };
   }
 
   function teamStatCellHTML(prior, pos, col, extraClass) {
@@ -6429,19 +6434,18 @@
       return `<td class="${cls} is-blank" data-team-stat="${escapeHtml(col.key)}">–</td>`;
     }
     const rank = teamPosRankMaps()[col.key][pos] && teamPosRankMaps()[col.key][pos].get(Number(prior.code));
-    const val = fmtNum(raw, col.decimals);
-    return `<td class="${cls}" data-team-stat="${escapeHtml(col.key)}">
-      <span class="team-stat-val">${val}</span>${teamStatRankHTML(rank)}
-    </td>`;
+    const hl = teamStatEnhance(rank, pos, col);
+    const style = hl.style ? ` style="${hl.style}"` : "";
+    return `<td class="${cls}${hl.cls}" data-team-stat="${escapeHtml(col.key)}"${style}>${fmtNum(raw, col.decimals)}</td>`;
   }
 
   function teamSetPieceCellHTML(row, col) {
     const mark = setPieceDisplayRank(row, col.key);
     if (mark == null) return `<td class="col-check col-team-setpiece"></td>`;
     if (mark === 1) {
-      return `<td class="col-check col-team-setpiece"><span class="check-mark"${tipAttr("1st choice")}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span></td>`;
+      return `<td class="col-check col-team-setpiece"><span class="check-mark"${tipAttr("#1 choice")}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span></td>`;
     }
-    return `<td class="col-check col-team-setpiece"><span class="check-mark check-mark-rank"${tipAttr(`${mark}${ordinalSuffix(mark)} choice`)}>${mark}</span></td>`;
+    return `<td class="col-check col-team-setpiece"><span class="check-mark check-mark-rank"${tipAttr(`${teamRankLabel(mark)} choice`)}>${escapeHtml(teamRankLabel(mark))}</span></td>`;
   }
 
   function teamMetricCellsHTML(row, opts) {
@@ -6545,7 +6549,7 @@
       const col = td.getAttribute("data-team-stat");
       const code = tr && tr.dataset.teamCode;
       const win = !!(map[col] && code != null && map[col].has(String(code)));
-      td.classList.toggle("highlight-top", win);
+      td.classList.toggle("is-compare-win", win);
       if (win) td.style.backgroundColor = positiveFill(0.24);
       else td.style.removeProperty("background-color");
     });
