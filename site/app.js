@@ -70,6 +70,9 @@
   const OWNERSHIP_TREND_THRESHOLD_MAX = 5;
   // Lookback in check-ins (1 / 3 / 7). Maps to ~1 / 3 / 7 days once snapshots are daily.
   const OWNERSHIP_TREND_WINDOW_DEFAULT = 1;
+  // Longer windows accumulate noise — scale the pp gate so Last 3 / Last 7
+  // still surface stronger moves rather than everyday drift.
+  const OWNERSHIP_TREND_THRESHOLD_SCALE = { 1: 1, 3: 2, 7: 3 };
   // Statistics-page fixture tooltip shading — wider than the players Enhance
   // default (10%) so tough/soft opponents read clearly in fixture tips.
   const FIXTURE_TT_ENHANCE_PCT = 30;
@@ -345,6 +348,9 @@
   const ENHANCE_PCT_MAX = 40;
   const ENHANCE_PCT_PLAYERS = 5;
   const ENHANCE_PCT_TEAMS = 30;
+  // Relative mode ranks within the filtered set — floor the band so a 5%
+  // full-table slider still colors a useful share of a small cohort (e.g. BHA Mids).
+  const ENHANCE_RELATIVE_FLOOR = 25;
   // Matchups highlight band as absolute ranks (always a ~20-team view).
   const SCHEDULE_ENHANCE_TOP_MIN = 1;
   const SCHEDULE_ENHANCE_TOP_MAX = 10;
@@ -501,7 +507,10 @@
     setPieceTakersOnly: false,
     // Always-on top/bottom % cell tint vs the full Players/Teams view
     // (raw values stay in the cells; filters don't shrink the bands).
+    // enhanceRelative = true ranks the band against the filtered rows instead.
+    // Defaults on whenever filters narrow; user can turn off until filters clear.
     enhancePct: ENHANCE_PCT_PLAYERS,
+    enhanceRelative: false,
     scheduleEnhanceTopN: SCHEDULE_ENHANCE_TOP_DEFAULT,
     compareMode: false,
     compareSelection: { players: new Set(), teams: new Set() },
@@ -551,6 +560,9 @@
   state.teamSearchPins = state.teamCompareCodes;
 
   const MAX_COMPARE = 5;
+  // Relative defaults on when filters narrow; remembered off until filters clear.
+  let enhanceRelativeUserOff = false;
+  let lastOptaHighlightFilterKey = "";
 
   function compareSet() {
     return state.compareSelection[state.view];
@@ -580,11 +592,20 @@
       };
     }
     const players = DATA.players.combined;
-    const price = players.map((p) => p.price);
+    // Include matched 2026/27 prices so Updates-mode £ filters cover the
+    // values shown in the table (e.g. Haaland 14.7 → 15.5).
+    const prices = [];
+    for (const p of players) {
+      if (p.price != null) prices.push(p.price);
+      if (p.price2627 != null) prices.push(p.price2627);
+    }
     const mins = players.map((p) => p.mins);
     return {
-      price: { min: Math.min(...price), max: Math.max(...price) },
-      mins: { min: 0, max: Math.max(...mins) },
+      price: {
+        min: prices.length ? Math.min(...prices) : 4,
+        max: prices.length ? Math.max(...prices) : 15,
+      },
+      mins: { min: 0, max: mins.length ? Math.max(...mins) : 38 * 90 },
     };
   }
 
@@ -874,6 +895,7 @@
     newpriceIssuesBadge: $("#newprice-issues-badge"),
     newpriceIssuesPanel: $("#newprice-issues-panel"),
     compareToggle: $("#compare-toggle"),
+    enhanceRelativeBtn: $("#enhance-relative-btn"),
     compareWrap: $("#compare-wrap"),
     compareTitle: $("#compare-title"),
     compareClear: $("#compare-clear"),
@@ -1019,8 +1041,11 @@
     $$("#split-seg button").forEach((b) => b.classList.toggle("active", b.dataset.split === "combined"));
     syncSegThumb(el.splitSeg);
     state.enhancePct = defaultEnhancePct();
+    state.enhanceRelative = false;
+    enhanceRelativeUserOff = false;
     state.hiddenCols = new Set();
     updateEnhancePctSlider();
+    syncEnhanceRelativeUI();
     updatePriceSlider();
     updateOwnedSlider();
     updateOwnershipTrendThresholdSlider();
@@ -1078,15 +1103,14 @@
       if (state.view === "players") {
         if (excludeDepartedPlayer(r)) return false;
         if (state.setPieceTakersOnly && !isSetPieceTaker(r)) return false;
-        if (state.posFilter.size && !state.posFilter.has(r.position)) return false;
-        if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
-        if (r.price < state.priceMin || r.price > state.priceMax) return false;
+        // Match table display: Updates remaps team / position / £ on 2025/26 rows.
+        if (state.posFilter.size && !state.posFilter.has(filterPosition(r))) return false;
+        if (state.teamFilter.size && !state.teamFilter.has(filterTeamCode(r))) return false;
+        const price = effectivePrice(r);
+        if (price < state.priceMin || price > state.priceMax) return false;
         if (!passesOwnershipFilter(r)) return false;
         if (r.mins < state.minsMin || r.mins > state.minsMax) return false;
-        if (q) {
-          const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
+        if (q && !playerSearchHaystack(r).includes(q)) return false;
       } else {
         if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
         if (q) {
@@ -1106,11 +1130,32 @@
     return ((row[col.key] || 0) / mins) * 90;
   }
 
-  // Active price for display / Per £m: next-season price while Updates is on
-  // (when matched). In 2026/27 mode the row price is already remapped.
+  // Active price for display / Per £m / price filter: next-season price while
+  // Updates is on (when matched). In 2026/27 mode the row price is already remapped.
   function effectivePrice(row) {
     if (updatesOverlayOn() && row.price2627 != null) return row.price2627;
     return row.price || 0;
+  }
+
+  // Filter chips / search must match crest + position badge + £ in the table.
+  function filterTeamCode(row) {
+    if (state.view === "teams") return row.team;
+    if (updatesOverlayOn() && row.newTeam) return row.newTeam;
+    return row.team;
+  }
+
+  function filterPosition(row) {
+    if (updatesOverlayOn() && row.newPosition) return row.newPosition;
+    return row.position;
+  }
+
+  function playerSearchHaystack(row) {
+    const team = filterTeamCode(row);
+    const parts = [row.name, team, teamNameForSeason(team)];
+    if (row.team && row.team !== team) {
+      parts.push(row.team, teamNameForSeason(row.team));
+    }
+    return parts.join(" ").toLowerCase();
   }
 
   function perMillionValue(row, col) {
@@ -1685,19 +1730,63 @@
     return Math.pow(1 - i / (n - 1), 1.55);
   }
 
+  // Value gap within the highlighted band: best → 1, edge of band → 0.
+  // A runaway leader saturates harder than a tight pack at the same ranks.
+  // `best`/`worst` are the slice endpoints after best-first sort (works for
+  // both higher-better and lower-better columns).
+  function valueBandIntensity(val, best, worst) {
+    const span = best - worst;
+    if (Math.abs(span) < 1e-12) return 1;
+    const t = (val - worst) / span;
+    return Math.pow(Math.min(1, Math.max(0, t)), 0.85);
+  }
+
+  // Mix rank position with value gap so order stays readable but big leads punch.
+  // Relative (filtered) mode leans harder on value so standouts in a small cohort
+  // read clearly even when ranks are only a few slots apart.
+  const ENHANCE_RANK_WEIGHT = 0.4;
+  const ENHANCE_VALUE_WEIGHT = 0.6;
+  const ENHANCE_RELATIVE_RANK_WEIGHT = 0.25;
+  const ENHANCE_RELATIVE_VALUE_WEIGHT = 0.75;
+
+  function enhanceBandIntensity(i, n, val, best, worst) {
+    const rankI = rankBandIntensity(i, n);
+    const valueI = valueBandIntensity(val, best, worst);
+    if (state.enhanceRelative) {
+      return ENHANCE_RELATIVE_RANK_WEIGHT * rankI + ENHANCE_RELATIVE_VALUE_WEIGHT * valueI;
+    }
+    return ENHANCE_RANK_WEIGHT * rankI + ENHANCE_VALUE_WEIGHT * valueI;
+  }
+
+  function intensitiesForBand(slice) {
+    if (!slice.length) return new Map();
+    const best = slice[0].val;
+    const worst = slice[slice.length - 1].val;
+    return new Map(
+      slice.map((x, i) => [x.key, enhanceBandIntensity(i, slice.length, x.val, best, worst)])
+    );
+  }
+
+  function effectiveEnhancePct() {
+    if (!state.enhanceRelative) return state.enhancePct;
+    return Math.min(ENHANCE_PCT_MAX, Math.max(state.enhancePct, ENHANCE_RELATIVE_FLOOR));
+  }
+
   // Builds { colKey: { top: Map(rowKey -> intensity), bottom: Map(...) } }
-  // for the columns visible in the current view. Bands are always measured
-  // against the full player/team population (not the filtered rows). topN is
-  // state.enhancePct of that population. Players rank only
-  // the best values (green). Teams — a much smaller population — rank
-  // both the best and worst (green "target" / red "avoid"), with the
-  // bottom set drawn only from values outside the top set so the two never
-  // overlap. Zero-valued cells are excluded from ranking (they're always
-  // visually demoted instead). Ties share the same intensity.
+  // for the columns visible in the current view. Default bands use the full
+  // player/team population; Relative mode passes the filtered rows and a
+  // boosted topN so small cohorts still get a readable highlight band.
+  // Players rank only the best values (green). Teams — a much smaller
+  // population — rank both the best and worst (green "target" / red "avoid"),
+  // with the bottom set drawn only from values outside the top set so the
+  // two never overlap. Zero-valued cells are excluded from ranking (they're
+  // always visually demoted instead). Intensity blends rank order with value
+  // gap inside the band so large leads read stronger than a tight pack.
   function buildHighlightMaps(rows) {
     const maps = {};
     const isTeams = state.view === "teams";
-    const topN = Math.max(1, Math.round((rows.length * state.enhancePct) / 100));
+    const pct = effectiveEnhancePct();
+    const topN = Math.max(1, Math.round((rows.length * pct) / 100));
     visibleColumns().forEach((col) => {
       if (!isNumericCol(col) || ENHANCE_EXCLUDE.has(col.key)) return;
       const lowerBetter = LOWER_BETTER.has(col.key);
@@ -1715,14 +1804,14 @@
       // effective top-N down to fewer highlighted rows than intended.
       withVals.sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
 
-      const topSlice = withVals.slice(0, topN);
-      const top = new Map(topSlice.map((x, i) => [x.key, rankBandIntensity(i, topSlice.length)]));
+      const topSlice = withVals.slice(0, Math.min(topN, withVals.length));
+      const top = intensitiesForBand(topSlice);
 
       const bottom = new Map();
       if (isTeams) {
         const remaining = withVals.slice(topSlice.length);
-        const bottomSlice = remaining.slice(-topN).reverse();
-        bottomSlice.forEach((x, i) => bottom.set(x.key, rankBandIntensity(i, bottomSlice.length)));
+        const bottomSlice = remaining.slice(-Math.min(topN, remaining.length)).reverse();
+        intensitiesForBand(bottomSlice).forEach((intensity, key) => bottom.set(key, intensity));
       }
 
       maps[col.key] = { top, bottom };
@@ -3061,7 +3150,9 @@
       return;
     }
 
-    const highlightMaps = buildHighlightMaps(getRows());
+    const highlightMaps = buildHighlightMaps(
+      state.enhanceRelative && state.page === "opta" ? rows : getRows()
+    );
     rows.forEach((r) =>
       el.tableBody.appendChild(buildDataRow(r, vcols, highlightMaps))
     );
@@ -3340,7 +3431,15 @@
       return;
     }
     const filtered = applyFilters(getRows());
+    // Resolve Relative default before building highlight maps.
+    syncEnhanceRelativeUI();
     const sorted = sortRows(filtered);
+    const highlightFilterKey = state.page === "opta" ? optaHighlightFilterKey(filtered.length) : "";
+    const highlightsChanged =
+      state.page === "opta" &&
+      (opts.animateHighlights === true ||
+        (highlightFilterKey && highlightFilterKey !== lastOptaHighlightFilterKey));
+    if (state.page === "opta") lastOptaHighlightFilterKey = highlightFilterKey;
     renderHead();
     renderBody(sorted);
     el.countLabel.textContent = `${filtered.length.toLocaleString()} of ${getRows().length.toLocaleString()} shown`;
@@ -3352,6 +3451,9 @@
     syncFiltersResetUI();
     syncCoreUnderName();
     syncTeamSearchHost();
+    if (highlightsChanged && el.optaPage) {
+      requestAnimationFrame(() => startOptaHighlightEnter(el.optaPage));
+    }
     requestAnimationFrame(() => {
       if (opts.resetScroll) {
         resetScrollWraps(optaTableWraps());
@@ -3944,7 +4046,7 @@
       const reading = [
         spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines until you pick one."),
         spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
-        spitRow(spitRank("Trend"), "Window and minimum change (pp) in Filters. Lines that qualify color green (up) or red (down); the rest stay grey."),
+        spitRow(spitRank("Trend"), "Window and minimum change (pp) in Filters. Longer windows raise the effective pp gate (Last×1, Last 3×2, Last 7×3) so bigger moves stand out. Lines that qualify color green (up) or red (down); the rest stay grey."),
         spitRow(spitRank("Axis"), "X is a snapshot date, not a gameweek. Y zooms to the lines on screen."),
         spitRow(spitRank(mobile ? "Tap" : "Select"), mobile
           ? "Tap a line or a Riser/Faller to pin it in club color; other lines go faint. Tap again or empty space to unpin."
@@ -4042,7 +4144,7 @@
       spitRow(spitRank("TSB%"), "FPL selected-by-% from the latest ownership check-in."),
       spitRow(
         spitRank("Tint"),
-        "Green/red Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them. Soft green fills use a quieter tone in dark mode."
+        "Green/red Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them unless Relative is on. Stronger wash when a leader pulls clear of the band; soft green is quieter in dark mode."
       ),
       spitRow(
         spitRank("Fixtures"),
@@ -7328,16 +7430,14 @@
       if (r.code == null) return false;
       if (excludeDepartedPlayer(r)) return false;
       if (inSquad.has(r.code) && r.code !== replaceCode) return false;
-      if (lock && r.position !== lock) return false;
-      if (!lock && state.posFilter.size && !state.posFilter.has(r.position)) return false;
-      if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
-      if (r.price < state.priceMin || r.price > state.priceMax) return false;
+      if (lock && filterPosition(r) !== lock) return false;
+      if (!lock && state.posFilter.size && !state.posFilter.has(filterPosition(r))) return false;
+      if (state.teamFilter.size && !state.teamFilter.has(filterTeamCode(r))) return false;
+      const price = effectivePrice(r);
+      if (price < state.priceMin || price > state.priceMax) return false;
       if (state.setPieceTakersOnly && !isSetPieceTaker(r)) return false;
       if (state.teamAffordableOnly && !teamRowAffordable(r, replaceCode)) return false;
-      if (q) {
-        const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      if (q && !playerSearchHaystack(r).includes(q)) return false;
       return true;
     });
   }
@@ -10285,6 +10385,18 @@ python3 site/annotate_social.py</pre>
     return n === 3 || n === 7 ? n : 1;
   }
 
+  function ownershipTrendThresholdScale(span = ownershipTrendWindowSpan()) {
+    return OWNERSHIP_TREND_THRESHOLD_SCALE[span] || 1;
+  }
+
+  function effectiveOwnershipTrendThreshold(base = state.ownershipTrendThreshold, span = ownershipTrendWindowSpan()) {
+    const scaled = Number(base) * ownershipTrendThresholdScale(span);
+    return Math.min(
+      OWNERSHIP_TREND_THRESHOLD_MAX,
+      Math.max(0.1, Math.round(scaled * 10) / 10)
+    );
+  }
+
   function ownershipTrendScore(series) {
     const owned = (series.points || [])
       .filter((pt) => pt && pt.owned != null && !Number.isNaN(Number(pt.owned)))
@@ -10303,7 +10415,7 @@ python3 site/annotate_social.py</pre>
     const recent = Math.round((last - owned[fromIdx]) * 10) / 10;
     const net = Math.round((last - owned[0]) * 10) / 10;
     const current = last;
-    const threshold = state.ownershipTrendThreshold;
+    const threshold = effectiveOwnershipTrendThreshold(state.ownershipTrendThreshold, span);
     let kind = "flat";
     if (recent >= threshold) kind = "riser";
     else if (recent <= -threshold) kind = "faller";
@@ -11325,8 +11437,13 @@ python3 site/annotate_social.py</pre>
         : state.ownershipTrendWindow === 3
           ? "last 3 check-ins"
           : "last 7 check-ins";
-    const threshold = Number(state.ownershipTrendThreshold).toFixed(1);
-    return `${base} · ${windowLabel}, ≥${threshold} pp`;
+    const baseThr = Number(state.ownershipTrendThreshold);
+    const effective = effectiveOwnershipTrendThreshold(baseThr);
+    const thrLabel =
+      Math.abs(effective - baseThr) > 1e-9
+        ? `${baseThr.toFixed(1)}→${effective.toFixed(1)} pp`
+        : `${effective.toFixed(1)} pp`;
+    return `${base} · ${windowLabel}, ≥${thrLabel}`;
   }
 
   function syncOwnershipChartTitle() {
@@ -11952,6 +12069,11 @@ python3 site/annotate_social.py</pre>
     if (el.compareToggle) {
       el.compareToggle.style.display = page === "opta" ? "" : "none";
     }
+    if (page !== "opta") {
+      state.enhanceRelative = false;
+      enhanceRelativeUserOff = false;
+    }
+    syncEnhanceRelativeUI();
     if (el.columnsBtn) el.columnsBtn.style.display = "none";
     syncColumnsPanelHost();
     syncHighlightUI();
@@ -13177,6 +13299,10 @@ python3 site/annotate_social.py</pre>
     format: (value) => {
       const span = ownershipTrendWindowSpan();
       const windowLabel = span === 1 ? "last update" : `last ${span} updates`;
+      const effective = effectiveOwnershipTrendThreshold(value, span);
+      if (Math.abs(effective - value) > 1e-9) {
+        return `${value.toFixed(1)}→${effective.toFixed(1)} pp · ${windowLabel}`;
+      }
       return `${value.toFixed(1)} pp · ${windowLabel}`;
     },
     onInput: renderOwnership,
@@ -13646,11 +13772,72 @@ python3 site/annotate_social.py</pre>
   });
 
   // Highlight Top/Bottom % is always on for Statistics; show the slider
-  // whenever that page is active. Bands always use the full view.
+  // whenever that page is active. Default bands use the full view; Relative
+  // ranks against the filtered rows when a narrowing filter is active (on by
+  // default; user can turn off until filters clear).
+  function optaFiltersNarrowPopulation() {
+    if (state.page !== "opta") return false;
+    const all = getRows();
+    if (!all.length) return false;
+    // Departed players are always excluded — don't count that as a "filter".
+    const baseline =
+      state.view === "players" ? all.filter((r) => !excludeDepartedPlayer(r)) : all;
+    const filtered = applyFilters(all);
+    return filtered.length >= 2 && filtered.length < baseline.length;
+  }
+
+  function optaHighlightFilterKey(filteredCount) {
+    return [
+      state.view,
+      state.split,
+      state.valueMode,
+      state.search.trim().toLowerCase(),
+      [...state.posFilter].sort().join(","),
+      [...state.teamFilter].sort().join(","),
+      state.priceMin,
+      state.priceMax,
+      state.ownedMin,
+      state.minsMin,
+      state.minsMax,
+      state.setPieceTakersOnly ? 1 : 0,
+      state.enhancePct,
+      state.enhanceRelative ? 1 : 0,
+      filteredCount,
+    ].join("|");
+  }
+
+  function syncEnhanceRelativeUI() {
+    const btn = el.enhanceRelativeBtn;
+    const show = state.page === "opta" && optaFiltersNarrowPopulation();
+    if (!show) {
+      state.enhanceRelative = false;
+      enhanceRelativeUserOff = false;
+    } else if (!enhanceRelativeUserOff) {
+      state.enhanceRelative = true;
+    }
+    if (!btn) {
+      syncHighlightUI();
+      return;
+    }
+    btn.hidden = !show;
+    btn.classList.toggle("on", !!state.enhanceRelative);
+    btn.setAttribute("aria-pressed", state.enhanceRelative ? "true" : "false");
+    const tip = state.enhanceRelative
+      ? "Highlights ranked against the filtered rows — click for full-table bands"
+      : "Rank green/red highlights against the current filtered rows";
+    setTip(btn, tip);
+    syncHighlightUI();
+  }
+
   function syncHighlightUI() {
     el.enhancePctGroup.style.display = state.page === "opta" ? "" : "none";
     if (el.enhancePctHint) {
-      el.enhancePctHint.textContent = `of all ${state.view}`;
+      if (state.enhanceRelative) {
+        const pct = effectiveEnhancePct();
+        el.enhancePctHint.textContent = `of filtered ${state.view} (${pct}%)`;
+      } else {
+        el.enhancePctHint.textContent = `of all ${state.view}`;
+      }
     }
   }
 
@@ -13671,6 +13858,29 @@ python3 site/annotate_social.py</pre>
     syncTeamSearchHost();
   });
 
+  if (el.enhanceRelativeBtn) {
+    el.enhanceRelativeBtn.addEventListener("click", () => {
+      if (!optaFiltersNarrowPopulation()) {
+        state.enhanceRelative = false;
+        enhanceRelativeUserOff = false;
+        syncEnhanceRelativeUI();
+        return;
+      }
+      state.enhanceRelative = !state.enhanceRelative;
+      enhanceRelativeUserOff = !state.enhanceRelative;
+      syncEnhanceRelativeUI();
+      if (state.enhanceRelative) {
+        showToast({
+          title: "Relative highlights",
+          message: "Green/red bands now rank within the filtered rows.",
+          icon: "sparkles",
+        });
+      } else {
+        hideToast();
+      }
+      renderTable({ preserveOptaScroll: true });
+    });
+  }
   el.compareClear.addEventListener("click", () => {
     compareSet().clear();
     renderTable({ preserveOptaScroll: true });

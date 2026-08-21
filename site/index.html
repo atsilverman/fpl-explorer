@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=543" />
+<link rel="stylesheet" href="styles.css?v=544" />
 <script>
 (() => {
   try {
@@ -432,6 +432,11 @@
       <button id="compare-toggle" class="ghost-btn icon-label-btn" type="button" title="Click up to 5 rows to compare side by side" aria-label="Compare">
         <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
         <span class="btn-label">Compare</span>
+      </button>
+      <button id="enhance-relative-btn" class="ghost-btn icon-label-btn" type="button" hidden
+        title="Rank green/red highlights against the current filtered rows" aria-label="Relative highlights" aria-pressed="false">
+        <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg>
+        <span class="btn-label">Relative</span>
       </button>
       <button id="columns-btn" class="ghost-btn icon-label-btn" type="button" title="Columns" aria-label="Columns" aria-expanded="false" aria-controls="columns-sidebar" hidden>
         <svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>
@@ -1052,11 +1057,11 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=28"></script>
-<script src="social_data.js?v=15"></script>
+<script src="data.js?v=30"></script>
+<script src="social_data.js?v=16"></script>
 <script src="markets_data.js?v=7"></script>
-<script src="ownership_data.js?v=4"></script>
-<script src="app.js?v=541"></script>
+<script src="ownership_data.js?v=5"></script>
+<script src="app.js?v=548"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

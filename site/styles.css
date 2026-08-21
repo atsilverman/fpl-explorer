@@ -2050,7 +2050,9 @@ a { color: var(--blue); }
     gap: 8px;
   }
   html[data-page="opta"] #subtoolbar.is-opta-mobile #compare-toggle,
-  html.is-mobile-layout[data-page="opta"] #subtoolbar #compare-toggle {
+  html.is-mobile-layout[data-page="opta"] #subtoolbar #compare-toggle,
+  html[data-page="opta"] #subtoolbar.is-opta-mobile #enhance-relative-btn,
+  html.is-mobile-layout[data-page="opta"] #subtoolbar #enhance-relative-btn {
     order: 1;
     flex: none;
   }
@@ -2071,7 +2073,8 @@ a { color: var(--blue); }
   html.is-mobile-layout[data-page="opta"] #stats-toolbar-start > .tabs {
     display: none !important;
   }
-  html:not([data-page="opta"]) #compare-toggle {
+  html:not([data-page="opta"]) #compare-toggle,
+  html:not([data-page="opta"]) #enhance-relative-btn {
     display: none !important;
   }
 
@@ -2113,6 +2116,7 @@ a { color: var(--blue); }
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) .topbar-data-cluster,
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) .team-toolbar-controls,
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #compare-toggle,
+  #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #enhance-relative-btn,
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #columns-btn,
   #subtoolbar:has(#search-wrap.search-open:not(.mobile-search-always-open)) #expected-cat-toolbar {
     display: none !important;
@@ -9767,6 +9771,7 @@ html[data-page="team"] .layout .main {
   #subtoolbar.is-team-picking .topbar-data-cluster,
   #subtoolbar.is-team-picking .topbar-end-cluster,
   #subtoolbar.is-team-picking #compare-toggle,
+  #subtoolbar.is-team-picking #enhance-relative-btn,
   #subtoolbar.is-team-picking #columns-btn,
   #subtoolbar.is-team-picking #expected-cat-toolbar {
     display: none !important;
