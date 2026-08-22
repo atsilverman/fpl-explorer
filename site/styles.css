@@ -11416,13 +11416,119 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-player-profile {
   margin-bottom: 12px;
 }
-.home-player-profile-card {
+.home-lookup-card {
   position: relative;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: hsl(var(--card));
   box-shadow: var(--shadow-sm);
-  padding: 12px 40px 12px 12px;
+  padding: 10px 36px 10px 10px;
+  border-left: 3px solid var(--home-lookup-accent, hsl(var(--border)));
+}
+.home-lookup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.home-lookup-photo-wrap {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.home-lookup-photo {
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 12%;
+  background: hsl(var(--muted) / 0.45);
+}
+.home-lookup-photo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.home-lookup-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 2px hsl(var(--card));
+}
+.home-lookup-badge .badge-img {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+.home-lookup-id {
+  min-width: 0;
+  flex: 1;
+}
+.home-lookup-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-lookup-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.home-lookup-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid hsl(var(--border) / 0.65);
+}
+.home-lookup-stat {
+  min-width: 0;
+  padding: 4px 2px;
+  border-radius: calc(var(--radius) - 4px);
+  background: hsl(var(--muted) / 0.35);
+  text-align: center;
+}
+.home-lookup-stat-val {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.home-lookup-stat-lbl {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  line-height: 1.1;
+}
+.home-lookup-ownership-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-dim);
 }
 .home-player-profile-close {
   position: absolute;
@@ -11449,18 +11555,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   width: 16px;
   height: 16px;
 }
-.home-player-profile .feed-player-card-top {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.home-player-profile .feed-player-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
 .home-player-matchup {
-  margin-top: 12px;
+  margin-bottom: 12px;
 }
 .home-player-matchup .schedule-card {
   width: 100%;
@@ -11536,11 +11632,6 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: var(--text-faint);
   font-size: 13px;
   text-align: center;
-}
-@media (max-width: 720px) {
-  .home-player-profile .feed-player-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 .home-panel {
   border: 1px solid var(--border);
@@ -11892,23 +11983,14 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-status-dot.is-done {
   background: hsl(var(--muted-foreground) / 0.45);
 }
-.home-play-counts {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
+.home-play-left {
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
-}
-.home-play-live {
-  color: hsl(142 55% 38%);
-}
-.home-play-sep {
-  color: var(--text-faint);
-  font-weight: 500;
-}
-.home-play-left {
   color: var(--text-dim);
+}
+.home-play-left.is-active {
+  color: hsl(142 55% 38%);
 }
 @keyframes home-live-pulse {
   0% { box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45); }

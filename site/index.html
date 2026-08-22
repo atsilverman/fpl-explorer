@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=569" />
+<link rel="stylesheet" href="styles.css?v=573" />
 <script>
 (() => {
   try {
@@ -680,7 +680,7 @@
         <p class="home-deadline" id="home-deadline" hidden></p>
         <div class="home-summary-cards" id="home-summary-cards">
           <article class="home-panel home-stat-panel home-stat-gw">
-            <h3 class="home-panel-heading">GW points</h3>
+            <h3 class="home-panel-heading" id="home-gw-heading">GW points</h3>
             <p class="home-stat-value" id="home-gw-points">—</p>
             <div class="home-stat-meta" id="home-gw-meta"></div>
           </article>
@@ -705,6 +705,7 @@
           </article>
         </div>
         <div id="home-player-profile" class="home-player-profile" hidden></div>
+        <div id="home-player-matchup" class="home-player-matchup" hidden></div>
 
         <div class="home-tables-grid">
         <article class="home-panel home-table-panel" id="home-squad-panel">
@@ -739,7 +740,7 @@
                 <tr>
                   <th scope="col" class="home-col-rank">#</th>
                   <th scope="col" class="home-col-manager">Manager</th>
-                  <th scope="col" class="home-col-play" title="In play · still to play (active picks; Bench Boost can exceed 11)">Play</th>
+                  <th scope="col" class="home-col-play" title="Still to play among active picks (Bench Boost can exceed 11)">Left</th>
                   <th scope="col" class="home-col-gw">GW</th>
                   <th scope="col" class="home-col-total">Total</th>
                 </tr>
@@ -749,7 +750,6 @@
           </div>
         </article>
         </div>
-        <div id="home-player-matchup" class="home-player-matchup" hidden></div>
       </div>
     </div>
 
@@ -1176,13 +1176,13 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=36"></script>
+<script src="data.js?v=37"></script>
 <script src="social_data.js?v=18"></script>
 <script src="markets_data.js?v=9"></script>
 <script src="ownership_data.js?v=8"></script>
 <script src="leagues_data.js?v=2"></script>
 <script src="home_data.js?v=7"></script>
-<script src="app.js?v=589"></script>
+<script src="app.js?v=594"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -3,7 +3,9 @@
 Home dashboard cache → site/home_data.js (window.FPL_HOME).
 
 Uses live_scoring (Defcon auto-subs + chips) for focus manager squad
-and mini-league GW standings. Target manager/league from:
+and mini-league GW standings. Rank delta arrows compare live ranks to
+end-of-previous-GW baselines (frozen in home_rank_baselines.json per
+manager/league/GW on first GW2+ refresh). Target manager/league from:
   1) CLI --manager / --league
   2) site/home_prefs.json
   3) first tracked manager + first tracked league
@@ -41,6 +43,7 @@ from live_scoring import (
 SITE = Path(__file__).resolve().parent
 TRACKED_PATH = SITE / "tracked_ids.json"
 PREFS_PATH = SITE / "home_prefs.json"
+BASELINES_PATH = SITE / "home_rank_baselines.json"
 OUT_PATH = SITE / "home_data.js"
 FPL_BASE = "https://fantasy.premierleague.com/api"
 UA = "Mozilla/5.0 (compatible; FPL-Explorer/1.0; +local-home)"
@@ -72,6 +75,79 @@ def load_json(path: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def save_json(path: Path, data: dict) -> None:
+    path.write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def rank_baseline_key(manager_id: int, league_id: int) -> str:
+    return f"{manager_id}:{league_id}"
+
+
+def positive_rank(value: object) -> int | None:
+    try:
+        rank = int(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return rank if rank > 0 else None
+
+
+def resolve_rank_baselines(
+    manager_id: int,
+    league_id: int,
+    gw: int,
+    api_overall_prev: int | None,
+    api_league_prev: int | None,
+    baselines: dict,
+) -> tuple[int | None, int | None, bool]:
+    """Freeze end-of-previous-GW ranks for intra-GW delta arrows.
+
+    GW1 has no prior gameweek — return None and clear any stale snapshot.
+    GW2+ locks baselines on the first refresh of the gameweek; later refreshes
+    keep those values while live overall/league ranks update from the API.
+    """
+    key = rank_baseline_key(manager_id, league_id)
+    changed = False
+
+    if gw <= 1:
+        if key in baselines:
+            del baselines[key]
+            changed = True
+        return None, None, changed
+
+    stored = baselines.get(key) if isinstance(baselines.get(key), dict) else {}
+    if stored.get("gw") == gw:
+        overall = positive_rank(stored.get("overallRankPrev"))
+        league = positive_rank(stored.get("leagueRankPrev"))
+        if overall is None and api_overall_prev:
+            overall = api_overall_prev
+            stored["overallRankPrev"] = overall
+            stored["updatedAt"] = generated_at()
+            baselines[key] = stored
+            changed = True
+        if league is None and api_league_prev:
+            league = api_league_prev
+            stored["leagueRankPrev"] = league
+            stored["updatedAt"] = generated_at()
+            baselines[key] = stored
+            changed = True
+        return overall, league, changed
+
+    overall = api_overall_prev
+    league = api_league_prev
+    if overall or league:
+        baselines[key] = {
+            "gw": gw,
+            "overallRankPrev": overall,
+            "leagueRankPrev": league,
+            "updatedAt": generated_at(),
+        }
+        changed = True
+    return overall, league, changed
 
 
 def resolve_targets(args: argparse.Namespace) -> tuple[int | None, int | None]:
@@ -236,6 +312,25 @@ def fetch_standings_page(league_id: int, page: int = 1) -> dict:
     return fpl_get(f"/leagues-classic/{league_id}/standings/?page_standings={page}")
 
 
+def fetch_all_standings(league_id: int) -> tuple[list, dict]:
+    """Paginate classic league standings until has_next is false."""
+    page = 1
+    all_results: list = []
+    league_meta: dict = {}
+    while True:
+        payload = fetch_standings_page(league_id, page)
+        assert isinstance(payload, dict)
+        if not league_meta:
+            league_meta = payload.get("league") or {}
+        standings = payload.get("standings") or {}
+        results = standings.get("results") or []
+        all_results.extend(results)
+        if not standings.get("has_next"):
+            break
+        page += 1
+    return all_results, league_meta
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fetch Home dashboard cache")
     parser.add_argument("--manager", type=int, default=None)
@@ -286,32 +381,39 @@ def main() -> int:
         history_payload = fpl_get(f"/entry/{manager_id}/history/")
         assert isinstance(history_payload, dict)
 
-        standings_payload = fetch_standings_page(league_id, 1)
-        assert isinstance(standings_payload, dict)
-        results = ((standings_payload.get("standings") or {}).get("results")) or []
-        league_meta = standings_payload.get("league") or {}
+        results, league_meta = fetch_all_standings(league_id)
 
         total_players = int(bootstrap.get("total_players") or 0)
-        overall_rank_prev = None
+        api_overall_prev = None
         for hist in history_payload.get("current") or []:
             try:
                 if int(hist.get("event") or 0) == gw - 1:
-                    prev = int(hist.get("overall_rank") or 0)
-                    overall_rank_prev = prev if prev > 0 else None
+                    api_overall_prev = positive_rank(hist.get("overall_rank"))
                     break
             except (TypeError, ValueError):
                 continue
 
-        league_rank_prev = None
+        api_league_prev = None
         for row in results:
             try:
                 if int(row.get("entry") or 0) != manager_id:
                     continue
-                prev = int(row.get("last_rank") or 0)
-                league_rank_prev = prev if prev > 0 else None
+                api_league_prev = positive_rank(row.get("last_rank"))
                 break
             except (TypeError, ValueError):
                 continue
+
+        rank_baselines = load_json(BASELINES_PATH)
+        overall_rank_prev, league_rank_prev, baselines_changed = resolve_rank_baselines(
+            manager_id,
+            league_id,
+            gw,
+            api_overall_prev,
+            api_league_prev,
+            rank_baselines,
+        )
+        if baselines_changed:
+            save_json(BASELINES_PATH, rank_baselines)
 
         stats = live_stats_map(live)
         etypes = element_type_map(bootstrap)

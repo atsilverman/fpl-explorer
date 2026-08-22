@@ -501,6 +501,56 @@
     return season2627Cache;
   }
 
+  let fplElementByCodeCache = null;
+  let fplElementLookupWarned = false;
+
+  function fplElementByCodeMap() {
+    if (fplElementByCodeCache) return fplElementByCodeCache;
+    const map = new Map();
+    const fromData = (DATA.fplIdentity && DATA.fplIdentity.elementByCode) || {};
+    Object.entries(fromData).forEach(([code, element]) => {
+      const c = Number(code);
+      const el = Number(element);
+      if (Number.isFinite(c) && Number.isFinite(el)) map.set(c, el);
+    });
+    if (!map.size) {
+      const pool = (season2627Data().players && season2627Data().players.combined) || [];
+      for (const row of pool) {
+        const code = Number(row.code);
+        const el = Number(row.element);
+        if (Number.isFinite(code) && Number.isFinite(el)) map.set(code, el);
+      }
+    }
+    for (const row of (HOME && HOME.squad) || []) {
+      const code = Number(row.code);
+      const el = Number(row.element);
+      if (Number.isFinite(code) && Number.isFinite(el) && !map.has(code)) map.set(code, el);
+    }
+    fplElementByCodeCache = map;
+    return map;
+  }
+
+  function fplElementIdForRow(row) {
+    if (!row) return null;
+    if (row.element2627 != null) {
+      const el = Number(row.element2627);
+      if (Number.isFinite(el)) return el;
+    }
+    if (row.element != null) {
+      const el = Number(row.element);
+      if (Number.isFinite(el)) return el;
+    }
+    const code = Number(row.code);
+    if (!Number.isFinite(code)) return null;
+    const mapped = fplElementByCodeMap().get(code);
+    if (mapped != null) return mapped;
+    if (!fplElementLookupWarned) {
+      console.warn("FPL element lookup failed for player code", code, row.name || row);
+      fplElementLookupWarned = true;
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -799,6 +849,7 @@
     homeBento: $("#home-bento"),
     homeDeadline: $("#home-deadline"),
     homeGwPoints: $("#home-gw-points"),
+    homeGwHeading: $("#home-gw-heading"),
     homeGwMeta: $("#home-gw-meta"),
     homeOverallRank: $("#home-overall-rank"),
     homeOverallRankNum: $("#home-overall-rank-num"),
@@ -1975,9 +2026,6 @@
     return v.toLocaleString();
   }
 
-  // GW1 has no prior rank — keep true to preview arrow UI; set false once GW2+ deltas exist.
-  const HOME_RANK_ARROW_MOCK = true;
-
   function homeRankDeltaPlaces(current, previous) {
     const cur = Number(current);
     const prev = Number(previous);
@@ -1995,12 +2043,9 @@
     return abs.toLocaleString();
   }
 
-  function setHomeRankDelta(elDelta, places, { mock = false, mockPlaces = 0 } = {}) {
+  function setHomeRankDelta(elDelta, places) {
     if (!elDelta) return;
-    let delta = places;
-    if ((delta == null || !Number.isFinite(delta)) && mock) {
-      delta = mockPlaces;
-    }
+    const delta = places;
     if (delta == null || !Number.isFinite(delta)) {
       elDelta.hidden = true;
       elDelta.className = "home-rank-delta";
@@ -2013,10 +2058,9 @@
     const flat = delta === 0;
     const cls = flat ? "is-flat" : up ? "is-up" : "is-down";
     const icon = flat ? "minus" : up ? "trending-up" : "trending-down";
-    const placesLabel = flat
+    const label = flat
       ? "Rank unchanged vs last gameweek"
       : `${up ? "Up" : "Down"} ${formatHomeRankDelta(delta)} places vs last gameweek`;
-    const label = mock ? `${placesLabel} (preview)` : placesLabel;
     elDelta.hidden = false;
     elDelta.className = `home-rank-delta ${cls}`;
     elDelta.title = label;
@@ -2038,9 +2082,7 @@
 
   function setHomeOverallPct(elPct, rank, totalPlayers) {
     if (!elPct) return;
-    let label = homeTopPercentLabel(rank, totalPlayers);
-    // Preview the subtle label while current rank is outside the top 10%.
-    if (!label && HOME_RANK_ARROW_MOCK) label = "Top 5%";
+    const label = homeTopPercentLabel(rank, totalPlayers);
     if (!label) {
       elPct.hidden = true;
       elPct.textContent = "";
@@ -2295,17 +2337,14 @@
     return `${id} deadline · ${when}`;
   }
 
+  // Home ownership/standings use live FPL element ids — always search the
+  // current-season catalog (2026/27), not the OPTA 2025/26 list.
   function homeSearchCatalog() {
-    if (isNextSeason()) {
-      return (season2627Data().players && season2627Data().players.combined) || [];
-    }
-    return (DATA.players && DATA.players.combined) || [];
+    return (season2627Data().players && season2627Data().players.combined) || [];
   }
 
   function homeLookupElementId(row) {
-    if (!row) return null;
-    const id = Number(row.id != null ? row.id : row.element);
-    return Number.isFinite(id) ? id : null;
+    return fplElementIdForRow(row);
   }
 
   function homeLeagueOwnsElement(elementId) {
@@ -2313,7 +2352,49 @@
     return !!(owners && owners.size);
   }
 
-  function homePlayerProfileHTML(row) {
+  function homePlayerStatSpecs(position) {
+    const pos = String(position || "").toUpperCase();
+    const byPos = {
+      GK: [
+        { key: "saves", label: "Saves", decimals: 0 },
+        { key: "cleanSheets", label: "CS", decimals: 0 },
+        { key: "goalsConceded", label: "GC", decimals: 0 },
+        { key: "pts", label: "Pts", decimals: 0 },
+      ],
+      DEF: [
+        { key: "cleanSheets", label: "CS", decimals: 0 },
+        { key: "defCon", label: "DefCon", decimals: 0 },
+        { key: "goalsConceded", label: "GC", decimals: 0 },
+        { key: "__gi", label: "G+A", decimals: 0 },
+      ],
+      MID: [
+        { key: "assists", label: "Assists", decimals: 0 },
+        { key: "goals", label: "Goals", decimals: 0 },
+        { key: "xgi", label: "xGI", decimals: 1 },
+        { key: "defCon", label: "DefCon", decimals: 0 },
+      ],
+      FWD: [
+        { key: "goals", label: "Goals", decimals: 0 },
+        { key: "assists", label: "Assists", decimals: 0 },
+        { key: "xg", label: "xG", decimals: 1 },
+        { key: "xgi", label: "xGI", decimals: 1 },
+      ],
+    };
+    return byPos[pos] || byPos.FWD;
+  }
+
+  function homePlayerStatsHTML(row) {
+    if (!row) return "";
+    return homePlayerStatSpecs(row.position)
+      .map((spec) => {
+        const raw = feedRowStatValue(row, spec.key);
+        const shown = feedStatDisplay(raw, spec.decimals);
+        return `<div class="home-lookup-stat"><span class="home-lookup-stat-val">${escapeHtml(shown)}</span><span class="home-lookup-stat-lbl">${escapeHtml(spec.label)}</span></div>`;
+      })
+      .join("");
+  }
+
+  function homePlayerProfileHTML(row, { ownershipNote = "" } = {}) {
     if (!row) return "";
     const initials = String(row.name || "?")
       .split(/[\s.]+/)
@@ -2324,48 +2405,32 @@
       .toUpperCase() || "?";
     const photo = feedPlayerPhotoUrl(row.code);
     const teamLabel = row.team ? teamNameForSeason(row.team) : "";
-    const badge = row.team
-      ? badgeHTML(row.team, "feed-player-team-badge").replace(
-          "<img ",
-          `<img${tipAttr(teamLabel)} `
-        )
-      : "";
+    const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
+    const owned = currentOwnership(row.code);
     const metaBits = [];
     if (row.position) metaBits.push(posBadgeHTML(row.position));
     if (row.price != null) metaBits.push(`<span>£${Number(row.price).toFixed(1)}m</span>`);
-    if (row.pts != null) metaBits.push(`<span>${Number(row.pts)} Pts</span>`);
-    const owned = currentOwnership(row.code);
     if (owned != null) metaBits.push(`<span>${Number(owned).toFixed(1)}% TSB</span>`);
-    const card = {
-      code: row.code,
-      name: row.name,
-      team: row.team,
-      position: row.position,
-      price: row.price,
-      pts: row.pts,
-      row,
-    };
-    const stats = feedPlayerStatsHTML(card, { detail: true });
+    if (teamLabel) metaBits.push(`<span>${escapeHtml(teamLabel)}</span>`);
     const photoBlock = photo
-      ? `<img class="feed-player-photo" src="${escapeHtml(photo)}" alt="" width="80" height="80" loading="lazy" data-initials="${escapeHtml(initials)}" />`
-      : `<span class="feed-player-photo feed-player-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-initials="${escapeHtml(initials)}" />`
+      : `<span class="home-lookup-photo home-lookup-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
-    const accentStyle = teamAccent ? `--feed-team-accent:${teamAccent};` : "";
-    return `<article class="home-player-profile-card feed-player-card" style="${accentStyle}">
+    const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
+    return `<article class="home-lookup-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
       <button type="button" class="home-player-profile-close" aria-label="Clear player">${iconHTML("x")}</button>
-      <div class="feed-player-card-top">
-        <div class="feed-player-identity">
-          <div class="feed-player-photo-wrap">
-            ${photoBlock}
-            ${badge}
-          </div>
-          <div class="feed-player-title">
-            <h3 class="feed-player-name"><span class="feed-player-name-text">${escapeHtml(row.name || "—")}</span></h3>
-            <p class="feed-player-meta">${metaBits.join("")}</p>
-          </div>
+      <div class="home-lookup-head">
+        <div class="home-lookup-photo-wrap">
+          ${photoBlock}
+          ${badge}
         </div>
-        <div class="feed-player-stats feed-player-detail-stats">${stats}</div>
+        <div class="home-lookup-id">
+          <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}</h3>
+          <p class="home-lookup-meta">${metaBits.join("")}</p>
+        </div>
       </div>
+      <div class="home-lookup-stats">${homePlayerStatsHTML(row)}</div>
+      ${ownershipNote ? `<p class="home-lookup-ownership-note">${escapeHtml(ownershipNote)}</p>` : ""}
     </article>`;
   }
 
@@ -2461,7 +2526,7 @@
         const id = Number(btn.getAttribute("data-home-search-id"));
         const row = homeSearchCatalog().find((r) =>
           (Number.isFinite(code) && Number(r.code) === code) ||
-          (Number.isFinite(id) && Number(r.id) === id)
+          (Number.isFinite(id) && homeLookupElementId(r) === id)
         );
         if (!row) return;
         setHomePlayerLookup(row);
@@ -2528,13 +2593,19 @@
     const hasOwners = homeLeagueOwnsElement(elementId);
     el.homeBento.classList.toggle("has-lookup-owners", hasOwners);
 
+    let ownershipNote = "";
+    if (Number.isFinite(elementId) && !hasOwners) {
+      const leagueLabel = HOME.leagueName || "this league";
+      ownershipNote = `No managers in ${leagueLabel} own this player.`;
+    }
+
     if (el.homePlayerProfile) {
       el.homePlayerProfile.hidden = false;
-      el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer);
-      el.homePlayerProfile.querySelectorAll("img.feed-player-photo").forEach((img) => {
+      el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer, { ownershipNote });
+      el.homePlayerProfile.querySelectorAll("img.home-lookup-photo").forEach((img) => {
         img.addEventListener("error", () => {
           const fallback = document.createElement("span");
-          fallback.className = "feed-player-photo feed-player-photo-fallback";
+          fallback.className = "home-lookup-photo home-lookup-photo-fallback";
           fallback.setAttribute("aria-hidden", "true");
           fallback.textContent = img.getAttribute("data-initials") || "?";
           img.replaceWith(fallback);
@@ -2615,6 +2686,10 @@
       el.homeDeadline.textContent = label;
       el.homeDeadline.hidden = !label;
     }
+    if (el.homeGwHeading) {
+      el.homeGwHeading.textContent =
+        HOME.gw != null ? `GW ${HOME.gw} points` : "GW points";
+    }
     if (el.homeGwPoints) el.homeGwPoints.textContent = String(summary.gwPoints ?? "—");
     if (el.homeOverallRankNum) {
       el.homeOverallRankNum.textContent = formatHomeRank(summary.overallRank);
@@ -2623,8 +2698,7 @@
     }
     setHomeRankDelta(
       el.homeOverallRankDelta,
-      homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev),
-      { mock: HOME_RANK_ARROW_MOCK, mockPlaces: 124000 }
+      homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
     );
     setHomeOverallPct(el.homeOverallPct, summary.overallRank, summary.totalPlayers);
     if (el.homeTotalPoints) el.homeTotalPoints.textContent = formatHomeRank(summary.overallPoints);
@@ -2635,8 +2709,7 @@
     }
     setHomeRankDelta(
       el.homeLeagueRankDelta,
-      homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev),
-      { mock: HOME_RANK_ARROW_MOCK, mockPlaces: -3 }
+      homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
     );
     if (el.homeGwMeta) {
       const chip = summary.activeChip ? String(summary.activeChip) : "";
@@ -2678,11 +2751,10 @@
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       el.homeStandingsBody.innerHTML = rows.map((r) => {
         const you = Number(r.entry) === focus;
-        const inPlay = Number(r.inPlay);
         const toPlay = Number(r.toPlay);
-        const playTitle = "In play · still to play (active picks; Bench Boost can exceed 11)";
-        const playHTML = (Number.isFinite(inPlay) && Number.isFinite(toPlay))
-          ? `<span class="home-play-counts" title="${escapeHtml(playTitle)}"><span class="home-play-live">${escapeHtml(String(inPlay))}</span><span class="home-play-sep">·</span><span class="home-play-left">${escapeHtml(String(toPlay))}</span></span>`
+        const playTitle = "Still to play among active picks (Bench Boost can exceed 11)";
+        const playHTML = Number.isFinite(toPlay)
+          ? `<span class="home-play-left${toPlay > 0 ? " is-active" : ""}" title="${escapeHtml(playTitle)}">${escapeHtml(String(toPlay))}</span>`
           : "—";
         return `<tr class="${you ? "is-you" : ""}" data-entry="${escapeHtml(String(r.entry ?? ""))}" role="button" tabindex="0" aria-label="Show squad players owned by ${escapeHtml(r.playerName || "this manager")}">
           <td class="home-col-rank">${escapeHtml(String(r.rankLive ?? r.rankOfficial ?? "—"))}</td>
@@ -5196,7 +5268,7 @@
           spitRow(spitRank("MP dots"), "Green = fixture in play. Grey = finished (incl. FPL provisional FT). Kickoff time = not started."),
           spitRow(spitRank("Hot PTS"), "Highlighted when a player has scored 8+ this GW."),
           spitRow(spitRank("IMP"), "Your multiplier share vs league top third (100% unique XI, 200% C, 300% TC). Green ahead, red behind."),
-          spitRow(spitRank("Play"), "Standings: in play · still to play among active picks (BB can exceed 11)."),
+          spitRow(spitRank("Left"), "Standings: still to play among active picks (BB can exceed 11)."),
           spitRow(spitRank("Own"), "Hover/click a squad player or standings manager to cross-highlight shared ownership."),
           ...(mobile
             ? [spitRow(spitRank("Search"), "Search any player: profile replaces summary cards, hides squad, highlights league owners (or hides standings), and shows club fixtures.")]

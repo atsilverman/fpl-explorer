@@ -1080,6 +1080,7 @@ def match_new_season_prices(players_combined):
             "directFreekicksOrder": e.get("direct_freekicks_order"),
             "cornersOrder": e.get("corners_and_indirect_freekicks_order"),
             "code": e["code"],
+            "element2627": int(e["id"]),
             # Display rename only — applied after match so Hub CSV strings
             # stay the join key. Player `id` keeps the Hub-based pid.
             "webName": e["web_name"],
@@ -1093,6 +1094,58 @@ def match_new_season_prices(players_combined):
         "totalPlayers": len(players_combined),
     }
     return results, issues, meta
+
+
+def build_fpl_identity(next_season_players: dict, source: str | None = None) -> dict:
+    """Stable code → current-season element/team ids for live FPL joins."""
+    combined = (next_season_players or {}).get("combined") or []
+    element_by_code = {}
+    missing = 0
+    for row in combined:
+        code = row.get("code")
+        element = row.get("element")
+        if code is None or element is None:
+            missing += 1
+            continue
+        element_by_code[str(int(code))] = int(element)
+
+    team_code_by_short = {}
+    snap_path = latest_bootstrap_snapshot()
+    if snap_path is not None:
+        snap = json.loads(snap_path.read_text(encoding="utf-8"))
+        source = source or snap_path.name
+        for team in snap.get("teams") or []:
+            short = team.get("short_name")
+            tid = team.get("code")
+            if short and tid is not None:
+                team_code_by_short[str(short)] = int(tid)
+
+    return {
+        "elementByCode": element_by_code,
+        "teamCodeByShort": team_code_by_short,
+        "source": source,
+        "playerCount": len(element_by_code),
+        "missingElementRows": missing,
+    }
+
+
+def validate_fpl_identity(fpl_identity: dict, next_season_players: dict, price_meta: dict) -> None:
+    combined = (next_season_players or {}).get("combined") or []
+    bad = [r for r in combined if r.get("code") is None or r.get("element") is None]
+    if bad:
+        names = ", ".join(str(r.get("name") or "?") for r in bad[:5])
+        raise RuntimeError(
+            f"nextSeasonPlayers missing code/element on {len(bad)} row(s)"
+            + (f" (e.g. {names})" if names else "")
+        )
+    if not fpl_identity.get("elementByCode"):
+        raise RuntimeError("fplIdentity.elementByCode is empty — bootstrap snapshot may be missing")
+    print(
+        f"FPL identity: {fpl_identity['playerCount']} code→element mappings "
+        f"from {fpl_identity.get('source') or 'nextSeasonPlayers'}; "
+        f"2025/26 price match {price_meta.get('matched', 0)}/{price_meta.get('totalPlayers', 0)} "
+        f"({price_meta.get('unmatched', 0)} departed/unmatched)"
+    )
 
 
 # Our CSV field -> the FPL element-summary history_past field it directly
@@ -1285,6 +1338,8 @@ def main():
     next_season_players, next_season_team_names, next_season_meta, next_season_teams = (
         build_next_season_squad()
     )
+    fpl_identity = build_fpl_identity(next_season_players, next_season_meta.get("source"))
+    validate_fpl_identity(fpl_identity, next_season_players, price_meta)
     # PL table ranks from finished fixture scorelines (ESPN 403 fallback removed).
     league_positions, league_positions_meta = league_positions_from_fixtures()
 
@@ -1320,6 +1375,7 @@ def main():
         "nextSeasonTeams": next_season_teams,
         "nextSeasonTeamNames": next_season_team_names,
         "nextSeasonMeta": next_season_meta,
+        "fplIdentity": fpl_identity,
     }
 
     OUT.write_text("window.FPL_DATA = " + json.dumps(data, ensure_ascii=False) + ";\n", encoding="utf-8")
