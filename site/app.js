@@ -2048,7 +2048,10 @@
     if (!el.homeSquadBody || !el.homeStandingsBody) return;
     homeOwnerBindingsReady = true;
 
+    // Desktop: hover previews ownership. Touch: skip hover — first tap would
+    // otherwise feel like only the name “worked” before the click pin lands.
     el.homeSquadBody.addEventListener("pointerover", (e) => {
+      if (!hasFineHover()) return;
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadBody.contains(tr)) return;
       const eid = Number(tr.dataset.element);
@@ -2059,6 +2062,7 @@
       syncHomeOwnerHighlights();
     });
     el.homeSquadBody.addEventListener("pointerleave", () => {
+      if (!hasFineHover()) return;
       if (!homeOwnerHover || homeOwnerHover.type !== "element") return;
       homeOwnerHover = null;
       syncHomeOwnerHighlights();
@@ -2066,14 +2070,18 @@
     el.homeSquadBody.addEventListener("click", (e) => {
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadBody.contains(tr)) return;
+      // Whole row is the hit target (crest, pts, mp, opp, imp — not just the name).
       const eid = Number(tr.dataset.element);
       if (!Number.isFinite(eid)) return;
+      e.preventDefault();
       const next = { type: "element", id: eid };
       homeOwnerPin = homeOwnerSame(homeOwnerPin, next) ? null : next;
+      homeOwnerHover = null;
       syncHomeOwnerHighlights();
     });
 
     el.homeStandingsBody.addEventListener("pointerover", (e) => {
+      if (!hasFineHover()) return;
       const tr = e.target.closest("tr[data-entry]");
       if (!tr || !el.homeStandingsBody.contains(tr)) return;
       const entry = Number(tr.dataset.entry);
@@ -2084,6 +2092,7 @@
       syncHomeOwnerHighlights();
     });
     el.homeStandingsBody.addEventListener("pointerleave", () => {
+      if (!hasFineHover()) return;
       if (!homeOwnerHover || homeOwnerHover.type !== "entry") return;
       homeOwnerHover = null;
       syncHomeOwnerHighlights();
@@ -2093,8 +2102,10 @@
       if (!tr || !el.homeStandingsBody.contains(tr)) return;
       const entry = Number(tr.dataset.entry);
       if (!Number.isFinite(entry)) return;
+      e.preventDefault();
       const next = { type: "entry", id: entry };
       homeOwnerPin = homeOwnerSame(homeOwnerPin, next) ? null : next;
+      homeOwnerHover = null;
       syncHomeOwnerHighlights();
     });
   }
@@ -2116,8 +2127,8 @@
       if (f.live || f.finished) {
         const mins = f.minutes != null ? f.minutes : row.minutes;
         const dot = f.live
-          ? `<span class="home-status-dot is-live" title="Live"></span>`
-          : `<span class="home-status-dot is-done" title="Played"></span>`;
+          ? `<span class="home-status-dot is-live" aria-label="Live"></span>`
+          : `<span class="home-status-dot is-done" aria-label="Played"></span>`;
         return `<span class="home-mp-line">${escapeHtml(String(mins ?? "—"))}′${dot}</span>`;
       }
       return homeKickoffHTML(f.kickoff || row.kickoff);
@@ -2141,7 +2152,7 @@
       "(100% ≈ unique XI, 200% captain, 300% triple captain). " +
       "Positive = you gain more than the top third; negative = they hold more share.";
     const benchCls = row.onBench ? " home-row-bench" : "";
-    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" title="Hover or click to highlight managers who own this player">
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="Show managers who own ${escapeHtml(row.name || "this player")}">
       <td class="home-col-player">
         <div class="home-player-cell">
           ${teamBadge}
@@ -2154,7 +2165,7 @@
       <td class="home-col-mp"><div class="home-fx-stack">${mpHTML}</div></td>
       <td class="home-col-opp"><div class="home-fx-stack home-fx-opp">${oppHTML}</div></td>
       <td class="home-col-imp">
-        <div class="home-imp ${impSign}" title="${escapeHtml(impTitle)}">
+        <div class="home-imp ${impSign}"${tipAttr(impTitle)}>
           <span class="home-imp-track"><span class="home-imp-fill ${impSign}" style="width:${barPct}%"></span></span>
           <span class="home-imp-pct">${escapeHtml(impLabel)}</span>
         </div>
@@ -2296,7 +2307,7 @@
         const playHTML = (Number.isFinite(inPlay) && Number.isFinite(toPlay))
           ? `<span class="home-play-counts" title="${escapeHtml(playTitle)}"><span class="home-play-live">${escapeHtml(String(inPlay))}</span><span class="home-play-sep">·</span><span class="home-play-left">${escapeHtml(String(toPlay))}</span></span>`
           : "—";
-        return `<tr class="${you ? "is-you" : ""}" data-entry="${escapeHtml(String(r.entry ?? ""))}" title="Hover or click to highlight squad players this manager owns">
+        return `<tr class="${you ? "is-you" : ""}" data-entry="${escapeHtml(String(r.entry ?? ""))}" role="button" tabindex="0" aria-label="Show squad players owned by ${escapeHtml(r.playerName || "this manager")}">
           <td class="home-col-rank">${escapeHtml(String(r.rankLive ?? r.rankOfficial ?? "—"))}</td>
           <td class="home-col-manager">
             <span class="home-standings-name">${escapeHtml(r.playerName || "—")}</span>
@@ -3022,7 +3033,14 @@
 
   function mobileViewTabsVisible() {
     const page = state.page;
-    if (page === "team" || page === "feed" || page === "markets" || page === "schedule") {
+    // Home has no Players/Teams split — keep the bottom dock clear.
+    if (
+      page === "home" ||
+      page === "team" ||
+      page === "feed" ||
+      page === "markets" ||
+      page === "schedule"
+    ) {
       return false;
     }
     const tabs = mobileViewTabsEl();

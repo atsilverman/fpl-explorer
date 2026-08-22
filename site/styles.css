@@ -11651,9 +11651,6 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   text-transform: uppercase;
   text-align: left;
 }
-.home-row-bench td {
-  opacity: 0.72;
-}
 .home-row-bench .home-player-name {
   font-weight: 500;
 }
@@ -11918,6 +11915,7 @@ html[data-page="home"] #subtoolbar {
 .home-squad-row,
 .home-standings-table tr[data-entry] {
   cursor: pointer;
+  touch-action: manipulation;
 }
 .home-squad-row.is-owner-source,
 .home-standings-table tr.is-owner-source td {
