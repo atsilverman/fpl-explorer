@@ -1,28 +1,28 @@
 ---
-description: When the user says refresh data, pull Ownership, Feed, Markets, Leagues, and Home caches
+description: When the user says refresh data, pull Ownership, Markets, Leagues, and Home caches
 alwaysApply: true
 ---
 
 # Refresh data
 
-If the user says **refresh data** (or "check in", "refresh ownership/feed/markets"), run the live cache pulls. Do not wait for extra confirmation.
+If the user says **refresh data** (or "check in", "refresh ownership/markets"), run the live cache pulls. Do not wait for extra confirmation.
 
-Default **refresh data** = all five, in parallel where possible:
+Default **refresh data** = all four, in parallel where possible:
 
 ```bash
 python3 site/fetch_ownership.py
-python3 site/fetch_social.py && python3 site/annotate_social.py
 python3 site/fetch_markets.py
 python3 site/fetch_leagues.py
 python3 site/fetch_home.py
 ```
 
-Scripts load API keys from the project-root `.env` (`X_BEARER_TOKEN`, `ODDS_API_KEY`, LLM keys). Need network. Annotate only after social fetch succeeds. Home uses `site/home_prefs.json` (managerId + leagueId) when present.
+Scripts load API keys from the project-root `.env` (`ODDS_API_KEY`). Need network. Home uses `site/home_prefs.json` (managerId + leagueId) when present.
 
-Then bump the matching cache-bust query params in `site/index.html` (`social_data.js?v=`, `markets_data.js?v=`, `ownership_data.js?v=`, `leagues_data.js?v=`, `home_data.js?v=`). Do not bump `app.js` / `styles.css` unless those files also changed.
+Then bump the matching cache-bust query params in `site/index.html` (`markets_data.js?v=`, `ownership_data.js?v=`, `leagues_data.js?v=`, `home_data.js?v=`). Do not bump `app.js` / `styles.css` unless those files also changed.
 
 Do **not**:
 - Run `site/build.py` unless they also want a CSV/Statistics rebuild
 - Commit or deploy unless they ask
+- Run Feed / X social pulls — archived under `archive/feed/` (see that README to restore)
 
-Subset phrases: "refresh ownership" / "refresh feed" / "refresh markets" / "refresh leagues" / "refresh home" run only that pipeline.
+Subset phrases: "refresh ownership" / "refresh markets" / "refresh leagues" / "refresh home" run only that pipeline.

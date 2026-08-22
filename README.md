@@ -30,14 +30,15 @@ FPL/
 │   ├── index.html
 │   ├── app.js / styles.css
 │   ├── data.js           # Main stats bundle (from build.py)
-│   ├── social_data.js    # Feed cache
 │   ├── markets_data.js   # Markets cache
+│   ├── ownership_data.js # Ownership check-ins
 │   ├── badges/           # Club crest SVGs (ARS.svg, …)
 │   ├── img/              # Matchups help art
 │   ├── build.py          # CSV + snapshots → data.js
 │   ├── fetch_*.py        # Optional refresh scripts
 │   └── …
 ├── snapshots/            # Saved FPL API JSON (bootstrap, fixtures, …)
+├── archive/              # Parked features (e.g. Feed / X API)
 ├── docs/                 # API notes & data-source writeups
 ├── reports/              # Optional build diffs (CSV vs FPL API)
 ├── FPL Data - *.csv      # Fantasy Football Hub exports (build inputs)
@@ -63,12 +64,9 @@ Built by `python3 site/build.py`:
 
 Relegated clubs from the prior campaign are excluded where appropriate; promoted clubs appear in 2026/27 mode from bootstrap.
 
-### Feed (`social_data.js`)
+### Feed (archived)
 
-1. `python3 site/fetch_social.py` — X API v2 (`X_BEARER_TOKEN`), accounts in `site/social_accounts.json`.
-2. `python3 site/annotate_social.py` — resolve player mentions (Claude / OpenAI if keyed, else heuristics).
-
-Refreshing the browser never spends X credits; only the fetch script does.
+Social Feed + X API pulls are parked under [`archive/feed/`](archive/feed/README.md) (scripts, accounts list, last `social_data.js`, and a client JS excerpt). Not part of the live UI or **refresh data** pipeline.
 
 ### Ownership (`ownership_data.js`)
 
@@ -102,13 +100,14 @@ Browsing existing caches needs no API keys. For refreshes:
 
 ```bash
 cp .env.example .env
-# fill X_BEARER_TOKEN, ODDS_API_KEY, and optional LLM keys
+# fill ODDS_API_KEY (and other keys as needed)
 
 python3 site/build.py                 # after CSV / snapshot updates
 python3 site/fetch_history_past.py    # optional: rebuild history_past snapshot
 python3 site/fetch_ownership.py       # ownership check-in + history bundle
-python3 site/fetch_social.py && python3 site/annotate_social.py
 python3 site/fetch_markets.py         # ~few Odds API credits per pull
+python3 site/fetch_leagues.py
+python3 site/fetch_home.py
 ```
 
 Drop updated Hub CSVs in the project root and/or dated JSON under `snapshots/` before rebuilding. Manual FPL price ambiguities go in `site/price_overrides.json`.

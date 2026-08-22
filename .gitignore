@@ -10,3 +10,6 @@ venv/
 .Python
 
 .claude/
+
+# Frozen rank baselines for Home delta arrows (per manager/league/GW).
+site/home_rank_baselines.json

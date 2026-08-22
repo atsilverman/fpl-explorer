@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=573" />
+<link rel="stylesheet" href="styles.css?v=574" />
 <script>
 (() => {
   try {
@@ -32,7 +32,7 @@
     const PAGE_KEY = "fpl-explorer-page";
     // Keep in sync with app.js PAGES — missing entries flash the wrong shell
     // before JS loads (e.g. omitting "home" painted Statistics on every refresh).
-    const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team"];
+    const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
     let page = "home";
     try {
       const saved = localStorage.getItem(PAGE_KEY);
@@ -285,10 +285,6 @@
       <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
       Matchups
     </button>
-    <button id="page-feed" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-rss"/></svg>
-      Feed
-    </button>
     <button id="page-markets" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
       Markets
@@ -483,23 +479,6 @@
     </div>
   </div>
 
-  <div class="topbar-cluster topbar-feed-start" id="feed-toolbar-start" style="display:none;">
-    <button id="feed-filters-toggle" class="ghost-btn icon-only-btn" type="button"
-      title="Show feed filters" aria-label="Show feed filters" aria-expanded="false" aria-controls="feed-controls">
-      <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
-    </button>
-  </div>
-  <div class="topbar-cluster topbar-feed-end" id="feed-toolbar-end" style="display:none;">
-    <div class="search-wrap feed-search-wrap" id="feed-search-wrap">
-      <button id="feed-search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button"
-        title="Search" aria-label="Search players or teams in feed" aria-expanded="false" aria-controls="feed-search-input">
-        <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-      </button>
-      <svg class="icon search-field-icon" aria-hidden="true"><use href="#i-search"/></svg>
-      <input id="feed-search-input" type="search" placeholder="Search player or team…" autocomplete="off" aria-label="Search players or teams in feed" enterkeyhint="search" />
-      <button type="button" id="feed-search-clear-btn" class="search-clear-btn" hidden>Clear</button>
-    </div>
-  </div>
 </div>
 
 <div class="layout">
@@ -630,31 +609,6 @@
     <div id="sidebar-columns-host" class="sidebar-columns-host" hidden></div>
   </aside>
 
-  <aside class="feed-filters-sidebar collapsed" id="feed-controls" aria-label="Feed filters" style="display:none;">
-    <div class="filter-group feed-control-range">
-      <h3>Date range</h3>
-      <div class="segmented feed-range-seg" id="feed-range-seg" role="group" aria-label="Feed date range">
-        <button type="button" data-feed-range="today" class="active">Today</button>
-        <button type="button" data-feed-range="3d">Last 3 days</button>
-        <button type="button" data-feed-range="7d">Past week</button>
-      </div>
-    </div>
-    <div class="filter-group feed-control-types">
-      <h3>
-        Post type
-        <span class="reset feed-filter-reset" id="feed-reset-types" role="button" tabindex="0">clear</span>
-      </h3>
-      <div class="chip-row" id="feed-type-filters"></div>
-    </div>
-    <div class="filter-group feed-control-teams">
-      <h3>
-        Team
-        <span class="reset feed-filter-reset" id="feed-reset-teams" role="button" tabindex="0">clear</span>
-      </h3>
-      <div class="chip-row" id="feed-team-filters"></div>
-    </div>
-  </aside>
-
   <main class="main">
     <div id="home-page" class="page-pane">
       <div class="page-header opta-header home-header">
@@ -740,7 +694,7 @@
                 <tr>
                   <th scope="col" class="home-col-rank">#</th>
                   <th scope="col" class="home-col-manager">Manager</th>
-                  <th scope="col" class="home-col-play" title="Still to play among active picks (Bench Boost can exceed 11)">Left</th>
+                  <th scope="col" class="home-col-play" title="In play · still to play (active picks; Bench Boost can exceed 11)">Left</th>
                   <th scope="col" class="home-col-gw">GW</th>
                   <th scope="col" class="home-col-total">Total</th>
                 </tr>
@@ -1032,17 +986,6 @@
       <div class="schedule-grid schedule-grid-matchups schedule-grid-analyze" id="schedule-grid"></div>
     </div>
 
-    <div id="feed-page" class="page-pane" style="display:none;">
-      <div class="page-header feed-header">
-        <div class="feed-header-text">
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-rss"/></svg>Social Media Feed<button class="page-info-btn" type="button" aria-label="How Social Media Feed works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-          <p class="page-subtitle">Player-mention cards from curated X accounts — filter by date range, creator, and post type, with quotes underneath.</p>
-        </div>
-      </div>
-      <section id="feed-treemap" class="feed-treemap" hidden></section>
-      <div class="feed-trending" id="feed-trending"></div>
-    </div>
-
     <div id="markets-page" class="page-pane" style="display:none;">
       <div class="page-header markets-header">
         <div class="markets-header-top">
@@ -1177,12 +1120,11 @@
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
 <script src="data.js?v=37"></script>
-<script src="social_data.js?v=18"></script>
-<script src="markets_data.js?v=9"></script>
-<script src="ownership_data.js?v=8"></script>
-<script src="leagues_data.js?v=2"></script>
-<script src="home_data.js?v=7"></script>
-<script src="app.js?v=594"></script>
+<script src="markets_data.js?v=10"></script>
+<script src="ownership_data.js?v=9"></script>
+<script src="leagues_data.js?v=3"></script>
+<script src="home_data.js?v=9"></script>
+<script src="app.js?v=597"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

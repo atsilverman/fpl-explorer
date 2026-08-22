@@ -6,7 +6,6 @@
   "use strict";
 
   const DATA = window.FPL_DATA;
-  const SOCIAL = window.FPL_SOCIAL || { generatedAt: null, accounts: [], posts: [] };
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
   const OWNERSHIP = window.FPL_OWNERSHIP || { generatedAt: null, checkIns: [] };
   const LEAGUES = window.FPL_LEAGUES || { generatedAt: null, managers: [], leagues: [] };
@@ -555,7 +554,7 @@
   // State
   // ---------------------------------------------------------------------
   const state = {
-    page: "home", // home | opta | rankings | ownership | expected | schedule | feed | markets | team
+    page: "home", // home | opta | rankings | ownership | expected | schedule | markets | team
     season: "2026-27", // 2025-26 | 2026-27
     view: "players", // players | teams
     split: "combined", // combined | home | away
@@ -592,10 +591,6 @@
     scheduleMatchups: true,
     scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
     scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
-    feedRange: "today", // today | 3d | 7d
-    feedTypeFilter: new Set(), // empty = all post types
-    feedTeamFilter: new Set(), // empty = all teams
-    feedSelectedCode: null, // treemap selection — filter cards to one player
     // Markets Goals/CS heat fills — 0 = stricter (less color), 100 = looser (more).
     marketsHeatGoals: MARKETS_HEAT_DEFAULT,
     marketsHeatCs: MARKETS_HEAT_DEFAULT,
@@ -838,7 +833,6 @@
     expectedCatBtn: $("#expected-cat-btn"),
     expectedCatLabel: $("#expected-cat-label"),
     pageSchedule: $("#page-schedule"),
-    pageFeed: $("#page-feed"),
     pageMarkets: $("#page-markets"),
     homePage: $("#home-page"),
     homePageSubtitle: $("#home-page-subtitle"),
@@ -872,8 +866,6 @@
     subtoolbar: $("#subtoolbar"),
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
-    feedToolbarStart: $("#feed-toolbar-start"),
-    feedToolbarEnd: $("#feed-toolbar-end"),
     optaPage: $("#opta-page"),
     rankingsPage: $("#rankings-page"),
     rankingsPinBar: $("#rankings-pin-bar"),
@@ -930,20 +922,6 @@
     expectedPage: $("#expected-page"),
     schedulePage: $("#schedule-page"),
     scheduleGrid: $("#schedule-grid"),
-    feedPage: $("#feed-page"),
-    feedList: $("#feed-list"),
-    feedTrending: $("#feed-trending"),
-    feedTreemap: $("#feed-treemap"),
-    feedFiltersToggle: $("#feed-filters-toggle"),
-    feedControls: $("#feed-controls"),
-    feedRangeSeg: $("#feed-range-seg"),
-    feedTypeFilters: $("#feed-type-filters"),
-    feedTeamFilters: $("#feed-team-filters"),
-    feedResetTypes: $("#feed-reset-types"),
-    feedResetTeams: $("#feed-reset-teams"),
-    feedSearchWrap: $("#feed-search-wrap"),
-    feedSearchToggle: $("#feed-search-toggle"),
-    feedSearch: $("#feed-search-input"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
     marketsAttribution: $("#markets-attribution"),
@@ -972,7 +950,6 @@
     mobileChromeFade: $("#mobile-chrome-fade"),
     filtersResetRow: $("#filters-reset-row"),
     searchClearBtn: $("#search-clear-btn"),
-    feedSearchClearBtn: $("#feed-search-clear-btn"),
     scheduleRangeLabel: $("#schedule-range-label"),
     scheduleGwMin: $("#schedule-gw-min"),
     scheduleGwMax: $("#schedule-gw-max"),
@@ -2320,6 +2297,9 @@
     if (!gw || !gw.deadlineTime) return "";
     const d = new Date(gw.deadlineTime);
     if (Number.isNaN(d.getTime())) return "";
+    const msLeft = d.getTime() - Date.now();
+    // Only surface the countdown once the deadline is within 48 hours.
+    if (msLeft <= 0 || msLeft > 48 * 60 * 60 * 1000) return "";
     let when = "";
     try {
       const day = d.toLocaleString(undefined, { weekday: "short" });
@@ -2751,10 +2731,11 @@
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       el.homeStandingsBody.innerHTML = rows.map((r) => {
         const you = Number(r.entry) === focus;
+        const inPlay = Number(r.inPlay);
         const toPlay = Number(r.toPlay);
-        const playTitle = "Still to play among active picks (Bench Boost can exceed 11)";
-        const playHTML = Number.isFinite(toPlay)
-          ? `<span class="home-play-left${toPlay > 0 ? " is-active" : ""}" title="${escapeHtml(playTitle)}">${escapeHtml(String(toPlay))}</span>`
+        const playTitle = "In play · still to play (active picks; Bench Boost can exceed 11)";
+        const playHTML = (Number.isFinite(inPlay) && Number.isFinite(toPlay))
+          ? `<span class="home-play-counts" title="${escapeHtml(playTitle)}"><span class="home-play-live${inPlay > 0 ? " is-active" : ""}">${escapeHtml(String(inPlay))}</span><span class="home-play-sep">·</span><span class="home-play-left${toPlay > 0 ? " is-active" : ""}">${escapeHtml(String(toPlay))}</span></span>`
           : "—";
         return `<tr class="${you ? "is-you" : ""}" data-entry="${escapeHtml(String(r.entry ?? ""))}" role="button" tabindex="0" aria-label="Show squad players owned by ${escapeHtml(r.playerName || "this manager")}">
           <td class="home-col-rank">${escapeHtml(String(r.rankLive ?? r.rankOfficial ?? "—"))}</td>
@@ -3459,7 +3440,6 @@
   function restoreAllMobileFilterButtons() {
     [
       el.sidebarToggle,
-      el.feedFiltersToggle,
       el.marketsSlidersToggle,
       el.scheduleSlidersToggle,
       el.homeSearchBtn,
@@ -3469,7 +3449,6 @@
   function mobileFilterButtonForPage() {
     const page = state.page;
     if (page === "home") return el.homeSearchBtn || null;
-    if (page === "feed") return el.feedFiltersToggle || null;
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
     if (page === "team" && !state.teamPickerSlot) return null;
@@ -3488,7 +3467,6 @@
     if (
       page === "home" ||
       page === "team" ||
-      page === "feed" ||
       page === "markets" ||
       page === "schedule"
     ) {
@@ -3554,7 +3532,6 @@
     const dock = el.mobileFilterDock;
     const buttons = [
       el.sidebarToggle,
-      el.feedFiltersToggle,
       el.marketsSlidersToggle,
       el.scheduleSlidersToggle,
       el.homeSearchBtn,
@@ -4094,16 +4071,6 @@
       teamRowMenuRow = null;
       if (typeof clearTeamRowActions === "function") clearTeamRowActions();
     }
-    if (el.feedFiltersToggle && closingKey === "feed-filters") {
-      el.feedFiltersToggle.setAttribute("aria-expanded", "false");
-      const active = feedFiltersActive();
-      el.feedFiltersToggle.classList.toggle("on", active);
-      el.feedFiltersToggle.title = active ? "Feed filters (active)" : "Show feed filters";
-      el.feedFiltersToggle.setAttribute(
-        "aria-label",
-        active ? "Show feed filters (filters active)" : "Show feed filters"
-      );
-    }
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;
       restoreSheetHost();
@@ -4387,7 +4354,7 @@
         !identityTip &&
         (isTeamFixtureFormTipTarget(target) ||
           target.closest(
-            "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .feed-treemap-cell, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
+            "a, button, input, label, select, textarea, summary, thead th, .barbell-head-cell, .schedule-scatter-point, .barbell-dot, .team-rank-info, .ftt-verdict-tip, tbody tr[data-team], .schedule-card, #mobile-sheet"
           ))
       ) {
         return;
@@ -5268,7 +5235,7 @@
           spitRow(spitRank("MP dots"), "Green = fixture in play. Grey = finished (incl. FPL provisional FT). Kickoff time = not started."),
           spitRow(spitRank("Hot PTS"), "Highlighted when a player has scored 8+ this GW."),
           spitRow(spitRank("IMP"), "Your multiplier share vs league top third (100% unique XI, 200% C, 300% TC). Green ahead, red behind."),
-          spitRow(spitRank("Left"), "Standings: still to play among active picks (BB can exceed 11)."),
+          spitRow(spitRank("Left"), "Standings: in play (green) · still to play among active picks (BB can exceed 11)."),
           spitRow(spitRank("Own"), "Hover/click a squad player or standings manager to cross-highlight shared ownership."),
           ...(mobile
             ? [spitRow(spitRank("Search"), "Search any player: profile replaces summary cards, hides squad, highlights league owners (or hides standings), and shows club fixtures.")]
@@ -5324,25 +5291,6 @@
         ${spitSection("Icons", iconRows)}
         ${spitSection("Reading", reading)}
         ${spitNote("Green/red here is over/under vs expectation — not Matchups fixture difficulty. Soft green is quieter in dark mode.")}`;
-    }
-
-    if (state.page === "feed") {
-      const iconRows = [
-        spitRow(iconHTML("arrow-up-right"), "Open the post"),
-        spitRow(spitRank("Type"), "Original / Reply / Quote / Retweet badge — bottom right of each quote"),
-      ];
-      const reading = [
-        ...(mobile
-          ? []
-          : [spitRow(spitRank("Map"), "Treemap — share of mentions. Click a tile to filter to that player.")]),
-        spitRow(spitRank("Card"), "One resolved FPL player. Quotes newest first."),
-        spitRow(spitRank("Order"), "Most mentions first, then newest."),
-      ];
-      return `${spitHead("rss", "How Social Media Feed works")}
-        ${spitIntro("Player-mention cards from curated X accounts — filter by date, creator, and post type.")}
-        ${spitSection("Icons", iconRows)}
-        ${spitSection("Reading", reading)}
-        ${spitNote("Refreshing never calls X — it only reads the local cache.")}`;
     }
 
     if (state.page === "ownership") {
@@ -6060,7 +6008,6 @@
       rankings: "How Rankings works",
       expected: "How Expected Data works",
       schedule: "How Matchups works",
-      feed: "How Social Media Feed works",
       ownership: "How Ownership works",
       markets: "How Markets works",
       team: "How Team works",
@@ -6074,7 +6021,6 @@
         else if (pane.id === "rankings-page") page = "rankings";
         else if (pane.id === "expected-page") page = "expected";
         else if (pane.id === "schedule-page") page = "schedule";
-        else if (pane.id === "feed-page") page = "feed";
         else if (pane.id === "ownership-page") page = "ownership";
         else if (pane.id === "markets-page") page = "markets";
         else if (pane.id === "team-page") page = "team";
@@ -8739,7 +8685,7 @@
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
     syncTeamCompareHost();
     syncTeamPickerToolbarOrder();
-    const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "feed" || state.page === "home" || (state.page === "team" && !picking);
+    const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "home" || (state.page === "team" && !picking);
     if (el.sidebar) el.sidebar.style.display = hideSidebar ? "none" : "";
     if (el.sidebarToggle) {
       el.sidebarToggle.style.display = state.page === "team" && !picking ? "none" : "";
@@ -10026,229 +9972,13 @@
   bindTeamPickerSelection();
 
   // ---------------------------------------------------------------------
-  // Feed page — player-mention cards from annotated social_data.js
-  // ---------------------------------------------------------------------
-  const FEED_HISTORY_DAYS = 7;
-
-  const INDEXABLE_FEED_BASES = new Set([
-    "unique_full_alias",
-    "unique_lastname",
-    "team_context",
-    "team_position_context",
-    "team_alias",
-    "popularity_default",
-  ]);
-
-  let feedPlayerByCodeCache = null;
-
+  // Shared player photo / stat helpers (formerly Feed; also Home + Ownership)
   function feedPlayerPhotoUrl(code) {
     if (code == null || code === "") return "";
     // FPL bootstrap `photo` is "{code}.jpg"; current PL CDN path (25/26) is
     // premierleague25/…/{code}.png (no "p" prefix). Older p{code} 250x250
     // URLs 403 for many new/promoted players (e.g. Igor Jesus).
     return `https://resources.premierleague.com/premierleague25/photos/players/110x140/${code}.png`;
-  }
-
-  function feedPlayerCatalog() {
-    if (feedPlayerByCodeCache) return feedPlayerByCodeCache;
-    const map = new Map();
-    const combined = (DATA.players && DATA.players.combined) || [];
-    for (const row of combined) {
-      if (row && row.code != null) map.set(Number(row.code), { ...row });
-    }
-    for (const row of nextSeasonSplitLists(DATA.nextSeasonPlayers).combined) {
-      if (!row || row.code == null) continue;
-      const key = Number(row.code);
-      const prev = map.get(key);
-      if (prev) {
-        // Prefer 2025/26 stats; overlay current squad identity when present.
-        if (row.team) prev.team = row.team;
-        if (row.position) prev.position = row.position;
-        if (row.price != null) prev.price = row.price;
-        if (row.name) prev.name = row.name;
-      } else {
-        map.set(key, { ...row });
-      }
-    }
-    feedPlayerByCodeCache = map;
-    return map;
-  }
-
-  function feedLookupPlayer(code) {
-    if (code == null) return null;
-    return feedPlayerCatalog().get(Number(code)) || null;
-  }
-
-  function localDayKey(d = new Date()) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-
-  const FEED_POST_TYPES = [
-    { key: "original", label: "Original" },
-    { key: "reply", label: "Reply" },
-    { key: "quote", label: "Quote" },
-    { key: "retweet", label: "Retweet" },
-  ];
-
-  const FEED_RANGE_LABELS = {
-    today: "Today",
-    "3d": "the last 3 days",
-    "7d": "the past week",
-  };
-
-  function feedTypeFilterIsDefault() {
-    return state.feedTypeFilter.size === 0;
-  }
-
-  function feedRangeDayCount(range = state.feedRange) {
-    if (range === "3d") return 3;
-    if (range === "7d") return FEED_HISTORY_DAYS;
-    return 1;
-  }
-
-  function feedRangeDayKeys(range = state.feedRange, now = new Date()) {
-    const n = feedRangeDayCount(range);
-    const keys = [];
-    for (let offset = 0; offset < n; offset++) {
-      keys.push(
-        localDayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset))
-      );
-    }
-    return keys;
-  }
-
-  function feedPostKind(post) {
-    const refs = post && post.referencedTweets;
-    const types = new Set(
-      (Array.isArray(refs) ? refs : [])
-        .map((r) => (r && r.type) || "")
-        .filter(Boolean)
-    );
-    if (types.has("retweeted")) return "retweet";
-    if (types.has("quoted")) return "quote";
-    if (types.has("replied_to") || (post && post.inReplyToUserId)) return "reply";
-    return "original";
-  }
-
-  function feedFiltersActive() {
-    return (
-      state.feedRange !== "today" ||
-      !feedTypeFilterIsDefault() ||
-      state.feedTeamFilter.size > 0
-    );
-  }
-
-  function syncFeedFiltersToggle() {
-    if (!el.feedFiltersToggle) return;
-    const active = feedFiltersActive();
-    const panelOpen =
-      el.feedControls &&
-      !el.feedControls.classList.contains("collapsed") &&
-      el.feedControls.style.display !== "none";
-    const open = panelOpen || (mobileSheetOpen && mobileSheetKey === "feed-filters");
-    el.feedFiltersToggle.classList.toggle("on", open || active);
-    const label = open ? "Hide feed filters" : "Show feed filters";
-    el.feedFiltersToggle.title = active && !open ? "Feed filters (active)" : label;
-    el.feedFiltersToggle.setAttribute(
-      "aria-label",
-      active && !open ? "Show feed filters (filters active)" : label
-    );
-    el.feedFiltersToggle.setAttribute("aria-expanded", open ? "true" : "false");
-  }
-
-  function setFeedFiltersOpen(open) {
-    if (!el.feedControls || !el.feedFiltersToggle) return;
-    if (!hasFineHover()) {
-      if (open) {
-        openMobileSheetHost({
-          title: "Feed filters",
-          key: "feed-filters",
-          hostEl: el.feedControls,
-          prepare(host) {
-            host.style.display = "";
-            host.hidden = false;
-            host.classList.remove("collapsed");
-            buildFeedTypeChips();
-            buildFeedTeamChips();
-            syncFeedRangeSeg();
-          },
-          cleanup(host) {
-            host.classList.add("collapsed");
-            host.style.display = state.page === "feed" ? "" : "none";
-          },
-        });
-        syncFeedFiltersToggle();
-      } else if (mobileSheetKey === "feed-filters") {
-        closeMobileSheet();
-      } else {
-        el.feedControls.classList.add("collapsed");
-        syncFeedFiltersToggle();
-      }
-      return;
-    }
-    el.feedControls.style.display = "";
-    el.feedControls.hidden = false;
-    el.feedControls.classList.toggle("collapsed", !open);
-    if (open) {
-      buildFeedTypeChips();
-      buildFeedTeamChips();
-      syncFeedRangeSeg();
-      requestAnimationFrame(() => syncSegThumb(el.feedRangeSeg, { animate: false }));
-    }
-    syncFeedFiltersToggle();
-  }
-
-  function syncFeedRangeSeg() {
-    if (!el.feedRangeSeg) return;
-    $$("#feed-range-seg button[data-feed-range]").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.feedRange === state.feedRange);
-    });
-    syncSegThumb(el.feedRangeSeg, { animate: false });
-  }
-
-  function buildFeedTypeChips() {
-    const root = el.feedTypeFilters;
-    if (!root) return;
-    root.innerHTML = "";
-    for (const spec of FEED_POST_TYPES) {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip" + (state.feedTypeFilter.has(spec.key) ? " active" : "");
-      chip.dataset.feedType = spec.key;
-      chip.textContent = spec.label;
-      chip.addEventListener("click", () => {
-        toggleSetValue(state.feedTypeFilter, spec.key);
-        chip.classList.toggle("active", state.feedTypeFilter.has(spec.key));
-        syncFeedFiltersToggle();
-        renderFeed();
-      });
-      root.appendChild(chip);
-    }
-  }
-
-  function buildFeedTeamChips() {
-    const root = el.feedTeamFilters;
-    if (!root) return;
-    root.innerHTML = "";
-    teamCodesForSeason().forEach((code) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className =
-        "chip team-chip" + (state.feedTeamFilter.has(code) ? " active" : "");
-      chip.dataset.feedTeam = code;
-      chip.innerHTML = `${badgeHTML(code)}${escapeHtml(code)}`;
-      setTip(chip, teamNameForSeason(code));
-      chip.addEventListener("click", () => {
-        toggleSetValue(state.feedTeamFilter, code);
-        chip.classList.toggle("active", state.feedTeamFilter.has(code));
-        syncFeedFiltersToggle();
-        renderFeed();
-      });
-      root.appendChild(chip);
-    });
   }
 
   function detectLocaleClockFormat() {
@@ -10271,143 +10001,11 @@
     return { hour: "numeric", minute: "2-digit", hour12: true };
   }
 
-  function formatFeedTime(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return escapeHtml(String(iso));
-    const diffSec = Math.round((Date.now() - d.getTime()) / 1000);
-    if (diffSec < 60) return "just now";
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
-    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
-    if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)}d`;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  }
-
-  /** 0 = just now, 1 = FEED_HISTORY_DAYS (or older). Drives feed-time color mix. */
-  function feedTimeAgeProgress(iso) {
-    if (!iso) return 1;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return 1;
-    const ageMs = Math.max(0, Date.now() - d.getTime());
-    const maxMs = FEED_HISTORY_DAYS * 86400 * 1000;
-    return Math.min(1, ageMs / maxMs);
-  }
-
-  function formatFeedAbsolute(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      ...localeTimeOptions(),
-    });
-  }
-
   function feedStatDisplay(value, decimals) {
     if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
     const n = Number(value);
     if (decimals === 0) return String(Math.round(n));
     return n.toFixed(decimals);
-  }
-
-  function feedPosStatSpecs(position, { detail = false } = {}) {
-    const pos = String(position || "").toUpperCase();
-    const fplSeason = isNextSeason();
-    const compact = {
-      GK: [
-        { key: "saves", label: "Saves", decimals: 0 },
-        { key: "cleanSheets", label: "CS", decimals: 0 },
-        { key: "goalsConceded", label: "GC", decimals: 0 },
-      ],
-      DEF: [
-        { key: "cleanSheets", label: "CS", decimals: 0 },
-        { key: "goalsConceded", label: "GC", decimals: 0 },
-        { key: "defCon", label: "DC", decimals: 0 },
-        { key: "__gi", label: "G+A", decimals: 0 },
-      ],
-      MID: [
-        { key: "goals", label: "G", decimals: 0 },
-        { key: "assists", label: "A", decimals: 0 },
-        { key: "xgi", label: "xGI", decimals: 1 },
-        { key: "defCon", label: "DC", decimals: 0 },
-      ],
-      FWD: [
-        { key: "goals", label: "G", decimals: 0 },
-        { key: "assists", label: "A", decimals: 0 },
-        { key: "xg", label: "xG", decimals: 1 },
-        { key: "xa", label: "xA", decimals: 1 },
-      ],
-    };
-    const expanded = {
-      GK: [
-        ...compact.GK,
-        { key: "xgc", label: "xGC", decimals: 1 },
-        { key: "mins", label: "Mins", decimals: 0 },
-        { key: "pts", label: "Pts", decimals: 0 },
-        { key: "xPts", label: "xPts", decimals: 1 },
-        { key: "owned", label: "TSB%", decimals: 1 },
-      ],
-      DEF: [
-        ...compact.DEF,
-        { key: "xgc", label: "xGC", decimals: 1 },
-        { key: "xgi", label: "xGI", decimals: 1 },
-        { key: "mins", label: "Mins", decimals: 0 },
-        { key: "pts", label: "Pts", decimals: 0 },
-        { key: "xPts", label: "xPts", decimals: 1 },
-        { key: "owned", label: "TSB%", decimals: 1 },
-      ],
-      MID: [
-        { key: "goals", label: "G", decimals: 0 },
-        { key: "assists", label: "A", decimals: 0 },
-        { key: "xgi", label: "xGI", decimals: 1 },
-        { key: "xg", label: "xG", decimals: 1 },
-        { key: "xa", label: "xA", decimals: 1 },
-        { key: "defCon", label: "DC", decimals: 0 },
-        { key: "keyPasses", label: "KP", decimals: 0 },
-        { key: "mins", label: "Mins", decimals: 0 },
-        { key: "pts", label: "Pts", decimals: 0 },
-        { key: "xPts", label: "xPts", decimals: 1 },
-        { key: "owned", label: "TSB%", decimals: 1 },
-      ],
-      FWD: [
-        ...compact.FWD,
-        { key: "xgi", label: "xGI", decimals: 1 },
-        { key: "shots", label: "S", decimals: 0 },
-        { key: "mins", label: "Mins", decimals: 0 },
-        { key: "pts", label: "Pts", decimals: 0 },
-        { key: "xPts", label: "xPts", decimals: 1 },
-        { key: "owned", label: "TSB%", decimals: 1 },
-      ],
-    };
-    let list = detail ? expanded[pos] || expanded.FWD : compact[pos] || compact.FWD;
-    if (fplSeason) {
-      list = list.filter((s) => !PLAYER_OPTA_ONLY_COL_KEYS.has(s.key));
-    }
-    return detail ? list : list.slice(0, 4);
-  }
-
-  function feedPlayerStatsHTML(card, { detail = false } = {}) {
-    const rankMaps = feedStatRankMaps(card.position, { detail });
-    const posLabel = String(card.position || "").toUpperCase();
-    return feedPosStatSpecs(card.position, { detail })
-      .map((spec) => {
-        const raw = feedRowStatValue(card.row, spec.key);
-        const shown = feedStatDisplay(raw, spec.decimals);
-        const rankInfo = rankMaps[spec.key];
-        const rank =
-          card.code != null && rankInfo ? rankInfo.ranks.get(String(card.code)) : null;
-        const rankHtml =
-          rank != null
-            ? `<span class="feed-player-stat-rank" title="Rank among ${escapeHtml(posLabel)}s (${rank} of ${rankInfo.n})">#${rank}</span>`
-            : "";
-        return `<div class="feed-player-stat">
-          <span class="feed-player-stat-label">${escapeHtml(spec.label)}</span>
-          <span class="feed-player-stat-value">${escapeHtml(shown)}</span>
-          ${rankHtml}
-        </div>`;
-      })
-      .join("");
   }
 
   function feedRowStatValue(row, key) {
@@ -10418,332 +10016,6 @@
     return v == null ? null : v;
   }
 
-  // Competition ranks among same-position players (2025/26 combined). Cached
-  // per position for the Feed stat chips.
-  let feedStatRankCache = null;
-
-  function feedStatRankMaps(position, { detail = false } = {}) {
-    const pos = String(position || "").toUpperCase();
-    if (!pos) return {};
-    const cacheKey = `${pos}:${detail ? "detail" : "compact"}`;
-    if (!feedStatRankCache) feedStatRankCache = new Map();
-    if (feedStatRankCache.has(cacheKey)) return feedStatRankCache.get(cacheKey);
-
-    const pool = ((DATA.players && DATA.players.combined) || []).filter(
-      (r) => String(r.position || "").toUpperCase() === pos
-    );
-    const maps = {};
-    for (const spec of feedPosStatSpecs(pos, { detail })) {
-      const lowerBetter = LOWER_BETTER.has(spec.key);
-      const entries = pool
-        .map((r) => {
-          if (r.code == null) return null;
-          const val = feedRowStatValue(r, spec.key);
-          if (val == null || Number.isNaN(Number(val))) return null;
-          return { key: String(r.code), val: Number(val) };
-        })
-        .filter(Boolean)
-        .sort((a, b) => (lowerBetter ? a.val - b.val : b.val - a.val));
-      const ranks = new Map();
-      let i = 0;
-      while (i < entries.length) {
-        let j = i + 1;
-        while (j < entries.length && entries[j].val === entries[i].val) j += 1;
-        for (let k = i; k < j; k += 1) ranks.set(entries[k].key, i + 1);
-        i = j;
-      }
-      maps[spec.key] = { ranks, n: entries.length };
-    }
-    feedStatRankCache.set(cacheKey, maps);
-    return maps;
-  }
-
-  function escapeRegExp(s) {
-    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
-
-  function linkifyFeedText(text) {
-    const raw = String(text || "");
-    let html = escapeHtml(raw);
-    html = html.replace(/https?:\/\/[^\s<]+/g, (url) => {
-      const href = escapeHtml(url);
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
-    });
-    html = html.replace(
-      /(^|[\s(])@([A-Za-z0-9_]{1,15})\b/g,
-      (_, pre, handle) =>
-        `${pre}<a href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>`
-    );
-    return html;
-  }
-
-  function feedPlayerMentionAliases(card, post) {
-    const aliases = new Set();
-    const add = (value) => {
-      const s = String(value || "").trim();
-      if (s.length >= 2) aliases.add(s);
-    };
-    add(card && card.name);
-    const code = card && card.code != null ? String(card.code) : "";
-    const entities = (post && post.analysis && post.analysis.entities) || [];
-    for (const e of entities) {
-      if (!e || e.type !== "player" || !e.resolved) continue;
-      if (code && String(e.code) !== code) continue;
-      add(e.mention);
-      add(e.name);
-    }
-    return [...aliases].sort((a, b) => b.length - a.length);
-  }
-
-  function highlightFeedPlayerMentions(escapedHtml, aliases) {
-    if (!escapedHtml || !aliases || !aliases.length) return escapedHtml;
-    const unique = [];
-    const seen = new Set();
-    for (const alias of aliases) {
-      const key = alias.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      unique.push(alias);
-    }
-    if (!unique.length) return escapedHtml;
-    const pattern = unique.map(escapeRegExp).join("|");
-    // Avoid matching inside words (Haaland in FooHaaland) while allowing hyphens.
-    const re = new RegExp(`(?<![A-Za-z0-9_])(?:${pattern})(?![A-Za-z0-9_])`, "gi");
-    return escapedHtml.replace(
-      re,
-      (match) => `<mark class="feed-player-mention">${match}</mark>`
-    );
-  }
-
-  function formatFeedPostBody(text, card, post) {
-    let html = escapeHtml(String(text || ""));
-    html = highlightFeedPlayerMentions(html, feedPlayerMentionAliases(card, post));
-    html = html.replace(/https?:\/\/[^\s<]+/g, (url) => {
-      // Skip URLs that were already wrapped or sit inside a mark/tag.
-      if (url.includes("<")) return url;
-      const href = escapeHtml(url);
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
-    });
-    // Don't rewrite @handles that landed inside a highlight mark.
-    html = html.replace(
-      /(^|[\s(])@([A-Za-z0-9_]{1,15})\b/g,
-      (full, pre, handle, offset, str) => {
-        const before = str.slice(Math.max(0, offset - 24), offset);
-        if (/<mark\b[^>]*>[^<]*$/i.test(before)) return full;
-        return `${pre}<a href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>`;
-      }
-    );
-    return html;
-  }
-
-  function feedPostsFiltered(posts, { range = state.feedRange } = {}) {
-    const keys = new Set(feedRangeDayKeys(range));
-    return (posts || []).filter((post) => {
-      if (!post.createdAt) return false;
-      const created = new Date(post.createdAt);
-      if (Number.isNaN(created.getTime())) return false;
-      if (!keys.has(localDayKey(created))) return false;
-      if (state.feedTypeFilter.size && !state.feedTypeFilter.has(feedPostKind(post))) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  function computeFeedMentionCards(posts, { range = state.feedRange } = {}) {
-    const scopedPosts = feedPostsFiltered(posts, { range });
-    const byCode = new Map();
-
-    for (const post of scopedPosts) {
-      const analysis = post.analysis || {};
-      // One credit per player per post — repeat name/entity hits must not inflate.
-      const seenCodes = new Set();
-      for (const e of analysis.entities || []) {
-        if (!e || e.type !== "player" || !e.resolved || e.code == null) continue;
-        const basis = e.matchBasis || "";
-        if (basis && !INDEXABLE_FEED_BASES.has(basis)) continue;
-        const key = String(e.code);
-        if (seenCodes.has(key)) continue;
-        seenCodes.add(key);
-
-        let bucket = byCode.get(key);
-        if (!bucket) {
-          bucket = {
-            code: e.code,
-            name: e.name || e.mention,
-            team: e.team,
-            position: e.position,
-            postIds: new Set(),
-            latestAt: "",
-          };
-          byCode.set(key, bucket);
-        }
-        bucket.name = e.name || bucket.name;
-        bucket.team = e.team || bucket.team;
-        bucket.position = e.position || bucket.position;
-        bucket.postIds.add(String(post.id));
-        if (String(post.createdAt || "") > bucket.latestAt) {
-          bucket.latestAt = post.createdAt || "";
-        }
-      }
-    }
-
-    const cards = [...byCode.values()]
-      .map((bucket) => {
-        const row = feedLookupPlayer(bucket.code);
-        const name = (row && row.name) || bucket.name;
-        const team = (row && (row.newTeam || row.team)) || bucket.team || "";
-        const position =
-          (row && (row.newPosition || row.position)) || bucket.position || "";
-        const price =
-          row && row.price2627 != null
-            ? row.price2627
-            : row && row.price != null
-              ? row.price
-              : null;
-        const pts = row && row.pts != null ? row.pts : null;
-        return {
-          code: bucket.code,
-          name,
-          team,
-          position,
-          price,
-          pts,
-          row,
-          posts: bucket.postIds.size,
-          postIds: [...bucket.postIds],
-          latestAt: bucket.latestAt,
-        };
-      })
-      .sort((a, b) => sortFeedCards(a, b));
-
-    return {
-      range,
-      scopedPostCount: scopedPosts.length,
-      cards,
-    };
-  }
-
-  function sortFeedCards(a, b) {
-    const byRecent = () =>
-      String(b.latestAt || "").localeCompare(String(a.latestAt || ""));
-    const byVolume = () => b.posts - a.posts;
-    const byName = () => String(a.name || "").localeCompare(String(b.name || ""));
-    // Volume desc: most mentions, then most recent, then name.
-    return byVolume() || byRecent() || byName();
-  }
-
-  function feedPostKindLabel(kind) {
-    const hit = FEED_POST_TYPES.find((t) => t.key === kind);
-    return (hit && hit.label) || "Original";
-  }
-
-  function feedQuoteRowsHTML(postIds, postsById, card) {
-    const rows = (postIds || [])
-      .map((id) => postsById.get(String(id)))
-      .filter(Boolean)
-      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-    if (!rows.length) {
-      return `<p class="feed-trend-empty">No linked posts in the current window.</p>`;
-    }
-    return rows
-      .map((post, i) => {
-        const handle = post.handle || "";
-        const name = post.authorName || handle;
-        const url = post.url || `https://x.com/${handle}/status/${post.id}`;
-        const body = formatFeedPostBody(post.text || "", card, post);
-        const kind = feedPostKind(post);
-        const kindLabel = feedPostKindLabel(kind);
-        const avatar = post.authorAvatarUrl
-          ? `<img class="feed-source-avatar" src="${escapeHtml(post.authorAvatarUrl)}" alt="" width="32" height="32" loading="lazy" />`
-          : `<span class="feed-source-avatar feed-source-avatar-fallback" aria-hidden="true">${escapeHtml((handle || "?").slice(0, 1).toUpperCase())}</span>`;
-        return `<article class="feed-source-row" style="--enter-i:${i}">
-          <header class="feed-source-head">
-            ${avatar}
-            <div class="feed-source-identity">
-              <div class="feed-source-name-line">
-                <span class="feed-source-author">${escapeHtml(name)}</span>
-              </div>
-              <div class="feed-source-meta-line">
-                <a class="feed-handle" href="https://x.com/${escapeHtml(handle)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(handle)}</a>
-                <span class="feed-meta-dot" aria-hidden="true">·</span>
-                <time class="feed-time" style="--feed-age:${feedTimeAgeProgress(post.createdAt).toFixed(3)}" datetime="${escapeHtml(post.createdAt || "")}"${tipAttr(formatFeedAbsolute(post.createdAt))}>${formatFeedTime(post.createdAt)}</time>
-              </div>
-            </div>
-            <a class="feed-source-open icon-only-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open post"${tipAttr("Open post")}>${iconHTML("arrow-up-right")}</a>
-          </header>
-          <div class="feed-source-text">${body || "<span class='feed-trend-empty'>No text</span>"}</div>
-          <footer class="feed-source-foot">
-            <span class="feed-post-kind feed-post-kind-${escapeHtml(kind)}">${escapeHtml(kindLabel)}</span>
-          </footer>
-        </article>`;
-      })
-      .join("");
-  }
-
-  function feedPlayerCardHTML(card, postsById, enterIndex, { detail = false } = {}) {
-    const initials = String(card.name || "?")
-      .split(/[\s.]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p[0])
-      .join("")
-      .toUpperCase() || "?";
-    const photo = feedPlayerPhotoUrl(card.code);
-    const teamLabel = card.team ? teamNameForSeason(card.team) : "";
-    const badge = card.team
-      ? badgeHTML(card.team, "feed-player-team-badge").replace(
-          "<img ",
-          `<img${tipAttr(teamLabel)} `
-        )
-      : "";
-    const metaBits = [];
-    if (card.position) metaBits.push(posBadgeHTML(card.position));
-    if (card.price != null) metaBits.push(`<span>£${Number(card.price).toFixed(1)}m</span>`);
-    if (!detail && card.pts != null) metaBits.push(`<span>${Number(card.pts)} Pts</span>`);
-    if (detail) {
-      const postN = Number(card.posts) || (card.postIds && card.postIds.length) || 0;
-      if (postN) metaBits.push(`<span>${postN} post${postN === 1 ? "" : "s"}</span>`);
-    }
-    const stats = feedPlayerStatsHTML(card, { detail });
-    const photoSize = detail ? 80 : 72;
-    const photoBlock = photo
-      ? `<img class="feed-player-photo" src="${escapeHtml(photo)}" alt="" width="${photoSize}" height="${photoSize}" loading="lazy" data-initials="${escapeHtml(initials)}" />`
-      : `<span class="feed-player-photo feed-player-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
-    const teamAccent = TEAM_SCATTER_ACCENT[card.team] || "";
-    const accentStyle = teamAccent ? `--feed-team-accent:${teamAccent};` : "";
-    const cardId = `feed-card-${escapeHtml(String(card.code))}`;
-    const cardData = `id="${cardId}" data-feed-code="${escapeHtml(String(card.code))}" data-team="${escapeHtml(String(card.team || ""))}" style="--enter-i:${enterIndex};${accentStyle}"`;
-    const identityHTML = `<div class="feed-player-identity">
-          <div class="feed-player-photo-wrap">
-            ${photoBlock}
-            ${badge}
-          </div>
-          <div class="feed-player-title">
-            <h3 class="feed-player-name"><span class="feed-player-name-text">${escapeHtml(card.name)}</span></h3>
-            <p class="feed-player-meta">${metaBits.join("")}</p>
-          </div>
-        </div>`;
-    const quotesHTML = feedQuoteRowsHTML(card.postIds, postsById, card);
-
-    if (detail) {
-      return `<section class="feed-player-detail" ${cardData}>
-      <header class="feed-player-detail-header feed-player-card-top">
-        ${identityHTML}
-        <div class="feed-player-stats feed-player-detail-stats">${stats}</div>
-      </header>
-      <div class="feed-source-list feed-player-detail-posts">${quotesHTML}</div>
-    </section>`;
-    }
-
-    return `<article class="rankings-card feed-player-card" ${cardData}>
-      <div class="feed-player-card-top">
-        ${identityHTML}
-        <div class="feed-player-stats">${stats}</div>
-      </div>
-      <div class="feed-source-list feed-player-quotes">${quotesHTML}</div>
-    </article>`;
-  }
 
   function fmtMarketsKickoffParts(iso) {
     if (!iso) return { day: "", date: "", time: "" };
@@ -11324,344 +10596,6 @@
     syncMarketsViewControls();
   }
 
-  function feedCardMatchesQuery(card, query) {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return true;
-    const teamName = card.team ? teamNameForSeason(card.team) : "";
-    const hay = [card.name, card.team, teamName, card.position]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  }
-
-  function feedCardMatchesTeamFilter(card) {
-    if (!state.feedTeamFilter.size) return true;
-    return card.team && state.feedTeamFilter.has(card.team);
-  }
-
-  function feedSearchWiderRangeHits(posts, query) {
-    if (!(state.feedRange === "today" || state.feedRange === "3d")) return 0;
-    const weekMention = computeFeedMentionCards(posts, { range: "7d" });
-    return weekMention.cards.filter(
-      (card) => feedCardMatchesTeamFilter(card) && feedCardMatchesQuery(card, query)
-    ).length;
-  }
-
-  function feedWidenRangeHintHTML(count) {
-    if (!count) return "";
-    const label = count === 1 ? "1 match" : `${count} matches`;
-    return `<p class="feed-empty-widen">
-      <button type="button" class="feed-widen-range" data-feed-widen="7d">
-        ${escapeHtml(label)} in the past week — show Past week
-      </button>
-    </p>`;
-  }
-
-  const FEED_TREEMAP_MAX = 14;
-  const FEED_TREEMAP_W = 1000;
-  const FEED_TREEMAP_H = 220;
-
-  function feedTreemapIsCompact() {
-    try {
-      return window.matchMedia("(max-width: 640px)").matches;
-    } catch {
-      return false;
-    }
-  }
-
-  function feedTreemapShortName(card) {
-    const name = String(card.name || "").trim();
-    if (!name) return "?";
-    const parts = name.split(/\s+/).filter(Boolean);
-    if (parts.length === 1) return parts[0];
-    return parts[parts.length - 1];
-  }
-
-  function accentLuminance(hex) {
-    const raw = String(hex || "").replace("#", "");
-    if (raw.length !== 6) return 0.5;
-    const r = parseInt(raw.slice(0, 2), 16) / 255;
-    const g = parseInt(raw.slice(2, 4), 16) / 255;
-    const b = parseInt(raw.slice(4, 6), 16) / 255;
-    const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  }
-
-  function feedTreemapTextColor(accent) {
-    return accentLuminance(accent) > 0.55 ? "#111" : "#fff";
-  }
-
-  // Squarified treemap (Bruls et al.) — layout only in abstract units.
-  function squarifyFeedMentions(items, width, height) {
-    const total = items.reduce((sum, d) => sum + d.value, 0);
-    if (!total || width <= 0 || height <= 0) return [];
-    const nodes = items.map((d) => ({
-      ...d,
-      area: (d.value / total) * width * height,
-    }));
-    const out = [];
-    let x0 = 0;
-    let y0 = 0;
-    let x1 = width;
-    let y1 = height;
-    let row = [];
-    let i = 0;
-
-    const shortest = () => Math.min(x1 - x0, y1 - y0);
-    const worst = (areas, side) => {
-      if (!areas.length) return Infinity;
-      const s = areas.reduce((a, b) => a + b, 0);
-      const mx = Math.max(...areas);
-      const mn = Math.min(...areas);
-      return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
-    };
-
-    const flush = (rowNodes) => {
-      if (!rowNodes.length) return;
-      const sum = rowNodes.reduce((a, b) => a + b.area, 0);
-      const wide = x1 - x0 >= y1 - y0;
-      if (wide) {
-        const rw = sum / (y1 - y0);
-        let y = y0;
-        for (const node of rowNodes) {
-          const h = node.area / rw;
-          out.push({ ...node, x: x0, y, w: rw, h });
-          y += h;
-        }
-        x0 += rw;
-      } else {
-        const rh = sum / (x1 - x0);
-        let x = x0;
-        for (const node of rowNodes) {
-          const w = node.area / rh;
-          out.push({ ...node, x, y: y0, w, h: rh });
-          x += w;
-        }
-        y0 += rh;
-      }
-    };
-
-    while (i < nodes.length) {
-      const side = shortest();
-      const next = nodes[i];
-      const rowAreas = row.map((n) => n.area);
-      if (!row.length || worst(rowAreas.concat(next.area), side) <= worst(rowAreas, side)) {
-        row.push(next);
-        i += 1;
-      } else {
-        flush(row);
-        row = [];
-      }
-    }
-    flush(row);
-    return out;
-  }
-
-  function clearFeedTreemap() {
-    if (!el.feedTreemap) return;
-    el.feedTreemap.hidden = true;
-    el.feedTreemap.classList.remove("is-scrollable");
-    el.feedTreemap.innerHTML = "";
-  }
-
-  function renderFeedTreemap(cards, rangeLabel) {
-    if (!el.feedTreemap) return;
-    // Desktop/tablet only — mobile cards already carry the mention list.
-    if (feedTreemapIsCompact()) {
-      clearFeedTreemap();
-      return;
-    }
-    const selected = state.feedSelectedCode != null ? String(state.feedSelectedCode) : "";
-    const top = (cards || [])
-      .filter((c) => c && c.posts > 0)
-      .slice(0, FEED_TREEMAP_MAX)
-      .map((c) => ({
-        code: c.code,
-        name: c.name,
-        shortName: feedTreemapShortName(c),
-        team: c.team,
-        value: c.posts,
-      }));
-    if (top.length < 2) {
-      clearFeedTreemap();
-      return;
-    }
-
-    const totalMentions = top.reduce((s, d) => s + d.value, 0);
-    const layoutW = FEED_TREEMAP_W;
-    const layoutH = FEED_TREEMAP_H;
-    const layout = squarifyFeedMentions(top, layoutW, layoutH);
-    const selectedCard = selected
-      ? top.find((c) => String(c.code) === selected)
-      : null;
-    const cells = layout
-      .map((cell, i) => {
-        const accent = TEAM_SCATTER_ACCENT[cell.team] || "#6b7280";
-        const text = feedTreemapTextColor(accent);
-        const left = (cell.x / layoutW) * 100;
-        const topPct = (cell.y / layoutH) * 100;
-        const width = (cell.w / layoutW) * 100;
-        const height = (cell.h / layoutH) * 100;
-        const pct = totalMentions ? Math.round((cell.value / totalMentions) * 100) : 0;
-        const showCount = cell.w * cell.h > 9000;
-        const showName = cell.w > 70 && cell.h > 36;
-        const isSelected = selected && String(cell.code) === selected;
-        const tip = isSelected
-          ? `${cell.name} · selected — click to clear`
-          : `${cell.name} · ${cell.value} post${cell.value === 1 ? "" : "s"} — click to filter`;
-        return `<button type="button" class="feed-treemap-cell${isSelected ? " is-selected" : ""}" style="--enter-i:${i};left:${left.toFixed(2)}%;top:${topPct.toFixed(2)}%;width:${width.toFixed(2)}%;height:${height.toFixed(2)}%;--cell-accent:${accent};--cell-fg:${text}" data-feed-card="${escapeHtml(String(cell.code))}" aria-pressed="${isSelected ? "true" : "false"}" aria-label="${escapeHtml(`${cell.name}: ${cell.value} post${cell.value === 1 ? "" : "s"} (${pct}%)${isSelected ? ", selected" : ""}`)}"${tipAttr(tip)}>
-          ${showName ? `<span class="feed-treemap-name">${escapeHtml(cell.shortName)}</span>` : ""}
-          ${showCount ? `<span class="feed-treemap-count">${cell.value}</span>` : ""}
-        </button>`;
-      })
-      .join("");
-
-    const clearBtn = selectedCard
-      ? `<button type="button" class="feed-treemap-clear" data-feed-treemap-clear${tipAttr("Show all players")}>Clear ${escapeHtml(selectedCard.shortName)}</button>`
-      : "";
-
-    el.feedTreemap.hidden = false;
-    el.feedTreemap.classList.remove("is-scrollable");
-    el.feedTreemap.innerHTML = `
-      <div class="feed-treemap-head">
-        <div>
-          <h3>Mention share</h3>
-          <p>${
-            selectedCard
-              ? `Filtered to <strong>${escapeHtml(selectedCard.name)}</strong> — click again or Clear to show all.`
-              : `Top players in ${escapeHtml(rangeLabel)} — sized by posts (one count per player per post). Click a tile to filter.`
-          }</p>
-        </div>
-        ${clearBtn}
-      </div>
-      <div class="feed-treemap-scroll">
-        <div class="feed-treemap-plot" role="group" aria-label="Treemap of player mention volume">${cells}</div>
-      </div>
-    `;
-
-    el.feedTreemap.querySelectorAll(".feed-treemap-cell").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const code = btn.getAttribute("data-feed-card");
-        if (!code) return;
-        state.feedSelectedCode =
-          state.feedSelectedCode != null && String(state.feedSelectedCode) === code
-            ? null
-            : code;
-        renderFeed();
-      });
-    });
-    const clearEl = el.feedTreemap.querySelector("[data-feed-treemap-clear]");
-    if (clearEl) {
-      clearEl.addEventListener("click", () => {
-        state.feedSelectedCode = null;
-        renderFeed();
-      });
-    }
-  }
-
-  function renderFeed() {
-    const root = el.feedTrending || el.feedList;
-    if (!root) return;
-    if (el.feedTrending) el.feedTrending.classList.remove("is-player-selected");
-    syncFeedRangeSeg();
-    syncFeedFiltersToggle();
-    const posts = SOCIAL.posts || [];
-    const accounts = SOCIAL.accounts || [];
-    const postsById = new Map(posts.map((p) => [String(p.id), p]));
-    const rangeLabel = FEED_RANGE_LABELS[state.feedRange] || "the selected range";
-    const query = el.feedSearch ? el.feedSearch.value : "";
-    const trimmed = String(query || "").trim();
-    const mention = computeFeedMentionCards(posts);
-
-    if (!posts.length) {
-      state.feedSelectedCode = null;
-      clearFeedTreemap();
-      const handles = accounts.map((a) => `@${a.handle}`).filter(Boolean).join(", ") || "@LetsTalk_FPL";
-      root.innerHTML = `<div class="empty-state feed-empty">
-        <p>No posts loaded yet — player cards need a fetched corpus.</p>
-        <p class="feed-empty-hint">Watching ${escapeHtml(handles)}. Add more handles in <code>site/social_accounts.json</code>, then:</p>
-        <pre class="feed-empty-cmd">python3 site/fetch_social.py
-python3 site/annotate_social.py</pre>
-      </div>`;
-      return;
-    }
-
-    if (!mention.cards.length) {
-      state.feedSelectedCode = null;
-      clearFeedTreemap();
-      const widenCount = trimmed ? feedSearchWiderRangeHits(posts, query) : 0;
-      root.innerHTML = `<div class="empty-state feed-empty">
-        <p>No player mentions for ${escapeHtml(rangeLabel)}.</p>
-        ${
-          widenCount
-            ? feedWidenRangeHintHTML(widenCount)
-            : `<p class="feed-empty-hint">Widen the date range, clear type/team filters, or pull fresher posts.</p>`
-        }
-      </div>`;
-      return;
-    }
-
-    const filtered = mention.cards.filter(
-      (card) => feedCardMatchesTeamFilter(card) && feedCardMatchesQuery(card, query)
-    );
-    if (!filtered.length) {
-      state.feedSelectedCode = null;
-      clearFeedTreemap();
-      const widenCount = trimmed ? feedSearchWiderRangeHits(posts, query) : 0;
-      root.innerHTML = `<div class="empty-state feed-empty" role="status">
-        <p>No players found${trimmed ? ` for “${escapeHtml(trimmed)}”` : ""} in ${escapeHtml(rangeLabel)}.</p>
-        ${
-          widenCount
-            ? feedWidenRangeHintHTML(widenCount)
-            : `<p class="feed-empty-hint">Try another name or team, or clear search / filters.</p>`
-        }
-      </div>`;
-      return;
-    }
-
-    if (
-      state.feedSelectedCode != null &&
-      !filtered.some((c) => String(c.code) === String(state.feedSelectedCode))
-    ) {
-      state.feedSelectedCode = null;
-    }
-
-    // Treemap stays on the full filtered set so selection can switch; cards narrow.
-    renderFeedTreemap(filtered, rangeLabel);
-    const cardsForList =
-      state.feedSelectedCode != null
-        ? filtered.filter((c) => String(c.code) === String(state.feedSelectedCode))
-        : filtered;
-
-    const playerSelected =
-      state.feedSelectedCode != null && !feedTreemapIsCompact();
-    if (el.feedTrending) {
-      el.feedTrending.classList.toggle("is-player-selected", playerSelected);
-    }
-
-    if (playerSelected && cardsForList.length === 1) {
-      root.innerHTML = feedPlayerCardHTML(cardsForList[0], postsById, 0, { detail: true });
-    } else {
-      const cards = cardsForList
-        .map((card, i) => feedPlayerCardHTML(card, postsById, i))
-        .join("");
-      root.innerHTML = `<div class="rankings-grid feed-player-grid">${cards}</div>`;
-    }
-
-    root.querySelectorAll("img.feed-player-photo").forEach((img) => {
-      img.addEventListener("error", () => {
-        const fallback = document.createElement("span");
-        fallback.className = "feed-player-photo feed-player-photo-fallback";
-        fallback.setAttribute("aria-hidden", "true");
-        fallback.textContent = img.getAttribute("data-initials") || "?";
-        img.replaceWith(fallback);
-      });
-    });
-  }
-
-
-  // ---------------------------------------------------------------------
   // Ownership page — multi-line selected_by% over manual check-ins
   // ---------------------------------------------------------------------
   const OWNERSHIP_TOP_PLAYERS = 100;
@@ -13120,7 +12054,7 @@ python3 site/annotate_social.py</pre>
 
 
   const PAGE_KEY = "fpl-explorer-page";
-  const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team"];
+  const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
 
   function storedPage() {
     try {
@@ -13140,7 +12074,6 @@ python3 site/annotate_social.py</pre>
     if (page === "ownership") return el.ownershipPage;
     if (page === "expected") return el.expectedPage;
     if (page === "schedule") return el.schedulePage;
-    if (page === "feed") return el.feedPage;
     if (page === "markets") return el.marketsPage;
     if (page === "team") return el.teamPage;
     return null;
@@ -13185,11 +12118,6 @@ python3 site/annotate_social.py</pre>
       ".schedule-grid > .schedule-card",
       ".schedule-scatter-head",
       ".schedule-scatter-point",
-      ".feed-treemap-head",
-      ".feed-treemap-cell",
-      ".feed-trending .feed-player-card",
-      ".feed-trending .feed-player-detail",
-      ".feed-trending .feed-source-row",
       ".team-player-row",
       ".team-empty-row",
       ".team-picker-row",
@@ -13212,16 +12140,6 @@ python3 site/annotate_social.py</pre>
         node.style.setProperty("--enter-i", String(i));
       });
       pane.querySelectorAll(".schedule-grid > .schedule-card").forEach((node, i) => {
-        node.style.setProperty("--enter-i", String(i));
-      });
-    }
-    // Feed: treemap cells get their own index (already set in HTML); cards
-    // restart so they don't inherit the treemap stagger.
-    if (pane.id === "feed-page") {
-      pane.querySelectorAll(".feed-treemap-cell").forEach((node, i) => {
-        node.style.setProperty("--enter-i", String(i));
-      });
-      pane.querySelectorAll(".feed-trending .feed-player-card, .feed-trending .feed-player-detail").forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
       });
     }
@@ -13345,24 +12263,9 @@ python3 site/annotate_social.py</pre>
     if (typeof updateMinsSlider === "function") updateMinsSlider();
     if (typeof syncFiltersResetUI === "function") syncFiltersResetUI();
 
-    if (el.feedSearch) el.feedSearch.value = "";
-    if (el.feedSearchWrap && !feedSearchAlwaysOpen()) {
-      el.feedSearchWrap.classList.remove("search-open");
-      if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
-    }
-    state.feedTeamFilter.clear();
-    state.feedTypeFilter.clear();
-    state.feedRange = "today";
-    state.feedSelectedCode = null;
-    if (typeof syncFeedRangeSeg === "function") syncFeedRangeSeg();
-    if (typeof buildFeedTypeChips === "function") buildFeedTypeChips();
-    if (typeof buildFeedTeamChips === "function") buildFeedTeamChips();
-    if (typeof syncFeedFiltersToggle === "function") syncFeedFiltersToggle();
-
     syncSearchClearBtns();
     if (rerender) {
-      if (state.page === "feed") renderFeed();
-      else if (state.page === "opta" || state.page === "rankings" || state.page === "team" || state.page === "ownership") renderTable();
+      if (state.page === "opta" || state.page === "rankings" || state.page === "team" || state.page === "ownership") renderTable();
       if (state.page === "rankings") renderRankings();
     }
   }
@@ -13470,7 +12373,6 @@ python3 site/annotate_social.py</pre>
       resetSearchAndFiltersForNavigation({ rerender: false });
       if (page === "team" || prev === "team") buildTeamFilterChips();
     }
-    if (page === "feed") syncFeedSearchLayout();
     if (page !== "team" && el.subtoolbar) el.subtoolbar.classList.remove("is-team-picking");
     syncTeamSearchHost();
     syncTeamCompareHost();
@@ -13483,7 +12385,6 @@ python3 site/annotate_social.py</pre>
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
     el.pageExpected.classList.toggle("active", page === "expected");
     el.pageSchedule.classList.toggle("active", page === "schedule");
-    if (el.pageFeed) el.pageFeed.classList.toggle("active", page === "feed");
     if (el.pageMarkets) el.pageMarkets.classList.toggle("active", page === "markets");
     if (el.pageTeam) el.pageTeam.classList.toggle("active", page === "team");
     syncPageTabCloneActive(page);
@@ -13496,7 +12397,6 @@ python3 site/annotate_social.py</pre>
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
     el.expectedPage.style.display = page === "expected" ? "" : "none";
     el.schedulePage.style.display = page === "schedule" ? "" : "none";
-    if (el.feedPage) el.feedPage.style.display = page === "feed" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
     if (el.teamPage) el.teamPage.style.display = page === "team" ? "" : "none";
     syncTeamLandscapeMode();
@@ -13508,38 +12408,24 @@ python3 site/annotate_social.py</pre>
       isMarkets ||
       isHome ||
       (preferMobileSheet() && page === "rankings");
-    const isFeed = page === "feed";
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
     el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
     el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
     el.subtoolbar.classList.toggle("is-opta-mobile", page === "opta" && preferMobileSheet());
     el.sidebar.style.display =
-      page === "schedule" || isMarkets || isFeed || isHome || (page === "team" && !state.teamPickerSlot)
+      page === "schedule" || isMarkets || isHome || (page === "team" && !state.teamPickerSlot)
         ? "none"
         : "";
     if (el.sidebarToggle) {
       el.sidebarToggle.style.display =
         page === "team" && !state.teamPickerSlot ? "none" : "";
     }
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets || isHome ? "none" : "";
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed || isHome ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
     if (el.teamToolbarMode) el.teamToolbarMode.hidden = page !== "team";
     if (prev !== page) disarmConfirmButton();
     syncTeamPlannerPrefsBtns();
-    if (el.feedToolbarStart) el.feedToolbarStart.style.display = isFeed ? "" : "none";
-    if (el.feedToolbarEnd) el.feedToolbarEnd.style.display = isFeed ? "" : "none";
-    if (el.feedControls) {
-      if (isFeed) {
-        el.feedControls.style.display = "";
-        el.feedControls.hidden = false;
-        syncFeedFiltersToggle();
-      } else {
-        el.feedControls.classList.add("collapsed");
-        el.feedControls.style.display = "none";
-        syncFeedFiltersToggle();
-      }
-    }
     if (el.columnsSidebar) {
       el.columnsSidebar.style.display = "none";
     }
@@ -13637,8 +12523,6 @@ python3 site/annotate_social.py</pre>
     } else if (page === "schedule") {
       updateScheduleGwSlider();
       renderSchedule();
-    } else if (page === "feed") {
-      renderFeed();
     } else if (page === "markets") {
       renderMarkets();
     } else if (page === "opta") {
@@ -13808,7 +12692,6 @@ python3 site/annotate_social.py</pre>
     });
   }
   el.pageSchedule.addEventListener("click", () => setPage("schedule"));
-  if (el.pageFeed) el.pageFeed.addEventListener("click", () => setPage("feed"));
   if (el.pageTrayBtn) {
     el.pageTrayBtn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -13857,7 +12740,6 @@ python3 site/annotate_social.py</pre>
     if (id === "page-team") return "team";
     if (id === "page-expected") return "expected";
     if (id === "page-schedule") return "schedule";
-    if (id === "page-feed") return "feed";
     if (id === "page-markets") return "markets";
     const host = btn.closest("[data-page-clone]");
     return host ? host.getAttribute("data-page-clone") : null;
@@ -13904,7 +12786,6 @@ python3 site/annotate_social.py</pre>
       team: "page-team",
       expected: "page-expected",
       schedule: "page-schedule",
-      feed: "page-feed",
       markets: "page-markets",
     };
     const btn = idByPage[page] ? tabs.querySelector(`#${idByPage[page]}`) : null;
@@ -14282,178 +13163,11 @@ python3 site/annotate_social.py</pre>
     renderExpected();
   });
 
-  if (el.feedFiltersToggle) {
-    el.feedFiltersToggle.addEventListener("click", () => {
-      const open = hasFineHover()
-        ? el.feedControls && el.feedControls.classList.contains("collapsed")
-        : !(mobileSheetOpen && mobileSheetKey === "feed-filters");
-      setFeedFiltersOpen(!!open);
-    });
-  }
-
-  if (el.feedRangeSeg) {
-    el.feedRangeSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-feed-range]");
-      if (!btn) return;
-      const range = btn.dataset.feedRange;
-      if (!range || range === state.feedRange) return;
-      if (range !== "today" && range !== "3d" && range !== "7d") return;
-      state.feedRange = range;
-      syncFeedRangeSeg();
-      syncFeedFiltersToggle();
-      renderFeed();
-    });
-  }
-
-  const feedResultsRoot = el.feedTrending || el.feedList;
-  if (feedResultsRoot) {
-    feedResultsRoot.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-feed-widen]");
-      if (!btn) return;
-      const range = btn.dataset.feedWiden;
-      if (range !== "today" && range !== "3d" && range !== "7d") return;
-      if (range === state.feedRange) return;
-      state.feedRange = range;
-      syncFeedRangeSeg();
-      syncFeedFiltersToggle();
-      renderFeed();
-    });
-  }
-
-  function clearFeedTypeFilter() {
-    state.feedTypeFilter.clear();
-    buildFeedTypeChips();
-    syncFeedFiltersToggle();
-    renderFeed();
-  }
-
-  function clearFeedTeamFilter() {
-    state.feedTeamFilter.clear();
-    buildFeedTeamChips();
-    syncFeedFiltersToggle();
-    renderFeed();
-  }
-
-  if (el.feedResetTypes) {
-    el.feedResetTypes.addEventListener("click", clearFeedTypeFilter);
-    el.feedResetTypes.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        clearFeedTypeFilter();
-      }
-    });
-  }
-  if (el.feedResetTeams) {
-    el.feedResetTeams.addEventListener("click", clearFeedTeamFilter);
-    el.feedResetTeams.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        clearFeedTeamFilter();
-      }
-    });
-  }
-
-  function feedSearchAlwaysOpen() {
-    return !hasFineHover() || NARROW_MQ.matches;
-  }
-
-  function closeFeedSearch({ clear = false } = {}) {
-    if (!el.feedSearchWrap) return;
-    if (feedSearchAlwaysOpen()) {
-      if (clear && el.feedSearch) {
-        el.feedSearch.value = "";
-        renderFeed();
-      }
-      syncSearchClearBtns();
-      return;
-    }
-    el.feedSearchWrap.classList.remove("search-open");
-    if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
-    if (clear && el.feedSearch) {
-      el.feedSearch.value = "";
-      renderFeed();
-    }
-    syncSearchClearBtns();
-  }
-
-  function openFeedSearch() {
-    if (!el.feedSearchWrap) return;
-    el.feedSearchWrap.classList.add("search-open");
-    if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "true");
-    syncSearchClearBtns();
-    requestAnimationFrame(() => {
-      if (el.feedSearch) el.feedSearch.focus({ preventScroll: true });
-    });
-  }
-
-  function syncFeedSearchLayout() {
-    if (!el.feedSearchWrap) return;
-    if (feedSearchAlwaysOpen()) {
-      el.feedSearchWrap.classList.add("search-open", "feed-search-always-open");
-      if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "true");
-    } else {
-      el.feedSearchWrap.classList.remove("feed-search-always-open");
-      if (!(el.feedSearch && el.feedSearch.value.trim())) {
-        el.feedSearchWrap.classList.remove("search-open");
-        if (el.feedSearchToggle) el.feedSearchToggle.setAttribute("aria-expanded", "false");
-      }
-    }
-    syncSearchClearBtns();
-  }
-
-  if (el.feedSearchToggle) {
-    el.feedSearchToggle.addEventListener("click", () => {
-      if (feedSearchAlwaysOpen()) return;
-      if (el.feedSearchWrap && el.feedSearchWrap.classList.contains("search-open")) {
-        closeFeedSearch();
-      } else {
-        openFeedSearch();
-      }
-    });
-  }
-
-  if (el.feedSearch) {
-    let feedSearchTimer;
-    el.feedSearch.addEventListener("input", () => {
-      syncSearchClearBtns();
-      clearTimeout(feedSearchTimer);
-      feedSearchTimer = setTimeout(() => renderFeed(), 120);
-    });
-    el.feedSearch.addEventListener("focus", () => {
-      syncSearchClearBtns();
-    });
-    el.feedSearch.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (feedSearchAlwaysOpen()) {
-          if (el.feedSearch.value) {
-            el.feedSearch.value = "";
-            renderFeed();
-            syncSearchClearBtns();
-          } else {
-            el.feedSearch.blur();
-          }
-        } else {
-          closeFeedSearch();
-        }
-      }
-    });
-  }
-
-  document.addEventListener("click", (e) => {
-    if (feedSearchAlwaysOpen()) return;
-    if (!el.feedSearchWrap || !el.feedSearchWrap.classList.contains("search-open")) return;
-    if (el.feedSearchWrap.contains(e.target)) return;
-    if (el.feedSearch && el.feedSearch.value.trim()) return;
-    closeFeedSearch();
-  });
-
   let searchTimer;
 
   function syncSearchClearBtns() {
     const pairs = [
       { input: el.search, btn: el.searchClearBtn, wrap: el.searchWrap },
-      { input: el.feedSearch, btn: el.feedSearchClearBtn, wrap: el.feedSearchWrap },
     ];
     for (const { input, btn, wrap } of pairs) {
       if (!btn) continue;
@@ -14479,15 +13193,6 @@ python3 site/annotate_social.py</pre>
       if (!state.teamPickerSlot) return;
       renderTeam();
     } else if (state.page !== "rankings") renderTable();
-  }
-
-  function clearFeedSearchInput() {
-    if (el.feedSearch) {
-      el.feedSearch.value = "";
-      el.feedSearch.focus({ preventScroll: true });
-    }
-    syncSearchClearBtns();
-    renderFeed();
   }
 
   function teamSearchAlwaysOpen() {
@@ -14651,13 +13356,6 @@ python3 site/annotate_social.py</pre>
       e.preventDefault();
       e.stopPropagation();
       clearMainSearch();
-    });
-  }
-  if (el.feedSearchClearBtn) {
-    el.feedSearchClearBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      clearFeedSearchInput();
     });
   }
 
@@ -15852,10 +14550,6 @@ python3 site/annotate_social.py</pre>
   // ---------------------------------------------------------------------
   async function init() {
     buildStaticFilters();
-    buildFeedTypeChips();
-    buildFeedTeamChips();
-    syncFeedRangeSeg();
-    syncFeedSearchLayout();
     upgradeNativeTitles();
     renderPriceIssuesPanel();
     // Filters start closed on every page and viewport; the toolbar button opens them.
@@ -15908,7 +14602,6 @@ python3 site/annotate_social.py</pre>
     }
     window.addEventListener("resize", () => {
       syncAllSegThumbs({ animate: false });
-      syncFeedSearchLayout();
       syncTeamSearchHost();
       syncTeamCompareHost();
       syncPageTabsScrollHints();
@@ -15927,7 +14620,6 @@ python3 site/annotate_social.py</pre>
     if (typeof NARROW_MQ.addEventListener === "function") {
       NARROW_MQ.addEventListener("change", () => {
         syncMobileLayoutClass();
-        syncFeedSearchLayout();
         syncTeamSearchHost();
         syncTeamCompareHost();
         syncTeamPickerCancelHost();
@@ -15947,7 +14639,6 @@ python3 site/annotate_social.py</pre>
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
         syncMobileLayoutClass();
-        syncFeedSearchLayout();
         syncTeamSearchHost();
         syncTeamCompareHost();
         syncTeamPickerCancelHost();

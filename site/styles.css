@@ -11983,14 +11983,29 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-status-dot.is-done {
   background: hsl(var(--muted-foreground) / 0.45);
 }
-.home-play-left {
+.home-play-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
+}
+.home-play-live {
+  color: var(--text-dim);
+}
+.home-play-live.is-active {
+  color: hsl(142 55% 38%);
+}
+.home-play-sep {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.home-play-left {
   color: var(--text-dim);
 }
 .home-play-left.is-active {
-  color: hsl(142 55% 38%);
+  color: var(--text);
 }
 @keyframes home-live-pulse {
   0% { box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45); }
