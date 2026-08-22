@@ -31,6 +31,9 @@ UA = "fpl-explorer/1.0 (+ownership-checkin)"
 FPL_POS_MAP = {"GKP": "GK", "DEF": "DEF", "MID": "MID", "FWD": "FWD"}
 DATE_RE = __import__("re").compile(r"bootstrap-static_(\d{4}-\d{2}-\d{2})\.json$")
 
+sys.path.insert(0, str(SITE))
+from fpl_gameweeks import extract_gameweeks  # noqa: E402
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -121,15 +124,31 @@ def write_ownership_js(payload: dict) -> None:
     OUT_PATH.write_text(f"window.FPL_OWNERSHIP = {body};\n", encoding="utf-8")
 
 
+def gameweeks_from_latest_snapshot() -> dict:
+    """Prev/current/next GW from the newest bootstrap snapshot on disk."""
+    paths = snapshot_paths()
+    if not paths:
+        return {"previous": None, "current": None, "next": None, "source": None}
+    path = paths[-1]
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"skip gameweeks from {path.name}: {exc}", file=sys.stderr)
+        return {"previous": None, "current": None, "next": None, "source": None}
+    return extract_gameweeks(snap, path.name)
+
+
 def rebuild_bundle() -> dict:
     check_ins = []
     for path in snapshot_paths():
         row = slim_checkin(path)
         if row:
             check_ins.append(row)
+    gameweeks = gameweeks_from_latest_snapshot()
     payload = {
         "generatedAt": generated_at(),
         "checkIns": check_ins,
+        "gameweeks": gameweeks,
     }
     write_ownership_js(payload)
     return payload
@@ -159,9 +178,15 @@ def main() -> int:
     payload = rebuild_bundle()
     n_ci = len(payload["checkIns"])
     n_pl = len(payload["checkIns"][-1]["players"]) if n_ci else 0
+    gw = payload.get("gameweeks") or {}
+    gw_bits = []
+    for label, key in (("prev", "previous"), ("curr", "current"), ("next", "next")):
+        row = gw.get(key)
+        gw_bits.append(f"{label}={row['id'] if row else '—'}")
     print(
         f"Wrote {OUT_PATH.relative_to(ROOT)}: {n_ci} check-in{'s' if n_ci != 1 else ''}"
         + (f", latest {n_pl} players" if n_ci else "")
+        + f"; gameweeks {' '.join(gw_bits)}"
     )
     if not n_ci:
         print("No non-archived bootstrap-static_YYYY-MM-DD.json files in snapshots/.", file=sys.stderr)

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import re
 import time
 import urllib.error
@@ -153,6 +155,17 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def do_OPTIONS(self):
+        parsed = urlparse(self.path)
+        if parsed.path.rstrip("/") in {"/api/home-prefs", "/api/refresh-home"}:
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+            return
+        self.send_error(404)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path.rstrip("/") == "/api/fpl/squad":
@@ -165,13 +178,104 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as exc:  # noqa: BLE001
                 return self._json(502, {"ok": False, "error": str(exc)})
             return self._json(status, body)
+        if parsed.path.rstrip("/") == "/api/home-prefs":
+            prefs_path = ROOT / "home_prefs.json"
+            if prefs_path.exists():
+                try:
+                    data = json.loads(prefs_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    data = {}
+            else:
+                data = {}
+            return self._json(200, {"ok": True, "prefs": data})
         return super().do_GET()
+
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        raw_body = self.rfile.read(length) if length else b"{}"
+        try:
+            return json.loads(raw_body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            return None
+
+    def _write_home_prefs(self, body: dict):
+        out = {}
+        manager_id = body.get("managerId")
+        league_id = body.get("leagueId")
+        if manager_id is not None and str(manager_id).strip() != "":
+            mid = str(manager_id).strip()
+            if not re.fullmatch(r"\d+", mid) or int(mid) <= 0:
+                return None, "Invalid managerId"
+            out["managerId"] = int(mid)
+        if league_id is not None and str(league_id).strip() != "":
+            lid = str(league_id).strip()
+            if not re.fullmatch(r"\d+", lid) or int(lid) <= 0:
+                return None, "Invalid leagueId"
+            out["leagueId"] = int(lid)
+        prefs_path = ROOT / "home_prefs.json"
+        prefs_path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+        return out, None
+
+    def _parse_home_data_js(self):
+        path = ROOT / "home_data.js"
+        if not path.exists():
+            return None
+        text = path.read_text(encoding="utf-8").strip()
+        # window.FPL_HOME = {...};
+        if "=" not in text:
+            return None
+        raw = text.split("=", 1)[1].strip().rstrip(";").strip()
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    def _run_fetch_home(self):
+        script = ROOT / "fetch_home.py"
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(ROOT.parent),
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        return proc
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        route = parsed.path.rstrip("/")
+        if route not in {"/api/home-prefs", "/api/refresh-home"}:
+            self.send_error(404)
+            return
+        body = self._read_json_body()
+        if body is None:
+            return self._json(400, {"ok": False, "error": "Invalid JSON"})
+        prefs, err = self._write_home_prefs(body)
+        if err:
+            return self._json(400, {"ok": False, "error": err})
+        if route == "/api/home-prefs":
+            return self._json(200, {"ok": True, "prefs": prefs})
+        # /api/refresh-home — rebuild home_data.js for current prefs, return payload.
+        try:
+            proc = self._run_fetch_home()
+        except subprocess.TimeoutExpired:
+            return self._json(504, {"ok": False, "error": "fetch_home timed out"})
+        except OSError as exc:
+            return self._json(500, {"ok": False, "error": str(exc)})
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "fetch_home failed").strip()
+            return self._json(502, {"ok": False, "error": detail[-800:], "prefs": prefs})
+        home = self._parse_home_data_js()
+        if not home:
+            return self._json(500, {"ok": False, "error": "home_data.js missing or invalid", "prefs": prefs})
+        return self._json(200, {"ok": True, "prefs": prefs, "home": home})
 
     def _json(self, status: int, body: dict):
         raw = json.dumps(body).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -184,7 +288,7 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     host, port = "127.0.0.1", 8000
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"Serving {ROOT} at http://{host}:{port} (with /api/fpl/squad)")
+    print(f"Serving {ROOT} at http://{host}:{port} (with /api/fpl/squad, /api/home-prefs, /api/refresh-home)")
     httpd.serve_forever()
 
 

@@ -9,6 +9,25 @@
   const SOCIAL = window.FPL_SOCIAL || { generatedAt: null, accounts: [], posts: [] };
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
   const OWNERSHIP = window.FPL_OWNERSHIP || { generatedAt: null, checkIns: [] };
+  const LEAGUES = window.FPL_LEAGUES || { generatedAt: null, managers: [], leagues: [] };
+  const HOME = window.FPL_HOME || {
+    generatedAt: null,
+    gw: null,
+    managerId: null,
+    leagueId: null,
+    summary: null,
+    squad: [],
+    standings: [],
+    ownersByElement: {},
+    error: null,
+  };
+  window.FPL_HOME = HOME;
+  // Prefer ownership bundle (refreshed with bootstrap) over build-time data.js.
+  const GAMEWEEKS =
+    OWNERSHIP.gameweeks ||
+    DATA.gameweeks ||
+    (DATA.fixturesMeta && DATA.fixturesMeta.gameweeks) ||
+    { previous: null, current: null, next: null, source: null };
   const TEAM_NAMES = { ...DATA.teamNames, ...(DATA.fixtureTeamNames || {}) };
   const TEAM_BADGES = DATA.teamBadges || {}; // short code -> "badges/XXX.svg" (only where art exists)
   // Dark-surface variants (navy/black crests that disappear on dark UI).
@@ -66,13 +85,9 @@
   const FIXTURE_TT_COUNT = 7;
   const OWNERSHIP_FILTER_DEFAULT = 5;
   const OWNERSHIP_FILTER_MAX = 100;
-  const OWNERSHIP_TREND_THRESHOLD_DEFAULT = 0.5;
-  const OWNERSHIP_TREND_THRESHOLD_MAX = 5;
   // Lookback in check-ins (1 / 3 / 7). Maps to ~1 / 3 / 7 days once snapshots are daily.
+  // Chart + cards color only the top N risers/fallers for that window.
   const OWNERSHIP_TREND_WINDOW_DEFAULT = 1;
-  // Longer windows accumulate noise — scale the pp gate so Last 3 / Last 7
-  // still surface stronger moves rather than everyday drift.
-  const OWNERSHIP_TREND_THRESHOLD_SCALE = { 1: 1, 3: 2, 7: 3 };
   // Statistics-page fixture tooltip shading — wider than the players Enhance
   // default (10%) so tough/soft opponents read clearly in fixture tips.
   const FIXTURE_TT_ENHANCE_PCT = 30;
@@ -82,6 +97,53 @@
     .filter(Number.isFinite);
   const SCHEDULE_GW_MIN = FIXTURE_GAMEWEEKS.length ? Math.min(...FIXTURE_GAMEWEEKS) : 1;
   const SCHEDULE_GW_MAX = FIXTURE_GAMEWEEKS.length ? Math.max(...FIXTURE_GAMEWEEKS) : 38;
+
+  // FPL triad: current when a GW is live; otherwise next (preseason / between GWs).
+  function activeGameweek() {
+    const cur = Number(GAMEWEEKS.current && GAMEWEEKS.current.id);
+    if (Number.isFinite(cur)) return cur;
+    const nxt = Number(GAMEWEEKS.next && GAMEWEEKS.next.id);
+    if (Number.isFinite(nxt)) return nxt;
+    const meta = DATA.fixturesMeta || {};
+    const active = Number(meta.activeGw != null ? meta.activeGw : meta.currentGw);
+    if (Number.isFinite(active)) return active;
+    return SCHEDULE_GW_MIN;
+  }
+
+  // Planning horizon: next GW while current is live; else next/active.
+  // Used by Team heat, Matchups defaults, and fixture tooltips.
+  function planningGameweek() {
+    const cur = Number(GAMEWEEKS.current && GAMEWEEKS.current.id);
+    const nxt = Number(GAMEWEEKS.next && GAMEWEEKS.next.id);
+    let n;
+    if (Number.isFinite(cur)) {
+      n = Number.isFinite(nxt) ? nxt : cur + 1;
+    } else if (Number.isFinite(nxt)) {
+      n = nxt;
+    } else {
+      n = Number(activeGameweek());
+    }
+    if (Number.isFinite(n) && n >= SCHEDULE_GW_MIN) {
+      return Math.min(n, SCHEDULE_GW_MAX);
+    }
+    return SCHEDULE_GW_MIN;
+  }
+
+  function defaultScheduleGwWindow() {
+    const start = Math.min(
+      SCHEDULE_GW_MAX,
+      Math.max(SCHEDULE_GW_MIN, planningGameweek())
+    );
+    return [start, Math.min(start + FIXTURE_TT_COUNT - 1, SCHEDULE_GW_MAX)];
+  }
+  const [SCHEDULE_GW_DEFAULT_MIN, SCHEDULE_GW_DEFAULT_MAX] = defaultScheduleGwWindow();
+
+  function planningFixturesForTeam(teamCode, count = FIXTURE_TT_COUNT) {
+    const startGw = planningGameweek();
+    return (FIXTURES_BY_TEAM[teamCode] || [])
+      .filter((fx) => Number(fx.gw) >= startGw)
+      .slice(0, count);
+  }
   // Whether build.py's 2026/27 price match ran — used to exclude players with
   // no price2627 (departed / not on the current FPL list).
   const HAS_PRICE_DATA = !!(DATA.newSeasonPriceMeta && DATA.newSeasonPriceMeta.source);
@@ -95,18 +157,9 @@
   // Fit % is precomputed from each file's viewBox aspect (rsvg raster check);
   // square/circular art stays at 100. Regenerate: compare max/min viewBox sides,
   // pct = clamp(74, 100, round(100 * 1.05 / ratio)) when ratio > 1.08.
-  const CREST_FIT_PCT = {
-    "badges/ARS.svg": 87,
-    "badges/AVL.svg": 78,
-    "badges/BOU.svg": 80,
-    "badges/COV.svg": 81,
-    "badges/FUL.svg": 79,
-    "badges/HUL.svg": 83,
-    "badges/IPS.svg": 84,
-    "badges/LEE.svg": 87,
-    // Spurs stays at 100: the cockerel is a narrow figure, not a wide shield, so
-    // full box height reads the same weight as Liverpool's liver bird.
-  };
+  // Rounded color-tile badges are already square with internal padding — no
+  // per-crest shrink. (Legacy tall shields used fit % here.)
+  const CREST_FIT_PCT = {};
 
   function badgeHTML(teamCode, className) {
     const src = TEAM_BADGES[teamCode];
@@ -149,11 +202,6 @@
     return `hsl(var(--fdr-hard) / ${alpha})`;
   }
 
-  // Shared intensity ramp for Enhance (green/red) and Team FDR (blue/pink).
-  // Intensity 1 = strongest in the band. Low intensities must be able to
-  // reach ~0 so the tail melts into the row; leaders still punch.
-  // Light-mode easy stays a wash (dark text). Dark mode / hard ends still
-  // solidify toward black for white text.
   function spectrumHighlightPaint(isEasy, intensity, palette) {
     const t = Math.min(1, Math.max(0, Number(intensity) || 0));
     if (t < 0.04) {
@@ -214,19 +262,6 @@
     });
   }
 
-  function applyEnhanceHighlight(td, kind, intensity) {
-    const paint = enhanceHighlightPaint(kind, intensity);
-    if (paint.skip) return;
-    td.classList.add("is-enhanced");
-    if (paint.emphasize || paint.strong) {
-      td.classList.add(kind === "top" ? "highlight-top" : "highlight-bottom");
-    }
-    td.classList.toggle("highlight-strong", paint.strong);
-    td.style.setProperty("--hl-fill", paint.backgroundColor);
-    td.style.removeProperty("background-color");
-    td.style.removeProperty("color");
-  }
-
   function enhanceHighlightInlineStyle(kind, intensity) {
     const paint = enhanceHighlightPaint(kind, intensity);
     if (paint.skip) return { style: "", strongClass: "" };
@@ -253,65 +288,21 @@
     };
   }
 
-  // ---------------------------------------------------------------------
-  // Column definitions
-  // ---------------------------------------------------------------------
-  const PLAYER_COLS = [
-    { key: "player", label: "Player", type: "player", pin: true },
-    { key: "price", label: "£m", decimals: 1, group: "Core", title: "Price (£m)" },
-    { key: "owned", label: "TSB%", decimals: 1, group: "Core", title: "FPL selected-by-% (TSB)" },
-    { key: "apps", label: "Apps", decimals: 0, group: "Core", title: "Appearances" },
-    { key: "mins", label: "Mins", decimals: 0, group: "Core", title: "Minutes played" },
-    { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
-    { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
-    { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
-    { key: "bigChances", label: "BC", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Big chances" },
-    { key: "xg", label: "xG", decimals: 1, group: "Attack", section: "Goal Threat", rate: true, title: "Expected goals" },
-    { key: "goals", label: "G", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Goals" },
-    { key: "keyPasses", label: "KP", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Key passes" },
-    { key: "bigChancesCreated", label: "BCC", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Big chances created" },
-    { key: "xa", label: "xA", decimals: 1, group: "Creativity", section: "Creativity", rate: true, title: "Expected assists" },
-    { key: "assists", label: "A", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Assists" },
-    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets (FPL API, 2025/26 combined only)" },
-    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded while on the pitch — recorded for every position, though only keepers and defenders are docked points for them (FPL API, 2025/26 combined only)" },
-    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded while on the pitch — recorded for every position (FPL API, 2025/26 combined only)" },
-    { key: "saves", label: "Saves", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Saves — goalkeepers (FPL API, 2025/26 combined only)" },
-    { key: "__cbitr", label: "CBIT/R", decimals: 0, group: "Defence", section: "Defensive", rate: true, derived: true, title: "Clearances, blocks, interceptions & tackles (+ recoveries for MID/FWD). Combined view only." },
-    { key: "xPts", label: "xPts", decimals: 1, group: "Points", section: "FPL", rate: true, title: "Expected FPL points" },
-    { key: "bps", label: "BPS", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points system score" },
-    { key: "bonus", label: "B", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points" },
-    { key: "defCon", label: "DC", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Defensive contribution points earned (2 per match at the position's action threshold)" },
-    { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points", strong: true },
-    { key: "__gi", label: "G+A", decimals: 0, group: "Combined", section: "Combined", derived: true, rate: true, title: "Goals + assists" },
-    { key: "xgi", label: "xGI", decimals: 1, group: "Combined", section: "Combined", rate: true, title: "Expected goal involvements (FPL API, 2025/26 combined only)" },
-    { key: "penaltiesOrder", label: "PK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice penalty taker" },
-    { key: "directFreekicksOrder", label: "FK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice direct free kick taker" },
-    { key: "cornersOrder", label: "CK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice corners & indirect free kick taker" },
-  ];
+  function applyEnhanceHighlight(td, kind, intensity) {
+    const paint = enhanceHighlightPaint(kind, intensity);
+    if (paint.skip) return;
+    td.classList.add("is-enhanced");
+    if (paint.emphasize || paint.strong) {
+      td.classList.add(kind === "top" ? "highlight-top" : "highlight-bottom");
+    }
+    td.classList.toggle("highlight-strong", paint.strong);
+    td.style.setProperty("--hl-fill", paint.backgroundColor);
+    td.style.removeProperty("background-color");
+    td.style.removeProperty("color");
+  }
 
-  const TEAM_COLS = [
-    { key: "name", label: "Team", type: "name", pin: true },
-    { key: "gp", label: "GP", decimals: 0, group: "Core", title: "Gameweeks played" },
-    { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
-    { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
-    { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
-    { key: "bigChances", label: "BC", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Big chances" },
-    { key: "xg", label: "xG", decimals: 1, group: "Attack", section: "Goal Threat", rate: true, title: "Expected goals" },
-    { key: "goals", label: "G", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Goals" },
-    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded" },
-    { key: "xcs", label: "xCS", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected clean sheets" },
-    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded" },
-    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets" },
-    { key: "xgd", label: "xGD", decimals: 1, group: "Overall", section: "Overall", rate: true, title: "Expected goal difference (xG − xGC)" },
-    { key: "gd", label: "GD", decimals: 0, group: "Overall", section: "Overall", title: "Goal difference (goals − conceded)" },
-    { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points scored by the squad", strong: true },
-    { key: "__ppg", label: "Pts/GP", decimals: 1, group: "Derived", section: "Derived", derived: true, title: "Points per gameweek played" },
-    { key: "__gpg", label: "G/GP", decimals: 1, group: "Derived", section: "Derived", derived: true, title: "Goals per gameweek played" },
-  ];
 
-  // Concise display titles shared by Rankings cards and the Columns settings
-  // panel. Keep OPTA table header tooltips on col.title — these overrides only
-  // change the friendlier labels shown in those surfaces.
+
   const METRIC_TITLE_OVERRIDES = {
     players: {
       cleanSheets: "Clean sheets",
@@ -342,8 +333,8 @@
     "cleanSheets", "goalsConceded", "xgc", "saves", "__cbitr", "xgi",
   ]);
   // Columns exempt from Enhance ranking even though they're numeric.
-  const ENHANCE_EXCLUDE = new Set(["price", "owned", "apps", "gp"]);
-  const CORE_COL_KEYS = new Set(["price", "owned", "apps", "mins", "gp"]);
+  const ENHANCE_EXCLUDE = new Set(["price", "owned", "apps", "starts", "gp"]);
+  const CORE_COL_KEYS = new Set(["price", "owned", "apps", "starts", "mins", "gp"]);
   const ENHANCE_PCT_MIN = 2;
   const ENHANCE_PCT_MAX = 40;
   const ENHANCE_PCT_PLAYERS = 5;
@@ -412,17 +403,21 @@
     DATA.teams[split].forEach((r) => deriveExtra(r, true));
   });
 
-  // Zero-stat 2026/27 view: full FPL bootstrap squad (promoted clubs included;
-  // relegated clubs absent). Built lazily once from DATA.nextSeasonPlayers.
-  const PLAYER_ZERO_KEYS = [
-    "apps", "mins", "shots", "shotsOnTarget", "touchesBox", "bigChances",
-    "xg", "goals", "keyPasses", "bigChancesCreated", "xa", "assists",
-    "xPts", "bps", "bonus", "defCon", "pts",
-    "cleanSheets", "goalsConceded", "xgc", "saves", "xgi", "cbit", "cbitr",
+  // 2026/27 view: full FPL bootstrap squad with season-to-date API stats.
+  // Hub/OPTA-only columns stay zero (no FPL equivalent).
+  const PLAYER_OPTA_ONLY_KEYS = [
+    "shots", "shotsOnTarget", "touchesBox", "bigChances",
+    "keyPasses", "bigChancesCreated", "xPts",
   ];
-  const TEAM_ZERO_KEYS = [
-    "gp", "shots", "shotsOnTarget", "touchesBox", "bigChances", "xg",
-    "goals", "xgc", "xcs", "goalsConceded", "cleanSheets", "xgd", "gd", "pts",
+  const PLAYER_FPL_STAT_KEYS = [
+    "apps", "starts", "mins", "xg", "goals", "xa", "assists", "bps", "bonus", "pts",
+    "cleanSheets", "goalsConceded", "xgc", "saves", "xgi", "cbit", "cbitr", "defCon",
+  ];
+  const TEAM_OPTA_ONLY_KEYS = [
+    "shots", "shotsOnTarget", "touchesBox", "bigChances", "xcs",
+  ];
+  const TEAM_FPL_STAT_KEYS = [
+    "gp", "xg", "goals", "xgc", "goalsConceded", "cleanSheets", "xgd", "gd", "pts",
   ];
   let season2627Cache = null;
 
@@ -433,49 +428,69 @@
     return TEAM_NAMES[code] || code;
   }
 
+  function nextSeasonSplitLists(raw) {
+    // New builds ship {home,away,combined}; older data.js may still be a flat array.
+    if (Array.isArray(raw)) {
+      return { home: raw, away: raw, combined: raw };
+    }
+    return {
+      home: (raw && raw.home) || [],
+      away: (raw && raw.away) || [],
+      combined: (raw && raw.combined) || [],
+    };
+  }
+
   function buildSeason2627Data() {
-    const roster = DATA.nextSeasonPlayers || [];
+    const playerLists = nextSeasonSplitLists(DATA.nextSeasonPlayers);
+    const teamLists = nextSeasonSplitLists(DATA.nextSeasonTeams);
     const players = { home: [], away: [], combined: [] };
-    roster.forEach((src) => {
-      const row = {
-        id: src.id,
-        name: src.name,
-        team: src.team,
-        position: src.position,
-        price: src.price,
-        price2627: src.price,
-        priceDelta: 0,
-        newTeam: src.team,
-        newPosition: src.position,
-        status: "ok",
-        code: src.code,
-        penaltiesOrder: src.penaltiesOrder ?? null,
-        directFreekicksOrder: src.directFreekicksOrder ?? null,
-        cornersOrder: src.cornersOrder ?? null,
-      };
-      PLAYER_ZERO_KEYS.forEach((k) => {
-        row[k] = 0;
-      });
-      deriveExtra(row, false);
-      // No H/A splits yet — same zero row for every fixture-location view.
-      ["home", "away", "combined"].forEach((split) => {
-        players[split].push({ ...row });
+    ["home", "away", "combined"].forEach((split) => {
+      (playerLists[split] || []).forEach((src) => {
+        const row = {
+          id: src.id,
+          name: src.name,
+          team: src.team,
+          position: src.position,
+          price: src.price,
+          price2627: src.price,
+          priceDelta: 0,
+          newTeam: src.team,
+          newPosition: src.position,
+          status: "ok",
+          code: src.code,
+          penaltiesOrder: src.penaltiesOrder ?? null,
+          directFreekicksOrder: src.directFreekicksOrder ?? null,
+          cornersOrder: src.cornersOrder ?? null,
+        };
+        PLAYER_FPL_STAT_KEYS.forEach((k) => {
+          row[k] = src[k] != null ? src[k] : 0;
+        });
+        PLAYER_OPTA_ONLY_KEYS.forEach((k) => {
+          row[k] = 0;
+        });
+        deriveExtra(row, false);
+        players[split].push(row);
       });
     });
 
     const teamCodes = NEXT_SEASON_TEAM_CODES.length ? NEXT_SEASON_TEAM_CODES : ALL_TEAM_CODES;
     const teams = { home: [], away: [], combined: [] };
-    teamCodes.forEach((code) => {
-      const base = {
-        team: code,
-        name: NEXT_SEASON_TEAM_NAMES[code] || TEAM_NAMES[code] || code,
-      };
-      TEAM_ZERO_KEYS.forEach((k) => {
-        base[k] = 0;
-      });
-      deriveExtra(base, true);
-      ["home", "away", "combined"].forEach((split) => {
-        teams[split].push({ ...base });
+    ["home", "away", "combined"].forEach((split) => {
+      const byCode = new Map((teamLists[split] || []).map((t) => [t.team, t]));
+      teamCodes.forEach((code) => {
+        const src = byCode.get(code) || {};
+        const base = {
+          team: code,
+          name: src.name || NEXT_SEASON_TEAM_NAMES[code] || TEAM_NAMES[code] || code,
+        };
+        TEAM_FPL_STAT_KEYS.forEach((k) => {
+          base[k] = src[k] != null ? src[k] : 0;
+        });
+        TEAM_OPTA_ONLY_KEYS.forEach((k) => {
+          base[k] = src[k] != null ? src[k] : 0;
+        });
+        deriveExtra(base, true);
+        teams[split].push(base);
       });
     });
     return { players, teams };
@@ -490,8 +505,8 @@
   // State
   // ---------------------------------------------------------------------
   const state = {
-    page: "opta", // opta | rankings | ownership | expected | schedule | feed | markets | team
-    season: "2025-26", // 2025-26 | 2026-27
+    page: "home", // home | opta | rankings | ownership | expected | schedule | feed | markets | team
+    season: "2026-27", // 2025-26 | 2026-27
     view: "players", // players | teams
     split: "combined", // combined | home | away
     search: "",
@@ -514,7 +529,7 @@
     scheduleEnhanceTopN: SCHEDULE_ENHANCE_TOP_DEFAULT,
     compareMode: false,
     compareSelection: { players: new Set(), teams: new Set() },
-    sortKey: "pts",
+    sortKey: "price",
     sortDir: "desc",
     hiddenCols: new Set(),
     rankingsPins: [],
@@ -522,8 +537,8 @@
     expectedSortKey: "actual", // diff | expected | actual | name
     expectedSortDir: "desc",
     expectedSplit: "combined", // combined | home | away | compare
-    scheduleGwMin: SCHEDULE_GW_MIN,
-    scheduleGwMax: Math.min(SCHEDULE_GW_MIN + FIXTURE_TT_COUNT - 1, SCHEDULE_GW_MAX),
+    scheduleGwMin: SCHEDULE_GW_DEFAULT_MIN,
+    scheduleGwMax: SCHEDULE_GW_DEFAULT_MAX,
     scheduleMatchups: true,
     scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
     scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
@@ -549,9 +564,8 @@
     teamCompareCodes: [], // pins + click-to-select, max MAX_COMPARE
     teamHoverCompareCode: null,
     teamSearchActiveCode: null,
-    teamMode: "planner", // planner | actual
+    teamMode: "actual", // planner | actual
     teamSparkMetric: "form", // form | owned
-    ownershipTrendThreshold: OWNERSHIP_TREND_THRESHOLD_DEFAULT,
     ownershipTrendWindow: OWNERSHIP_TREND_WINDOW_DEFAULT,
     ownershipRisersCollapsed: false,
     ownershipFallersCollapsed: false,
@@ -610,7 +624,7 @@
   }
 
   // Mutable range used by the price/mins dual sliders (updated on season switch).
-  const bounds = computeBounds("2025-26");
+  const bounds = computeBounds(state.season);
   function defaultMinPrice() {
     // Player select shows the full catalog; elsewhere keep the £4.5m+ default.
     if (state.page === "team" && state.teamPickerSlot) return bounds.price.min;
@@ -658,8 +672,72 @@
   state.minsMin = statsCoreDefaults.minsMin;
   state.minsMax = statsCoreDefaults.minsMax;
 
+  const PLAYER_COLS = [
+    { key: "player", label: "Player", type: "player", pin: true },
+    { key: "price", label: "£m", decimals: 1, group: "Core", title: "Price (£m)" },
+    { key: "owned", label: "TSB%", decimals: 1, group: "Core", title: "FPL selected-by-% (TSB)" },
+    { key: "apps", label: "Apps", decimals: 0, group: "Core", title: "Appearances" },
+    { key: "mins", label: "Mins", decimals: 0, group: "Core", title: "Minutes played" },
+    { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
+    { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
+    { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
+    { key: "bigChances", label: "BC", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Big chances" },
+    { key: "xg", label: "xG", decimals: 1, group: "Attack", section: "Goal Threat", rate: true, title: "Expected goals" },
+    { key: "goals", label: "G", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Goals" },
+    { key: "keyPasses", label: "KP", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Key passes" },
+    { key: "bigChancesCreated", label: "BCC", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Big chances created" },
+    { key: "xa", label: "xA", decimals: 1, group: "Creativity", section: "Creativity", rate: true, title: "Expected assists" },
+    { key: "assists", label: "A", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Assists" },
+    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets (FPL API, 2025/26 combined only)" },
+    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded while on the pitch — recorded for every position, though only keepers and defenders are docked points for them (FPL API, 2025/26 combined only)" },
+    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded while on the pitch — recorded for every position (FPL API, 2025/26 combined only)" },
+    { key: "saves", label: "Saves", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Saves — goalkeepers (FPL API, 2025/26 combined only)" },
+    { key: "__cbitr", label: "CBIT/R", decimals: 0, group: "Defence", section: "Defensive", rate: true, derived: true, title: "Clearances, blocks, interceptions & tackles (+ recoveries for MID/FWD). Combined view only." },
+    { key: "xPts", label: "xPts", decimals: 1, group: "Points", section: "FPL", rate: true, title: "Expected FPL points" },
+    { key: "bps", label: "BPS", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points system score" },
+    { key: "bonus", label: "B", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points" },
+    { key: "defCon", label: "DC", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Defensive contribution points earned (2 per match at the position's action threshold)" },
+    { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points", strong: true },
+    { key: "__gi", label: "G+A", decimals: 0, group: "Combined", section: "Combined", derived: true, rate: true, title: "Goals + assists" },
+    { key: "xgi", label: "xGI", decimals: 1, group: "Combined", section: "Combined", rate: true, title: "Expected goal involvements (FPL API, 2025/26 combined only)" },
+    { key: "penaltiesOrder", label: "PK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice penalty taker" },
+    { key: "directFreekicksOrder", label: "FK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice direct free kick taker" },
+    { key: "cornersOrder", label: "CK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice corners & indirect free kick taker" },
+  ];
+
+  const TEAM_COLS = [
+    { key: "name", label: "Team", type: "name", pin: true },
+    { key: "gp", label: "GP", decimals: 0, group: "Core", title: "Gameweeks played" },
+    { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
+    { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
+    { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
+    { key: "bigChances", label: "BC", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Big chances" },
+    { key: "xg", label: "xG", decimals: 1, group: "Attack", section: "Goal Threat", rate: true, title: "Expected goals" },
+    { key: "goals", label: "G", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Goals" },
+    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded" },
+    { key: "xcs", label: "xCS", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected clean sheets" },
+    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded" },
+    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Team clean sheets — max of (sum of GK FPL CS, best DEF/MID CS). Outfield fallback covers keepers subbed before 60′." },
+    { key: "xgd", label: "xGD", decimals: 1, group: "Overall", section: "Overall", rate: true, title: "Expected goal difference (xG − xGC)" },
+    { key: "gd", label: "GD", decimals: 0, group: "Overall", section: "Overall", title: "Goal difference (goals − conceded)" },
+    { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points scored by the squad", strong: true },
+    { key: "__ppg", label: "Pts/GP", decimals: 1, group: "Derived", section: "Derived", derived: true, title: "Points per gameweek played" },
+    { key: "__gpg", label: "G/GP", decimals: 1, group: "Derived", section: "Derived", derived: true, title: "Goals per gameweek played" },
+  ];
+
+  const PLAYER_OPTA_ONLY_COL_KEYS = new Set([
+    "shots", "shotsOnTarget", "touchesBox", "bigChances",
+    "keyPasses", "bigChancesCreated", "xPts",
+  ]);
+  const TEAM_OPTA_ONLY_COL_KEYS = new Set([
+    "shots", "shotsOnTarget", "touchesBox", "bigChances", "xcs",
+  ]);
+
   function cols() {
-    return state.view === "players" ? PLAYER_COLS : TEAM_COLS;
+    const all = state.view === "players" ? PLAYER_COLS : TEAM_COLS;
+    if (!isNextSeason()) return all;
+    const hide = state.view === "players" ? PLAYER_OPTA_ONLY_COL_KEYS : TEAM_OPTA_ONLY_COL_KEYS;
+    return all.filter((c) => !hide.has(c.key));
   }
 
   const latestOwnershipCheckIn =
@@ -691,6 +769,7 @@
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   const el = {
+    pageHome: $("#page-home"),
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
     pageOwnership: $("#page-ownership"),
@@ -711,6 +790,23 @@
     pageSchedule: $("#page-schedule"),
     pageFeed: $("#page-feed"),
     pageMarkets: $("#page-markets"),
+    homePage: $("#home-page"),
+    homePageSubtitle: $("#home-page-subtitle"),
+    homeCountLabel: $("#home-count-label"),
+    homeEmpty: $("#home-empty"),
+    homeEmptyTitle: $("#home-empty-title"),
+    homeEmptyCopy: $("#home-empty-copy"),
+    homeBento: $("#home-bento"),
+    homeDeadline: $("#home-deadline"),
+    homeGwPoints: $("#home-gw-points"),
+    homeGwMeta: $("#home-gw-meta"),
+    homeOverallRank: $("#home-overall-rank"),
+    homeTotalPoints: $("#home-total-points"),
+    homeLeagueRank: $("#home-league-rank"),
+    homeSquadGwLabel: $("#home-squad-gw-label"),
+    homeLeagueTitle: $("#home-league-title"),
+    homeSquadBody: $("#home-squad-body"),
+    homeStandingsBody: $("#home-standings-body"),
     subtoolbar: $("#subtoolbar"),
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
@@ -726,12 +822,10 @@
     ownershipChartWrap: $("#ownership-chart-wrap"),
     ownershipChartTitle: $("#ownership-chart-title"),
     ownershipTooltip: $("#ownership-tooltip"),
+    ownershipSelection: $("#ownership-selection"),
     ownershipCountLabel: $("#ownership-count-label"),
     ownershipTrendingGroup: $("#ownership-trending-group"),
     ownershipTrendWindowSeg: $("#ownership-trend-window-seg"),
-    ownershipTrendThreshold: $("#ownership-trend-threshold"),
-    ownershipTrendThresholdFill: $("#ownership-trend-threshold-fill"),
-    ownershipTrendThresholdLabel: $("#ownership-trend-threshold-label"),
     ownershipTrendCards: $("#ownership-trend-cards"),
     ownershipTrendRisers: $("#ownership-trend-risers"),
     ownershipTrendFallers: $("#ownership-trend-fallers"),
@@ -739,6 +833,9 @@
     teamPageSubtitle: $("#team-page-subtitle"),
     teamModeSeg: $("#team-mode-seg"),
     teamResyncBtn: $("#team-resync-btn"),
+    teamResyncToolbar: $("#team-resync-toolbar"),
+    teamClearBtn: $("#team-clear-btn"),
+    teamClearToolbar: $("#team-clear-toolbar"),
     teamRowMenu: $("#team-row-menu"),
     teamBudgetBar: $("#team-budget-bar"),
     teamSubBar: $("#team-sub-bar"),
@@ -754,7 +851,6 @@
     teamSearchBody: $("#team-search-body"),
     teamPickerHead: $("#team-picker-head"),
     teamPickerBody: $("#team-picker-body"),
-    teamClearBtn: $("#team-clear-btn"),
     teamAffordableGroup: $("#team-affordable-group"),
     teamAffordableCheck: $("#team-affordable-check"),
     teamCompareBtn: $("#team-compare-btn"),
@@ -863,8 +959,8 @@
     accentSwatches: $("#accent-swatches"),
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
-    fplIdInput: $("#fpl-id-input"),
-    fplIdSave: $("#fpl-id-save"),
+    fplManagerSelect: $("#fpl-manager-select"),
+    fplLeagueSelect: $("#fpl-league-select"),
     fplIdClear: $("#fpl-id-clear"),
     fplIdStatus: $("#fpl-id-status"),
     posFilters: $("#pos-filters"),
@@ -992,7 +1088,6 @@
     if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
     if (state.ownedMin !== coreDefaults.ownedMin) return true;
     if (state.minsMin !== coreDefaults.minsMin || state.minsMax !== coreDefaults.minsMax) return true;
-    if (state.ownershipTrendThreshold !== OWNERSHIP_TREND_THRESHOLD_DEFAULT) return true;
     if (state.ownershipTrendWindow !== OWNERSHIP_TREND_WINDOW_DEFAULT) return true;
     if (state.setPieceTakersOnly) return true;
     if (state.page === "team" && state.teamAffordableOnly) return true;
@@ -1024,7 +1119,6 @@
     state.ownedMin = coreDefaults.ownedMin;
     state.minsMin = coreDefaults.minsMin;
     state.minsMax = coreDefaults.minsMax;
-    state.ownershipTrendThreshold = OWNERSHIP_TREND_THRESHOLD_DEFAULT;
     state.ownershipTrendWindow = OWNERSHIP_TREND_WINDOW_DEFAULT;
     syncOwnershipTrendWindowUI();
     state.search = "";
@@ -1048,7 +1142,6 @@
     syncEnhanceRelativeUI();
     updatePriceSlider();
     updateOwnedSlider();
-    updateOwnershipTrendThresholdSlider();
     updateMinsSlider();
     syncFilterChipUI();
     renderColumnsPanel();
@@ -1250,26 +1343,39 @@
     return `<span class="source-unsupported" role="img" aria-label="${escapeHtml(reason)}"${tipAttr(reason)}>${iconHTML("triangle-alert")}</span>`;
   }
 
-  // Per-90 defensive-action rate against that position's threshold. Null when
-  // the player is ineligible or the raw counts are missing (home/away splits
-  // carry no API data, and unmatched players have none at all).
+  // DefCon indicator beside CBIT/R. Thresholds are per *match* (DEF 10 /
+  // MID·FWD 12), not per 90 — a 20′ cameo with 5 actions is 22.5/90 but never
+  // hit the bar. `meets` therefore follows earned DC points (2 per hit).
   function defconStatus(row) {
     const pos = defconPosition(row);
     const rule = DEFCON_RULES[pos];
     if (!rule || row.__cbitr == null || !row.mins) return null;
     const per90 = (row.__cbitr / row.mins) * 90;
-    return { pos, per90, actions: row.__cbitr, rule, threshold: rule.threshold, meets: per90 >= rule.threshold };
+    const dcPts = Number(row.defCon) || 0;
+    const hits = Math.floor(dcPts / 2);
+    return {
+      pos,
+      per90,
+      actions: row.__cbitr,
+      rule,
+      threshold: rule.threshold,
+      dcPts,
+      hits,
+      meets: dcPts > 0,
+    };
   }
 
-  // Filled check beside CBIT/R for players clearing their threshold on a
-  // per-90 basis — a quick read on who is a repeatable defensive-contribution
-  // source rather than someone who banked points in heavy-minute games.
-  // Uses the same circle-check mark as set-pieces (not the home-fixture star).
-  // Color: blue in light mode, red in dark mode (see .threshold-dot).
+  // Check beside CBIT/R only when the player has actually earned DefCon
+  // points (hit the match threshold at least once). Color: blue in light
+  // mode, red in dark mode (see .threshold-dot).
   function defconDotHTML(row) {
     const status = defconStatus(row);
     if (!status || !status.meets) return "";
-    const title = `${status.per90.toFixed(1)} per 90 — clears the ${status.threshold} ${status.pos} threshold`;
+    const hitLabel = status.hits === 1 ? "1 match" : `${status.hits} matches`;
+    const title =
+      `DefCon hit in ${hitLabel} (+${status.dcPts} pts) — ` +
+      `${status.threshold} ${status.pos} actions needed per match` +
+      (status.per90 ? ` · ${status.per90.toFixed(1)} actions/90` : "");
     return `<span class="threshold-dot"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
   }
 
@@ -1328,10 +1434,12 @@
   // Viewer-owned squad (FPL manager ID → owned player codes)
   // ---------------------------------------------------------------------
   const FPL_ID_KEY = "fpl-explorer-manager-id";
+  const FPL_LEAGUE_KEY = "fpl-explorer-league-id";
   const TEAM_MODE_KEY = "fpl-explorer-team-mode";
   const TEAM_ACTUAL_KEY = "fpl-explorer-team-actual";
   let ownedCodes = new Set();
   let savedManagerId = null;
+  let savedLeagueId = null;
   async function fetchManagerSquad(managerId) {
     const url = `/api/fpl/squad?id=${encodeURIComponent(managerId)}`;
     const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -1417,23 +1525,179 @@
     }
   }
 
+  function trackedManagerById(id) {
+    const n = Number(id);
+    return (LEAGUES.managers || []).find((m) => Number(m.id) === n) || null;
+  }
+
+  function trackedLeagueById(id) {
+    const n = Number(id);
+    return (LEAGUES.leagues || []).find((L) => Number(L.id) === n) || null;
+  }
+
+  function refreshManagerDependentUI() {
+    syncFplIdStatus();
+    syncTeamModeUI();
+    if (state.page === "home") renderHome();
+    else if (state.page === "rankings") renderRankings();
+    else if (state.page === "team") renderTeam();
+    else if (state.page === "opta") renderTable();
+    else renderTable();
+  }
+
+  function populateManagerSelect() {
+    if (!el.fplManagerSelect) return;
+    const selected = savedManagerId || "";
+    const opts = ['<option value="">Select manager…</option>'];
+    for (const m of LEAGUES.managers || []) {
+      const label = m.teamName ? `${m.name} — ${m.teamName}` : m.name;
+      opts.push(
+        `<option value="${escapeHtml(String(m.id))}">${escapeHtml(label)}</option>`
+      );
+    }
+    el.fplManagerSelect.innerHTML = opts.join("");
+    el.fplManagerSelect.value = selected;
+    if (selected && el.fplManagerSelect.value !== selected) {
+      el.fplManagerSelect.value = "";
+    }
+  }
+
+  function rebuildLeagueSelect({ preferredId = savedLeagueId } = {}) {
+    if (!el.fplLeagueSelect) return;
+    const manager = trackedManagerById(savedManagerId);
+    const leagueIds = manager && Array.isArray(manager.leagueIds) ? manager.leagueIds : [];
+    const opts = ['<option value="">Select league…</option>'];
+    for (const lid of leagueIds) {
+      const L = trackedLeagueById(lid);
+      const label = L ? L.name : `League ${lid}`;
+      opts.push(`<option value="${escapeHtml(String(lid))}">${escapeHtml(label)}</option>`);
+    }
+    el.fplLeagueSelect.innerHTML = opts.join("");
+    el.fplLeagueSelect.disabled = leagueIds.length === 0;
+    let next = preferredId != null ? String(preferredId) : "";
+    if (next && !leagueIds.some((id) => String(id) === next)) next = "";
+    if (!next && leagueIds.length) next = String(leagueIds[0]);
+    el.fplLeagueSelect.value = next;
+    applyLeagueId(next, { persist: true, quiet: true });
+  }
+
+  function applyLeagueId(rawId, { persist = true, quiet = true } = {}) {
+    const id = String(rawId || "").trim();
+    if (!id) {
+      savedLeagueId = null;
+      if (persist) {
+        try {
+          localStorage.removeItem(FPL_LEAGUE_KEY);
+        } catch {
+          /* private browsing */
+        }
+        persistHomePrefs();
+      }
+      if (!quiet) syncFplIdStatus();
+      scheduleSiteRefreshForHomeTargets({ toast: !quiet });
+      return;
+    }
+    if (!/^\d+$/.test(id) || Number(id) <= 0) return;
+    const prevLeague = savedLeagueId;
+    savedLeagueId = id;
+    if (persist) {
+      try {
+        localStorage.setItem(FPL_LEAGUE_KEY, id);
+      } catch {
+        /* private browsing */
+      }
+      persistHomePrefs();
+    }
+    if (el.fplLeagueSelect && el.fplLeagueSelect.value !== id) {
+      el.fplLeagueSelect.value = id;
+    }
+    if (!quiet) syncFplIdStatus();
+    // Rebuild Home + site-wide owned indicators when the league target changes.
+    if (String(prevLeague || "") !== String(id)) {
+      scheduleSiteRefreshForHomeTargets({ toast: !quiet });
+    } else {
+      refreshManagerDependentUI();
+    }
+  }
+
   function syncFplIdStatus() {
     if (!el.fplIdStatus) return;
     if (!savedManagerId) {
-      el.fplIdStatus.textContent = "No manager ID saved.";
+      el.fplIdStatus.textContent = "No manager linked.";
       syncTeamPlannerPrefsBtns();
       return;
     }
+    const manager = trackedManagerById(savedManagerId);
+    const league = trackedLeagueById(savedLeagueId);
     const n = ownedCodes.size;
     const meta = state.actualMeta;
-    const bits = [`ID ${savedManagerId}`];
-    if (meta && meta.teamName) bits.push(meta.teamName);
+    const bits = [];
+    if (manager) {
+      bits.push(manager.teamName ? `${manager.name} (${manager.teamName})` : manager.name);
+    } else {
+      bits.push(`ID ${savedManagerId}`);
+    }
+    if (league) bits.push(league.name);
     if (meta && meta.gwLabel) bits.push(meta.gwLabel);
     if (n > 0) bits.push(`${n} pick${n === 1 ? "" : "s"}`);
     else if (meta && meta.hasPicks === false) bits.push("no published picks yet");
     else bits.push("not synced");
     el.fplIdStatus.textContent = bits.join(" · ");
     syncTeamPlannerPrefsBtns();
+  }
+
+  let confirmArmBtn = null;
+  let confirmArmTimer = null;
+
+  function confirmButtonLabelEl(btn) {
+    return (btn && (btn.querySelector(".btn-label") || btn)) || null;
+  }
+
+  function disarmConfirmButton(btn) {
+    const target = btn || confirmArmBtn;
+    if (!target) {
+      if (confirmArmTimer) {
+        clearTimeout(confirmArmTimer);
+        confirmArmTimer = null;
+      }
+      return;
+    }
+    if (confirmArmBtn === target) {
+      confirmArmBtn = null;
+      if (confirmArmTimer) {
+        clearTimeout(confirmArmTimer);
+        confirmArmTimer = null;
+      }
+    }
+    const labelEl = confirmButtonLabelEl(target);
+    if (labelEl && target.dataset.confirmOrig != null) {
+      labelEl.textContent = target.dataset.confirmOrig;
+    }
+    delete target.dataset.confirmOrig;
+    delete target.dataset.confirmArmed;
+    target.classList.remove("is-confirm-armed");
+    target.removeAttribute("aria-pressed");
+  }
+
+  function armConfirmButton(btn, { onConfirm, timeoutMs = 4000 } = {}) {
+    if (!btn) return;
+    if (btn.dataset.confirmArmed === "1") {
+      disarmConfirmButton(btn);
+      if (typeof onConfirm === "function") onConfirm();
+      return;
+    }
+    if (confirmArmBtn && confirmArmBtn !== btn) disarmConfirmButton(confirmArmBtn);
+    const labelEl = confirmButtonLabelEl(btn);
+    if (labelEl && btn.dataset.confirmOrig == null) {
+      btn.dataset.confirmOrig = labelEl.textContent;
+      labelEl.textContent = "Confirm";
+    }
+    btn.dataset.confirmArmed = "1";
+    btn.classList.add("is-confirm-armed");
+    btn.setAttribute("aria-pressed", "true");
+    confirmArmBtn = btn;
+    if (confirmArmTimer) clearTimeout(confirmArmTimer);
+    confirmArmTimer = setTimeout(() => disarmConfirmButton(btn), timeoutMs);
   }
 
   function syncTeamModeUI() {
@@ -1451,20 +1715,31 @@
       el.teamPageSubtitle.textContent =
         state.teamMode === "actual"
           ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
-          : "Editable planner squad (£100.0m). Resync from Preferences replaces this with your linked Actual team.";
+          : "Editable planner squad (£100.0m). Use Resync to replace this with your linked Actual team.";
     }
     syncTeamPlannerPrefsBtns();
   }
 
   function syncTeamPlannerPrefsBtns() {
-    if (el.teamClearBtn) {
-      el.teamClearBtn.disabled = !teamIsEditable() || !state.teamSquad.length;
-    }
-    if (el.teamResyncBtn) {
-      const enabled = !!savedManagerId && state.teamMode === "planner";
-      el.teamResyncBtn.hidden = !enabled;
-      el.teamResyncBtn.disabled = !enabled;
-    }
+    const planner = state.teamMode === "planner";
+    const canResync = !!savedManagerId && planner;
+    const canClear = planner && !!state.teamSquad.length;
+    const desktop = !NARROW_MQ.matches;
+
+    const syncOne = (btn, { show, enabled }) => {
+      if (!btn) return;
+      btn.hidden = !show;
+      btn.disabled = !enabled;
+      if (!show || !enabled) disarmConfirmButton(btn);
+    };
+
+    // Prefs buttons: mobile only (desktop uses toolbar).
+    syncOne(el.teamResyncBtn, { show: canResync && !desktop, enabled: canResync });
+    syncOne(el.teamClearBtn, { show: canClear && !desktop, enabled: canClear });
+    // Toolbar: desktop Team page, Planner mode.
+    const onTeamDesktop = desktop && state.page === "team";
+    syncOne(el.teamResyncToolbar, { show: onTeamDesktop && canResync, enabled: canResync });
+    syncOne(el.teamClearToolbar, { show: onTeamDesktop && canClear, enabled: canClear });
   }
 
   function setTeamMode(mode, { render = true, persist = true } = {}) {
@@ -1546,11 +1821,516 @@
     return payload;
   }
 
+  function homePrefsBody() {
+    return {
+      managerId: savedManagerId ? Number(savedManagerId) : null,
+      leagueId: savedLeagueId ? Number(savedLeagueId) : null,
+    };
+  }
+
+  function persistHomePrefs() {
+    // Fire-and-forget; local serve.py writes site/home_prefs.json for fetch_home.py.
+    try {
+      return fetch("/api/home-prefs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(homePrefsBody()),
+      }).catch(() => null);
+    } catch {
+      /* file:// or offline */
+      return Promise.resolve(null);
+    }
+  }
+
+  function applyHomePayload(payload) {
+    if (!payload || typeof payload !== "object") return false;
+    HOME.generatedAt = payload.generatedAt ?? null;
+    HOME.gw = payload.gw ?? null;
+    HOME.managerId = payload.managerId ?? null;
+    HOME.leagueId = payload.leagueId ?? null;
+    HOME.leagueName = payload.leagueName ?? null;
+    HOME.summary = payload.summary ?? null;
+    HOME.squad = Array.isArray(payload.squad) ? payload.squad : [];
+    HOME.standings = Array.isArray(payload.standings) ? payload.standings : [];
+    HOME.ownersByElement = payload.ownersByElement || {};
+    HOME.error = payload.error ?? null;
+    window.FPL_HOME = HOME;
+    // Clear ownership pin/hover — element/entry ids may not apply to the new league.
+    homeOwnerHover = null;
+    homeOwnerPin = null;
+    return true;
+  }
+
+  let homeTargetsRefreshTimer = null;
+  let homeTargetsRefreshSeq = 0;
+
+  function scheduleSiteRefreshForHomeTargets({ toast = false } = {}) {
+    // Owned pins / tables update immediately from the live squad sync.
+    refreshManagerDependentUI();
+    if (homeTargetsRefreshTimer) clearTimeout(homeTargetsRefreshTimer);
+    const seq = ++homeTargetsRefreshSeq;
+    homeTargetsRefreshTimer = setTimeout(() => {
+      homeTargetsRefreshTimer = null;
+      refreshHomeCacheFromServer({ toast, seq });
+    }, 400);
+  }
+
+  async function refreshHomeCacheFromServer({ toast = false, seq = 0 } = {}) {
+    if (!savedManagerId || !savedLeagueId) {
+      refreshManagerDependentUI();
+      return false;
+    }
+    try {
+      await persistHomePrefs();
+      if (seq && seq !== homeTargetsRefreshSeq) return false;
+      const res = await fetch("/api/refresh-home", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(homePrefsBody()),
+      });
+      if (seq && seq !== homeTargetsRefreshSeq) return false;
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody && errBody.error) msg = String(errBody.error);
+        } catch { /* ignore */ }
+        if (toast) {
+          showToast({
+            title: "Home cache not refreshed",
+            message: msg.slice(0, 160),
+            icon: "triangle-alert",
+          });
+        }
+        refreshManagerDependentUI();
+        return false;
+      }
+      const data = await res.json();
+      if (seq && seq !== homeTargetsRefreshSeq) return false;
+      if (!(data && data.ok && data.home)) {
+        refreshManagerDependentUI();
+        return false;
+      }
+      applyHomePayload(data.home);
+      refreshManagerDependentUI();
+      if (toast) {
+        showToast({
+          title: "Home updated",
+          message: `GW${data.home.gw ?? "?"} · ${data.home.leagueName || "league"}`,
+          icon: "check",
+        });
+      }
+      return true;
+    } catch {
+      // Static host / offline — UI still refreshed from live squad ownership.
+      refreshManagerDependentUI();
+      return false;
+    }
+  }
+
+  function homeKickoffParts(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    try {
+      return {
+        day: d.toLocaleString(undefined, { weekday: "short" }).toUpperCase(),
+        // Always 24h — compact MP stack (no AM/PM).
+        time: d.toLocaleString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function homeKickoffHTML(iso) {
+    const parts = homeKickoffParts(iso);
+    if (!parts) return `<span class="home-mp-line home-kickoff">—</span>`;
+    return `<span class="home-mp-line home-kickoff" title="${escapeHtml(`${parts.day} ${parts.time}`)}"><span class="home-kickoff-day">${escapeHtml(parts.day)}</span><span class="home-kickoff-time">${escapeHtml(parts.time)}</span></span>`;
+  }
+
+  function formatHomeRank(n) {
+    if (n == null || n === "" || Number(n) <= 0) return "—";
+    const v = Number(n);
+    if (v >= 1e6) {
+      const m = v / 1e6;
+      return `${m >= 10 ? m.toFixed(1) : m.toFixed(2).replace(/0$/, "")}M`;
+    }
+    if (v >= 1e4) return `${(v / 1e3).toFixed(1).replace(/\.0$/, "")}K`;
+    return v.toLocaleString();
+  }
+
+  function homeSquadFixtures(row) {
+    if (Array.isArray(row.fixtures) && row.fixtures.length) return row.fixtures;
+    return [{
+      opp: row.opp || "—",
+      oppHa: row.oppHa || "",
+      kickoff: row.kickoff,
+      live: !!row.live,
+      finished: row.matchStatus === "finished",
+      minutes: row.minutes,
+    }];
+  }
+
+
+  // Squad ↔ standings ownership highlight (hover + click-to-pin), both directions.
+  // active = { type: "element"|"entry", id } — pin wins over hover.
+  let homeOwnerHover = null;
+  let homeOwnerPin = null;
+  let homeOwnerBindingsReady = false;
+
+  function homeActiveOwnerFocus() {
+    return homeOwnerPin || homeOwnerHover;
+  }
+
+  function homeOwnersForElement(elementId) {
+    if (elementId == null || elementId === "") return new Set();
+    const map = (HOME && HOME.ownersByElement) || {};
+    const list = map[elementId] || map[String(elementId)] || [];
+    return new Set(list.map(Number).filter((n) => Number.isFinite(n)));
+  }
+
+  function homeElementsForEntry(entryId) {
+    if (entryId == null || entryId === "") return new Set();
+    const entry = Number(entryId);
+    if (!Number.isFinite(entry)) return new Set();
+    const map = (HOME && HOME.ownersByElement) || {};
+    const out = new Set();
+    Object.keys(map).forEach((eid) => {
+      const list = map[eid] || [];
+      if (list.map(Number).includes(entry)) out.add(Number(eid));
+    });
+    return out;
+  }
+
+  function syncHomeOwnerHighlights() {
+    const focus = homeActiveOwnerFocus();
+    const pinned = !!homeOwnerPin;
+    const fromElement = focus && focus.type === "element";
+    const fromEntry = focus && focus.type === "entry";
+    const ownerEntries = fromElement ? homeOwnersForElement(focus.id) : null;
+    const ownedElements = fromEntry ? homeElementsForEntry(focus.id) : null;
+
+    if (el.homeSquadBody) {
+      el.homeSquadBody.classList.toggle("has-owner-filter", fromEntry);
+      el.homeSquadBody.querySelectorAll("tr.home-squad-row").forEach((tr) => {
+        const eid = Number(tr.dataset.element);
+        const isSource = fromElement && Number.isFinite(eid) && eid === Number(focus.id);
+        const isMatch = fromEntry && ownedElements && ownedElements.has(eid);
+        tr.classList.toggle("is-owner-source", isSource);
+        tr.classList.toggle("is-owner-pinned", isSource && pinned);
+        tr.classList.toggle("is-owner-match", !!isMatch);
+      });
+    }
+    if (el.homeStandingsBody) {
+      el.homeStandingsBody.classList.toggle("has-owner-filter", fromElement);
+      el.homeStandingsBody.querySelectorAll("tr[data-entry]").forEach((tr) => {
+        const entry = Number(tr.dataset.entry);
+        const isSource = fromEntry && Number.isFinite(entry) && entry === Number(focus.id);
+        const isMatch = fromElement && ownerEntries && ownerEntries.has(entry);
+        tr.classList.toggle("is-owner-source", isSource);
+        tr.classList.toggle("is-owner-pinned", isSource && pinned);
+        tr.classList.toggle("is-owner-match", !!isMatch);
+      });
+    }
+  }
+
+  function homeOwnerSame(a, b) {
+    return !!a && !!b && a.type === b.type && Number(a.id) === Number(b.id);
+  }
+
+  function bindHomeOwnerHighlighting() {
+    if (homeOwnerBindingsReady) return;
+    if (!el.homeSquadBody || !el.homeStandingsBody) return;
+    homeOwnerBindingsReady = true;
+
+    el.homeSquadBody.addEventListener("pointerover", (e) => {
+      const tr = e.target.closest("tr.home-squad-row");
+      if (!tr || !el.homeSquadBody.contains(tr)) return;
+      const eid = Number(tr.dataset.element);
+      if (!Number.isFinite(eid)) return;
+      const next = { type: "element", id: eid };
+      if (homeOwnerSame(homeOwnerHover, next)) return;
+      homeOwnerHover = next;
+      syncHomeOwnerHighlights();
+    });
+    el.homeSquadBody.addEventListener("pointerleave", () => {
+      if (!homeOwnerHover || homeOwnerHover.type !== "element") return;
+      homeOwnerHover = null;
+      syncHomeOwnerHighlights();
+    });
+    el.homeSquadBody.addEventListener("click", (e) => {
+      const tr = e.target.closest("tr.home-squad-row");
+      if (!tr || !el.homeSquadBody.contains(tr)) return;
+      const eid = Number(tr.dataset.element);
+      if (!Number.isFinite(eid)) return;
+      const next = { type: "element", id: eid };
+      homeOwnerPin = homeOwnerSame(homeOwnerPin, next) ? null : next;
+      syncHomeOwnerHighlights();
+    });
+
+    el.homeStandingsBody.addEventListener("pointerover", (e) => {
+      const tr = e.target.closest("tr[data-entry]");
+      if (!tr || !el.homeStandingsBody.contains(tr)) return;
+      const entry = Number(tr.dataset.entry);
+      if (!Number.isFinite(entry)) return;
+      const next = { type: "entry", id: entry };
+      if (homeOwnerSame(homeOwnerHover, next)) return;
+      homeOwnerHover = next;
+      syncHomeOwnerHighlights();
+    });
+    el.homeStandingsBody.addEventListener("pointerleave", () => {
+      if (!homeOwnerHover || homeOwnerHover.type !== "entry") return;
+      homeOwnerHover = null;
+      syncHomeOwnerHighlights();
+    });
+    el.homeStandingsBody.addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-entry]");
+      if (!tr || !el.homeStandingsBody.contains(tr)) return;
+      const entry = Number(tr.dataset.entry);
+      if (!Number.isFinite(entry)) return;
+      const next = { type: "entry", id: entry };
+      homeOwnerPin = homeOwnerSame(homeOwnerPin, next) ? null : next;
+      syncHomeOwnerHighlights();
+    });
+  }
+
+  function homeSquadRowHTML(row, maxAbsImp = 100) {
+    const teamBadge = badgeHTML(row.team, "home-crest") ||
+      `<span class="home-crest-fallback">${escapeHtml((row.team || "?").slice(0, 3))}</span>`;
+    const tags = [];
+    if (row.isCaptain) tags.push(`<span class="home-role-tag home-role-c">C</span>`);
+    if (row.isVice) tags.push(`<span class="home-role-tag home-role-a">A</span>`);
+    const fx = homeSquadFixtures(row);
+    const pts = row.gwPoints != null ? Number(row.gwPoints) : null;
+    const ptsHi = pts != null && pts >= 8;
+    const ptsHTML = pts == null
+      ? "—"
+      : `<span class="home-pts${ptsHi ? " is-hot" : ""}${pts === 0 ? " is-zero" : ""}">${escapeHtml(String(pts))}</span>`;
+
+    const mpHTML = fx.map((f) => {
+      if (f.live || f.finished) {
+        const mins = f.minutes != null ? f.minutes : row.minutes;
+        const dot = f.live
+          ? `<span class="home-status-dot is-live" title="Live"></span>`
+          : `<span class="home-status-dot is-done" title="Played"></span>`;
+        return `<span class="home-mp-line">${escapeHtml(String(mins ?? "—"))}′${dot}</span>`;
+      }
+      return homeKickoffHTML(f.kickoff || row.kickoff);
+    }).join("");
+
+    const oppHTML = fx.map((f) => {
+      const crest = badgeHTML(f.opp, "home-crest home-crest-sm") ||
+        `<span class="home-crest-fallback home-crest-sm">${escapeHtml((f.opp || "?").slice(0, 3))}</span>`;
+      const homeIcon = f.oppHa === "H" ? iconHTML("house-solid", "home-ha-icon") : "";
+      return `<span class="home-opp-line">${crest}${homeIcon}</span>`;
+    }).join("");
+
+    const impRaw = row.imp != null ? Number(row.imp) : (row.impMock != null ? Number(row.impMock) : 0);
+    const imp = Number.isFinite(impRaw) ? Math.round(impRaw) : 0;
+    const scale = Math.max(1, Number(maxAbsImp) || 1);
+    const barPct = Math.min(100, (Math.abs(imp) / scale) * 100);
+    const impSign = imp > 0 ? "is-pos" : imp < 0 ? "is-neg" : "is-flat";
+    const impLabel = `${Math.abs(imp)}%`;
+    const impTitle =
+      "Your share of this player's points vs the top third of your league " +
+      "(100% ≈ unique XI, 200% captain, 300% triple captain). " +
+      "Positive = you gain more than the top third; negative = they hold more share.";
+    const benchCls = row.onBench ? " home-row-bench" : "";
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" title="Hover or click to highlight managers who own this player">
+      <td class="home-col-player">
+        <div class="home-player-cell">
+          ${teamBadge}
+          <div class="home-player-text">
+            <div class="home-player-name">${escapeHtml(row.name || "—")}${tags.join("")}</div>
+          </div>
+        </div>
+      </td>
+      <td class="home-col-pts">${ptsHTML}</td>
+      <td class="home-col-mp"><div class="home-fx-stack">${mpHTML}</div></td>
+      <td class="home-col-opp"><div class="home-fx-stack home-fx-opp">${oppHTML}</div></td>
+      <td class="home-col-imp">
+        <div class="home-imp ${impSign}" title="${escapeHtml(impTitle)}">
+          <span class="home-imp-track"><span class="home-imp-fill ${impSign}" style="width:${barPct}%"></span></span>
+          <span class="home-imp-pct">${escapeHtml(impLabel)}</span>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+
+  function homeNextDeadlineLabel() {
+    const next = GAMEWEEKS && GAMEWEEKS.next;
+    const cur = GAMEWEEKS && GAMEWEEKS.current;
+    let gw = next && next.deadlineTime ? next : null;
+    if (!gw && cur && cur.deadlineTime) {
+      const t = Date.parse(cur.deadlineTime);
+      if (Number.isFinite(t) && t > Date.now()) gw = cur;
+    }
+    if (!gw || !gw.deadlineTime) return "";
+    const d = new Date(gw.deadlineTime);
+    if (Number.isNaN(d.getTime())) return "";
+    let when = "";
+    try {
+      const day = d.toLocaleString(undefined, { weekday: "short" });
+      const date = d.toLocaleString(undefined, { month: "short", day: "numeric" });
+      const time = d.toLocaleString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      when = `${day} ${date} · ${time}`;
+    } catch {
+      when = d.toISOString();
+    }
+    const id = gw.id != null ? `GW${gw.id}` : "Next GW";
+    return `${id} deadline · ${when}`;
+  }
+
+  function renderHome() {
+    if (!el.homePage) return;
+    const linked = !!(savedManagerId && savedLeagueId);
+    const hasPayload = !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId);
+    const prefsMatch =
+      hasPayload &&
+      String(HOME.managerId) === String(savedManagerId) &&
+      String(HOME.leagueId) === String(savedLeagueId);
+    const showEmpty = !linked || !hasPayload;
+
+    if (el.homeEmpty) el.homeEmpty.hidden = !showEmpty;
+    if (el.homeBento) el.homeBento.hidden = showEmpty;
+    if (showEmpty && el.homeEmptyTitle && el.homeEmptyCopy) {
+      if (!linked) {
+        el.homeEmptyTitle.textContent = "Link a manager and league";
+        el.homeEmptyCopy.textContent =
+          "Pick both in Preferences, then run refresh home (or refresh data) so this page can load live GW points.";
+      } else {
+        el.homeEmptyTitle.textContent = "Home cache not loaded";
+        el.homeEmptyCopy.textContent =
+          "Manager and league are linked. Run refresh home (or refresh data) to build the dashboard cache.";
+      }
+    }
+    if (el.homeCountLabel) {
+      if (!linked) el.homeCountLabel.textContent = "No manager linked";
+      else if (!hasPayload) el.homeCountLabel.textContent = "Refresh home to load";
+      else {
+        const when = HOME.generatedAt ? ` · ${HOME.generatedAt.replace("T", " ").replace("Z", " UTC")}` : "";
+        el.homeCountLabel.textContent = `GW${HOME.gw || "?"}${when}`;
+      }
+    }
+    if (el.homePageSubtitle) {
+      if (!linked) {
+        el.homePageSubtitle.textContent = "Link a manager and league in Preferences to personalize Home.";
+      } else if (!prefsMatch && hasPayload) {
+        el.homePageSubtitle.textContent = "Cached Home data is for a different manager/league — run refresh home.";
+      } else {
+        const s = HOME.summary || {};
+        const bits = [s.teamName, s.managerName].filter(Boolean);
+        el.homePageSubtitle.textContent = bits.length
+          ? `${bits.join(" · ")} — live GW scoring from the last refresh.`
+          : "Your manager squad and mini-league gameweek standings from the last refresh.";
+      }
+    }
+    if (showEmpty) {
+      if (el.homeDeadline) el.homeDeadline.hidden = true;
+      return;
+    }
+
+    const summary = HOME.summary || {};
+    if (el.homeDeadline) {
+      const label = homeNextDeadlineLabel();
+      el.homeDeadline.textContent = label;
+      el.homeDeadline.hidden = !label;
+    }
+    if (el.homeGwPoints) el.homeGwPoints.textContent = String(summary.gwPoints ?? "—");
+    if (el.homeOverallRank) el.homeOverallRank.textContent = formatHomeRank(summary.overallRank);
+    if (el.homeTotalPoints) el.homeTotalPoints.textContent = formatHomeRank(summary.overallPoints);
+    if (el.homeLeagueRank) el.homeLeagueRank.textContent = formatHomeRank(summary.leagueRank);
+    if (el.homeGwMeta) {
+      const chip = summary.activeChip ? String(summary.activeChip) : "";
+      el.homeGwMeta.innerHTML = chip
+        ? `<span class="home-chip">${escapeHtml(chip)}</span>`
+        : "";
+    }
+    if (el.homeSquadGwLabel) {
+      el.homeSquadGwLabel.textContent = HOME.gw != null ? `Gameweek ${HOME.gw}` : "";
+    }
+    if (el.homeLeagueTitle) {
+      el.homeLeagueTitle.textContent = HOME.leagueName || "";
+    }
+    if (el.homeSquadBody) {
+      const rows = Array.isArray(HOME.squad) ? HOME.squad : [];
+      const maxAbsImp = Math.max(
+        1,
+        ...rows.map((r) => {
+          const v = r.imp != null ? Number(r.imp) : Number(r.impMock) || 0;
+          return Number.isFinite(v) ? Math.abs(v) : 0;
+        })
+      );
+      const parts = [];
+      let benchLabeled = false;
+      for (const r of rows) {
+        if (r.onBench && !benchLabeled) {
+          parts.push(
+            `<tr class="home-bench-divider"><th scope="rowgroup" colspan="5">Bench</th></tr>`
+          );
+          benchLabeled = true;
+        }
+        parts.push(homeSquadRowHTML(r, maxAbsImp));
+      }
+      el.homeSquadBody.innerHTML = parts.join("") ||
+        `<tr><td colspan="5">No squad picks in cache.</td></tr>`;
+    }
+    if (el.homeStandingsBody) {
+      const focus = Number(HOME.managerId);
+      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+      el.homeStandingsBody.innerHTML = rows.map((r) => {
+        const you = Number(r.entry) === focus;
+        const inPlay = Number(r.inPlay);
+        const toPlay = Number(r.toPlay);
+        const playTitle = "In play · still to play (active picks; Bench Boost can exceed 11)";
+        const playHTML = (Number.isFinite(inPlay) && Number.isFinite(toPlay))
+          ? `<span class="home-play-counts" title="${escapeHtml(playTitle)}"><span class="home-play-live">${escapeHtml(String(inPlay))}</span><span class="home-play-sep">·</span><span class="home-play-left">${escapeHtml(String(toPlay))}</span></span>`
+          : "—";
+        return `<tr class="${you ? "is-you" : ""}" data-entry="${escapeHtml(String(r.entry ?? ""))}" title="Hover or click to highlight squad players this manager owns">
+          <td class="home-col-rank">${escapeHtml(String(r.rankLive ?? r.rankOfficial ?? "—"))}</td>
+          <td class="home-col-manager">
+            <span class="home-standings-name">${escapeHtml(r.playerName || "—")}</span>
+            <span class="home-standings-entry">${escapeHtml(r.entryName || "")}</span>
+          </td>
+          <td class="home-col-play">${playHTML}</td>
+          <td class="home-col-gw">${escapeHtml(String(r.gwPointsLive ?? "—"))}</td>
+          <td class="home-col-total">${escapeHtml(String(r.total ?? "—"))}</td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="5">No standings.</td></tr>`;
+    }
+    bindHomeOwnerHighlighting();
+    syncHomeOwnerHighlights();
+  }
+
   async function applyManagerId(rawId, { quiet = false, render = true, seedPlannerIfEmpty = true } = {}) {
     const id = String(rawId || "").trim();
+    if (!id) {
+      clearManagerId({ quiet, render });
+      return false;
+    }
     if (!/^\d+$/.test(id) || Number(id) <= 0) {
       if (!quiet) {
-        showToast({ title: "Invalid FPL ID", message: "Enter a positive numeric manager ID.", icon: "triangle-alert" });
+        showToast({ title: "Invalid manager", message: "Pick a manager from the list.", icon: "triangle-alert" });
+      }
+      return false;
+    }
+    if (!trackedManagerById(id)) {
+      if (!quiet) {
+        showToast({
+          title: "Unknown manager",
+          message: "That ID isn’t in the tracked list. Refresh leagues data.",
+          icon: "triangle-alert",
+        });
       }
       return false;
     }
@@ -1560,7 +2340,11 @@
     } catch {
       /* private browsing */
     }
-    if (el.fplIdInput) el.fplIdInput.value = id;
+    persistHomePrefs();
+    if (el.fplManagerSelect && el.fplManagerSelect.value !== id) {
+      el.fplManagerSelect.value = id;
+    }
+    rebuildLeagueSelect({ preferredId: savedLeagueId });
     try {
       await syncManagerFromApi(id, { seedPlannerIfEmpty, quiet });
     } catch (err) {
@@ -1569,108 +2353,138 @@
       if (!quiet) {
         showToast({
           title: "Could not sync FPL team",
-          message: err && err.message ? err.message : "Check the ID and try again.",
+          message: err && err.message ? err.message : "Check the connection and try again.",
           icon: "triangle-alert",
         });
       }
-      if (render) renderTable();
+      if (render) scheduleSiteRefreshForHomeTargets({ toast: false });
       return false;
     }
-    if (render) renderTable();
+    if (render) scheduleSiteRefreshForHomeTargets({ toast: !quiet });
     return true;
   }
 
   function clearManagerId({ quiet = false, render = true } = {}) {
     savedManagerId = null;
+    savedLeagueId = null;
     ownedCodes = new Set();
     state.actualMeta = null;
     try {
       localStorage.removeItem(FPL_ID_KEY);
+      localStorage.removeItem(FPL_LEAGUE_KEY);
       localStorage.removeItem(TEAM_ACTUAL_KEY);
     } catch {
       /* private browsing */
     }
-    if (el.fplIdInput) el.fplIdInput.value = "";
+    persistHomePrefs();
+    if (el.fplManagerSelect) el.fplManagerSelect.value = "";
+    rebuildLeagueSelect({ preferredId: null });
     if (state.teamMode === "actual") {
       applySquadSnapshot({ squad: [], captain: null, vice: null });
     }
     syncFplIdStatus();
     syncTeamModeUI();
     if (!quiet) {
-      showToast({ title: "FPL ID cleared", message: "Actual team link removed. Planner draft is unchanged.", icon: "info" });
+      showToast({ title: "FPL link cleared", message: "Actual team link removed. Planner draft is unchanged.", icon: "info" });
     }
-    if (render) renderTable();
+    if (render) scheduleSiteRefreshForHomeTargets({ toast: !quiet });
   }
 
   async function restoreManagerId() {
     let saved = "";
-    let mode = "planner";
+    let savedLeague = "";
+    let mode = "actual";
     try {
       saved = localStorage.getItem(FPL_ID_KEY) || "";
-      mode = localStorage.getItem(TEAM_MODE_KEY) === "actual" ? "actual" : "planner";
+      savedLeague = localStorage.getItem(FPL_LEAGUE_KEY) || "";
+      // Default Actual; only stay on Planner when explicitly stored.
+      mode = localStorage.getItem(TEAM_MODE_KEY) === "planner" ? "planner" : "actual";
     } catch {
       saved = "";
-      mode = "planner";
+      savedLeague = "";
+      mode = "actual";
     }
     const actual = loadActualSnapshot();
     if (actual) {
       state.actualMeta = actual.meta || null;
       ownedCodes = new Set(actual.squad.map((s) => s.code));
     }
-    if (el.fplIdInput && saved) el.fplIdInput.value = saved;
-    if (saved) savedManagerId = saved;
-    state.teamMode = "planner";
-    loadTeamDraft();
-    if (saved) {
+    populateManagerSelect();
+    if (saved && trackedManagerById(saved)) {
+      savedManagerId = saved;
+      if (el.fplManagerSelect) el.fplManagerSelect.value = saved;
+      if (savedLeague) savedLeagueId = savedLeague;
+      rebuildLeagueSelect({ preferredId: savedLeague || null });
+      state.teamMode = "planner";
+      loadTeamDraft();
       try {
         await syncManagerFromApi(saved, { seedPlannerIfEmpty: true, quiet: true });
       } catch {
         syncFplIdStatus();
       }
     } else {
-      syncFplIdStatus();
-    }
-    setTeamMode(mode, { render: false, persist: false });
-  }
-
-  function requestResyncPlanner() {
-    if (!savedManagerId) {
-      showToast({ title: "No manager linked", message: "Save a Manager ID in Preferences first.", icon: "triangle-alert" });
-      return;
-    }
-    openConfirmModal({
-      title: "Resync planner from Actual?",
-      message: "This replaces your Planner squad with the latest linked FPL team. Planner-only edits will be lost.",
-      okLabel: "Resync planner",
-    }).then(async (ok) => {
-      if (!ok) return;
-      try {
-        const payload = await fetchManagerSquad(savedManagerId);
-        const snap = await ingestManagerSquad(payload, { seedPlannerIfEmpty: false });
-        state.teamMode = "planner";
+      if (saved && !trackedManagerById(saved)) {
+        // Migrated free-text ID no longer in tracked list — leave unlinked.
         try {
-          localStorage.setItem(TEAM_MODE_KEY, "planner");
+          localStorage.removeItem(FPL_ID_KEY);
+          localStorage.removeItem(FPL_LEAGUE_KEY);
         } catch {
           /* private browsing */
         }
-        applySquadSnapshot(snap);
-        saveTeamDraft();
-        syncTeamModeUI();
-        renderTeam();
-        showToast({
-          title: "Planner resynced",
-          message: payload.hasPicks
-            ? `Copied ${payload.squad.length} picks from Actual.`
-            : payload.message || "Actual had no published picks — planner cleared.",
-          icon: "circle-check",
-        });
-      } catch (err) {
-        showToast({
-          title: "Resync failed",
-          message: err && err.message ? err.message : "Could not reach the FPL proxy.",
-          icon: "triangle-alert",
-        });
       }
+      savedManagerId = null;
+      savedLeagueId = null;
+      rebuildLeagueSelect({ preferredId: null });
+      state.teamMode = "planner";
+      loadTeamDraft();
+      syncFplIdStatus();
+    }
+    setTeamMode(mode, { render: false, persist: false });
+    persistHomePrefs();
+    refreshManagerDependentUI();
+  }
+
+  function requestResyncPlanner(fromBtn) {
+    if (!savedManagerId) {
+      showToast({ title: "No manager linked", message: "Pick a manager in Preferences first.", icon: "triangle-alert" });
+      return;
+    }
+    if (state.teamMode !== "planner") {
+      showToast({ title: "Switch to Planner", message: "Resync copies Actual into the Planner draft.", icon: "info" });
+      return;
+    }
+    const btn = fromBtn || el.teamResyncToolbar || el.teamResyncBtn;
+    armConfirmButton(btn, {
+      onConfirm: async () => {
+        setPrefsOpen(false);
+        try {
+          const payload = await fetchManagerSquad(savedManagerId);
+          const snap = await ingestManagerSquad(payload, { seedPlannerIfEmpty: false });
+          state.teamMode = "planner";
+          try {
+            localStorage.setItem(TEAM_MODE_KEY, "planner");
+          } catch {
+            /* private browsing */
+          }
+          applySquadSnapshot(snap);
+          saveTeamDraft();
+          syncTeamModeUI();
+          renderTeam();
+          showToast({
+            title: "Planner resynced",
+            message: payload.hasPicks
+              ? `Copied ${payload.squad.length} picks from Actual.`
+              : payload.message || "Actual had no published picks — planner cleared.",
+            icon: "circle-check",
+          });
+        } catch (err) {
+          showToast({
+            title: "Resync failed",
+            message: err && err.message ? err.message : "Could not reach the FPL proxy.",
+            icon: "triangle-alert",
+          });
+        }
+      },
     });
   }
 
@@ -3748,8 +4562,7 @@
   }
 
   function fixtureCardHTML(teamCode, highlightMaps, rankMaps, options = {}) {
-    const fixtures = options.fixtures ||
-      (FIXTURES_BY_TEAM[teamCode] || []).slice(0, FIXTURE_TT_COUNT);
+    const fixtures = options.fixtures || planningFixturesForTeam(teamCode, FIXTURE_TT_COUNT);
     const showMeta = options.showMeta !== false;
     const showTeamInfo = options.showTeamInfo === true;
     const showMatchups = options.showMatchups === true;
@@ -3974,10 +4787,24 @@
   function pageInfoTooltipHTML() {
     const mobile = pageInfoIsMobile();
 
+    if (state.page === "home") {
+      return `${spitHead("house", "How Home works")}
+        ${spitIntro("Live GW dashboard for your Preferences manager + league (auto-subs & chips from last refresh).")}
+        ${spitSection("Reading", [
+          spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
+          spitRow(spitRank("MP dots"), "Green = fixture in play. Grey = finished (incl. FPL provisional FT). Kickoff time = not started."),
+          spitRow(spitRank("Hot PTS"), "Highlighted when a player has scored 8+ this GW."),
+          spitRow(spitRank("IMP"), "Your multiplier share vs league top third (100% unique XI, 200% C, 300% TC). Green ahead, red behind."),
+          spitRow(spitRank("Play"), "Standings: in play · still to play among active picks (BB can exceed 11)."),
+          spitRow(spitRank("Own"), "Hover/click a squad player or standings manager to cross-highlight shared ownership."),
+          spitRow(spitRank("Refresh"), "Changing manager/league auto-refreshes Home + owned pins (local server). Or run refresh home."),
+        ])}`;
+    }
+
     if (state.page === "rankings") {
       const iconRows = [
         spitRow(spitMedalsHTML(), "Places 1–3 on each card.", "spit-medals"),
-        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)."),
+        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
       const reading = [
         spitRow(spitRank("Place"), "Among the current filters (and any pinned compares) — not the full unfiltered list. Default mins/price cuts stop low-minute Per 90 outliers from taking #1."),
@@ -4014,7 +4841,7 @@
         ),
       ];
       const intro = isNextSeason()
-        ? "Expected vs actual isn’t published for 2026/27 yet. Switch Data season in Preferences to 2025/26."
+        ? "FPL expected vs actual for 2026/27 — home/away from live match venue."
         : "Expected (x) vs actual — who over- or underperformed.";
       return `${spitHead("chart-gantt", "How Expected Data works")}
         ${spitIntro(intro)}
@@ -4046,10 +4873,10 @@
       const reading = [
         spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines until you pick one."),
         spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
-        spitRow(spitRank("Trend"), "Window and minimum change (pp) in Filters. Longer windows raise the effective pp gate (Last×1, Last 3×2, Last 7×3) so bigger moves stand out. Lines that qualify color green (up) or red (down); the rest stay grey."),
+        spitRow(spitRank("Trend"), "Last / Last 3 / Last 7 in Filters picks the lookback. Top 5 risers and fallers are ranked across the full ownership set (team/position chips only hide lines). Matching movers color green or red; everyone else stays grey. The chart x-axis zooms to the window."),
         spitRow(spitRank("Axis"), "X is a snapshot date, not a gameweek. Y zooms to the lines on screen."),
         spitRow(spitRank(mobile ? "Tap" : "Select"), mobile
-          ? "Tap a line or a Riser/Faller to pin it in club color; other lines go faint. Tap again or empty space to unpin."
+          ? "Tap a line or a Riser/Faller to pin it. A selection card appears above the chart — use ✕ to clear."
           : "Click a Riser/Faller (or a line) to pin it in club color; other lines go faint. Click again or empty space to unpin. Hover a line for the player/club card."),
       ];
       return `${spitHead("trending-up", "How Ownership works")}
@@ -4092,10 +4919,10 @@
         spitRow(spitRank("Planner"), "Editable local draft. Survives refresh. Resync in Preferences overwrites it from Actual."),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
-        spitRow(spitRank("Stats"), "Pts, xPts, xGI, xG, xA from 2025/26 (matched by FPL code). Green cell wash is last-season rank among that position (same top-% band as Statistics Enhance). New signings show –."),
+        spitRow(spitRank("Stats"), `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). Green cell wash is rank among that position (same top-% band as Statistics Enhance). New signings / zero rows show –.`),
         spitRow(spitRank("Form"), "Sparkline of mock recent form. Tap it (or the column header) to switch to TSB% from ownership check-ins."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (green check). FK/CK also show #2."),
-        spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Pick GW2 to shift the run so GW2 is current."),
+        spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Defaults to the next GW once the current one has started, so you can plan ahead."),
         spitRow(
           spitRank("Select"),
           mobile
@@ -4108,7 +4935,7 @@
           ? "Compare mode — tap squad or picker rows to pin up to 5. Compare mode is off while pins exist."
           : "Compare mode — click squad or picker rows to pin up to 5. Compare mode is off while pins exist."),
         spitRow(spitRank("Compare"), "With no pins, Compare mode selects instead of add/replace. Hover a squad or result row to highlight stat winners."),
-        spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager ID to import Actual."),
+        spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager in Preferences to import Actual."),
       ];
       const intro = state.teamMode === "actual"
         ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
@@ -4129,10 +4956,10 @@
       spitRow(iconHTML("scale"), "Compare — tap the toolbar button, then pick up to five rows"),
     ];
     iconRows.push(
-      spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager ID)"),
+      spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)"),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold"),
-        "DC threshold check — enough CBIT/R per 90 (10 DEF / 12 MID·FWD). Blue in light mode, red in dark mode."
+        "DefCon check — earned DC points by hitting the match threshold (DEF 10 CBIT / MID·FWD 12 CBIRT). Not a per-90 rate. Blue in light mode, red in dark mode."
       ),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
@@ -4752,6 +5579,7 @@
 
   function syncPageInfoButton() {
     const labels = {
+      home: "How Home works",
       opta: "How Statistics works",
       rankings: "How Rankings works",
       expected: "How Expected Data works",
@@ -4765,7 +5593,8 @@
       const pane = btn.closest(".page-pane");
       let page = state.page;
       if (pane) {
-        if (pane.id === "opta-page") page = "opta";
+        if (pane.id === "home-page") page = "home";
+        else if (pane.id === "opta-page") page = "opta";
         else if (pane.id === "rankings-page") page = "rankings";
         else if (pane.id === "expected-page") page = "expected";
         else if (pane.id === "schedule-page") page = "schedule";
@@ -5156,6 +5985,7 @@
   const PLAYER_EXPECTED_CATS = [
     { key: "goals", label: "xG vs Goals", expectedKey: "xg", actualKey: "goals", expectedLabel: "xG", actualLabel: "Goals", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false },
     { key: "assists", label: "xA vs Assists", expectedKey: "xa", actualKey: "assists", expectedLabel: "xA", actualLabel: "Assists", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false },
+    // combinedOnly only for 2025/26 (history_past has no venue split). 2026/27 has H/A from live+fixtures.
     { key: "gi", label: "xGI vs G+A", expectedKey: "xgi", actualKey: "__gi", expectedLabel: "xGI", actualLabel: "G+A", expectedDecimals: 1, actualDecimals: 0, lowerBetter: false, combinedOnly: true },
     { key: "conceded", label: "xGC vs Conceded", expectedKey: "xgc", actualKey: "goalsConceded", expectedLabel: "xGC", actualLabel: "GC", expectedDecimals: 1, actualDecimals: 0, lowerBetter: true, combinedOnly: true },
   ];
@@ -5167,7 +5997,10 @@
   const EXPECTED_DIFF_EPSILON = 0.05;
 
   function expectedCats() {
-    return state.view === "players" ? PLAYER_EXPECTED_CATS : TEAM_EXPECTED_CATS;
+    const cats = state.view === "players" ? PLAYER_EXPECTED_CATS : TEAM_EXPECTED_CATS;
+    if (!isNextSeason()) return cats;
+    // xCS is Hub/OPTA-only — no FPL equivalent for 2026/27.
+    return cats.filter((c) => c.expectedKey !== "xcs" && c.actualKey !== "xcs");
   }
 
   function currentExpectedCat() {
@@ -5285,7 +6118,12 @@
   // Total/Home/Away control (state.split) used by the OPTA table, since only
   // this page supports a 4th "Compare" mode that shows a Home row and an Away
   // row per player/team — a shape the other pages' rendering doesn't understand.
+  // Still follows the settings season toggle (2025/26 OPTA vs 2026/27 FPL).
   function expectedSplitRows(split) {
+    if (isNextSeason()) {
+      const next = season2627Data();
+      return state.view === "players" ? next.players[split] : next.teams[split];
+    }
     return state.view === "players" ? DATA.players[split] : DATA.teams[split];
   }
 
@@ -5667,7 +6505,8 @@
   // Total if they were sitting on a split that just became unavailable —
   // e.g. switching from "xG vs Goals" to "xGC vs Conceded" while on Home.
   function updateExpectedSplitAvailability(cat) {
-    const restricted = !!cat.combinedOnly;
+    // 2026/27 has venue splits from live+fixtures; combinedOnly only binds 2025/26.
+    const restricted = !!cat.combinedOnly && !isNextSeason();
     if (restricted && state.expectedSplit !== "combined") state.expectedSplit = "combined";
     $$("#expected-split-seg button").forEach((b) => {
       const isCombined = b.dataset.split === "combined";
@@ -5691,23 +6530,14 @@
     el.expectedTitle.querySelector(".page-title-text").textContent = "Expected Data";
 
     if (isNextSeason()) {
-      el.expectedSub.textContent = "Expected vs actual isn’t available for 2026/27 yet.";
-      el.barbellHead.innerHTML = "";
-      el.barbellScale.innerHTML = "";
-      el.barbellBody.innerHTML = "";
-      const empty = document.createElement("div");
-      empty.className = "empty-state expected-empty";
-      empty.innerHTML = `
-        <p>No expected data for 2026/27.</p>
-        <p class="expected-empty-hint">xG, xA, and other expected stats aren’t published for the new season yet. Switch the data season to <strong>2025/26</strong> to browse last year’s expected vs actual.</p>`;
-      el.barbellBody.appendChild(empty);
-      if (NARROW_MQ.matches) bindMobileChromeScrollHide();
-      return;
+      el.expectedSub.textContent = compareMode
+        ? "2026/27 home and away side by side (venue from fixtures + live stats)."
+        : "FPL expected vs actual for 2026/27 — Home/Away from match venue.";
+    } else {
+      el.expectedSub.textContent = compareMode
+        ? "Home and away side by side for the same players or teams."
+        : "Compare expected (x) stats with what actually happened — who overperformed or underperformed.";
     }
-
-    el.expectedSub.textContent = compareMode
-      ? "Home and away side by side for the same players or teams."
-      : "Compare expected (x) stats with what actually happened — who overperformed or underperformed.";
 
     // Compare mode always groups by the combined (whole-season) totals —
     // the Home/Away rows within a group come from their own splits, but
@@ -5782,6 +6612,18 @@
     ],
   };
 
+  function rankingsSectionsForView() {
+    const sections = RANKINGS_SECTIONS[state.view] || [];
+    if (!isNextSeason()) return sections;
+    const hide = state.view === "players" ? PLAYER_OPTA_ONLY_COL_KEYS : TEAM_OPTA_ONLY_COL_KEYS;
+    return sections
+      .map((sec) => ({
+        ...sec,
+        keys: sec.keys.filter((k) => !hide.has(k)),
+      }))
+      .filter((sec) => sec.keys.length);
+  }
+
   // Card titles intentionally differ from the OPTA table's detailed tooltips.
   // metricDisplayTitle() / METRIC_TITLE_OVERRIDES keep Rankings concise without
   // changing any existing table labels or explanatory hover text.
@@ -5798,16 +6640,18 @@
   }
 
   function rankingsColumnsForSection(section) {
-    const spec = (RANKINGS_SECTIONS[state.view] || []).find((s) => s.label === section);
+    const spec = rankingsSectionsForView().find((s) => s.label === section);
     if (!spec) return [];
     const byKey = new Map(cols().map((col) => [col.key, col]));
     return spec.keys
       .map((key) => byKey.get(key))
       .filter((col) => {
         if (!col || !isRankingsMetricCol(col)) return false;
-        // FPL season totals have no home/away breakdown — omit those cards.
+        // 2025/26 FPL season totals have no home/away breakdown — omit those cards.
+        // 2026/27 derives venue splits from live + fixtures.
         if (
           state.view === "players" &&
+          !isNextSeason() &&
           FPL_SEASON_TOTAL_ONLY.has(col.key) &&
           state.split !== "combined"
         ) {
@@ -5821,7 +6665,7 @@
   // the combined-only groups drop out on Home/Away rather than leaving a
   // heading above an empty stretch of grid.
   function rankingsSections() {
-    return (RANKINGS_SECTIONS[state.view] || [])
+    return rankingsSectionsForView()
       .map((s) => ({ label: s.label, metricCols: rankingsColumnsForSection(s.label) }))
       .filter((s) => s.metricCols.length > 0);
   }
@@ -6215,9 +7059,7 @@
   }
 
   function teamCurrentGw() {
-    const n = Number(DATA.fixturesMeta && DATA.fixturesMeta.currentGw);
-    if (Number.isFinite(n) && n >= SCHEDULE_GW_MIN) return n;
-    return SCHEDULE_GW_MIN;
+    return planningGameweek();
   }
 
   function teamClampGwStart(start) {
@@ -6242,13 +7084,20 @@
   }
 
   let teamPriorByCodeCache = null;
+  let teamPriorByCodeSeason = null;
   function teamPriorByCode() {
-    if (teamPriorByCodeCache) return teamPriorByCodeCache;
+    if (teamPriorByCodeCache && teamPriorByCodeSeason === state.season) {
+      return teamPriorByCodeCache;
+    }
     const map = new Map();
-    ((DATA.players && DATA.players.combined) || []).forEach((row) => {
+    const source = isNextSeason()
+      ? (season2627Data().players.combined || [])
+      : ((DATA.players && DATA.players.combined) || []);
+    source.forEach((row) => {
       if (row && row.code != null) map.set(Number(row.code), row);
     });
     teamPriorByCodeCache = map;
+    teamPriorByCodeSeason = state.season;
     return map;
   }
 
@@ -6257,11 +7106,18 @@
     return teamPriorByCode().get(Number(code)) || null;
   }
 
+  function teamStatsSeasonLabel() {
+    return isNextSeason() ? "2026/27" : "2025/26";
+  }
+
   let teamPosRankCache = null;
+  let teamPosRankSeason = null;
   function teamPosRankMaps() {
-    if (teamPosRankCache) return teamPosRankCache;
+    if (teamPosRankCache && teamPosRankSeason === state.season) return teamPosRankCache;
     const maps = {};
-    const prior = (DATA.players && DATA.players.combined) || [];
+    const prior = isNextSeason()
+      ? (season2627Data().players.combined || [])
+      : ((DATA.players && DATA.players.combined) || []);
     TEAM_STAT_COLS.forEach((col) => {
       maps[col.key] = {};
       POSITIONS.forEach((pos) => {
@@ -6282,6 +7138,7 @@
       });
     });
     teamPosRankCache = maps;
+    teamPosRankSeason = state.season;
     return maps;
   }
 
@@ -6335,7 +7192,7 @@
         col.key,
         col.label,
         "col-num col-team-stat",
-        `${col.title} · 2025/26`,
+        `${col.title} · ${teamStatsSeasonLabel()}`,
         { plain }
       )
     ).join("");
@@ -7150,18 +8007,18 @@
     });
   }
 
-  function requestClearTeamSquad() {
+  function requestClearTeamSquad(fromBtn) {
     if (!teamIsEditable()) {
       showToast({ title: "Actual is read-only", message: "Switch to Planner to clear the draft.", icon: "info" });
       return;
     }
     if (!state.teamSquad.length) return;
-    openConfirmModal({
-      title: "Clear planner?",
-      message: "This removes every player from the Planner draft. Your Actual FPL team is unchanged.",
-      okLabel: "Clear planner",
-    }).then((ok) => {
-      if (ok) clearTeamSquad();
+    const btn = fromBtn || el.teamClearToolbar || el.teamClearBtn;
+    armConfirmButton(btn, {
+      onConfirm: () => {
+        setPrefsOpen(false);
+        clearTeamSquad();
+      },
     });
   }
 
@@ -7406,7 +8263,7 @@
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
     syncTeamCompareHost();
     syncTeamPickerToolbarOrder();
-    const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "feed" || (state.page === "team" && !picking);
+    const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "feed" || state.page === "home" || (state.page === "team" && !picking);
     if (el.sidebar) el.sidebar.style.display = hideSidebar ? "none" : "";
     if (el.sidebarToggle) {
       el.sidebarToggle.style.display = state.page === "team" && !picking ? "none" : "";
@@ -8723,7 +9580,7 @@
     for (const row of combined) {
       if (row && row.code != null) map.set(Number(row.code), { ...row });
     }
-    for (const row of DATA.nextSeasonPlayers || []) {
+    for (const row of nextSeasonSplitLists(DATA.nextSeasonPlayers).combined) {
       if (!row || row.code == null) continue;
       const key = Number(row.code);
       const prev = map.get(key);
@@ -8980,6 +9837,7 @@
 
   function feedPosStatSpecs(position, { detail = false } = {}) {
     const pos = String(position || "").toUpperCase();
+    const fplSeason = isNextSeason();
     const compact = {
       GK: [
         { key: "saves", label: "Saves", decimals: 0 },
@@ -9046,7 +9904,10 @@
         { key: "owned", label: "TSB%", decimals: 1 },
       ],
     };
-    const list = detail ? expanded[pos] || expanded.FWD : compact[pos] || compact.FWD;
+    let list = detail ? expanded[pos] || expanded.FWD : compact[pos] || compact.FWD;
+    if (fplSeason) {
+      list = list.filter((s) => !PLAYER_OPTA_ONLY_COL_KEYS.has(s.key));
+    }
     return detail ? list : list.slice(0, 4);
   }
 
@@ -10333,7 +11194,7 @@ python3 site/annotate_social.py</pre>
   const OWNERSHIP_POINT_HIT = 16;
   const OWNERSHIP_LINE_HIT = 10;
   const OWNERSHIP_PLAYER_TREND_CARD_N = 5;
-  const OWNERSHIP_TEAM_TREND_CARD_N = 8;
+  const OWNERSHIP_TEAM_TREND_CARD_N = 5;
 
   let ownershipHoverKey = null;
   let ownershipHoverIndex = null;
@@ -10385,18 +11246,55 @@ python3 site/annotate_social.py</pre>
     return n === 3 || n === 7 ? n : 1;
   }
 
-  function ownershipTrendThresholdScale(span = ownershipTrendWindowSpan()) {
-    return OWNERSHIP_TREND_THRESHOLD_SCALE[span] || 1;
+  // Chart x-axis follows the trend window: span steps ⇒ span+1 check-ins
+  // (the endpoints of the delta used for risers/fallers).
+  function ownershipChartWindow(checkIns = ownershipCheckIns()) {
+    const all = Array.isArray(checkIns) ? checkIns : [];
+    const span = ownershipTrendWindowSpan();
+    const count = Math.min(all.length, span + 1);
+    const startIdx = Math.max(0, all.length - count);
+    const endIdx = all.length ? all.length - 1 : -1;
+    return {
+      startIdx,
+      endIdx,
+      count,
+      checkIns: count ? all.slice(startIdx) : [],
+    };
   }
 
-  function effectiveOwnershipTrendThreshold(base = state.ownershipTrendThreshold, span = ownershipTrendWindowSpan()) {
-    const scaled = Number(base) * ownershipTrendThresholdScale(span);
-    return Math.min(
-      OWNERSHIP_TREND_THRESHOLD_MAX,
-      Math.max(0.1, Math.round(scaled * 10) / 10)
-    );
+  function ownershipTrendCardLimit() {
+    return state.view === "teams" ? OWNERSHIP_TEAM_TREND_CARD_N : OWNERSHIP_PLAYER_TREND_CARD_N;
   }
 
+  // Rank movers without team/pos chips so filters only subset the chart —
+  // coloring stays the global top-N, not "top-N of this club".
+  function ownershipTrendRankSeries() {
+    return state.view === "teams"
+      ? buildOwnershipTeamSeries({ ignoreTeamPos: true })
+      : buildOwnershipPlayerSeries({ ignoreTeamPos: true });
+  }
+
+  function ownershipTrendColoredKeys(rankSeries) {
+    const scored = (rankSeries || []).map((s) => ({
+      series: s,
+      trend: ownershipTrendScore(s),
+    }));
+    const cardLimit = ownershipTrendCardLimit();
+    const keys = new Set();
+    scored
+      .filter((x) => x.trend.kind === "riser")
+      .sort(compareOwnershipTrends)
+      .slice(0, cardLimit)
+      .forEach((x) => keys.add(x.series.key));
+    scored
+      .filter((x) => x.trend.kind === "faller")
+      .sort(compareOwnershipTrends)
+      .slice(0, cardLimit)
+      .forEach((x) => keys.add(x.series.key));
+    return keys;
+  }
+
+  // Score the window delta only — top-N coloring is applied later via _trendCard.
   function ownershipTrendScore(series) {
     const owned = (series.points || [])
       .filter((pt) => pt && pt.owned != null && !Number.isNaN(Number(pt.owned)))
@@ -10415,10 +11313,9 @@ python3 site/annotate_social.py</pre>
     const recent = Math.round((last - owned[fromIdx]) * 10) / 10;
     const net = Math.round((last - owned[0]) * 10) / 10;
     const current = last;
-    const threshold = effectiveOwnershipTrendThreshold(state.ownershipTrendThreshold, span);
     let kind = "flat";
-    if (recent >= threshold) kind = "riser";
-    else if (recent <= -threshold) kind = "faller";
+    if (recent > 0) kind = "riser";
+    else if (recent < 0) kind = "faller";
     return { kind, recent, net, current };
   }
 
@@ -10466,8 +11363,8 @@ python3 site/annotate_social.py</pre>
   }
 
   function ownershipSeriesTrendQualifies(series) {
-    const trend = ownershipSeriesTrend(series);
-    return !!(trend && trend.kind !== "flat");
+    // Colored only when this series made the top-N riser/faller cards.
+    return !!(series && series._trendCard);
   }
 
   function syncOwnershipTrendingUI() {
@@ -10486,28 +11383,25 @@ python3 site/annotate_social.py</pre>
     syncSegThumb(el.ownershipTrendWindowSeg, { animate });
   }
 
-  function renderOwnershipTrendCards(series) {
+  function renderOwnershipTrendCards(series, coloredKeys) {
     if (!el.ownershipTrendRisers || !el.ownershipTrendFallers) return;
-    const scored = (series || [])
-      .map((s) => ({ series: s, trend: s._trend || ownershipTrendScore(s) }))
-      .filter((x) => x.trend.kind !== "flat");
-    const cardLimit =
-      state.view === "teams" ? OWNERSHIP_TEAM_TREND_CARD_N : OWNERSHIP_PLAYER_TREND_CARD_N;
+    const keySet = coloredKeys || new Set();
+    const scored = (series || []).map((s) => ({
+      series: s,
+      trend: s._trend || ownershipTrendScore(s),
+    }));
+    // Cards list global top movers that remain after team/pos filters —
+    // not a re-ranked top-N of the filtered club/position alone.
     const risers = scored
-      .filter((x) => x.trend.kind === "riser")
-      .sort(compareOwnershipTrends)
-      .slice(0, cardLimit);
+      .filter((x) => keySet.has(x.series.key) && x.trend.kind === "riser")
+      .sort(compareOwnershipTrends);
     const fallers = scored
-      .filter((x) => x.trend.kind === "faller")
-      .sort(compareOwnershipTrends)
-      .slice(0, cardLimit);
+      .filter((x) => keySet.has(x.series.key) && x.trend.kind === "faller")
+      .sort(compareOwnershipTrends);
     (series || []).forEach((item) => {
-      item._trendCard = false;
+      item._trendCard = keySet.has(item.key);
     });
-    [...risers, ...fallers].forEach((item) => {
-      item.series._trendCard = true;
-    });
-    const empty = `<div class="ownership-trend-empty">No ownership movers match the current filters.</div>`;
+    const empty = `<div class="ownership-trend-empty">No top movers match the current filters.</div>`;
     el.ownershipTrendRisers.innerHTML = risers.length
       ? risers.map((x) => ownershipTrendCardHTML(x.series, x.trend)).join("")
       : empty;
@@ -10533,9 +11427,9 @@ python3 site/annotate_social.py</pre>
     }
   }
 
-  function ownershipPlayerPassesFilters(p, catalog) {
-    if (state.posFilter.size && !state.posFilter.has(p.position)) return false;
-    if (state.teamFilter.size && !state.teamFilter.has(p.team)) return false;
+  function ownershipPlayerPassesFilters(p, catalog, { ignoreTeamPos = false } = {}) {
+    if (!ignoreTeamPos && state.posFilter.size && !state.posFilter.has(p.position)) return false;
+    if (!ignoreTeamPos && state.teamFilter.size && !state.teamFilter.has(p.team)) return false;
     const price = Number(p.price);
     if (Number.isFinite(price) && (price < state.priceMin || price > state.priceMax)) return false;
     if (!Number.isFinite(Number(p.owned)) || Number(p.owned) < state.ownedMin) return false;
@@ -10551,8 +11445,8 @@ python3 site/annotate_social.py</pre>
     return true;
   }
 
-  function ownershipTeamPassesFilters(team, name) {
-    if (state.teamFilter.size && !state.teamFilter.has(team)) return false;
+  function ownershipTeamPassesFilters(team, name, { ignoreTeamPos = false } = {}) {
+    if (!ignoreTeamPos && state.teamFilter.size && !state.teamFilter.has(team)) return false;
     const q = state.search.trim().toLowerCase();
     if (q) {
       const hay = `${name || ""} ${team || ""} ${teamNameForSeason(team) || ""}`.toLowerCase();
@@ -10569,27 +11463,35 @@ python3 site/annotate_social.py</pre>
     return { owned: Math.round((sum / n) * 10) / 10, n, sample: top[0] };
   }
 
-  function ownershipOwnedValues(series) {
+  function ownershipOwnedValues(series, startIdx = null, endIdx = null) {
     return (series || []).flatMap((item) =>
       (item.points || [])
-        .map((point) => Number(point && point.owned))
+        .filter((point) => {
+          if (!point) return false;
+          if (startIdx != null && point.i < startIdx) return false;
+          if (endIdx != null && point.i > endIdx) return false;
+          return true;
+        })
+        .map((point) => Number(point.owned))
         .filter(Number.isFinite)
     );
   }
 
-  function ownershipScaleRange(series) {
-    const values = ownershipOwnedValues(series);
+  function ownershipScaleRange(series, startIdx = null, endIdx = null) {
+    const values = ownershipOwnedValues(series, startIdx, endIdx);
     const dataMax = values.length ? Math.max(...values) : 10;
     const dataMin = values.length ? Math.min(...values) : 0;
     return niceOwnershipRange(dataMin, dataMax);
   }
 
-  function buildOwnershipPlayerSeries() {
+  function buildOwnershipPlayerSeries({ ignoreTeamPos = false } = {}) {
     const checkIns = ownershipCheckIns();
     if (!checkIns.length) return [];
     const catalog = ownershipCatalogByCode();
     const latest = checkIns[checkIns.length - 1];
-    const universe = (latest.players || []).filter((p) => ownershipPlayerPassesFilters(p, catalog));
+    const universe = (latest.players || []).filter((p) =>
+      ownershipPlayerPassesFilters(p, catalog, { ignoreTeamPos })
+    );
     const top = universe
       .slice()
       .sort((a, b) => (b.owned || 0) - (a.owned || 0) || a.code - b.code)
@@ -10621,7 +11523,7 @@ python3 site/annotate_social.py</pre>
     });
   }
 
-  function buildOwnershipTeamSeries() {
+  function buildOwnershipTeamSeries({ ignoreTeamPos = false } = {}) {
     const checkIns = ownershipCheckIns();
     if (!checkIns.length) return [];
     const perCheckIn = checkIns.map((ci) => {
@@ -10640,7 +11542,7 @@ python3 site/annotate_social.py</pre>
     });
     const latestMap = perCheckIn[perCheckIn.length - 1];
     const teams = Array.from(latestMap.keys()).filter((team) =>
-      ownershipTeamPassesFilters(team, teamNameForSeason(team))
+      ownershipTeamPassesFilters(team, teamNameForSeason(team), { ignoreTeamPos })
     );
     teams.sort((a, b) => (latestMap.get(b).owned || 0) - (latestMap.get(a).owned || 0) || a.localeCompare(b));
     return teams.map((team) => {
@@ -10660,10 +11562,19 @@ python3 site/annotate_social.py</pre>
     });
   }
 
-  function ownershipPolylines(points, xAt, yAt) {
+  function ownershipPolylines(points, xAt, yAt, startIdx = null, endIdx = null) {
     const lines = [];
     let cur = [];
     points.forEach((pt) => {
+      if (
+        startIdx != null &&
+        endIdx != null &&
+        (pt.i < startIdx || pt.i > endIdx)
+      ) {
+        if (cur.length) lines.push(cur);
+        cur = [];
+        return;
+      }
       if (pt.owned == null || Number.isNaN(pt.owned)) {
         if (cur.length) lines.push(cur);
         cur = [];
@@ -10735,12 +11646,61 @@ python3 site/annotate_social.py</pre>
     return { yMin, yMax, step };
   }
 
+  function ownershipUsesSelectionCard() {
+    // Touch / narrow: selection lives in a dedicated card, not a floating tip over the plot.
+    return NARROW_MQ.matches || !hasFineHover();
+  }
+
+  function hideOwnershipSelection() {
+    if (!el.ownershipSelection) return;
+    el.ownershipSelection.hidden = true;
+    el.ownershipSelection.innerHTML = "";
+  }
+
+  function clearOwnershipSelection() {
+    ownershipPinnedKey = null;
+    ownershipPinnedFromChart = false;
+    setOwnershipHover(null, null);
+    hideOwnershipTooltip();
+  }
+
+  function bindOwnershipTipPhotoFallback(root) {
+    if (!root) return;
+    root.querySelectorAll("img.own-tip-photo").forEach((img) => {
+      img.addEventListener("error", () => {
+        const fallback = document.createElement("span");
+        fallback.className = "own-tip-photo own-tip-photo-fallback";
+        fallback.setAttribute("aria-hidden", "true");
+        fallback.textContent = img.getAttribute("data-initials") || "?";
+        img.replaceWith(fallback);
+      }, { once: true });
+    });
+  }
+
+  function showOwnershipSelection(series, ptIndex) {
+    if (!el.ownershipSelection || !series) return;
+    const rollFrom = ownershipTipStats && ownershipTipStats.key === series.key ? ownershipTipStats : null;
+    const body = ownershipTooltipHTML(series, ptIndex, rollFrom);
+    if (!body) return;
+    el.ownershipSelection.innerHTML = `<div class="ownership-selection-card">
+      <button type="button" class="ownership-selection-close" aria-label="Clear selection">${iconHTML("x")}</button>
+      ${body}
+    </div>`;
+    el.ownershipSelection.hidden = false;
+    bindOwnershipTipPhotoFallback(el.ownershipSelection);
+    mountAndAnimateStatRolls(el.ownershipSelection, { duration: 720 });
+    const data = ownershipTooltipPointData(series, ptIndex);
+    if (data) {
+      ownershipTipStats = snapshotOwnershipTipStats(series, data.idx, data.pt, data.delta, data.trend);
+    }
+  }
+
   function hideOwnershipTooltip() {
     clearTimeout(ownershipTipTimer);
     ownershipTipTimer = null;
     ownershipTipStats = null;
-    if (!el.ownershipTooltip) return;
-    el.ownershipTooltip.style.display = "none";
+    if (el.ownershipTooltip) el.ownershipTooltip.style.display = "none";
+    hideOwnershipSelection();
   }
 
   function ownershipInitials(name) {
@@ -11081,23 +12041,22 @@ python3 site/annotate_social.py</pre>
   }
 
   function showOwnershipTooltip(clientX, clientY, series, ptIndex) {
-    if (!el.ownershipTooltip || !el.ownershipChartWrap || !series) return;
+    if (!series) return;
+    if (ownershipUsesSelectionCard()) {
+      if (el.ownershipTooltip) el.ownershipTooltip.style.display = "none";
+      showOwnershipSelection(series, ptIndex);
+      return;
+    }
+    if (!el.ownershipTooltip || !el.ownershipChartWrap) return;
+    hideOwnershipSelection();
     const rollFrom = ownershipTipStats && ownershipTipStats.key === series.key ? ownershipTipStats : null;
     const html = ownershipTooltipHTML(series, ptIndex, rollFrom);
     if (!html) return;
     el.ownershipTooltip.innerHTML = html;
-    el.ownershipTooltip.querySelectorAll("img.own-tip-photo").forEach((img) => {
-      img.addEventListener("error", () => {
-        const fallback = document.createElement("span");
-        fallback.className = "own-tip-photo own-tip-photo-fallback";
-        fallback.setAttribute("aria-hidden", "true");
-        fallback.textContent = img.getAttribute("data-initials") || "?";
-        img.replaceWith(fallback);
-      }, { once: true });
-    });
+    bindOwnershipTipPhotoFallback(el.ownershipTooltip);
     el.ownershipTooltip.style.display = "block";
     positionOwnershipTooltip(clientX, clientY);
-    mountAndAnimateStatRolls(el.ownershipTooltip, { duration: hasFineHover() ? 520 : 720 });
+    mountAndAnimateStatRolls(el.ownershipTooltip, { duration: 520 });
     const data = ownershipTooltipPointData(series, ptIndex);
     if (data) {
       ownershipTipStats = snapshotOwnershipTipStats(series, data.idx, data.pt, data.delta, data.trend);
@@ -11243,6 +12202,14 @@ python3 site/annotate_social.py</pre>
   }
 
   function setOwnershipHover(key, index, { fromChart = false } = {}) {
+    if (
+      index != null &&
+      ownershipLayout &&
+      ownershipLayout.startIdx != null &&
+      ownershipLayout.endIdx != null
+    ) {
+      index = Math.max(ownershipLayout.startIdx, Math.min(ownershipLayout.endIdx, index));
+    }
     ownershipHoverKey = key;
     ownershipHoverIndex = index;
     if (el.ownershipChartWrap) {
@@ -11437,13 +12404,8 @@ python3 site/annotate_social.py</pre>
         : state.ownershipTrendWindow === 3
           ? "last 3 check-ins"
           : "last 7 check-ins";
-    const baseThr = Number(state.ownershipTrendThreshold);
-    const effective = effectiveOwnershipTrendThreshold(baseThr);
-    const thrLabel =
-      Math.abs(effective - baseThr) > 1e-9
-        ? `${baseThr.toFixed(1)}→${effective.toFixed(1)} pp`
-        : `${effective.toFixed(1)} pp`;
-    return `${base} · ${windowLabel}, ≥${thrLabel}`;
+    const n = ownershipTrendCardLimit();
+    return `${base} · ${windowLabel} · top ${n}`;
   }
 
   function syncOwnershipChartTitle() {
@@ -11462,13 +12424,19 @@ python3 site/annotate_social.py</pre>
     hideOwnershipTooltip();
     syncOwnershipChartTitle();
     const checkIns = ownershipCheckIns();
+    const rankSeries = ownershipTrendRankSeries();
+    rankSeries.forEach((s) => {
+      s._trend = ownershipTrendScore(s);
+    });
+    const coloredKeys = ownershipTrendColoredKeys(rankSeries);
     const series =
       state.view === "teams" ? buildOwnershipTeamSeries() : buildOwnershipPlayerSeries();
     series.forEach((s) => {
       s._trend = ownershipTrendScore(s);
+      s._trendCard = coloredKeys.has(s.key);
     });
     ownershipSeriesCache = series;
-    renderOwnershipTrendCards(series);
+    renderOwnershipTrendCards(series, coloredKeys);
     if (el.ownershipChartWrap) {
       el.ownershipChartWrap.classList.add("is-trending");
     }
@@ -11495,15 +12463,35 @@ python3 site/annotate_social.py</pre>
     if (mobileChart) pad.bottom = 56;
     const innerW = Math.max(40, w - pad.left - pad.right);
     const innerH = Math.max(40, h - pad.top - pad.bottom);
-    const n = checkIns.length;
+    const view = ownershipChartWindow(checkIns);
+    const viewCheckIns = view.checkIns;
+    const n = viewCheckIns.length;
     const xAt = (i) => {
       if (n <= 1) return pad.left + innerW / 2;
-      return pad.left + (i / (n - 1)) * innerW;
+      const local = i - view.startIdx;
+      return pad.left + (local / (n - 1)) * innerW;
     };
-    const { yMin, yMax, step: tickStep } = ownershipScaleRange(series);
+    const { yMin, yMax, step: tickStep } = ownershipScaleRange(
+      series,
+      view.startIdx,
+      view.endIdx
+    );
     const ySpan = Math.max(yMax - yMin, 1e-6);
     const yAt = (owned) => pad.top + (1 - (owned - yMin) / ySpan) * innerH;
-    ownershipLayout = { w, h, pad, innerW, innerH, xAt, yAt, yMin, yMax, n };
+    ownershipLayout = {
+      w,
+      h,
+      pad,
+      innerW,
+      innerH,
+      xAt,
+      yAt,
+      yMin,
+      yMax,
+      n,
+      startIdx: view.startIdx,
+      endIdx: view.endIdx,
+    };
 
     if (!checkIns.length) {
       el.ownershipChart.innerHTML = `<div class="ownership-empty">No ownership check-ins yet. Run <code>python3 site/fetch_ownership.py</code> to capture the current FPL selected-by-%.</div>`;
@@ -11518,7 +12506,7 @@ python3 site/annotate_social.py</pre>
     for (let v = yMin; v <= yMax + 1e-6; v += tickStep) yTicks.push(v);
 
     series.forEach((s) => {
-      s._drawn = ownershipPolylines(s.points, xAt, yAt);
+      s._drawn = ownershipPolylines(s.points, xAt, yAt, view.startIdx, view.endIdx);
     });
 
     const grid = yTicks
@@ -11529,9 +12517,9 @@ python3 site/annotate_social.py</pre>
       })
       .join("");
 
-    const xLabels = checkIns
-      .map((ci, i) => {
-        const x = xAt(i);
+    const xLabels = viewCheckIns
+      .map((ci, localI) => {
+        const x = xAt(view.startIdx + localI);
         return `<text class="ownership-axis-label is-x" x="${x.toFixed(1)}" y="${h - 10}">${escapeHtml(fmtOwnershipDate(ci.checkedAt))}</text>`;
       })
       .join("");
@@ -11656,20 +12644,21 @@ python3 site/annotate_social.py</pre>
 
 
   const PAGE_KEY = "fpl-explorer-page";
-  const PAGES = ["opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team"];
+  const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "feed", "markets", "team"];
 
   function storedPage() {
     try {
       const saved = localStorage.getItem(PAGE_KEY);
       if (saved === "notes") return "opta";
-      const page = PAGES.includes(saved) ? saved : "opta";
+      const page = PAGES.includes(saved) ? saved : "home";
       return page;
     } catch {
-      return "opta";
+      return "home";
     }
   }
 
   function pagePaneFor(page) {
+    if (page === "home") return el.homePage;
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
     if (page === "ownership") return el.ownershipPage;
@@ -11730,6 +12719,9 @@ python3 site/annotate_social.py</pre>
       ".team-picker-row",
       ".team-budget-bar",
       ".team-section-row",
+      ".home-panel",
+      ".home-squad-table tbody tr",
+      ".home-standings-table tbody tr",
     ].join(", ");
     pane.querySelectorAll(staggerSel).forEach((node, i) => {
       node.style.setProperty("--enter-i", String(i));
@@ -11994,6 +12986,11 @@ python3 site/annotate_social.py</pre>
         applyTeamPageBounds();
         if (prev !== "team") state.teamGwStart = teamClampGwStart(teamCurrentGw());
       }
+      if (page === "schedule" && prev !== "schedule") {
+        const [lo, hi] = defaultScheduleGwWindow();
+        state.scheduleGwMin = lo;
+        state.scheduleGwMax = hi;
+      }
       resetSearchAndFiltersForNavigation({ rerender: false });
       if (page === "team" || prev === "team") buildTeamFilterChips();
     }
@@ -12006,6 +13003,7 @@ python3 site/annotate_social.py</pre>
     syncAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
+    if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
     el.pageExpected.classList.toggle("active", page === "expected");
     el.pageSchedule.classList.toggle("active", page === "schedule");
@@ -12016,6 +13014,7 @@ python3 site/annotate_social.py</pre>
     document.documentElement.dataset.page = page;
     syncPageTrayTrigger();
     setPageTrayOpen(false);
+    if (el.homePage) el.homePage.style.display = page === "home" ? "" : "none";
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
@@ -12026,10 +13025,12 @@ python3 site/annotate_social.py</pre>
     if (el.teamPage) el.teamPage.style.display = page === "team" ? "" : "none";
     syncTeamLandscapeMode();
     const isMarkets = page === "markets";
+    const isHome = page === "home";
     // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
     const hideSubtoolbar =
       page === "schedule" ||
       isMarkets ||
+      isHome ||
       (preferMobileSheet() && page === "rankings");
     const isFeed = page === "feed";
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
@@ -12037,17 +13038,19 @@ python3 site/annotate_social.py</pre>
     el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
     el.subtoolbar.classList.toggle("is-opta-mobile", page === "opta" && preferMobileSheet());
     el.sidebar.style.display =
-      page === "schedule" || isMarkets || isFeed || (page === "team" && !state.teamPickerSlot)
+      page === "schedule" || isMarkets || isFeed || isHome || (page === "team" && !state.teamPickerSlot)
         ? "none"
         : "";
     if (el.sidebarToggle) {
       el.sidebarToggle.style.display =
         page === "team" && !state.teamPickerSlot ? "none" : "";
     }
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets ? "none" : "";
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isFeed || isMarkets || isHome ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isFeed || isHome ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
     if (el.teamToolbarMode) el.teamToolbarMode.hidden = page !== "team";
+    if (prev !== page) disarmConfirmButton();
+    syncTeamPlannerPrefsBtns();
     if (el.feedToolbarStart) el.feedToolbarStart.style.display = isFeed ? "" : "none";
     if (el.feedToolbarEnd) el.feedToolbarEnd.style.display = isFeed ? "" : "none";
     if (el.feedControls) {
@@ -12126,17 +13129,21 @@ python3 site/annotate_social.py</pre>
     }
     if (page !== "ownership") {
       if (el.ownershipTrendCards) el.ownershipTrendCards.hidden = true;
+      hideOwnershipSelection();
     } else {
       syncOwnershipTrendingUI();
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
     if (page === "rankings") {
       renderRankings();
+    } else if (page === "home") {
+      renderHome();
     } else if (page === "ownership") {
       renderOwnership();
     } else if (page === "expected") {
       renderExpected();
     } else if (page === "schedule") {
+      updateScheduleGwSlider();
       renderSchedule();
     } else if (page === "feed") {
       renderFeed();
@@ -12163,6 +13170,7 @@ python3 site/annotate_social.py</pre>
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
+  if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
@@ -12175,9 +13183,16 @@ python3 site/annotate_social.py</pre>
       if (next === state.ownershipTrendWindow) return;
       state.ownershipTrendWindow = next;
       syncOwnershipTrendWindowUI({ animate: true });
-      updateOwnershipTrendThresholdSlider();
       syncFiltersResetUI();
       if (state.page === "ownership") renderOwnership();
+    });
+  }
+  if (el.ownershipSelection) {
+    el.ownershipSelection.addEventListener("click", (e) => {
+      const close = e.target.closest(".ownership-selection-close");
+      if (!close || !el.ownershipSelection.contains(close)) return;
+      e.preventDefault();
+      clearOwnershipSelection();
     });
   }
   if (el.ownershipTrendCards) {
@@ -12293,6 +13308,7 @@ python3 site/annotate_social.py</pre>
   function pageKeyFromTabBtn(btn) {
     if (!btn) return null;
     const id = btn.id || "";
+    if (id === "page-home") return "home";
     if (id === "page-opta") return "opta";
     if (id === "page-rankings") return "rankings";
     if (id === "page-ownership") return "ownership";
@@ -12339,6 +13355,7 @@ python3 site/annotate_social.py</pre>
     const hosts = [];
     tabs.querySelectorAll(`[data-page-clone="${page}"]`).forEach((node) => hosts.push(node));
     const idByPage = {
+      home: "page-home",
       opta: "page-opta",
       rankings: "page-rankings",
       ownership: "page-ownership",
@@ -12632,14 +13649,14 @@ python3 site/annotate_social.py</pre>
     syncPageTabWheel();
   }
 
-  // Brand mark always returns to OPTA (home) with a full refresh so filters
+  // Brand mark always returns to Home with a full refresh so filters
   // and ephemeral UI state reset alongside the page switch.
   const brandHome = document.querySelector("#brand-home");
   if (brandHome) {
     brandHome.addEventListener("click", (e) => {
       e.preventDefault();
       try {
-        localStorage.setItem(PAGE_KEY, "opta");
+        localStorage.setItem(PAGE_KEY, "home");
       } catch {
         // Private browsing — reload still lands on the default page.
       }
@@ -12653,7 +13670,7 @@ python3 site/annotate_social.py</pre>
   function setView(view) {
     state.view = view;
     document.documentElement.dataset.view = view;
-    state.sortKey = view === "players" && isNextSeason() ? "price" : "pts";
+    state.sortKey = "pts";
     state.sortDir = "desc";
     state.hiddenCols = new Set();
     state.compareMode = false;
@@ -13285,29 +14302,6 @@ python3 site/annotate_social.py</pre>
     format: (value) => `${value.toFixed(1)}+`,
   });
 
-  const updateOwnershipTrendThresholdSlider = setupSingleSlider({
-    input: el.ownershipTrendThreshold,
-    fillEl: el.ownershipTrendThresholdFill,
-    labelEl: el.ownershipTrendThresholdLabel,
-    boundsMin: 0.1,
-    boundsMax: OWNERSHIP_TREND_THRESHOLD_MAX,
-    step: 0.1,
-    get: () => state.ownershipTrendThreshold,
-    set: (value) => {
-      state.ownershipTrendThreshold = value;
-    },
-    format: (value) => {
-      const span = ownershipTrendWindowSpan();
-      const windowLabel = span === 1 ? "last update" : `last ${span} updates`;
-      const effective = effectiveOwnershipTrendThreshold(value, span);
-      if (Math.abs(effective - value) > 1e-9) {
-        return `${value.toFixed(1)}→${effective.toFixed(1)} pp · ${windowLabel}`;
-      }
-      return `${value.toFixed(1)} pp · ${windowLabel}`;
-    },
-    onInput: renderOwnership,
-  });
-
   updateEnhancePctSlider = setupSingleSlider({
     input: el.enhancePct,
     fillEl: el.enhancePctFill,
@@ -13655,6 +14649,10 @@ python3 site/annotate_social.py</pre>
     if (season !== "2025-26" && season !== "2026-27") return;
     if (state.season === season) return;
     state.season = season;
+    teamPriorByCodeCache = null;
+    teamPriorByCodeSeason = null;
+    teamPosRankCache = null;
+    teamPosRankSeason = null;
     // Drop team filters that don't exist in the destination season's chip set.
     const allowed = new Set(teamCodesForSeason());
     state.teamFilter.forEach((code) => {
@@ -13663,9 +14661,9 @@ python3 site/annotate_social.py</pre>
     state.compareSelection.players.clear();
     state.compareSelection.teams.clear();
     state.rankingsPins.length = 0;
-    // 2026/27 is preseason zeros — price is the useful default sort.
+    // 2026/27 uses live FPL season totals — default sort by points.
     if (state.view === "players") {
-      state.sortKey = isNextSeason() ? "price" : "pts";
+      state.sortKey = "pts";
       state.sortDir = "desc";
     }
     hideToast();
@@ -13819,7 +14817,11 @@ python3 site/annotate_social.py</pre>
       syncHighlightUI();
       return;
     }
+    // .ghost-btn sets display:inline-flex, which overrides the [hidden] UA rule —
+    // set display explicitly (same pattern as Compare) so Relative never leaks
+    // onto xData / Rankings / Team / etc.
     btn.hidden = !show;
+    btn.style.display = show ? "" : "none";
     btn.classList.toggle("on", !!state.enhanceRelative);
     btn.setAttribute("aria-pressed", state.enhanceRelative ? "true" : "false");
     const tip = state.enhanceRelative
@@ -14212,9 +15214,14 @@ python3 site/annotate_social.py</pre>
     }
   });
 
-  if (el.fplIdSave) {
-    el.fplIdSave.addEventListener("click", () => {
-      applyManagerId(el.fplIdInput ? el.fplIdInput.value : "");
+  if (el.fplManagerSelect) {
+    el.fplManagerSelect.addEventListener("change", () => {
+      applyManagerId(el.fplManagerSelect.value);
+    });
+  }
+  if (el.fplLeagueSelect) {
+    el.fplLeagueSelect.addEventListener("change", () => {
+      applyLeagueId(el.fplLeagueSelect.value, { persist: true, quiet: false });
     });
   }
   if (el.fplIdClear) {
@@ -14224,29 +15231,22 @@ python3 site/annotate_social.py</pre>
     el.teamModeSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-team-mode]");
       if (!btn) return;
+      disarmConfirmButton();
       setTeamMode(btn.getAttribute("data-team-mode"));
     });
   }
-  if (el.teamResyncBtn) {
-    el.teamResyncBtn.addEventListener("click", () => {
-      setPrefsOpen(false);
-      requestResyncPlanner();
+  function bindTeamPlannerAction(btn, action) {
+    if (!btn) return;
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (action === "resync") requestResyncPlanner(btn);
+      else if (action === "clear") requestClearTeamSquad(btn);
     });
   }
-  if (el.teamClearBtn) {
-    el.teamClearBtn.addEventListener("click", () => {
-      setPrefsOpen(false);
-      requestClearTeamSquad();
-    });
-  }
-  if (el.fplIdInput) {
-    el.fplIdInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        applyManagerId(el.fplIdInput.value);
-      }
-    });
-  }
+  bindTeamPlannerAction(el.teamResyncBtn, "resync");
+  bindTeamPlannerAction(el.teamClearBtn, "clear");
+  bindTeamPlannerAction(el.teamResyncToolbar, "resync");
+  bindTeamPlannerAction(el.teamClearToolbar, "clear");
 
   // ---------------------------------------------------------------------
   // Sliding selection thumb for .tabs / .segmented button groups
@@ -14399,6 +15399,8 @@ python3 site/annotate_social.py</pre>
         syncMobileScrollportHeight();
         scheduleOptaMobileNameColWidth();
         scheduleTeamTableHeadHeightSync();
+        disarmConfirmButton();
+        syncTeamPlannerPrefsBtns();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
@@ -14417,6 +15419,8 @@ python3 site/annotate_social.py</pre>
         syncMobileScrollportHeight();
         scheduleOptaMobileNameColWidth();
         scheduleTeamTableHeadHeightSync();
+        disarmConfirmButton();
+        syncTeamPlannerPrefsBtns();
       });
     }
     bindAllNameColumnSimplifies();

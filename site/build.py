@@ -17,11 +17,16 @@ in snapshots/ to attach a 2026/27 price (see match_new_season_prices()).
 import csv
 import json
 import re
+import sys
 import unicodedata
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = Path(__file__).resolve().parent / "data.js"
+SITE = Path(__file__).resolve().parent
+OUT = SITE / "data.js"
+sys.path.insert(0, str(SITE))
+from fpl_gameweeks import active_gameweek_id, extract_gameweeks  # noqa: E402
 SNAPSHOTS_DIR = ROOT / "snapshots"
 OVERRIDES_PATH = Path(__file__).resolve().parent / "price_overrides.json"
 LAST_SEASON_STATS_PATH = SNAPSHOTS_DIR / "history_past_2025-26.json"
@@ -299,29 +304,319 @@ def latest_bootstrap_snapshot():
     return candidates[-1] if candidates else None
 
 
+def _http_get_json(url: str, timeout: int = 45):
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "fpl-explorer/1.0 (+build-apps)", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+# FPL DefCon thresholds (2025/26+): 2 pts when match actions clear the bar.
+# DEF uses CBIT only; MID/FWD use CBIT + recoveries. GK ineligible.
+DEFCON_POINTS_PER_HIT = 2
+DEFCON_THRESHOLD_BY_TYPE = {
+    2: 10,  # DEF — clearances_blocks_interceptions + tackles
+    3: 12,  # MID — CBIT + recoveries
+    4: 12,  # FWD — CBIT + recoveries
+}
+
+
+def _empty_live_bucket() -> dict:
+    return {
+        "apps": 0,
+        "starts": 0,
+        "mins": 0,
+        "xg": 0.0,
+        "goals": 0,
+        "xa": 0.0,
+        "assists": 0,
+        "bps": 0,
+        "bonus": 0,
+        "pts": 0,
+        "cleanSheets": 0,
+        "goalsConceded": 0,
+        "xgc": 0.0,
+        "saves": 0,
+        "xgi": 0.0,
+        "cbit": 0,
+        "cbitr": 0,
+        "defCon": 0,
+        "defConActions": 0,
+        "_defConHits": 0,
+    }
+
+
+def _fnum(stats: dict, key: str) -> float:
+    try:
+        return float(stats.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _inum(stats: dict, key: str) -> int:
+    try:
+        return int(stats.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _add_live_stats(bucket: dict, stats: dict, element_type: int | None) -> None:
+    """Accumulate one GW's live stats into a venue bucket."""
+    mins = _inum(stats, "minutes")
+    if mins > 0:
+        bucket["apps"] += 1
+    bucket["starts"] += _inum(stats, "starts")
+    bucket["mins"] += mins
+    bucket["xg"] += _fnum(stats, "expected_goals")
+    bucket["goals"] += _inum(stats, "goals_scored")
+    bucket["xa"] += _fnum(stats, "expected_assists")
+    bucket["assists"] += _inum(stats, "assists")
+    bucket["bps"] += _inum(stats, "bps")
+    bucket["bonus"] += _inum(stats, "bonus")
+    bucket["pts"] += _inum(stats, "total_points")
+    bucket["cleanSheets"] += _inum(stats, "clean_sheets")
+    bucket["goalsConceded"] += _inum(stats, "goals_conceded")
+    bucket["xgc"] += _fnum(stats, "expected_goals_conceded")
+    bucket["saves"] += _inum(stats, "saves")
+    bucket["xgi"] += _fnum(stats, "expected_goal_involvements")
+    cbit = _inum(stats, "clearances_blocks_interceptions") + _inum(stats, "tackles")
+    recoveries = _inum(stats, "recoveries")
+    bucket["cbit"] += cbit
+    bucket["cbitr"] += cbit + recoveries
+    bucket["defConActions"] += _inum(stats, "defensive_contribution")
+    threshold = DEFCON_THRESHOLD_BY_TYPE.get(element_type) if element_type else None
+    if threshold and mins > 0:
+        actions = cbit if element_type == 2 else cbit + recoveries
+        if actions >= threshold:
+            bucket["_defConHits"] += 1
+            bucket["defCon"] = bucket["_defConHits"] * DEFCON_POINTS_PER_HIT
+
+
+def _team_venue_by_gw(fixtures: list, gw: int) -> dict[int, str | None]:
+    """Map FPL team_id → 'H' | 'A' | None for a gameweek.
+
+    None means the club had no fixture, or a DGW spanning both venues (stats
+    stay on combined only for that GW).
+    """
+    by_team: dict[int, list[str]] = {}
+    for f in fixtures:
+        if f.get("event") != gw:
+            continue
+        try:
+            th = int(f["team_h"])
+            ta = int(f["team_a"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        by_team.setdefault(th, []).append("H")
+        by_team.setdefault(ta, []).append("A")
+    out: dict[int, str | None] = {}
+    for tid, venues in by_team.items():
+        uniq = set(venues)
+        out[tid] = venues[0] if len(uniq) == 1 else None
+    return out
+
+
+def live_gw_aggregates_by_element(bootstrap: dict) -> tuple[dict, dict]:
+    """From /event/{gw}/live/ + fixtures venue: per-player home/away/combined.
+
+    Returns (by_split, meta) where by_split is
+      { "home"|"away"|"combined": { element_id: stats_bucket } }.
+
+    DefCon points = 2 × matches where the position threshold is hit
+    (DEF 10 CBIT, MID/FWD 12 CBIRT). Appearances = GWs with minutes > 0.
+
+    Finished GWs reuse snapshots/event-live_{gw}.json; the current GW is
+    always re-fetched so mid-weekend updates land on rebuild.
+    """
+    events = bootstrap.get("events") or []
+    element_type = {
+        int(e["id"]): int(e["element_type"])
+        for e in (bootstrap.get("elements") or [])
+        if e.get("id") is not None and e.get("element_type") is not None
+    }
+    element_team = {
+        int(e["id"]): int(e["team"])
+        for e in (bootstrap.get("elements") or [])
+        if e.get("id") is not None and e.get("team") is not None
+    }
+    gw_ids: list[int] = []
+    current_id = None
+    for ev in events:
+        try:
+            eid = int(ev["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if ev.get("is_current"):
+            current_id = eid
+        if ev.get("finished") or ev.get("is_current") or ev.get("is_previous"):
+            gw_ids.append(eid)
+    seen = set()
+    ordered = []
+    for eid in gw_ids:
+        if eid not in seen:
+            seen.add(eid)
+            ordered.append(eid)
+
+    fx_path = latest_fixtures_snapshot()
+    fixtures = []
+    if fx_path is not None:
+        try:
+            fixtures = json.loads(fx_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            fixtures = []
+
+    by_split = {"home": {}, "away": {}, "combined": {}}
+    fetched = 0
+    cached = 0
+    failed = []
+    hit_log = []
+    mixed_venue_gws = 0
+
+    def bucket_for(split: str, eid: int) -> dict:
+        store = by_split[split]
+        if eid not in store:
+            store[eid] = _empty_live_bucket()
+        return store[eid]
+
+    for gw in ordered:
+        cache_path = SNAPSHOTS_DIR / f"event-live_{gw}.json"
+        live = None
+        use_cache = cache_path.exists() and gw != current_id
+        if use_cache:
+            try:
+                live = json.loads(cache_path.read_text(encoding="utf-8"))
+                cached += 1
+            except (OSError, json.JSONDecodeError):
+                live = None
+        if live is None:
+            try:
+                live = _http_get_json(
+                    f"https://fantasy.premierleague.com/api/event/{gw}/live/"
+                )
+                SNAPSHOTS_DIR.mkdir(exist_ok=True)
+                cache_path.write_text(json.dumps(live), encoding="utf-8")
+                fetched += 1
+            except Exception as exc:  # noqa: BLE001
+                if cache_path.exists():
+                    try:
+                        live = json.loads(cache_path.read_text(encoding="utf-8"))
+                        cached += 1
+                    except (OSError, json.JSONDecodeError):
+                        live = None
+                if live is None:
+                    failed.append({"gw": gw, "error": str(exc)})
+                    continue
+
+        venue_by_team = _team_venue_by_gw(fixtures, gw)
+        if any(v is None for v in venue_by_team.values()):
+            mixed_venue_gws += 1
+
+        for el in live.get("elements") or []:
+            try:
+                eid = int(el["id"])
+                stats = el.get("stats") or {}
+            except (KeyError, TypeError, ValueError):
+                continue
+            etype = element_type.get(eid)
+            tid = element_team.get(eid)
+            venue = venue_by_team.get(tid) if tid is not None else None
+
+            _add_live_stats(bucket_for("combined", eid), stats, etype)
+            if venue in ("H", "A"):
+                split = "home" if venue == "H" else "away"
+                before_hits = bucket_for(split, eid)["_defConHits"]
+                _add_live_stats(bucket_for(split, eid), stats, etype)
+                if bucket_for(split, eid)["_defConHits"] > before_hits:
+                    hit_log.append(
+                        {
+                            "gw": gw,
+                            "element": eid,
+                            "elementType": etype,
+                            "venue": venue,
+                            "threshold": DEFCON_THRESHOLD_BY_TYPE.get(etype),
+                        }
+                    )
+
+    # Round floats; drop internal hit counter from exported buckets.
+    for split_map in by_split.values():
+        for bucket in split_map.values():
+            for key in ("xg", "xa", "xgc", "xgi"):
+                bucket[key] = round(bucket[key], 3)
+            bucket.pop("_defConHits", None)
+
+    apps = {eid: b["apps"] for eid, b in by_split["combined"].items() if b["apps"]}
+    defcon_pts = {
+        eid: b["defCon"] for eid, b in by_split["combined"].items() if b["defCon"]
+    }
+    meta = {
+        "gameweeks": ordered,
+        "fetched": fetched,
+        "cached": cached,
+        "playersWithApps": len(apps),
+        "defConHits": len(hit_log),
+        "playersWithDefCon": len(defcon_pts),
+        "failed": failed,
+        "hitLog": hit_log,
+        "fixturesSource": fx_path.name if fx_path else None,
+        "mixedVenueGameweeks": mixed_venue_gws,
+        "homePlayers": len(by_split["home"]),
+        "awayPlayers": len(by_split["away"]),
+    }
+    return by_split, meta
+
+
 def build_next_season_squad():
-    """Full 2026/27 FPL elements list (all 20 clubs, including promoted) for
-    the site's next-season zero-stat view. Relegated clubs are simply absent
-    from bootstrap — no OPTA survivors from BUR/WHU/WOL are added here.
+    """Full 2026/27 FPL elements with combined + home/away splits.
+
+    Combined stats come from bootstrap season totals (authoritative). Home/Away
+    are summed from /event/{gw}/live/ tagged by fixture venue. Returns
+    players/teams as {home, away, combined} lists.
     """
     snap_path = latest_bootstrap_snapshot()
     if snap_path is None:
-        return [], {}, {"source": None, "count": 0}
+        empty = {"home": [], "away": [], "combined": []}
+        return empty, {}, {"source": None, "count": 0}, empty
 
     snap = json.loads(snap_path.read_text(encoding="utf-8"))
-    teams_by_id = {t["id"]: t["short_name"] for t in snap["teams"]}
+    teams_by_id = {t["id"]: t for t in snap["teams"]}
     team_names = {t["short_name"]: t["name"] for t in snap["teams"]}
     postype_by_id = {e["id"]: e["singular_name_short"] for e in snap["element_types"]}
+    by_split, live_meta = live_gw_aggregates_by_element(snap)
+    combined_live = by_split.get("combined") or {}
 
-    players = []
-    for e in snap["elements"]:
-        team = teams_by_id.get(e["team"])
-        if not team:
-            continue
-        pos_raw = postype_by_id.get(e["element_type"], "")
-        pos = FPL_POS_MAP.get(pos_raw, pos_raw)
-        players.append({
+    # Games played per club by venue from finished/provisional fixtures.
+    fx_path = latest_fixtures_snapshot()
+    gp_by_venue = {code: {"home": 0, "away": 0, "combined": 0} for code in team_names}
+    if fx_path is not None:
+        try:
+            fixtures = json.loads(fx_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            fixtures = []
+        for f in fixtures:
+            if not (f.get("finished") or f.get("finished_provisional")):
+                continue
+            try:
+                home = teams_by_id[int(f["team_h"])]["short_name"]
+                away = teams_by_id[int(f["team_a"])]["short_name"]
+            except (KeyError, TypeError, ValueError):
+                continue
+            gp_by_venue[home]["home"] += 1
+            gp_by_venue[home]["combined"] += 1
+            gp_by_venue[away]["away"] += 1
+            gp_by_venue[away]["combined"] += 1
+
+    STAT_KEYS = (
+        "apps", "starts", "mins", "xg", "goals", "xa", "assists", "bps", "bonus",
+        "pts", "cleanSheets", "goalsConceded", "xgc", "saves", "xgi", "cbit",
+        "cbitr", "defCon", "defConActions",
+    )
+
+    def identity_row(e, team, pos):
+        return {
             "id": f"fpl-{e['code']}",
+            "element": int(e["id"]),
             "name": e["web_name"],
             "team": team,
             "position": pos,
@@ -330,12 +625,265 @@ def build_next_season_squad():
             "penaltiesOrder": e.get("penalties_order"),
             "directFreekicksOrder": e.get("direct_freekicks_order"),
             "cornersOrder": e.get("corners_and_indirect_freekicks_order"),
-        })
+            "form": float(e.get("form") or 0),
+            "ppg": float(e.get("points_per_game") or 0),
+            "ict": float(e.get("ict_index") or 0),
+            "selectedBy": float(e.get("selected_by_percent") or 0),
+        }
 
-    players.sort(key=lambda p: (p["team"], POSITIONS.index(p["position"]) if p["position"] in POSITIONS else 99, p["name"]))
-    meta = {"source": snap_path.name, "count": len(players), "teams": len(team_names)}
-    return players, team_names, meta
+    def bootstrap_stats(e, eid):
+        cbit = int(e.get("clearances_blocks_interceptions") or 0) + int(e.get("tackles") or 0)
+        recoveries = int(e.get("recoveries") or 0)
+        starts = int(e.get("starts") or 0)
+        mins = int(e.get("minutes") or 0)
+        live = combined_live.get(eid) or {}
+        if eid in combined_live and live.get("apps"):
+            apps = int(live["apps"])
+        elif starts:
+            apps = starts
+        else:
+            apps = 1 if mins > 0 else 0
+        return {
+            "apps": apps,
+            "starts": starts,
+            "mins": mins,
+            "xg": api_number(e, "expected_goals"),
+            "goals": int(e.get("goals_scored") or 0),
+            "xa": api_number(e, "expected_assists"),
+            "assists": int(e.get("assists") or 0),
+            "bps": int(e.get("bps") or 0),
+            "bonus": int(e.get("bonus") or 0),
+            "pts": int(e.get("total_points") or 0),
+            "cleanSheets": int(e.get("clean_sheets") or 0),
+            "goalsConceded": int(e.get("goals_conceded") or 0),
+            "xgc": api_number(e, "expected_goals_conceded"),
+            "saves": int(e.get("saves") or 0),
+            "xgi": api_number(e, "expected_goal_involvements"),
+            "cbit": cbit,
+            "cbitr": cbit + recoveries,
+            "defCon": int((live.get("defCon") if live else 0) or 0),
+            "defConActions": int(e.get("defensive_contribution") or 0),
+        }
 
+    def live_stats(eid, split):
+        bucket = (by_split.get(split) or {}).get(eid)
+        if not bucket:
+            return {k: 0 for k in STAT_KEYS}
+        out = {k: bucket.get(k, 0) for k in STAT_KEYS if k != "defConActions"}
+        # Actions are season-total in bootstrap; keep venue-split actions from live.
+        out["defConActions"] = int(bucket.get("defConActions") or 0)
+        return out
+
+    def sort_players(rows):
+        rows.sort(
+            key=lambda p: (
+                p["team"],
+                POSITIONS.index(p["position"]) if p["position"] in POSITIONS else 99,
+                p["name"],
+            )
+        )
+        return rows
+
+    def team_rows_from_players(player_rows, split):
+        by_team = {}
+        for p in player_rows:
+            by_team.setdefault(p["team"], []).append(p)
+        teams = []
+        for tid, tmeta in teams_by_id.items():
+            code = tmeta["short_name"]
+            plist = by_team.get(code) or []
+            gks = [p for p in plist if p["position"] == "GK"]
+            defs = [p for p in plist if p["position"] == "DEF"]
+            mids = [p for p in plist if p["position"] == "MID"]
+            outfield = [p for p in plist if p["position"] != "GK"]
+            gc_all = sum(p["goalsConceded"] for p in plist)
+            team_gc = sum(p["goalsConceded"] for p in gks) if gks else gc_all
+            # Team CS ≈ sum of GK clean_sheets (one eligible keeper per CS GW).
+            # Fallback: max DEF/MID CS — covers the rare case the keeper was
+            # subbed before 60' so FPL gave CS to outfield only. Never sum
+            # DEF/MID (many players share one team CS).
+            gk_cs = sum(int(p.get("cleanSheets") or 0) for p in gks)
+            outfield_cs = 0
+            for p in defs + mids:
+                outfield_cs = max(outfield_cs, int(p.get("cleanSheets") or 0))
+            team_cs = max(gk_cs, outfield_cs)
+            team_xgc = round(sum(p["xgc"] for p in gks), 3) if gks else 0
+            team_xg = round(sum(p["xg"] for p in outfield), 3)
+            team_goals = sum(p["goals"] for p in outfield)
+            gp = gp_by_venue.get(code, {}).get(split, 0)
+            if split == "combined" and gp == 0:
+                gp = int(tmeta.get("played") or 0)
+            teams.append({
+                "team": code,
+                "name": tmeta.get("name") or code,
+                "gp": gp,
+                "pts": sum(int(p.get("pts") or 0) for p in plist),
+                "xg": team_xg,
+                "goals": team_goals,
+                "xgc": team_xgc,
+                "goalsConceded": team_gc,
+                "cleanSheets": team_cs,
+                "xcs": None,
+                "xgd": round(team_xg - team_xgc, 3),
+                "gd": team_goals - team_gc,
+                "shots": 0,
+                "shotsOnTarget": 0,
+                "touchesBox": 0,
+                "bigChances": 0,
+                "squadPts": sum(int(p.get("pts") or 0) for p in plist),
+                "tablePts": int(tmeta.get("points") or 0),
+            })
+        teams.sort(key=lambda t: t["team"])
+        return teams
+
+    players_by_split = {"home": [], "away": [], "combined": []}
+    for e in snap["elements"]:
+        tmeta = teams_by_id.get(e["team"])
+        if not tmeta:
+            continue
+        team = tmeta["short_name"]
+        pos_raw = postype_by_id.get(e["element_type"], "")
+        pos = FPL_POS_MAP.get(pos_raw, pos_raw)
+        eid = int(e["id"])
+        base = identity_row(e, team, pos)
+
+        combined = {**base, **bootstrap_stats(e, eid)}
+        players_by_split["combined"].append(combined)
+
+        for split in ("home", "away"):
+            row = {**base, **live_stats(eid, split)}
+            # Season-level rates stay on the identity; don't invent venue form.
+            players_by_split[split].append(row)
+
+    for split in players_by_split:
+        sort_players(players_by_split[split])
+
+    teams_by_split = {
+        split: team_rows_from_players(players_by_split[split], split)
+        for split in ("home", "away", "combined")
+    }
+
+    meta = {
+        "source": snap_path.name,
+        "count": len(players_by_split["combined"]),
+        "teams": len(team_names),
+        "statsFrom": "bootstrap-static+event-live",
+        "liveAggregates": live_meta,
+        "splits": True,
+    }
+    return players_by_split, team_names, meta, teams_by_split
+
+
+def league_positions_from_fixtures(bootstrap: dict | None = None):
+    """Premier League table ranks from finished fixture scorelines.
+
+    Prefer this over ESPN — no third-party dependency, uses the same
+    snapshots/fixtures_*.json the rest of the site already trusts.
+    """
+    fx_path = latest_fixtures_snapshot()
+    bs_path = latest_bootstrap_snapshot() if bootstrap is None else None
+    meta = {
+        "source": "fixtures",
+        "fixturesSource": fx_path.name if fx_path else None,
+        "bootstrapSource": None,
+    }
+    if fx_path is None:
+        meta["error"] = "no fixtures snapshot"
+        return {}, meta
+
+    if bootstrap is None:
+        if bs_path is None:
+            meta["error"] = "no bootstrap snapshot"
+            return {}, meta
+        bootstrap = json.loads(bs_path.read_text(encoding="utf-8"))
+        meta["bootstrapSource"] = bs_path.name
+
+    teams_by_id = {int(t["id"]): t for t in bootstrap.get("teams") or []}
+    table = {
+        int(tid): {
+            "code": t["short_name"],
+            "played": 0,
+            "won": 0,
+            "drawn": 0,
+            "lost": 0,
+            "gf": 0,
+            "ga": 0,
+            "gd": 0,
+            "pts": 0,
+        }
+        for tid, t in teams_by_id.items()
+    }
+
+    try:
+        fixtures = json.loads(fx_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        meta["error"] = str(exc)
+        return {}, meta
+
+    counted = 0
+    for f in fixtures:
+        if not (f.get("finished") or f.get("finished_provisional")):
+            continue
+        try:
+            th = int(f["team_h"])
+            ta = int(f["team_a"])
+            hs = int(f["team_h_score"])
+            as_ = int(f["team_a_score"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if th not in table or ta not in table:
+            continue
+        home, away = table[th], table[ta]
+        home["played"] += 1
+        away["played"] += 1
+        home["gf"] += hs
+        home["ga"] += as_
+        away["gf"] += as_
+        away["ga"] += hs
+        if hs > as_:
+            home["won"] += 1
+            home["pts"] += 3
+            away["lost"] += 1
+        elif hs < as_:
+            away["won"] += 1
+            away["pts"] += 3
+            home["lost"] += 1
+        else:
+            home["drawn"] += 1
+            away["drawn"] += 1
+            home["pts"] += 1
+            away["pts"] += 1
+        counted += 1
+
+    for row in table.values():
+        row["gd"] = row["gf"] - row["ga"]
+
+    ranked = sorted(
+        table.values(),
+        key=lambda r: (-r["pts"], -r["gd"], -r["gf"], r["code"]),
+    )
+    positions = {row["code"]: i for i, row in enumerate(ranked, start=1)}
+    meta.update({
+        "count": len(positions),
+        "fixturesCounted": counted,
+        "seasonLabel": "2026/27",
+        "table": [
+            {
+                "rank": i,
+                "team": row["code"],
+                "played": row["played"],
+                "won": row["won"],
+                "drawn": row["drawn"],
+                "lost": row["lost"],
+                "gf": row["gf"],
+                "ga": row["ga"],
+                "gd": row["gd"],
+                "pts": row["pts"],
+            }
+            for i, row in enumerate(ranked, start=1)
+        ],
+    })
+    return positions, meta
 
 def latest_fixtures_snapshot():
     """Picks the newest fixtures_*.json in snapshots/."""
@@ -394,18 +942,21 @@ def build_fixtures_by_team():
         by_team[home].append(home_row)
         by_team[away].append(away_row)
 
-    events = bootstrap.get("events") or []
-    current_gw = next((e.get("id") for e in events if e.get("is_current")), None)
-    if current_gw is None:
-        current_gw = next((e.get("id") for e in events if e.get("is_next")), None)
-    if current_gw is None:
+    gameweeks = extract_gameweeks(bootstrap, bs_path.name)
+    active_gw = active_gameweek_id(gameweeks)
+    if active_gw is None:
         gws = [fx["gw"] for rows in by_team.values() for fx in rows if fx.get("gw") is not None]
-        current_gw = min(gws) if gws else 1
+        active_gw = min(gws) if gws else 1
 
     meta = {
         "source": fx_path.name,
         "bootstrap": bs_path.name,
-        "currentGw": current_gw,
+        # FPL triad (nullable ids). activeGw = current or next for UI windows.
+        "previousGw": gameweeks["previous"]["id"] if gameweeks["previous"] else None,
+        "currentGw": gameweeks["current"]["id"] if gameweeks["current"] else None,
+        "nextGw": gameweeks["next"]["id"] if gameweeks["next"] else None,
+        "activeGw": active_gw,
+        "gameweeks": gameweeks,
     }
     return by_team, team_names, meta
 
@@ -579,6 +1130,8 @@ API_ONLY_FIELD_MAP = {
     "xgc": "expected_goals_conceded",  # string
     "saves": "saves",
     "xgi": "expected_goal_involvements",  # string
+    # Starts are API-only for 2025/26 — Hub Apps stay as OPTA appearances.
+    "starts": "starts",
 }
 
 
@@ -729,8 +1282,11 @@ def main():
         team_names[rec["team"]] = rec["name"]
 
     fixtures_by_team, fixture_team_names, fixtures_meta = build_fixtures_by_team()
-    next_season_players, next_season_team_names, next_season_meta = build_next_season_squad()
-    league_positions, league_positions_meta = fetch_league_positions(2025)
+    next_season_players, next_season_team_names, next_season_meta, next_season_teams = (
+        build_next_season_squad()
+    )
+    # PL table ranks from finished fixture scorelines (ESPN 403 fallback removed).
+    league_positions, league_positions_meta = league_positions_from_fixtures()
 
     badges_dir = Path(__file__).resolve().parent / "badges"
     badge_codes = set(TEAM_CODES) | set(fixtures_by_team) | set(next_season_team_names)
@@ -754,10 +1310,14 @@ def main():
         "teams": teams,
         "fixturesByTeam": fixtures_by_team,
         "fixturesMeta": fixtures_meta,
+        # Global prev/current/next GW (also nested under fixturesMeta).
+        "gameweeks": fixtures_meta.get("gameweeks")
+        or {"previous": None, "current": None, "next": None, "source": None},
         "newSeasonPriceMeta": price_meta,
         "priceMatchIssues": price_issues,
         "lastSeasonApiMeta": last_season_api_meta,
         "nextSeasonPlayers": next_season_players,
+        "nextSeasonTeams": next_season_teams,
         "nextSeasonTeamNames": next_season_team_names,
         "nextSeasonMeta": next_season_meta,
     }
@@ -793,6 +1353,16 @@ def main():
             f"2026/27 squad: {next_season_meta['count']} players across "
             f"{next_season_meta['teams']} teams from {next_season_meta['source']}"
         )
+        live = next_season_meta.get("liveAggregates") or {}
+        hits = live.get("defConHits") or 0
+        print(
+            f"2026/27 DefCon: {hits} threshold hit(s) → "
+            f"{live.get('playersWithDefCon', 0)} player(s) with DC points "
+            f"(GWs {live.get('gameweeks')})"
+        )
+        for hit in live.get("hitLog") or []:
+            print(f"  GW{hit['gw']} element={hit['element']} type={hit['elementType']} "
+                  f"venue={hit.get('venue')} threshold={hit.get('threshold')}")
     else:
         print("2026/27 squad: no bootstrap-static snapshot found in snapshots/, skipped")
     if price_meta["source"]:
@@ -818,12 +1388,16 @@ def main():
     if fixtures_meta.get("source"):
         n_teams = len(fixtures_by_team)
         n_fx = sum(len(v) for v in fixtures_by_team.values()) // 2
-        print(f"Fixtures: {n_fx} upcoming across {n_teams} teams from {fixtures_meta['source']}")
+        print(
+            f"Fixtures: {n_fx} upcoming across {n_teams} teams from {fixtures_meta['source']}"
+            f" (prev={fixtures_meta.get('previousGw')!s} curr={fixtures_meta.get('currentGw')!s}"
+            f" next={fixtures_meta.get('nextGw')!s} active={fixtures_meta.get('activeGw')!s})"
+        )
     else:
         print("Fixtures: no fixtures_*.json snapshot found in snapshots/, skipped")
     if league_positions:
         label = league_positions_meta.get("seasonLabel") or "PL"
-        print(f"League table: {len(league_positions)} teams from ESPN ({label})")
+        print(f"League table: {len(league_positions)} teams from fixtures ({label})")
     else:
         err = league_positions_meta.get("error") or "unknown error"
         print(f"League table: skipped ({err})")

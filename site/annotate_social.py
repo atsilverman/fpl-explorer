@@ -213,7 +213,10 @@ def load_catalog() -> dict:
         if not p or p.get("code") is None:
             continue
         by_code[str(p["code"])] = p
-    for row in data.get("nextSeasonPlayers") or []:
+    next_players = data.get("nextSeasonPlayers") or []
+    if isinstance(next_players, dict):
+        next_players = next_players.get("combined") or []
+    for row in next_players:
         p = _catalog_player_from_row(row)
         if not p or p.get("code") is None:
             continue
