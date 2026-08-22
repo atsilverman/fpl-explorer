@@ -283,11 +283,35 @@ def main() -> int:
         assert isinstance(entry, dict)
         picks_payload = fpl_get(f"/entry/{manager_id}/event/{gw}/picks/")
         assert isinstance(picks_payload, dict)
+        history_payload = fpl_get(f"/entry/{manager_id}/history/")
+        assert isinstance(history_payload, dict)
 
         standings_payload = fetch_standings_page(league_id, 1)
         assert isinstance(standings_payload, dict)
         results = ((standings_payload.get("standings") or {}).get("results")) or []
         league_meta = standings_payload.get("league") or {}
+
+        total_players = int(bootstrap.get("total_players") or 0)
+        overall_rank_prev = None
+        for hist in history_payload.get("current") or []:
+            try:
+                if int(hist.get("event") or 0) == gw - 1:
+                    prev = int(hist.get("overall_rank") or 0)
+                    overall_rank_prev = prev if prev > 0 else None
+                    break
+            except (TypeError, ValueError):
+                continue
+
+        league_rank_prev = None
+        for row in results:
+            try:
+                if int(row.get("entry") or 0) != manager_id:
+                    continue
+                prev = int(row.get("last_rank") or 0)
+                league_rank_prev = prev if prev > 0 else None
+                break
+            except (TypeError, ValueError):
+                continue
 
         stats = live_stats_map(live)
         etypes = element_type_map(bootstrap)
@@ -433,7 +457,10 @@ def main() -> int:
                 "gwPoints": focus_pts,
                 "overallPoints": int(entry.get("summary_overall_points") or 0),
                 "overallRank": int(entry.get("summary_overall_rank") or 0),
+                "overallRankPrev": overall_rank_prev,
                 "leagueRank": focus_league_rank,
+                "leagueRankPrev": league_rank_prev,
+                "totalPlayers": total_players or None,
                 "eventPointsOfficial": int(entry.get("summary_event_points") or 0),
                 "teamName": entry.get("name") or "",
                 "managerName": manager_name,

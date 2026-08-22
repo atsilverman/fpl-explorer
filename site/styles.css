@@ -11394,6 +11394,154 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
+.home-search-btn[hidden] {
+  display: none !important;
+}
+.home-player-profile[hidden],
+.home-player-matchup[hidden] {
+  display: none !important;
+}
+.home-dashboard.is-player-lookup .home-summary-cards {
+  display: none;
+}
+.home-dashboard.is-player-lookup #home-squad-panel {
+  display: none;
+}
+.home-dashboard.is-player-lookup:not(.has-lookup-owners) #home-standings-panel {
+  display: none;
+}
+.home-dashboard.is-player-lookup .home-tables-grid {
+  grid-template-columns: 1fr;
+}
+.home-player-profile {
+  margin-bottom: 12px;
+}
+.home-player-profile-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  box-shadow: var(--shadow-sm);
+  padding: 12px 40px 12px 12px;
+}
+.home-player-profile-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: calc(var(--radius) - 4px);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.home-player-profile-close:hover,
+.home-player-profile-close:focus-visible {
+  color: var(--text);
+  background: hsl(var(--muted) / 0.55);
+  outline: none;
+}
+.home-player-profile-close .icon {
+  width: 16px;
+  height: 16px;
+}
+.home-player-profile .feed-player-card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.home-player-profile .feed-player-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.home-player-matchup {
+  margin-top: 12px;
+}
+.home-player-matchup .schedule-card {
+  width: 100%;
+}
+.home-search-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.home-search-input-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: hsl(var(--card));
+  padding-bottom: 4px;
+}
+.home-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--muted) / 0.35);
+  color: var(--text);
+  font-size: 15px;
+}
+.home-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.home-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.home-search-row:hover,
+.home-search-row:focus-visible {
+  background: hsl(var(--muted) / 0.55);
+  outline: none;
+}
+.home-search-row .badge-img {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 5px;
+}
+.home-search-row-text {
+  min-width: 0;
+  flex: 1;
+}
+.home-search-row-name {
+  font-weight: 650;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.home-search-row-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.home-search-empty {
+  padding: 16px 8px;
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+}
+@media (max-width: 720px) {
+  .home-player-profile .feed-player-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .home-panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -11429,7 +11577,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-height: 88px;
+  min-height: 96px;
 }
 .home-stat-panel .home-panel-heading {
   margin-bottom: 2px;
@@ -11441,6 +11589,42 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   letter-spacing: -0.03em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+}
+.home-stat-rank {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.home-rank-num {
+  min-width: 0;
+}
+.home-rank-delta {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.home-rank-delta .icon {
+  width: 16px;
+  height: 16px;
+}
+.home-rank-delta.is-up {
+  color: hsl(var(--positive));
+}
+.home-rank-delta.is-down {
+  color: hsl(var(--negative));
+}
+.home-rank-delta.is-flat {
+  color: var(--text-faint);
+}
+.home-stat-subtle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-faint);
+  line-height: 1.2;
 }
 .home-stat-gw .home-stat-value {
   font-size: 34px;
@@ -11911,31 +12095,31 @@ html[data-page="home"] #subtoolbar {
   border-radius: 5px;
 }
 
-/* Home ownership cross-highlight (squad ↔ standings, both ways) */
+/* Home ownership cross-highlight (squad ↔ standings, both ways).
+   Paint backgrounds on td (not tr) — WebKit often delays/skips tr backgrounds,
+   which made mobile taps look like only the name recolored before the row filled. */
 .home-squad-row,
 .home-standings-table tr[data-entry] {
   cursor: pointer;
   touch-action: manipulation;
 }
-.home-squad-row.is-owner-source,
-.home-standings-table tr.is-owner-source td {
+.home-squad-row.is-owner-source > td,
+.home-standings-table tr.is-owner-source > td {
   background: hsl(var(--blue-hsl) / 0.10);
 }
-.home-squad-row.is-owner-pinned {
-  background: hsl(var(--blue-hsl) / 0.16);
-  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
-}
-.home-standings-table tr.is-owner-pinned td {
+.home-squad-row.is-owner-pinned > td,
+.home-standings-table tr.is-owner-pinned > td {
   background: hsl(var(--blue-hsl) / 0.16);
 }
-.home-standings-table tr.is-owner-pinned td:first-child {
+.home-squad-row.is-owner-pinned > td:first-child,
+.home-standings-table tr.is-owner-pinned > td:first-child {
   box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
 }
-.home-squad-row.is-owner-match,
-.home-standings-table tr.is-owner-match td {
+.home-squad-row.is-owner-match > td,
+.home-standings-table tr.is-owner-match > td {
   background: hsl(var(--blue-hsl) / 0.12);
 }
-.home-standings-table tr.is-owner-match.is-you td {
+.home-standings-table tr.is-owner-match.is-you > td {
   background: hsl(var(--blue-hsl) / 0.18);
 }
 .home-squad-row.is-owner-match .home-player-name,
