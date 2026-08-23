@@ -348,8 +348,10 @@ def main() -> int:
             "leagueName": None,
             "summary": None,
             "squad": [],
+            "squadsByEntry": {},
             "standings": [],
             "ownersByElement": {},
+            "elementGw": {},
             "error": "No manager/league configured. Set Preferences or pass --manager/--league.",
         }
         OUT_PATH.write_text(
@@ -436,6 +438,18 @@ def main() -> int:
         )
 
         standing_rows: list[dict] = []
+        entry_data: dict[int, dict] = {
+            manager_id: {
+                "picks": focus_picks,
+                "active": focus_active,
+                "subs": focus_subs,
+                "chip": focus_chip,
+                "live_gw": focus_pts,
+                "mults": focus_mults,
+                "overall_rank": int(entry.get("summary_overall_rank") or 0),
+                "overall_points": int(entry.get("summary_overall_points") or 0),
+            }
+        }
         mults_by_entry: dict[int, dict[int, int]] = {manager_id: focus_mults}
         owners_by_element: dict[int, list[int]] = {}
         progress_by_entry: dict[int, tuple[int, int]] = {
@@ -464,6 +478,7 @@ def main() -> int:
                 if eid == manager_id:
                     live_gw = focus_pts
                     active = focus_active
+                    subs = focus_subs
                     chip = focus_chip
                 else:
                     mp = fpl_get(f"/entry/{eid}/event/{gw}/picks/")
@@ -471,16 +486,43 @@ def main() -> int:
                     other_picks = mp.get("picks") or []
                     chip = mp.get("active_chip")
                     note_owners(eid, other_picks)
-                    live_gw, active, _ = calculate_manager_points_from_live(
+                    live_gw, active, subs = calculate_manager_points_from_live(
                         other_picks,
                         stats,
                         match_status,
                         etypes,
                         chip,
                     )
-                    mults_by_entry[eid] = effective_element_multipliers(
-                        other_picks, active
-                    )
+                    other_mults = effective_element_multipliers(other_picks, active)
+                    mults_by_entry[eid] = other_mults
+                    overall_rank = 0
+                    overall_points = int(row.get("total") or 0)
+                    try:
+                        other_entry = fpl_get(f"/entry/{eid}/")
+                        assert isinstance(other_entry, dict)
+                        overall_rank = int(other_entry.get("summary_overall_rank") or 0)
+                        overall_points = int(
+                            other_entry.get("summary_overall_points") or overall_points
+                        )
+                    except (
+                        urllib.error.HTTPError,
+                        urllib.error.URLError,
+                        RuntimeError,
+                        AssertionError,
+                        OSError,
+                        json.JSONDecodeError,
+                    ) as exc:
+                        print(f"  entry failed entry={eid}: {exc}", file=sys.stderr)
+                    entry_data[eid] = {
+                        "picks": other_picks,
+                        "active": active,
+                        "subs": subs,
+                        "chip": chip,
+                        "live_gw": live_gw,
+                        "mults": other_mults,
+                        "overall_rank": overall_rank,
+                        "overall_points": overall_points,
+                    }
                 chip_by_entry[eid] = chip
                 progress_by_entry[eid] = active_pick_progress(
                     active, elements, fixtures, match_status
@@ -500,6 +542,7 @@ def main() -> int:
                 chip_by_entry.setdefault(eid, None)
 
             in_play, to_play = progress_by_entry.get(eid, (0, 0))
+            ed = entry_data.get(eid, {})
             standing_rows.append(
                 {
                     "entry": eid,
@@ -508,6 +551,9 @@ def main() -> int:
                     "gwPointsLive": live_gw,
                     "eventTotalOfficial": int(row.get("event_total") or 0),
                     "total": int(row.get("total") or 0),
+                    "overallRank": int(ed.get("overall_rank") or 0) or None,
+                    "overallPoints": int(ed.get("overall_points") or 0)
+                    or int(row.get("total") or 0),
                     "rankOfficial": int(row.get("rank") or 0),
                     "inPlay": in_play,
                     "toPlay": to_play,
@@ -517,18 +563,28 @@ def main() -> int:
 
         top_ids = top_third_entry_ids(results)
         top_third_mult_maps = [mults_by_entry.get(eid, {}) for eid in top_ids]
-        squad = build_squad_rows(
-            focus_picks,
-            active_ids,
-            auto_in,
-            stats,
-            match_status,
-            elements,
-            teams,
-            fixtures,
-            focus_mults,
-            top_third_mult_maps,
-        )
+        squads_by_entry: dict[str, list] = {}
+        for eid, ed in entry_data.items():
+            picks = ed.get("picks") or []
+            if not picks:
+                continue
+            active = ed.get("active") or []
+            subs = ed.get("subs") or []
+            active_ids = {int(p["element"]) for p in active}
+            auto_in = {s["in"] for s in subs}
+            squads_by_entry[str(eid)] = build_squad_rows(
+                picks,
+                active_ids,
+                auto_in,
+                stats,
+                match_status,
+                elements,
+                teams,
+                fixtures,
+                ed.get("mults") or {},
+                top_third_mult_maps,
+            )
+        squad = squads_by_entry.get(str(manager_id), [])
 
         standing_rows.sort(key=lambda r: (-r["gwPointsLive"], r["rankOfficial"] or 9999))
         for i, row in enumerate(standing_rows, start=1):
@@ -548,6 +604,16 @@ def main() -> int:
         first = (entry.get("player_first_name") or "").strip()
         last = (entry.get("player_last_name") or "").strip()
         manager_name = " ".join(p for p in (first, last) if p) or f"Manager {manager_id}"
+
+        element_gw: dict[str, dict] = {}
+        for eid, st in stats.items():
+            status = match_status.get(eid) or "scheduled"
+            element_gw[str(eid)] = {
+                "pts": int(st.get("total_points") or 0),
+                "minutes": int(st.get("minutes") or 0),
+                "live": status == "live",
+                "status": status,
+            }
 
         payload = {
             "generatedAt": generated_at(),
@@ -569,11 +635,13 @@ def main() -> int:
                 "activeChip": focus_chip,
             },
             "squad": squad,
+            "squadsByEntry": squads_by_entry,
             "standings": standing_rows,
             "ownersByElement": {
                 str(el_id): entry_ids
                 for el_id, entry_ids in sorted(owners_by_element.items())
             },
+            "elementGw": element_gw,
             "error": None,
         }
 

@@ -16,8 +16,10 @@
     leagueId: null,
     summary: null,
     squad: [],
+    squadsByEntry: {},
     standings: [],
     ownersByElement: {},
+    elementGw: {},
     error: null,
   };
   window.FPL_HOME = HOME;
@@ -842,6 +844,9 @@
     homeEmptyCopy: $("#home-empty-copy"),
     homeBento: $("#home-bento"),
     homeDeadline: $("#home-deadline"),
+    homeViewBanner: $("#home-view-banner"),
+    homeViewBannerName: $("#home-view-banner-name"),
+    homeViewBannerClear: $("#home-view-banner-clear"),
     homeGwPoints: $("#home-gw-points"),
     homeGwHeading: $("#home-gw-heading"),
     homeGwMeta: $("#home-gw-meta"),
@@ -1890,13 +1895,19 @@
     HOME.leagueName = payload.leagueName ?? null;
     HOME.summary = payload.summary ?? null;
     HOME.squad = Array.isArray(payload.squad) ? payload.squad : [];
+    HOME.squadsByEntry = payload.squadsByEntry && typeof payload.squadsByEntry === "object"
+      ? payload.squadsByEntry
+      : {};
     HOME.standings = Array.isArray(payload.standings) ? payload.standings : [];
     HOME.ownersByElement = payload.ownersByElement || {};
+    HOME.elementGw = payload.elementGw && typeof payload.elementGw === "object"
+      ? payload.elementGw
+      : {};
     HOME.error = payload.error ?? null;
     window.FPL_HOME = HOME;
-    // Clear ownership pin/hover — element/entry ids may not apply to the new league.
-    homeOwnerHover = null;
     homeOwnerPin = null;
+    homeViewEntryId = null;
+    homeElementGwCache = null;
     return true;
   }
 
@@ -2082,16 +2093,104 @@
   }
 
 
-  // Squad ↔ standings ownership highlight (hover + click-to-pin), both directions.
-  // active = { type: "element"|"entry", id } — pin wins over hover.
-  let homeOwnerHover = null;
+  // Squad ↔ standings: squad tap filters standings by owner; standings tap switches
+  // the whole Home view to that manager's team. Pin = { type: "element", id }.
   let homeOwnerPin = null;
   let homeOwnerBindingsReady = false;
+  let homeViewEntryId = null;
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
+  let homeElementGwCache = null;
 
-  function homeActiveOwnerFocus() {
-    return homeOwnerPin || homeOwnerHover;
+  function homeConfiguredEntryId() {
+    const id = Number(HOME && HOME.managerId);
+    return Number.isFinite(id) ? id : null;
+  }
+
+  function homeActiveViewEntryId() {
+    const configured = homeConfiguredEntryId();
+    const view = homeViewEntryId != null ? Number(homeViewEntryId) : configured;
+    return Number.isFinite(view) ? view : null;
+  }
+
+  function homeIsViewingOtherManager() {
+    const configured = homeConfiguredEntryId();
+    const active = homeActiveViewEntryId();
+    return configured != null && active != null && active !== configured;
+  }
+
+  function homeStandingForEntry(entryId) {
+    const id = Number(entryId);
+    if (!Number.isFinite(id)) return null;
+    return (HOME.standings || []).find((r) => Number(r.entry) === id) || null;
+  }
+
+  function homeSquadForEntry(entryId) {
+    const id = Number(entryId);
+    if (!Number.isFinite(id)) return [];
+    const map = (HOME && HOME.squadsByEntry) || {};
+    const cached = map[String(id)] || map[id];
+    if (Array.isArray(cached) && cached.length) return cached;
+    if (id === homeConfiguredEntryId()) return Array.isArray(HOME.squad) ? HOME.squad : [];
+    return [];
+  }
+
+  function homeSummaryForView(entryId) {
+    const configured = homeConfiguredEntryId();
+    const id = Number(entryId);
+    if (!Number.isFinite(id)) return HOME.summary || {};
+    if (id === configured && HOME.summary) return HOME.summary;
+    const row = homeStandingForEntry(id);
+    if (!row) return HOME.summary || {};
+    return {
+      gwPoints: row.gwPointsLive,
+      overallPoints: row.overallPoints ?? row.total,
+      overallRank: row.overallRank,
+      overallRankPrev: null,
+      leagueRank: row.rankLive ?? row.rankOfficial,
+      leagueRankPrev: null,
+      totalPlayers: HOME.summary && HOME.summary.totalPlayers,
+      eventPointsOfficial: row.eventTotalOfficial,
+      teamName: row.entryName || "",
+      managerName: row.playerName || "",
+      activeChip: row.activeChip,
+    };
+  }
+
+  function homeViewBannerLabel(entryId) {
+    const row = homeStandingForEntry(entryId);
+    if (row && row.entryName) return row.entryName;
+    const summary = homeSummaryForView(entryId);
+    return summary.teamName || summary.managerName || "Manager";
+  }
+
+  function setHomeViewEntry(entryId) {
+    const id = Number(entryId);
+    if (!Number.isFinite(id)) return;
+    const configured = homeConfiguredEntryId();
+    if (id === homeViewEntryId || (homeViewEntryId == null && id === configured)) {
+      clearHomeViewEntry();
+      return;
+    }
+    homeViewEntryId = id;
+    homeOwnerPin = null;
+    renderHome();
+  }
+
+  function clearHomeViewEntry() {
+    if (homeViewEntryId == null) return;
+    homeViewEntryId = null;
+    homeOwnerPin = null;
+    renderHome();
+  }
+
+  function syncHomeViewBanner() {
+    const viewingOther = homeIsViewingOtherManager();
+    if (el.homeViewBanner) el.homeViewBanner.hidden = !viewingOther;
+    if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
+    if (viewingOther && el.homeViewBannerName) {
+      el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
+    }
   }
 
   function homeOwnersForElement(elementId) {
@@ -2115,33 +2214,41 @@
   }
 
   function syncHomeOwnerHighlights() {
-    const focus = homeActiveOwnerFocus();
-    const pinned = !!homeOwnerPin;
-    const fromElement = focus && focus.type === "element";
-    const fromEntry = focus && focus.type === "entry";
-    const ownerEntries = fromElement ? homeOwnersForElement(focus.id) : null;
-    const ownedElements = fromEntry ? homeElementsForEntry(focus.id) : null;
+    const configuredEntry = homeConfiguredEntryId();
+    const viewingEntry = homeActiveViewEntryId();
+    const viewingOther = homeIsViewingOtherManager();
+    const elementPin = homeOwnerPin && homeOwnerPin.type === "element" ? homeOwnerPin : null;
+    const ownerEntries = elementPin ? homeOwnersForElement(elementPin.id) : null;
+    const configuredOwned = configuredEntry != null
+      ? homeElementsForEntry(configuredEntry)
+      : new Set();
 
     if (el.homeSquadBody) {
-      el.homeSquadBody.classList.toggle("has-owner-filter", fromEntry);
+      el.homeSquadBody.classList.remove("has-owner-filter");
       el.homeSquadBody.querySelectorAll("tr.home-squad-row").forEach((tr) => {
         const eid = Number(tr.dataset.element);
-        const isSource = fromElement && Number.isFinite(eid) && eid === Number(focus.id);
-        const isMatch = fromEntry && ownedElements && ownedElements.has(eid);
-        tr.classList.toggle("is-owner-source", isSource);
-        tr.classList.toggle("is-owner-pinned", isSource && pinned);
-        tr.classList.toggle("is-owner-match", !!isMatch);
+        const isConfiguredOverlap =
+          viewingOther && Number.isFinite(eid) && configuredOwned.has(eid);
+        const isPinned =
+          elementPin && Number.isFinite(eid) && Number(elementPin.id) === eid;
+        tr.hidden = false;
+        tr.classList.toggle("is-owner-match", isConfiguredOverlap && !isPinned);
+        tr.classList.toggle("is-owner-pinned", isPinned);
+        tr.classList.remove("is-owner-source");
       });
     }
     if (el.homeStandingsBody) {
-      el.homeStandingsBody.classList.toggle("has-owner-filter", fromElement);
+      el.homeStandingsBody.classList.toggle("has-owner-filter", !!elementPin);
       el.homeStandingsBody.querySelectorAll("tr[data-entry]").forEach((tr) => {
         const entry = Number(tr.dataset.entry);
-        const isSource = fromEntry && Number.isFinite(entry) && entry === Number(focus.id);
-        const isMatch = fromElement && ownerEntries && ownerEntries.has(entry);
-        tr.classList.toggle("is-owner-source", isSource);
-        tr.classList.toggle("is-owner-pinned", isSource && pinned);
-        tr.classList.toggle("is-owner-match", !!isMatch);
+        const show = !elementPin || (ownerEntries && ownerEntries.has(entry));
+        tr.hidden = !show;
+        tr.classList.remove("is-owner-source", "is-owner-pinned", "is-owner-match");
+        tr.classList.toggle("is-view-active", Number.isFinite(entry) && entry === viewingEntry);
+        tr.classList.toggle(
+          "is-configured-manager",
+          viewingOther && Number.isFinite(entry) && entry === configuredEntry
+        );
       });
     }
   }
@@ -2161,7 +2268,6 @@
       if (!Number.isFinite(eid)) return;
       const next = { type: "element", id: eid };
       homeOwnerPin = homeOwnerSame(homeOwnerPin, next) ? null : next;
-      homeOwnerHover = null;
       syncHomeOwnerHighlights();
     }
 
@@ -2169,31 +2275,9 @@
       if (!tr || !el.homeStandingsBody.contains(tr)) return;
       const entry = Number(tr.dataset.entry);
       if (!Number.isFinite(entry)) return;
-      const next = { type: "entry", id: entry };
-      homeOwnerPin = homeOwnerSame(homeOwnerPin, next) ? null : next;
-      homeOwnerHover = null;
-      syncHomeOwnerHighlights();
+      setHomeViewEntry(entry);
     }
 
-    // Desktop: hover previews ownership. Touch: skip hover so the first tap
-    // goes straight to pin (no name-only preview flash).
-    el.homeSquadBody.addEventListener("pointerover", (e) => {
-      if (!hasFineHover()) return;
-      const tr = e.target.closest("tr.home-squad-row");
-      if (!tr || !el.homeSquadBody.contains(tr)) return;
-      const eid = Number(tr.dataset.element);
-      if (!Number.isFinite(eid)) return;
-      const next = { type: "element", id: eid };
-      if (homeOwnerSame(homeOwnerHover, next)) return;
-      homeOwnerHover = next;
-      syncHomeOwnerHighlights();
-    });
-    el.homeSquadBody.addEventListener("pointerleave", () => {
-      if (!hasFineHover()) return;
-      if (!homeOwnerHover || homeOwnerHover.type !== "element") return;
-      homeOwnerHover = null;
-      syncHomeOwnerHighlights();
-    });
     el.homeSquadBody.addEventListener("click", (e) => {
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadBody.contains(tr)) return;
@@ -2201,24 +2285,23 @@
       toggleSquadOwner(tr);
     });
 
-    el.homeStandingsBody.addEventListener("pointerover", (e) => {
-      if (!hasFineHover()) return;
+    el.homeStandingsBody.addEventListener("click", (e) => {
       const tr = e.target.closest("tr[data-entry]");
       if (!tr || !el.homeStandingsBody.contains(tr)) return;
-      const entry = Number(tr.dataset.entry);
-      if (!Number.isFinite(entry)) return;
-      const next = { type: "entry", id: entry };
-      if (homeOwnerSame(homeOwnerHover, next)) return;
-      homeOwnerHover = next;
-      syncHomeOwnerHighlights();
+      e.preventDefault();
+      toggleStandingOwner(tr);
     });
-    el.homeStandingsBody.addEventListener("pointerleave", () => {
-      if (!hasFineHover()) return;
-      if (!homeOwnerHover || homeOwnerHover.type !== "entry") return;
-      homeOwnerHover = null;
-      syncHomeOwnerHighlights();
+
+    el.homeSquadBody.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const tr = e.target.closest("tr.home-squad-row");
+      if (!tr || !el.homeSquadBody.contains(tr)) return;
+      e.preventDefault();
+      toggleSquadOwner(tr);
     });
-    el.homeStandingsBody.addEventListener("click", (e) => {
+
+    el.homeStandingsBody.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
       const tr = e.target.closest("tr[data-entry]");
       if (!tr || !el.homeStandingsBody.contains(tr)) return;
       e.preventDefault();
@@ -2317,6 +2400,51 @@
     return `${id} deadline · ${when}`;
   }
 
+  function homeElementGwMap() {
+    if (homeElementGwCache) return homeElementGwCache;
+    homeElementGwCache = (HOME && HOME.elementGw) || {};
+    return homeElementGwCache;
+  }
+
+  function homeElementGwStats(elementId) {
+    const id = Number(elementId);
+    if (!Number.isFinite(id)) {
+      return { pts: 0, live: false, minutes: 0, status: "scheduled" };
+    }
+    const row = homeElementGwMap()[String(id)] || homeElementGwMap()[id] || {};
+    return {
+      pts: Number(row.pts) || 0,
+      live: !!row.live,
+      minutes: Number(row.minutes) || 0,
+      status: row.status || "scheduled",
+    };
+  }
+
+  function homeSearchGwTier(stats) {
+    if (stats.live && stats.pts > 0) return 0;
+    if (stats.live) return 1;
+    if (stats.status === "finished" && stats.pts > 0) return 2;
+    if (stats.pts > 0) return 3;
+    return 4;
+  }
+
+  function homeSearchGwCompare(a, b) {
+    const sa = homeElementGwStats(homeLookupElementId(a));
+    const sb = homeElementGwStats(homeLookupElementId(b));
+    const ta = homeSearchGwTier(sa);
+    const tb = homeSearchGwTier(sb);
+    if (ta !== tb) return ta - tb;
+    if (sb.pts !== sa.pts) return sb.pts - sa.pts;
+    if (sb.minutes !== sa.minutes) return sb.minutes - sa.minutes;
+    return 0;
+  }
+
+  function homeSearchSortRows(rows) {
+    return rows.slice().sort((a, b) =>
+      homeSearchGwCompare(a, b) || String(a.name || "").localeCompare(String(b.name || ""))
+    );
+  }
+
   // Home ownership/standings use live FPL element ids — always search the
   // current-season catalog (2026/27), not the OPTA 2025/26 list.
   function homeSearchCatalog() {
@@ -2398,7 +2526,6 @@
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
     return `<article class="home-lookup-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
-      <button type="button" class="home-player-profile-close" aria-label="Clear player">${iconHTML("x")}</button>
       <div class="home-lookup-head">
         <div class="home-lookup-photo-wrap">
           ${photoBlock}
@@ -2455,7 +2582,7 @@
   function homeSearchFilteredRows(query) {
     const q = String(query || "").trim().toLowerCase();
     const catalog = homeSearchCatalog();
-    if (!q) return catalog.slice(0, 40);
+    if (!q) return homeSearchSortRows(catalog).slice(0, 40);
     const scored = [];
     for (const row of catalog) {
       const name = String(row.name || "").toLowerCase();
@@ -2465,7 +2592,11 @@
       const starts = name.startsWith(q) ? 0 : 1;
       scored.push({ row, starts, name });
     }
-    scored.sort((a, b) => a.starts - b.starts || a.name.localeCompare(b.name));
+    scored.sort((a, b) =>
+      a.starts - b.starts
+      || homeSearchGwCompare(a.row, b.row)
+      || a.name.localeCompare(b.name)
+    );
     return scored.slice(0, 60).map((x) => x.row);
   }
 
@@ -2517,11 +2648,24 @@
 
   function openHomeSearchSheet() {
     openMobileSheet({
-      title: "Search players",
+      title: "",
       html: homeSearchSheetHTML(""),
       key: "home-search",
     });
     bindHomeSearchSheetEvents();
+  }
+
+  function syncHomeSearchBtn() {
+    if (!el.homeSearchBtn) return;
+    const clearMode = !!homeLookupPlayer;
+    const iconUse = el.homeSearchBtn.querySelector("use");
+    if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
+    const label = clearMode ? "Clear player search" : "Search players";
+    el.homeSearchBtn.title = label;
+    el.homeSearchBtn.setAttribute("aria-label", label);
+    el.homeSearchBtn.classList.toggle("is-clear", clearMode);
+    el.homeSearchBtn.setAttribute("aria-pressed", clearMode ? "true" : "false");
+    el.homeSearchBtn.classList.toggle("on", clearMode);
   }
 
   function clearHomePlayerLookup({ rerender = true } = {}) {
@@ -2529,9 +2673,7 @@
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
-    homeOwnerHover = null;
-    if (el.homeSearchBtn) el.homeSearchBtn.setAttribute("aria-pressed", "false");
-    if (el.homeSearchBtn) el.homeSearchBtn.classList.remove("on");
+    syncHomeSearchBtn();
     if (rerender) syncHomeLookupUI();
   }
 
@@ -2541,10 +2683,7 @@
       return;
     }
     homeLookupPlayer = row;
-    if (el.homeSearchBtn) {
-      el.homeSearchBtn.setAttribute("aria-pressed", "true");
-      el.homeSearchBtn.classList.add("on");
-    }
+    syncHomeSearchBtn();
     syncHomeLookupUI();
   }
 
@@ -2597,10 +2736,8 @@
 
     if (hasOwners && Number.isFinite(elementId)) {
       homeOwnerPin = { type: "element", id: elementId };
-      homeOwnerHover = null;
     } else {
       if (homeOwnerPin && homeOwnerPin.type === "element") homeOwnerPin = null;
-      homeOwnerHover = null;
     }
     syncHomeOwnerHighlights();
 
@@ -2648,19 +2785,28 @@
       } else if (!prefsMatch && hasPayload) {
         el.homePageSubtitle.textContent = "Cached Home data is for a different manager/league — run refresh home.";
       } else {
-        const s = HOME.summary || {};
+        const viewEntry = homeActiveViewEntryId();
+        const viewingOther = homeIsViewingOtherManager();
+        const s = viewingOther
+          ? homeSummaryForView(viewEntry)
+          : (HOME.summary || {});
         const bits = [s.teamName, s.managerName].filter(Boolean);
         el.homePageSubtitle.textContent = bits.length
-          ? `${bits.join(" · ")} — live GW scoring from the last refresh.`
+          ? viewingOther
+            ? `${bits.join(" · ")} — viewing another manager's team.`
+            : `${bits.join(" · ")} — live GW scoring from the last refresh.`
           : "Your manager squad and mini-league gameweek standings from the last refresh.";
       }
     }
     if (showEmpty) {
       if (el.homeDeadline) el.homeDeadline.hidden = true;
+      if (el.homeViewBanner) el.homeViewBanner.hidden = true;
       return;
     }
 
-    const summary = HOME.summary || {};
+    const viewEntry = homeActiveViewEntryId();
+    const viewingOther = homeIsViewingOtherManager();
+    const summary = homeSummaryForView(viewEntry);
     if (el.homeDeadline) {
       const label = homeNextDeadlineLabel();
       el.homeDeadline.textContent = label;
@@ -2678,9 +2824,13 @@
     }
     setHomeRankDelta(
       el.homeOverallRankDelta,
-      homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
+      viewingOther ? null : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
     );
-    setHomeOverallPct(el.homeOverallPct, summary.overallRank, summary.totalPlayers);
+    setHomeOverallPct(
+      el.homeOverallPct,
+      viewingOther ? null : summary.overallRank,
+      viewingOther ? null : summary.totalPlayers
+    );
     if (el.homeTotalPoints) el.homeTotalPoints.textContent = formatHomeRank(summary.overallPoints);
     if (el.homeLeagueRankNum) {
       el.homeLeagueRankNum.textContent = formatHomeRank(summary.leagueRank);
@@ -2689,7 +2839,7 @@
     }
     setHomeRankDelta(
       el.homeLeagueRankDelta,
-      homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
+      viewingOther ? null : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
     );
     if (el.homeGwMeta) {
       const chip = summary.activeChip ? String(summary.activeChip) : "";
@@ -2704,7 +2854,7 @@
       el.homeLeagueTitle.textContent = HOME.leagueName || "";
     }
     if (el.homeSquadBody) {
-      const rows = Array.isArray(HOME.squad) ? HOME.squad : [];
+      const rows = homeSquadForEntry(viewEntry);
       const maxAbsImp = Math.max(
         1,
         ...rows.map((r) => {
@@ -2727,17 +2877,25 @@
         `<tr><td colspan="5">No squad picks in cache.</td></tr>`;
     }
     if (el.homeStandingsBody) {
-      const focus = Number(HOME.managerId);
+      const configuredEntry = homeConfiguredEntryId();
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       el.homeStandingsBody.innerHTML = rows.map((r) => {
-        const you = Number(r.entry) === focus;
+        const entry = Number(r.entry);
+        const isConfigured = Number.isFinite(configuredEntry) && entry === configuredEntry;
+        const isViewActive = Number.isFinite(viewEntry) && entry === viewEntry;
+        const rowCls = [
+          isConfigured && !viewingOther ? "is-you" : "",
+          viewingOther && isViewActive ? "is-view-active" : "",
+          viewingOther && isConfigured ? "is-configured-manager" : "",
+        ].filter(Boolean).join(" ");
         const inPlay = Number(r.inPlay);
         const toPlay = Number(r.toPlay);
         const playTitle = "In play · still to play (active picks; Bench Boost can exceed 11)";
         const playHTML = (Number.isFinite(inPlay) && Number.isFinite(toPlay))
           ? `<span class="home-play-counts" title="${escapeHtml(playTitle)}"><span class="home-play-live${inPlay > 0 ? " is-active" : ""}">${escapeHtml(String(inPlay))}</span><span class="home-play-sep">·</span><span class="home-play-left${toPlay > 0 ? " is-active" : ""}">${escapeHtml(String(toPlay))}</span></span>`
           : "—";
-        return `<tr class="${you ? "is-you" : ""}" data-entry="${escapeHtml(String(r.entry ?? ""))}" role="button" tabindex="0" aria-label="Show squad players owned by ${escapeHtml(r.playerName || "this manager")}">
+        const labelName = r.playerName || r.entryName || "this manager";
+        return `<tr class="${rowCls}" data-entry="${escapeHtml(String(r.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
           <td class="home-col-rank">${escapeHtml(String(r.rankLive ?? r.rankOfficial ?? "—"))}</td>
           <td class="home-col-manager">
             <span class="home-standings-name">${escapeHtml(r.playerName || "—")}</span>
@@ -2750,6 +2908,8 @@
       }).join("") || `<tr><td colspan="5">No standings.</td></tr>`;
     }
     bindHomeOwnerHighlighting();
+    syncHomeViewBanner();
+    syncHomeOwnerHighlights();
     syncHomeLookupUI();
   }
 
@@ -3561,7 +3721,10 @@
     rememberMobileFilterHome(active);
     if (active.parentElement !== dock) dock.appendChild(active);
     active.classList.add("mobile-filter-fab");
-    if (active === el.homeSearchBtn) active.hidden = false;
+    if (active === el.homeSearchBtn) {
+      active.hidden = false;
+      syncHomeSearchBtn();
+    }
     dock.hidden = false;
     dock.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("has-mobile-filter-fab");
@@ -4028,6 +4191,7 @@
     // Move focus out before aria-hidden — Chrome warns if a descendant stays focused.
     releaseMobileSheetFocus();
     el.mobileSheet.classList.remove("is-open");
+    el.mobileSheet.classList.remove("is-home-search");
     el.mobileSheet.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("mobile-sheet-active");
     if (el.mobileSheetPanel) {
@@ -4129,6 +4293,9 @@
         : sheetReturnFocus;
 
     mobileSheetKey = key;
+    if (el.mobileSheet) {
+      el.mobileSheet.classList.toggle("is-home-search", key === "home-search");
+    }
     if (el.mobileSheetTitle) {
       if (titleHtml) {
         el.mobileSheetTitle.classList.add("mobile-sheet-title-rich");
@@ -12547,6 +12714,12 @@
   }
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
+  if (el.homeViewBannerClear) {
+    el.homeViewBannerClear.addEventListener("click", (e) => {
+      e.preventDefault();
+      clearHomeViewEntry();
+    });
+  }
   if (el.homeSearchBtn) {
     el.homeSearchBtn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -12561,14 +12734,6 @@
         return;
       }
       openHomeSearchSheet();
-    });
-  }
-  if (el.homePlayerProfile) {
-    el.homePlayerProfile.addEventListener("click", (e) => {
-      const close = e.target.closest(".home-player-profile-close");
-      if (!close || !el.homePlayerProfile.contains(close)) return;
-      e.preventDefault();
-      clearHomePlayerLookup();
     });
   }
   if (el.homePlayerMatchup) {

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=574" />
+<link rel="stylesheet" href="styles.css?v=580" />
 <script>
 (() => {
   try {
@@ -632,6 +632,13 @@
       </div>
       <div id="home-bento" class="home-dashboard" hidden>
         <p class="home-deadline" id="home-deadline" hidden></p>
+        <div id="home-view-banner" class="home-view-banner" hidden>
+          <div class="home-view-banner-copy">
+            <span class="home-view-banner-label">Viewing</span>
+            <strong class="home-view-banner-name" id="home-view-banner-name"></strong>
+          </div>
+          <button type="button" class="home-view-banner-clear" id="home-view-banner-clear">Clear</button>
+        </div>
         <div class="home-summary-cards" id="home-summary-cards">
           <article class="home-panel home-stat-panel home-stat-gw">
             <h3 class="home-panel-heading" id="home-gw-heading">GW points</h3>
@@ -1123,8 +1130,8 @@
 <script src="markets_data.js?v=10"></script>
 <script src="ownership_data.js?v=9"></script>
 <script src="leagues_data.js?v=3"></script>
-<script src="home_data.js?v=9"></script>
-<script src="app.js?v=597"></script>
+<script src="home_data.js?v=11"></script>
+<script src="app.js?v=601"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

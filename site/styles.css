@@ -11370,6 +11370,82 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+.home-view-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: hsl(var(--card));
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  border-left: 3px solid hsl(var(--primary));
+}
+.home-view-banner[hidden] {
+  display: none !important;
+}
+.home-view-banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.home-view-banner-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  line-height: 1.2;
+}
+.home-view-banner-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-view-banner-clear {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--muted) / 0.35);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.home-view-banner-clear:hover {
+  background: hsl(var(--muted) / 0.55);
+  color: var(--text);
+  border-color: hsl(var(--border-hsl) / 0.9);
+}
+.home-view-banner-clear:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.45);
+  outline-offset: 2px;
+}
+.home-view-banner-clear:active {
+  transform: translateY(0.5px);
+}
+@media (max-width: 900px) {
+  .home-view-banner {
+    padding: 9px 10px 9px 12px;
+    border-radius: calc(var(--radius) + 2px);
+  }
+  .home-view-banner-name {
+    font-size: 13.5px;
+  }
+}
 @media (max-width: 900px) {
   .home-deadline:not([hidden]) {
     display: block;
@@ -11397,6 +11473,24 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-search-btn[hidden] {
   display: none !important;
 }
+.home-search-btn.mobile-filter-fab,
+.home-search-btn.mobile-filter-fab.on,
+.home-search-btn.mobile-filter-fab.is-clear,
+.home-search-btn.mobile-filter-fab[aria-pressed="true"] {
+  background: hsl(var(--card));
+  border: 1px solid var(--mobile-dock-border);
+  box-shadow: var(--mobile-dock-shadow);
+  color: var(--text);
+}
+html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab:hover,
+html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.on:hover,
+html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
+  background: hsl(var(--card));
+  color: var(--text);
+}
+.home-search-btn.mobile-filter-fab.is-clear {
+  color: var(--text-dim);
+}
 .home-player-profile[hidden],
 .home-player-matchup[hidden] {
   display: none !important;
@@ -11422,7 +11516,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   border-radius: var(--radius);
   background: hsl(var(--card));
   box-shadow: var(--shadow-sm);
-  padding: 10px 36px 10px 10px;
+  padding: 10px;
   border-left: 3px solid var(--home-lookup-accent, hsl(var(--border)));
 }
 .home-lookup-head {
@@ -11566,6 +11660,24 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+}
+.mobile-sheet.is-home-search .mobile-sheet-header {
+  display: none;
+}
+.mobile-sheet-body > .home-search-sheet {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 2px;
+}
+.mobile-sheet-body > .home-search-sheet .home-search-input-wrap {
+  position: static;
+  flex: none;
+  padding-bottom: 0;
+}
+.mobile-sheet-body > .home-search-sheet .home-search-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 .home-search-input-wrap {
   position: sticky;
@@ -12089,6 +12201,25 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-tables-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .home-squad-table th.home-col-pts,
+  .home-squad-table th.home-col-mp,
+  .home-squad-table th.home-col-opp,
+  .home-squad-table td.home-col-pts,
+  .home-squad-table td.home-col-mp,
+  .home-squad-table td.home-col-opp {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+  .home-squad-table .home-player-cell,
+  .home-squad-table .home-player-text {
+    min-width: 0;
+  }
+  .home-squad-table .home-player-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 @media (max-width: 560px) {
   .home-summary-cards {
@@ -12192,42 +12323,38 @@ html[data-page="home"] #subtoolbar {
   border-radius: 5px;
 }
 
-/* Home ownership cross-highlight (squad ↔ standings, both ways).
-   Paint backgrounds on td (not tr) — WebKit often delays/skips tr backgrounds,
-   which made mobile taps look like only the name recolored before the row filled. */
+/* Home ownership cross-highlight (squad ↔ standings).
+   Squad tap filters standings rows (hidden, no tint). Standings tap switches
+   manager view; squad overlap with configured manager uses is-owner-match. */
 .home-squad-row,
 .home-standings-table tr[data-entry] {
   cursor: pointer;
   touch-action: manipulation;
 }
-.home-squad-row.is-owner-source > td,
-.home-standings-table tr.is-owner-source > td {
-  background: hsl(var(--blue-hsl) / 0.10);
+.home-standings-table tr[hidden] {
+  display: none;
 }
-.home-squad-row.is-owner-pinned > td,
-.home-standings-table tr.is-owner-pinned > td {
-  background: hsl(var(--blue-hsl) / 0.16);
-}
-.home-squad-row.is-owner-pinned > td:first-child,
-.home-standings-table tr.is-owner-pinned > td:first-child {
-  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
-}
-.home-squad-row.is-owner-match > td,
-.home-standings-table tr.is-owner-match > td {
+.home-squad-row.is-owner-match > td {
   background: hsl(var(--blue-hsl) / 0.12);
 }
-.home-standings-table tr.is-owner-match.is-you > td {
-  background: hsl(var(--blue-hsl) / 0.18);
+.home-squad-row.is-owner-match .home-player-name {
+  color: hsl(var(--blue-hsl));
 }
-.home-squad-row.is-owner-match .home-player-name,
-.home-standings-table tr.is-owner-match .home-standings-name,
-.home-standings-table tr.is-owner-source .home-standings-name,
-.home-standings-table tr.is-owner-pinned .home-standings-name,
-.home-squad-row.is-owner-source .home-player-name,
+.home-squad-row.is-owner-pinned > td {
+  background: hsl(var(--blue-hsl) / 0.16);
+}
+.home-squad-row.is-owner-pinned > td:first-child {
+  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
+}
 .home-squad-row.is-owner-pinned .home-player-name {
   color: hsl(var(--blue-hsl));
 }
-.home-squad-table tbody.has-owner-filter > tr.home-squad-row:not(.is-owner-match),
-.home-standings-table tbody.has-owner-filter > tr[data-entry]:not(.is-owner-match) {
-  opacity: 0.38;
+.home-standings-table tr.is-view-active td {
+  background: hsl(var(--blue-hsl) / 0.10);
+}
+.home-standings-table tr.is-view-active td:first-child {
+  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
+}
+.home-standings-table tr.is-configured-manager td {
+  background: hsl(var(--primary) / 0.08);
 }
