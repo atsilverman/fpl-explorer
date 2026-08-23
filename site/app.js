@@ -1980,6 +1980,8 @@
 
   const LIVE_HOME_API = String(window.FPL_LIVE_API || "").replace(/\/$/, "");
   let homeLivePollTimer = null;
+  let homeLiveLastPollAt = 0;
+  let homeLiveLastPollOk = false;
 
   function homeLiveApiUrl() {
     if (LIVE_HOME_API) return `${LIVE_HOME_API}/api/home`;
@@ -2005,16 +2007,31 @@
     const url = homeLiveApiUrl();
     if (!url || state.page !== "home") return;
     if (!savedManagerId || !savedLeagueId) return;
+    homeLiveLastPollAt = Date.now();
     try {
       const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        homeLiveLastPollOk = false;
+        syncHomeCountLabel();
+        return;
+      }
       const data = await res.json();
-      if (!(data && data.ok && data.home)) return;
-      if (!homeLivePayloadMatchesPrefs(data.home)) return;
+      if (!(data && data.ok && data.home)) {
+        homeLiveLastPollOk = false;
+        syncHomeCountLabel();
+        return;
+      }
+      if (!homeLivePayloadMatchesPrefs(data.home)) {
+        homeLiveLastPollOk = false;
+        syncHomeCountLabel();
+        return;
+      }
+      homeLiveLastPollOk = true;
       applyHomePayload(data.home);
       renderHome();
     } catch {
-      /* offline, CORS, or live server down — static home_data.js remains */
+      homeLiveLastPollOk = false;
+      syncHomeCountLabel();
     }
   }
 
@@ -2025,8 +2042,56 @@
     }
     if (!homeLiveApiUrl() || state.page !== "home") return;
     if (!savedManagerId || !savedLeagueId) return;
+    homeLiveLastPollOk = false;
+    homeLiveLastPollAt = 0;
     pollHomeFromLiveServer();
     homeLivePollTimer = setInterval(pollHomeFromLiveServer, 60_000);
+  }
+
+  function syncHomeCountLabel() {
+    if (!el.homeCountLabel) return;
+    const linked = !!(savedManagerId && savedLeagueId);
+    const hasPayload = !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId);
+    el.homeCountLabel.classList.remove("is-live", "is-live-stale", "is-live-offline");
+
+    if (!linked) {
+      el.homeCountLabel.textContent = "No manager linked";
+      el.homeCountLabel.removeAttribute("title");
+      return;
+    }
+    if (!hasPayload) {
+      el.homeCountLabel.textContent = "Refresh home to load";
+      el.homeCountLabel.removeAttribute("title");
+      return;
+    }
+
+    const when = fmtMarketsUpdated(HOME.generatedAt);
+    let text = `GW${HOME.gw || "?"}`;
+    if (when) text += ` · Updated ${when}`;
+    if (HOME.generatedAt) {
+      el.homeCountLabel.title = `Data refreshed ${HOME.generatedAt.replace("T", " ").replace("Z", " UTC")}`;
+    } else {
+      el.homeCountLabel.removeAttribute("title");
+    }
+
+    const liveUrl = homeLiveApiUrl();
+    if (liveUrl) {
+      const polledRecently = homeLiveLastPollAt && Date.now() - homeLiveLastPollAt < 120_000;
+      if (homeLiveLastPollOk && polledRecently) {
+        text += " · Live";
+        el.homeCountLabel.classList.add("is-live");
+      } else if (homeLiveLastPollAt && polledRecently) {
+        text += " · Live offline";
+        el.homeCountLabel.classList.add("is-live-offline");
+      } else if (!homeLiveLastPollAt) {
+        text += " · Connecting…";
+      } else {
+        text += " · Live offline";
+        el.homeCountLabel.classList.add("is-live-stale");
+      }
+    }
+
+    el.homeCountLabel.textContent = text;
   }
 
   function homeKickoffParts(iso) {
@@ -2822,14 +2887,7 @@
           "Manager and league are linked. Run refresh home (or refresh data) to build the dashboard cache.";
       }
     }
-    if (el.homeCountLabel) {
-      if (!linked) el.homeCountLabel.textContent = "No manager linked";
-      else if (!hasPayload) el.homeCountLabel.textContent = "Refresh home to load";
-      else {
-        const when = HOME.generatedAt ? ` · ${HOME.generatedAt.replace("T", " ").replace("Z", " UTC")}` : "";
-        el.homeCountLabel.textContent = `GW${HOME.gw || "?"}${when}`;
-      }
-    }
+    if (el.homeCountLabel) syncHomeCountLabel();
     if (el.homePageSubtitle) {
       if (!linked) {
         el.homePageSubtitle.textContent = "Link a manager and league in Preferences to personalize Home.";

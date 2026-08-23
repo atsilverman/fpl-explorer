@@ -4013,6 +4013,13 @@ tbody tr.row-selected td:first-child {
 .page-header-meta .count-label {
   padding-top: 0;
 }
+.page-header-meta .count-label.is-live {
+  color: hsl(var(--positive));
+}
+.page-header-meta .count-label.is-live-offline,
+.page-header-meta .count-label.is-live-stale {
+  color: var(--text-faint);
+}
 
 /* Statistics: title/subtitle left, count upper-right. All metric columns shown by default. */
 .opta-header {
