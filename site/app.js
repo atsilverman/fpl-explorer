@@ -1983,8 +1983,13 @@
 
   function homeLiveApiUrl() {
     if (LIVE_HOME_API) return `${LIVE_HOME_API}/api/home`;
-    // Local serve.py mirrors the DO live API on the same origin.
-    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+    // Same-origin proxy (local serve.py or Vercel /api/home → DO droplet).
+    if (
+      location.hostname === "localhost"
+      || location.hostname === "127.0.0.1"
+      || location.hostname.endsWith("vercel.app")
+      || location.hostname === "fpl-explorer.vercel.app"
+    ) {
       return "/api/home";
     }
     return "";

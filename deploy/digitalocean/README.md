@@ -10,7 +10,7 @@ Minute-by-minute FPL live updates for the Home dashboard (configured manager, le
 |-------|------|
 | [`site/fetch_home.py`](../site/fetch_home.py) | Pulls FPL live + fixtures + league picks, runs [`live_scoring.py`](../site/live_scoring.py) (auto-subs, chips, Defcon, minutes, live status) |
 | [`site/live_server.py`](../site/live_server.py) | Polls `fetch_home.py` on an interval and serves `GET /api/home` |
-| Static site (Vercel) | UI; polls the DO API when `window.FPL_LIVE_API` is set |
+| Static site (Vercel) | UI; polls `/api/home` (proxied to the droplet) every 60s |
 
 One DO droplet polls FPL **once per minute** (during live fixtures) and serves **all users** — far better than per-browser FPL calls or git deploy cycles.
 
@@ -23,10 +23,12 @@ One DO droplet polls FPL **once per minute** (during live fixtures) and serves *
 └─────────────┘                           │  + fetch_home.py │
                                           └────────┬─────────┘
                                                    │ GET /api/home
-┌─────────────┐                                    │
-│   Vercel    │ ◄── browser polls every 60s ───────┘
-│  (static)   │
-└─────────────┘
+┌─────────────┐     GET /api/home          ┌──────────────────┐
+│   Vercel    │ ◄── browser polls 60s ──── │  DO 159.203…     │
+│  (static)   │                            │  :8080           │
+└──────┬──────┘     serverless proxy ─────►└──────────────────┘
+       │
+       └── /api/home.js → http://159.203.184.115:8080/api/home
 ```
 
 ### What refreshes each cycle
@@ -108,9 +110,35 @@ sudo systemctl status fpl-live
 journalctl -u fpl-live -f
 ```
 
-### 6. HTTPS (recommended)
+### 6. Expose port 8080
 
-Put **Caddy** or **nginx** in front for TLS:
+**Droplet IP:** `159.203.184.115`
+
+Allow inbound 8080 (and keep SSH open):
+
+```bash
+ufw allow OpenSSH
+ufw allow 8080/tcp
+ufw enable
+```
+
+Ensure the service binds publicly (not `127.0.0.1` only):
+
+```bash
+cd /opt/fpl-explorer && git pull
+sudo cp deploy/digitalocean/fpl-live.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl restart fpl-live
+```
+
+Test from your laptop:
+
+```bash
+curl http://159.203.184.115:8080/health
+```
+
+### 7. HTTPS on droplet (optional)
+
+Not required for production — Vercel proxies via `/api/home` so browsers never hit HTTP on the IP. Add Caddy only if you want a direct HTTPS API.
 
 ```bash
 sudo apt install -y caddy
@@ -128,15 +156,11 @@ live.yourdomain.com {
 sudo systemctl reload caddy
 ```
 
-### 7. Wire the static site
+### 8. Vercel (automatic after deploy)
 
-In [`site/index.html`](../index.html), set (before `app.js`):
+[`site/api/home.js`](../../site/api/home.js) proxies to `http://159.203.184.115:8080`. Override with Vercel env `FPL_LIVE_ORIGIN` if the IP changes.
 
-```html
-<script>window.FPL_LIVE_API = "https://live.yourdomain.com";</script>
-```
-
-Redeploy Vercel. On Home, the app polls `/api/home` every 60s when that URL is set and manager/league match the user’s Preferences.
+Home polls same-origin `/api/home` every 60s on `*.vercel.app` — no `FPL_LIVE_API` in `index.html` needed.
 
 ## Endpoints
 
@@ -145,7 +169,7 @@ Redeploy Vercel. On Home, the app polls `/api/home` every 60s when that URL is s
 | `GET /api/home` | `{ ok: true, home: { ... FPL_HOME payload ... } }` |
 | `GET /health` | `{ ok, generatedAt, intervalSec, lastError, fetching }` |
 
-CORS is `*` so the Vercel origin can fetch directly.
+CORS is `*` on the droplet. Production uses the Vercel proxy to avoid HTTPS→HTTP mixed-content blocking.
 
 ## Environment variables
 
