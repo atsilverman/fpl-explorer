@@ -2996,15 +2996,49 @@
     return !!a && !!b && a.type === b.type && Number(a.id) === Number(b.id);
   }
 
+  function homeScrollStandingsIntoView() {
+    if (!NARROW_MQ.matches) return;
+    const panel = el.homeStandingsPanel;
+    if (!panel) return;
+    const main = document.querySelector("main.main");
+    const behavior = prefersReducedMotion() ? "auto" : "smooth";
+    requestAnimationFrame(() => {
+      if (main) {
+        const panelRect = panel.getBoundingClientRect();
+        const mainRect = main.getBoundingClientRect();
+        const topGap = 12;
+        main.scrollTo({
+          top: Math.max(0, main.scrollTop + panelRect.top - mainRect.top - topGap),
+          behavior,
+        });
+        return;
+      }
+      panel.scrollIntoView({ behavior, block: "start" });
+    });
+  }
+
+  function homeScrollPageToTop() {
+    if (!NARROW_MQ.matches) return;
+    const behavior = prefersReducedMotion() ? "auto" : "smooth";
+    const main = document.querySelector("main.main");
+    requestAnimationFrame(() => {
+      if (main) {
+        main.scrollTo({ top: 0, left: 0, behavior });
+        return;
+      }
+      window.scrollTo({ top: 0, left: 0, behavior });
+    });
+  }
+
   function bindHomeOwnerHighlighting() {
     if (homeOwnerBindingsReady) return;
-    if (!el.homeSquadSplit || !el.homeStandingsTrack) return;
+    if (!el.homeSquadTrack || !el.homeStandingsTrack) return;
     homeOwnerBindingsReady = true;
     bindHomeStandingsPager();
     bindHomeSquadPager();
 
     function toggleSquadOwner(tr) {
-      if (!tr || !el.homeSquadSplit.contains(tr)) return;
+      if (!tr || !el.homeSquadTrack.contains(tr)) return;
       const eid = Number(tr.dataset.element);
       if (!Number.isFinite(eid)) return;
       const next = { type: "element", id: eid };
@@ -3013,10 +3047,12 @@
         homeViewEntryId = null;
         homeOwnerPin = togglingOff ? null : next;
         renderHome({ deferDuringEnter: true });
+        if (!togglingOff) homeScrollStandingsIntoView();
         return;
       }
       homeOwnerPin = togglingOff ? null : next;
       syncHomeOwnerHighlights();
+      if (!togglingOff) homeScrollStandingsIntoView();
     }
 
     function toggleStandingOwner(tr) {
@@ -3024,11 +3060,12 @@
       const entry = Number(tr.dataset.entry);
       if (!Number.isFinite(entry)) return;
       setHomeViewEntry(entry);
+      homeScrollPageToTop();
     }
 
-    el.homeSquadSplit.addEventListener("click", (e) => {
+    el.homeSquadTrack.addEventListener("click", (e) => {
       const tr = e.target.closest("tr.home-squad-row");
-      if (!tr || !el.homeSquadSplit.contains(tr)) return;
+      if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
       toggleSquadOwner(tr);
     });
@@ -3040,10 +3077,10 @@
       toggleStandingOwner(tr);
     });
 
-    el.homeSquadSplit.addEventListener("keydown", (e) => {
+    el.homeSquadTrack.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
       const tr = e.target.closest("tr.home-squad-row");
-      if (!tr || !el.homeSquadSplit.contains(tr)) return;
+      if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
       toggleSquadOwner(tr);
     });
