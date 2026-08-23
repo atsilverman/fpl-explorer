@@ -816,6 +816,16 @@ a { color: var(--blue); }
   outline: none;
   box-shadow: var(--focus-ring);
 }
+.prefs-league-fixed {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--border);
+  background: hsl(var(--muted) / 0.25);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
 .prefs-select:disabled {
   opacity: 0.55;
   cursor: not-allowed;

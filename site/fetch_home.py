@@ -41,6 +41,8 @@ from live_scoring import (
 )
 
 SITE = Path(__file__).resolve().parent
+SOCAL_LEAGUE_ID = 954157
+TRACKED_MANAGERS = [296817, 1404383, 5497737, 185072]
 TRACKED_PATH = SITE / "tracked_ids.json"
 PREFS_PATH = SITE / "home_prefs.json"
 BASELINES_PATH = SITE / "home_rank_baselines.json"
@@ -181,10 +183,14 @@ def resolve_targets(args: argparse.Namespace) -> tuple[int | None, int | None]:
             lid = int(prefs["leagueId"])
         except (TypeError, ValueError):
             lid = None
+    if lid is None and leagues:
+        lid = SOCAL_LEAGUE_ID if SOCAL_LEAGUE_ID in leagues else leagues[0]
+    if lid != SOCAL_LEAGUE_ID:
+        lid = SOCAL_LEAGUE_ID
     if mid is None and managers:
         mid = managers[0]
-    if lid is None and leagues:
-        lid = leagues[0]
+    if mid is not None and mid not in TRACKED_MANAGERS and managers:
+        mid = managers[0]
     return mid, lid
 
 

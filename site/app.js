@@ -1004,7 +1004,7 @@
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplManagerSelect: $("#fpl-manager-select"),
-    fplLeagueSelect: $("#fpl-league-select"),
+    fplLeagueLabel: $("#fpl-league-label"),
     fplIdClear: $("#fpl-id-clear"),
     fplIdStatus: $("#fpl-id-status"),
     posFilters: $("#pos-filters"),
@@ -1479,6 +1479,9 @@
   // ---------------------------------------------------------------------
   const FPL_ID_KEY = "fpl-explorer-manager-id";
   const FPL_LEAGUE_KEY = "fpl-explorer-league-id";
+  const HOME_LEAGUE_ID = "954157";
+  const HOME_LEAGUE_NAME = "SoCal Big Guy FPL";
+  const TRACKED_MANAGER_IDS = [296817, 1404383, 5497737, 185072];
   const TEAM_MODE_KEY = "fpl-explorer-team-mode";
   const TEAM_ACTUAL_KEY = "fpl-explorer-team-actual";
   let ownedCodes = new Set();
@@ -1571,6 +1574,7 @@
 
   function trackedManagerById(id) {
     const n = Number(id);
+    if (!TRACKED_MANAGER_IDS.includes(n)) return null;
     return (LEAGUES.managers || []).find((m) => Number(m.id) === n) || null;
   }
 
@@ -1592,8 +1596,10 @@
   function populateManagerSelect() {
     if (!el.fplManagerSelect) return;
     const selected = savedManagerId || "";
+    const allowed = new Set(TRACKED_MANAGER_IDS.map(String));
     const opts = ['<option value="">Select manager…</option>'];
     for (const m of LEAGUES.managers || []) {
+      if (!allowed.has(String(m.id))) continue;
       const label = m.teamName ? `${m.name} — ${m.teamName}` : m.name;
       opts.push(
         `<option value="${escapeHtml(String(m.id))}">${escapeHtml(label)}</option>`
@@ -1606,42 +1612,26 @@
     }
   }
 
-  function rebuildLeagueSelect({ preferredId = savedLeagueId } = {}) {
-    if (!el.fplLeagueSelect) return;
-    const manager = trackedManagerById(savedManagerId);
-    const leagueIds = manager && Array.isArray(manager.leagueIds) ? manager.leagueIds : [];
-    const opts = ['<option value="">Select league…</option>'];
-    for (const lid of leagueIds) {
-      const L = trackedLeagueById(lid);
-      const label = L ? L.name : `League ${lid}`;
-      opts.push(`<option value="${escapeHtml(String(lid))}">${escapeHtml(label)}</option>`);
-    }
-    el.fplLeagueSelect.innerHTML = opts.join("");
-    el.fplLeagueSelect.disabled = leagueIds.length === 0;
-    let next = preferredId != null ? String(preferredId) : "";
-    if (next && !leagueIds.some((id) => String(id) === next)) next = "";
-    if (!next && leagueIds.length) next = String(leagueIds[0]);
-    el.fplLeagueSelect.value = next;
-    applyLeagueId(next, { persist: true, quiet: true });
+  function syncFixedHomeLeague({ persist = true, quiet = true } = {}) {
+    applyLeagueId(HOME_LEAGUE_ID, { persist, quiet });
+    if (el.fplLeagueLabel) el.fplLeagueLabel.textContent = HOME_LEAGUE_NAME;
+  }
+
+  function rebuildLeagueSelect() {
+    syncFixedHomeLeague({ persist: true, quiet: true });
   }
 
   function applyLeagueId(rawId, { persist = true, quiet = true } = {}) {
-    const id = String(rawId || "").trim();
-    if (!id) {
-      savedLeagueId = null;
-      if (persist) {
-        try {
-          localStorage.removeItem(FPL_LEAGUE_KEY);
-        } catch {
-          /* private browsing */
-        }
-        persistHomePrefs();
+    const id = HOME_LEAGUE_ID;
+    if (String(rawId || "").trim() && String(rawId).trim() !== id) {
+      if (!quiet) {
+        showToast({
+          title: "League fixed",
+          message: HOME_LEAGUE_NAME,
+          icon: "info",
+        });
       }
-      if (!quiet) syncFplIdStatus();
-      scheduleSiteRefreshForHomeTargets({ toast: !quiet });
-      return;
     }
-    if (!/^\d+$/.test(id) || Number(id) <= 0) return;
     const prevLeague = savedLeagueId;
     savedLeagueId = id;
     if (persist) {
@@ -1652,9 +1642,7 @@
       }
       persistHomePrefs();
     }
-    if (el.fplLeagueSelect && el.fplLeagueSelect.value !== id) {
-      el.fplLeagueSelect.value = id;
-    }
+    if (el.fplLeagueLabel) el.fplLeagueLabel.textContent = HOME_LEAGUE_NAME;
     if (!quiet) syncFplIdStatus();
     // Rebuild Home + site-wide owned indicators when the league target changes.
     if (String(prevLeague || "") !== String(id)) {
@@ -1998,9 +1986,9 @@
   }
 
   function homeLivePayloadMatchesPrefs(home) {
-    if (!home || !savedManagerId || !savedLeagueId) return false;
-    return String(home.managerId) === String(savedManagerId)
-      && String(home.leagueId) === String(savedLeagueId);
+    if (!home || !savedManagerId) return false;
+    if (String(home.leagueId) !== HOME_LEAGUE_ID) return false;
+    return TRACKED_MANAGER_IDS.map(String).includes(String(savedManagerId));
   }
 
   async function pollHomeFromLiveServer() {
@@ -2219,8 +2207,8 @@
   let homeElementGwCache = null;
 
   function homeConfiguredEntryId() {
-    const id = Number(HOME && HOME.managerId);
-    return Number.isFinite(id) ? id : null;
+    const id = Number(savedManagerId);
+    return Number.isFinite(id) && id > 0 ? id : null;
   }
 
   function homeActiveViewEntryId() {
@@ -2255,22 +2243,26 @@
     const configured = homeConfiguredEntryId();
     const id = Number(entryId);
     if (!Number.isFinite(id)) return HOME.summary || {};
-    if (id === configured && HOME.summary) return HOME.summary;
     const row = homeStandingForEntry(id);
-    if (!row) return HOME.summary || {};
-    return {
-      gwPoints: row.gwPointsLive,
-      overallPoints: row.overallPoints ?? row.total,
-      overallRank: row.overallRank,
-      overallRankPrev: null,
-      leagueRank: row.rankLive ?? row.rankOfficial,
-      leagueRankPrev: null,
-      totalPlayers: HOME.summary && HOME.summary.totalPlayers,
-      eventPointsOfficial: row.eventTotalOfficial,
-      teamName: row.entryName || "",
-      managerName: row.playerName || "",
-      activeChip: row.activeChip,
-    };
+    const payloadSummary =
+      HOME.summary && Number(HOME.managerId) === id ? HOME.summary : null;
+    if (row) {
+      return {
+        gwPoints: row.gwPointsLive,
+        overallPoints: row.overallPoints ?? row.total,
+        overallRank: row.overallRank,
+        overallRankPrev: payloadSummary?.overallRankPrev ?? null,
+        leagueRank: row.rankLive ?? row.rankOfficial,
+        leagueRankPrev: payloadSummary?.leagueRankPrev ?? null,
+        totalPlayers: HOME.summary?.totalPlayers,
+        eventPointsOfficial: row.eventTotalOfficial,
+        teamName: row.entryName || "",
+        managerName: row.playerName || "",
+        activeChip: row.activeChip,
+      };
+    }
+    if (id === configured && HOME.summary) return HOME.summary;
+    return HOME.summary || {};
   }
 
   function homeViewBannerLabel(entryId) {
@@ -2869,18 +2861,18 @@
     const linked = !!(savedManagerId && savedLeagueId);
     const hasPayload = !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId);
     const prefsMatch =
-      hasPayload &&
-      String(HOME.managerId) === String(savedManagerId) &&
-      String(HOME.leagueId) === String(savedLeagueId);
+      hasPayload
+      && String(HOME.leagueId) === HOME_LEAGUE_ID
+      && TRACKED_MANAGER_IDS.map(String).includes(String(savedManagerId));
     const showEmpty = !linked || !hasPayload;
 
     if (el.homeEmpty) el.homeEmpty.hidden = !showEmpty;
     if (el.homeBento) el.homeBento.hidden = showEmpty;
     if (showEmpty && el.homeEmptyTitle && el.homeEmptyCopy) {
       if (!linked) {
-        el.homeEmptyTitle.textContent = "Link a manager and league";
+        el.homeEmptyTitle.textContent = "Pick a manager";
         el.homeEmptyCopy.textContent =
-          "Pick both in Preferences, then run refresh home (or refresh data) so this page can load live GW points.";
+          "Choose one of the four SoCal Big Guy managers in Preferences for live Home data.";
       } else {
         el.homeEmptyTitle.textContent = "Home cache not loaded";
         el.homeEmptyCopy.textContent =
@@ -3054,7 +3046,7 @@
     if (el.fplManagerSelect && el.fplManagerSelect.value !== id) {
       el.fplManagerSelect.value = id;
     }
-    rebuildLeagueSelect({ preferredId: savedLeagueId });
+    rebuildLeagueSelect();
     try {
       await syncManagerFromApi(id, { seedPlannerIfEmpty, quiet });
     } catch (err) {
@@ -3088,7 +3080,7 @@
     }
     persistHomePrefs();
     if (el.fplManagerSelect) el.fplManagerSelect.value = "";
-    rebuildLeagueSelect({ preferredId: null });
+    rebuildLeagueSelect();
     if (state.teamMode === "actual") {
       applySquadSnapshot({ squad: [], captain: null, vice: null });
     }
@@ -3120,11 +3112,11 @@
       ownedCodes = new Set(actual.squad.map((s) => s.code));
     }
     populateManagerSelect();
+    syncFixedHomeLeague({ persist: true, quiet: true });
     if (saved && trackedManagerById(saved)) {
       savedManagerId = saved;
       if (el.fplManagerSelect) el.fplManagerSelect.value = saved;
-      if (savedLeague) savedLeagueId = savedLeague;
-      rebuildLeagueSelect({ preferredId: savedLeague || null });
+      rebuildLeagueSelect();
       state.teamMode = "planner";
       loadTeamDraft();
       try {
@@ -3144,7 +3136,7 @@
       }
       savedManagerId = null;
       savedLeagueId = null;
-      rebuildLeagueSelect({ preferredId: null });
+      rebuildLeagueSelect();
       state.teamMode = "planner";
       loadTeamDraft();
       syncFplIdStatus();
@@ -14732,11 +14724,6 @@
   if (el.fplManagerSelect) {
     el.fplManagerSelect.addEventListener("change", () => {
       applyManagerId(el.fplManagerSelect.value);
-    });
-  }
-  if (el.fplLeagueSelect) {
-    el.fplLeagueSelect.addEventListener("change", () => {
-      applyLeagueId(el.fplLeagueSelect.value, { persist: true, quiet: false });
     });
   }
   if (el.fplIdClear) {

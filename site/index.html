@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=581" />
+<link rel="stylesheet" href="styles.css?v=582" />
 <script>
 (() => {
   try {
@@ -357,10 +357,8 @@
               </select>
             </div>
             <div class="prefs-field">
-              <label class="prefs-field-label" for="fpl-league-select">League</label>
-              <select id="fpl-league-select" class="prefs-select" aria-describedby="fpl-id-status" disabled>
-                <option value="">Select league…</option>
-              </select>
+              <span class="prefs-field-label">League</span>
+              <p class="prefs-league-fixed" id="fpl-league-label">SoCal Big Guy FPL</p>
             </div>
             <div class="prefs-field">
               <div class="prefs-action-row">
@@ -615,7 +613,7 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-house"/></svg>Home<button class="page-info-btn" type="button" aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle" id="home-page-subtitle">Your manager squad and mini-league gameweek standings from the last refresh.</p>
+            <p class="page-subtitle" id="home-page-subtitle">SoCal Big Guy FPL — pick your manager in Preferences for live Home data.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="home-count-label"></span>
@@ -627,8 +625,8 @@
         </div>
       </div>
       <div id="home-empty" class="home-empty" hidden>
-        <p class="home-empty-title" id="home-empty-title">Link a manager and league</p>
-        <p class="home-empty-copy" id="home-empty-copy">Pick both in Preferences, then run refresh home (or refresh data) so this page can load live GW points.</p>
+        <p class="home-empty-title" id="home-empty-title">Pick a manager</p>
+        <p class="home-empty-copy" id="home-empty-copy">Choose one of the four SoCal Big Guy managers in Preferences for live Home data.</p>
       </div>
       <div id="home-bento" class="home-dashboard" hidden>
         <p class="home-deadline" id="home-deadline" hidden></p>
@@ -1130,10 +1128,10 @@
 <script src="markets_data.js?v=10"></script>
 <script src="ownership_data.js?v=9"></script>
 <script src="leagues_data.js?v=3"></script>
-<script src="home_data.js?v=11"></script>
+<script src="home_data.js?v=12"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=605"></script>
+<script src="app.js?v=606"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
