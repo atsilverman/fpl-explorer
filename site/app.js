@@ -1978,6 +1978,52 @@
     }
   }
 
+  const LIVE_HOME_API = String(window.FPL_LIVE_API || "").replace(/\/$/, "");
+  let homeLivePollTimer = null;
+
+  function homeLiveApiUrl() {
+    if (LIVE_HOME_API) return `${LIVE_HOME_API}/api/home`;
+    // Local serve.py mirrors the DO live API on the same origin.
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      return "/api/home";
+    }
+    return "";
+  }
+
+  function homeLivePayloadMatchesPrefs(home) {
+    if (!home || !savedManagerId || !savedLeagueId) return false;
+    return String(home.managerId) === String(savedManagerId)
+      && String(home.leagueId) === String(savedLeagueId);
+  }
+
+  async function pollHomeFromLiveServer() {
+    const url = homeLiveApiUrl();
+    if (!url || state.page !== "home") return;
+    if (!savedManagerId || !savedLeagueId) return;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!(data && data.ok && data.home)) return;
+      if (!homeLivePayloadMatchesPrefs(data.home)) return;
+      applyHomePayload(data.home);
+      renderHome();
+    } catch {
+      /* offline, CORS, or live server down — static home_data.js remains */
+    }
+  }
+
+  function syncHomeLivePolling() {
+    if (homeLivePollTimer) {
+      clearInterval(homeLivePollTimer);
+      homeLivePollTimer = null;
+    }
+    if (!homeLiveApiUrl() || state.page !== "home") return;
+    if (!savedManagerId || !savedLeagueId) return;
+    pollHomeFromLiveServer();
+    homeLivePollTimer = setInterval(pollHomeFromLiveServer, 60_000);
+  }
+
   function homeKickoffParts(iso) {
     if (!iso) return null;
     const d = new Date(iso);
@@ -12710,6 +12756,7 @@
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncMobileChrome();
+    syncHomeLivePolling();
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 

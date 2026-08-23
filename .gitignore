@@ -13,3 +13,5 @@ venv/
 
 # Frozen rank baselines for Home delta arrows (per manager/league/GW).
 site/home_rank_baselines.json
+# Live-server runtime cache (DO / VPS); static fallback stays home_data.js in git.
+site/home_data.json

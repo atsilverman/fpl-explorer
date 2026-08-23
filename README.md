@@ -112,6 +112,22 @@ python3 site/fetch_home.py
 
 Drop updated Hub CSVs in the project root and/or dated JSON under `snapshots/` before rebuilding. Manual FPL price ambiguities go in `site/price_overrides.json`.
 
+### Live Home (near real-time GW updates)
+
+Static `home_data.js` on Vercel is a fallback. For minute-by-minute live scores, standings, and squads:
+
+1. **DigitalOcean droplet** ($6/mo, 1 GB) runs [`site/live_server.py`](site/live_server.py) — polls [`site/fetch_home.py`](site/fetch_home.py) every 60s during live fixtures.
+2. **Vercel** serves the UI; set `window.FPL_LIVE_API` in [`site/index.html`](site/index.html) to your droplet URL (HTTPS).
+3. Home polls `GET /api/home` every 60s when manager/league match Preferences.
+
+Full setup: [`deploy/digitalocean/README.md`](deploy/digitalocean/README.md). On a fresh Ubuntu droplet:
+
+```bash
+sudo bash deploy/digitalocean/setup.sh
+```
+
+Local dev with live polling: `python3 site/serve.py` (includes `/api/home`) + optional `python3 site/live_server.py` in another terminal.
+
 ---
 
 ## Stack

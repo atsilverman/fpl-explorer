@@ -45,6 +45,7 @@ TRACKED_PATH = SITE / "tracked_ids.json"
 PREFS_PATH = SITE / "home_prefs.json"
 BASELINES_PATH = SITE / "home_rank_baselines.json"
 OUT_PATH = SITE / "home_data.js"
+JSON_PATH = SITE / "home_data.json"
 FPL_BASE = "https://fantasy.premierleague.com/api"
 UA = "Mozilla/5.0 (compatible; FPL-Explorer/1.0; +local-home)"
 
@@ -148,6 +149,18 @@ def resolve_rank_baselines(
         }
         changed = True
     return overall, league, changed
+
+
+def write_home_outputs(payload: dict) -> None:
+    """Write Home cache for static embed (JS) and live server API (JSON)."""
+    OUT_PATH.write_text(
+        f"window.FPL_HOME = {json.dumps(payload, separators=(',', ':'))};\n",
+        encoding="utf-8",
+    )
+    JSON_PATH.write_text(
+        json.dumps(payload, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
 
 def resolve_targets(args: argparse.Namespace) -> tuple[int | None, int | None]:
@@ -354,10 +367,7 @@ def main() -> int:
             "elementGw": {},
             "error": "No manager/league configured. Set Preferences or pass --manager/--league.",
         }
-        OUT_PATH.write_text(
-            f"window.FPL_HOME = {json.dumps(empty, separators=(',', ':'))};\n",
-            encoding="utf-8",
-        )
+        write_home_outputs(empty)
         print(f"Wrote empty {OUT_PATH.name} (missing manager/league)", file=sys.stderr)
         return 0
 
@@ -645,10 +655,7 @@ def main() -> int:
             "error": None,
         }
 
-        OUT_PATH.write_text(
-            f"window.FPL_HOME = {json.dumps(payload, separators=(',', ':'))};\n",
-            encoding="utf-8",
-        )
+        write_home_outputs(payload)
         print(
             f"Wrote {OUT_PATH.name}: GW{gw} pts={focus_pts} "
             f"squad={len(squad)} standings={len(standing_rows)}"

@@ -188,6 +188,18 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 data = {}
             return self._json(200, {"ok": True, "prefs": data})
+        if parsed.path.rstrip("/") == "/api/home":
+            json_path = ROOT / "home_data.json"
+            if not json_path.exists():
+                home = self._parse_home_data_js()
+                if not home:
+                    return self._json(503, {"ok": False, "error": "Home cache not ready"})
+                return self._json(200, {"ok": True, "home": home})
+            try:
+                home = json.loads(json_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return self._json(503, {"ok": False, "error": "Home cache invalid"})
+            return self._json(200, {"ok": True, "home": home})
         return super().do_GET()
 
     def _read_json_body(self):
@@ -288,7 +300,7 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     host, port = "127.0.0.1", 8000
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"Serving {ROOT} at http://{host}:{port} (with /api/fpl/squad, /api/home-prefs, /api/refresh-home)")
+    print(f"Serving {ROOT} at http://{host}:{port} (with /api/fpl/squad, /api/home-prefs, /api/refresh-home, /api/home)")
     httpd.serve_forever()
 
 

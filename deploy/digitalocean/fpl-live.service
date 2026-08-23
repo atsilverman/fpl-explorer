@@ -1,0 +1,23 @@
+[Unit]
+Description=FPL Explorer live Home cache
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/fpl-explorer
+Environment=PYTHONUNBUFFERED=1
+Environment=LIVE_SERVER_HOST=127.0.0.1
+Environment=LIVE_SERVER_PORT=8080
+Environment=LIVE_INTERVAL_LIVE=60
+Environment=LIVE_INTERVAL_IDLE=300
+# Optional overrides:
+# Environment=FPL_HOME_MANAGER_ID=296817
+# Environment=FPL_HOME_LEAGUE_ID=954157
+ExecStart=/opt/fpl-explorer/.venv/bin/python3 /opt/fpl-explorer/site/live_server.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
