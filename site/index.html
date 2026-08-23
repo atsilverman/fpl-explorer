@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=615" />
+<link rel="stylesheet" href="styles.css?v=617" />
 <script>
 (() => {
   try {
@@ -673,46 +673,31 @@
             <span class="home-panel-heading-meta" id="home-squad-gw-label"></span>
           </h3>
           <div class="home-squad-pager">
-            <div class="home-squad-split" id="home-squad-split">
-              <div class="home-squad-players-pane">
+            <div class="home-squad-track" id="home-squad-track">
+              <div class="home-squad-page">
                 <div class="home-table-wrap">
-                  <table class="home-data-table home-squad-table home-squad-players-table">
+                  <table class="home-data-table home-squad-table home-squad-live-table">
                     <thead>
                       <tr>
                         <th scope="col" class="home-col-player">Player</th>
+                        <th scope="col" class="home-col-pts">PTS</th>
+                        <th scope="col" class="home-col-mp">MP</th>
+                        <th scope="col" class="home-col-opp">OPP</th>
+                        <th scope="col" class="home-col-imp">IMP</th>
                       </tr>
                     </thead>
-                    <tbody id="home-squad-players-body"></tbody>
+                    <tbody id="home-squad-body"></tbody>
                   </table>
                 </div>
               </div>
-              <div class="home-squad-metrics">
-                <div class="home-squad-track" id="home-squad-track">
-                  <div class="home-squad-page">
-                    <div class="home-table-wrap">
-                      <table class="home-data-table home-squad-table home-squad-live-table">
-                        <thead>
-                          <tr>
-                            <th scope="col" class="home-col-pts">PTS</th>
-                            <th scope="col" class="home-col-mp">MP</th>
-                            <th scope="col" class="home-col-opp">OPP</th>
-                            <th scope="col" class="home-col-imp">IMP</th>
-                          </tr>
-                        </thead>
-                        <tbody id="home-squad-body"></tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div class="home-squad-page">
-                    <div class="home-table-wrap">
-                      <table class="home-data-table home-squad-table home-squad-fixtures-table">
-                        <thead>
-                          <tr id="home-squad-fixtures-head"></tr>
-                        </thead>
-                        <tbody id="home-squad-fixtures-body"></tbody>
-                      </table>
-                    </div>
-                  </div>
+              <div class="home-squad-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-squad-table home-squad-fixtures-table">
+                    <thead>
+                      <tr id="home-squad-fixtures-head"></tr>
+                    </thead>
+                    <tbody id="home-squad-fixtures-body"></tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -729,65 +714,54 @@
             <span class="home-panel-heading-meta" id="home-league-title"></span>
           </h3>
           <div class="home-standings-pager">
-            <div class="home-standings-split" id="home-standings-split">
-              <div class="home-standings-managers-pane">
+            <div class="home-standings-track" id="home-standings-track">
+              <div class="home-standings-page">
                 <div class="home-table-wrap">
-                  <table class="home-data-table home-standings-table home-standings-managers-table">
+                  <table class="home-data-table home-standings-table home-standings-live-table">
                     <thead>
                       <tr>
                         <th scope="col" class="home-col-rank">#</th>
                         <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-live" title="Active picks in play (Bench Boost can exceed 11)">Live</th>
+                        <th scope="col" class="home-col-left" title="Still to play this gameweek">Left</th>
+                        <th scope="col" class="home-col-gw">GW</th>
+                        <th scope="col" class="home-col-total">Total</th>
                       </tr>
                     </thead>
-                    <tbody id="home-standings-managers-body"></tbody>
+                    <tbody id="home-standings-body"></tbody>
                   </table>
                 </div>
               </div>
-              <div class="home-standings-metrics">
-                <div class="home-standings-track" id="home-standings-track">
-                  <div class="home-standings-page">
-                    <div class="home-table-wrap">
-                      <table class="home-data-table home-standings-table home-standings-metrics-table home-standings-live-table">
-                        <thead>
-                          <tr>
-                            <th scope="col" class="home-col-live" title="Active picks in play (Bench Boost can exceed 11)">Live</th>
-                            <th scope="col" class="home-col-left" title="Still to play this gameweek">Left</th>
-                            <th scope="col" class="home-col-gw">GW</th>
-                            <th scope="col" class="home-col-total">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody id="home-standings-body"></tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div class="home-standings-page">
-                    <div class="home-table-wrap">
-                      <table class="home-data-table home-standings-table home-standings-metrics-table home-captains-table">
-                        <thead>
-                          <tr>
-                            <th scope="col" class="home-col-captain">Captain</th>
-                            <th scope="col" class="home-col-vice">Vice</th>
-                          </tr>
-                        </thead>
-                        <tbody id="home-standings-captains-body"></tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div class="home-standings-page">
-                    <div class="home-table-wrap">
-                      <table class="home-data-table home-standings-table home-standings-metrics-table home-chips-table">
-                        <thead>
-                          <tr>
-                            <th scope="col" class="home-col-chip" title="Wildcard">WC</th>
-                            <th scope="col" class="home-col-chip" title="Free Hit">FH</th>
-                            <th scope="col" class="home-col-chip" title="Bench Boost">BB</th>
-                            <th scope="col" class="home-col-chip" title="Triple Captain">TC</th>
-                          </tr>
-                        </thead>
-                        <tbody id="home-standings-chips-body"></tbody>
-                      </table>
-                    </div>
-                  </div>
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table home-captains-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-captain">Captain</th>
+                        <th scope="col" class="home-col-vice">Vice</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-captains-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table home-chips-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-chip" title="Wildcard">WC</th>
+                        <th scope="col" class="home-col-chip" title="Free Hit">FH</th>
+                        <th scope="col" class="home-col-chip" title="Bench Boost">BB</th>
+                        <th scope="col" class="home-col-chip" title="Triple Captain">TC</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-chips-body"></tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1222,7 +1196,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=634"></script>
+<script src="app.js?v=637"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

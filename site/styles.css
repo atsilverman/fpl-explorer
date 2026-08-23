@@ -12146,107 +12146,56 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   min-height: 0;
 }
 @media (min-width: 901px) {
-  /* Fill card height: stretch split + equal-share player rows so the last
-     pick sits just above the dots. */
-  #home-squad-panel > .home-squad-pager {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-  #home-squad-panel .home-squad-split {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-  #home-squad-panel .home-squad-players-pane,
-  #home-squad-panel .home-squad-metrics,
-  #home-squad-panel .home-squad-track {
-    min-height: 0;
-    height: 100%;
-  }
-  #home-squad-panel .home-squad-track {
-    flex: 1 1 auto;
-    height: auto !important;
-    align-items: stretch;
-  }
-  #home-squad-panel .home-squad-page {
-    height: 100%;
-    align-self: stretch;
-  }
-  #home-squad-panel .home-squad-players-pane .home-table-wrap,
-  #home-squad-panel .home-squad-page .home-table-wrap {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-  #home-squad-panel .home-squad-table {
-    flex: 1 1 auto;
-    height: 100%;
-    width: 100%;
-  }
-  #home-squad-panel .home-squad-table thead {
-    height: 0;
-  }
-  #home-squad-panel .home-squad-table thead tr {
-    height: auto;
-  }
-  #home-squad-panel .home-squad-table tbody tr.home-squad-row {
-    height: 1px;
-  }
-  #home-squad-panel .home-squad-table tbody tr.home-bench-divider {
-    height: auto;
-  }
-  #home-squad-panel .home-squad-table tbody tr.home-squad-row > td {
-    vertical-align: middle;
-  }
-  #home-squad-panel .home-squad-dots {
-    margin-top: 0;
-  }
-  /* Standings: same stretch so frozen managers + metrics rows share height. */
+  /* Fill card height: stretch pager pages + equal-share rows above the dots. */
+  #home-squad-panel > .home-squad-pager,
   #home-standings-panel > .home-standings-pager {
     flex: 1 1 auto;
     min-height: 0;
   }
-  #home-standings-panel .home-standings-split {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-  #home-standings-panel .home-standings-managers-pane,
-  #home-standings-panel .home-standings-metrics,
+  #home-squad-panel .home-squad-track,
   #home-standings-panel .home-standings-track {
     min-height: 0;
-    height: 100%;
-  }
-  #home-standings-panel .home-standings-track {
     flex: 1 1 auto;
     height: auto !important;
     align-items: stretch;
   }
+  #home-squad-panel .home-squad-page,
   #home-standings-panel .home-standings-page {
     height: 100%;
     align-self: stretch;
   }
-  #home-standings-panel .home-standings-managers-pane .home-table-wrap,
+  #home-squad-panel .home-squad-page .home-table-wrap,
   #home-standings-panel .home-standings-page .home-table-wrap {
     height: 100%;
     display: flex;
     flex-direction: column;
   }
+  #home-squad-panel .home-squad-table,
   #home-standings-panel .home-standings-table {
     flex: 1 1 auto;
     height: 100%;
     width: 100%;
   }
+  #home-squad-panel .home-squad-table thead,
   #home-standings-panel .home-standings-table thead {
     height: 0;
   }
+  #home-squad-panel .home-squad-table thead tr,
   #home-standings-panel .home-standings-table thead tr {
     height: auto;
   }
+  #home-squad-panel .home-squad-table tbody tr.home-squad-row,
   #home-standings-panel .home-standings-table tbody tr[data-entry] {
     height: 1px;
   }
+  #home-squad-panel .home-squad-table tbody tr.home-bench-divider {
+    height: auto;
+  }
+  #home-squad-panel .home-squad-table tbody tr.home-squad-row > td,
   #home-standings-panel .home-standings-table tbody tr[data-entry] > td {
     vertical-align: middle;
   }
+  #home-squad-panel .home-squad-dots,
   #home-standings-panel .home-standings-dots {
     margin-top: 0;
   }
@@ -12257,33 +12206,6 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-}
-.home-squad-split {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-.home-squad-players-pane {
-  flex: 0 0 auto;
-  width: min(42%, 11.5rem);
-  min-width: 7.5rem;
-  max-width: 14rem;
-  z-index: 1;
-  background: hsl(var(--card));
-  box-shadow: 1px 0 0 hsl(var(--border) / 0.55);
-}
-.home-squad-players-pane .home-table-wrap {
-  margin: 0;
-  overflow: hidden;
-}
-.home-squad-metrics {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
 }
 .home-squad-track {
   display: flex;
@@ -12393,33 +12315,6 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-}
-.home-standings-split {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-.home-standings-managers-pane {
-  flex: 0 0 auto;
-  width: min(48%, 13.5rem);
-  min-width: 8.5rem;
-  max-width: 16rem;
-  z-index: 1;
-  background: hsl(var(--card));
-  box-shadow: 1px 0 0 hsl(var(--border) / 0.55);
-}
-.home-standings-managers-pane .home-table-wrap {
-  margin: 0;
-  overflow: hidden;
-}
-.home-standings-metrics {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
 }
 .home-standings-track {
   display: flex;
@@ -12566,31 +12461,28 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
     white-space: nowrap;
     max-width: 100%;
   }
-  .home-standings-managers-table {
-    table-layout: fixed;
-  }
-  .home-standings-managers-table .home-col-rank {
-    width: 22%;
-  }
-  .home-standings-managers-table .home-col-manager {
-    width: 78%;
-    min-width: 0;
-    overflow: hidden;
-  }
-  .home-standings-managers-table .home-standings-name,
-  .home-standings-managers-table .home-standings-entry {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .home-standings-live-table {
     table-layout: fixed;
+  }
+  .home-standings-live-table .home-col-rank {
+    width: 8%;
+  }
+  .home-standings-live-table .home-col-manager {
+    width: 44%;
+    min-width: 0;
+    overflow: hidden;
   }
   .home-standings-live-table .home-col-live,
   .home-standings-live-table .home-col-left,
   .home-standings-live-table .home-col-gw,
   .home-standings-live-table .home-col-total {
-    width: 25%;
+    width: 12%;
+  }
+  .home-standings-live-table .home-standings-name,
+  .home-standings-live-table .home-standings-entry {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 .home-player-cell {
@@ -13030,12 +12922,14 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--text-dim);
+  min-height: 1em;
 }
 .home-chip-cell.is-active .home-chip-cell-gw {
   color: hsl(142 55% 32%);
 }
 .home-chip-cell.is-available .home-chip-cell-gw {
-  display: none;
+  /* Keep GW slot so used/active rows don't grow taller than available. */
+  visibility: hidden;
 }
 @media (prefers-reduced-motion: reduce) {
   .home-chip-cell.is-active .home-chip-cell-mark {
@@ -13043,46 +12937,55 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   }
 }
 @media (max-width: 900px) {
-  .home-standings-managers-table {
+  .home-standings-live-table {
     table-layout: fixed;
   }
-  .home-standings-managers-table .home-col-rank {
-    width: 20%;
+  .home-standings-live-table .home-col-rank {
+    width: 8%;
   }
-  .home-standings-managers-table .home-col-manager {
-    width: 80%;
+  .home-standings-live-table .home-col-manager {
+    width: 40%;
     min-width: 0;
     overflow: hidden;
   }
-  .home-standings-managers-table .home-standings-name,
-  .home-standings-managers-table .home-standings-entry {
+  .home-standings-live-table .home-standings-name,
+  .home-standings-live-table .home-standings-entry {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .home-standings-live-table {
-    table-layout: fixed;
   }
   .home-standings-live-table .home-col-live,
   .home-standings-live-table .home-col-left,
   .home-standings-live-table .home-col-gw,
   .home-standings-live-table .home-col-total {
-    width: 25%;
+    width: 13%;
     padding-left: 4px;
     padding-right: 4px;
   }
   .home-captains-table {
     table-layout: fixed;
   }
+  .home-captains-table .home-col-rank {
+    width: 8%;
+  }
+  .home-captains-table .home-col-manager {
+    width: 34%;
+  }
   .home-captains-table .home-col-captain,
   .home-captains-table .home-col-vice {
-    width: 50%;
+    width: 29%;
   }
   .home-chips-table {
     table-layout: fixed;
   }
+  .home-chips-table .home-col-rank {
+    width: 10%;
+  }
+  .home-chips-table .home-col-manager {
+    width: 42%;
+  }
   .home-chips-table .home-col-chip {
-    width: 25%;
+    width: 12%;
   }
   .home-summary-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -13126,17 +13029,17 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   .home-imp-track {
     width: 36px;
   }
-  .home-standings-managers-table .home-col-manager {
-    width: 80%;
+  .home-standings-live-table .home-col-manager {
+    width: 36%;
   }
   .home-standings-live-table .home-col-live,
   .home-standings-live-table .home-col-left,
   .home-standings-live-table .home-col-gw,
   .home-standings-live-table .home-col-total {
-    width: 25%;
+    width: 14%;
     font-size: 11px;
   }
-  .home-standings-managers-table .home-standings-entry {
+  .home-standings-live-table .home-standings-entry {
     display: none;
   }
   .home-standings-table th.home-col-live,
@@ -13256,9 +13159,7 @@ html[data-page="home"] #subtoolbar {
   cursor: pointer;
   touch-action: manipulation;
 }
-/* No inset/absolute edge bars — use left border only (pages are clipped).
-   Accent lives on the frozen left pane only so metrics first-cells don't
-   double the bar beside Player / Manager. */
+/* No inset/absolute edge bars — left border accent on each full page table. */
 .home-data-table tbody tr.row-selected > td,
 .home-standings-table tr[data-entry] > td,
 .home-squad-row > td {
@@ -13269,30 +13170,21 @@ html[data-page="home"] #subtoolbar {
   border-collapse: separate;
   border-spacing: 0;
 }
-.home-standings-managers-table th:first-child,
-.home-standings-managers-table tr[data-entry] > td:first-child,
-.home-squad-players-table th:first-child,
-.home-squad-players-table .home-squad-row > td:first-child {
+.home-standings-table th:first-child,
+.home-standings-table tr[data-entry] > td:first-child,
+.home-squad-table th:first-child,
+.home-squad-row > td:first-child {
   border-left: 3px solid transparent;
 }
-.home-standings-managers-table tr.is-you > td:first-child,
-.home-standings-managers-table tr.is-configured-manager > td:first-child {
+.home-standings-table tr.is-you > td:first-child,
+.home-standings-table tr.is-configured-manager > td:first-child {
   border-left-color: hsl(var(--primary));
 }
-.home-standings-managers-table tr.is-view-active > td:first-child {
+.home-standings-table tr.is-view-active > td:first-child {
   border-left-color: hsl(var(--blue-hsl));
 }
-.home-squad-players-table .home-squad-row.is-owner-pinned > td:first-child {
+.home-squad-row.is-owner-pinned > td:first-child {
   border-left-color: hsl(var(--blue-hsl));
-}
-/* Metrics panes: never paint a left accent (would sit mid-row after freeze). */
-.home-squad-live-table th:first-child,
-.home-squad-live-table .home-squad-row > td:first-child,
-.home-squad-fixtures-table th:first-child,
-.home-squad-fixtures-table .home-squad-row > td:first-child,
-.home-standings-metrics-table th:first-child,
-.home-standings-metrics-table tr[data-entry] > td:first-child {
-  border-left: none;
 }
 .home-standings-table tbody tr[data-entry] > td {
   vertical-align: middle;

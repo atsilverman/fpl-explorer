@@ -871,20 +871,16 @@
     homeLeagueRankDelta: $("#home-league-rank-delta"),
     homeSquadGwLabel: $("#home-squad-gw-label"),
     homeLeagueTitle: $("#home-league-title"),
-    homeSquadPlayersBody: $("#home-squad-players-body"),
     homeSquadBody: $("#home-squad-body"),
     homeSquadFixturesBody: $("#home-squad-fixtures-body"),
     homeSquadFixturesHead: $("#home-squad-fixtures-head"),
-    homeSquadSplit: $("#home-squad-split"),
     homeSquadTrack: $("#home-squad-track"),
     homeSquadDots: $("#home-squad-dots"),
-    homeStandingsManagersBody: $("#home-standings-managers-body"),
     homeStandingsBody: $("#home-standings-body"),
     homeStandingsCaptainsBody: $("#home-standings-captains-body"),
     homeStandingsChipsBody: $("#home-standings-chips-body"),
     homeStandingsTrack: $("#home-standings-track"),
     homeStandingsDots: $("#home-standings-dots"),
-    homeStandingsSplit: $("#home-standings-split"),
     homeSummaryCards: $("#home-summary-cards"),
     homeSquadPanel: $("#home-squad-panel"),
     homeStandingsPanel: $("#home-standings-panel"),
@@ -2476,9 +2472,6 @@
     const elementPin = homeOwnerPin && homeOwnerPin.type === "element" ? homeOwnerPin : null;
     const ownerEntries = elementPin ? homeOwnersForElement(elementPin.id) : null;
 
-    if (el.homeSquadPlayersBody) {
-      el.homeSquadPlayersBody.classList.remove("has-owner-filter");
-    }
     if (el.homeSquadBody) {
       el.homeSquadBody.classList.remove("has-owner-filter");
     }
@@ -2493,9 +2486,6 @@
       tr.classList.remove("is-owner-match", "is-owner-source");
       tr.classList.toggle("is-owner-pinned", isPinned);
     });
-    if (el.homeStandingsManagersBody) {
-      el.homeStandingsManagersBody.classList.remove("has-owner-filter");
-    }
     if (el.homeStandingsBody) el.homeStandingsBody.classList.remove("has-owner-filter");
     if (el.homeStandingsCaptainsBody) {
       el.homeStandingsCaptainsBody.classList.remove("has-owner-filter");
@@ -2549,39 +2539,29 @@
   }
 
   function forEachHomeStandingsRow(fn) {
-    [
-      el.homeStandingsManagersBody,
-      el.homeStandingsBody,
-      el.homeStandingsCaptainsBody,
-      el.homeStandingsChipsBody,
-    ].forEach((body) => {
+    [el.homeStandingsBody, el.homeStandingsCaptainsBody, el.homeStandingsChipsBody].forEach((body) => {
       if (!body) return;
       body.querySelectorAll("tr[data-entry]").forEach(fn);
     });
   }
 
   function forEachHomeSquadRow(fn) {
-    [el.homeSquadPlayersBody, el.homeSquadBody, el.homeSquadFixturesBody].forEach((body) => {
+    [el.homeSquadBody, el.homeSquadFixturesBody].forEach((body) => {
       if (!body) return;
       body.querySelectorAll("tr.home-squad-row").forEach(fn);
     });
   }
 
-  function homeStandingsManagerRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
-    const entry = Number(row.entry);
-    const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
+  function homeStandingsManagerCellsHTML(row) {
     const rankVal = row.rankLive != null ? Number(row.rankLive) : (row.rankOfficial != null ? Number(row.rankOfficial) : null);
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
       ? statRollSpan(rankVal, { from: 0, decimals: 0, className: "home-stat-roll" })
       : "—";
-    const labelName = row.playerName || row.entryName || "this manager";
-    return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      <td class="home-col-rank">${rankHTML}</td>
+    return `<td class="home-col-rank">${rankHTML}</td>
       <td class="home-col-manager">
         <span class="home-standings-name">${escapeHtml(row.playerName || "—")}</span>
         <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
-      </td>
-    </tr>`;
+      </td>`;
   }
 
   function homeStandingsLiveRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
@@ -2608,6 +2588,7 @@
       : "—";
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
+      ${homeStandingsManagerCellsHTML(row)}
       <td class="home-col-live">${liveHTML}</td>
       <td class="home-col-left">${leftHTML}</td>
       <td class="home-col-gw">${gwHTML}</td>
@@ -2615,12 +2596,13 @@
     </tr>`;
   }
 
-  function homeCaptainsMetricsRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
+  function homeCaptainsRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const { captain, vice } = homeCaptainsForEntry(entry);
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
+      ${homeStandingsManagerCellsHTML(row)}
       <td class="home-col-captain">${homeCaptainPickHTML(captain)}</td>
       <td class="home-col-vice">${homeCaptainPickHTML(vice)}</td>
     </tr>`;
@@ -2632,17 +2614,17 @@
     const status = chip && chip.status ? String(chip.status) : "available";
     const label = chip && chip.label ? String(chip.label) : "";
     const ev = chip && chip.event != null ? Number(chip.event) : null;
-    const gwLabel = Number.isFinite(ev) ? String(ev) : "";
+    const gwLabel = Number.isFinite(ev) ? String(ev) : "\u00a0";
     if (status === "active") {
       return `<span class="home-chip-cell is-active" title="${escapeHtml(label)} active this GW"><span class="home-chip-cell-mark" aria-hidden="true"></span><span class="home-chip-cell-gw">${escapeHtml(gwLabel)}</span></span>`;
     }
     if (status === "used") {
-      return `<span class="home-chip-cell is-used" title="${escapeHtml(label)} used GW${escapeHtml(gwLabel)}"><span class="home-chip-cell-mark" aria-hidden="true"></span><span class="home-chip-cell-gw">${escapeHtml(gwLabel)}</span></span>`;
+      return `<span class="home-chip-cell is-used" title="${escapeHtml(label)} used GW${escapeHtml(Number.isFinite(ev) ? String(ev) : "")}"><span class="home-chip-cell-mark" aria-hidden="true"></span><span class="home-chip-cell-gw">${escapeHtml(gwLabel)}</span></span>`;
     }
-    return `<span class="home-chip-cell is-available" title="${escapeHtml(label || "Chip")} still available"><span class="home-chip-cell-mark" aria-hidden="true"></span></span>`;
+    return `<span class="home-chip-cell is-available" title="${escapeHtml(label || "Chip")} still available"><span class="home-chip-cell-mark" aria-hidden="true"></span><span class="home-chip-cell-gw" aria-hidden="true">${escapeHtml(gwLabel)}</span></span>`;
   }
 
-  function homeChipsMetricsRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
+  function homeChipsRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const chips = row.chips && typeof row.chips === "object" ? row.chips : {};
@@ -2651,6 +2633,7 @@
     }).join("");
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
+      ${homeStandingsManagerCellsHTML(row)}
       ${cells}
     </tr>`;
   }
@@ -2707,7 +2690,6 @@
    *  Live / Captains / Chips so highlight washes don't jump when swiping. */
   function syncHomeStandingsRowHeights() {
     const tables = [
-      el.homeStandingsManagersBody && el.homeStandingsManagersBody.closest("table"),
       el.homeStandingsBody && el.homeStandingsBody.closest("table"),
       el.homeStandingsCaptainsBody && el.homeStandingsCaptainsBody.closest("table"),
       el.homeStandingsChipsBody && el.homeStandingsChipsBody.closest("table"),
@@ -2720,7 +2702,7 @@
       });
     });
 
-    // Desktop equal-share rows come from CSS (height: 1px trick); leave inline clear.
+    // Desktop equal-share rows come from CSS (height: 1px trick).
     if (homeSquadIsDesktopLayout()) return;
 
     const heads = tables.map((t) => t.querySelector("thead tr")).filter(Boolean);
@@ -2785,7 +2767,7 @@
     });
     const onPageChange = (idx) => {
       syncHomeStandingsPagerDots(idx);
-      syncHomeStandingsTrackHeight(idx);
+      syncHomeStandingsLayout(idx);
     };
     if (typeof IntersectionObserver !== "function") {
       el.homeStandingsTrack.addEventListener(
@@ -2818,7 +2800,7 @@
     requestAnimationFrame(() => syncHomeStandingsLayout(0));
   }
 
-  const HOME_SQUAD_FIXTURE_GWS = 6;
+  const HOME_SQUAD_FIXTURE_GWS = 5;
 
   function homeSquadFixtureGwList() {
     const start = planningGameweek();
@@ -2887,7 +2869,6 @@
 
   function syncHomeSquadRowHeights() {
     const tables = [
-      el.homeSquadPlayersBody && el.homeSquadPlayersBody.closest("table"),
       el.homeSquadBody && el.homeSquadBody.closest("table"),
       el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table"),
     ].filter(Boolean);
@@ -3095,13 +3076,6 @@
       </td>`;
   }
 
-  function homeSquadPlayerRowHTML(row, opts = {}) {
-    const benchCls = row.onBench ? " home-row-bench" : "";
-    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="Show managers who own ${escapeHtml(row.name || "this player")}">
-      ${homeSquadPlayerCellHTML(row, opts)}
-    </tr>`;
-  }
-
   function homeSquadFdrCellPaint(fixtures) {
     const diffs = (fixtures || [])
       .map((fx) => Number(fx.difficulty))
@@ -3167,6 +3141,7 @@
       return `<td class="home-col-fx${cell.className}"${cell.style}>${cell.inner}</td>`;
     }).join("");
     return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="Show managers who own ${escapeHtml(row.name || "this player")}">
+      ${homeSquadPlayerCellHTML(row, opts)}
       ${cells}
     </tr>`;
   }
@@ -3216,6 +3191,7 @@
     });
     const benchCls = row.onBench ? " home-row-bench" : "";
     return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="Show managers who own ${escapeHtml(row.name || "this player")}">
+      ${homeSquadPlayerCellHTML(row, opts)}
       <td class="home-col-pts">${ptsHTML}</td>
       <td class="home-col-mp"><div class="home-fx-stack">${mpHTML}</div></td>
       <td class="home-col-opp"><div class="home-fx-stack home-fx-opp">${oppHTML}</div></td>
@@ -3775,11 +3751,9 @@
     setHomeOverallPct(el.homeOverallPct, null, null);
     if (el.homeSquadGwLabel) el.homeSquadGwLabel.textContent = "";
     if (el.homeLeagueTitle) el.homeLeagueTitle.textContent = "";
-    if (el.homeSquadPlayersBody) el.homeSquadPlayersBody.innerHTML = "";
     if (el.homeSquadBody) el.homeSquadBody.innerHTML = "";
     if (el.homeSquadFixturesBody) el.homeSquadFixturesBody.innerHTML = "";
     if (el.homeSquadFixturesHead) el.homeSquadFixturesHead.innerHTML = "";
-    if (el.homeStandingsManagersBody) el.homeStandingsManagersBody.innerHTML = "";
     if (el.homeStandingsBody) el.homeStandingsBody.innerHTML = "";
     if (el.homeStandingsCaptainsBody) el.homeStandingsCaptainsBody.innerHTML = "";
     if (el.homeStandingsChipsBody) el.homeStandingsChipsBody.innerHTML = "";
@@ -3889,7 +3863,7 @@
     if (el.homeLeagueTitle) {
       el.homeLeagueTitle.textContent = HOME.leagueName || "";
     }
-    if (el.homeSquadPlayersBody || el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead) {
+    if (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead) {
       const rows = homeSquadForEntry(viewEntry);
       const configuredOwned = viewingOther && homeConfiguredEntryId() != null
         ? homeElementsForEntry(homeConfiguredEntryId())
@@ -3897,21 +3871,6 @@
       const pinOpts = (r) => ({
         configuredPin: viewingOther && configuredOwned.has(Number(r.element)),
       });
-      if (el.homeSquadPlayersBody) {
-        const parts = [];
-        let benchLabeled = false;
-        for (const r of rows) {
-          if (r.onBench && !benchLabeled) {
-            parts.push(
-              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="1">Bench</th></tr>`
-            );
-            benchLabeled = true;
-          }
-          parts.push(homeSquadPlayerRowHTML(r, pinOpts(r)));
-        }
-        el.homeSquadPlayersBody.innerHTML = parts.join("") ||
-          `<tr><td>No squad picks in cache.</td></tr>`;
-      }
       if (el.homeSquadBody) {
         const maxAbsImp = Math.max(
           1,
@@ -3925,26 +3884,28 @@
         for (const r of rows) {
           if (r.onBench && !benchLabeled) {
             parts.push(
-              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="4">Bench</th></tr>`
+              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="5">Bench</th></tr>`
             );
             benchLabeled = true;
           }
           parts.push(homeSquadRowHTML(r, maxAbsImp, pinOpts(r)));
         }
         el.homeSquadBody.innerHTML = parts.join("") ||
-          `<tr><td colspan="4">No squad picks in cache.</td></tr>`;
+          `<tr><td colspan="5">No squad picks in cache.</td></tr>`;
       }
       const gws = homeSquadFixtureGwList();
       if (el.homeSquadFixturesHead) {
-        el.homeSquadFixturesHead.innerHTML = gws.map(
-          (gw) =>
-            `<th scope="col" class="home-col-fx">GW${escapeHtml(String(gw))}</th>`
-        ).join("");
+        el.homeSquadFixturesHead.innerHTML =
+          `<th scope="col" class="home-col-player">Player</th>` +
+          gws.map(
+            (gw) =>
+              `<th scope="col" class="home-col-fx">GW${escapeHtml(String(gw))}</th>`
+          ).join("");
       }
       if (el.homeSquadFixturesBody) {
         const parts = [];
         let benchLabeled = false;
-        const colspan = Math.max(1, gws.length);
+        const colspan = Math.max(2, 1 + gws.length);
         for (const r of rows) {
           if (r.onBench && !benchLabeled) {
             parts.push(
@@ -3958,37 +3919,29 @@
           `<tr><td colspan="${colspan}">No squad picks in cache.</td></tr>`;
       }
     }
-    if (el.homeStandingsManagersBody) {
-      const configuredEntry = homeConfiguredEntryId();
-      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
-      const opts = { configuredEntry, viewEntry, viewingOther };
-      el.homeStandingsManagersBody.innerHTML = rows.map((r) =>
-        homeStandingsManagerRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="2">No standings.</td></tr>`;
-    }
     if (el.homeStandingsBody) {
       const configuredEntry = homeConfiguredEntryId();
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       const opts = { configuredEntry, viewEntry, viewingOther };
       el.homeStandingsBody.innerHTML = rows.map((r) =>
         homeStandingsLiveRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
+      ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
     }
     if (el.homeStandingsCaptainsBody) {
       const configuredEntry = homeConfiguredEntryId();
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       const opts = { configuredEntry, viewEntry, viewingOther };
       el.homeStandingsCaptainsBody.innerHTML = rows.map((r) =>
-        homeCaptainsMetricsRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="2">No standings.</td></tr>`;
+        homeCaptainsRowHTML(r, opts)
+      ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
     }
     if (el.homeStandingsChipsBody) {
       const configuredEntry = homeConfiguredEntryId();
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       const opts = { configuredEntry, viewEntry, viewingOther };
       el.homeStandingsChipsBody.innerHTML = rows.map((r) =>
-        homeChipsMetricsRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
+        homeChipsRowHTML(r, opts)
+      ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
       const chipsTable = el.homeStandingsChipsBody.closest("table");
       if (chipsTable) {
         const halfLabel = (HOME.chipWindow && HOME.chipWindow.label) || "First half";
@@ -6554,7 +6507,7 @@
       const reading = [
         spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
         spitRow(spitRank("Own"), "Click a squad player to highlight owners in standings (others fade). Click a standings manager to view their squad — Exit returns to yours."),
-        spitRow(spitRank("Fixtures"), "Swipe metrics (player column stays put) for the next 6 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."),
+        spitRow(spitRank("Fixtures"), "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."),
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
         ...(mobile
           ? [spitRow(spitRank("Search"), "Search any player: profile replaces summary cards, hides squad, highlights owners in standings, and shows club fixtures.")]
@@ -13507,8 +13460,6 @@
       ".team-budget-bar",
       ".team-section-row",
       ".home-panel",
-      ".home-squad-table tbody tr",
-      ".home-standings-table tbody tr",
     ].join(", ");
     pane.querySelectorAll(staggerSel).forEach((node, i) => {
       node.style.setProperty("--enter-i", String(i));
@@ -13532,16 +13483,26 @@
         row.style.setProperty("--enter-i", String(i));
       });
     });
-    // Home squad / standings: frozen + metrics tables share ordinal indices
-    // so a row enters as one unit.
-    pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody").forEach((tbody) => {
-      tbody.querySelectorAll(":scope > tr").forEach((row, i) => {
-        row.style.setProperty("--enter-i", String(i));
-        row.querySelectorAll(".home-imp-fill").forEach((track) => {
-          track.style.setProperty("--enter-i", String(i));
+    // Home: summary cards cascade; squad + standings cards share one index so
+    // both tables load together; rows use per-tbody ordinals in lockstep.
+    if (homeEnter) {
+      const summaryPanels = [...pane.querySelectorAll(".home-summary-cards > .home-panel")];
+      summaryPanels.forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+      });
+      const tablesI = String(summaryPanels.length);
+      pane.querySelectorAll(".home-tables-grid > .home-panel").forEach((node) => {
+        node.style.setProperty("--enter-i", tablesI);
+      });
+      pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody").forEach((tbody) => {
+        tbody.querySelectorAll(":scope > tr").forEach((row, i) => {
+          row.style.setProperty("--enter-i", String(i));
+          row.querySelectorAll(".home-imp-fill").forEach((track) => {
+            track.style.setProperty("--enter-i", String(i));
+          });
         });
       });
-    });
+    }
     if (marketsEnter) {
       pane.querySelectorAll(".markets-divider").forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
