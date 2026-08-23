@@ -51,6 +51,15 @@ JSON_PATH = SITE / "home_data.json"
 FPL_BASE = "https://fantasy.premierleague.com/api"
 UA = "Mozilla/5.0 (compatible; FPL-Explorer/1.0; +local-home)"
 
+# Season chip set — each name has a first-half and second-half window in bootstrap.
+CHIP_NAMES = ("wildcard", "freehit", "bboost", "3xc")
+CHIP_LABELS = {
+    "wildcard": "WC",
+    "freehit": "FH",
+    "bboost": "BB",
+    "3xc": "TC",
+}
+
 
 def generated_at() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -97,6 +106,109 @@ def positive_rank(value: object) -> int | None:
     except (TypeError, ValueError):
         return None
     return rank if rank > 0 else None
+
+
+def chip_windows_from_bootstrap(bootstrap: dict) -> dict[str, list[tuple[int, int]]]:
+    """name -> [(start, stop), ...] ordered by start_event (half 1, then half 2)."""
+    by_name: dict[str, list[tuple[int, int]]] = {}
+    for raw in bootstrap.get("chips") or []:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or "").strip()
+        if name not in CHIP_NAMES:
+            continue
+        try:
+            start = int(raw.get("start_event") or 0)
+            stop = int(raw.get("stop_event") or 0)
+        except (TypeError, ValueError):
+            continue
+        if start <= 0 or stop <= 0:
+            continue
+        by_name.setdefault(name, []).append((start, stop))
+    for name in by_name:
+        by_name[name].sort(key=lambda w: w[0])
+    return by_name
+
+
+def season_chip_half(gw: int, windows: dict[str, list[tuple[int, int]]]) -> int:
+    """1 = first half, 2 = second half. Prefer wildcard windows; fall back to GW≤19."""
+    for name in ("wildcard", "bboost", "3xc", "freehit"):
+        halves = windows.get(name) or []
+        if len(halves) >= 2:
+            start1, stop1 = halves[0]
+            if start1 <= gw <= stop1:
+                return 1
+            start2, stop2 = halves[1]
+            if start2 <= gw <= stop2:
+                return 2
+            return 1 if gw <= stop1 else 2
+        if len(halves) == 1:
+            start1, stop1 = halves[0]
+            if start1 <= gw <= stop1:
+                return 1
+    return 1 if gw <= 19 else 2
+
+
+def entry_chips_for_half(
+    history_chips: list,
+    active_chip: str | None,
+    half: int,
+    windows: dict[str, list[tuple[int, int]]],
+    gw: int,
+) -> dict[str, dict]:
+    """Per-chip status for the visible season half: available | used | active."""
+    out: dict[str, dict] = {}
+    active = str(active_chip or "").strip() or None
+    for name in CHIP_NAMES:
+        halves = windows.get(name) or []
+        if half > len(halves):
+            out[name] = {"status": "unavailable", "event": None, "label": CHIP_LABELS[name]}
+            continue
+        start, stop = halves[half - 1]
+        used_event: int | None = None
+        for ch in history_chips or []:
+            if not isinstance(ch, dict):
+                continue
+            if str(ch.get("name") or "") != name:
+                continue
+            try:
+                ev = int(ch.get("event") or 0)
+            except (TypeError, ValueError):
+                continue
+            if start <= ev <= stop:
+                used_event = ev
+                break
+        label = CHIP_LABELS[name]
+        if active == name and start <= gw <= stop:
+            out[name] = {"status": "active", "event": gw, "label": label}
+        elif used_event is not None:
+            out[name] = {"status": "used", "event": used_event, "label": label}
+        else:
+            out[name] = {"status": "available", "event": None, "label": label}
+    return out
+
+
+def chip_window_meta(half: int, windows: dict[str, list[tuple[int, int]]], gw: int) -> dict:
+    chips = []
+    for name in CHIP_NAMES:
+        halves = windows.get(name) or []
+        if half > len(halves):
+            continue
+        start, stop = halves[half - 1]
+        chips.append(
+            {
+                "name": name,
+                "label": CHIP_LABELS[name],
+                "startEvent": start,
+                "stopEvent": stop,
+            }
+        )
+    return {
+        "half": half,
+        "gw": gw,
+        "label": "First half" if half == 1 else "Second half",
+        "chips": chips,
+    }
 
 
 def resolve_rank_baselines(
@@ -443,6 +555,9 @@ def main() -> int:
 
         focus_picks = picks_payload.get("picks") or []
         focus_chip = picks_payload.get("active_chip")
+        focus_history_chips = list(history_payload.get("chips") or [])
+        chip_windows = chip_windows_from_bootstrap(bootstrap)
+        chip_half = season_chip_half(gw, chip_windows)
         focus_pts, focus_active, focus_subs = calculate_manager_points_from_live(
             focus_picks, stats, match_status, etypes, focus_chip
         )
@@ -472,6 +587,7 @@ def main() -> int:
             manager_id: (focus_in_play, focus_to_play)
         }
         chip_by_entry: dict[int, str | None] = {manager_id: focus_chip}
+        history_chips_by_entry: dict[int, list] = {manager_id: focus_history_chips}
 
         def note_owners(entry_id: int, picks: list) -> None:
             for pick in picks or []:
@@ -539,6 +655,22 @@ def main() -> int:
                         "overall_rank": overall_rank,
                         "overall_points": overall_points,
                     }
+                # Season chip uses — history/chips[] (half-scoped later).
+                if eid != manager_id:
+                    try:
+                        hist = fpl_get(f"/entry/{eid}/history/")
+                        assert isinstance(hist, dict)
+                        history_chips_by_entry[eid] = list(hist.get("chips") or [])
+                    except (
+                        urllib.error.HTTPError,
+                        urllib.error.URLError,
+                        RuntimeError,
+                        AssertionError,
+                        OSError,
+                        json.JSONDecodeError,
+                    ) as exc:
+                        print(f"  history failed entry={eid}: {exc}", file=sys.stderr)
+                        history_chips_by_entry.setdefault(eid, [])
                 chip_by_entry[eid] = chip
                 progress_by_entry[eid] = active_pick_progress(
                     active, elements, fixtures, match_status
@@ -556,9 +688,17 @@ def main() -> int:
                 mults_by_entry.setdefault(eid, {})
                 progress_by_entry.setdefault(eid, (0, 0))
                 chip_by_entry.setdefault(eid, None)
+                history_chips_by_entry.setdefault(eid, [])
 
             in_play, to_play = progress_by_entry.get(eid, (0, 0))
             ed = entry_data.get(eid, {})
+            chips_half = entry_chips_for_half(
+                history_chips_by_entry.get(eid) or [],
+                chip_by_entry.get(eid),
+                chip_half,
+                chip_windows,
+                gw,
+            )
             standing_rows.append(
                 {
                     "entry": eid,
@@ -574,6 +714,7 @@ def main() -> int:
                     "inPlay": in_play,
                     "toPlay": to_play,
                     "activeChip": chip_by_entry.get(eid),
+                    "chips": chips_half,
                 }
             )
 
@@ -653,6 +794,7 @@ def main() -> int:
             "squad": squad,
             "squadsByEntry": squads_by_entry,
             "standings": standing_rows,
+            "chipWindow": chip_window_meta(chip_half, chip_windows, gw),
             "ownersByElement": {
                 str(el_id): entry_ids
                 for el_id, entry_ids in sorted(owners_by_element.items())

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=582" />
+<link rel="stylesheet" href="styles.css?v=592" />
 <script>
 (() => {
   try {
@@ -693,19 +693,63 @@
             Standings
             <span class="home-panel-heading-meta" id="home-league-title"></span>
           </h3>
-          <div class="home-table-wrap">
-            <table class="home-data-table home-standings-table">
-              <thead>
-                <tr>
-                  <th scope="col" class="home-col-rank">#</th>
-                  <th scope="col" class="home-col-manager">Manager</th>
-                  <th scope="col" class="home-col-play" title="In play · still to play (active picks; Bench Boost can exceed 11)">Left</th>
-                  <th scope="col" class="home-col-gw">GW</th>
-                  <th scope="col" class="home-col-total">Total</th>
-                </tr>
-              </thead>
-              <tbody id="home-standings-body"></tbody>
-            </table>
+          <div class="home-standings-pager">
+            <div class="home-standings-track" id="home-standings-track">
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-live" title="Active picks in play (Bench Boost can exceed 11)">Live</th>
+                        <th scope="col" class="home-col-left" title="Still to play this gameweek">Left</th>
+                        <th scope="col" class="home-col-gw">GW</th>
+                        <th scope="col" class="home-col-total">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table home-captains-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-captain">Captain</th>
+                        <th scope="col" class="home-col-vice">Vice</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-captains-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table home-chips-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-chip" title="Wildcard">WC</th>
+                        <th scope="col" class="home-col-chip" title="Free Hit">FH</th>
+                        <th scope="col" class="home-col-chip" title="Bench Boost">BB</th>
+                        <th scope="col" class="home-col-chip" title="Triple Captain">TC</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-chips-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="home-standings-dots" id="home-standings-dots" role="tablist" aria-label="Standings views">
+              <button type="button" class="home-standings-dot is-active" role="tab" aria-selected="true" aria-label="Standings" data-page="0"></button>
+              <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Captains" data-page="1"></button>
+              <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Chips" data-page="2"></button>
+            </div>
           </div>
         </article>
         </div>
@@ -1124,14 +1168,14 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=37"></script>
-<script src="markets_data.js?v=10"></script>
-<script src="ownership_data.js?v=9"></script>
-<script src="leagues_data.js?v=3"></script>
-<script src="home_data.js?v=12"></script>
+<script src="data.js?v=38"></script>
+<script src="markets_data.js?v=11"></script>
+<script src="ownership_data.js?v=10"></script>
+<script src="leagues_data.js?v=4"></script>
+<script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=607"></script>
+<script src="app.js?v=620"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

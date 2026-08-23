@@ -2672,6 +2672,22 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation-delay: calc(0.14s + (min(var(--enter-i, 0), 24) * 0.032s));
 }
 
+#home-page.is-entering > .page-header {
+  animation: page-enter-header 0.7s var(--ease-out) both;
+}
+#home-page.is-entering .home-deadline,
+#home-page.is-entering .home-view-banner,
+#home-page.is-entering .home-summary-cards > .home-panel,
+#home-page.is-entering .home-tables-grid > .home-panel {
+  animation: page-enter-item 0.65s var(--ease-out) both;
+  animation-delay: calc(0.16s + (min(var(--enter-i, 0), 16) * 0.055s));
+}
+#home-page.is-entering .home-squad-table tbody tr,
+#home-page.is-entering .home-standings-table tbody tr {
+  animation: page-enter-item 0.55s var(--ease-out) both;
+  animation-delay: calc(0.28s + (min(var(--enter-i, 0), 28) * 0.045s));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-pane.is-enter-pending > .page-header,
   .page-pane.is-enter-pending > .table-wrap,
@@ -2710,7 +2726,13 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .page-pane.is-entering .markets-grid > .markets-card,
   .page-pane.is-entering .markets-divider,
   .page-pane.is-entering .barbell-track,
-  #expected-page.is-entering .barbell-track {
+  #expected-page.is-entering .barbell-track,
+  #home-page.is-entering .home-deadline,
+  #home-page.is-entering .home-view-banner,
+  #home-page.is-entering .home-summary-cards > .home-panel,
+  #home-page.is-entering .home-tables-grid > .home-panel,
+  #home-page.is-entering .home-squad-table tbody tr,
+  #home-page.is-entering .home-standings-table tbody tr {
     animation: none;
   }
 }
@@ -6707,6 +6729,196 @@ html[data-page="ownership"] .layout .main {
   margin-top: 2px;
   border-radius: 3px;
   background: hsl(var(--blue-hsl) / 0.55);
+}
+
+/* Page-info legend swatches — mirror live UI chrome (see Home .spit-home-swatch). */
+.spit-highlight {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--text);
+}
+.spit-highlight-top {
+  background: hsl(var(--positive) / 0.35);
+}
+.spit-highlight-bottom {
+  background: hsl(var(--negative) / 0.35);
+}
+.spit-ownership-line {
+  display: block;
+  width: 40px;
+  height: 12px;
+  flex: none;
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+.spit-ownership-line.is-riser {
+  stroke: hsl(var(--positive));
+  opacity: 0.9;
+}
+.spit-ownership-line.is-faller {
+  stroke: hsl(var(--negative));
+  opacity: 0.9;
+}
+.spit-symbol .ownership-trend-delta.spit-ui-swatch {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.spit-symbol .markets-stat.spit-markets-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.spit-symbol .markets-stat.spit-markets-swatch .markets-stat-value {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.spit-symbol .markets-stat-delta.spit-ui-swatch {
+  font-size: 10.5px;
+  gap: 3px;
+}
+.spit-symbol .markets-stat-delta.spit-ui-swatch .icon {
+  width: 12px;
+  height: 12px;
+}
+.spit-symbol .rankings-bar.spit-rankings-bar {
+  width: 52px !important;
+  min-width: 52px !important;
+  height: 18px;
+  transition: none;
+  padding: 0 5px;
+}
+.spit-symbol .rankings-bar.spit-rankings-bar .rankings-value {
+  opacity: 1;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.spit-symbol .rankings-pin-chip.spit-rankings-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid hsl(var(--pin-1) / 0.5);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.spit-symbol .rankings-pin-chip.spit-rankings-pin .rankings-pin-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: hsl(var(--pin-1));
+}
+.spit-symbol .team-role-badge.spit-ui-swatch {
+  width: 15px;
+  height: 15px;
+  font-size: 8.5px;
+}
+.spit-symbol:has(.team-role-badge + .team-role-badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.spit-symbol .diff-pill.spit-ui-swatch {
+  min-width: 2.6em;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.spit-barbell-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 52px;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+  position: relative;
+}
+.spit-barbell-expected {
+  position: absolute;
+  left: 38%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.spit-barbell-actual {
+  display: block;
+  width: 62%;
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--positive) / 0.55);
+}
+
+/* Home page-info legend swatches — mirror live UI chrome. */
+.spit-symbol .spit-home-swatch {
+  flex: none;
+}
+.spit-symbol .home-status-dot.spit-home-swatch {
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
+}
+.spit-symbol .home-pts.is-hot.spit-home-swatch {
+  min-width: 1.6em;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.spit-symbol .home-imp.spit-home-swatch {
+  min-width: 78px;
+  gap: 5px;
+}
+.spit-symbol .home-imp.spit-home-swatch .home-imp-track {
+  width: 36px;
+  height: 5px;
+}
+.spit-symbol .home-imp.spit-home-swatch .home-imp-fill {
+  transition: none;
+  width: var(--imp-pct, 0%);
+}
+.spit-symbol .home-imp.spit-home-swatch .home-imp-pct {
+  min-width: 2.4em;
+  font-size: 11px;
+}
+.spit-symbol .home-play-live.spit-home-swatch,
+.spit-symbol .home-play-left.spit-home-swatch {
+  font-size: 12px;
+}
+.spit-symbol .home-role-tag.spit-home-swatch {
+  margin-top: 1px;
+}
+.spit-symbol .home-chip-cell.spit-home-swatch {
+  margin-top: 1px;
+}
+.spit-symbol:has(.home-role-tag) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .spit-medals {
@@ -11807,8 +12019,19 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+.home-stat-value .stat-roll,
+.home-rank-num .stat-roll {
+  line-height: 1;
+  vertical-align: baseline;
+}
+.home-stat-value .stat-roll-digit,
+.home-rank-num .stat-roll-digit {
+  height: 1em;
+  line-height: 1;
+  overflow: hidden;
 }
 .home-stat-rank {
   display: flex;
@@ -11848,6 +12071,7 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 }
 .home-stat-gw .home-stat-value {
   font-size: 34px;
+  line-height: 1;
 }
 .home-stat-meta {
   display: flex;
@@ -11910,9 +12134,12 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-col-opp,
 .home-col-imp,
 .home-col-rank,
-.home-col-play,
+.home-col-live,
+.home-col-left,
 .home-col-gw,
-.home-col-total {
+.home-col-total,
+.home-col-captain,
+.home-col-vice {
   text-align: center;
   font-variant-numeric: tabular-nums;
   width: 1%;
@@ -11923,7 +12150,8 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-data-table th.home-col-opp,
 .home-data-table th.home-col-imp,
 .home-data-table th.home-col-rank,
-.home-data-table th.home-col-play,
+.home-data-table th.home-col-live,
+.home-data-table th.home-col-left,
 .home-data-table th.home-col-gw,
 .home-data-table th.home-col-total,
 .home-data-table td.home-col-pts,
@@ -11931,7 +12159,8 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-data-table td.home-col-opp,
 .home-data-table td.home-col-imp,
 .home-data-table td.home-col-rank,
-.home-data-table td.home-col-play,
+.home-data-table td.home-col-live,
+.home-data-table td.home-col-left,
 .home-data-table td.home-col-gw,
 .home-data-table td.home-col-total {
   text-align: center;
@@ -11966,23 +12195,34 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
     white-space: nowrap;
     max-width: 100%;
   }
-  .home-standings-table {
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) {
     table-layout: fixed;
   }
-  .home-standings-table .home-col-rank {
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-rank {
+    width: 7%;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
+    width: 44%;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-live,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-left {
     width: 8%;
   }
-  .home-standings-table .home-col-manager {
-    width: 42%;
-  }
-  .home-standings-table .home-col-play {
-    width: 16%;
-  }
-  .home-standings-table .home-col-gw {
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-gw {
     width: 14%;
   }
-  .home-standings-table .home-col-total {
-    width: 20%;
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-total {
+    width: 19%;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-name,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-entry {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 .home-player-cell {
@@ -12065,6 +12305,31 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   min-width: 1.5em;
   font-weight: 600;
 }
+.home-pts .stat-roll,
+.home-imp-pct .stat-roll,
+.home-play-live .stat-roll,
+.home-play-left .stat-roll,
+.home-standings-table .stat-roll,
+.home-squad-table .stat-roll {
+  line-height: 1;
+  vertical-align: baseline;
+}
+.home-captain-pts .stat-roll,
+.home-captain-pts .stat-roll-digit {
+  line-height: 1;
+  height: 1em;
+  overflow: hidden;
+}
+.home-pts .stat-roll-digit,
+.home-imp-pct .stat-roll-digit,
+.home-play-live .stat-roll-digit,
+.home-play-left .stat-roll-digit,
+.home-standings-table .stat-roll-digit,
+.home-squad-table .stat-roll-digit {
+  height: 1em;
+  line-height: 1;
+  overflow: hidden;
+}
 .home-pts.is-zero {
   color: var(--text-faint);
   font-weight: 500;
@@ -12112,10 +12377,12 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-status-dot.is-done {
   background: hsl(var(--muted-foreground) / 0.45);
 }
-.home-play-counts {
+.home-play-live,
+.home-play-left {
   display: inline-flex;
   align-items: baseline;
-  gap: 3px;
+  justify-content: center;
+  min-width: 1.1em;
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
@@ -12126,15 +12393,17 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-play-live.is-active {
   color: hsl(142 55% 38%);
 }
-.home-play-sep {
-  color: var(--text-faint);
-  font-weight: 500;
-}
 .home-play-left {
   color: var(--text-dim);
 }
 .home-play-left.is-active {
-  color: var(--text);
+  color: hsl(var(--primary));
+}
+.home-standings-table th.home-col-live,
+.home-standings-table th.home-col-left {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 @keyframes home-live-pulse {
   0% { box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45); }
@@ -12171,11 +12440,27 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   background: hsl(var(--muted));
   overflow: hidden;
 }
+.home-stat-value .stat-roll,
+.home-stat-rank .stat-roll,
+.home-rank-num .stat-roll {
+  vertical-align: baseline;
+}
 .home-imp-fill {
   display: block;
+  width: 0;
   height: 100%;
   border-radius: inherit;
   background: hsl(var(--text-faint) / 0.55);
+  transition: width 2.8s var(--ease-out);
+  transition-delay: 0s;
+}
+.home-imp-fill.is-drawn {
+  width: var(--imp-pct, 0%);
+}
+#home-page.is-entering .home-imp-fill {
+  /* Match summary/squad odometer duration; grow L→R together, not staggered. */
+  transition: width 2.8s var(--ease-out);
+  transition-delay: 0.12s;
 }
 .home-imp-fill.is-pos {
   background: hsl(var(--positive));
@@ -12198,6 +12483,12 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-imp.is-neg .home-imp-pct {
   color: hsl(0 72% 48%);
 }
+@media (prefers-reduced-motion: reduce) {
+  .home-imp-fill {
+    transition: none;
+    width: var(--imp-pct, 0%);
+  }
+}
 .home-standings-table tr.is-you td {
   background: hsl(var(--primary) / 0.08);
 }
@@ -12211,7 +12502,222 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   font-weight: 500;
   color: var(--text-faint);
 }
+.home-standings-pager {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.home-standings-track {
+  display: flex;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+.home-standings-track::-webkit-scrollbar {
+  display: none;
+}
+.home-standings-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.home-standings-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 0 2px;
+}
+.home-standings-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.22s var(--ease-out),
+    background-color 0.22s ease,
+    opacity 0.22s ease;
+}
+.home-standings-dot.is-active {
+  background: hsl(var(--primary));
+  transform: scale(1.18);
+  opacity: 1;
+}
+.home-standings-dot:not(.is-active) {
+  opacity: 0.85;
+}
+.home-standings-dot:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.55);
+  outline-offset: 2px;
+}
+.home-captains-table .home-col-captain,
+.home-captains-table .home-col-vice {
+  text-align: left;
+  white-space: normal;
+  width: auto;
+}
+.home-captain-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.home-captain-pick .home-crest-captain,
+.home-captain-pick .home-crest-fallback.home-crest-captain {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+.home-captains-table th.home-col-captain,
+.home-captains-table th.home-col-vice {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.home-captain-pick-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.home-captain-name {
+  font-weight: 600;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-captain-pts {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.home-captains-table tr.is-you .home-captain-pts {
+  color: hsl(var(--primary));
+}
+.home-chips-table .home-col-chip {
+  text-align: center;
+  width: 12%;
+  white-space: nowrap;
+}
+.home-chips-table th.home-col-chip {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.home-chip-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 1.75em;
+  vertical-align: middle;
+}
+.home-chip-cell-mark {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.home-chip-cell.is-available .home-chip-cell-mark {
+  border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
+  background: transparent;
+}
+.home-chip-cell.is-used .home-chip-cell-mark {
+  border: none;
+  background: hsl(var(--muted-foreground) / 0.72);
+}
+.home-chip-cell.is-active .home-chip-cell-mark {
+  border: none;
+  background: hsl(142 55% 38%);
+  box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45);
+  animation: home-live-pulse 1.6s ease-out infinite;
+}
+.home-chip-cell-gw {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text-dim);
+}
+.home-chip-cell.is-active .home-chip-cell-gw {
+  color: hsl(142 55% 32%);
+}
+.home-chip-cell.is-available .home-chip-cell-gw {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-chip-cell.is-active .home-chip-cell-mark {
+    animation: none;
+  }
+}
 @media (max-width: 900px) {
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) {
+    table-layout: fixed;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-rank {
+    width: 8%;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
+    width: 34%;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-live,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-left {
+    width: 10%;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-gw,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-total {
+    width: 12%;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-name,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-entry {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .home-captains-table {
+    table-layout: fixed;
+  }
+  .home-captains-table .home-col-rank {
+    width: 8%;
+  }
+  .home-captains-table .home-col-manager {
+    width: 34%;
+  }
+  .home-captains-table .home-col-captain,
+  .home-captains-table .home-col-vice {
+    width: 29%;
+  }
+  .home-chips-table {
+    table-layout: fixed;
+  }
+  .home-chips-table .home-col-rank {
+    width: 10%;
+  }
+  .home-chips-table .home-col-manager {
+    width: 42%;
+  }
+  .home-chips-table .home-col-chip {
+    width: 12%;
+  }
   .home-summary-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -12253,6 +12759,28 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   }
   .home-imp-track {
     width: 36px;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
+    width: 30%;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-live,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-left,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-gw,
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-total {
+    width: 11%;
+    font-size: 11px;
+  }
+  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-entry {
+    display: none;
+  }
+  .home-standings-table th.home-col-live,
+  .home-standings-table th.home-col-left,
+  .home-standings-table th.home-col-gw,
+  .home-standings-table th.home-col-total {
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    padding-left: 2px;
+    padding-right: 2px;
   }
 }
 
@@ -12341,8 +12869,9 @@ html[data-page="home"] #subtoolbar {
 }
 
 /* Home ownership cross-highlight (squad ↔ standings).
-   Squad tap filters standings rows (hidden, no tint). Standings tap switches
-   manager view; squad overlap with configured manager uses is-owner-match. */
+   Squad tap highlights owners in standings and fades the rest (no filter).
+   Standings tap switches manager view; squad overlap with configured manager
+   uses is-owner-match. */
 .home-squad-row,
 .home-standings-table tr[data-entry] {
   cursor: pointer;
@@ -12365,6 +12894,18 @@ html[data-page="home"] #subtoolbar {
 }
 .home-squad-row.is-owner-pinned .home-player-name {
   color: hsl(var(--blue-hsl));
+}
+.home-standings-table tr.is-owner-match td {
+  background: hsl(var(--blue-hsl) / 0.12);
+}
+.home-standings-table tr.is-owner-match .home-standings-name {
+  color: hsl(var(--blue-hsl));
+}
+.home-standings-table tr.is-owner-demote {
+  opacity: 0.38;
+}
+.home-standings-table tr.is-owner-demote td {
+  background: transparent;
 }
 .home-standings-table tr.is-view-active td {
   background: hsl(var(--blue-hsl) / 0.10);
