@@ -11,7 +11,7 @@ Configure manager/league via site/home_prefs.json or env:
 
 Run:
   python3 site/live_server.py
-  python3 site/live_server.py --port 8080 --interval-live 60 --interval-idle 300
+  python3 site/live_server.py --port 8080 --interval-live 60 --interval-idle 3600
 """
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -37,6 +38,9 @@ PREFS_PATH = SITE / "home_prefs.json"
 FETCH_SCRIPT = SITE / "fetch_home.py"
 FPL_BASE = "https://fantasy.premierleague.com/api"
 UA = "Mozilla/5.0 (compatible; FPL-Explorer/1.0; +live-server)"
+# Wake this many seconds before the next kickoff so the first live poll
+# lands near KO instead of sleeping a blind idle hour past it.
+KICKOFF_LEAD_SEC = 120
 
 
 class LiveState:
@@ -45,7 +49,7 @@ class LiveState:
         self.generated_at: str | None = None
         self.last_error: str | None = None
         self.last_fetch_sec: float | None = None
-        self.interval_sec = 300
+        self.interval_sec = 3600
         self.fetching = False
 
 
@@ -86,20 +90,57 @@ def load_prefs() -> tuple[int | None, int | None]:
     return manager_id, league_id
 
 
-def fixtures_have_live_action(gw: int | None) -> bool:
+def load_gw_fixtures(gw: int | None) -> list[dict]:
     if not gw:
-        return False
+        return []
     try:
         fixtures_raw = fpl_get(f"/fixtures/?event={gw}")
-        fixtures = fixtures_raw if isinstance(fixtures_raw, list) else []
+        return fixtures_raw if isinstance(fixtures_raw, list) else []
     except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError):
-        return False
+        return []
+
+
+def fixtures_have_live_action(fixtures: list[dict]) -> bool:
     for fx in fixtures:
         if fixture_is_live(fx):
             return True
         if fx.get("started") and not fixture_is_finished(fx):
             return True
     return False
+
+
+def parse_kickoff_unix(iso: str | None) -> float | None:
+    if not iso or not isinstance(iso, str):
+        return None
+    raw = iso.strip()
+    if not raw:
+        return None
+    # FPL uses e.g. 2026-08-23T14:00:00Z
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def seconds_until_next_kickoff(fixtures: list[dict], now: float | None = None) -> float | None:
+    """Seconds until the soonest not-started fixture kickoff, or None."""
+    now_ts = time.time() if now is None else now
+    soonest: float | None = None
+    for fx in fixtures:
+        if fx.get("started") or fixture_is_finished(fx):
+            continue
+        ko = parse_kickoff_unix(fx.get("kickoff_time") if isinstance(fx, dict) else None)
+        if ko is None:
+            continue
+        delta = ko - now_ts
+        if soonest is None or delta < soonest:
+            soonest = delta
+    return soonest
 
 
 def resolve_active_gw() -> int | None:
@@ -159,9 +200,20 @@ def run_fetch_home(manager_id: int, league_id: int) -> tuple[bool, str | None]:
     return True, None
 
 
-def choose_interval(live_sec: int, idle_sec: int) -> int:
+def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOFF_LEAD_SEC) -> int:
     gw = resolve_active_gw()
-    return live_sec if fixtures_have_live_action(gw) else idle_sec
+    fixtures = load_gw_fixtures(gw)
+    if fixtures_have_live_action(fixtures):
+        return max(15, live_sec)
+    until = seconds_until_next_kickoff(fixtures)
+    if until is None:
+        return max(15, idle_sec)
+    # KO imminent or overdue (API lag on `started`) — keep live cadence.
+    if until <= kickoff_lead_sec:
+        return max(15, live_sec)
+    # Wake ~kickoff_lead_sec before KO; never sleep longer than idle_sec.
+    wake = max(15, int(until) - kickoff_lead_sec)
+    return min(max(15, idle_sec), wake)
 
 
 def refresh_once(live_sec: int, idle_sec: int) -> None:
@@ -266,8 +318,8 @@ def main() -> int:
     parser.add_argument(
         "--interval-idle",
         type=int,
-        default=int(os.environ.get("LIVE_INTERVAL_IDLE", "300")),
-        help="Refresh seconds when no live fixtures (default 300)",
+        default=int(os.environ.get("LIVE_INTERVAL_IDLE", "3600")),
+        help="Max refresh seconds when no live fixtures (default 3600; shortens near kickoff)",
     )
     parser.add_argument(
         "--skip-daemon",

@@ -2488,6 +2488,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     transform: translateY(0);
   }
 }
+/* Opacity-only — safe on table cells (transform/opacity on <tr> breaks
+   WebKit table layout and causes a height jump when is-entering clears). */
+@keyframes page-enter-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 /* Scatter badges are centered with translate(-50%, -50%); the generic item
    keyframe would clobber that and jump them when is-entering is cleared. */
 @keyframes page-enter-scatter-point {
@@ -2682,9 +2688,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation: page-enter-item 0.65s var(--ease-out) both;
   animation-delay: calc(0.16s + (min(var(--enter-i, 0), 16) * 0.055s));
 }
-#home-page.is-entering .home-squad-table tbody tr,
-#home-page.is-entering .home-standings-table tbody tr {
-  animation: page-enter-item 0.55s var(--ease-out) both;
+#home-page.is-entering .home-squad-table tbody tr > *,
+#home-page.is-entering .home-standings-table tbody tr > * {
+  animation: page-enter-fade 0.55s var(--ease-out) both;
   animation-delay: calc(0.28s + (min(var(--enter-i, 0), 28) * 0.045s));
 }
 
@@ -2731,8 +2737,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #home-page.is-entering .home-view-banner,
   #home-page.is-entering .home-summary-cards > .home-panel,
   #home-page.is-entering .home-tables-grid > .home-panel,
-  #home-page.is-entering .home-squad-table tbody tr,
-  #home-page.is-entering .home-standings-table tbody tr {
+  #home-page.is-entering .home-squad-table tbody tr > *,
+  #home-page.is-entering .home-standings-table tbody tr > * {
     animation: none;
   }
 }
@@ -11589,6 +11595,29 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   line-height: 1.45;
 }
 
+/* Desktop: Updated stays in header meta. Mobile: footer under Home content. */
+.home-updated-footer {
+  display: none;
+  margin: 16px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+@media (max-width: 720px) {
+  .home-updated-footer:not([hidden]) {
+    display: block;
+    margin: 18px 0 0;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+  html.is-mobile-layout .home-updated-footer:not([hidden]),
+  html[data-page="home"] .home-updated-footer:not([hidden]) {
+    padding-bottom: calc(var(--mobile-dock-clearance, 80px) + 4px);
+  }
+}
+
 .home-deadline {
   display: none;
   margin: 0;
@@ -12094,12 +12123,349 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 }
 .home-table-panel {
   padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .home-tables-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
+}
+.home-tables-grid > .home-table-panel {
+  height: 100%;
+}
+.home-table-panel > .home-panel-heading {
+  flex: none;
+}
+.home-table-panel > .home-table-wrap,
+.home-table-panel > .home-squad-pager,
+.home-table-panel > .home-standings-pager {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+@media (min-width: 901px) {
+  /* Fill card height: stretch split + equal-share player rows so the last
+     pick sits just above the dots. */
+  #home-squad-panel > .home-squad-pager {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #home-squad-panel .home-squad-split {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #home-squad-panel .home-squad-players-pane,
+  #home-squad-panel .home-squad-metrics,
+  #home-squad-panel .home-squad-track {
+    min-height: 0;
+    height: 100%;
+  }
+  #home-squad-panel .home-squad-track {
+    flex: 1 1 auto;
+    height: auto !important;
+    align-items: stretch;
+  }
+  #home-squad-panel .home-squad-page {
+    height: 100%;
+    align-self: stretch;
+  }
+  #home-squad-panel .home-squad-players-pane .home-table-wrap,
+  #home-squad-panel .home-squad-page .home-table-wrap {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  #home-squad-panel .home-squad-table {
+    flex: 1 1 auto;
+    height: 100%;
+    width: 100%;
+  }
+  #home-squad-panel .home-squad-table thead {
+    height: 0;
+  }
+  #home-squad-panel .home-squad-table thead tr {
+    height: auto;
+  }
+  #home-squad-panel .home-squad-table tbody tr.home-squad-row {
+    height: 1px;
+  }
+  #home-squad-panel .home-squad-table tbody tr.home-bench-divider {
+    height: auto;
+  }
+  #home-squad-panel .home-squad-table tbody tr.home-squad-row > td {
+    vertical-align: middle;
+  }
+  #home-squad-panel .home-squad-dots {
+    margin-top: 0;
+  }
+  /* Standings: same stretch so frozen managers + metrics rows share height. */
+  #home-standings-panel > .home-standings-pager {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #home-standings-panel .home-standings-split {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #home-standings-panel .home-standings-managers-pane,
+  #home-standings-panel .home-standings-metrics,
+  #home-standings-panel .home-standings-track {
+    min-height: 0;
+    height: 100%;
+  }
+  #home-standings-panel .home-standings-track {
+    flex: 1 1 auto;
+    height: auto !important;
+    align-items: stretch;
+  }
+  #home-standings-panel .home-standings-page {
+    height: 100%;
+    align-self: stretch;
+  }
+  #home-standings-panel .home-standings-managers-pane .home-table-wrap,
+  #home-standings-panel .home-standings-page .home-table-wrap {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  #home-standings-panel .home-standings-table {
+    flex: 1 1 auto;
+    height: 100%;
+    width: 100%;
+  }
+  #home-standings-panel .home-standings-table thead {
+    height: 0;
+  }
+  #home-standings-panel .home-standings-table thead tr {
+    height: auto;
+  }
+  #home-standings-panel .home-standings-table tbody tr[data-entry] {
+    height: 1px;
+  }
+  #home-standings-panel .home-standings-table tbody tr[data-entry] > td {
+    vertical-align: middle;
+  }
+  #home-standings-panel .home-standings-dots {
+    margin-top: 0;
+  }
+}
+.home-squad-pager {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-squad-split {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-squad-players-pane {
+  flex: 0 0 auto;
+  width: min(42%, 11.5rem);
+  min-width: 7.5rem;
+  max-width: 14rem;
+  z-index: 1;
+  background: hsl(var(--card));
+  box-shadow: 1px 0 0 hsl(var(--border) / 0.55);
+}
+.home-squad-players-pane .home-table-wrap {
+  margin: 0;
+  overflow: hidden;
+}
+.home-squad-metrics {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home-squad-track {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  transition: height 0.22s var(--ease-out);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#home-page.is-entering .home-squad-track,
+#home-page.is-entering .home-standings-track {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-squad-track {
+    transition: none;
+  }
+}
+.home-squad-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  align-self: flex-start;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+}
+.home-squad-page .home-table-wrap {
+  margin: 0;
+}
+.home-squad-track::-webkit-scrollbar {
+  display: none;
+}
+.home-squad-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  padding: 10px 0 2px;
+}
+.home-squad-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.22s var(--ease-out),
+    background-color 0.22s ease,
+    opacity 0.22s ease;
+}
+.home-squad-dot.is-active {
+  background: hsl(var(--primary));
+  transform: scale(1.18);
+  opacity: 1;
+}
+.home-squad-dot:not(.is-active) {
+  opacity: 0.85;
+}
+.home-squad-dot:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.55);
+  outline-offset: 2px;
+}
+.home-squad-live-table,
+.home-squad-fixtures-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.home-squad-fixtures-table .home-col-fx {
+  text-align: center;
+  width: 16.666%;
+  padding-left: 4px;
+  padding-right: 4px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.home-squad-fixtures-table th.home-col-fx {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.home-squad-fixtures-table .home-fx-blank {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.home-squad-fixtures-table td.home-col-fx.fdr-3 {
+  background: hsl(var(--muted) / 0.28);
+}
+.home-squad-fixtures-table td.home-col-fx.is-blank {
+  background: transparent;
+}
+.home-standings-pager {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-standings-split {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-standings-managers-pane {
+  flex: 0 0 auto;
+  width: min(48%, 13.5rem);
+  min-width: 8.5rem;
+  max-width: 16rem;
+  z-index: 1;
+  background: hsl(var(--card));
+  box-shadow: 1px 0 0 hsl(var(--border) / 0.55);
+}
+.home-standings-managers-pane .home-table-wrap {
+  margin: 0;
+  overflow: hidden;
+}
+.home-standings-metrics {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home-standings-track {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  /* Height is set to the active page so Captains/Chips don't force empty space. */
+  transition: height 0.22s var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-standings-track {
+    transition: none;
+  }
+}
+.home-standings-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  align-self: flex-start;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  /* Clip next/prev page bleed — negative .home-table-wrap margins were
+     showing Captains' highlighted row edges as "right bars" on Standings. */
+  overflow: hidden;
+}
+.home-standings-page .home-table-wrap {
+  margin: 0;
+}
+.home-standings-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  padding: 10px 0 2px;
+}
+@media (min-width: 901px) {
+  /* Stretch shorter card; keep dots at the bottom of the standings panel. */
+  .home-standings-dots {
+    margin-top: auto;
+  }
 }
 .home-table-wrap {
   overflow-x: auto;
@@ -12125,6 +12491,11 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   padding: 9px 8px;
   border-bottom: 1px solid hsl(var(--border) / 0.65);
   vertical-align: middle;
+  --home-row-bg: hsl(var(--card));
+}
+.home-data-table th + th,
+.home-data-table td + td {
+  border-left: 1px solid hsl(var(--border) / 0.5);
 }
 .home-data-table tr:last-child td {
   border-bottom: none;
@@ -12195,34 +12566,31 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
     white-space: nowrap;
     max-width: 100%;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) {
+  .home-standings-managers-table {
     table-layout: fixed;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-rank {
-    width: 7%;
+  .home-standings-managers-table .home-col-rank {
+    width: 22%;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
-    width: 44%;
-  }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-live,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-left {
-    width: 8%;
-  }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-gw {
-    width: 14%;
-  }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-total {
-    width: 19%;
-  }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
+  .home-standings-managers-table .home-col-manager {
+    width: 78%;
     min-width: 0;
     overflow: hidden;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-name,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-entry {
+  .home-standings-managers-table .home-standings-name,
+  .home-standings-managers-table .home-standings-entry {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .home-standings-live-table {
+    table-layout: fixed;
+  }
+  .home-standings-live-table .home-col-live,
+  .home-standings-live-table .home-col-left,
+  .home-standings-live-table .home-col-gw,
+  .home-standings-live-table .home-col-total {
+    width: 25%;
   }
 }
 .home-player-cell {
@@ -12346,9 +12714,33 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   flex-direction: column;
   gap: 4px;
   align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 .home-fx-opp {
   align-items: center;
+}
+.home-col-opp .home-fx-stack,
+.home-col-fx .home-fx-stack,
+.home-col-opp .home-fx-blank,
+.home-col-fx .home-fx-blank {
+  margin-inline: auto;
+}
+.home-opp-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: max-content;
+  max-width: 100%;
+}
+.home-ha-icon {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  fill: currentColor;
+  stroke: none;
 }
 .home-mp-line {
   display: inline-flex;
@@ -12380,12 +12772,14 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-play-live,
 .home-play-left {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   min-width: 1.1em;
+  min-height: 1.1em;
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
+  vertical-align: middle;
 }
 .home-play-live {
   color: var(--text-dim);
@@ -12413,18 +12807,6 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 @media (prefers-reduced-motion: reduce) {
   .home-status-dot.is-live { animation: none; }
 }
-.home-opp-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.home-ha-icon {
-  width: 12px;
-  height: 12px;
-  color: var(--text-dim);
-  fill: currentColor;
-  stroke: none;
-}
 .home-imp {
   display: inline-flex;
   align-items: center;
@@ -12433,19 +12815,47 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   justify-content: flex-end;
 }
 .home-imp-track {
+  position: relative;
   flex: 1 1 auto;
   width: 52px;
   height: 6px;
   border-radius: 999px;
-  background: hsl(var(--muted));
+  /* Groove sits on the row colour. */
+  background-color: color-mix(
+    in srgb,
+    var(--home-row-bg, hsl(var(--card))) 62%,
+    hsl(var(--foreground) / 0.16)
+  );
   overflow: hidden;
 }
-.home-stat-value .stat-roll,
-.home-stat-rank .stat-roll,
-.home-rank-num .stat-roll {
-  vertical-align: baseline;
+.home-imp-track::after {
+  /* Vertical ticks sit above fill + groove so they read through green/red. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(
+      var(--home-row-bg, hsl(var(--card))),
+      var(--home-row-bg, hsl(var(--card)))
+    ),
+    linear-gradient(
+      var(--home-row-bg, hsl(var(--card))),
+      var(--home-row-bg, hsl(var(--card)))
+    ),
+    linear-gradient(
+      var(--home-row-bg, hsl(var(--card))),
+      var(--home-row-bg, hsl(var(--card)))
+    );
+  background-size: 1px 100%, 1px 100%, 1px 100%;
+  background-position: 25% 0, 50% 0, 75% 0;
+  background-repeat: no-repeat;
 }
 .home-imp-fill {
+  position: relative;
+  z-index: 0;
   display: block;
   width: 0;
   height: 100%;
@@ -12489,9 +12899,6 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
     width: var(--imp-pct, 0%);
   }
 }
-.home-standings-table tr.is-you td {
-  background: hsl(var(--primary) / 0.08);
-}
 .home-standings-name {
   display: block;
   font-weight: 600;
@@ -12502,36 +12909,8 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   font-weight: 500;
   color: var(--text-faint);
 }
-.home-standings-pager {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.home-standings-track {
-  display: flex;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  scrollbar-width: none;
-}
 .home-standings-track::-webkit-scrollbar {
   display: none;
-}
-.home-standings-page {
-  flex: 0 0 100%;
-  min-width: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-.home-standings-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px 0 2px;
 }
 .home-standings-dot {
   width: 7px;
@@ -12664,59 +13043,46 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   }
 }
 @media (max-width: 900px) {
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) {
+  .home-standings-managers-table {
     table-layout: fixed;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-rank {
-    width: 8%;
+  .home-standings-managers-table .home-col-rank {
+    width: 20%;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
-    width: 34%;
+  .home-standings-managers-table .home-col-manager {
+    width: 80%;
     min-width: 0;
     overflow: hidden;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-live,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-left {
-    width: 10%;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-gw,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-total {
-    width: 12%;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-name,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-entry {
+  .home-standings-managers-table .home-standings-name,
+  .home-standings-managers-table .home-standings-entry {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .home-standings-live-table {
+    table-layout: fixed;
+  }
+  .home-standings-live-table .home-col-live,
+  .home-standings-live-table .home-col-left,
+  .home-standings-live-table .home-col-gw,
+  .home-standings-live-table .home-col-total {
+    width: 25%;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
   .home-captains-table {
     table-layout: fixed;
   }
-  .home-captains-table .home-col-rank {
-    width: 8%;
-  }
-  .home-captains-table .home-col-manager {
-    width: 34%;
-  }
   .home-captains-table .home-col-captain,
   .home-captains-table .home-col-vice {
-    width: 29%;
+    width: 50%;
   }
   .home-chips-table {
     table-layout: fixed;
   }
-  .home-chips-table .home-col-rank {
-    width: 10%;
-  }
-  .home-chips-table .home-col-manager {
-    width: 42%;
-  }
   .home-chips-table .home-col-chip {
-    width: 12%;
+    width: 25%;
   }
   .home-summary-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -12760,17 +13126,17 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   .home-imp-track {
     width: 36px;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-manager {
-    width: 30%;
+  .home-standings-managers-table .home-col-manager {
+    width: 80%;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-live,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-left,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-gw,
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-col-total {
-    width: 11%;
+  .home-standings-live-table .home-col-live,
+  .home-standings-live-table .home-col-left,
+  .home-standings-live-table .home-col-gw,
+  .home-standings-live-table .home-col-total {
+    width: 25%;
     font-size: 11px;
   }
-  .home-standings-table:not(.home-captains-table):not(.home-chips-table) .home-standings-entry {
+  .home-standings-managers-table .home-standings-entry {
     display: none;
   }
   .home-standings-table th.home-col-live,
@@ -12868,35 +13234,89 @@ html[data-page="home"] #subtoolbar {
   border-radius: 5px;
 }
 
+/* Subtle zebra — softens large white table areas; hover steps up one notch.
+   Highlight states below override both. --home-row-bg feeds IMP track ticks. */
+.home-squad-table tbody tr.home-squad-row:nth-child(even) > td,
+.home-standings-table tbody tr[data-entry]:nth-child(even) > td {
+  --home-row-bg: hsl(var(--muted) / 0.42);
+  background: var(--home-row-bg);
+}
+.home-squad-table tbody tr.home-squad-row:hover > td,
+.home-standings-table tbody tr[data-entry]:hover > td {
+  --home-row-bg: hsl(var(--muted) / 0.78);
+  background: var(--home-row-bg);
+}
+
 /* Home ownership cross-highlight (squad ↔ standings).
    Squad tap highlights owners in standings and fades the rest (no filter).
-   Standings tap switches manager view; squad overlap with configured manager
-   uses is-owner-match. */
+   Standings tap switches manager view; overlap with your configured squad
+   uses the red owned-pin (same as Statistics), not a row wash. */
 .home-squad-row,
 .home-standings-table tr[data-entry] {
   cursor: pointer;
   touch-action: manipulation;
 }
+/* No inset/absolute edge bars — use left border only (pages are clipped).
+   Accent lives on the frozen left pane only so metrics first-cells don't
+   double the bar beside Player / Manager. */
+.home-data-table tbody tr.row-selected > td,
+.home-standings-table tr[data-entry] > td,
+.home-squad-row > td {
+  box-shadow: none !important;
+}
+.home-standings-table,
+.home-squad-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.home-standings-managers-table th:first-child,
+.home-standings-managers-table tr[data-entry] > td:first-child,
+.home-squad-players-table th:first-child,
+.home-squad-players-table .home-squad-row > td:first-child {
+  border-left: 3px solid transparent;
+}
+.home-standings-managers-table tr.is-you > td:first-child,
+.home-standings-managers-table tr.is-configured-manager > td:first-child {
+  border-left-color: hsl(var(--primary));
+}
+.home-standings-managers-table tr.is-view-active > td:first-child {
+  border-left-color: hsl(var(--blue-hsl));
+}
+.home-squad-players-table .home-squad-row.is-owner-pinned > td:first-child {
+  border-left-color: hsl(var(--blue-hsl));
+}
+/* Metrics panes: never paint a left accent (would sit mid-row after freeze). */
+.home-squad-live-table th:first-child,
+.home-squad-live-table .home-squad-row > td:first-child,
+.home-squad-fixtures-table th:first-child,
+.home-squad-fixtures-table .home-squad-row > td:first-child,
+.home-standings-metrics-table th:first-child,
+.home-standings-metrics-table tr[data-entry] > td:first-child {
+  border-left: none;
+}
+.home-standings-table tbody tr[data-entry] > td {
+  vertical-align: middle;
+}
 .home-standings-table tr[hidden] {
   display: none;
 }
-.home-squad-row.is-owner-match > td {
-  background: hsl(var(--blue-hsl) / 0.12);
+.home-player-name .home-owned-flag,
+.home-player-name .owned-flag {
+  margin-left: 4px;
+  vertical-align: -0.15em;
 }
-.home-squad-row.is-owner-match .home-player-name {
-  color: hsl(var(--blue-hsl));
-}
-.home-squad-row.is-owner-pinned > td {
-  background: hsl(var(--blue-hsl) / 0.16);
-}
-.home-squad-row.is-owner-pinned > td:first-child {
-  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
+.home-squad-row.is-owner-pinned > td,
+.home-squad-row.is-owner-pinned:hover > td {
+  --home-row-bg: hsl(var(--blue-hsl) / 0.16);
+  background: var(--home-row-bg);
 }
 .home-squad-row.is-owner-pinned .home-player-name {
   color: hsl(var(--blue-hsl));
 }
-.home-standings-table tr.is-owner-match td {
-  background: hsl(var(--blue-hsl) / 0.12);
+.home-standings-table tr.is-owner-match td,
+.home-standings-table tr.is-owner-match:hover td {
+  --home-row-bg: hsl(var(--blue-hsl) / 0.12);
+  background: var(--home-row-bg);
 }
 .home-standings-table tr.is-owner-match .home-standings-name {
   color: hsl(var(--blue-hsl));
@@ -12904,15 +13324,20 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tr.is-owner-demote {
   opacity: 0.38;
 }
-.home-standings-table tr.is-owner-demote td {
+.home-standings-table tr.is-owner-demote td,
+.home-standings-table tr.is-owner-demote:hover td {
+  --home-row-bg: hsl(var(--card));
   background: transparent;
 }
-.home-standings-table tr.is-view-active td {
-  background: hsl(var(--blue-hsl) / 0.10);
+.home-standings-table tr.is-view-active td,
+.home-standings-table tr.is-view-active:hover td {
+  --home-row-bg: hsl(var(--blue-hsl) / 0.10);
+  background: var(--home-row-bg);
 }
-.home-standings-table tr.is-view-active td:first-child {
-  box-shadow: inset 3px 0 0 hsl(var(--blue-hsl));
-}
-.home-standings-table tr.is-configured-manager td {
-  background: hsl(var(--primary) / 0.08);
+.home-standings-table tr.is-you td,
+.home-standings-table tr.is-you:hover td,
+.home-standings-table tr.is-configured-manager td,
+.home-standings-table tr.is-configured-manager:hover td {
+  --home-row-bg: hsl(var(--primary) / 0.08);
+  background: var(--home-row-bg);
 }

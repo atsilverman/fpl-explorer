@@ -12,12 +12,12 @@ Minute-by-minute FPL live updates for the Home dashboard (configured manager, le
 | [`site/live_server.py`](../site/live_server.py) | Polls `fetch_home.py` on an interval and serves `GET /api/home` |
 | Static site (Vercel) | UI; polls `/api/home` (proxied to the droplet) every 60s |
 
-One DO droplet polls FPL **once per minute** (during live fixtures) and serves **all users** — far better than per-browser FPL calls or git deploy cycles.
+One DO droplet polls FPL every **60s while fixtures are live** (idle up to **1h**, waking ~2m before kickoff) and serves **all users** — far better than per-browser FPL calls or git deploy cycles.
 
 ## Architecture
 
 ```
-┌─────────────┐     every 60s (live)      ┌──────────────────┐
+┌─────────────┐     60s live / ≤1h idle   ┌──────────────────┐
 │  FPL API    │ ◄──────────────────────── │  DO Droplet      │
 │  live/picks │                           │  live_server.py  │
 └─────────────┘                           │  + fetch_home.py │
@@ -179,7 +179,7 @@ CORS is `*` on the droplet. Production uses the Vercel proxy to avoid HTTPS→HT
 | `FPL_HOME_LEAGUE_ID` | `home_prefs.json` | Mini-league |
 | `LIVE_SERVER_PORT` | `8080` | HTTP port |
 | `LIVE_INTERVAL_LIVE` | `60` | Poll interval when fixtures are live |
-| `LIVE_INTERVAL_IDLE` | `300` | Poll interval otherwise |
+| `LIVE_INTERVAL_IDLE` | `3600` | Max poll interval when idle (shortens ~2m before next kickoff) |
 
 ## Limitations & next steps
 
