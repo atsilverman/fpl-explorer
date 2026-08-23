@@ -1586,8 +1586,10 @@
   function refreshManagerDependentUI() {
     syncFplIdStatus();
     syncTeamModeUI();
-    if (state.page === "home") renderHome();
-    else if (state.page === "rankings") renderRankings();
+    if (state.page === "home") {
+      renderHome();
+      syncHomeLivePolling();
+    } else if (state.page === "rankings") renderRankings();
     else if (state.page === "team") renderTeam();
     else if (state.page === "opta") renderTable();
     else renderTable();
@@ -1973,13 +1975,9 @@
 
   function homeLiveApiUrl() {
     if (LIVE_HOME_API) return `${LIVE_HOME_API}/api/home`;
-    // Same-origin proxy (local serve.py or Vercel /api/home → DO droplet).
-    if (
-      location.hostname === "localhost"
-      || location.hostname === "127.0.0.1"
-      || location.hostname.endsWith("vercel.app")
-      || location.hostname === "fpl-explorer.vercel.app"
-    ) {
+    // Same-origin /api/home (Vercel proxy or local serve.py). Skip file:// previews.
+    if (location.protocol === "file:") return "";
+    if (location.protocol === "http:" || location.protocol === "https:") {
       return "/api/home";
     }
     return "";
@@ -2071,7 +2069,7 @@
       } else if (homeLiveLastPollAt && polledRecently) {
         text += " · Live offline";
         el.homeCountLabel.classList.add("is-live-offline");
-      } else if (!homeLiveLastPollAt) {
+      } else if (!homeLiveLastPollAt && savedManagerId && savedLeagueId) {
         text += " · Connecting…";
       } else {
         text += " · Live offline";
@@ -3135,7 +3133,7 @@
         }
       }
       savedManagerId = null;
-      savedLeagueId = null;
+      syncFixedHomeLeague({ persist: true, quiet: true });
       rebuildLeagueSelect();
       state.teamMode = "planner";
       loadTeamDraft();
@@ -14926,6 +14924,7 @@
     } catch {
       syncFplIdStatus();
     }
+    if (state.page === "home") syncHomeLivePolling();
     renderTable();
   }
 
