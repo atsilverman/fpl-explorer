@@ -2494,60 +2494,16 @@
 
   function hideHomeViewBannerToast() {
     const banner = el.homeViewBanner;
-    if (!banner || banner.hidden) return;
-    const reduceMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!banner.classList.contains("is-visible") || reduceMotion) {
-      banner.hidden = true;
-      banner.classList.remove("is-visible", "is-leaving");
-      return;
-    }
-    banner.classList.remove("is-visible");
-    banner.classList.add("is-leaving");
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      banner.hidden = true;
-      banner.classList.remove("is-leaving");
-      banner.removeEventListener("transitionend", onEnd);
-    };
-    const onEnd = (e) => {
-      if (e.target !== banner || e.propertyName !== "opacity") return;
-      finish();
-    };
-    banner.addEventListener("transitionend", onEnd);
-    window.setTimeout(finish, 320);
+    if (!banner) return;
+    banner.hidden = true;
+    banner.classList.remove("is-visible", "is-leaving");
   }
 
   function hideHomeOwnerBannerToast() {
     const banner = el.homeOwnerBanner;
-    if (!banner || banner.hidden) return;
-    const reduceMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!banner.classList.contains("is-visible") || reduceMotion) {
-      banner.hidden = true;
-      banner.classList.remove("is-visible", "is-leaving");
-      return;
-    }
-    banner.classList.remove("is-visible");
-    banner.classList.add("is-leaving");
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      banner.hidden = true;
-      banner.classList.remove("is-leaving");
-      banner.removeEventListener("transitionend", onEnd);
-    };
-    const onEnd = (e) => {
-      if (e.target !== banner || e.propertyName !== "opacity") return;
-      finish();
-    };
-    banner.addEventListener("transitionend", onEnd);
-    window.setTimeout(finish, 320);
+    if (!banner) return;
+    banner.hidden = true;
+    banner.classList.remove("is-visible", "is-leaving");
   }
 
   function homeOwnerBannerPlayerName() {
@@ -2579,31 +2535,15 @@
     if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
     const banner = el.homeViewBanner;
     if (!banner) return;
-    // Desktop relies on the page subtitle; toast is mobile-only.
-    // Prefer viewing-manager toast over ownership pin toast.
-    const show = viewingOther && NARROW_MQ.matches;
-    if (!show) {
-      hideHomeViewBannerToast();
-      return;
+    // In-flow top banner (all viewports). Prefer viewing over ownership pin.
+    if (viewingOther) {
+      hideHomeOwnerBannerToast();
+      if (el.homeViewBannerName) {
+        el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
+      }
     }
-    hideHomeOwnerBannerToast();
-    if (el.homeViewBannerName) {
-      el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
-    }
-    if (banner.hidden) {
-      banner.classList.remove("is-visible", "is-leaving");
-      banner.hidden = false;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!banner.hidden && homeIsViewingOtherManager() && NARROW_MQ.matches) {
-            banner.classList.add("is-visible");
-          }
-        });
-      });
-    } else {
-      banner.classList.remove("is-leaving");
-      banner.classList.add("is-visible");
-    }
+    banner.hidden = !viewingOther;
+    banner.classList.remove("is-visible", "is-leaving");
   }
 
   function syncHomeOwnerBanner() {
@@ -2611,8 +2551,7 @@
     if (!banner) return;
     const pinOn =
       !!(homeOwnerPin && homeOwnerPin.type === "element") &&
-      !homeIsViewingOtherManager() &&
-      NARROW_MQ.matches;
+      !homeIsViewingOtherManager();
     if (!pinOn) {
       hideHomeOwnerBannerToast();
       return;
@@ -2621,26 +2560,8 @@
     if (el.homeOwnerBannerName) {
       el.homeOwnerBannerName.textContent = homeOwnerBannerPlayerName();
     }
-    if (banner.hidden) {
-      banner.classList.remove("is-visible", "is-leaving");
-      banner.hidden = false;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (
-            !banner.hidden &&
-            homeOwnerPin &&
-            homeOwnerPin.type === "element" &&
-            !homeIsViewingOtherManager() &&
-            NARROW_MQ.matches
-          ) {
-            banner.classList.add("is-visible");
-          }
-        });
-      });
-    } else {
-      banner.classList.remove("is-leaving");
-      banner.classList.add("is-visible");
-    }
+    banner.hidden = false;
+    banner.classList.remove("is-visible", "is-leaving");
   }
 
   function homeOwnersForElement(elementId) {
@@ -4033,15 +3954,30 @@
     const input = document.getElementById("home-search-input");
     const results = document.getElementById("home-search-results");
     if (input) {
+      const refreshSheetViewport = () => {
+        syncVisualViewportInsets();
+        if (results && results.scrollTop > 0) {
+          // Keep the list usable as the keyboard animates.
+          results.scrollTop = Math.min(results.scrollTop, results.scrollHeight);
+        }
+      };
       input.addEventListener("input", () => {
         if (!results) return;
         const rows = homeSearchFilteredRows(input.value);
         results.innerHTML = rows.length
           ? rows.map(homeSearchResultRowHTML).join("")
           : `<div class="home-search-empty">No players match “${escapeHtml(input.value)}”.</div>`;
+        refreshSheetViewport();
+      });
+      input.addEventListener("focus", refreshSheetViewport);
+      input.addEventListener("blur", () => {
+        scheduleMobileViewportReset({ force: true });
       });
       requestAnimationFrame(() => {
         try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+        refreshSheetViewport();
+        window.setTimeout(refreshSheetViewport, 80);
+        window.setTimeout(refreshSheetViewport, 320);
       });
     }
     if (results) {
@@ -5109,8 +5045,31 @@
   // visualViewport.offsetTop can stay non-zero and crop .page-nav under the
   // status bar / Dynamic Island.
   let mobileViewportResetTimer = 0;
+  function homeSearchInputFocused() {
+    const active = document.activeElement;
+    return !!(active && active.id === "home-search-input");
+  }
+  function syncVisualViewportInsets() {
+    const root = document.documentElement;
+    const vv = window.visualViewport;
+    if (!vv) {
+      root.style.removeProperty("--vv-height");
+      root.style.removeProperty("--vv-offset-top");
+      root.style.removeProperty("--vv-keyboard-inset");
+      return;
+    }
+    const keyboardInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    root.style.setProperty("--vv-height", `${Math.round(vv.height)}px`);
+    root.style.setProperty("--vv-offset-top", `${Math.round(vv.offsetTop)}px`);
+    root.style.setProperty("--vv-keyboard-inset", `${Math.round(keyboardInset)}px`);
+  }
   function resetMobileViewportOffset() {
     if (!NARROW_MQ.matches) return;
+    // Keep the Home search sheet pinned to the visual viewport while typing.
+    if (homeSearchInputFocused() || (mobileSheetOpen && mobileSheetKey === "home-search")) {
+      syncVisualViewportInsets();
+      return;
+    }
     const html = document.documentElement;
     const body = document.body;
     const y =
@@ -5120,15 +5079,23 @@
       0;
     const vv = window.visualViewport;
     const vvTop = vv ? vv.offsetTop : 0;
-    if (y === 0 && vvTop === 0) return;
+    if (y === 0 && vvTop === 0) {
+      syncVisualViewportInsets();
+      return;
+    }
     window.scrollTo(0, 0);
     html.scrollTop = 0;
     body.scrollTop = 0;
+    syncVisualViewportInsets();
   }
   function scheduleMobileViewportReset({ force = false } = {}) {
     if (!NARROW_MQ.matches) return;
     // Don't fight Safari while the keyboard is up for search.
     if (!force && el.search && document.activeElement === el.search) return;
+    if (!force && homeSearchInputFocused()) {
+      syncVisualViewportInsets();
+      return;
+    }
     resetMobileViewportOffset();
     requestAnimationFrame(resetMobileViewportOffset);
     if (mobileViewportResetTimer) clearTimeout(mobileViewportResetTimer);
@@ -5136,9 +5103,17 @@
     mobileViewportResetTimer = window.setTimeout(() => {
       mobileViewportResetTimer = 0;
       if (!force && el.search && document.activeElement === el.search) return;
+      if (!force && homeSearchInputFocused()) {
+        syncVisualViewportInsets();
+        return;
+      }
       resetMobileViewportOffset();
       window.setTimeout(() => {
         if (!force && el.search && document.activeElement === el.search) return;
+        if (!force && homeSearchInputFocused()) {
+          syncVisualViewportInsets();
+          return;
+        }
         resetMobileViewportOffset();
       }, 280);
     }, 60);
@@ -6164,6 +6139,7 @@
     el.mobileSheet.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("mobile-sheet-active");
     if (el.homeBento) el.homeBento.classList.remove("is-search-open");
+    scheduleMobileViewportReset({ force: true });
     if (el.mobileSheetPanel) {
       el.mobileSheetPanel.style.transform = "";
       el.mobileSheetPanel.style.transition = "";
@@ -14763,11 +14739,13 @@
     }
     cluster.style.setProperty("--page-nav-label-offset", "0px");
     requestAnimationFrame(() => {
-      const navRect = nav.getBoundingClientRect();
-      const navMid = navRect.left + navRect.width / 2;
+      // Center within the inset title band (not full nav) so Search/Settings
+      // stay clear of the page tray after the offset nudge.
+      const bandRect = cluster.getBoundingClientRect();
+      const bandMid = bandRect.left + bandRect.width / 2;
       const labelRect = label.getBoundingClientRect();
       const labelMid = labelRect.left + labelRect.width / 2;
-      cluster.style.setProperty("--page-nav-label-offset", `${navMid - labelMid}px`);
+      cluster.style.setProperty("--page-nav-label-offset", `${bandMid - labelMid}px`);
     });
   }
 
@@ -16982,15 +16960,20 @@
       scheduleOptaMobileNameColWidth();
     });
     if (window.visualViewport) {
+      syncVisualViewportInsets();
       window.visualViewport.addEventListener("resize", () => {
+        syncVisualViewportInsets();
         syncMobileScrollportHeight();
         scheduleOptaMobileNameColWidth();
         scheduleMobileViewportReset();
       });
       window.visualViewport.addEventListener("scroll", () => {
+        syncVisualViewportInsets();
         syncMobileScrollportHeight();
         scheduleMobileViewportReset();
       });
+    } else {
+      document.documentElement.style.setProperty("--vv-height", `${window.innerHeight}px`);
     }
     window.addEventListener("pageshow", scheduleMobileViewportReset);
     window.addEventListener("orientationchange", scheduleMobileViewportReset);

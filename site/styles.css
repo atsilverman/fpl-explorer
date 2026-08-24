@@ -2021,7 +2021,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     margin-left: auto;
     padding-left: 0;
     box-shadow: none;
-    z-index: 5;
+    /* Above .page-nav-center (z-index 5). The absolute title band is full-bleed
+       and can cover Search on real devices after label centering. */
+    position: relative;
+    z-index: 8;
   }
   .page-nav-center {
     display: inline-flex;
@@ -2029,8 +2032,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 0;
     order: 2;
     position: absolute;
-    left: 0;
-    right: 0;
+    /* Keep Home/title clear of brand + the search/settings cluster. */
+    left: max(52px, calc(44px + env(safe-area-inset-left, 0px)));
+    right: max(96px, calc(84px + env(safe-area-inset-right, 0px)));
     justify-content: center;
     transform: translateX(var(--page-nav-label-offset, 0px));
     z-index: 5;
@@ -12456,41 +12460,18 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-variant-numeric: tabular-nums;
 }
 .home-view-banner {
-  position: fixed;
-  left: 50%;
-  right: auto;
-  bottom: max(18px, env(safe-area-inset-bottom, 0px));
-  z-index: 46;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  box-sizing: border-box;
-  width: max-content;
-  max-width: min(280px, calc(100vw - 28px));
+  justify-content: space-between;
+  gap: 12px;
   margin: 0;
-  padding: 10px 4px 10px 12px;
+  padding: 10px 12px 10px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+  border-left: 3px solid hsl(var(--primary));
   background: hsl(var(--card));
-  box-shadow: var(--shadow-md, var(--shadow-sm));
+  box-shadow: var(--shadow-sm);
   color: var(--text);
-  pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, 12px);
-  transition:
-    opacity 0.22s var(--ease-out),
-    transform 0.22s var(--ease-out);
-}
-.home-view-banner.is-visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  pointer-events: auto;
-}
-.home-view-banner.is-leaving {
-  opacity: 0;
-  transform: translate(-50%, 8px);
-  pointer-events: none;
 }
 .home-view-banner[hidden] {
   display: none !important;
@@ -12501,11 +12482,9 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   gap: 1px;
   min-width: 0;
   flex: 1 1 auto;
-  padding-right: 2px;
-  max-width: 100%;
 }
 .home-view-banner-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -12513,7 +12492,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   line-height: 1.2;
 }
 .home-view-banner-name {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -12524,25 +12503,25 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-view-banner-clear {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
-  background: transparent;
+  background: hsl(var(--muted) / 0.35);
   color: var(--text-dim);
   cursor: pointer;
   touch-action: manipulation;
-  transition: color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 .home-view-banner-clear .icon {
   width: 16px;
   height: 16px;
 }
 .home-view-banner-clear:hover {
-  background: transparent;
+  background: hsl(var(--muted) / 0.55);
   color: var(--text);
-  border: none;
+  border-color: hsl(var(--border-hsl) / 0.9);
 }
 .home-view-banner-clear:focus-visible {
   outline: 2px solid hsl(var(--primary) / 0.45);
@@ -12551,25 +12530,13 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-view-banner-clear:active {
   transform: translateY(0.5px);
 }
-html.has-mobile-bottom-dock .home-view-banner,
-html.has-mobile-filter-fab .home-view-banner {
-  bottom: calc(var(--mobile-dock-clearance, 80px) + 6px);
-}
-/* Desktop: subtitle already names the viewed manager — no floating toast. */
-@media (min-width: 721px) {
+@media (max-width: 900px) {
   .home-view-banner {
-    display: none !important;
+    padding: 9px 10px 9px 12px;
+    border-radius: calc(var(--radius) + 2px);
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .home-view-banner,
-  .home-view-banner.is-visible,
-  .home-view-banner.is-leaving {
-    transition: none;
-    transform: translate(-50%, 0);
-  }
-  .home-view-banner.is-visible {
-    opacity: 1;
+  .home-view-banner-name {
+    font-size: 13.5px;
   }
 }
 @media (max-width: 900px) {
@@ -12591,7 +12558,7 @@ html.has-mobile-filter-fab .home-view-banner {
   gap: 12px;
   margin: 8px 0 32px;
 }
-/* Viewing another manager — floating chip gets fill; cards get border accent only. */
+/* Viewing another manager — banner + cards share the blue rail accent. */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
   --home-view-border: hsl(var(--blue-hsl) / 0.32);
@@ -12601,28 +12568,17 @@ html.has-mobile-filter-fab .home-view-banner {
   border-color: var(--home-view-border);
   border-left: 3px solid var(--home-view-accent);
 }
-/* Toast uses charcoal accent so it doesn’t read as the same blue
-   left rail as the standings/panel “viewing” highlights. */
 .home-dashboard.is-viewing-manager .home-view-banner {
-  background: hsl(var(--card));
-  border-color: var(--border);
-  border-left: 3px solid hsl(var(--primary));
-  box-shadow: var(--shadow-md, var(--shadow-sm));
-}
-.home-dashboard.is-viewing-manager .home-view-banner-label {
-  color: var(--text-faint);
-}
-.home-dashboard.is-viewing-manager .home-view-banner-name {
-  color: var(--text);
+  border-left-color: var(--home-view-accent);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear {
-  background: transparent;
-  border: none;
+  background: hsl(var(--muted) / 0.35);
+  border: 1px solid var(--border);
   color: var(--text-dim);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear:hover {
-  background: transparent;
-  border: none;
+  background: hsl(var(--muted) / 0.55);
+  border-color: hsl(var(--border-hsl) / 0.9);
   color: var(--text);
 }
 .home-summary-cards {
@@ -12977,6 +12933,27 @@ html.has-mobile-filter-fab .home-view-banner {
 .mobile-sheet.is-home-search .mobile-sheet-header {
   display: none;
 }
+/* Pin the Home search overlay to the visual viewport so the keyboard / iOS
+   chrome don't cover the input + results list. */
+.mobile-sheet.is-home-search {
+  top: var(--vv-offset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: auto;
+  height: var(--vv-height, 100%);
+  align-items: flex-end;
+}
+.mobile-sheet.is-home-search .mobile-sheet-panel {
+  max-height: min(92%, calc(var(--vv-height, 100dvh) - 8px));
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
+.mobile-sheet.is-home-search .mobile-sheet-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 4px;
+}
 .mobile-sheet-body > .home-search-sheet {
   flex: 1 1 auto;
   min-height: 0;
@@ -12991,6 +12968,9 @@ html.has-mobile-filter-fab .home-view-banner {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
 }
 .home-search-input-wrap {
   position: sticky;
