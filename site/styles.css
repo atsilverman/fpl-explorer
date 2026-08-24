@@ -954,13 +954,8 @@ a { color: var(--blue); }
     display: none !important;
   }
 }
-.prefs-status {
-  margin: 0;
-  min-height: 1.2em;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-faint);
-  line-height: 1.35;
+#prefs-planner-section[hidden] {
+  display: none !important;
 }
 .prefs-font-select {
   width: 100%;
@@ -2310,15 +2305,15 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: none !important;
   }
   :root {
-    --mobile-dock-size: 34px;
+    --mobile-dock-size: 40px;
     --mobile-dock-bottom: max(14px, env(safe-area-inset-bottom, 0px));
     --mobile-dock-clearance: calc(var(--mobile-dock-size) + var(--mobile-dock-bottom) + 12px);
   }
   .mobile-view-dock,
   .mobile-filter-dock {
-    --mobile-dock-size: 34px;
+    --mobile-dock-size: 40px;
     --mobile-dock-btn-size: auto;
-    --mobile-dock-radius: 10px;
+    --mobile-dock-radius: 12px;
     --mobile-dock-border: hsl(var(--border-hsl) / 0.65);
     --mobile-dock-shadow: 0 1px 3px hsl(240 6% 10% / 0.06);
     transition:
@@ -2342,7 +2337,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-view-dock .mobile-dock-label,
   .mobile-filter-fab .mobile-dock-label {
     display: inline;
-    font-size: 11px;
+    font-size: 12.5px;
     font-weight: 600;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -2390,9 +2385,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     min-width: 0;
     height: auto;
     min-height: 0;
-    padding: 0 10px;
-    gap: 5px;
-    font-size: 11px;
+    padding: 0 12px;
+    gap: 6px;
+    font-size: 12.5px;
     font-weight: 600;
     line-height: 1;
     border: none;
@@ -2406,9 +2401,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       transform 0.14s var(--ease-out);
   }
   .mobile-view-dock .tab-btn .icon {
-    width: 14px;
-    height: 14px;
-    font-size: 14px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
     color: inherit;
     flex: none;
   }
@@ -2449,11 +2444,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 6px;
     width: auto;
     min-width: 0;
     height: var(--mobile-dock-size);
-    padding: 0 10px;
+    padding: 0 12px;
     border-radius: var(--mobile-dock-radius);
     background: hsl(var(--card));
     border: 1px solid var(--mobile-dock-border);
@@ -2471,16 +2466,16 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .topbar .ghost-btn.mobile-filter-fab,
   .mobile-filter-dock .ghost-btn.mobile-filter-fab {
     width: auto;
-    min-width: var(--mobile-dock-size, 34px);
+    min-width: var(--mobile-dock-size, 40px);
     height: var(--mobile-dock-size, 34px);
     padding: 0 10px;
     gap: 5px;
     justify-content: center;
   }
   .mobile-filter-fab .icon {
-    width: 14px;
-    height: 14px;
-    font-size: 14px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
     flex: none;
   }
   .mobile-filter-fab.on,
@@ -3023,38 +3018,36 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --name-col-compact-teams: 40px;
   }
 
-  /* Statistics: table card is the scrollport again (vertical + horizontal).
-     The split .main vertical / .table-wrap horizontal-only model blocks
-     touch scroll when the table fills the viewport. */
+  /* Statistics / Ownership: page (.main) scrolls vertically; table wraps
+     only pan horizontally and size to content (no nested card scrollport). */
   html[data-page="opta"] .main,
-  html[data-page="expected"] .main,
   html[data-page="ownership"] .main {
+    padding-bottom: var(--main-pad-x, 8px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+  }
+  html[data-page="expected"] .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
 
-  html[data-page="opta"] .main {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
   html[data-page="opta"] #opta-page {
-    flex: 1 1 auto;
+    display: block;
+    flex: none;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
   }
   html[data-page="opta"] #opta-page > .table-wrap {
-    overflow: auto;
-    overflow-y: auto;
+    overflow-x: auto;
+    overflow-y: visible;
     max-height: none;
-    flex: 1 1 auto;
-    min-height: var(--mobile-scrollport-min-h, 0px);
-    overscroll-behavior: none;
+    flex: none;
+    min-height: 0;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
   }
   html[data-page="opta"] #opta-page > .opta-table-footer {
-    flex: 0 0 auto;
+    flex: none;
     width: 100%;
     margin: 8px 0 0;
     padding: 4px 2px 0;
@@ -3068,11 +3061,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     text-overflow: clip;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
-    flex: 0 0 auto;
+    flex: none;
     min-height: auto;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
     margin-bottom: 8px;
   }
 
@@ -3547,22 +3539,33 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   flex: none;
 }
 
-/* Ownership: scroll-linked identity shrink → photo/crest only (mobile JS).
-   Column morphs; name/meta stay single-line and clip from the right
-   (no wrap → no row-height jump). Rank fades/collapses beside the photo. */
-#ownership-table-wrap.name-simplify-ready {
+/* Photo-identity tables (Ownership, Statistics, Planner): scroll-linked
+   identity shrink → photo/crest only (mobile JS). Column morphs; name/meta
+   stay single-line and clip from the right (no wrap → no row-height jump).
+   Rank fades/collapses beside the photo on Ownership. */
+#ownership-table-wrap.name-simplify-ready,
+#opta-page .table-wrap.name-simplify-ready,
+#team-page .table-wrap.name-simplify-ready {
   --name-col-compact-players: 46px;
   --name-col-compact-teams: 46px;
   --own-photo: 30px;
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
-#ownership-table-wrap.name-simplify-ready tbody td.col-player {
+#ownership-table-wrap.name-simplify-ready tbody td.col-player,
+#opta-page .table-wrap.name-simplify-ready thead th.col-player,
+#opta-page .table-wrap.name-simplify-ready thead th.col-name,
+#opta-page .table-wrap.name-simplify-ready tbody td.col-player,
+#opta-page .table-wrap.name-simplify-ready tbody td.col-name,
+#team-page .table-wrap.name-simplify-ready thead th.col-player,
+#team-page .table-wrap.name-simplify-ready tbody td.col-player {
   overflow: hidden;
   vertical-align: middle;
   padding-left: calc(16px - var(--name-collapse) * 8px);
   padding-right: calc(8px - var(--name-collapse) * 6px);
 }
-#ownership-table-wrap.name-simplify-ready .ownership-id {
+#ownership-table-wrap.name-simplify-ready .ownership-id,
+#opta-page .table-wrap.name-simplify-ready .ownership-id,
+#team-page .table-wrap.name-simplify-ready .ownership-id {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -3582,12 +3585,18 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   margin: 0;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-photo,
-#ownership-table-wrap.name-simplify-ready .ownership-crest {
+#ownership-table-wrap.name-simplify-ready .ownership-crest,
+#opta-page .table-wrap.name-simplify-ready .ownership-photo,
+#opta-page .table-wrap.name-simplify-ready .ownership-crest,
+#team-page .table-wrap.name-simplify-ready .ownership-photo,
+#team-page .table-wrap.name-simplify-ready .ownership-crest {
   flex: 0 0 var(--own-photo);
   width: var(--own-photo);
   height: var(--own-photo);
 }
-#ownership-table-wrap.name-simplify-ready .ownership-id-text {
+#ownership-table-wrap.name-simplify-ready .ownership-id-text,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-text,
+#team-page .table-wrap.name-simplify-ready .ownership-id-text {
   flex: 1 1 auto;
   min-width: 0;
   max-width: calc((1 - var(--name-collapse)) * 180px);
@@ -3596,14 +3605,20 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   pointer-events: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
-#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
+#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#team-page .table-wrap.name-simplify-ready .ownership-id .player-name,
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
   display: block;
   overflow: hidden;
   text-overflow: clip;
   white-space: nowrap;
   min-width: 0;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-id-sub {
+#ownership-table-wrap.name-simplify-ready .ownership-id-sub,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-sub,
+#team-page .table-wrap.name-simplify-ready .ownership-id-sub {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -3614,7 +3629,9 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   overflow: hidden;
   white-space: nowrap;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-id-sub > * {
+#ownership-table-wrap.name-simplify-ready .ownership-id-sub > *,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
+#team-page .table-wrap.name-simplify-ready .ownership-id-sub > * {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -4810,16 +4827,14 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 
 @media (max-width: 720px) {
   html[data-page="ownership"] .layout .main {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
     overflow-x: hidden;
+    overflow-y: auto;
     min-height: 0;
   }
   html[data-page="ownership"] #ownership-page {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
+    display: block;
+    flex: none;
     min-width: 0;
     min-height: 0;
   }
@@ -4844,12 +4859,12 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
     display: inline;
   }
   .ownership-treemap {
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: none;
+    min-height: 280px;
     max-height: none;
   }
   .ownership-treemap-plot {
-    min-height: 0;
+    min-height: 240px;
   }
   .ownership-treemap-photo,
   .ownership-treemap-crest {
@@ -4862,16 +4877,16 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .ownership-treemap-delta {
     font-size: 10px;
   }
-  /* Ownership: table card is the scrollport — pin header like Statistics. */
+  /* Ownership: content-sized table; .main is the vertical scroller. */
   #ownership-table-wrap {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
     max-height: none;
-    overflow: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
     --name-col-w: 168px;
     --metric-col-w: 58px;
   }
@@ -9274,8 +9289,7 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   padding: 0 6px;
   font-size: 12px;
 }
-.markets-controls.is-scoreline-view .markets-control-compare,
-.markets-controls.is-scoreline-view .markets-control:not(.markets-control-view) {
+.markets-controls.is-scoreline-view .markets-control:not(.markets-control-view):not(.markets-control-compare) {
   display: none;
 }
 
@@ -9425,6 +9439,57 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   display: flex;
   align-items: baseline;
   padding: 0 10px 4px;
+}
+.markets-scoreline-deltas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 8px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--muted) / 0.35);
+}
+.markets-scoreline-delta-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.markets-scoreline-delta-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.markets-scoreline-delta-team .player-cell-crest,
+.markets-scoreline-delta-team .badge-img {
+  width: 16px;
+  height: 16px;
+}
+.markets-scoreline-delta-stat {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.markets-scoreline-delta-lab {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.markets-scoreline-delta-stat .markets-stat-value {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.markets-scoreline-delta-stat .markets-stat-delta {
+  font-size: 11px;
 }
 .markets-card-scoreline .markets-scores-matrix-wrap {
   border-left: none;
@@ -9935,12 +10000,12 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   max-width: 560px;
   /* Cap well below the viewport so the tray never reads as a full-screen card;
      long filter lists scroll inside .mobile-sheet-body. */
-  max-height: min(68dvh, 520px);
+  max-height: min(74dvh, 580px);
   background: hsl(var(--card));
   color: var(--text);
   border: 1px solid var(--border);
   border-bottom: none;
-  border-radius: 16px 16px 0 0;
+  border-radius: 18px 18px 0 0;
   box-shadow: var(--shadow-lg);
   transform: translateY(108%);
   transition: transform 0.28s var(--ease-out);
@@ -10285,6 +10350,9 @@ html[data-page="team"] .layout .main {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 .team-gw-range {
   min-width: 3.2em;
@@ -10312,6 +10380,133 @@ html[data-page="team"] .layout .main {
 }
 .team-gw-select-btn[aria-expanded="true"] .page-tab-caret {
   transform: rotate(180deg);
+}
+.team-gw-carousel {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: min(280px, 58vw);
+  min-width: 0;
+  overflow: hidden;
+}
+.team-gw-carousel::before,
+.team-gw-carousel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.team-gw-carousel::before {
+  left: 0;
+  background: linear-gradient(
+    to right,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.85) 40%,
+    hsl(var(--card) / 0)
+  );
+}
+.team-gw-carousel::after {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.85) 40%,
+    hsl(var(--card) / 0)
+  );
+}
+.team-gw-carousel.has-more-left::before,
+.team-gw-carousel.has-more-right::after {
+  opacity: 1;
+}
+.team-gw-carousel-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 40%;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 40%;
+  touch-action: pan-x;
+}
+.team-gw-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+.team-gw-carousel-item {
+  appearance: none;
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  height: 34px;
+  min-width: 3.4em;
+  padding: 0 12px;
+  border: 1px solid hsl(var(--border-hsl) / 0.9);
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color 0.14s ease,
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.14s var(--ease-out);
+}
+.team-gw-carousel-item.is-active {
+  color: #fff;
+  background: hsl(var(--blue-hsl));
+  border-color: hsl(var(--blue-hsl));
+  font-weight: 750;
+  box-shadow:
+    0 0 0 2px hsl(var(--blue-hsl) / 0.22),
+    0 4px 10px hsl(var(--blue-hsl) / 0.28);
+  transform: scale(1.06);
+}
+@media (max-width: 720px) {
+  html[data-page="team"] #subtoolbar .team-toolbar-controls:has(.team-gw-carousel) {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  html[data-page="team"] #subtoolbar .team-gw-nav:has(.team-gw-carousel) {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    justify-content: stretch;
+  }
+  html[data-page="team"] #subtoolbar .team-gw-carousel {
+    max-width: none;
+    width: 100%;
+  }
+  html[data-page="team"].has-mobile-view-dock #stats-toolbar-actions:has(.team-gw-carousel),
+  html[data-page="team"].has-mobile-view-dock #stats-toolbar-actions .topbar-end-cluster:has(.team-gw-carousel) {
+    width: 100%;
+    max-width: none;
+    justify-content: stretch;
+  }
+  /* Full-bleed to the mobile topbar edges */
+  html[data-page="team"] #subtoolbar:has(.team-gw-carousel) {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  html[data-page="team"] #subtoolbar:has(.team-gw-carousel) .team-gw-carousel-track {
+    padding-inline: max(12px, 42%);
+    scroll-padding-inline: max(12px, 42%);
+  }
 }
 .team-gw-sheet-grid {
   display: grid;
@@ -10725,6 +10920,16 @@ html[data-page="team"] .layout .main {
 #team-page .player-cell {
   --crest-size: 30px;
 }
+#team-page .ownership-id {
+  min-height: 100%;
+}
+#team-page .ownership-id .player-name {
+  font-size: 13.5px;
+  font-weight: 650;
+}
+#team-page .ownership-id-sub {
+  font-size: 10.5px;
+}
 #team-page .player-cell .player-name {
   font-size: 13.5px;
   font-weight: 650;
@@ -10789,6 +10994,11 @@ html[data-page="team"] .layout .main {
   gap: 8px;
   min-width: 0;
   height: 100%;
+}
+.team-player-id .player-cell,
+.team-player-id .ownership-id {
+  flex: 1;
+  min-width: 0;
 }
 .team-player-id .player-cell {
   flex: 1;
@@ -11091,6 +11301,7 @@ html[data-page="team"] .layout .main {
 }
 #team-page tbody td.team-heat-cell.fdr-3,
 #team-picker-view tbody td.team-heat-cell.fdr-3 {
+  /* Mid step of the 5-ramp; inline style sets the wash — keep a fallback. */
   background: hsl(var(--muted) / 0.55);
 }
 #team-page thead th.col-heat.is-anchor,
@@ -11266,11 +11477,11 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   font-size: 13.5px;
 }
 @media (max-width: 720px) {
-  /* Squad/picker tables are the scrollport (same pattern as Statistics). */
+  /* Squad/picker: page scroll — tables size to content. */
   html[data-page="team"] .layout .main {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
   }
   #team-page {
     --name-col-w: 130px;
@@ -11278,15 +11489,14 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
     --badge-size: 26px;
     --crest-gap: 6px;
     --team-row-h: 42px;
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    overflow: visible;
+    display: block;
   }
   #team-page .page-header,
   #team-page .team-budget-bar {
-    flex: 0 0 auto;
+    flex: none;
   }
   #team-page .team-budget-bar {
     flex-wrap: nowrap;
@@ -11312,11 +11522,10 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   }
   #team-squad-view,
   #team-picker-view {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    overflow: visible;
+    display: block;
   }
   #team-search-results,
   #team-page:not(.is-picking) #team-compare-wrap {
@@ -11342,7 +11551,7 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
     -webkit-overflow-scrolling: touch;
   }
   #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
   }
   #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) {
@@ -11384,14 +11593,14 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   #team-page .team-table-wrap,
   #team-picker-view .team-table-wrap.team-picker-table-wrap,
   #team-page #team-search-results .team-table-wrap {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
     max-height: none;
-    overflow: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
     position: relative;
     top: auto;
   }
@@ -11582,6 +11791,19 @@ html.is-team-landscape #team-page .player-cell .player-name {
   font-size: 10px;
   font-weight: 650;
   line-height: 1.15;
+}
+html.is-team-landscape #team-page .ownership-id .player-name {
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+html.is-team-landscape #team-page .ownership-photo,
+html.is-team-landscape #team-page .ownership-crest {
+  width: 22px;
+  height: 22px;
+}
+html.is-team-landscape #team-page .ownership-id-sub {
+  display: none;
 }
 html.is-team-landscape #team-page .player-cell-sub {
   display: flex;
@@ -12380,6 +12602,13 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   font-size: 11px;
   color: var(--text-dim);
 }
+.home-lookup-price {
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
 .home-lookup-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -12558,6 +12787,21 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   margin-top: 2px;
   font-size: 11px;
   color: var(--text-dim);
+}
+.home-search-metric.is-soft {
+  color: hsl(var(--positive) / 0.78);
+  font-weight: 600;
+}
+.home-search-metric.is-warm {
+  color: hsl(var(--positive));
+  font-weight: 650;
+}
+.home-search-metric.is-hot {
+  color: hsl(var(--positive));
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: hsl(var(--positive) / 0.12);
 }
 .home-search-empty {
   padding: 16px 8px;
@@ -12881,6 +13125,9 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+}
+.home-standings-pager[hidden] {
+  display: none !important;
 }
 .home-standings-track {
   display: flex;
@@ -13979,10 +14226,4 @@ html[data-page="home"] #subtoolbar {
   --home-row-bg: hsl(var(--blue-hsl) / 0.10);
   background: var(--home-row-bg);
 }
-.home-standings-table tr.is-you td,
-.home-standings-table tr.is-you:hover td,
-.home-standings-table tr.is-configured-manager td,
-.home-standings-table tr.is-configured-manager:hover td {
-  --home-row-bg: hsl(var(--primary) / 0.08);
-  background: var(--home-row-bg);
-}
+/* Configured manager: primary left rail only — keep zebra / hover like peers. */

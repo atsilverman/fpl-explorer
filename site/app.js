@@ -296,6 +296,43 @@
     };
   }
 
+  /**
+   * Official FPL FDR is 1 (easiest) → 5 (hardest). Five discrete wash steps
+   * so Team heat / Home fixtures read as a continuous easy→hard ramp.
+   * `quiet` softens the wash (Home squad cells).
+   */
+  const FDR_RAMP = Object.freeze({
+    1: { kind: "easy", intensity: 1 },
+    2: { kind: "easy", intensity: 0.58 },
+    3: { kind: "mid", intensity: 0.34 },
+    4: { kind: "hard", intensity: 0.58 },
+    5: { kind: "hard", intensity: 1 },
+  });
+
+  function fdrRampInlineStyle(fdr, { quiet = false } = {}) {
+    const n = Math.round(Number(fdr));
+    const spec = FDR_RAMP[n];
+    if (!spec) return { className: "", styleAttr: "", strongClass: "" };
+    if (spec.kind === "mid") {
+      const dark = themePrefersDark();
+      const alpha = quiet
+        ? dark ? 0.28 : 0.36
+        : dark ? 0.42 : 0.55;
+      return {
+        className: ` fdr-${n}`,
+        styleAttr: ` style="background-color:hsl(var(--muted) / ${alpha.toFixed(3)})"`,
+        strongClass: "",
+      };
+    }
+    const intensity = quiet ? Math.min(1, spec.intensity * 0.4) : spec.intensity;
+    const paint = fdrHighlightInlineStyle(spec.kind, intensity);
+    return {
+      className: ` fdr-${n}`,
+      styleAttr: paint.style ? ` style="${paint.style}"` : "",
+      strongClass: quiet ? "" : paint.strongClass || "",
+    };
+  }
+
   function applyEnhanceHighlight(td, kind, intensity) {
     const paint = enhanceHighlightPaint(kind, intensity);
     if (paint.skip) return;
@@ -859,6 +896,9 @@
     homeViewBanner: $("#home-view-banner"),
     homeViewBannerName: $("#home-view-banner-name"),
     homeViewBannerClear: $("#home-view-banner-clear"),
+    homeOwnerBanner: $("#home-owner-banner"),
+    homeOwnerBannerName: $("#home-owner-banner-name"),
+    homeOwnerBannerClear: $("#home-owner-banner-clear"),
     homeGwPoints: $("#home-gw-points"),
     homeGwHeading: $("#home-gw-heading"),
     homeGwMeta: $("#home-gw-meta"),
@@ -1032,7 +1072,7 @@
     fplManagerSelect: $("#fpl-manager-select"),
     fplLeagueLabel: $("#fpl-league-label"),
     fplIdClear: $("#fpl-id-clear"),
-    fplIdStatus: $("#fpl-id-status"),
+    prefsPlannerSection: $("#prefs-planner-section"),
     posFilters: $("#pos-filters"),
     teamFilters: $("#team-filters"),
     priceMin: $("#price-min"),
@@ -1663,7 +1703,7 @@
     if (state.page === "home") {
       // Defer DOM rebuild while Home enter is playing so squad/stats don't
       // flash a second paint mid-animation.
-      renderHome({ deferDuringEnter: true });
+      renderHome({ deferDuringEnter: true, settleQuiet: true });
       syncHomeLivePolling({ waitForEnter: true });
     } else if (state.page === "rankings") renderRankings();
     else if (state.page === "team") renderTeam();
@@ -1731,28 +1771,6 @@
   }
 
   function syncFplIdStatus() {
-    if (!el.fplIdStatus) return;
-    if (!savedManagerId) {
-      el.fplIdStatus.textContent = "No manager linked.";
-      syncTeamPlannerPrefsBtns();
-      return;
-    }
-    const manager = trackedManagerById(savedManagerId);
-    const league = trackedLeagueById(savedLeagueId);
-    const n = ownedCodes.size;
-    const meta = state.actualMeta;
-    const bits = [];
-    if (manager) {
-      bits.push(manager.teamName ? `${manager.name} (${manager.teamName})` : manager.name);
-    } else {
-      bits.push(`ID ${savedManagerId}`);
-    }
-    if (league) bits.push(league.name);
-    if (meta && meta.gwLabel) bits.push(meta.gwLabel);
-    if (n > 0) bits.push(`${n} pick${n === 1 ? "" : "s"}`);
-    else if (meta && meta.hasPicks === false) bits.push("no published picks yet");
-    else bits.push("not synced");
-    el.fplIdStatus.textContent = bits.join(" · ");
     syncTeamPlannerPrefsBtns();
   }
 
@@ -1827,6 +1845,11 @@
     const canResync = !!savedManagerId;
     const canClear = !!state.teamSquad.length;
     const desktop = !NARROW_MQ.matches;
+    const onPlanner = state.page === "team";
+
+    if (el.prefsPlannerSection) {
+      el.prefsPlannerSection.hidden = !onPlanner;
+    }
 
     const syncOne = (btn, { show, enabled }) => {
       if (!btn) return;
@@ -1835,11 +1858,11 @@
       if (!show || !enabled) disarmConfirmButton(btn);
     };
 
-    // Prefs buttons: mobile only (desktop uses toolbar).
-    syncOne(el.teamResyncBtn, { show: canResync && !desktop, enabled: canResync });
-    syncOne(el.teamClearBtn, { show: canClear && !desktop, enabled: canClear });
+    // Prefs buttons: mobile Planner only (desktop uses toolbar).
+    syncOne(el.teamResyncBtn, { show: onPlanner && canResync && !desktop, enabled: canResync });
+    syncOne(el.teamClearBtn, { show: onPlanner && canClear && !desktop, enabled: canClear });
     // Toolbar: desktop Planner page.
-    const onTeamDesktop = desktop && state.page === "team";
+    const onTeamDesktop = desktop && onPlanner;
     syncOne(el.teamResyncToolbar, { show: onTeamDesktop && canResync, enabled: canResync });
     syncOne(el.teamClearToolbar, { show: onTeamDesktop && canClear, enabled: canClear });
   }
@@ -2059,7 +2082,8 @@
     if (el.homePage) finishHomeStatRolls(el.homePage);
     if (homeRenderQueued) {
       homeRenderQueued = false;
-      renderHome();
+      // Quiet rebuild after enter — never restart page-enter / odometer motion.
+      renderHome({ settleQuiet: true });
     }
     if (homeLivePollAfterEnter) {
       homeLivePollAfterEnter = false;
@@ -2138,7 +2162,7 @@
         return;
       }
       applyHomePayload(data.home);
-      renderHome({ deferDuringEnter: true });
+      renderHome({ deferDuringEnter: true, settleQuiet: true });
     } catch {
       homeLiveLastPollOk = false;
       syncHomeCountLabel();
@@ -2452,17 +2476,72 @@
     window.setTimeout(finish, 320);
   }
 
+  function hideHomeOwnerBannerToast() {
+    const banner = el.homeOwnerBanner;
+    if (!banner || banner.hidden) return;
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!banner.classList.contains("is-visible") || reduceMotion) {
+      banner.hidden = true;
+      banner.classList.remove("is-visible", "is-leaving");
+      return;
+    }
+    banner.classList.remove("is-visible");
+    banner.classList.add("is-leaving");
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      banner.hidden = true;
+      banner.classList.remove("is-leaving");
+      banner.removeEventListener("transitionend", onEnd);
+    };
+    const onEnd = (e) => {
+      if (e.target !== banner || e.propertyName !== "opacity") return;
+      finish();
+    };
+    banner.addEventListener("transitionend", onEnd);
+    window.setTimeout(finish, 320);
+  }
+
+  function homeOwnerBannerPlayerName() {
+    if (!homeOwnerPin || homeOwnerPin.type !== "element") return "";
+    const eid = Number(homeOwnerPin.id);
+    let name = "";
+    forEachHomeSquadRow((tr) => {
+      if (Number(tr.dataset.element) === eid) {
+        const n = tr.querySelector(".home-player-name-text");
+        if (n) name = n.textContent.trim();
+      }
+    });
+    if (name) return name;
+    const squad = homeSquadForEntry(homeActiveViewEntryId()) || [];
+    const row = squad.find((r) => Number(r.element) === eid);
+    return (row && row.name) || "Player";
+  }
+
+  function clearHomeOwnerPin() {
+    if (!homeOwnerPin) return false;
+    homeOwnerPin = null;
+    syncHomeOwnerHighlights();
+    syncHomeOwnerBanner();
+    return true;
+  }
+
   function syncHomeViewBanner() {
     const viewingOther = homeIsViewingOtherManager();
     if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
     const banner = el.homeViewBanner;
     if (!banner) return;
     // Desktop relies on the page subtitle; toast is mobile-only.
+    // Prefer viewing-manager toast over ownership pin toast.
     const show = viewingOther && NARROW_MQ.matches;
     if (!show) {
       hideHomeViewBannerToast();
       return;
     }
+    hideHomeOwnerBannerToast();
     if (el.homeViewBannerName) {
       el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
     }
@@ -2472,6 +2551,43 @@
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (!banner.hidden && homeIsViewingOtherManager() && NARROW_MQ.matches) {
+            banner.classList.add("is-visible");
+          }
+        });
+      });
+    } else {
+      banner.classList.remove("is-leaving");
+      banner.classList.add("is-visible");
+    }
+  }
+
+  function syncHomeOwnerBanner() {
+    const banner = el.homeOwnerBanner;
+    if (!banner) return;
+    const pinOn =
+      !!(homeOwnerPin && homeOwnerPin.type === "element") &&
+      !homeIsViewingOtherManager() &&
+      NARROW_MQ.matches;
+    if (!pinOn) {
+      hideHomeOwnerBannerToast();
+      return;
+    }
+    hideHomeViewBannerToast();
+    if (el.homeOwnerBannerName) {
+      el.homeOwnerBannerName.textContent = homeOwnerBannerPlayerName();
+    }
+    if (banner.hidden) {
+      banner.classList.remove("is-visible", "is-leaving");
+      banner.hidden = false;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (
+            !banner.hidden &&
+            homeOwnerPin &&
+            homeOwnerPin.type === "element" &&
+            !homeIsViewingOtherManager() &&
+            NARROW_MQ.matches
+          ) {
             banner.classList.add("is-visible");
           }
         });
@@ -2531,10 +2647,16 @@
     forEachHomeStandingsRow((tr) => {
       const entry = Number(tr.dataset.entry);
       const ownsPinned = !!(elementPin && ownerEntries && ownerEntries.has(entry));
-      tr.hidden = false;
+      // Unowned lookup: empty message replaces the list — don't keep demoted rows.
+      const hideForEmptyLookup =
+        !!(elementPin && ownerEntries && ownerEntries.size === 0);
+      tr.hidden = hideForEmptyLookup;
       tr.classList.remove("is-owner-source", "is-owner-pinned");
       tr.classList.toggle("is-owner-match", ownsPinned);
-      tr.classList.toggle("is-owner-demote", !!(elementPin && !ownsPinned));
+      tr.classList.toggle(
+        "is-owner-demote",
+        !!(elementPin && ownerEntries && ownerEntries.size > 0 && !ownsPinned)
+      );
       tr.classList.toggle(
         "is-view-active",
         viewingOther && Number.isFinite(entry) && entry === viewingEntry
@@ -2867,7 +2989,7 @@
     });
     const onPageChange = (idx) => {
       syncHomeStandingsPagerDots(idx);
-      syncHomeStandingsLayout(idx);
+      syncHomeStandingsLayout(idx, homeIsEnterBusy() ? { animate: false } : undefined);
     };
     if (typeof IntersectionObserver !== "function") {
       el.homeStandingsTrack.addEventListener(
@@ -3065,7 +3187,7 @@
     });
     const onPageChange = (idx) => {
       syncHomeSquadPagerDots(idx);
-      syncHomeSquadTrackHeight(idx);
+      syncHomeSquadTrackHeight(idx, homeIsEnterBusy() ? { animate: false } : undefined);
     };
     if (typeof IntersectionObserver !== "function") {
       el.homeSquadTrack.addEventListener(
@@ -3242,15 +3364,20 @@
           return;
         }
         if (Math.abs(dx) < 6) return;
+        // Ownership highlight: swipe right only (pull row to the right).
+        if (dx < 0) {
+          resetHomeSquadRowSwipe(swipe.tr, { animate: false });
+          return;
+        }
         swipe.tracking = "horizontal";
         if (e.cancelable) e.preventDefault();
-        const clamped = Math.max(-100, Math.min(100, dx));
+        const clamped = Math.min(100, dx);
         swipe.tr.classList.add("is-swipe-active");
         swipe.tr.style.transition = "none";
         swipe.tr.style.transform = `translateX(${clamped}px)`;
         swipe.tr.classList.toggle(
           "is-swipe-armed",
-          Math.abs(dx) >= homeSquadOwnerSwipeThreshold(swipe.tr)
+          dx >= homeSquadOwnerSwipeThreshold(swipe.tr)
         );
       },
       { passive: false }
@@ -3269,7 +3396,7 @@
       const dx = match ? Number(match[1]) : 0;
       const threshold = homeSquadOwnerSwipeThreshold(swipe.tr);
       resetHomeSquadRowSwipe(swipe.tr);
-      if (Math.abs(dx) >= threshold) {
+      if (dx >= threshold) {
         homeSquadRowSwipeBlockClick = true;
         window.setTimeout(() => {
           homeSquadRowSwipeBlockClick = false;
@@ -3300,11 +3427,13 @@
         homeOwnerPin = togglingOff ? null : next;
         homeRenderQueued = false;
         renderHome({ animateView: true });
+        syncHomeOwnerBanner();
         if (!togglingOff) homeScrollStandingsIntoView();
         return;
       }
       homeOwnerPin = togglingOff ? null : next;
       syncHomeOwnerHighlights();
+      syncHomeOwnerBanner();
       if (!togglingOff) homeScrollStandingsIntoView();
     }
 
@@ -3383,28 +3512,8 @@
     if (!diffs.length) return { className: "", style: "" };
     // DGW: use the hardest fixture so tough doubles still read clearly.
     const fdr = Math.max(...diffs);
-    // Quieter than Team heat — tint only, no strong/emphasize text classes.
-    let intensity = 0;
-    let kind = null;
-    if (fdr === 1) {
-      kind = "easy";
-      intensity = 0.38;
-    } else if (fdr === 2) {
-      kind = "easy";
-      intensity = 0.2;
-    } else if (fdr === 4) {
-      kind = "hard";
-      intensity = 0.2;
-    } else if (fdr === 5) {
-      kind = "hard";
-      intensity = 0.38;
-    }
-    let style = "";
-    if (kind) {
-      const paint = fdrHighlightInlineStyle(kind, intensity);
-      style = paint.style ? ` style="${paint.style}"` : "";
-    }
-    return { className: ` fdr-${fdr}`, style };
+    const ramp = fdrRampInlineStyle(fdr, { quiet: true });
+    return { className: ramp.className, style: ramp.styleAttr };
   }
 
   function homeSquadFixtureCellHTML(team, gw) {
@@ -3584,8 +3693,46 @@
 
   function homeSearchSortRows(rows) {
     return rows.slice().sort((a, b) =>
-      homeSearchGwCompare(a, b) || String(a.name || "").localeCompare(String(b.name || ""))
+      homeSearchGwCompare(a, b)
+      || homeSearchAttentionCompare(a, b)
+      || String(a.name || "").localeCompare(String(b.name || ""))
     );
+  }
+
+  /** League ownership, then TSB — surfaces interesting picks when search opens. */
+  function homeSearchAttentionCompare(a, b) {
+    const ownA = homeOwnersForElement(homeLookupElementId(a)).size;
+    const ownB = homeOwnersForElement(homeLookupElementId(b)).size;
+    if (ownB !== ownA) return ownB - ownA;
+    const tsbA = Number(currentOwnership(a.code));
+    const tsbB = Number(currentOwnership(b.code));
+    const na = Number.isFinite(tsbA) ? tsbA : -1;
+    const nb = Number.isFinite(tsbB) ? tsbB : -1;
+    return nb - na;
+  }
+
+  function homeSearchMetricTone(kind, value, total) {
+    if (kind === "league") {
+      const n = Number(value) || 0;
+      if (n <= 0) return "";
+      const r = total > 0 ? n / total : 0;
+      if (n >= 3 || r >= 0.75) return "is-hot";
+      if (n >= 2 || r >= 0.5) return "is-warm";
+      return "is-soft";
+    }
+    if (kind === "tsb") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 5) return "";
+      if (n >= 40) return "is-hot";
+      if (n >= 15) return "is-warm";
+      return "is-soft";
+    }
+    return "";
+  }
+
+  function homeSearchMetricHTML(text, tone) {
+    if (!tone) return escapeHtml(text);
+    return `<span class="home-search-metric ${tone}">${escapeHtml(text)}</span>`;
   }
 
   // Home ownership/standings use live FPL element ids — always search the
@@ -3621,13 +3768,22 @@
       label: s.label,
       decimals: s.decimals,
       lowerBetter: LOWER_BETTER.has(s.key),
+      rankable: true,
     }));
     return [
-      { id: "gwPts", label: "GW pts", lowerBetter: false, allowHot: true },
-      { id: "price", label: "Price", lowerBetter: true },
+      { id: "gwPts", label: "GW pts", lowerBetter: false, allowHot: true, rankable: true },
+      // Season expected points — game-stat stand-in for price (price lives in the header).
+      {
+        id: "xPts",
+        key: "xPts",
+        label: "xPts",
+        decimals: 1,
+        lowerBetter: false,
+        rankable: true,
+      },
       ...season,
-      { id: "league", label: "League", lowerBetter: false },
-      { id: "tsb", label: "TSB", lowerBetter: false },
+      { id: "league", label: "League", lowerBetter: false, rankable: false },
+      { id: "tsb", label: "TSB", lowerBetter: false, rankable: false },
     ];
   }
 
@@ -3638,8 +3794,6 @@
         const pts = homeElementGwStats(elementId).pts;
         return Number.isFinite(Number(pts)) ? Number(pts) : null;
       }
-      case "price":
-        return row.price != null && Number.isFinite(Number(row.price)) ? Number(row.price) : null;
       case "league":
         return homeOwnersForElement(elementId).size;
       case "tsb": {
@@ -3662,6 +3816,7 @@
         ? homeSearchCatalog().filter((r) => String(r.position || "").toUpperCase() === pos)
         : homeSearchCatalog();
     for (const spec of homeLookupStatSpecList(row)) {
+      if (spec.rankable === false) continue;
       const entries = population
         .map((r) => ({
           key: homeLookupPlayerKey(r),
@@ -3675,7 +3830,8 @@
   }
 
   function homeLookupStatDisplay(row, spec, modeKey, rankMaps) {
-    if (modeKey !== "values") {
+    // Rank views only for game stats — League / TSB stay as raw context values.
+    if (modeKey !== "values" && spec.rankable !== false) {
       const rank = rankMaps.get(spec.id)?.get(homeLookupPlayerKey(row));
       const n = Number(rank);
       const topRank = Number.isFinite(n) && n > 0 && n <= 10;
@@ -3688,13 +3844,6 @@
         const n = pts != null ? Number(pts) : 0;
         return { value: String(n), hot: n >= 8, isRank: false, topRank: false };
       }
-      case "price":
-        return {
-          value: row.price != null ? `£${Number(row.price).toFixed(1)}m` : "—",
-          hot: false,
-          isRank: false,
-          topRank: false,
-        };
       case "league":
         return {
           value: homeLeagueOwnershipLabel(elementId),
@@ -3837,6 +3986,11 @@
     const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
     const metaBits = [];
     if (row.position) metaBits.push(posBadgeHTML(row.position));
+    if (row.price != null && Number.isFinite(Number(row.price))) {
+      metaBits.push(
+        `<span class="home-lookup-price">£${escapeHtml(Number(row.price).toFixed(1))}m</span>`
+      );
+    }
     const photoBlock = photo
       ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-initials="${escapeHtml(initials)}" />`
       : `<span class="home-lookup-photo home-lookup-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
@@ -3887,18 +4041,28 @@
   function homeSearchResultRowHTML(row) {
     const badge = row.team ? badgeHTML(row.team) : "";
     const id = homeLookupElementId(row);
+    const owners = homeOwnersForElement(id).size;
+    const leagueTotal = Array.isArray(HOME.standings) ? HOME.standings.length : 0;
     const leagueOwn = homeLeagueOwnershipLabel(id);
     const tsb = currentOwnership(row.code);
-    const metaParts = [row.position];
-    if (leagueOwn !== "—") metaParts.push(`${leagueOwn} league`);
-    if (tsb != null) metaParts.push(`${Number(tsb).toFixed(1)}% TSB`);
-    if (row.price != null) metaParts.push(`£${Number(row.price).toFixed(1)}m`);
-    const meta = metaParts.filter(Boolean).join(" · ");
+    const leagueTone = leagueOwn !== "—"
+      ? homeSearchMetricTone("league", owners, leagueTotal)
+      : "";
+    const tsbTone = tsb != null ? homeSearchMetricTone("tsb", Number(tsb)) : "";
+    const metaBits = [];
+    if (row.position) metaBits.push(escapeHtml(row.position));
+    if (leagueOwn !== "—") {
+      metaBits.push(homeSearchMetricHTML(`${leagueOwn} league`, leagueTone));
+    }
+    if (tsb != null) {
+      metaBits.push(homeSearchMetricHTML(`${Number(tsb).toFixed(1)}% TSB`, tsbTone));
+    }
+    if (row.price != null) metaBits.push(escapeHtml(`£${Number(row.price).toFixed(1)}m`));
     return `<button type="button" class="home-search-row" data-home-search-id="${escapeHtml(String(id ?? ""))}" data-home-search-code="${escapeHtml(String(row.code ?? ""))}">
       ${badge}
       <span class="home-search-row-text">
         <span class="home-search-row-name">${escapeHtml(row.name || "—")}</span>
-        <span class="home-search-row-meta">${escapeHtml(meta)}</span>
+        <span class="home-search-row-meta">${metaBits.join(" · ")}</span>
       </span>
     </button>`;
   }
@@ -3919,6 +4083,7 @@
     scored.sort((a, b) =>
       a.starts - b.starts
       || homeSearchGwCompare(a.row, b.row)
+      || homeSearchAttentionCompare(a.row, b.row)
       || a.name.localeCompare(b.name)
     );
     return scored.slice(0, 60).map((x) => x.row);
@@ -4271,6 +4436,7 @@
     if (el.homeBento) el.homeBento.hidden = false;
     if (el.homeDeadline) el.homeDeadline.hidden = true;
     if (el.homeViewBanner) el.homeViewBanner.hidden = true;
+    if (el.homeOwnerBanner) el.homeOwnerBanner.hidden = true;
     if (el.homePageSubtitle) {
       el.homePageSubtitle.textContent =
         "Link a manager and league in Preferences to personalize Home.";
@@ -4301,13 +4467,14 @@
     });
   }
 
-  function renderHome({ deferDuringEnter = false, animateView = false } = {}) {
+  function renderHome({ deferDuringEnter = false, animateView = false, settleQuiet = false } = {}) {
     if (deferDuringEnter && homeIsEnterBusy()) {
       homeRenderQueued = true;
       return;
     }
     homeRenderQueued = false;
     if (!el.homePage) return;
+    // settleQuiet: post-enter / live rebuild — never restart enter motion.
     const noManager = !savedManagerId;
     const linked = !!(savedManagerId && savedLeagueId);
     const hasPayload = !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId);
@@ -4316,8 +4483,6 @@
       && String(HOME.leagueId) === HOME_LEAGUE_ID
       && TRACKED_MANAGER_IDS.map(String).includes(String(savedManagerId));
     const showEmpty = !linked || !hasPayload;
-    const enterBusy = homeIsEnterBusy();
-
     if (noManager) {
       renderHomeUnlinked();
       if (el.homeCountLabel) syncHomeCountLabel();
@@ -4360,6 +4525,7 @@
     if (showEmpty) {
       if (el.homeDeadline) el.homeDeadline.hidden = true;
       if (el.homeViewBanner) el.homeViewBanner.hidden = true;
+      if (el.homeOwnerBanner) el.homeOwnerBanner.hidden = true;
       return;
     }
 
@@ -4496,24 +4662,29 @@
     }
     bindHomeOwnerHighlighting();
     syncHomeViewBanner();
+    syncHomeOwnerBanner();
     syncHomeOwnerHighlights();
     syncHomeLookupUI();
+    // During page enter, leave odometers empty for startHomeEnterMotion.
+    // Quiet/live rebuilds settle in the same turn so iOS never paints empty
+    // rolls then a second count-up.
+    const enterBusyNow = homeIsEnterBusy();
+    if (!animateView && !enterBusyNow) {
+      finishHomeStatRolls(el.homePage);
+      animateHomeImpBars(el.homePage, { animate: false });
+    }
     requestAnimationFrame(() => {
-      if (animateView) {
+      if (animateView && !settleQuiet) {
         startHomeEnterMotion(el.homePage, {
           duration: HOME_VIEW_SWITCH_ROLL_MS,
           skipStandings: true,
         });
-      } else if (!enterBusy) {
-        finishHomeStatRolls(el.homePage);
-        animateHomeImpBars(el.homePage, { animate: false });
       }
-      syncHomeSquadLayout();
-      // View-switch: don't tween standings card height — selection is the only change.
-      syncHomeStandingsLayout(undefined, animateView ? { animate: false } : undefined);
+      // Always snap pager heights after DOM rebuild — height tweens after
+      // cascade looked like a second enter on iPhone (especially after scroll).
+      syncHomeSquadLayout(undefined, { animate: false });
+      syncHomeStandingsLayout(undefined, { animate: false });
     });
-    // During enter / view-switch, leave odometers empty and IMP bars undrawn so
-    // startHomeEnterMotion can animate everything in one synchronized pass.
   }
 
   async function applyManagerId(rawId, { quiet = false, render = true, seedPlannerIfEmpty = true } = {}) {
@@ -4936,23 +5107,16 @@
       const position = updatesOverlayOn() && row.newPosition ? row.newPosition : row.position;
       const teamChanged = updatesOverlayOn() && row.newTeam && row.newTeam !== row.team;
       const posChanged = updatesOverlayOn() && row.newPosition && row.newPosition !== row.position;
-      const crest = playerCrestHTML(
+      return tableOwnershipIdentityHTML(row, {
+        kind: "players",
         teamCode,
-        teamChanged ? tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`) : ""
-      );
-      const posTip = posChanged ? tipAttr(`Was ${row.position}`) : "";
-      const sub = `<div class="player-cell-sub">${posBadgeHTML(position, { attrs: posTip })}</div>`;
-      return playerIdentityHTML(crest, playerNameHTML(row), sub);
+        position,
+        teamTip: teamChanged ? tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`) : "",
+        posTip: posChanged ? tipAttr(`Was ${row.position}`) : "",
+      });
     }
     if (col.key === "name") {
-      const pos = LEAGUE_POSITIONS[row.team];
-      const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
-      const posHTML = pos != null
-        ? `<span class="team-league-pos"${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`
-        : "";
-      const name = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
-      const sub = posHTML ? `<div class="player-cell-sub">${posHTML}</div>` : "";
-      return playerIdentityHTML(playerCrestHTML(row.team), name, sub);
+      return tableOwnershipIdentityHTML(row, { kind: "teams" });
     }
     if (col.key === "price") {
       return fmtDisplayValue(displayValue(row, col), col);
@@ -5047,14 +5211,13 @@
 
   function syncMobileScrollportHeight() {
     const root = document.documentElement;
-    if (!NARROW_MQ.matches || (state.page !== "opta" && state.page !== "expected")) {
+    // Opta/Ownership/Team use page-level .main scroll on mobile.
+    // Only Expected still uses a nested scrollport min-height.
+    if (!NARROW_MQ.matches || state.page !== "expected") {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
-    const scrollport =
-      state.page === "opta"
-        ? document.querySelector("#opta-page > .table-wrap")
-        : document.querySelector("#expected-page .barbell-wrap");
+    const scrollport = document.querySelector("#expected-page .barbell-wrap");
     if (!scrollport || scrollport.offsetParent === null) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
@@ -5062,11 +5225,7 @@
     const vv = window.visualViewport;
     const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const top = scrollport.getBoundingClientRect().top;
-    let footerH = 0;
-    if (state.page === "opta" && el.optaTableFooter && !el.optaTableFooter.hidden) {
-      footerH = Math.ceil(el.optaTableFooter.getBoundingClientRect().height);
-    }
-    const minH = Math.max(180, Math.floor(viewportBottom - top - footerH));
+    const minH = Math.max(180, Math.floor(viewportBottom - top));
     root.style.setProperty("--mobile-scrollport-min-h", `${minH}px`);
   }
 
@@ -5495,15 +5654,8 @@
       const compare = el.compareWrap && el.compareWrap.querySelector(".compare-table-wrap");
       if (compare) wraps.push(compare);
     }
-    if (state.page === "team" && state.teamPickerSlot) {
-      const picker =
-        el.teamPickerView && el.teamPickerView.querySelector(".team-picker-table-wrap");
-      if (picker) wraps.push(picker);
-      const teamCompare =
-        el.teamCompareWrap &&
-        !el.teamCompareWrap.hidden &&
-        el.teamCompareWrap.querySelector(".team-table-wrap");
-      if (teamCompare) wraps.push(teamCompare);
+    if (state.page === "team") {
+      teamTableScrollWraps().forEach((wrap) => wraps.push(wrap));
     }
     if (state.page === "ownership" && el.ownershipTableWrap && !el.ownershipTableWrap.hidden) {
       wraps.push(el.ownershipTableWrap);
@@ -5525,9 +5677,12 @@
 
   function nameSimplifyActive() {
     if (!(NARROW_MQ.matches || !hasFineHover())) return false;
-    if (state.page === "ownership" || state.page === "expected") return true;
-    if (state.page === "team" && state.teamPickerSlot) return true;
-    return false;
+    return (
+      state.page === "ownership" ||
+      state.page === "expected" ||
+      state.page === "opta" ||
+      state.page === "team"
+    );
   }
 
   let optaMobileNameColW = null;
@@ -5594,10 +5749,12 @@
   }
 
   function nameSimplifyProgress(scrollLeft, origin = 0, wrap = null) {
-    // Ownership (and similarly tight tables): map the full available
-    // horizontal scroll to collapse 0→1 so photo-only is reachable even
-    // when maxScroll is well under NAME_SIMPLIFY_END.
-    if (wrap && state.page === "ownership") {
+    // Photo-identity tables: map full available horizontal scroll to collapse
+    // 0→1 so photo-only is reachable even when maxScroll is short.
+    if (
+      wrap &&
+      (state.page === "ownership" || state.page === "opta" || state.page === "team")
+    ) {
       const maxScroll = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
       if (maxScroll <= 0) return 0;
       const linear = Math.min(1, Math.max(0, scrollLeft) / maxScroll);
@@ -6236,6 +6393,7 @@
     rows.forEach((r) =>
       el.tableBody.appendChild(buildDataRow(r, vcols, highlightMaps))
     );
+    bindOwnershipPhotoFallback(el.tableBody);
   }
 
   function buildDataRow(r, vcols, highlightMaps) {
@@ -7233,8 +7391,8 @@
         spitRow(spitMarketsDeltaSwatch("down"), "Compare mode — moved down vs earlier pull"),
       ];
       const reading = [
-        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — in Markets filters" : "Goals and CS% or Scoreline — next to the slider button"),
-        spitRow(iconHTML("sliders-horizontal"), "Color thresholds and Compare window"),
+        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — in Compare sheet" : "Goals and CS% or Scoreline — in the header"),
+        spitRow(iconHTML("scale"), "Compare window — Current / Last run / Last 72 hr (both card views)"),
         spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
         spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
         spitRow(spitRank("Scoreline"), "Exact-score matrix (% in cells). Goals view lists top likely scores."),
@@ -8304,6 +8462,7 @@
       });
       el.compareBody.appendChild(tr);
     });
+    bindOwnershipPhotoFallback(el.compareBody);
     syncComparePanelRows(el.compareWrap, el.compareBody);
     bindCompareScrollSync();
   }
@@ -9069,29 +9228,46 @@
     }));
   }
 
-  function ownershipStyleIdentityHTML(row, { extraBits = [] } = {}) {
+  function ownershipStyleIdentityHTML(row, {
+    extraBits = [],
+    nameExtras = "",
+    kind = null,
+    showOwned = true,
+    teamCode = null,
+    position = null,
+    teamTip = "",
+    posTip = "",
+    omitPrice = false,
+  } = {}) {
+    const isPlayers = (kind != null ? kind : state.view) !== "teams";
     let thumb = "";
     let meta = "";
-    if (state.view === "players") {
+    if (isPlayers) {
       thumb = ownershipPhotoHTML(row);
-      const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+      const displayTeam = teamCode || row.team;
+      const displayPos = position || row.position;
+      const accent = TEAM_SCATTER_ACCENT[displayTeam] || "";
       const teamStyle = accent ? ` style="color:${accent}"` : "";
-      const price = effectivePrice(row);
+      const price = omitPrice ? null : effectivePrice(row);
       const bits = [
-        row.team ? `<span class="ownership-id-team"${teamStyle}>${escapeHtml(row.team)}</span>` : "",
+        displayTeam
+          ? `<span class="ownership-id-team"${teamStyle}${teamTip || ""}>${escapeHtml(displayTeam)}</span>`
+          : "",
         price != null && Number.isFinite(Number(price))
           ? `<span>£${Number(price).toFixed(1)}m</span>`
           : "",
-        row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
+        displayPos
+          ? `<span${posTip || ""}>${escapeHtml(displayPos)}</span>`
+          : "",
         ...extraBits,
       ].filter(Boolean);
       meta = bits.length
         ? `<div class="ownership-id-sub">${bits.join('<span class="ownership-id-sep">|</span>')}</div>`
         : "";
     } else {
-      const teamCode = currentTeamCode(row) || row.team;
+      const code = currentTeamCode(row) || row.team;
       thumb =
-        badgeHTML(teamCode, "ownership-crest") ||
+        badgeHTML(code, "ownership-crest") ||
         `<span class="ownership-photo ownership-photo-fallback" aria-hidden="true">${escapeHtml(String(row.team || "?").slice(0, 3))}</span>`;
       const pos = LEAGUE_POSITIONS[row.team];
       const bits = [];
@@ -9107,8 +9283,14 @@
         : "";
     }
     const nameHTML = `<span class="player-name">${escapeHtml(row.name)}</span>`;
-    const nameLine = `<span class="player-name-line">${nameHTML}${ownedFlagHTML(row)}</span>`;
+    const flags = showOwned ? ownedFlagHTML(row) : "";
+    const nameLine = `<span class="player-name-line">${nameHTML}${flags}${nameExtras || ""}</span>`;
     return `${thumb}<span class="ownership-id-text rankings-identity-text">${nameLine}${meta}</span>`;
+  }
+
+  /** Table sticky-column identity — same photo + TEAM|£|POS layout as Ownership / Rankings. */
+  function tableOwnershipIdentityHTML(row, opts = {}) {
+    return `<div class="ownership-id">${ownershipStyleIdentityHTML(row, opts)}</div>`;
   }
 
   function rankingsIdentityHTML(row) {
@@ -9957,11 +10139,13 @@
       el.teamCompareBody.innerHTML = rows
         .map((row, i) => {
           const heat = teamHeatCellsHTML(row.team);
-          const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
-          const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}</div>`;
-          const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
+          const identity = tableOwnershipIdentityHTML(row, {
+            kind: "players",
+            showOwned: false,
+            omitPrice: true,
+          });
           return `<tr class="row-selectable" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}">
-            <td class="col-player">${playerIdentityHTML(crest, nameHTML, sub)}</td>
+            <td class="col-player">${identity}</td>
             <td class="col-num col-core team-price">${Number(row.price).toFixed(1)}</td>
             <td class="col-num col-core col-team-owned">${fmtOwnedPct(currentOwnership(row.code))}</td>
             ${teamMetricCellsHTML(row, { setPieces: true, price: true })}
@@ -10875,30 +11059,13 @@
     if (!fixtures.length) {
       return `<td class="team-heat-cell is-blank${divide}${teamHeatAnchorClass(gw)}"><span class="team-heat-label">–</span></td>`;
     }
-    const fx = fixtures[0];
     const label = fixtures.map(teamHeatOppLabel).join("+");
-    const d = Number(fx.difficulty);
-    const fdr = Number.isFinite(d) && d >= 1 && d <= 5 ? d : null;
-    let style = "";
-    let extraClass = fdr != null ? ` fdr-${fdr}` : "";
-    if (fdr === 1) {
-      const paint = fdrHighlightInlineStyle("easy", 1);
-      style = ` style="${paint.style}"`;
-      extraClass += paint.strongClass;
-    } else if (fdr === 2) {
-      const paint = fdrHighlightInlineStyle("easy", 0.48);
-      style = ` style="${paint.style}"`;
-      extraClass += paint.strongClass;
-    } else if (fdr === 4) {
-      const paint = fdrHighlightInlineStyle("hard", 0.48);
-      style = ` style="${paint.style}"`;
-      extraClass += paint.strongClass;
-    } else if (fdr === 5) {
-      const paint = fdrHighlightInlineStyle("hard", 1);
-      style = ` style="${paint.style}"`;
-      extraClass += paint.strongClass;
-    }
-    return `<td class="team-heat-cell${extraClass}${divide}${teamHeatAnchorClass(gw)}"${style}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
+    const diffs = fixtures
+      .map((fx) => Number(fx.difficulty))
+      .filter((d) => Number.isFinite(d) && d >= 1 && d <= 5);
+    const fdr = diffs.length ? Math.max(...diffs) : null;
+    const ramp = fdr != null ? fdrRampInlineStyle(fdr) : { className: "", styleAttr: "", strongClass: "" };
+    return `<td class="team-heat-cell${ramp.className}${ramp.strongClass}${divide}${teamHeatAnchorClass(gw)}"${ramp.styleAttr}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
   }
 
   function teamHeatHeadHTML() {
@@ -10922,10 +11089,11 @@
       : isV
         ? `<span class="team-role-badge is-v"${tipAttr("Vice-captain")}>V</span>`
         : "";
-    const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${role}</div>`;
-    const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}<span>${Number(row.price).toFixed(1)}M</span></div>`;
-    const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
-    return playerIdentityHTML(crest, nameHTML, sub);
+    return tableOwnershipIdentityHTML(row, {
+      kind: "players",
+      showOwned: false,
+      nameExtras: role,
+    });
   }
 
   function teamRowMenuItemHTML({ attrs, icon, label, on = false, danger = false }) {
@@ -11186,7 +11354,7 @@
     if (state.teamSubCode != null && teamCodeEq(slot.code, state.teamSubCode)) subClass = " is-sub-source";
     else if (subPartners && subPartners.has(String(slot.code))) subClass = " is-sub-target";
     return `<tr class="team-player-row${subClass}" style="--enter-i:${enterI}" data-team-code="${escapeHtml(String(row.code))}"${subClass === " is-sub-target" ? ' role="button"' : ""}>
-      <td class="col-player"><div class="team-player-id">${teamPlayerCellHTML(row, slot)}</div></td>
+      <td class="col-player">${teamPlayerCellHTML(row, slot)}</td>
       ${teamMetricCellsHTML(row)}
       ${heat}
     </tr>`;
@@ -11252,14 +11420,17 @@
     const maxStart = SCHEDULE_GW_MAX;
     const label = `GW${start}`;
     if (preferMobileSheet()) {
-      const open = !!(mobileSheetOpen && mobileSheetKey === "team-gw");
+      const items = [];
+      for (let gw = minStart; gw <= maxStart; gw++) {
+        items.push(
+          `<button type="button" class="team-gw-carousel-item${gw === start ? " is-active" : ""}" data-team-gw="${gw}" aria-current="${gw === start ? "true" : "false"}"><span class="team-gw-carousel-label">GW${gw}</span></button>`
+        );
+      }
       el.teamGwNav.innerHTML = `
-        <button type="button" class="ghost-btn team-gw-select-btn" id="team-gw-select"
-          aria-haspopup="dialog" aria-expanded="${open ? "true" : "false"}"
-          aria-label="Selected gameweek, ${label}">
-          <span class="team-gw-range">${label}</span>
-          ${iconHTML("chevron-down", "page-tab-caret")}
-        </button>`;
+        <div class="team-gw-carousel" id="team-gw-carousel" aria-label="Gameweek">
+          <div class="team-gw-carousel-track">${items.join("")}</div>
+        </div>`;
+      bindTeamGwCarousel();
       return;
     }
     el.teamGwNav.innerHTML = `
@@ -11268,7 +11439,112 @@
       <button type="button" class="ghost-btn icon-only-btn" id="team-gw-next" ${start >= maxStart ? "disabled" : ""} aria-label="Next gameweek">${iconHTML("chevron-right")}</button>`;
   }
 
+  let teamGwCarouselBound = false;
+  let teamGwCarouselScrollRaf = 0;
+
+  function syncTeamGwCarouselEdges(track) {
+    const carousel = track && track.closest(".team-gw-carousel");
+    if (!carousel || !track) return;
+    const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+    if (maxScroll < 2) {
+      carousel.classList.remove("has-more-left", "has-more-right");
+      return;
+    }
+    const left = track.scrollLeft;
+    carousel.classList.toggle("has-more-left", left > 1);
+    carousel.classList.toggle("has-more-right", left < maxScroll - 2);
+  }
+
+  function bindTeamGwCarousel() {
+    const carousel = $("#team-gw-carousel");
+    if (!carousel) return;
+    const track = carousel.querySelector(".team-gw-carousel-track");
+    if (!track) return;
+
+    const centerActive = ({ instant = false } = {}) => {
+      const active = track.querySelector(".team-gw-carousel-item.is-active");
+      if (!active) return;
+      const left = active.offsetLeft - (track.clientWidth - active.offsetWidth) / 2;
+      track.scrollTo({
+        left: Math.max(0, left),
+        behavior: instant || prefersReducedMotion() ? "auto" : "smooth",
+      });
+      requestAnimationFrame(() => syncTeamGwCarouselEdges(track));
+    };
+
+    requestAnimationFrame(() => {
+      centerActive({ instant: true });
+      syncTeamGwCarouselEdges(track);
+    });
+
+    if (teamGwCarouselBound) return;
+    teamGwCarouselBound = true;
+
+    // Delegated: track is rebuilt each render, but nav host stays.
+    el.teamGwNav.addEventListener("click", (e) => {
+      const btn = e.target.closest(".team-gw-carousel-item[data-team-gw]");
+      if (!btn || !el.teamGwNav.contains(btn)) return;
+      const gw = Number(btn.getAttribute("data-team-gw"));
+      if (!Number.isFinite(gw)) return;
+      const next = teamClampPlanGw(gw);
+      if (next === teamPlanGw()) {
+        centerActive();
+        return;
+      }
+      setTeamPlanGw(next);
+    });
+
+    el.teamGwNav.addEventListener(
+      "scroll",
+      (e) => {
+        const t = e.target.closest(".team-gw-carousel-track");
+        if (!t || !el.teamGwNav.contains(t)) return;
+        if (teamGwCarouselScrollRaf) return;
+        teamGwCarouselScrollRaf = requestAnimationFrame(() => {
+          teamGwCarouselScrollRaf = 0;
+          syncTeamGwCarouselEdges(t);
+          const items = [...t.querySelectorAll(".team-gw-carousel-item")];
+          if (!items.length) return;
+          const mid = t.scrollLeft + t.clientWidth / 2;
+          let best = items[0];
+          let bestDist = Infinity;
+          items.forEach((item) => {
+            const c = item.offsetLeft + item.offsetWidth / 2;
+            const d = Math.abs(c - mid);
+            if (d < bestDist) {
+              bestDist = d;
+              best = item;
+            }
+          });
+          items.forEach((item) => {
+            const on = item === best;
+            item.classList.toggle("is-active", on);
+            item.setAttribute("aria-current", on ? "true" : "false");
+          });
+        });
+      },
+      true
+    );
+
+    el.teamGwNav.addEventListener(
+      "scrollend",
+      (e) => {
+        const t = e.target.closest(".team-gw-carousel-track");
+        if (!t || !el.teamGwNav.contains(t)) return;
+        syncTeamGwCarouselEdges(t);
+        const active = t.querySelector(".team-gw-carousel-item.is-active");
+        if (!active) return;
+        const gw = Number(active.getAttribute("data-team-gw"));
+        if (!Number.isFinite(gw)) return;
+        const next = teamClampPlanGw(gw);
+        if (next !== teamPlanGw()) setTeamPlanGw(next);
+      },
+      true
+    );
+  }
+
   function openTeamGwSheet() {
+    // Mobile uses the GW carousel in the toolbar; keep sheet helper for any legacy calls.
     const start = teamPlanGw();
     const windowGws = new Set(teamHeatGws().filter(teamHeatGwInSeason));
     const cells = [];
@@ -11291,8 +11567,6 @@
       html: `<div class="team-gw-sheet-grid" role="listbox" aria-label="Gameweeks">${cells.join("")}</div>`,
       key: "team-gw",
     });
-    const selectBtn = $("#team-gw-select");
-    if (selectBtn) selectBtn.setAttribute("aria-expanded", "true");
     if (!el.mobileSheetBody) return;
     el.mobileSheetBody.querySelectorAll("[data-team-gw]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -11445,14 +11719,16 @@
     const note = inSquad
       ? `<span class="team-search-in">${escapeHtml(teamSquadSlotNote(slot))}</span>`
       : "";
-    const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${note}</div>`;
-    const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}<span>${Number(row.price).toFixed(1)}M</span></div>`;
-    const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
+    const identity = tableOwnershipIdentityHTML(row, {
+      kind: "players",
+      showOwned: false,
+      nameExtras: note,
+    });
     const selectable = state.teamCompareMode || pinned ? " row-selectable" : "";
     const cls = `team-search-row${inSquad && !(opts && opts.pin) ? " is-in-squad" : ""}${opts && opts.pin ? " is-pinned-row" : ""}${selectable}`;
     const id = `team-search-opt-${escapeHtml(String(row.code))}`;
     return `<tr class="${cls}" id="${id}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" role="option">
-      <td class="col-player"><div class="team-player-id">${playerIdentityHTML(crest, nameHTML, sub)}</div></td>
+      <td class="col-player">${identity}</td>
       ${teamMetricCellsHTML(row)}
       ${heat}
     </tr>`;
@@ -11720,13 +11996,14 @@
     el.teamPickerBody.innerHTML = rows
       .map((row, i) => {
         const heat = teamHeatCellsHTML(row.team);
-        const nameHTML = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
-        const sub = `<div class="player-cell-sub">${posBadgeHTML(row.position, { label: TEAM_POS_LABEL[row.position] })}</div>`;
-        const crest = playerCrestHTML(row.team, tipAttr(teamNameForSeason(row.team)));
         const selected = teamCompareHas(row.code);
         const selectedCls = selected ? " row-selected" : "";
         const selectableCls = state.teamCompareMode ? " row-selectable" : "";
-        const identity = playerIdentityHTML(crest, nameHTML, sub);
+        const identity = tableOwnershipIdentityHTML(row, {
+          kind: "players",
+          showOwned: false,
+          omitPrice: true,
+        });
         return `<tr class="team-picker-row${selectableCls}${selectedCls}" style="--enter-i:${i}" data-team-code="${escapeHtml(String(row.code))}" data-team-pick="${escapeHtml(String(row.code))}" role="button" tabindex="0">
           <td class="col-player">${identity}</td>
           <td class="col-num col-core team-price">${Number(row.price).toFixed(1)}</td>
@@ -11774,6 +12051,7 @@
     }
     upgradeNativeTitles(el.teamPage);
     paintTeamCompareWinners();
+    bindOwnershipPhotoFallback(el.teamPage);
     bindAllNameColumnSimplifies();
     syncTeamPickerCoreUnder();
     requestAnimationFrame(() => {
@@ -12722,6 +13000,38 @@
     syncMobileChrome();
   }
 
+  function marketsScorelineCompareStripHTML(goalsH, goalsA, csH, csA, homeBase, awayBase, homeCode, awayCode) {
+    if (state.marketsCompare === "current") return "";
+    const pastGH =
+      homeBase && Number.isFinite(Number(homeBase.goals)) ? Number(homeBase.goals) : null;
+    const pastGA =
+      awayBase && Number.isFinite(Number(awayBase.goals)) ? Number(awayBase.goals) : null;
+    const pastCH =
+      homeBase && Number.isFinite(Number(homeBase.cs)) ? Number(homeBase.cs) : null;
+    const pastCA =
+      awayBase && Number.isFinite(Number(awayBase.cs)) ? Number(awayBase.cs) : null;
+    const side = (code, goals, cs, pastG, pastC, role) => {
+      const crest = playerCrestHTML(code) || `<span class="markets-score-matrix-code">${escapeHtml(code || "?")}</span>`;
+      return `<div class="markets-scoreline-delta-side markets-scoreline-delta-${role}">
+        <span class="markets-scoreline-delta-team">${crest}<span>${escapeHtml(code || "—")}</span></span>
+        <span class="markets-scoreline-delta-stat" title="Projected goals">
+          <span class="markets-scoreline-delta-lab">G</span>
+          <span class="markets-stat-value" data-count-to="${Number(goals)}" data-count-decimals="2">${Number(goals).toFixed(2)}</span>
+          ${marketsStatDeltaHTML(Number(goals), pastG, { decimals: 2, kind: "goals" })}
+        </span>
+        <span class="markets-scoreline-delta-stat" title="Clean sheet %">
+          <span class="markets-scoreline-delta-lab">CS</span>
+          <span class="markets-stat-value" data-count-to="${Math.round(Number(cs))}" data-count-decimals="0" data-count-suffix="%">${Math.round(Number(cs))}%</span>
+          ${marketsStatDeltaHTML(Number(cs), pastC, { decimals: 0, suffix: "%", kind: "cs" })}
+        </span>
+      </div>`;
+    };
+    return `<div class="markets-scoreline-deltas" aria-label="Goals and CS% vs earlier odds pull">
+      ${side(homeCode, goalsH, csH, pastGH, pastCH, "home")}
+      ${side(awayCode, goalsA, csA, pastGA, pastCA, "away")}
+    </div>`;
+  }
+
   function marketsCardHTML(fx, baseline) {
     const homeCode = fx.home?.code || "";
     const awayCode = fx.away?.code || "";
@@ -12747,11 +13057,22 @@
         : topScores.length
           ? topScores.map((s) => marketsScoreRowHTML(s.score, s.prob, homeCode, awayCode)).join("")
           : `<div class="markets-scores-empty">—</div>`;
+      const compareStrip = marketsScorelineCompareStripHTML(
+        goalsH,
+        goalsA,
+        csH,
+        csA,
+        homeBase,
+        awayBase,
+        homeCode,
+        awayCode
+      );
       return `<article class="markets-card markets-card-scoreline${hasMatrix ? " markets-card-matrix" : ""}${compareCls}">
         <div class="markets-body markets-body-scoreline">
           <div class="markets-scoreline-head">
             <span class="markets-col-head markets-col-head-team markets-kickoff"${kickLabel ? ` title="${escapeHtml(kickLabel)}"` : ""}>${escapeHtml(when.time || "")}</span>
           </div>
+          ${compareStrip}
           <div class="${hasMatrix ? "markets-scores-matrix-wrap" : "markets-scores-list markets-scores-list-solo"}" aria-label="${hasMatrix ? "Score matrix" : "Most likely scores"}">${scoresHTML}</div>
         </div>
       </article>`;
@@ -13599,7 +13920,7 @@
   function hideOwnershipTooltip() {}
   function hideOwnershipSelection() {}
 
-  function renderOwnership() {
+  function renderOwnership({ animateEnter = false } = {}) {
     if (!el.ownershipTableBody || !el.ownershipTableHead) return;
     syncOwnershipViewMode();
     syncOwnershipMoverUI();
@@ -13652,12 +13973,17 @@
     syncFiltersResetUI();
     syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
     bindAllNameColumnSimplifies();
-    const entering =
+    // Page enter: leave rolls empty — playPageEnter owns the single motion.
+    // Risers/fallers toggle: animateEnter starts motion without a full page enter.
+    const pageEntering =
       el.ownershipPage &&
       (el.ownershipPage.classList.contains("is-entering") ||
         el.ownershipPage.classList.contains("is-enter-pending"));
-    if (entering) {
+    if (animateEnter && el.ownershipPage) {
+      el.ownershipPage.classList.add("is-enter-pending");
       startOwnershipEnterMotion(el.ownershipPage);
+    } else if (pageEntering) {
+      /* empty rolls for playPageEnter */
     } else if (el.ownershipPage) {
       finishOwnershipStatRolls(el.ownershipPage);
     }
@@ -13685,6 +14011,7 @@
   function startOwnershipEnterMotion(pane) {
     if (!pane) return;
     if (prefersReducedMotion()) {
+      pane.classList.remove("is-enter-pending");
       finishOwnershipStatRolls(pane);
       return;
     }
@@ -13692,6 +14019,7 @@
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (token !== ownershipEnterMotionToken) return;
+        pane.classList.remove("is-enter-pending");
         const nodes = [...pane.querySelectorAll(".ownership-stat-roll[data-count-to]")];
         if (!nodes.length) return;
         let maxMs = OWNERSHIP_ENTER_ROLL_MS_MIN;
@@ -13952,14 +14280,16 @@
     }
     if (pane.id === "opta-page") pane.style.removeProperty("--hl-sat");
     if (pane.id === "home-page") {
-      // Invalidate any in-flight enter rolls; don't settle numbers here —
-      // startHomeEnterMotion (or reduced-motion path) owns the single paint.
+      // Invalidate in-flight rolls only. Do NOT flush deferred renders here —
+      // that settled/rebuilt mid-start and replayed enter after scroll on iOS.
       homeEnterMotionToken += 1;
-      flushHomeEnterDeferred();
     }
     if (pane.id === "ownership-page") {
       ownershipEnterMotionToken += 1;
     }
+    // Cancel a previous double-rAF start if setPage/playPageEnter raced.
+    pane._enterGen = (pane._enterGen || 0) + 1;
+    const enterGen = pane._enterGen;
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
         finishHomeStatRolls(pane);
@@ -14063,6 +14393,7 @@
     // (avoids browsers skipping the animation on the same frame as show).
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        if (enterGen !== pane._enterGen) return;
         if (pane.style.display === "none") {
           pane.classList.remove("is-enter-pending");
           return;
@@ -14450,7 +14781,7 @@
       requestAnimationFrame(() => {
         scrollActivePageTabIntoView({ instant: true });
       });
-      if (page === "ownership") renderOwnership();
+      // Ownership is rendered once above; a second rAF render restarted odometers.
     });
     syncExpectedCatToolbar();
     syncMarketsViewControls();
@@ -14464,6 +14795,12 @@
     el.homeViewBannerClear.addEventListener("click", (e) => {
       e.preventDefault();
       clearHomeViewEntry();
+    });
+  }
+  if (el.homeOwnerBannerClear) {
+    el.homeOwnerBannerClear.addEventListener("click", (e) => {
+      e.preventDefault();
+      clearHomeOwnerPin();
     });
   }
   if (el.homeSearchBtn) {
@@ -14520,7 +14857,7 @@
       state.ownershipMoverKind = next;
       resetOwnershipSortForKind(next);
       syncOwnershipMoverUI({ animate: true });
-      if (state.page === "ownership") renderOwnership();
+      if (state.page === "ownership") renderOwnership({ animateEnter: true });
     });
   }
   if (el.ownershipTreemapToggle) {
@@ -15566,7 +15903,7 @@
     if (!hasFineHover()) {
       if (open) {
         openMobileSheetHost({
-          title: "Markets filters",
+          title: "Compare",
           key: "markets-filters",
           hostEl: el.marketsControls,
           prepare(host) {
@@ -15580,11 +15917,9 @@
         });
         el.marketsSlidersToggle.classList.add("on");
         el.marketsSlidersToggle.setAttribute("aria-expanded", "true");
-        el.marketsSlidersToggle.title = "Hide color threshold sliders";
-        el.marketsSlidersToggle.setAttribute("aria-label", "Hide color threshold sliders");
+        el.marketsSlidersToggle.title = "Hide compare options";
+        el.marketsSlidersToggle.setAttribute("aria-label", "Hide compare options");
         requestAnimationFrame(() => {
-          updateMarketsHeatGoalsSlider();
-          updateMarketsHeatCsSlider();
           syncMarketsCompareSeg();
           syncMarketsViewSeg();
         });
@@ -15595,8 +15930,8 @@
         el.marketsControls.classList.add("is-collapsed");
         el.marketsSlidersToggle.classList.remove("on");
         el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
-        el.marketsSlidersToggle.title = "Show color threshold sliders";
-        el.marketsSlidersToggle.setAttribute("aria-label", "Show color threshold sliders");
+        el.marketsSlidersToggle.title = "Show compare options";
+        el.marketsSlidersToggle.setAttribute("aria-label", "Show compare options");
       }
       return;
     }
@@ -15604,15 +15939,13 @@
     el.marketsControls.classList.toggle("is-collapsed", !open);
     el.marketsSlidersToggle.classList.toggle("on", open);
     el.marketsSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    el.marketsSlidersToggle.title = open ? "Hide color threshold sliders" : "Show color threshold sliders";
+    el.marketsSlidersToggle.title = open ? "Hide compare options" : "Show compare options";
     el.marketsSlidersToggle.setAttribute(
       "aria-label",
-      open ? "Hide color threshold sliders" : "Show color threshold sliders"
+      open ? "Hide compare options" : "Show compare options"
     );
     if (open) {
       requestAnimationFrame(() => {
-        updateMarketsHeatGoalsSlider();
-        updateMarketsHeatCsSlider();
         syncMarketsCompareSeg();
         syncMarketsViewSeg();
       });
@@ -16390,7 +16723,20 @@
       });
     }, { once: true });
     window.addEventListener("pageshow", () => {
-      if (el.optaPage) el.optaPage.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
+      // BFCache restore can leave enter classes mid-flight; clear so we don't
+      // resume a half-finished cascade when the user scrolls.
+      document.querySelectorAll(".page-pane.is-entering, .page-pane.is-enter-pending, .page-pane.is-hl-entering").forEach((pane) => {
+        pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
+      });
+      if (el.homePage) {
+        homeEnterMotionToken += 1;
+        finishHomeStatRolls(el.homePage);
+        animateHomeImpBars(el.homePage, { animate: false });
+      }
+      if (el.ownershipPage) {
+        ownershipEnterMotionToken += 1;
+        finishOwnershipStatRolls(el.ownershipPage);
+      }
       syncAllSegThumbs({ animate: false });
       scrollActivePageTabIntoView({ instant: true });
     });

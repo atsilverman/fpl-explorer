@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=663" />
+<link rel="stylesheet" href="styles.css?v=673" />
 <script>
 (() => {
   try {
@@ -350,7 +350,7 @@
             <div class="settings-section-label">FPL</div>
             <div class="prefs-field">
               <label class="prefs-field-label" for="fpl-manager-select">Manager</label>
-              <select id="fpl-manager-select" class="prefs-select" aria-describedby="fpl-id-status">
+              <select id="fpl-manager-select" class="prefs-select">
                 <option value="">Select manager…</option>
               </select>
             </div>
@@ -362,11 +362,9 @@
               <div class="prefs-action-row">
                 <button id="fpl-id-clear" class="ghost-btn prefs-action-btn" type="button">Clear</button>
               </div>
-              <p id="fpl-id-status" class="prefs-status" aria-live="polite"></p>
-              <p class="prefs-field-hint">Links your FPL squad for ownership pins and seeds the Planner. Your live team is on Home.</p>
             </div>
           </section>
-          <section class="settings-section" id="prefs-planner-section">
+          <section class="settings-section" id="prefs-planner-section" hidden>
             <div class="settings-section-label">Planner</div>
             <div class="prefs-field">
               <p class="prefs-field-hint prefs-planner-hint-mobile">Resync copies your linked FPL squad into the Planner. Clear removes every planned pick.</p>
@@ -623,6 +621,16 @@
           </div>
           <button type="button" class="home-view-banner-clear icon-only-btn" id="home-view-banner-clear"
             aria-label="Exit viewing" title="Exit viewing">
+            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+          </button>
+        </div>
+        <div id="home-owner-banner" class="home-view-banner home-owner-banner" hidden>
+          <div class="home-view-banner-copy">
+            <span class="home-view-banner-label">Owners</span>
+            <strong class="home-view-banner-name" id="home-owner-banner-name"></strong>
+          </div>
+          <button type="button" class="home-view-banner-clear icon-only-btn" id="home-owner-banner-clear"
+            aria-label="Clear ownership highlight" title="Clear ownership highlight">
             <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
           </button>
         </div>
@@ -1079,9 +1087,9 @@
               </div>
             </div>
             <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
-              title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls">
-              <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
-              <span class="mobile-dock-label">Sliders</span>
+              title="Show compare options" aria-label="Show compare options" aria-expanded="false" aria-controls="markets-controls">
+              <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+              <span class="mobile-dock-label">Compare</span>
             </button>
           </div>
         </div>
@@ -1091,7 +1099,7 @@
             <div class="schedule-control-head">
               <strong>Compare
                 <span class="schedule-control-info" tabindex="0"
-                  data-tip="Show how projected Goals and CS% moved versus an earlier odds pull. Current hides changes. Last run compares to the previous refresh; Last 72 hr uses the snapshot nearest that lookback."
+                  data-tip="Show how projected Goals and CS% moved versus an earlier odds pull. Works in both Goals/CS% and Scoreline views. Current hides changes. Last run compares to the previous refresh; Last 72 hr uses the snapshot nearest that lookback."
                   aria-label="How Compare works">
                   <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
                 </span>
@@ -1101,48 +1109,6 @@
               <button type="button" data-markets-compare="current" class="active">Current</button>
               <button type="button" data-markets-compare="last">Last run</button>
               <button type="button" data-markets-compare="72h">Last 72 hr</button>
-            </div>
-          </div>
-          <div class="markets-control">
-            <div class="schedule-control-head">
-              <strong>Goals color
-                <span class="schedule-control-info" tabindex="0"
-                  data-tip="How extreme projected goals must be before cells get green (high) or red (low). Deeper color for values well past the band. Soft green is quieter in dark mode. Right = more colored cells."
-                  aria-label="How Goals color works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
-              <span id="markets-heat-goals-label">Default</span>
-            </div>
-            <div class="dual-slider single-slider">
-              <div class="slider-track"></div>
-              <div class="slider-fill" id="markets-heat-goals-fill"></div>
-              <input type="range" id="markets-heat-goals" step="5" aria-label="Goals color thresholds" />
-            </div>
-            <div class="slider-values">
-              <span>Less color</span>
-              <span>More color</span>
-            </div>
-          </div>
-          <div class="markets-control">
-            <div class="schedule-control-head">
-              <strong>CS% color
-                <span class="schedule-control-info" tabindex="0"
-                  data-tip="How extreme clean-sheet % must be before cells get green (high) or red (low). Deeper color for values well past the band. Soft green is quieter in dark mode. Right = more colored cells."
-                  aria-label="How CS% color works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
-              <span id="markets-heat-cs-label">Default</span>
-            </div>
-            <div class="dual-slider single-slider">
-              <div class="slider-track"></div>
-              <div class="slider-fill" id="markets-heat-cs-fill"></div>
-              <input type="range" id="markets-heat-cs" step="5" aria-label="Clean sheet color thresholds" />
-            </div>
-            <div class="slider-values">
-              <span>Less color</span>
-              <span>More color</span>
             </div>
           </div>
         </div>
@@ -1202,7 +1168,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=674"></script>
+<script src="app.js?v=685"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
