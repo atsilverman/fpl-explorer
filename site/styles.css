@@ -420,14 +420,15 @@ a { color: var(--blue); }
   text-overflow: ellipsis;
 }
 
-/* Tabs stay on the brand/settings row and scroll under the action cluster
-   instead of wrapping onto a second line. */
+/* Tabs sit in the middle band between brand and actions. */
 .page-tabs-clip {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 1 1 0;
   min-width: 0;
   position: relative;
-  align-self: stretch;
+  align-self: center;
 }
 .page-tabs-clip::before,
 .page-tabs-clip::after {
@@ -435,17 +436,20 @@ a { color: var(--blue); }
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 28px;
+  width: 36px;
   pointer-events: none;
   z-index: 3;
   opacity: 0;
   transition: opacity 0.15s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .page-tabs-clip::before {
   left: 0;
   background: linear-gradient(
     to right,
-    hsl(var(--card)) 18%,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.88) 35%,
     hsl(var(--card) / 0)
   );
 }
@@ -453,7 +457,8 @@ a { color: var(--blue); }
   right: 0;
   background: linear-gradient(
     to left,
-    hsl(var(--card)) 18%,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.88) 35%,
     hsl(var(--card) / 0)
   );
 }
@@ -463,19 +468,20 @@ a { color: var(--blue); }
 }
 .page-tabs {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: flex-start;
-  align-self: stretch;
+  align-self: center;
   gap: 8px;
   flex: none;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   flex-wrap: nowrap;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  padding-inline: 0 8px;
+  padding-inline: 0;
   scroll-padding-inline: 12px;
   touch-action: pan-x;
 }
@@ -574,7 +580,9 @@ a { color: var(--blue); }
   padding: 8px 12px;
   border-radius: calc(var(--radius) - 2px);
   font-size: 13.5px;
-  font-weight: 500;
+  /* Keep 600 at rest — toggling 500↔600 on .active changes glyph width and
+     shifts the centered tab cluster when the selection moves. */
+  font-weight: 600;
   letter-spacing: 0;
   white-space: nowrap;
   cursor: pointer;
@@ -585,7 +593,6 @@ a { color: var(--blue); }
 .page-tab-btn.active {
   background: transparent;
   color: hsl(var(--blue-hsl) / 0.9);
-  font-weight: 600;
   box-shadow: none;
 }
 .page-tab-btn.active .icon {
@@ -1346,9 +1353,29 @@ a { color: var(--blue); }
   position: relative;
   z-index: 4;
   background: hsl(var(--card));
-  margin-left: 0;
+  margin-left: auto;
   padding-left: 4px;
   box-shadow: none;
+}
+
+/* Desktop: tray/info live in page headers — keep nav center out of the flex
+   math so the tab group can sit truly between brand and actions. */
+@media (min-width: 721px) {
+  .page-nav-center {
+    display: none;
+  }
+  .page-nav {
+    gap: 16px;
+  }
+  .page-tabs-clip {
+    /* Extra inset from brand / actions so the cluster reads as centered. */
+    margin-inline: 12px;
+  }
+  .page-tab-btn {
+    height: 36px;
+    padding: 0 12px;
+    box-sizing: border-box;
+  }
 }
 
 .icon-btn, .ghost-btn {
@@ -1934,7 +1961,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
 
   .topbar {
-    top: 49px;
+    top: calc(49px + env(safe-area-inset-top, 0px));
     padding: 8px 10px;
     gap: 6px;
     flex-wrap: nowrap;
@@ -1964,7 +1991,13 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   .page-nav {
     --page-nav-pad-y: 8px;
-    padding: var(--page-nav-pad-y) 10px;
+    /* viewport-fit=cover: keep brand/page tray clear of the Dynamic Island.
+       iOS search/keyboard often collapses the URL bar and leaves chrome under
+       the status region without this inset. */
+    padding:
+      calc(var(--page-nav-pad-y) + env(safe-area-inset-top, 0px))
+      10px
+      var(--page-nav-pad-y);
     gap: 8px;
     flex-wrap: nowrap;
     overflow: visible;
@@ -2379,6 +2412,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     letter-spacing: 0.01em;
     line-height: 1;
     white-space: nowrap;
+    color: inherit;
   }
   #sidebar-toggle.mobile-filter-fab .btn-label {
     display: none;
@@ -2426,6 +2460,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 6px;
     font-size: 12.5px;
     font-weight: 600;
+    letter-spacing: 0.01em;
     line-height: 1;
     border: none;
     border-radius: calc(var(--mobile-dock-radius) - 3px);
@@ -2482,15 +2517,21 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     align-items: center;
     justify-content: center;
     gap: 6px;
+    box-sizing: border-box;
     width: auto;
-    min-width: 0;
+    min-width: var(--mobile-dock-size);
     height: var(--mobile-dock-size);
+    min-height: var(--mobile-dock-size);
     padding: 0 12px;
     border-radius: var(--mobile-dock-radius);
     background: hsl(var(--card));
     border: 1px solid var(--mobile-dock-border);
     box-shadow: var(--mobile-dock-shadow);
     color: var(--text-dim);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1;
     touch-action: manipulation;
     transition:
       background-color 0.16s ease,
@@ -2499,20 +2540,44 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       box-shadow 0.16s ease,
       transform 0.14s var(--ease-out);
   }
-  /* icon-only-btn is 32px fixed — override when promoted to a labeled dock FAB. */
+  /* Beat ID/toolbar height:32 + icon:15 rules so Filters matches Players/Teams
+     glyph size and type, while keeping the 40px shell. */
+  #sidebar-toggle.mobile-filter-fab,
+  #sidebar-toggle.icon-label-btn.mobile-filter-fab,
+  #schedule-sliders-toggle.mobile-filter-fab,
+  #markets-sliders-toggle.mobile-filter-fab,
   .topbar .ghost-btn.mobile-filter-fab,
-  .mobile-filter-dock .ghost-btn.mobile-filter-fab {
+  .topbar .icon-only-btn.mobile-filter-fab,
+  .page-header .icon-only-btn.mobile-filter-fab,
+  .mobile-filter-dock .ghost-btn.mobile-filter-fab,
+  .mobile-filter-dock .icon-only-btn.mobile-filter-fab,
+  .mobile-filter-dock .icon-label-btn.mobile-filter-fab {
+    box-sizing: border-box;
     width: auto;
-    min-width: var(--mobile-dock-size, 40px);
-    height: var(--mobile-dock-size, 34px);
-    padding: 0 10px;
-    gap: 5px;
+    min-width: var(--mobile-dock-size);
+    height: var(--mobile-dock-size);
+    min-height: var(--mobile-dock-size);
+    padding: 0 12px;
+    gap: 6px;
     justify-content: center;
+    color: var(--text-dim);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    border-radius: var(--mobile-dock-radius);
   }
-  .mobile-filter-fab .icon {
+  #sidebar-toggle.mobile-filter-fab .icon,
+  #sidebar-toggle.icon-label-btn.mobile-filter-fab .icon,
+  #schedule-sliders-toggle.mobile-filter-fab .icon,
+  #markets-sliders-toggle.mobile-filter-fab .icon,
+  .mobile-filter-fab .icon,
+  .mobile-filter-dock .icon-label-btn.mobile-filter-fab .icon,
+  .mobile-filter-dock .icon-only-btn.mobile-filter-fab .icon {
     width: 16px;
     height: 16px;
     font-size: 16px;
+    color: inherit;
     flex: none;
   }
   .mobile-filter-fab.on,
@@ -2525,7 +2590,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html[data-pointer="coarse"] .mobile-filter-fab:hover {
     background: hsl(var(--card));
-    color: hsl(var(--muted-foreground));
+    color: var(--text-dim);
   }
   html[data-pointer="coarse"] .mobile-filter-fab.on:hover,
   html[data-pointer="coarse"] .mobile-filter-fab[aria-expanded="true"]:hover,
@@ -2544,9 +2609,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.has-mobile-bottom-dock .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Statistics / Expected / Ownership: the table card is the scrollport —
+  /* Expected / Ownership: the table card is the scrollport —
      extend it under the floating docks instead of shrinking the flex area. */
-  html.has-mobile-bottom-dock[data-page="opta"] .main,
   html.has-mobile-bottom-dock[data-page="expected"] .main,
   html.has-mobile-bottom-dock[data-page="ownership"] .main {
     padding-bottom: var(--main-pad-x, 8px);
@@ -2558,7 +2622,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding-bottom: var(--mobile-dock-clearance);
     scroll-padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Statistics: pager sits under the table, above the floating docks. */
+  /* Statistics: pager sits under the full table in page scroll. */
+  html.has-mobile-bottom-dock[data-page="opta"] .main {
+    padding-bottom: var(--mobile-dock-clearance);
+  }
   html.has-mobile-bottom-dock[data-page="opta"] #opta-page > .table-wrap {
     margin-bottom: 0;
     padding-bottom: 0;
@@ -3054,37 +3121,38 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --name-col-compact-teams: 40px;
   }
 
-  /* Statistics / Ownership / Expected: shrink page chrome; cards are scrollports. */
-  html[data-page="opta"] .main,
-  html[data-page="expected"] .main,
-  html[data-page="ownership"] .main {
+  /* Ownership / Expected: shrink page chrome; cards are scrollports.
+     Statistics: page (.main) scrolls so all rows + pager sit in document flow. */
+  html[data-page="ownership"] .main,
+  html[data-page="expected"] .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
 
-  /* Statistics: table card scrolls vertically + horizontally; thead sticks. */
+  /* Statistics: content-sized table; .main is the vertical scroller (Rankings-style). */
   html[data-page="opta"] .main {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    padding-bottom: var(--main-pad-x, 8px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
   }
   html[data-page="opta"] #opta-page {
-    flex: 1 1 auto;
+    display: block;
+    flex: none;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
   }
   html[data-page="opta"] #opta-page > .table-wrap {
-    overflow: auto;
-    overflow-y: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
     max-height: none;
-    flex: 1 1 auto;
-    min-height: var(--mobile-scrollport-min-h, 0px);
-    overscroll-behavior: none;
+    flex: none;
+    min-height: 0;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
   }
   html[data-page="opta"] #opta-page > .opta-table-footer {
-    flex: 0 0 auto;
+    flex: none;
     width: 100%;
     margin: 8px 0 0;
     padding: 4px 2px 0;
@@ -3098,11 +3166,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     text-overflow: clip;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
-    flex: 0 0 auto;
+    flex: none;
     min-height: auto;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
     margin-bottom: 8px;
   }
 
@@ -3608,6 +3675,24 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   padding-left: calc(16px - var(--name-collapse) * 8px);
   padding-right: calc(8px - var(--name-collapse) * 6px);
   box-sizing: border-box;
+}
+/* Mobile: match xData barbell name inset (10px). Must follow the rule above
+   or calc(16px − …) wins on equal specificity. */
+@media (max-width: 720px) {
+  #ownership-table-wrap.name-simplify-ready thead th.col-player,
+  #ownership-table-wrap.name-simplify-ready tbody td.col-player,
+  #opta-page .table-wrap.name-simplify-ready thead th.col-player,
+  #opta-page .table-wrap.name-simplify-ready thead th.col-name,
+  #opta-page .table-wrap.name-simplify-ready tbody td.col-player,
+  #opta-page .table-wrap.name-simplify-ready tbody td.col-name,
+  #team-page .table-wrap.name-simplify-ready thead th.col-player,
+  #team-page .table-wrap.name-simplify-ready tbody td.col-player,
+  #team-page .table-wrap.name-simplify-ready tbody th.col-player,
+  #team-page .table-wrap.name-simplify-ready thead tr.section-row th.sec-sticky-lead,
+  #team-picker-view .table-wrap.name-simplify-ready thead th.col-player,
+  #team-picker-view .table-wrap.name-simplify-ready tbody td.col-player {
+    padding-left: 10px;
+  }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id,
 #opta-page .table-wrap.name-simplify-ready .ownership-id,
@@ -5563,6 +5648,35 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   overscroll-behavior: none;
   touch-action: pan-x pan-y;
   scrollbar-width: thin;
+}
+/* Desktop + mobile: one nested scrollport so head/scale stay sticky while
+   rows pan — avoid dual-scroll with .main carrying the headers away. */
+html[data-page="expected"] .main {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+html[data-page="expected"] #expected-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+html[data-page="expected"] #expected-page .barbell-wrap {
+  flex: 1 1 auto;
+  min-height: var(--mobile-scrollport-min-h, 240px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: none;
+}
+html[data-page="expected"] #expected-page .barbell-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  max-height: none;
 }
 .barbell-scroll img,
 .barbell-scroll svg {
@@ -10255,7 +10369,6 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 .mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-btn.active {
   background: hsl(var(--accent-hsl));
   color: var(--text);
-  font-weight: 600;
 }
 .mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-clone {
   display: none !important;
@@ -12520,23 +12633,22 @@ html.has-mobile-filter-fab .home-view-banner {
 .home-search-btn[hidden] {
   display: none !important;
 }
-.home-search-btn.mobile-filter-fab,
-.home-search-btn.mobile-filter-fab.on,
-.home-search-btn.mobile-filter-fab.is-clear,
-.home-search-btn.mobile-filter-fab[aria-pressed="true"] {
-  background: hsl(var(--card));
-  border: 1px solid var(--mobile-dock-border);
-  box-shadow: var(--mobile-dock-shadow);
-  color: var(--text-dim);
+/* Desktop tabs are centered in the flex band between brand and actions.
+   Hiding the Home-only search control with display:none shrinks that band and
+   slides the whole tab cluster — keep the footprint, just make it inert. */
+@media (min-width: 721px) {
+  .page-nav-actions .home-search-btn[hidden] {
+    display: inline-flex !important;
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
-html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab:hover,
-html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.on:hover,
-html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
-  background: hsl(var(--card));
-  color: var(--text);
+.page-nav-actions .home-search-btn {
+  flex: none;
 }
-.home-search-btn.mobile-filter-fab.is-clear {
-  color: var(--text-dim);
+.page-nav-actions .home-search-btn.is-clear,
+.page-nav-actions .home-search-btn.on {
+  color: hsl(var(--blue-hsl));
 }
 .home-player-profile[hidden],
 .home-player-matchup[hidden] {
@@ -13270,6 +13382,11 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 }
 .home-squad-fixtures-table td.home-col-fx.is-blank {
   background: transparent;
+}
+/* Card-colored rules between FDR washes — white in light, dark surface in dark.
+   Overrides the shared .home-data-table hairlines that disappear on heat fills. */
+.home-squad-fixtures-table tbody td.home-col-fx {
+  border: 1px solid hsl(var(--card));
 }
 .home-standings-pager {
   display: flex;

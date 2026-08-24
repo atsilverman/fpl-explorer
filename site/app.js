@@ -4080,13 +4080,13 @@
     const iconUse = el.homeSearchBtn.querySelector("use");
     if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
     const label = clearMode ? "Clear player search" : "Search players";
-    const dockLabel = el.homeSearchBtn.querySelector(".mobile-dock-label");
-    if (dockLabel) dockLabel.textContent = clearMode ? "Clear" : "Search";
     el.homeSearchBtn.title = label;
     el.homeSearchBtn.setAttribute("aria-label", label);
     el.homeSearchBtn.classList.toggle("is-clear", clearMode);
     el.homeSearchBtn.setAttribute("aria-pressed", clearMode ? "true" : "false");
     el.homeSearchBtn.classList.toggle("on", clearMode);
+    // Nav chrome: icon-only search sits left of Preferences on Home (mobile + desktop).
+    el.homeSearchBtn.hidden = state.page !== "home";
   }
 
   function clearHomePlayerLookup({ rerender = true } = {}) {
@@ -5103,6 +5103,46 @@
     document.documentElement.classList.toggle("is-mobile-layout", NARROW_MQ.matches);
   }
   syncMobileLayoutClass();
+
+  // iOS Safari: focusing search scrolls the layout viewport (even with
+  // overflow:hidden + preventScroll). After the keyboard dismisses, scrollY /
+  // visualViewport.offsetTop can stay non-zero and crop .page-nav under the
+  // status bar / Dynamic Island.
+  let mobileViewportResetTimer = 0;
+  function resetMobileViewportOffset() {
+    if (!NARROW_MQ.matches) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const y =
+      window.scrollY ||
+      html.scrollTop ||
+      body.scrollTop ||
+      0;
+    const vv = window.visualViewport;
+    const vvTop = vv ? vv.offsetTop : 0;
+    if (y === 0 && vvTop === 0) return;
+    window.scrollTo(0, 0);
+    html.scrollTop = 0;
+    body.scrollTop = 0;
+  }
+  function scheduleMobileViewportReset({ force = false } = {}) {
+    if (!NARROW_MQ.matches) return;
+    // Don't fight Safari while the keyboard is up for search.
+    if (!force && el.search && document.activeElement === el.search) return;
+    resetMobileViewportOffset();
+    requestAnimationFrame(resetMobileViewportOffset);
+    if (mobileViewportResetTimer) clearTimeout(mobileViewportResetTimer);
+    // Keyboard dismiss animation — retry while Safari settles.
+    mobileViewportResetTimer = window.setTimeout(() => {
+      mobileViewportResetTimer = 0;
+      if (!force && el.search && document.activeElement === el.search) return;
+      resetMobileViewportOffset();
+      window.setTimeout(() => {
+        if (!force && el.search && document.activeElement === el.search) return;
+        resetMobileViewportOffset();
+      }, 280);
+    }, 60);
+  }
   function hasFineHover() {
     return FINE_HOVER_MQ.matches;
   }
@@ -5143,14 +5183,10 @@
       NARROW_MQ.matches && state.page === "ownership" && ownershipIsTreemap();
     const ownershipTable =
       NARROW_MQ.matches && state.page === "ownership" && !ownershipIsTreemap();
-    // Opta / Ownership / Expected: nested card scrollports fill remaining viewport.
-    if (
-      !NARROW_MQ.matches ||
-      (state.page !== "expected" &&
-        state.page !== "opta" &&
-        !ownershipTree &&
-        !ownershipTable)
-    ) {
+    // Expected: nested card scrollport on all widths (sticky head/scale).
+    // Ownership: nested on mobile. Statistics: page-level .main scroll.
+    const expectedFill = state.page === "expected";
+    if (!expectedFill && !ownershipTree && !ownershipTable) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
@@ -5158,9 +5194,7 @@
       ? el.ownershipTreemap
       : ownershipTable
         ? el.ownershipTableWrap
-        : state.page === "opta"
-          ? document.querySelector("#opta-page > .table-wrap")
-          : document.querySelector("#expected-page .barbell-wrap");
+        : document.querySelector("#expected-page .barbell-wrap");
     if (!scrollport || scrollport.hidden || scrollport.offsetParent === null) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
@@ -5169,15 +5203,18 @@
     const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const top = scrollport.getBoundingClientRect().top;
     let reserve = 0;
-    if (state.page === "opta" && el.optaTableFooter && !el.optaTableFooter.hidden) {
-      reserve = Math.ceil(el.optaTableFooter.getBoundingClientRect().height);
-    } else if (
+    if (
       (ownershipTree || ownershipTable) &&
       el.ownershipUpdatedFooter &&
       !el.ownershipUpdatedFooter.hidden
     ) {
-      // Footer box includes dock clearance padding — keep it below the plot/table.
       reserve = Math.ceil(el.ownershipUpdatedFooter.getBoundingClientRect().height) + 8;
+    } else if (
+      expectedFill &&
+      el.expectedUpdatedFooter &&
+      !el.expectedUpdatedFooter.hidden
+    ) {
+      reserve = Math.ceil(el.expectedUpdatedFooter.getBoundingClientRect().height) + 8;
     }
     const minH = Math.max(
       ownershipTree ? 320 : 180,
@@ -5324,13 +5361,12 @@
       el.sidebarToggle,
       el.marketsSlidersToggle,
       el.scheduleSlidersToggle,
-      el.homeSearchBtn,
     ].forEach(restoreMobileFilterHome);
   }
 
   function mobileFilterButtonForPage() {
     const page = state.page;
-    if (page === "home") return el.homeSearchBtn || null;
+    if (page === "home") return null;
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
     if (page === "team" && !state.teamPickerSlot) return null;
@@ -5416,12 +5452,10 @@
       el.sidebarToggle,
       el.marketsSlidersToggle,
       el.scheduleSlidersToggle,
-      el.homeSearchBtn,
     ].filter(Boolean);
     if (!dock) return;
     if (!preferMobileSheet()) {
       restoreAllMobileFilterButtons();
-      if (el.homeSearchBtn) el.homeSearchBtn.hidden = true;
       dock.hidden = true;
       dock.setAttribute("aria-hidden", "true");
       document.documentElement.classList.remove("has-mobile-filter-fab");
@@ -5432,7 +5466,6 @@
     buttons.forEach((btn) => {
       if (btn !== active) restoreMobileFilterHome(btn);
     });
-    if (el.homeSearchBtn && active !== el.homeSearchBtn) el.homeSearchBtn.hidden = true;
     if (!active) {
       dock.hidden = true;
       dock.setAttribute("aria-hidden", "true");
@@ -5443,10 +5476,6 @@
     rememberMobileFilterHome(active);
     if (active.parentElement !== dock) dock.appendChild(active);
     active.classList.add("mobile-filter-fab");
-    if (active === el.homeSearchBtn) {
-      active.hidden = false;
-      syncHomeSearchBtn();
-    }
     dock.hidden = false;
     dock.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("has-mobile-filter-fab");
@@ -5456,6 +5485,7 @@
   function syncMobileChrome() {
     syncMobileFilterDock();
     syncMobileViewDock();
+    syncHomeSearchBtn();
     if (!mobileChromeScrollActive()) resetMobileChromeScrollHide();
     else {
       const main = document.querySelector("main.main");
@@ -5464,9 +5494,9 @@
     requestAnimationFrame(() => syncMobileScrollportHeight());
   }
 
-  // Nested card scrollports (Statistics / Ownership / Expected) own both axes.
-  // Planner and other page-scroll tables still pan horizontally on the wrap;
-  // wheel/touch vertical deltas chain to `.main` when the page is the scroller.
+  // Nested card scrollports (Ownership / Expected) own both axes.
+  // Statistics + Planner use page-level .main scroll; wheel/touch vertical
+  // deltas chain to `.main` when the page is the scroller.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -5476,11 +5506,7 @@
     }
 
     function pageOwnsVerticalScroll() {
-      return (
-        state.page === "expected" ||
-        state.page === "opta" ||
-        state.page === "ownership"
-      );
+      return state.page === "expected" || state.page === "ownership";
     }
 
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
@@ -6783,8 +6809,33 @@
     });
   }
 
+  function captureScrollWraps(wraps) {
+    return wraps.filter(Boolean).map((wrap) => ({
+      wrap,
+      top: wrap.scrollTop,
+      left: wrap.scrollLeft,
+    }));
+  }
+
+  function restoreScrollWraps(snaps) {
+    if (!snaps || !snaps.length) return;
+    const apply = () => {
+      snaps.forEach(({ wrap, top, left }) => {
+        if (!wrap) return;
+        wrap.scrollTop = top;
+        wrap.scrollLeft = left;
+      });
+    };
+    apply();
+    requestAnimationFrame(apply);
+  }
+
   function renderTable(opts = {}) {
     const preserveOptaScroll = !!opts.preserveOptaScroll;
+    const optaScrollSnap =
+      state.page === "opta" && preserveOptaScroll
+        ? captureScrollWraps(optaTableWraps())
+        : null;
     clearTimeout(fixtureTtTimer);
     hideFixtureTooltip();
     if (state.page === "ownership") {
@@ -6847,6 +6898,7 @@
         resetScrollWraps(optaTableWraps());
         refreshNameSimplifyOrigins();
       } else if (preserveOptaScroll) {
+        restoreScrollWraps(optaScrollSnap);
         refreshNameSimplifyOrigins();
       } else {
         snapOptaToGameStats();
@@ -8809,7 +8861,7 @@
             state.expectedSortKey = s.key;
             state.expectedSortDir = s.key === "name" ? "asc" : "desc";
           }
-          renderExpected({ resetScroll: true });
+          renderExpected();
         });
       }
       el.barbellHead.appendChild(div);
@@ -9124,6 +9176,11 @@
   }
 
   function renderExpected(opts = {}) {
+    const scroll = expectedScrollWrap();
+    const scrollSnap =
+      scroll && !opts.resetScroll
+        ? { wrap: scroll, top: scroll.scrollTop, left: scroll.scrollLeft }
+        : null;
     const cat = currentExpectedCat();
     updateExpectedSplitAvailability(cat);
     const compareMode = state.expectedSplit === "compare";
@@ -9188,9 +9245,11 @@
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     if (opts.resetScroll) {
       requestAnimationFrame(() => {
-        const scroll = expectedScrollWrap();
-        if (scroll) scroll.scrollLeft = 0;
+        const sc = expectedScrollWrap();
+        if (sc) sc.scrollLeft = 0;
       });
+    } else if (scrollSnap) {
+      restoreScrollWraps([scrollSnap]);
     }
     requestAnimationFrame(() => syncMobileScrollportHeight());
     syncPageUpdatedFooter(el.expectedUpdatedFooter, DATA.generatedAt);
@@ -12309,7 +12368,7 @@
         state.teamSortKey = key;
         state.teamSortDir = teamDefaultSortDir(key);
       }
-      renderTeam({ resetScroll: true });
+      renderTeam();
       return;
     }
     const pick = e.target.closest("[data-team-pick]");
@@ -14065,6 +14124,10 @@
     syncOwnershipViewMode();
     syncOwnershipMoverUI();
     const checkIns = ownershipCheckIns();
+    const scrollSnap =
+      !ownershipIsTreemap() && el.ownershipTableWrap
+        ? captureScrollWraps([el.ownershipTableWrap])
+        : null;
 
     if (ownershipIsTreemap()) {
       if (!checkIns.length) {
@@ -14118,6 +14181,7 @@
     syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
+    if (scrollSnap) restoreScrollWraps(scrollSnap);
     requestAnimationFrame(() => syncMobileScrollportHeight());
     // Page enter: leave rolls empty — playPageEnter owns the single motion.
     // Risers/fallers toggle: animateEnter starts motion without a full page enter.
@@ -15097,7 +15161,9 @@
   let pageTabWheelBooted = false;
 
   function pageTabWheelEnabled() {
-    return !!(el.pageTabs && !NARROW_MQ.matches);
+    // Desktop uses a linear Home→…→Markets row. Horizontal scroll + edge fades
+    // only appear when the window is too narrow to fit every tab.
+    return false;
   }
 
   function pageKeyFromTabBtn(btn) {
@@ -15422,8 +15488,9 @@
     el.pageTabs.addEventListener(
       "wheel",
       (e) => {
-        if (!pageTabWheelEnabled()) return;
+        if (NARROW_MQ.matches) return;
         if (e.ctrlKey) return;
+        if (!pageTabsAreScrollable()) return;
         const dx = e.deltaX !== 0 ? e.deltaX : e.deltaY;
         if (!dx) return;
         e.preventDefault();
@@ -15658,6 +15725,7 @@
     syncSearchClearBtns();
     requestAnimationFrame(() => {
       el.search.focus({ preventScroll: true });
+      resetMobileViewportOffset();
     });
   }
 
@@ -15720,6 +15788,12 @@
       openMobileSearch();
     }
     syncSearchClearBtns();
+    // Undo Safari's scroll-into-view nudge without fighting the open keyboard.
+    resetMobileViewportOffset();
+  });
+
+  el.search.addEventListener("blur", () => {
+    scheduleMobileViewportReset({ force: true });
   });
 
   if (el.searchClearBtn) {
@@ -16911,9 +16985,15 @@
       window.visualViewport.addEventListener("resize", () => {
         syncMobileScrollportHeight();
         scheduleOptaMobileNameColWidth();
+        scheduleMobileViewportReset();
       });
-      window.visualViewport.addEventListener("scroll", syncMobileScrollportHeight);
+      window.visualViewport.addEventListener("scroll", () => {
+        syncMobileScrollportHeight();
+        scheduleMobileViewportReset();
+      });
     }
+    window.addEventListener("pageshow", scheduleMobileViewportReset);
+    window.addEventListener("orientationchange", scheduleMobileViewportReset);
     if (typeof NARROW_MQ.addEventListener === "function") {
       NARROW_MQ.addEventListener("change", () => {
         syncMobileLayoutClass();

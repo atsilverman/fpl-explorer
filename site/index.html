@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=685" />
+<link rel="stylesheet" href="styles.css?v=696" />
 <script>
 (() => {
   try {
@@ -314,6 +314,10 @@
       title="Theme: Device" aria-label="Theme: Device">
       <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
     </button>
+    <button id="home-search-btn" class="icon-btn icon-only-btn home-search-btn" type="button"
+      title="Search players" aria-label="Search players" aria-pressed="false" hidden>
+      <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+    </button>
     <div class="dropdown-wrap" id="prefs-wrap">
       <button id="prefs-btn" class="icon-btn icon-only-btn" type="button"
         title="Preferences" aria-label="Preferences" aria-haspopup="true" aria-expanded="false" aria-controls="prefs-panel">
@@ -600,11 +604,6 @@
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="home-count-label"></span>
-            <button id="home-search-btn" class="ghost-btn icon-only-btn home-search-btn" type="button"
-              title="Search players" aria-label="Search players" aria-pressed="false" hidden>
-              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-              <span class="mobile-dock-label">Search</span>
-            </button>
           </div>
         </div>
       </div>
@@ -1168,7 +1167,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=696"></script>
+<script src="app.js?v=699"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
