@@ -44,7 +44,7 @@
     const join = src.includes("?") ? "&" : "?";
     return `${src}${join}v=${BADGE_CACHE_V}`;
   }
-  // Soft dark-mode scatter disc tint — club primary mixed toward white in CSS.
+  // Club primary — team abbreviations (Ownership etc.), photo/crest rings, scatter.
   const TEAM_SCATTER_ACCENT = {
     ARS: "#ef0107",
     AVL: "#670e36",
@@ -67,6 +67,18 @@
     SUN: "#eb172b",
     TOT: "#132257",
   };
+
+  function teamAccentDecl(teamCode) {
+    const accent = TEAM_SCATTER_ACCENT[teamCode];
+    return accent ? `--team-accent:${accent}` : "";
+  }
+
+  /** Class + style attrs for a thin club-colour ring around photos / crests. */
+  function teamRingAttrs(teamCode) {
+    const decl = teamAccentDecl(teamCode);
+    if (!decl) return { className: "", attr: "" };
+    return { className: " has-team-ring", attr: ` style="${decl}"` };
+  }
   const LEAGUE_POSITIONS = DATA.leaguePositions || {}; // short code -> 1..20
   const LEAGUE_POSITIONS_META = DATA.leaguePositionsMeta || {};
   const FIXTURES_BY_TEAM = DATA.fixturesByTeam || {};
@@ -85,6 +97,13 @@
     ? NEXT_SEASON_TEAM_CODES
     : Object.keys(TEAM_NAMES)
   ).slice().sort((a, b) => TEAM_NAMES[a].localeCompare(TEAM_NAMES[b]));
+  // Exact abbreviation queries ("ARS", "MUN") must match club codes, not
+  // accidental name substrings (e.g. "ars" in Strand Larsen).
+  const KNOWN_TEAM_CODES_LOWER = new Set(
+    [...ALL_TEAM_CODES, ...TEAM_CODES, ...Object.keys(TEAM_NAMES)].map((c) =>
+      String(c || "").toLowerCase()
+    )
+  );
   // Venue-split team stats for fixture tooltips (opponent home/away profile).
   const TEAM_STATS = {
     home: Object.fromEntries((DATA.teams.home || []).map((t) => [t.team, t])),
@@ -171,10 +190,15 @@
   function badgeHTML(teamCode, className) {
     const src = TEAM_BADGES[teamCode];
     if (!src) return "";
-    const cls = className ? `badge-img ${className}` : "badge-img";
+    const ring = teamRingAttrs(teamCode);
+    const cls = `badge-img${ring.className}${className ? ` ${className}` : ""}`;
+    const accentDecl = teamAccentDecl(teamCode);
     const fitAttr = (imgSrc) => {
       const pct = CREST_FIT_PCT[imgSrc];
-      return pct && pct < 100 ? ` style="--crest-fit:${pct}%"` : "";
+      const decls = [];
+      if (pct && pct < 100) decls.push(`--crest-fit:${pct}%`);
+      if (accentDecl) decls.push(accentDecl);
+      return decls.length ? ` style="${decls.join(";")}"` : "";
     };
     const light = badgeSrc(src);
     const darkSrc = TEAM_BADGES_DARK[teamCode];
@@ -183,6 +207,12 @@
       `<img class="${cls} badge-img-light" src="${light}"${fitAttr(src)} alt="" />` +
       `<img class="${cls} badge-img-dark" src="${badgeSrc(darkSrc)}"${fitAttr(darkSrc)} alt="" />`
     );
+  }
+
+  function teamCrestFallbackHTML(teamCode, className) {
+    const ring = teamRingAttrs(teamCode);
+    const cls = `${className || "home-crest-fallback"}${ring.className}`;
+    return `<span class="${cls}"${ring.attr} aria-hidden="true">${escapeHtml(String(teamCode || "?").slice(0, 3))}</span>`;
   }
 
   function iconHTML(name, className) {
@@ -1309,13 +1339,10 @@
         if (price < state.priceMin || price > state.priceMax) return false;
         if (!passesOwnershipFilter(r)) return false;
         if (r.mins < state.minsMin || r.mins > state.minsMax) return false;
-        if (q && !playerSearchHaystack(r).includes(q)) return false;
+        if (q && !playerMatchesSearch(r, q)) return false;
       } else {
         if (state.teamFilter.size && !state.teamFilter.has(r.team)) return false;
-        if (q) {
-          const hay = (r.name + " " + r.team + " " + teamNameForSeason(r.team)).toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
+        if (q && !teamRowMatchesSearch(r, q)) return false;
       }
       return true;
     });
@@ -1355,6 +1382,24 @@
       parts.push(row.team, teamNameForSeason(row.team));
     }
     return parts.join(" ").toLowerCase();
+  }
+
+  function playerMatchesSearch(row, q) {
+    if (!q) return true;
+    if (KNOWN_TEAM_CODES_LOWER.has(q)) {
+      const team = String(filterTeamCode(row) || "").toLowerCase();
+      const prev = String(row.team || "").toLowerCase();
+      return team === q || prev === q;
+    }
+    return playerSearchHaystack(row).includes(q);
+  }
+
+  function teamRowMatchesSearch(row, q) {
+    if (!q) return true;
+    const code = String(row.team || "").toLowerCase();
+    if (KNOWN_TEAM_CODES_LOWER.has(q)) return code === q;
+    const hay = `${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team)}`.toLowerCase();
+    return hay.includes(q);
   }
 
   function perMillionValue(row, col) {
@@ -2717,7 +2762,7 @@
   function homeCaptainPickHTML(player, { isTopCaptain = false, autoSubbed = false, original = null } = {}) {
     if (!player) return "—";
     const teamBadge = badgeHTML(player.team, "home-crest home-crest-captain") ||
-      `<span class="home-crest-fallback home-crest-captain">${escapeHtml((player.team || "?").slice(0, 3))}</span>`;
+      teamCrestFallbackHTML(player.team, "home-crest-fallback home-crest-captain");
     const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
     const ptsHi = isTopCaptain && Number.isFinite(pts);
     const ptsHTML = Number.isFinite(pts)
@@ -3297,118 +3342,6 @@
     });
   }
 
-  /** Team-row player card — tap target on mobile; full card UI next. */
-  function openHomeTeamPlayerFromRow(tr) {
-    const eid = Number(tr && tr.dataset.element);
-    if (!Number.isFinite(eid)) return;
-    const squad = homeSquadForEntry(homeActiveViewEntryId());
-    if (!squad.find((r) => Number(r.element) === eid)) return;
-  }
-
-  let homeSquadRowSwipe = null;
-  let homeSquadRowSwipeBlockClick = false;
-
-  function homeSquadOwnerSwipeThreshold(tr) {
-    const w = tr && tr.getBoundingClientRect ? tr.getBoundingClientRect().width : 320;
-    return Math.max(48, Math.round(w * 0.22));
-  }
-
-  function resetHomeSquadRowSwipe(tr, { animate = true } = {}) {
-    if (!tr) return;
-    tr.classList.remove("is-swipe-armed", "is-swipe-active");
-    if (animate && !prefersReducedMotion()) {
-      tr.style.transition = "transform 0.2s var(--ease-out)";
-      tr.style.transform = "";
-      tr.addEventListener(
-        "transitionend",
-        () => tr.style.removeProperty("transition"),
-        { once: true }
-      );
-    } else {
-      tr.style.removeProperty("transform");
-      tr.style.removeProperty("transition");
-    }
-  }
-
-  function bindHomeSquadRowSwipe(onOwnerSwipe) {
-    if (!el.homeSquadTrack) return;
-
-    el.homeSquadTrack.addEventListener(
-      "touchstart",
-      (e) => {
-        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
-        const tr = e.target.closest("tr.home-squad-row");
-        if (!tr || !el.homeSquadTrack.contains(tr)) return;
-        const touch = e.touches[0];
-        homeSquadRowSwipe = {
-          tr,
-          startX: touch.clientX,
-          startY: touch.clientY,
-          tracking: true,
-        };
-      },
-      { passive: true }
-    );
-
-    el.homeSquadTrack.addEventListener(
-      "touchmove",
-      (e) => {
-        const swipe = homeSquadRowSwipe;
-        if (!swipe || !swipe.tracking || e.touches.length !== 1) return;
-        const touch = e.touches[0];
-        const dx = touch.clientX - swipe.startX;
-        const dy = touch.clientY - swipe.startY;
-        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 14) {
-          resetHomeSquadRowSwipe(swipe.tr, { animate: false });
-          swipe.tracking = false;
-          return;
-        }
-        if (Math.abs(dx) < 6) return;
-        // Ownership highlight: swipe right only (pull row to the right).
-        if (dx < 0) {
-          resetHomeSquadRowSwipe(swipe.tr, { animate: false });
-          return;
-        }
-        swipe.tracking = "horizontal";
-        if (e.cancelable) e.preventDefault();
-        const clamped = Math.min(100, dx);
-        swipe.tr.classList.add("is-swipe-active");
-        swipe.tr.style.transition = "none";
-        swipe.tr.style.transform = `translateX(${clamped}px)`;
-        swipe.tr.classList.toggle(
-          "is-swipe-armed",
-          dx >= homeSquadOwnerSwipeThreshold(swipe.tr)
-        );
-      },
-      { passive: false }
-    );
-
-    const finishRowSwipe = () => {
-      const swipe = homeSquadRowSwipe;
-      if (!swipe) return;
-      homeSquadRowSwipe = null;
-      if (swipe.tracking !== "horizontal") {
-        resetHomeSquadRowSwipe(swipe.tr, { animate: false });
-        return;
-      }
-      const transform = swipe.tr.style.transform || "";
-      const match = transform.match(/translateX\(([-\d.]+)px\)/);
-      const dx = match ? Number(match[1]) : 0;
-      const threshold = homeSquadOwnerSwipeThreshold(swipe.tr);
-      resetHomeSquadRowSwipe(swipe.tr);
-      if (dx >= threshold) {
-        homeSquadRowSwipeBlockClick = true;
-        window.setTimeout(() => {
-          homeSquadRowSwipeBlockClick = false;
-        }, 450);
-        onOwnerSwipe(swipe.tr);
-      }
-    };
-
-    el.homeSquadTrack.addEventListener("touchend", finishRowSwipe);
-    el.homeSquadTrack.addEventListener("touchcancel", finishRowSwipe);
-  }
-
   function bindHomeOwnerHighlighting() {
     if (homeOwnerBindingsReady) return;
     if (!el.homeSquadTrack || !el.homeStandingsTrack) return;
@@ -3437,8 +3370,6 @@
       if (!togglingOff) homeScrollStandingsIntoView();
     }
 
-    bindHomeSquadRowSwipe(toggleSquadOwner);
-
     function toggleStandingOwner(tr) {
       if (!tr || !el.homeStandingsTrack.contains(tr)) return;
       const entry = Number(tr.dataset.entry);
@@ -3449,12 +3380,8 @@
     el.homeSquadTrack.addEventListener("click", (e) => {
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
+      if (NARROW_MQ.matches && !e.target.closest("td.home-col-player")) return;
       e.preventDefault();
-      if (homeSquadRowSwipeBlockClick) return;
-      if (NARROW_MQ.matches) {
-        openHomeTeamPlayerFromRow(tr);
-        return;
-      }
       toggleSquadOwner(tr);
     });
 
@@ -3470,10 +3397,6 @@
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
-      if (NARROW_MQ.matches) {
-        openHomeTeamPlayerFromRow(tr);
-        return;
-      }
       toggleSquadOwner(tr);
     });
 
@@ -3488,7 +3411,7 @@
 
   function homeSquadPlayerCellHTML(row, { configuredPin = false } = {}) {
     const teamBadge = badgeHTML(row.team, "home-crest") ||
-      `<span class="home-crest-fallback">${escapeHtml((row.team || "?").slice(0, 3))}</span>`;
+      teamCrestFallbackHTML(row.team, "home-crest-fallback");
     const tags = [];
     if (row.isCaptain) tags.push(`<span class="home-role-tag home-role-c">C</span>`);
     if (row.isVice) tags.push(`<span class="home-role-tag home-role-a">A</span>`);
@@ -3527,7 +3450,7 @@
     }
     const parts = list.map((fx) => {
       const crest = badgeHTML(fx.opp, "home-crest home-crest-sm") ||
-        `<span class="home-crest-fallback home-crest-sm">${escapeHtml((fx.opp || "?").slice(0, 3))}</span>`;
+        teamCrestFallbackHTML(fx.opp, "home-crest-fallback home-crest-sm");
       const ha = fx.ha || fx.oppHa || "";
       const homeIcon = ha === "H" ? iconHTML("house-solid", "home-ha-icon") : "";
       const title = `${fx.opp || "?"}${ha === "H" ? " (H)" : ha === "A" ? " (A)" : ""}${
@@ -3544,10 +3467,7 @@
   }
 
   function homeSquadRowAriaLabel(name) {
-    const label = name || "this player";
-    return NARROW_MQ.matches
-      ? `Open ${label} player card`
-      : `Show managers who own ${label}`;
+    return `Show managers who own ${name || "this player"}`;
   }
 
   function homeSquadFixturesRowHTML(row, gws, opts = {}) {
@@ -3587,7 +3507,7 @@
 
     const oppHTML = fx.map((f) => {
       const crest = badgeHTML(f.opp, "home-crest home-crest-sm") ||
-        `<span class="home-crest-fallback home-crest-sm">${escapeHtml((f.opp || "?").slice(0, 3))}</span>`;
+        teamCrestFallbackHTML(f.opp, "home-crest-fallback home-crest-sm");
       const homeIcon = f.oppHa === "H" ? iconHTML("house-solid", "home-ha-icon") : "";
       return `<span class="home-opp-line">${crest}${homeIcon}</span>`;
     }).join("");
@@ -3996,6 +3916,7 @@
       : `<span class="home-lookup-photo home-lookup-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
+    const photoRing = teamRingAttrs(row.team);
     const mode = homeLookupStatModeMeta();
     return `<article class="home-lookup-card is-lookup-tappable${mode.className ? ` ${mode.className}` : ""}" data-rank-mode="${escapeHtml(mode.key)}" role="button" tabindex="0" aria-label="Player stats. Tap to cycle rank views."${accentStyle ? ` style="${accentStyle}"` : ""}>
       <span class="home-lookup-corner" aria-hidden="true">
@@ -4003,7 +3924,7 @@
         ${iconHTML("mouse-pointer-click", "home-lookup-tap-icon")}
       </span>
       <div class="home-lookup-head">
-        <div class="home-lookup-photo-wrap">
+          <div class="home-lookup-photo-wrap${photoRing.className}"${photoRing.attr}>
           <div class="home-lookup-photo-clip">${photoBlock}</div>
           ${badge}
         </div>
@@ -4071,12 +3992,17 @@
     const q = String(query || "").trim().toLowerCase();
     const catalog = homeSearchCatalog();
     if (!q) return homeSearchSortRows(catalog).slice(0, 40);
+    const exactTeam = KNOWN_TEAM_CODES_LOWER.has(q);
     const scored = [];
     for (const row of catalog) {
       const name = String(row.name || "").toLowerCase();
       const team = String(row.team || "").toLowerCase();
       const teamFull = String(teamNameForSeason(row.team) || "").toLowerCase();
-      if (!name.includes(q) && !team.includes(q) && !teamFull.includes(q)) continue;
+      if (exactTeam) {
+        if (team !== q) continue;
+      } else if (!name.includes(q) && !team.includes(q) && !teamFull.includes(q)) {
+        continue;
+      }
       const starts = name.startsWith(q) ? 0 : 1;
       scored.push({ row, starts, name });
     }
@@ -4862,9 +4788,11 @@
   function playerCrestHTML(teamCode, tip) {
     const inner = badgeHTML(teamCode, "player-cell-badge");
     if (!inner) return "";
+    const ring = teamRingAttrs(teamCode);
+    const tipBit = tip || "";
     return tip
-      ? `<span class="player-cell-crest"${tip}>${inner}</span>`
-      : `<span class="player-cell-crest">${inner}</span>`;
+      ? `<span class="player-cell-crest${ring.className}"${tipBit}${ring.attr}>${inner}</span>`
+      : `<span class="player-cell-crest${ring.className}"${ring.attr}>${inner}</span>`;
   }
 
   /** Flat identity: crest | name / sub — no copy wrapper (keeps crest column tight). */
@@ -5211,22 +5139,53 @@
 
   function syncMobileScrollportHeight() {
     const root = document.documentElement;
-    // Opta/Ownership/Team use page-level .main scroll on mobile.
-    // Only Expected still uses a nested scrollport min-height.
-    if (!NARROW_MQ.matches || state.page !== "expected") {
+    const ownershipTree =
+      NARROW_MQ.matches && state.page === "ownership" && ownershipIsTreemap();
+    const ownershipTable =
+      NARROW_MQ.matches && state.page === "ownership" && !ownershipIsTreemap();
+    // Opta / Ownership / Expected: nested card scrollports fill remaining viewport.
+    if (
+      !NARROW_MQ.matches ||
+      (state.page !== "expected" &&
+        state.page !== "opta" &&
+        !ownershipTree &&
+        !ownershipTable)
+    ) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
-    const scrollport = document.querySelector("#expected-page .barbell-wrap");
-    if (!scrollport || scrollport.offsetParent === null) {
+    const scrollport = ownershipTree
+      ? el.ownershipTreemap
+      : ownershipTable
+        ? el.ownershipTableWrap
+        : state.page === "opta"
+          ? document.querySelector("#opta-page > .table-wrap")
+          : document.querySelector("#expected-page .barbell-wrap");
+    if (!scrollport || scrollport.hidden || scrollport.offsetParent === null) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
     const vv = window.visualViewport;
     const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const top = scrollport.getBoundingClientRect().top;
-    const minH = Math.max(180, Math.floor(viewportBottom - top));
+    let reserve = 0;
+    if (state.page === "opta" && el.optaTableFooter && !el.optaTableFooter.hidden) {
+      reserve = Math.ceil(el.optaTableFooter.getBoundingClientRect().height);
+    } else if (
+      (ownershipTree || ownershipTable) &&
+      el.ownershipUpdatedFooter &&
+      !el.ownershipUpdatedFooter.hidden
+    ) {
+      // Footer box includes dock clearance padding — keep it below the plot/table.
+      reserve = Math.ceil(el.ownershipUpdatedFooter.getBoundingClientRect().height) + 8;
+    }
+    const minH = Math.max(
+      ownershipTree ? 320 : 180,
+      Math.floor(viewportBottom - top - reserve)
+    );
+    const prev = root.style.getPropertyValue("--mobile-scrollport-min-h");
     root.style.setProperty("--mobile-scrollport-min-h", `${minH}px`);
+    if (ownershipTree && prev !== `${minH}px`) scheduleOwnershipTreemapRelayout();
   }
 
   let mobileChromeScrollLast = 0;
@@ -5257,9 +5216,26 @@
 
   function scrollPageContentToTop() {
     const main = document.querySelector("main.main");
-    if (!main) return;
-    main.scrollTop = 0;
-    main.scrollLeft = 0;
+    if (main) {
+      main.scrollTop = 0;
+      main.scrollLeft = 0;
+    }
+    if (!NARROW_MQ.matches) return;
+    if (state.page === "opta") {
+      optaTableWraps().forEach((wrap) => {
+        wrap.scrollTop = 0;
+        wrap.scrollLeft = 0;
+      });
+    } else if (state.page === "ownership" && el.ownershipTableWrap) {
+      el.ownershipTableWrap.scrollTop = 0;
+      el.ownershipTableWrap.scrollLeft = 0;
+    } else if (state.page === "expected") {
+      const barbell = expectedScrollWrap();
+      if (barbell) {
+        barbell.scrollTop = 0;
+        barbell.scrollLeft = 0;
+      }
+    }
   }
 
   function mobileChromeScrollSources() {
@@ -5488,9 +5464,9 @@
     requestAnimationFrame(() => syncMobileScrollportHeight());
   }
 
-  // Horizontal tables/barbells are overflow-x scrollers on mobile; vertical
-  // scroll lives on `.main`. Wheel on narrow viewports still chains vertically
-  // (trackpad / mouse); touch uses CSS touch-action: pan-x on the inner scroller.
+  // Nested card scrollports (Statistics / Ownership / Expected) own both axes.
+  // Planner and other page-scroll tables still pan horizontally on the wrap;
+  // wheel/touch vertical deltas chain to `.main` when the page is the scroller.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -5499,12 +5475,20 @@
       return Math.max(0, main.scrollHeight - main.clientHeight);
     }
 
+    function pageOwnsVerticalScroll() {
+      return (
+        state.page === "expected" ||
+        state.page === "opta" ||
+        state.page === "ownership"
+      );
+    }
+
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
 
       inner.addEventListener("wheel", (e) => {
-        if (!NARROW_MQ.matches) return;
+        if (!NARROW_MQ.matches || pageOwnsVerticalScroll()) return;
         if (inner.scrollTop > 0) return;
         const max = mainMax();
         if (e.deltaY > 0 && main.scrollTop < max - 1) {
@@ -5515,6 +5499,46 @@
           e.preventDefault();
         }
       }, { passive: false });
+
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchLastY = 0;
+      let touchAxis = null;
+      inner.addEventListener(
+        "touchstart",
+        (e) => {
+          if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          touchLastY = touchStartY;
+          touchAxis = null;
+        },
+        { passive: true }
+      );
+      inner.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+          if (pageOwnsVerticalScroll()) return;
+          const x = e.touches[0].clientX;
+          const y = e.touches[0].clientY;
+          const dx = x - touchStartX;
+          const dy = y - touchStartY;
+          if (touchAxis == null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+            touchAxis = Math.abs(dy) > Math.abs(dx) * 1.15 ? "y" : "x";
+          }
+          if (touchAxis !== "y") return;
+          const delta = touchLastY - y;
+          touchLastY = y;
+          const max = mainMax();
+          const next = Math.min(max, Math.max(0, main.scrollTop + delta));
+          if (next !== main.scrollTop) {
+            main.scrollTop = next;
+            e.preventDefault();
+          }
+        },
+        { passive: false }
+      );
     });
   }
 
@@ -5640,10 +5664,11 @@
     }
   }
 
-  // Team picker table: scroll-linked Player name morph (full ↔ compact).
-  // Dead zone after the default (Price/GW) origin so the landing view stays full.
+  // Dead zone after the default (Price) origin so the landing view stays full.
+  // Statistics collapse finishes after a short pan — not at the last column.
   const NAME_SIMPLIFY_START = 28;
   const NAME_SIMPLIFY_END = 220;
+  const OPTA_NAME_SIMPLIFY_END = 110;
   const nameSimplifyRafs = new WeakMap();
 
   function nameSimplifyWraps() {
@@ -5686,26 +5711,106 @@
   }
 
   let optaMobileNameColW = null;
-  let optaMobileNameColRaf = 0;
+  let ownershipMobileNameColW = null;
+  let mobileNameColRaf = 0;
 
-  const OPTA_MOBILE_NAME_COL_MIN = 140;
-  const OPTA_MOBILE_NAME_COL_MAX_FRAC = 0.54;
+  // Hug identity content (Planner-tight). Cap is only a safety rail — not a target.
+  const MOBILE_NAME_COL_MIN = 152;
+  const OWNERSHIP_MOBILE_NAME_COL_MIN = 168;
+  const MOBILE_NAME_COL_MAX_FRAC = 0.58;
+  const MOBILE_NAME_COL_SLACK = 10;
 
-  function measureOptaNameColWidth(wrap) {
-    if (!wrap) return OPTA_MOBILE_NAME_COL_MIN;
+  function measureInlineContentWidth(el) {
+    if (!el) return 0;
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      let w = 0;
+      const rects = range.getClientRects();
+      for (let i = 0; i < rects.length; i++) w = Math.max(w, rects[i].width);
+      if (w > 0) return Math.ceil(w);
+    } catch (_) {
+      /* fall through */
+    }
+    return Math.ceil(el.scrollWidth || 0);
+  }
+
+  function measureNameColWidth(wrap, { minW = MOBILE_NAME_COL_MIN } = {}) {
+    if (!wrap) return minW;
     const prevColW = wrap.style.getPropertyValue("--name-col-w");
-    wrap.style.removeProperty("--name-col-w");
+    const prevCollapse = wrap.style.getPropertyValue("--name-collapse");
+    // Expand so sub-line chips aren't clipped while measuring intrinsic widths.
+    wrap.style.setProperty("--name-col-w", "640px");
     wrap.style.setProperty("--name-collapse", "0");
+    wrap.classList.remove("is-name-simplifying");
     void wrap.offsetWidth;
-    let max = OPTA_MOBILE_NAME_COL_MIN;
+    let max = minW;
     wrap.querySelectorAll("tbody td.col-player, tbody td.col-name").forEach((td) => {
-      max = Math.max(max, Math.ceil(td.scrollWidth));
+      const cs = getComputedStyle(td);
+      const pad =
+        (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const id = td.querySelector(".ownership-id");
+      if (id) {
+        const idCs = getComputedStyle(id);
+        const gap = parseFloat(idCs.columnGap || idCs.gap) || 0;
+        const rank = id.querySelector(".ownership-rank");
+        const thumb = id.querySelector(".ownership-photo, .ownership-crest");
+        const text = id.querySelector(".ownership-id-text");
+        let content = 0;
+        let parts = 0;
+        if (rank) {
+          content += Math.ceil(rank.getBoundingClientRect().width);
+          parts += 1;
+        }
+        if (thumb) {
+          content += Math.ceil(thumb.getBoundingClientRect().width);
+          parts += 1;
+        }
+        if (text) {
+          const name = text.querySelector(".player-name");
+          const sub = text.querySelector(".ownership-id-sub");
+          // Range width — name.scrollWidth mirrors the stretched flex box.
+          const nameW = measureInlineContentWidth(name);
+          let subW = 0;
+          if (sub) {
+            const bits = Array.from(sub.children);
+            if (bits.length) {
+              const first = bits[0].getBoundingClientRect();
+              const last = bits[bits.length - 1].getBoundingClientRect();
+              subW = Math.max(0, Math.ceil(last.right - first.left));
+            }
+          }
+          content += Math.max(nameW, subW);
+          parts += 1;
+        }
+        if (parts > 1) content += gap * (parts - 1);
+        max = Math.max(max, content + Math.ceil(pad));
+        return;
+      }
+      const cell = td.querySelector(".player-cell");
+      if (cell) {
+        const name = cell.querySelector(".player-name");
+        const sub = cell.querySelector(".player-cell-sub");
+        const crest = cell.querySelector(".player-cell-crest");
+        const cellCs = getComputedStyle(cell);
+        const gap = parseFloat(cellCs.columnGap || cellCs.gap) || 0;
+        let content = crest ? Math.ceil(crest.getBoundingClientRect().width) : 0;
+        const textW = Math.max(
+          measureInlineContentWidth(name),
+          sub ? measureInlineContentWidth(sub) : 0
+        );
+        if (crest && textW) content += gap;
+        content += textW;
+        max = Math.max(max, content + Math.ceil(pad));
+        return;
+      }
+      max = Math.max(max, minW);
     });
-    const head = wrap.querySelector("thead th.col-player, thead th.col-name");
-    if (head) max = Math.max(max, Math.ceil(head.scrollWidth));
     if (prevColW) wrap.style.setProperty("--name-col-w", prevColW);
     else wrap.style.removeProperty("--name-col-w");
-    return max;
+    if (prevCollapse) wrap.style.setProperty("--name-collapse", prevCollapse);
+    else wrap.style.removeProperty("--name-collapse");
+    return max + MOBILE_NAME_COL_SLACK;
   }
 
   function syncOptaMobileNameColWidth() {
@@ -5720,11 +5825,11 @@
     }
     const mainWrap = wraps[0];
     if (mainWrap) {
-      const measured = measureOptaNameColWidth(mainWrap);
-      const cap = Math.round(mainWrap.clientWidth * OPTA_MOBILE_NAME_COL_MAX_FRAC);
-      optaMobileNameColW = Math.min(
-        measured,
-        Math.max(cap, OPTA_MOBILE_NAME_COL_MIN)
+      const measured = measureNameColWidth(mainWrap, { minW: MOBILE_NAME_COL_MIN });
+      const cap = Math.round(mainWrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
+      optaMobileNameColW = Math.max(
+        MOBILE_NAME_COL_MIN,
+        Math.min(measured, cap)
       );
     } else {
       optaMobileNameColW = null;
@@ -5740,21 +5845,47 @@
     }
   }
 
+  function syncOwnershipMobileNameColWidth() {
+    const wrap = el.ownershipTableWrap;
+    if (
+      !NARROW_MQ.matches ||
+      state.page !== "ownership" ||
+      !wrap ||
+      wrap.hidden ||
+      ownershipIsTreemap()
+    ) {
+      ownershipMobileNameColW = null;
+      if (wrap) wrap.style.removeProperty("--name-col-w");
+      return;
+    }
+    const measured = measureNameColWidth(wrap, {
+      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+    });
+    const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
+    ownershipMobileNameColW = Math.max(
+      OWNERSHIP_MOBILE_NAME_COL_MIN,
+      Math.min(measured, cap)
+    );
+    const prev = wrap.style.getPropertyValue("--name-col-w");
+    wrap.style.setProperty("--name-col-w", `${ownershipMobileNameColW}px`);
+    if (prev !== `${ownershipMobileNameColW}px`) {
+      invalidateNameSimplifyOrigin(wrap);
+    }
+  }
+
   function scheduleOptaMobileNameColWidth() {
-    if (optaMobileNameColRaf) cancelAnimationFrame(optaMobileNameColRaf);
-    optaMobileNameColRaf = requestAnimationFrame(() => {
-      optaMobileNameColRaf = 0;
+    if (mobileNameColRaf) cancelAnimationFrame(mobileNameColRaf);
+    mobileNameColRaf = requestAnimationFrame(() => {
+      mobileNameColRaf = 0;
       syncOptaMobileNameColWidth();
+      syncOwnershipMobileNameColWidth();
     });
   }
 
   function nameSimplifyProgress(scrollLeft, origin = 0, wrap = null) {
-    // Photo-identity tables: map full available horizontal scroll to collapse
-    // 0→1 so photo-only is reachable even when maxScroll is short.
-    if (
-      wrap &&
-      (state.page === "ownership" || state.page === "opta" || state.page === "team")
-    ) {
+    // Ownership still maps the full remaining pan (short table). Statistics /
+    // Planner finish compact well before the last column.
+    if (wrap && state.page === "ownership") {
       const maxScroll = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
       if (maxScroll <= 0) return 0;
       const linear = Math.min(1, Math.max(0, scrollLeft) / maxScroll);
@@ -5762,10 +5893,11 @@
     }
     const rel = Math.max(0, scrollLeft - origin);
     if (rel <= NAME_SIMPLIFY_START) return 0;
-    const linear = Math.min(
-      1,
-      (rel - NAME_SIMPLIFY_START) / (NAME_SIMPLIFY_END - NAME_SIMPLIFY_START)
-    );
+    const end =
+      state.page === "opta" || state.page === "team"
+        ? OPTA_NAME_SIMPLIFY_END
+        : NAME_SIMPLIFY_END;
+    const linear = Math.min(1, (rel - NAME_SIMPLIFY_START) / Math.max(1, end - NAME_SIMPLIFY_START));
     // smoothstep — soft after the initial drag, soft landing at compact
     return linear * linear * (3 - 2 * linear);
   }
@@ -5782,19 +5914,17 @@
     return result;
   }
 
-  // Default view origin = Price/GW snap (desktop 0; mobile core-under). Morph
-  // only after panning further right. Measure with the name column at full width
-  // so shrinking names cannot pull the origin left.
+  // Default Statistics origin = left edge of Price (£m / first Core col).
+  // Morph only after panning further right. Measure with the name column at
+  // full width so shrinking names cannot pull the origin left.
   function computeNameSimplifyOrigin(wrap) {
     if (!wrap || !wrap.classList.contains("is-core-under")) return 0;
     return withFullNameColumn(wrap, () => {
       const headRow = wrap.querySelector("thead tr:not(.section-row)");
       const pin = headRow && headRow.querySelector("th.col-player, th.col-name");
-      const firstStat =
-        headRow &&
-        headRow.querySelector("th.col-num:not(.col-core), th.col-check:not(.col-core)");
-      if (!pin || !firstStat) return 0;
-      const delta = firstStat.getBoundingClientRect().left - pin.getBoundingClientRect().right;
+      const price = headRow && headRow.querySelector("th.col-core");
+      if (!pin || !price) return 0;
+      const delta = price.getBoundingClientRect().left - pin.getBoundingClientRect().right;
       return Math.max(0, Math.round(wrap.scrollLeft + delta));
     });
   }
@@ -7287,7 +7417,7 @@
         spitRow(
           spitRank("Own"),
           mobile
-            ? "Swipe a team row to highlight owners in standings (others fade). Tap a row for the player card (next). Click a standings manager to view their team — Exit returns to yours."
+            ? "Tap a player name to highlight owners in standings (others fade). Swipe the team card for fixtures. Click a standings manager to view their team — Exit returns to yours."
             : "Click a team player to highlight owners in standings (others fade). Click a standings manager to view their team — Exit returns to yours."
         ),
         spitRow(
@@ -7516,9 +7646,9 @@
       const top = 50 - (profile.signedDefenceAvg / maxDefence) * 43;
       const teamLabel = TEAM_NAMES[profile.teamCode] || profile.teamCode;
       const quadrant = scheduleQuadrantLabel(profile.signedAttackAvg, profile.signedDefenceAvg);
-      const accent = TEAM_SCATTER_ACCENT[profile.teamCode];
-      const accentStyle = accent ? `;--scatter-accent:${accent}` : "";
-      return `<button type="button" class="schedule-scatter-point"
+      const accent = teamAccentDecl(profile.teamCode);
+      const accentStyle = accent ? `;${accent}` : "";
+      return `<button type="button" class="schedule-scatter-point${accent ? " has-team-ring" : ""}"
         style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%${accentStyle}"
         data-team="${escapeHtml(profile.teamCode)}"
         data-attack="${profile.signedAttackAvg}"
@@ -9243,9 +9373,9 @@
     let thumb = "";
     let meta = "";
     if (isPlayers) {
-      thumb = ownershipPhotoHTML(row);
       const displayTeam = teamCode || row.team;
       const displayPos = position || row.position;
+      thumb = ownershipPhotoHTML(row, displayTeam);
       const accent = TEAM_SCATTER_ACCENT[displayTeam] || "";
       const teamStyle = accent ? ` style="color:${accent}"` : "";
       const price = omitPrice ? null : effectivePrice(row);
@@ -9268,7 +9398,7 @@
       const code = currentTeamCode(row) || row.team;
       thumb =
         badgeHTML(code, "ownership-crest") ||
-        `<span class="ownership-photo ownership-photo-fallback" aria-hidden="true">${escapeHtml(String(row.team || "?").slice(0, 3))}</span>`;
+        teamCrestFallbackHTML(code || row.team, "ownership-photo ownership-photo-fallback");
       const pos = LEAGUE_POSITIONS[row.team];
       const bits = [];
       if (pos != null) {
@@ -9810,26 +9940,19 @@
     </tr>`;
   }
 
-  const teamTrendCache = new Map();
-  function teamMockTrend(code) {
-    const key = Number(code);
-    if (teamTrendCache.has(key)) return teamTrendCache.get(key);
-    let s = (Math.imul(key || 1, 2654435761) || 1) >>> 0;
-    const rand = () => {
-      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-      return s / 4294967296;
-    };
-    const prior = teamPriorRow(code);
-    const pts = prior && Number.isFinite(Number(prior.pts)) ? Number(prior.pts) : 60;
-    const mean = Math.max(0.8, pts / 38);
-    const series = [];
-    let v = mean * (0.7 + rand() * 0.6);
-    for (let i = 0; i < 8; i++) {
-      v = Math.max(0, v + (rand() - 0.47) * mean * 0.85);
-      series.push(Math.round(v * 10) / 10);
-    }
-    teamTrendCache.set(key, series);
-    return series;
+  /** Live GW points for form spark — HOME.elementGw (current season). */
+  function teamFormSeries(row) {
+    if (!row || row.code == null) return [];
+    const element = fplElementIdForRow(row);
+    if (element == null) return [];
+    const eg = (HOME && HOME.elementGw && HOME.elementGw[String(element)]) || null;
+    if (!eg) return [];
+    // Fixture not started (e.g. Chelsea / Fulham GW1) — no spark yet.
+    if (eg.status === "scheduled") return [];
+    const pts = Number(eg.pts);
+    if (!Number.isFinite(pts)) return [];
+    // One real GW datapoint for now; later GWs append to this series.
+    return [pts];
   }
 
   let teamOwnedSeriesCache = new Map();
@@ -9862,7 +9985,8 @@
 
   function teamSparkSeries(row) {
     if (!row || row.code == null) return [];
-    return teamSparkMetricIsOwned() ? teamOwnedSeries(row.code) : teamMockTrend(row.code);
+    if (teamSparkMetricIsOwned()) return teamOwnedSeries(row.code);
+    return teamFormSeries(row);
   }
 
   function teamSparkSvg(series, tone) {
@@ -10186,7 +10310,8 @@
   }
 
   function teamPlanGwMin() {
-    return plannerAnchorGw();
+    // Forward-looking only: next GW from the FPL API (skip current / finished).
+    return planningGameweek();
   }
 
   function teamClampPlanGw(start) {
@@ -11030,7 +11155,7 @@
       if (price < state.priceMin || price > state.priceMax) return false;
       if (state.setPieceTakersOnly && !isSetPieceTaker(r)) return false;
       if (state.teamAffordableOnly && !teamRowAffordable(r, replaceCode)) return false;
-      if (q && !playerSearchHaystack(r).includes(q)) return false;
+      if (q && !playerMatchesSearch(r, q)) return false;
       return true;
     });
   }
@@ -11451,7 +11576,7 @@
       return;
     }
     const left = track.scrollLeft;
-    carousel.classList.toggle("has-more-left", left > 1);
+    carousel.classList.remove("has-more-left");
     carousel.classList.toggle("has-more-right", left < maxScroll - 2);
   }
 
@@ -11461,19 +11586,20 @@
     const track = carousel.querySelector(".team-gw-carousel-track");
     if (!track) return;
 
-    const centerActive = ({ instant = false } = {}) => {
+    const leftAlignActive = ({ instant = false } = {}) => {
       const active = track.querySelector(".team-gw-carousel-item.is-active");
       if (!active) return;
-      const left = active.offsetLeft - (track.clientWidth - active.offsetWidth) / 2;
+      // Keep the selected GW left-aligned (not centered).
+      const pad = 12;
       track.scrollTo({
-        left: Math.max(0, left),
+        left: Math.max(0, active.offsetLeft - pad),
         behavior: instant || prefersReducedMotion() ? "auto" : "smooth",
       });
       requestAnimationFrame(() => syncTeamGwCarouselEdges(track));
     };
 
     requestAnimationFrame(() => {
-      centerActive({ instant: true });
+      leftAlignActive({ instant: true });
       syncTeamGwCarouselEdges(track);
     });
 
@@ -11488,7 +11614,7 @@
       if (!Number.isFinite(gw)) return;
       const next = teamClampPlanGw(gw);
       if (next === teamPlanGw()) {
-        centerActive();
+        leftAlignActive();
         return;
       }
       setTeamPlanGw(next);
@@ -11505,12 +11631,12 @@
           syncTeamGwCarouselEdges(t);
           const items = [...t.querySelectorAll(".team-gw-carousel-item")];
           if (!items.length) return;
-          const mid = t.scrollLeft + t.clientWidth / 2;
+          // Pick the left-most item that has crossed the leading edge.
+          const edge = t.scrollLeft + 14;
           let best = items[0];
           let bestDist = Infinity;
           items.forEach((item) => {
-            const c = item.offsetLeft + item.offsetWidth / 2;
-            const d = Math.abs(c - mid);
+            const d = Math.abs(item.offsetLeft - edge);
             if (d < bestDist) {
               bestDist = d;
               best = item;
@@ -11661,6 +11787,7 @@
     const name = String(row.name || "").toLowerCase();
     const team = String(row.team || "").toLowerCase();
     const teamName = teamNameForSeason(row.team).toLowerCase();
+    if (KNOWN_TEAM_CODES_LOWER.has(q)) return team === q ? 0 : 99;
     const tokens = name.split(/[\s.]+/).filter(Boolean);
     const last = tokens[tokens.length - 1] || "";
     if (name === q || team === q) return 0;
@@ -13240,8 +13367,12 @@
     }
     const q = state.search.trim().toLowerCase();
     if (q) {
-      const hay = `${p.name || ""} ${p.team || ""} ${teamNameForSeason(p.team) || ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      if (KNOWN_TEAM_CODES_LOWER.has(q)) {
+        if (String(p.team || "").toLowerCase() !== q) return false;
+      } else {
+        const hay = `${p.name || ""} ${p.team || ""} ${teamNameForSeason(p.team) || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
     }
     return true;
   }
@@ -13250,8 +13381,13 @@
     if (state.teamFilter.size && !state.teamFilter.has(team)) return false;
     const q = state.search.trim().toLowerCase();
     if (q) {
-      const hay = `${name || ""} ${team || ""} ${teamNameForSeason(team) || ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      const code = String(team || "").toLowerCase();
+      if (KNOWN_TEAM_CODES_LOWER.has(q)) {
+        if (code !== q) return false;
+      } else {
+        const hay = `${name || ""} ${team || ""} ${teamNameForSeason(team) || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
     }
     return true;
   }
@@ -13486,27 +13622,31 @@
     root.querySelectorAll("img.ownership-photo").forEach((img) => {
       img.addEventListener("error", () => {
         const fallback = document.createElement("span");
-        fallback.className = "ownership-photo ownership-photo-fallback";
+        fallback.className = `${img.className} ownership-photo-fallback`;
         fallback.setAttribute("aria-hidden", "true");
         fallback.textContent = img.getAttribute("data-initials") || "?";
+        const accent = img.style.getPropertyValue("--team-accent");
+        if (accent) fallback.style.setProperty("--team-accent", accent);
         img.replaceWith(fallback);
       }, { once: true });
     });
   }
 
-  function ownershipPhotoHTML(row) {
+  function ownershipPhotoHTML(row, teamCode) {
     const initials = ownershipInitials(row.name);
     const photo = feedPlayerPhotoUrl(row.code);
+    const team = teamCode || currentTeamCode(row) || row.team;
+    const ring = teamRingAttrs(team);
     if (!photo) {
-      return `<span class="ownership-photo ownership-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+      return `<span class="ownership-photo ownership-photo-fallback${ring.className}" aria-hidden="true"${ring.attr}>${escapeHtml(initials)}</span>`;
     }
-    return `<img class="ownership-photo" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="lazy" data-initials="${escapeHtml(initials)}" />`;
+    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="lazy" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
   }
 
   function ownershipIdCellHTML(row, rank) {
     if (row.kind === "team") {
       const crest = badgeHTML(row.team, "ownership-crest") ||
-        `<span class="ownership-photo ownership-photo-fallback">${escapeHtml((row.team || "?").slice(0, 3))}</span>`;
+        teamCrestFallbackHTML(row.team, "ownership-photo ownership-photo-fallback");
       return `<div class="ownership-id">
         <span class="ownership-rank">${rank}</span>
         ${crest}
@@ -13634,13 +13774,13 @@
     const plot = el.ownershipTreemapPlot;
     const cw = plot && plot.clientWidth > 40 ? plot.clientWidth : 0;
     const ch = plot && plot.clientHeight > 40 ? plot.clientHeight : 0;
-    let aspect =
-      cw && ch
-        ? cw / ch
-        : NARROW_MQ.matches
-          ? 0.55
-          : OWNERSHIP_TREE_LAYOUT_W / OWNERSHIP_TREE_LAYOUT_H;
-    // Phone: keep a portrait layout so squarify prefers horizontal bands.
+    if (cw && ch) {
+      return { w: cw, h: ch, preferHorizontal: NARROW_MQ.matches };
+    }
+    let aspect = NARROW_MQ.matches
+      ? 0.55
+      : OWNERSHIP_TREE_LAYOUT_W / OWNERSHIP_TREE_LAYOUT_H;
+    // Phone fallback: portrait so squarify prefers horizontal bands.
     if (NARROW_MQ.matches && aspect > 0.7) aspect = 0.55;
     const h = OWNERSHIP_TREE_LAYOUT_H;
     const w = Math.max(280, Math.round(h * aspect));
@@ -13814,7 +13954,7 @@
       if (cell.row.kind === "team") {
         thumb =
           badgeHTML(cell.row.team, "ownership-treemap-crest") ||
-          `<span class="ownership-treemap-crest ownership-photo-fallback">${escapeHtml(String(cell.row.team || "?").slice(0, 3))}</span>`;
+          teamCrestFallbackHTML(cell.row.team, "ownership-treemap-crest ownership-photo-fallback");
       } else {
         thumb = ownershipPhotoHTML(cell.row).replace(
           /class="ownership-photo/g,
@@ -13943,6 +14083,10 @@
       }
       syncFiltersResetUI();
       syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
+      requestAnimationFrame(() => {
+        syncMobileScrollportHeight();
+        scheduleOwnershipTreemapRelayout();
+      });
       return;
     }
 
@@ -13973,6 +14117,8 @@
     syncFiltersResetUI();
     syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
     bindAllNameColumnSimplifies();
+    scheduleOptaMobileNameColWidth();
+    requestAnimationFrame(() => syncMobileScrollportHeight());
     // Page enter: leave rolls empty — playPageEnter owns the single motion.
     // Risers/fallers toggle: animateEnter starts motion without a full page enter.
     const pageEntering =

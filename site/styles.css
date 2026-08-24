@@ -275,6 +275,43 @@ a { color: var(--blue); }
   flex: none;
   display: block;
 }
+/* Club colour ring — same primaries as team abbreviations (TEAM_SCATTER_ACCENT).
+   Border (not box-shadow) so the stroke stays inside the layout box and isn't
+   cropped by table overflow / row-height caps. Size is constant — not tied to
+   name-column collapse. */
+.has-team-ring {
+  --team-ring: 1.5px;
+  box-sizing: border-box;
+  border: var(--team-ring) solid var(--team-accent);
+  box-shadow: none;
+}
+.badge-img.has-team-ring {
+  border-radius: 5px;
+}
+/* Wrapper owns the ring; nested crest/photo rings would double up. */
+.player-cell-crest.has-team-ring .has-team-ring,
+.home-lookup-photo-wrap.has-team-ring .home-lookup-photo-clip .has-team-ring,
+.schedule-scatter-point.has-team-ring .has-team-ring {
+  box-shadow: none;
+  border: none;
+}
+.schedule-scatter-point.has-team-ring {
+  border-width: 1px;
+  border-color: var(--team-accent);
+}
+/* Constant air around identity photos/crests so the circle never kisses the
+   row rule — does not shrink with --name-collapse. */
+.ownership-photo.has-team-ring,
+.ownership-crest.has-team-ring,
+.player-cell-crest.has-team-ring,
+.home-crest.has-team-ring,
+.home-crest-fallback.has-team-ring {
+  margin: 2px;
+}
+.ownership-treemap-photo.has-team-ring,
+.ownership-treemap-crest.has-team-ring {
+  margin: 0;
+}
 /* Tall art (see CREST_FIT_PCT in app.js) shrinks so it doesn't dominate roundels.
    Scale rather than width/height: percentage sizing on tall art resolves against
    its own intrinsic aspect and overflows the crest box. */
@@ -2507,10 +2544,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.has-mobile-bottom-dock .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Statistics / Expected: the table card is the scrollport — extend it under
-     the floating docks instead of shrinking the flex area and leaving a gap. */
+  /* Statistics / Expected / Ownership: the table card is the scrollport —
+     extend it under the floating docks instead of shrinking the flex area. */
   html.has-mobile-bottom-dock[data-page="opta"] .main,
-  html.has-mobile-bottom-dock[data-page="expected"] .main {
+  html.has-mobile-bottom-dock[data-page="expected"] .main,
+  html.has-mobile-bottom-dock[data-page="ownership"] .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
   html.has-mobile-bottom-dock[data-page="expected"] #expected-page .barbell-wrap {
@@ -2993,8 +3031,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 
 @media (max-width: 720px) {
   .table-wrap {
-    /* Page (.main) is the vertical scroller so the title can hide and return.
-       The wrap only pans horizontally and clips to the rounded frame. */
+    /* Default: horizontal pan only. Statistics / Ownership / Expected override
+       with nested vertical scrollports so sticky thead / barbell heads stay put. */
     position: relative;
     top: auto;
     overflow-x: auto;
@@ -3005,10 +3043,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    /* Vertical flicks chain to .main with native iOS momentum; pan-x keeps
-       horizontal column scroll on this element. */
-    touch-action: pan-x;
-    --name-col-w: 152px;
+    touch-action: pan-x pan-y;
+    --name-col-w: 168px;
     --crest-size: 26px;
     --badge-size: 26px;
     --table-sec-h: 16px;
@@ -3018,36 +3054,37 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --name-col-compact-teams: 40px;
   }
 
-  /* Statistics / Ownership: page (.main) scrolls vertically; table wraps
-     only pan horizontally and size to content (no nested card scrollport). */
+  /* Statistics / Ownership / Expected: shrink page chrome; cards are scrollports. */
   html[data-page="opta"] .main,
+  html[data-page="expected"] .main,
   html[data-page="ownership"] .main {
-    padding-bottom: var(--main-pad-x, 8px);
-    overflow-x: hidden;
-    overflow-y: auto;
-    display: block;
-  }
-  html[data-page="expected"] .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
 
+  /* Statistics: table card scrolls vertically + horizontally; thead sticks. */
+  html[data-page="opta"] .main {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
   html[data-page="opta"] #opta-page {
-    display: block;
-    flex: none;
+    flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   html[data-page="opta"] #opta-page > .table-wrap {
-    overflow-x: auto;
-    overflow-y: visible;
+    overflow: auto;
+    overflow-y: auto;
     max-height: none;
-    flex: none;
-    min-height: 0;
-    overscroll-behavior-x: none;
+    flex: 1 1 auto;
+    min-height: var(--mobile-scrollport-min-h, 0px);
+    overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
+    touch-action: pan-x pan-y;
   }
   html[data-page="opta"] #opta-page > .opta-table-footer {
-    flex: none;
+    flex: 0 0 auto;
     width: 100%;
     margin: 8px 0 0;
     padding: 4px 2px 0;
@@ -3061,10 +3098,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     text-overflow: clip;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
-    flex: none;
+    flex: 0 0 auto;
     min-height: auto;
-    display: block;
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     margin-bottom: 8px;
   }
 
@@ -3546,8 +3584,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #ownership-table-wrap.name-simplify-ready,
 #opta-page .table-wrap.name-simplify-ready,
 #team-page .table-wrap.name-simplify-ready {
-  --name-col-compact-players: 46px;
-  --name-col-compact-teams: 46px;
+  --name-col-compact-players: 54px;
+  --name-col-compact-teams: 54px;
   --own-photo: 30px;
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
@@ -3557,11 +3595,19 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #opta-page .table-wrap.name-simplify-ready tbody td.col-player,
 #opta-page .table-wrap.name-simplify-ready tbody td.col-name,
 #team-page .table-wrap.name-simplify-ready thead th.col-player,
-#team-page .table-wrap.name-simplify-ready tbody td.col-player {
+#team-page .table-wrap.name-simplify-ready tbody td.col-player,
+#team-page .table-wrap.name-simplify-ready tbody th.col-player,
+#team-page .table-wrap.name-simplify-ready thead tr.section-row th.sec-sticky-lead,
+#team-picker-view .table-wrap.name-simplify-ready thead th.col-player,
+#team-picker-view .table-wrap.name-simplify-ready tbody td.col-player {
+  width: var(--name-col-w-morph);
+  min-width: var(--name-col-w-morph);
+  max-width: var(--name-col-w-morph);
   overflow: hidden;
   vertical-align: middle;
   padding-left: calc(16px - var(--name-collapse) * 8px);
   padding-right: calc(8px - var(--name-collapse) * 6px);
+  box-sizing: border-box;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id,
 #opta-page .table-wrap.name-simplify-ready .ownership-id,
@@ -3572,7 +3618,14 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   align-items: center;
   gap: calc(8px * (1 - var(--name-collapse) * 0.9));
   min-width: 0;
-  max-height: 36px;
+  /* At rest show full photo + name + TEAM|£|POS; only clip while collapsing. */
+  max-height: none;
+  overflow: visible;
+}
+#ownership-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
+#opta-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
+#team-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id {
+  max-height: calc(var(--own-photo, 36px) + 8px);
   overflow: hidden;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-rank {
@@ -3599,22 +3652,46 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #team-page .table-wrap.name-simplify-ready .ownership-id-text {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: calc((1 - var(--name-collapse)) * 180px);
+  /* Don't cap text at rest — column width already fits measured content.
+     Collapse drives max-width toward 0 so the photo remains. */
+  max-width: calc((1 - var(--name-collapse)) * 40rem);
   overflow: hidden;
   opacity: calc(1 - var(--name-collapse));
   pointer-events: none;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
-#opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
-#team-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
+#opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
+#team-page .table-wrap.name-simplify-ready .ownership-id .player-name {
   display: block;
   overflow: hidden;
   text-overflow: clip;
   white-space: nowrap;
   min-width: 0;
+  flex: 1 1 auto;
+}
+/* Planner C/V — hug the name (Home squad), don't grow and right-align. */
+#team-page .table-wrap.name-simplify-ready .ownership-id .player-name,
+#team-page .ownership-id-text .player-name-line > .player-name {
+  flex: 0 1 auto;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge {
+  flex: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub,
@@ -4768,13 +4845,15 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 }
 .ownership-id-sub {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0 4px;
   margin-top: 2px;
   font-size: 10.5px;
   color: var(--text-dim);
   line-height: 1.2;
+  min-width: 0;
+  white-space: nowrap;
 }
 .ownership-id-team {
   font-weight: 700;
@@ -4826,17 +4905,21 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 }
 
 @media (max-width: 720px) {
+  /* Ownership: mover bar stays put; table / treemap fill remaining height. */
   html[data-page="ownership"] .layout .main {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     overflow-x: hidden;
-    overflow-y: auto;
     min-height: 0;
   }
   html[data-page="ownership"] #ownership-page {
-    display: block;
-    flex: none;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
+    overflow: hidden;
   }
   html[data-page="ownership"] #ownership-page .ownership-header {
     display: none;
@@ -4866,6 +4949,19 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .ownership-treemap-plot {
     min-height: 240px;
   }
+  html[data-page="ownership"] #ownership-page.is-treemap .ownership-treemap {
+    flex: 1 1 auto;
+    min-height: var(--mobile-scrollport-min-h, 320px);
+    max-height: none;
+  }
+  html[data-page="ownership"] #ownership-page.is-treemap .ownership-treemap-plot {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  html[data-page="ownership"] #ownership-page.is-treemap #ownership-updated-footer {
+    flex: none;
+    margin-top: 8px;
+  }
   .ownership-treemap-photo,
   .ownership-treemap-crest {
     width: 24px;
@@ -4877,17 +4973,17 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .ownership-treemap-delta {
     font-size: 10px;
   }
-  /* Ownership: content-sized table; .main is the vertical scroller. */
+  /* Ownership table: card is the scrollport — pin column headers like Statistics. */
   #ownership-table-wrap {
-    flex: none;
-    min-height: 0;
+    flex: 1 1 auto;
+    min-height: var(--mobile-scrollport-min-h, 0px);
     max-height: none;
-    overflow-x: auto;
-    overflow-y: visible;
-    overscroll-behavior-x: none;
+    overflow: auto;
+    overflow-y: auto;
+    overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    --name-col-w: 168px;
+    touch-action: pan-x pan-y;
+    --name-col-w: 176px;
     --metric-col-w: 58px;
   }
   #ownership-table-wrap > table > thead {
@@ -6026,7 +6122,7 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .barbell-wrap.name-simplify-ready {
     --barbell-name-w-full: 140px;
     --barbell-name-w-compare-full: 128px;
-    --barbell-name-w-compact: 42px;
+    --barbell-name-w-compact: 50px;
     --barbell-name-w: calc(
       var(--barbell-name-w-full) -
         var(--name-collapse) * (var(--barbell-name-w-full) - var(--barbell-name-w-compact))
@@ -10395,7 +10491,7 @@ html[data-page="team"] .layout .main {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 36px;
+  width: 28px;
   pointer-events: none;
   z-index: 2;
   opacity: 0;
@@ -10404,13 +10500,7 @@ html[data-page="team"] .layout .main {
   -webkit-backdrop-filter: blur(10px);
 }
 .team-gw-carousel::before {
-  left: 0;
-  background: linear-gradient(
-    to right,
-    hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.85) 40%,
-    hsl(var(--card) / 0)
-  );
+  display: none;
 }
 .team-gw-carousel::after {
   right: 0;
@@ -10421,21 +10511,21 @@ html[data-page="team"] .layout .main {
     hsl(var(--card) / 0)
   );
 }
-.team-gw-carousel.has-more-left::before,
 .team-gw-carousel.has-more-right::after {
   opacity: 1;
 }
 .team-gw-carousel-track {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  scroll-padding-inline: 40%;
+  scroll-padding-inline: 12px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  padding: 2px 40%;
+  padding: 2px 48px 2px 12px;
   touch-action: pan-x;
+  max-width: 100%;
 }
 .team-gw-carousel-track::-webkit-scrollbar {
   display: none;
@@ -10443,26 +10533,28 @@ html[data-page="team"] .layout .main {
 .team-gw-carousel-item {
   appearance: none;
   flex: 0 0 auto;
-  scroll-snap-align: center;
+  scroll-snap-align: start;
   height: 34px;
-  min-width: 3.4em;
-  padding: 0 12px;
-  border: 1px solid hsl(var(--border-hsl) / 0.9);
-  border-radius: 999px;
-  background: hsl(var(--muted) / 0.55);
+  min-width: 2.6em;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
   color: var(--text-dim);
   font: inherit;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   cursor: pointer;
   touch-action: manipulation;
+  opacity: 0.48;
   transition:
     color 0.14s ease,
     background-color 0.14s ease,
     border-color 0.14s ease,
     box-shadow 0.14s ease,
+    opacity 0.14s ease,
     transform 0.14s var(--ease-out);
 }
 .team-gw-carousel-item.is-active {
@@ -10470,42 +10562,40 @@ html[data-page="team"] .layout .main {
   background: hsl(var(--blue-hsl));
   border-color: hsl(var(--blue-hsl));
   font-weight: 750;
+  opacity: 1;
   box-shadow:
     0 0 0 2px hsl(var(--blue-hsl) / 0.22),
     0 4px 10px hsl(var(--blue-hsl) / 0.28);
-  transform: scale(1.06);
 }
 @media (max-width: 720px) {
-  html[data-page="team"] #subtoolbar .team-toolbar-controls:has(.team-gw-carousel) {
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: none;
-    min-width: 0;
-  }
-  html[data-page="team"] #subtoolbar .team-gw-nav:has(.team-gw-carousel) {
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: none;
-    justify-content: stretch;
-  }
-  html[data-page="team"] #subtoolbar .team-gw-carousel {
-    max-width: none;
-    width: 100%;
-  }
-  html[data-page="team"].has-mobile-view-dock #stats-toolbar-actions:has(.team-gw-carousel),
-  html[data-page="team"].has-mobile-view-dock #stats-toolbar-actions .topbar-end-cluster:has(.team-gw-carousel) {
-    width: 100%;
-    max-width: none;
-    justify-content: stretch;
-  }
-  /* Full-bleed to the mobile topbar edges */
+  /* Keep the GW wheel inside the viewport — don't let the track expand the toolbar. */
   html[data-page="team"] #subtoolbar:has(.team-gw-carousel) {
+    overflow-x: hidden;
     padding-left: 0;
     padding-right: 0;
   }
+  html[data-page="team"] #subtoolbar .topbar-end-cluster:has(.team-gw-carousel),
+  html[data-page="team"] #subtoolbar #stats-toolbar-actions:has(.team-gw-carousel),
+  html[data-page="team"] #subtoolbar .team-toolbar-controls:has(.team-gw-carousel),
+  html[data-page="team"] #subtoolbar .team-gw-nav:has(.team-gw-carousel) {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+  html[data-page="team"] #subtoolbar .team-gw-carousel {
+    max-width: 100%;
+    width: 100%;
+    min-width: 0;
+  }
   html[data-page="team"] #subtoolbar:has(.team-gw-carousel) .team-gw-carousel-track {
-    padding-inline: max(12px, 42%);
-    scroll-padding-inline: max(12px, 42%);
+    padding-inline: 12px 40px;
+    scroll-padding-inline: 12px;
+  }
+  html[data-page="team"] #subtoolbar:has(.team-gw-carousel) .team-toolbar-planner-actions,
+  html[data-page="team"] #subtoolbar:has(.team-gw-carousel) #team-compare-btn {
+    display: none;
   }
 }
 .team-gw-sheet-grid {
@@ -10923,6 +11013,57 @@ html[data-page="team"] .layout .main {
 #team-page .ownership-id {
   min-height: 100%;
 }
+#team-page .table-wrap.name-simplify-ready tbody tr.team-player-row,
+#team-page .table-wrap.name-simplify-ready tbody tr.team-search-row,
+#team-picker-view .table-wrap.name-simplify-ready tbody tr.team-picker-row {
+  height: var(--team-row-h);
+  max-height: var(--team-row-h);
+}
+#team-page .table-wrap.name-simplify-ready tbody tr.team-player-row > td,
+#team-page .table-wrap.name-simplify-ready tbody tr.team-search-row > td,
+#team-picker-view .table-wrap.name-simplify-ready tbody tr.team-picker-row > td {
+  height: var(--team-row-h);
+  max-height: var(--team-row-h);
+  overflow: hidden;
+  vertical-align: middle;
+}
+#team-page .table-wrap.name-simplify-ready tbody td.col-player,
+#team-picker-view .table-wrap.name-simplify-ready tbody td.col-player {
+  overflow: hidden;
+}
+#team-page .table-wrap.name-simplify-ready .ownership-id,
+#team-picker-view .table-wrap.name-simplify-ready .ownership-id {
+  height: 100%;
+  max-height: calc(var(--team-row-h) - 2px);
+  min-height: 0;
+  overflow: hidden;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+#team-page .table-wrap.name-simplify-ready .ownership-id-text,
+#team-picker-view .table-wrap.name-simplify-ready .ownership-id-text {
+  overflow: hidden;
+}
+#team-page .table-wrap.name-simplify-ready .ownership-id-sub,
+#team-picker-view .table-wrap.name-simplify-ready .ownership-id-sub {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+  max-height: 1.15em;
+}
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#team-picker-view .table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+}
+#team-page .ownership-id-text .player-name-line {
+  display: inline-flex;
+  justify-content: flex-start;
+  width: max-content;
+  max-width: 100%;
+  gap: 4px;
+}
 #team-page .ownership-id .player-name {
   font-size: 13.5px;
   font-weight: 650;
@@ -11122,7 +11263,7 @@ html[data-page="team"] .layout .main {
   flex: none;
 }
 .player-name-line .team-role-badge {
-  margin-inline-start: 6px;
+  margin-inline-start: 2px;
 }
 .team-role-badge.is-c {
   background: hsl(var(--amber-hsl) / 0.2);
@@ -12538,6 +12679,11 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   flex: none;
   width: 52px;
   height: 52px;
+  border-radius: 50%;
+}
+.home-lookup-photo-wrap.has-team-ring {
+  border: none;
+  box-shadow: 0 0 0 1.5px var(--team-accent);
 }
 .home-lookup-photo-clip {
   width: 52px;
@@ -12573,6 +12719,12 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   border-radius: 5px;
   box-shadow: 0 0 0 2px hsl(var(--card));
   z-index: 1;
+}
+.home-lookup-badge.has-team-ring {
+  border: none;
+  box-shadow:
+    0 0 0 2px hsl(var(--card)),
+    0 0 0 3.5px var(--team-accent);
 }
 .home-lookup-badge .badge-img {
   width: 20px;
@@ -13022,7 +13174,7 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
   transition: height 0.22s var(--ease-out);
   flex: 1 1 auto;
@@ -14144,19 +14296,11 @@ html[data-page="home"] #subtoolbar {
 }
 @media (max-width: 720px) {
   .home-squad-row {
-    touch-action: pan-y;
-    position: relative;
-    z-index: 0;
+    touch-action: pan-x pan-y;
+    cursor: default;
   }
-  .home-squad-row.is-swipe-active {
-    z-index: 1;
-  }
-  .home-squad-row.is-swipe-armed > td {
-    --home-row-bg: hsl(var(--blue-hsl) / 0.14);
-    background: var(--home-row-bg);
-  }
-  .home-squad-row.is-swipe-armed > td:first-child {
-    border-left-color: hsl(var(--blue-hsl));
+  .home-squad-row .home-col-player {
+    cursor: pointer;
   }
 }
 /* No inset/absolute edge bars — left border accent on each full page table. */
