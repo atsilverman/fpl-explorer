@@ -750,13 +750,24 @@ a { color: var(--blue); }
   color: hsl(var(--blue-hsl));
 }
 
-/* Mid widths: end cluster drops to its own row; search stays icon-sized
-   until expanded (.search-open). */
+/* Mid widths (desktop, not phone layout): keep Filters / Compare / Search
+   on one row. Search flexes narrower instead of shoving Compare down. */
 @media (max-width: 900px) {
-  .topbar-end-cluster {
-    flex: 1 0 100%;
-    margin-left: 0;
+  html:not(.is-mobile-layout) .topbar {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  html:not(.is-mobile-layout) .topbar-end-cluster {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: auto;
     justify-content: flex-end;
+  }
+  html:not(.is-mobile-layout) #search-wrap.search-open {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 112px;
+    max-width: 220px;
   }
 }
 
@@ -3537,47 +3548,75 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 
 /* Ownership: scroll-linked identity shrink → photo/crest only (mobile JS).
-   Keep flex (xData-style) layout; never use `1fr` inside calc() — that
-   invalidates grid tracks and stacks rank/photo/name vertically. */
+   Column morphs; name/meta stay single-line and clip from the right
+   (no wrap → no row-height jump). Rank fades/collapses beside the photo. */
 #ownership-table-wrap.name-simplify-ready {
-  --name-col-compact-players: 44px;
-  --name-col-compact-teams: 44px;
+  --name-col-compact-players: 46px;
+  --name-col-compact-teams: 46px;
+  --own-photo: 30px;
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
 #ownership-table-wrap.name-simplify-ready tbody td.col-player {
   overflow: hidden;
+  vertical-align: middle;
+  padding-left: calc(16px - var(--name-collapse) * 8px);
+  padding-right: calc(8px - var(--name-collapse) * 6px);
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: calc(8px * (1 - var(--name-collapse) * 0.9));
   min-width: 0;
+  max-height: 36px;
+  overflow: hidden;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-rank {
-  flex: none;
+  flex: 0 1 auto;
   width: calc((1 - var(--name-collapse)) * 1.4em);
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   opacity: calc(1 - var(--name-collapse));
+  margin: 0;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-photo,
+#ownership-table-wrap.name-simplify-ready .ownership-crest {
+  flex: 0 0 var(--own-photo);
+  width: var(--own-photo);
+  height: var(--own-photo);
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: calc((1 - var(--name-collapse)) * 220px);
+  max-width: calc((1 - var(--name-collapse)) * 180px);
   overflow: hidden;
   opacity: calc(1 - var(--name-collapse));
+  pointer-events: none;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name,
-#ownership-table-wrap.name-simplify-ready .ownership-id-sub {
+#ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
+#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
+  display: block;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
+  white-space: nowrap;
+  min-width: 0;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-id-sub {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0 4px;
+  margin-top: 2px;
+  min-width: 0;
+  max-height: 1.2em;
+  overflow: hidden;
   white-space: nowrap;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-photo,
-#ownership-table-wrap.name-simplify-ready .ownership-crest {
-  flex: none;
-  width: 28px;
-  height: 28px;
+#ownership-table-wrap.name-simplify-ready .ownership-id-sub > * {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Identity: crest left of name/POS. Flat grid — crest column always hugs the badge. */
@@ -4344,6 +4383,20 @@ tbody tr.row-selected td:first-child {
 .ownership-pill.is-empty {
   background: transparent;
   color: var(--text-faint);
+}
+.ownership-pill .ownership-stat-roll,
+.ownership-delta .ownership-stat-roll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ownership-pill .stat-roll-digit,
+.ownership-delta .stat-roll-digit {
+  height: 1em;
+  overflow: hidden;
 }
 .data-delta,
 .ownership-delta {
@@ -5973,17 +6026,43 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .barbell-wrap.name-simplify-ready .barbell-group-identity {
     overflow: hidden;
   }
-  .barbell-wrap.name-simplify-ready .rankings-identity-text,
-  .barbell-wrap.name-simplify-ready .barbell-label .player-name-line > .player-name,
-  .barbell-wrap.name-simplify-ready .barbell-group-identity .player-name-line > .player-name,
-  .barbell-wrap.name-simplify-ready .barbell-label .ownership-id-sub,
-  .barbell-wrap.name-simplify-ready .barbell-group-identity .ownership-id-sub,
-  .barbell-wrap.name-simplify-ready .barbell-label .player-name-icons,
-  .barbell-wrap.name-simplify-ready .barbell-group-identity .player-name-icons {
+  .barbell-wrap.name-simplify-ready .rankings-identity,
+  .barbell-wrap.name-simplify-ready .barbell-label .player-cell {
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .barbell-wrap.name-simplify-ready .rankings-identity-text {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     opacity: calc(1 - var(--name-collapse));
-    max-width: calc((1 - var(--name-collapse)) * 140px);
+  }
+  .barbell-wrap.name-simplify-ready .rankings-identity .player-name,
+  .barbell-wrap.name-simplify-ready .barbell-label .player-name-line > .player-name,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity .player-name-line > .player-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .barbell-wrap.name-simplify-ready .rankings-identity .ownership-id-sub,
+  .barbell-wrap.name-simplify-ready .barbell-label .ownership-id-sub,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity .ownership-id-sub {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .barbell-wrap.name-simplify-ready .barbell-label .player-name-icons,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity .player-name-icons {
+    flex: none;
+    overflow: hidden;
+    opacity: calc(1 - var(--name-collapse));
+    max-width: calc((1 - var(--name-collapse)) * 48px);
   }
   .barbell-scroll {
     overflow: auto;
@@ -11908,13 +11987,13 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   z-index: 46;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 6px;
   box-sizing: border-box;
-  width: calc(100vw - 20px);
-  max-width: calc(100vw - 20px);
+  width: max-content;
+  max-width: min(280px, calc(100vw - 28px));
   margin: 0;
-  padding: 11px 6px 11px 14px;
+  padding: 10px 4px 10px 12px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: hsl(var(--card));
@@ -11947,6 +12026,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   min-width: 0;
   flex: 1 1 auto;
   padding-right: 2px;
+  max-width: 100%;
 }
 .home-view-banner-label {
   font-size: 10px;
@@ -12045,27 +12125,29 @@ html.has-mobile-filter-fab .home-view-banner {
   border-color: var(--home-view-border);
   border-left: 3px solid var(--home-view-accent);
 }
+/* Toast uses charcoal accent so it doesn’t read as the same blue
+   left rail as the standings/panel “viewing” highlights. */
 .home-dashboard.is-viewing-manager .home-view-banner {
   background: hsl(var(--card));
-  border-color: hsl(var(--blue-hsl) / 0.42);
-  border-left: 3px solid var(--home-view-accent);
+  border-color: var(--border);
+  border-left: 3px solid hsl(var(--primary));
   box-shadow: var(--shadow-md, var(--shadow-sm));
 }
 .home-dashboard.is-viewing-manager .home-view-banner-label {
-  color: hsl(var(--blue-hsl));
+  color: var(--text-faint);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-name {
-  color: hsl(var(--blue-hsl));
+  color: var(--text);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear {
   background: transparent;
   border: none;
-  color: hsl(var(--blue-hsl) / 0.85);
+  color: var(--text-dim);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear:hover {
   background: transparent;
   border: none;
-  color: var(--home-view-accent);
+  color: var(--text);
 }
 .home-summary-cards {
   display: grid;
@@ -12105,9 +12187,6 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 }
 @media (max-width: 720px) {
   .home-dashboard.is-player-lookup .home-player-profile:not([hidden]) {
-    position: sticky;
-    top: 0;
-    z-index: 2;
     margin-bottom: 8px;
   }
   .home-dashboard.is-search-open .home-player-profile,
@@ -12223,6 +12302,9 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-lookup-stat.is-rank-val .home-lookup-stat-val {
   color: hsl(var(--blue-hsl));
 }
+.home-lookup-stat.is-rank-muted .home-lookup-stat-val {
+  color: var(--text-dim);
+}
 .home-lookup-head {
   display: flex;
   align-items: center;
@@ -12301,45 +12383,66 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
 .home-lookup-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 44px;
   gap: 6px;
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid hsl(var(--border) / 0.65);
 }
 .home-lookup-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-width: 0;
+  height: 44px;
   padding: 4px 2px;
   border-radius: calc(var(--radius) - 4px);
   background: hsl(var(--muted) / 0.35);
   text-align: center;
+  overflow: hidden;
 }
 .home-lookup-stat-val {
-  display: block;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-.home-lookup-stat.is-hot .home-lookup-stat-val {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.5em;
+  box-sizing: border-box;
+  height: 20px;
+  min-height: 20px;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-lookup-stat.is-hot .home-lookup-stat-val {
+  width: max-content;
+  max-width: 100%;
   margin-inline: auto;
-  padding: 1px 6px;
+  padding: 0 6px;
   border-radius: 6px;
   background: hsl(var(--positive) / 0.16);
   color: hsl(var(--positive));
 }
 .home-lookup-stat-lbl {
   display: block;
+  flex: none;
+  height: 12px;
   margin-top: 2px;
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
-  line-height: 1.1;
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .home-player-profile-close {
   position: absolute;

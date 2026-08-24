@@ -581,7 +581,7 @@
     // Always-on top/bottom % cell tint vs the full Players/Teams view
     // (raw values stay in the cells; filters don't shrink the bands).
     // enhanceRelative = true ranks the band against the filtered rows instead.
-    // Defaults on whenever filters narrow; user can turn off until filters clear.
+    // Relative stays off until the user presses it while filters are active.
     enhancePct: ENHANCE_PCT_PLAYERS,
     enhanceRelative: false,
     scheduleEnhanceTopN: SCHEDULE_ENHANCE_TOP_DEFAULT,
@@ -633,8 +633,6 @@
   state.teamSearchPins = state.teamCompareCodes;
 
   const MAX_COMPARE = 5;
-  // Relative defaults on when filters narrow; remembered off until filters clear.
-  let enhanceRelativeUserOff = false;
   let lastOptaHighlightFilterKey = "";
   let lastOptaPaginationKey = "";
 
@@ -1205,7 +1203,6 @@
     syncSegThumb(el.splitSeg);
     state.enhancePct = defaultEnhancePct();
     state.enhanceRelative = false;
-    enhanceRelativeUserOff = false;
     state.hiddenCols = new Set();
     updateEnhancePctSlider();
     syncEnhanceRelativeUI();
@@ -3680,29 +3677,38 @@
   function homeLookupStatDisplay(row, spec, modeKey, rankMaps) {
     if (modeKey !== "values") {
       const rank = rankMaps.get(spec.id)?.get(homeLookupPlayerKey(row));
-      return { value: fmtHomeLookupRank(rank), hot: false, isRank: true };
+      const n = Number(rank);
+      const topRank = Number.isFinite(n) && n > 0 && n <= 10;
+      return { value: fmtHomeLookupRank(rank), hot: false, isRank: true, topRank };
     }
     const elementId = homeLookupElementId(row);
     switch (spec.id) {
       case "gwPts": {
         const pts = homeElementGwStats(elementId).pts;
         const n = pts != null ? Number(pts) : 0;
-        return { value: String(n), hot: n >= 8, isRank: false };
+        return { value: String(n), hot: n >= 8, isRank: false, topRank: false };
       }
       case "price":
         return {
           value: row.price != null ? `£${Number(row.price).toFixed(1)}m` : "—",
           hot: false,
           isRank: false,
+          topRank: false,
         };
       case "league":
-        return { value: homeLeagueOwnershipLabel(elementId), hot: false, isRank: false };
+        return {
+          value: homeLeagueOwnershipLabel(elementId),
+          hot: false,
+          isRank: false,
+          topRank: false,
+        };
       case "tsb": {
         const tsb = currentOwnership(row.code);
         return {
           value: tsb != null ? `${Number(tsb).toFixed(1)}%` : "—",
           hot: false,
           isRank: false,
+          topRank: false,
         };
       }
       default: {
@@ -3711,13 +3717,14 @@
           value: feedStatDisplay(raw, spec.decimals),
           hot: false,
           isRank: false,
+          topRank: false,
         };
       }
     }
   }
 
-  function homeLookupStatCard(value, label, { hot = false, isRank = false } = {}) {
-    const rankCls = isRank ? " is-rank-val" : "";
+  function homeLookupStatCard(value, label, { hot = false, isRank = false, topRank = false } = {}) {
+    const rankCls = isRank ? (topRank ? " is-rank-val" : " is-rank-muted") : "";
     const hotCls = hot ? " is-hot" : "";
     return `<div class="home-lookup-stat${hotCls}${rankCls}"><span class="home-lookup-stat-val">${escapeHtml(String(value ?? "—"))}</span><span class="home-lookup-stat-lbl">${escapeHtml(label)}</span></div>`;
   }
@@ -3738,6 +3745,7 @@
         return homeLookupStatCard(shown.value, spec.label, {
           hot: shown.hot,
           isRank: shown.isRank,
+          topRank: shown.topRank,
         });
       })
       .join("");
@@ -4208,7 +4216,7 @@
     requestAnimationFrame(() => requestAnimationFrame(draw));
   }
 
-  function startHomeEnterMotion(pane, { duration = HOME_ENTER_ROLL_MS } = {}) {
+  function startHomeEnterMotion(pane, { duration = HOME_ENTER_ROLL_MS, skipStandings = false } = {}) {
     if (!pane || prefersReducedMotion()) {
       if (pane) {
         finishHomeStatRolls(pane);
@@ -4219,6 +4227,11 @@
     const token = ++homeEnterMotionToken;
     const rollMs = Math.max(400, Number(duration) || HOME_ENTER_ROLL_MS);
     prepareHomeStatRolls();
+    // Manager view-switch: standings values don't change — settle them
+    // immediately so only summary + squad re-roll / draw.
+    if (skipStandings && el.homeStandingsPanel) {
+      finishHomeStatRolls(el.homeStandingsPanel);
+    }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (token !== homeEnterMotionToken) return;
@@ -4230,10 +4243,19 @@
         syncHomeSquadRowHeights();
         syncHomeStandingsTrackHeight(0, { animate: false });
         syncHomeSquadTrackHeight(0, { animate: false });
-        mountAndAnimateStatRolls(pane, {
-          duration: rollMs,
-          selector: ".home-stat-roll[data-count-to]",
-        });
+        const rollNodes = [...pane.querySelectorAll(".home-stat-roll[data-count-to]")].filter(
+          (node) =>
+            !(
+              skipStandings &&
+              el.homeStandingsPanel &&
+              el.homeStandingsPanel.contains(node)
+            )
+        );
+        if (prefersReducedMotion()) {
+          rollNodes.forEach(finishStatRollNode);
+        } else {
+          rollNodes.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
+        }
         animateHomeImpBars(pane);
         // Hard-settle rolls only — no layout sync (avoids mid-enter height jump).
         window.setTimeout(() => {
@@ -4478,13 +4500,17 @@
     syncHomeLookupUI();
     requestAnimationFrame(() => {
       if (animateView) {
-        startHomeEnterMotion(el.homePage, { duration: HOME_VIEW_SWITCH_ROLL_MS });
+        startHomeEnterMotion(el.homePage, {
+          duration: HOME_VIEW_SWITCH_ROLL_MS,
+          skipStandings: true,
+        });
       } else if (!enterBusy) {
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });
       }
       syncHomeSquadLayout();
-      syncHomeStandingsLayout();
+      // View-switch: don't tween standings card height — selection is the only change.
+      syncHomeStandingsLayout(undefined, animateView ? { animate: false } : undefined);
     });
     // During enter / view-switch, leave odometers empty and IMP bars undrawn so
     // startHomeEnterMotion can animate everything in one synchronized pass.
@@ -5567,7 +5593,16 @@
     });
   }
 
-  function nameSimplifyProgress(scrollLeft, origin = 0) {
+  function nameSimplifyProgress(scrollLeft, origin = 0, wrap = null) {
+    // Ownership (and similarly tight tables): map the full available
+    // horizontal scroll to collapse 0→1 so photo-only is reachable even
+    // when maxScroll is well under NAME_SIMPLIFY_END.
+    if (wrap && state.page === "ownership") {
+      const maxScroll = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+      if (maxScroll <= 0) return 0;
+      const linear = Math.min(1, Math.max(0, scrollLeft) / maxScroll);
+      return linear * linear * (3 - 2 * linear);
+    }
     const rel = Math.max(0, scrollLeft - origin);
     if (rel <= NAME_SIMPLIFY_START) return 0;
     const linear = Math.min(
@@ -5646,7 +5681,7 @@
     }
     const host = nameSimplifyHost(scrollEl);
     const scrollLeft = scrollLeftOverride != null ? scrollLeftOverride : scrollEl.scrollLeft;
-    const t = nameSimplifyProgress(scrollLeft, nameSimplifyOrigin(scrollEl));
+    const t = nameSimplifyProgress(scrollLeft, nameSimplifyOrigin(scrollEl), scrollEl);
     host.classList.add("name-simplify-ready");
     host.dataset.view = state.page === "team" ? "players" : state.view;
     host.style.setProperty("--name-collapse", String(t));
@@ -6476,7 +6511,7 @@
       return;
     }
     const filtered = applyFilters(getRows());
-    // Resolve Relative default before building highlight maps.
+    // Resolve Relative visibility before building highlight maps.
     syncEnhanceRelativeUI();
     const sorted = sortRows(filtered);
     const highlightFilterKey = state.page === "opta" ? optaHighlightFilterKey(filtered.length) : "";
@@ -13182,13 +13217,25 @@
     if (value == null || Number.isNaN(Number(value))) {
       return `<span class="ownership-pill is-empty">—</span>`;
     }
-    return `<span class="ownership-pill${live ? " is-live" : ""}">${escapeHtml(fmtOwnedPct(value))}</span>`;
+    return `<span class="ownership-pill${live ? " is-live" : ""}">${statRollSpan(Number(value), {
+      from: 0,
+      decimals: 1,
+      className: "ownership-stat-roll",
+    })}</span>`;
   }
 
   function ownershipDeltaPillHTML(delta, { quiet = false } = {}) {
     const cls = ownershipDeltaClass(delta);
     const quietCls = quiet && cls === "is-flat" ? " is-quiet" : "";
-    return `<span class="ownership-delta ${cls}${quietCls}">${escapeHtml(fmtOwnershipTrendDelta(delta))}</span>`;
+    if (delta == null || Number.isNaN(Number(delta))) {
+      return `<span class="ownership-delta ${cls}${quietCls}">—</span>`;
+    }
+    return `<span class="ownership-delta ${cls}${quietCls}">${statRollSpan(Number(delta), {
+      from: 0,
+      decimals: 1,
+      signed: true,
+      className: "ownership-stat-roll",
+    })}</span>`;
   }
 
   function ownershipSparkHTML(row) {
@@ -13605,6 +13652,60 @@
     syncFiltersResetUI();
     syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
     bindAllNameColumnSimplifies();
+    const entering =
+      el.ownershipPage &&
+      (el.ownershipPage.classList.contains("is-entering") ||
+        el.ownershipPage.classList.contains("is-enter-pending"));
+    if (entering) {
+      startOwnershipEnterMotion(el.ownershipPage);
+    } else if (el.ownershipPage) {
+      finishOwnershipStatRolls(el.ownershipPage);
+    }
+  }
+
+  let ownershipEnterMotionToken = 0;
+  const OWNERSHIP_ENTER_ROLL_MS_MIN = 420;
+  const OWNERSHIP_ENTER_ROLL_MS_MAX = 1600;
+
+  function finishOwnershipStatRolls(root) {
+    if (!root) return;
+    root.querySelectorAll(".ownership-stat-roll[data-count-to]").forEach(finishStatRollNode);
+  }
+
+  /** Larger |value| → longer odometer (ownership % and Δ pills). */
+  function ownershipRollDurationMs(value) {
+    const mag = Math.abs(Number(value));
+    if (!Number.isFinite(mag)) return OWNERSHIP_ENTER_ROLL_MS_MIN;
+    const scaled = OWNERSHIP_ENTER_ROLL_MS_MIN + Math.sqrt(mag) * 140;
+    return Math.round(
+      Math.min(OWNERSHIP_ENTER_ROLL_MS_MAX, Math.max(OWNERSHIP_ENTER_ROLL_MS_MIN, scaled))
+    );
+  }
+
+  function startOwnershipEnterMotion(pane) {
+    if (!pane) return;
+    if (prefersReducedMotion()) {
+      finishOwnershipStatRolls(pane);
+      return;
+    }
+    const token = ++ownershipEnterMotionToken;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (token !== ownershipEnterMotionToken) return;
+        const nodes = [...pane.querySelectorAll(".ownership-stat-roll[data-count-to]")];
+        if (!nodes.length) return;
+        let maxMs = OWNERSHIP_ENTER_ROLL_MS_MIN;
+        nodes.forEach((node) => {
+          const ms = ownershipRollDurationMs(node.dataset.countTo);
+          maxMs = Math.max(maxMs, ms);
+          animateStatRollNode(node, { duration: ms });
+        });
+        window.setTimeout(() => {
+          if (token !== ownershipEnterMotionToken) return;
+          finishOwnershipStatRolls(pane);
+        }, maxMs + 80);
+      });
+    });
   }
 
   function statRollFormat(value, decimals, signed) {
@@ -13810,8 +13911,6 @@
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
-  function startOwnershipEnterMotion() {}
-
 
   const PAGE_KEY = "fpl-explorer-page";
   const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
@@ -13858,11 +13957,17 @@
       homeEnterMotionToken += 1;
       flushHomeEnterDeferred();
     }
+    if (pane.id === "ownership-page") {
+      ownershipEnterMotionToken += 1;
+    }
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
         flushHomeEnterDeferred();
+      }
+      if (pane.id === "ownership-page") {
+        finishOwnershipStatRolls(pane);
       }
       return;
     }
@@ -13968,6 +14073,7 @@
         if (marketsEnter) startStatCountUp(pane, ".markets-stat-value[data-count-to]");
         if (rankingsEnter) animateRankingsBars();
         if (homeEnter) startHomeEnterMotion(pane);
+        if (ownershipEnter) startOwnershipEnterMotion(pane);
         // Matchups cards cascade with scatter (no wait for scatter to finish).
         const clearMs = expectedEnter
           ? 2400
@@ -13991,6 +14097,10 @@
             pane.classList.remove("is-entering");
             flushHomeEnterDeferred();
             return;
+          }
+          if (ownershipEnter) {
+            ownershipEnterMotionToken += 1;
+            finishOwnershipStatRolls(pane);
           }
           pane.classList.remove("is-entering");
         }, clearMs);
@@ -14238,7 +14348,6 @@
     }
     if (page !== "opta") {
       state.enhanceRelative = false;
-      enhanceRelativeUserOff = false;
     }
     syncEnhanceRelativeUI();
     if (el.columnsBtn) el.columnsBtn.style.display = "none";
@@ -14319,6 +14428,7 @@
       if (el.homePage) el.homePage.classList.add("is-enter-pending");
       renderHome();
     } else if (page === "ownership") {
+      if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
       renderOwnership();
     } else if (page === "expected") {
       renderExpected();
@@ -15789,8 +15899,7 @@
 
   // Highlight Top/Bottom % is always on for Statistics; show the slider
   // whenever that page is active. Default bands use the full view; Relative
-  // ranks against the filtered rows when a narrowing filter is active (on by
-  // default; user can turn off until filters clear).
+  // (opt-in) ranks against the filtered rows when a narrowing filter is active.
   function optaFiltersNarrowPopulation() {
     if (state.page !== "opta") return false;
     const all = getRows();
@@ -15827,9 +15936,6 @@
     const show = state.page === "opta" && optaFiltersNarrowPopulation();
     if (!show) {
       state.enhanceRelative = false;
-      enhanceRelativeUserOff = false;
-    } else if (!enhanceRelativeUserOff) {
-      state.enhanceRelative = true;
     }
     if (!btn) {
       syncHighlightUI();
@@ -15882,12 +15988,10 @@
     el.enhanceRelativeBtn.addEventListener("click", () => {
       if (!optaFiltersNarrowPopulation()) {
         state.enhanceRelative = false;
-        enhanceRelativeUserOff = false;
         syncEnhanceRelativeUI();
         return;
       }
       state.enhanceRelative = !state.enhanceRelative;
-      enhanceRelativeUserOff = !state.enhanceRelative;
       syncEnhanceRelativeUI();
       if (state.enhanceRelative) {
         showToast({
