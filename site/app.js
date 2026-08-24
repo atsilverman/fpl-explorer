@@ -874,6 +874,7 @@
     homeSquadBody: $("#home-squad-body"),
     homeSquadFixturesBody: $("#home-squad-fixtures-body"),
     homeSquadFixturesHead: $("#home-squad-fixtures-head"),
+    homeSquadFixturesCols: $("#home-squad-fixtures-cols"),
     homeSquadTrack: $("#home-squad-track"),
     homeSquadDots: $("#home-squad-dots"),
     homeStandingsBody: $("#home-standings-body"),
@@ -2348,6 +2349,14 @@
   let homeViewEntryId = null;
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
+  let homeLookupStatMode = 0;
+  let homeLookupCardBound = false;
+
+  const HOME_LOOKUP_STAT_MODES = [
+    { key: "values", label: "", className: "" },
+    { key: "overall", label: "Rank · All", className: "is-rank-overall" },
+    { key: "position", label: "Rank · POS", className: "is-rank-pos" },
+  ];
   let homeElementGwCache = null;
 
   function homeConfiguredEntryId() {
@@ -2517,13 +2526,27 @@
     };
   }
 
-  function homeCaptainPickHTML(player) {
+  function homeLeagueMaxCaptainPts() {
+    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    let max = null;
+    for (const r of rows) {
+      const { captain } = homeCaptainsForEntry(Number(r.entry));
+      if (!captain) continue;
+      const pts = captain.gwPoints != null ? Number(captain.gwPoints) : null;
+      if (!Number.isFinite(pts)) continue;
+      if (max == null || pts > max) max = pts;
+    }
+    return max;
+  }
+
+  function homeCaptainPickHTML(player, { isTopCaptain = false } = {}) {
     if (!player) return "—";
     const teamBadge = badgeHTML(player.team, "home-crest home-crest-captain") ||
       `<span class="home-crest-fallback home-crest-captain">${escapeHtml((player.team || "?").slice(0, 3))}</span>`;
     const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
+    const ptsHi = isTopCaptain && Number.isFinite(pts);
     const ptsHTML = Number.isFinite(pts)
-      ? `<span class="home-captain-pts">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+      ? `<span class="home-captain-pts${ptsHi ? " is-hot" : ""}">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
       : "";
     return `<span class="home-captain-pick">${teamBadge}<span class="home-captain-pick-text"><span class="home-captain-name">${escapeHtml(player.name || "—")}</span>${ptsHTML}</span></span>`;
   }
@@ -2596,14 +2619,20 @@
     </tr>`;
   }
 
-  function homeCaptainsRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
+  function homeCaptainsRowHTML(row, { configuredEntry, viewEntry, viewingOther, topCaptainPts }) {
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const { captain, vice } = homeCaptainsForEntry(entry);
+    const captainPts = captain && captain.gwPoints != null ? Number(captain.gwPoints) : null;
+    const isTopCaptain =
+      Number.isFinite(topCaptainPts)
+      && topCaptainPts > 0
+      && Number.isFinite(captainPts)
+      && captainPts === topCaptainPts;
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
       ${homeStandingsManagerCellsHTML(row)}
-      <td class="home-col-captain">${homeCaptainPickHTML(captain)}</td>
+      <td class="home-col-captain${isTopCaptain ? " is-top-captain" : ""}">${homeCaptainPickHTML(captain, { isTopCaptain })}</td>
       <td class="home-col-vice">${homeCaptainPickHTML(vice)}</td>
     </tr>`;
   }
@@ -2800,12 +2829,18 @@
     requestAnimationFrame(() => syncHomeStandingsLayout(0));
   }
 
-  const HOME_SQUAD_FIXTURE_GWS = 5;
+  const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;
+  const HOME_SQUAD_FIXTURE_GWS_MOBILE = 4;
+
+  function homeSquadFixtureGwCount() {
+    return NARROW_MQ.matches ? HOME_SQUAD_FIXTURE_GWS_MOBILE : HOME_SQUAD_FIXTURE_GWS_DESKTOP;
+  }
 
   function homeSquadFixtureGwList() {
     const start = planningGameweek();
+    const limit = homeSquadFixtureGwCount();
     const gws = [];
-    for (let gw = start; gw <= SCHEDULE_GW_MAX && gws.length < HOME_SQUAD_FIXTURE_GWS; gw += 1) {
+    for (let gw = start; gw <= SCHEDULE_GW_MAX && gws.length < limit; gw += 1) {
       gws.push(gw);
     }
     return gws;
@@ -2987,6 +3022,15 @@
     }
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
+      const nextCount = homeSquadFixtureGwList().length;
+      const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
+      const prevCount = fixturesTable
+        ? Number(fixturesTable.getAttribute("data-fx-cols"))
+        : nextCount;
+      if (Number.isFinite(prevCount) && prevCount !== nextCount) {
+        renderHome({ deferDuringEnter: true });
+        return;
+      }
       syncHomeSquadLayout();
     });
     requestAnimationFrame(() => syncHomeSquadLayout(0));
@@ -3030,6 +3074,113 @@
     });
   }
 
+  /** Team-row player card — tap target on mobile; full card UI next. */
+  function openHomeTeamPlayerFromRow(tr) {
+    const eid = Number(tr && tr.dataset.element);
+    if (!Number.isFinite(eid)) return;
+    const squad = homeSquadForEntry(homeActiveViewEntryId());
+    if (!squad.find((r) => Number(r.element) === eid)) return;
+  }
+
+  let homeSquadRowSwipe = null;
+  let homeSquadRowSwipeBlockClick = false;
+
+  function homeSquadOwnerSwipeThreshold(tr) {
+    const w = tr && tr.getBoundingClientRect ? tr.getBoundingClientRect().width : 320;
+    return Math.max(48, Math.round(w * 0.22));
+  }
+
+  function resetHomeSquadRowSwipe(tr, { animate = true } = {}) {
+    if (!tr) return;
+    tr.classList.remove("is-swipe-armed", "is-swipe-active");
+    if (animate && !prefersReducedMotion()) {
+      tr.style.transition = "transform 0.2s var(--ease-out)";
+      tr.style.transform = "";
+      tr.addEventListener(
+        "transitionend",
+        () => tr.style.removeProperty("transition"),
+        { once: true }
+      );
+    } else {
+      tr.style.removeProperty("transform");
+      tr.style.removeProperty("transition");
+    }
+  }
+
+  function bindHomeSquadRowSwipe(onOwnerSwipe) {
+    if (!el.homeSquadTrack) return;
+
+    el.homeSquadTrack.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+        const tr = e.target.closest("tr.home-squad-row");
+        if (!tr || !el.homeSquadTrack.contains(tr)) return;
+        const touch = e.touches[0];
+        homeSquadRowSwipe = {
+          tr,
+          startX: touch.clientX,
+          startY: touch.clientY,
+          tracking: true,
+        };
+      },
+      { passive: true }
+    );
+
+    el.homeSquadTrack.addEventListener(
+      "touchmove",
+      (e) => {
+        const swipe = homeSquadRowSwipe;
+        if (!swipe || !swipe.tracking || e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - swipe.startX;
+        const dy = touch.clientY - swipe.startY;
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 14) {
+          resetHomeSquadRowSwipe(swipe.tr, { animate: false });
+          swipe.tracking = false;
+          return;
+        }
+        if (Math.abs(dx) < 6) return;
+        swipe.tracking = "horizontal";
+        if (e.cancelable) e.preventDefault();
+        const clamped = Math.max(-100, Math.min(100, dx));
+        swipe.tr.classList.add("is-swipe-active");
+        swipe.tr.style.transition = "none";
+        swipe.tr.style.transform = `translateX(${clamped}px)`;
+        swipe.tr.classList.toggle(
+          "is-swipe-armed",
+          Math.abs(dx) >= homeSquadOwnerSwipeThreshold(swipe.tr)
+        );
+      },
+      { passive: false }
+    );
+
+    const finishRowSwipe = () => {
+      const swipe = homeSquadRowSwipe;
+      if (!swipe) return;
+      homeSquadRowSwipe = null;
+      if (swipe.tracking !== "horizontal") {
+        resetHomeSquadRowSwipe(swipe.tr, { animate: false });
+        return;
+      }
+      const transform = swipe.tr.style.transform || "";
+      const match = transform.match(/translateX\(([-\d.]+)px\)/);
+      const dx = match ? Number(match[1]) : 0;
+      const threshold = homeSquadOwnerSwipeThreshold(swipe.tr);
+      resetHomeSquadRowSwipe(swipe.tr);
+      if (Math.abs(dx) >= threshold) {
+        homeSquadRowSwipeBlockClick = true;
+        window.setTimeout(() => {
+          homeSquadRowSwipeBlockClick = false;
+        }, 450);
+        onOwnerSwipe(swipe.tr);
+      }
+    };
+
+    el.homeSquadTrack.addEventListener("touchend", finishRowSwipe);
+    el.homeSquadTrack.addEventListener("touchcancel", finishRowSwipe);
+  }
+
   function bindHomeOwnerHighlighting() {
     if (homeOwnerBindingsReady) return;
     if (!el.homeSquadTrack || !el.homeStandingsTrack) return;
@@ -3055,6 +3206,8 @@
       if (!togglingOff) homeScrollStandingsIntoView();
     }
 
+    bindHomeSquadRowSwipe(toggleSquadOwner);
+
     function toggleStandingOwner(tr) {
       if (!tr || !el.homeStandingsTrack.contains(tr)) return;
       const entry = Number(tr.dataset.entry);
@@ -3067,6 +3220,11 @@
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
+      if (homeSquadRowSwipeBlockClick) return;
+      if (NARROW_MQ.matches) {
+        openHomeTeamPlayerFromRow(tr);
+        return;
+      }
       toggleSquadOwner(tr);
     });
 
@@ -3082,6 +3240,10 @@
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
+      if (NARROW_MQ.matches) {
+        openHomeTeamPlayerFromRow(tr);
+        return;
+      }
       toggleSquadOwner(tr);
     });
 
@@ -3101,7 +3263,7 @@
     if (row.isCaptain) tags.push(`<span class="home-role-tag home-role-c">C</span>`);
     if (row.isVice) tags.push(`<span class="home-role-tag home-role-a">A</span>`);
     const pin = configuredPin
-      ? `<span class="owned-flag home-owned-flag"${tipAttr("In your squad")} aria-label="In your squad">${ownedPinSVG()}</span>`
+      ? `<span class="owned-flag home-owned-flag"${tipAttr("In your team")} aria-label="In your team">${ownedPinSVG()}</span>`
       : "";
     return `<td class="home-col-player">
         <div class="home-player-cell">
@@ -3171,13 +3333,20 @@
     };
   }
 
+  function homeSquadRowAriaLabel(name) {
+    const label = name || "this player";
+    return NARROW_MQ.matches
+      ? `Open ${label} player card`
+      : `Show managers who own ${label}`;
+  }
+
   function homeSquadFixturesRowHTML(row, gws, opts = {}) {
     const benchCls = row.onBench ? " home-row-bench" : "";
     const cells = gws.map((gw) => {
       const cell = homeSquadFixtureCellHTML(row.team, gw);
       return `<td class="home-col-fx${cell.className}"${cell.style}>${cell.inner}</td>`;
     }).join("");
-    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="Show managers who own ${escapeHtml(row.name || "this player")}">
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
       ${homeSquadPlayerCellHTML(row, opts)}
       ${cells}
     </tr>`;
@@ -3227,7 +3396,7 @@
       textFallback: impLabel,
     });
     const benchCls = row.onBench ? " home-row-bench" : "";
-    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="Show managers who own ${escapeHtml(row.name || "this player")}">
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
       ${homeSquadPlayerCellHTML(row, opts)}
       <td class="home-col-pts">${ptsHTML}</td>
       <td class="home-col-mp"><div class="home-fx-stack">${mpHTML}</div></td>
@@ -3333,6 +3502,178 @@
     return !!(owners && owners.size);
   }
 
+  function homeLeagueOwnershipLabel(elementId) {
+    const owners = homeOwnersForElement(elementId);
+    const total = Array.isArray(HOME.standings) ? HOME.standings.length : 0;
+    if (!total) return "—";
+    return `${owners.size}/${total}`;
+  }
+
+  function homeLookupPlayerKey(row) {
+    return String(row.code ?? homeLookupElementId(row) ?? "");
+  }
+
+  function homeLookupStatSpecList(row) {
+    const season = homePlayerStatSpecs(row.position).map((s) => ({
+      id: s.key,
+      key: s.key,
+      label: s.label,
+      decimals: s.decimals,
+      lowerBetter: LOWER_BETTER.has(s.key),
+    }));
+    return [
+      { id: "gwPts", label: "GW pts", lowerBetter: false, allowHot: true },
+      { id: "price", label: "Price", lowerBetter: true },
+      ...season,
+      { id: "league", label: "League", lowerBetter: false },
+      { id: "tsb", label: "TSB", lowerBetter: false },
+    ];
+  }
+
+  function homeLookupStatRawValue(row, spec) {
+    const elementId = homeLookupElementId(row);
+    switch (spec.id) {
+      case "gwPts": {
+        const pts = homeElementGwStats(elementId).pts;
+        return Number.isFinite(Number(pts)) ? Number(pts) : null;
+      }
+      case "price":
+        return row.price != null && Number.isFinite(Number(row.price)) ? Number(row.price) : null;
+      case "league":
+        return homeOwnersForElement(elementId).size;
+      case "tsb": {
+        const tsb = currentOwnership(row.code);
+        return tsb != null && Number.isFinite(Number(tsb)) ? Number(tsb) : null;
+      }
+      default: {
+        const raw = feedRowStatValue(row, spec.key);
+        return raw == null || raw === "" || Number.isNaN(Number(raw)) ? null : Number(raw);
+      }
+    }
+  }
+
+  function homeLookupRankMapsForRow(row, modeKey) {
+    const maps = new Map();
+    if (modeKey === "values") return maps;
+    const pos = String(row.position || "").toUpperCase();
+    const population =
+      modeKey === "position"
+        ? homeSearchCatalog().filter((r) => String(r.position || "").toUpperCase() === pos)
+        : homeSearchCatalog();
+    for (const spec of homeLookupStatSpecList(row)) {
+      const entries = population
+        .map((r) => ({
+          key: homeLookupPlayerKey(r),
+          val: homeLookupStatRawValue(r, spec),
+        }))
+        .filter((x) => x.key && x.val != null && Number.isFinite(x.val));
+      entries.sort((a, b) => (spec.lowerBetter ? a.val - b.val : b.val - a.val));
+      maps.set(spec.id, denseRankMap(entries));
+    }
+    return maps;
+  }
+
+  function homeLookupStatDisplay(row, spec, modeKey, rankMaps) {
+    if (modeKey !== "values") {
+      const rank = rankMaps.get(spec.id)?.get(homeLookupPlayerKey(row));
+      return { value: rank != null ? String(rank) : "—", hot: false, isRank: true };
+    }
+    const elementId = homeLookupElementId(row);
+    switch (spec.id) {
+      case "gwPts": {
+        const pts = homeElementGwStats(elementId).pts;
+        const n = pts != null ? Number(pts) : 0;
+        return { value: String(n), hot: n >= 8, isRank: false };
+      }
+      case "price":
+        return {
+          value: row.price != null ? `£${Number(row.price).toFixed(1)}m` : "—",
+          hot: false,
+          isRank: false,
+        };
+      case "league":
+        return { value: homeLeagueOwnershipLabel(elementId), hot: false, isRank: false };
+      case "tsb": {
+        const tsb = currentOwnership(row.code);
+        return {
+          value: tsb != null ? `${Number(tsb).toFixed(1)}%` : "—",
+          hot: false,
+          isRank: false,
+        };
+      }
+      default: {
+        const raw = feedRowStatValue(row, spec.key);
+        return {
+          value: feedStatDisplay(raw, spec.decimals),
+          hot: false,
+          isRank: false,
+        };
+      }
+    }
+  }
+
+  function homeLookupStatCard(value, label, { hot = false, isRank = false } = {}) {
+    const rankCls = isRank ? " is-rank-val" : "";
+    const hotCls = hot ? " is-hot" : "";
+    return `<div class="home-lookup-stat${hotCls}${rankCls}"><span class="home-lookup-stat-val">${escapeHtml(String(value ?? "—"))}</span><span class="home-lookup-stat-lbl">${escapeHtml(label)}</span></div>`;
+  }
+
+  function homePlayerProfileCardsHTML(row, modeKey = "values") {
+    if (!row) return "";
+    const rankMaps = homeLookupRankMapsForRow(row, modeKey);
+    return homeLookupStatSpecList(row)
+      .map((spec) => {
+        const shown = homeLookupStatDisplay(row, spec, modeKey, rankMaps);
+        return homeLookupStatCard(shown.value, spec.label, {
+          hot: shown.hot,
+          isRank: shown.isRank,
+        });
+      })
+      .join("");
+  }
+
+  function homeLookupStatModeMeta() {
+    return HOME_LOOKUP_STAT_MODES[homeLookupStatMode] || HOME_LOOKUP_STAT_MODES[0];
+  }
+
+  function refreshHomeLookupCardDisplay() {
+    const card = el.homePlayerProfile && el.homePlayerProfile.querySelector(".home-lookup-card");
+    if (!card || !homeLookupPlayer) return;
+    const mode = homeLookupStatModeMeta();
+    card.classList.remove("is-rank-overall", "is-rank-pos");
+    if (mode.className) card.classList.add(mode.className);
+    card.dataset.rankMode = mode.key;
+    const modeEl = card.querySelector(".home-lookup-mode");
+    if (modeEl) {
+      modeEl.textContent = mode.label;
+      modeEl.hidden = !mode.label;
+    }
+    const statsEl = card.querySelector(".home-lookup-stats");
+    if (statsEl) statsEl.innerHTML = homePlayerProfileCardsHTML(homeLookupPlayer, mode.key);
+  }
+
+  function cycleHomeLookupStatMode() {
+    if (!homeLookupPlayer) return;
+    homeLookupStatMode = (homeLookupStatMode + 1) % HOME_LOOKUP_STAT_MODES.length;
+    refreshHomeLookupCardDisplay();
+  }
+
+  function bindHomeLookupCard() {
+    if (homeLookupCardBound || !el.homePlayerProfile) return;
+    homeLookupCardBound = true;
+    el.homePlayerProfile.addEventListener("click", (e) => {
+      if (!e.target.closest(".home-lookup-card")) return;
+      cycleHomeLookupStatMode();
+    });
+    el.homePlayerProfile.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const card = e.target.closest(".home-lookup-card");
+      if (!card || !el.homePlayerProfile.contains(card)) return;
+      e.preventDefault();
+      cycleHomeLookupStatMode();
+    });
+  }
+
   function homePlayerStatSpecs(position) {
     const pos = String(position || "").toUpperCase();
     const byPos = {
@@ -3364,17 +3705,6 @@
     return byPos[pos] || byPos.FWD;
   }
 
-  function homePlayerStatsHTML(row) {
-    if (!row) return "";
-    return homePlayerStatSpecs(row.position)
-      .map((spec) => {
-        const raw = feedRowStatValue(row, spec.key);
-        const shown = feedStatDisplay(raw, spec.decimals);
-        return `<div class="home-lookup-stat"><span class="home-lookup-stat-val">${escapeHtml(shown)}</span><span class="home-lookup-stat-lbl">${escapeHtml(spec.label)}</span></div>`;
-      })
-      .join("");
-  }
-
   function homePlayerProfileHTML(row, { ownershipNote = "" } = {}) {
     if (!row) return "";
     const initials = String(row.name || "?")
@@ -3385,31 +3715,28 @@
       .join("")
       .toUpperCase() || "?";
     const photo = feedPlayerPhotoUrl(row.code);
-    const teamLabel = row.team ? teamNameForSeason(row.team) : "";
     const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
-    const owned = currentOwnership(row.code);
     const metaBits = [];
     if (row.position) metaBits.push(posBadgeHTML(row.position));
-    if (row.price != null) metaBits.push(`<span>£${Number(row.price).toFixed(1)}m</span>`);
-    if (owned != null) metaBits.push(`<span>${Number(owned).toFixed(1)}% TSB</span>`);
-    if (teamLabel) metaBits.push(`<span>${escapeHtml(teamLabel)}</span>`);
     const photoBlock = photo
       ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-initials="${escapeHtml(initials)}" />`
       : `<span class="home-lookup-photo home-lookup-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
-    return `<article class="home-lookup-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
+    const mode = homeLookupStatModeMeta();
+    return `<article class="home-lookup-card is-lookup-tappable${mode.className ? ` ${mode.className}` : ""}" data-rank-mode="${escapeHtml(mode.key)}" role="button" tabindex="0" aria-label="Player stats. Tap to cycle rank views."${accentStyle ? ` style="${accentStyle}"` : ""}>
+      <span class="home-lookup-mode"${mode.label ? "" : " hidden"}>${escapeHtml(mode.label)}</span>
       <div class="home-lookup-head">
         <div class="home-lookup-photo-wrap">
-          ${photoBlock}
+          <div class="home-lookup-photo-clip">${photoBlock}</div>
           ${badge}
         </div>
         <div class="home-lookup-id">
           <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}</h3>
-          <p class="home-lookup-meta">${metaBits.join("")}</p>
+          ${metaBits.length ? `<p class="home-lookup-meta">${metaBits.join("")}</p>` : ""}
         </div>
       </div>
-      <div class="home-lookup-stats">${homePlayerStatsHTML(row)}</div>
+      <div class="home-lookup-stats">${homePlayerProfileCardsHTML(row, mode.key)}</div>
       ${ownershipNote ? `<p class="home-lookup-ownership-note">${escapeHtml(ownershipNote)}</p>` : ""}
     </article>`;
   }
@@ -3438,11 +3765,14 @@
 
   function homeSearchResultRowHTML(row) {
     const badge = row.team ? badgeHTML(row.team) : "";
-    const team = row.team ? teamNameForSeason(row.team) : "";
-    const meta = [row.position, team, row.price != null ? `£${Number(row.price).toFixed(1)}m` : null]
-      .filter(Boolean)
-      .join(" · ");
     const id = homeLookupElementId(row);
+    const leagueOwn = homeLeagueOwnershipLabel(id);
+    const tsb = currentOwnership(row.code);
+    const metaParts = [row.position];
+    if (leagueOwn !== "—") metaParts.push(`${leagueOwn} league`);
+    if (tsb != null) metaParts.push(`${Number(tsb).toFixed(1)}% TSB`);
+    if (row.price != null) metaParts.push(`£${Number(row.price).toFixed(1)}m`);
+    const meta = metaParts.filter(Boolean).join(" · ");
     return `<button type="button" class="home-search-row" data-home-search-id="${escapeHtml(String(id ?? ""))}" data-home-search-code="${escapeHtml(String(row.code ?? ""))}">
       ${badge}
       <span class="home-search-row-text">
@@ -3543,6 +3873,7 @@
 
   function clearHomePlayerLookup({ rerender = true } = {}) {
     homeLookupPlayer = null;
+    homeLookupStatMode = 0;
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
@@ -3556,6 +3887,7 @@
       return;
     }
     homeLookupPlayer = row;
+    homeLookupStatMode = 0;
     syncHomeSearchBtn();
     syncHomeLookupUI();
   }
@@ -3594,6 +3926,7 @@
     if (el.homePlayerProfile) {
       el.homePlayerProfile.hidden = false;
       el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer, { ownershipNote });
+      bindHomeLookupCard();
       el.homePlayerProfile.querySelectorAll("img.home-lookup-photo").forEach((img) => {
         img.addEventListener("error", () => {
           const fallback = document.createElement("span");
@@ -3791,6 +4124,7 @@
     if (el.homeSquadBody) el.homeSquadBody.innerHTML = "";
     if (el.homeSquadFixturesBody) el.homeSquadFixturesBody.innerHTML = "";
     if (el.homeSquadFixturesHead) el.homeSquadFixturesHead.innerHTML = "";
+    if (el.homeSquadFixturesCols) el.homeSquadFixturesCols.innerHTML = "";
     if (el.homeStandingsBody) el.homeStandingsBody.innerHTML = "";
     if (el.homeStandingsCaptainsBody) el.homeStandingsCaptainsBody.innerHTML = "";
     if (el.homeStandingsChipsBody) el.homeStandingsChipsBody.innerHTML = "";
@@ -3853,7 +4187,7 @@
           ? viewingOther
             ? `${bits.join(" · ")} — viewing another manager's team.`
             : `${bits.join(" · ")} — live GW scoring from the last refresh.`
-          : "Your manager squad and mini-league gameweek standings from the last refresh.";
+          : "Your manager team and mini-league gameweek standings from the last refresh.";
       }
     }
     if (showEmpty) {
@@ -3928,9 +4262,14 @@
           parts.push(homeSquadRowHTML(r, maxAbsImp, pinOpts(r)));
         }
         el.homeSquadBody.innerHTML = parts.join("") ||
-          `<tr><td colspan="5">No squad picks in cache.</td></tr>`;
+          `<tr><td colspan="5">No team picks in cache.</td></tr>`;
       }
       const gws = homeSquadFixtureGwList();
+      if (el.homeSquadFixturesCols) {
+        el.homeSquadFixturesCols.innerHTML =
+          `<col class="home-col-player" />` +
+          gws.map(() => `<col class="home-col-fx" />`).join("");
+      }
       if (el.homeSquadFixturesHead) {
         el.homeSquadFixturesHead.innerHTML =
           `<th scope="col" class="home-col-player">Player</th>` +
@@ -3953,8 +4292,10 @@
           parts.push(homeSquadFixturesRowHTML(r, gws, pinOpts(r)));
         }
         el.homeSquadFixturesBody.innerHTML = parts.join("") ||
-          `<tr><td colspan="${colspan}">No squad picks in cache.</td></tr>`;
+          `<tr><td colspan="${colspan}">No team picks in cache.</td></tr>`;
       }
+      const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
+      if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
     }
     if (el.homeStandingsBody) {
       const configuredEntry = homeConfiguredEntryId();
@@ -3967,7 +4308,8 @@
     if (el.homeStandingsCaptainsBody) {
       const configuredEntry = homeConfiguredEntryId();
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
-      const opts = { configuredEntry, viewEntry, viewingOther };
+      const topCaptainPts = homeLeagueMaxCaptainPts();
+      const opts = { configuredEntry, viewEntry, viewingOther, topCaptainPts };
       el.homeStandingsCaptainsBody.innerHTML = rows.map((r) =>
         homeCaptainsRowHTML(r, opts)
       ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
@@ -5027,25 +5369,51 @@
   let optaMobileNameColW = null;
   let optaMobileNameColRaf = 0;
 
+  function measureOptaTeamsNameColWidth(wrap) {
+    if (!wrap) return 80;
+    const prevColW = wrap.style.getPropertyValue("--name-col-w");
+    wrap.style.removeProperty("--name-col-w");
+    wrap.style.setProperty("--name-collapse", "0");
+    void wrap.offsetWidth;
+    let max = 80;
+    wrap.querySelectorAll("tbody td.col-name").forEach((td) => {
+      max = Math.max(max, Math.ceil(td.scrollWidth));
+    });
+    const head = wrap.querySelector("thead th.col-name");
+    if (head) max = Math.max(max, Math.ceil(head.scrollWidth));
+    if (prevColW) wrap.style.setProperty("--name-col-w", prevColW);
+    else wrap.style.removeProperty("--name-col-w");
+    return max;
+  }
+
   function syncOptaMobileNameColWidth() {
     const wraps = optaTableWraps();
     if (!NARROW_MQ.matches || state.page !== "opta") {
       optaMobileNameColW = null;
-      wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
+      wraps.forEach((wrap) => {
+        wrap.style.removeProperty("--name-col-w");
+        wrap.removeAttribute("data-view");
+      });
       return;
     }
     const compareBtn = el.compareToggle;
     const mainWrap = wraps[0];
-    if (compareBtn && mainWrap && compareBtn.offsetParent !== null) {
-      const width = Math.max(
+    if (state.view === "teams" && mainWrap) {
+      optaMobileNameColW = measureOptaTeamsNameColWidth(mainWrap);
+    } else if (compareBtn && mainWrap && compareBtn.offsetParent !== null) {
+      optaMobileNameColW = Math.max(
         72,
         Math.round(compareBtn.getBoundingClientRect().right - mainWrap.getBoundingClientRect().left)
       );
-      optaMobileNameColW = width;
+    } else {
+      optaMobileNameColW = null;
     }
     if (optaMobileNameColW == null) return;
     const prev = mainWrap && mainWrap.style.getPropertyValue("--name-col-w");
-    wraps.forEach((wrap) => wrap.style.setProperty("--name-col-w", `${optaMobileNameColW}px`));
+    wraps.forEach((wrap) => {
+      wrap.dataset.view = state.view;
+      wrap.style.setProperty("--name-col-w", `${optaMobileNameColW}px`);
+    });
     if (prev !== `${optaMobileNameColW}px`) {
       wraps.forEach(invalidateNameSimplifyOrigin);
     }
@@ -6543,11 +6911,21 @@
       ];
       const reading = [
         spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
-        spitRow(spitRank("Own"), "Click a squad player to highlight owners in standings (others fade). Click a standings manager to view their squad — Exit returns to yours."),
-        spitRow(spitRank("Fixtures"), "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."),
+        spitRow(
+          spitRank("Own"),
+          mobile
+            ? "Swipe a team row to highlight owners in standings (others fade). Tap a row for the player card (next). Click a standings manager to view their team — Exit returns to yours."
+            : "Click a team player to highlight owners in standings (others fade). Click a standings manager to view their team — Exit returns to yours."
+        ),
+        spitRow(
+          spitRank("Fixtures"),
+          mobile
+            ? "Swipe for the next 4 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."
+            : "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."
+        ),
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
         ...(mobile
-          ? [spitRow(spitRank("Search"), "Search any player: profile replaces summary cards, hides squad, highlights owners in standings, and shows club fixtures.")]
+          ? [spitRow(spitRank("Search"), "Search any player: profile replaces summary cards, hides team, highlights owners in standings, and shows club fixtures.")]
           : []),
         spitRow(spitRank("Refresh"), "Changing manager auto-rebuilds Home on the local server (python3 site/serve.py)."),
       ];

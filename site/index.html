@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=617" />
+<link rel="stylesheet" href="styles.css?v=623" />
 <script>
 (() => {
   try {
@@ -669,7 +669,7 @@
         <div class="home-tables-grid">
         <article class="home-panel home-table-panel" id="home-squad-panel">
           <h3 class="home-panel-heading">
-            Squad
+            Team
             <span class="home-panel-heading-meta" id="home-squad-gw-label"></span>
           </h3>
           <div class="home-squad-pager">
@@ -677,6 +677,13 @@
               <div class="home-squad-page">
                 <div class="home-table-wrap">
                   <table class="home-data-table home-squad-table home-squad-live-table">
+                    <colgroup>
+                      <col class="home-col-player" />
+                      <col class="home-col-pts" />
+                      <col class="home-col-mp" />
+                      <col class="home-col-opp" />
+                      <col class="home-col-imp" />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th scope="col" class="home-col-player">Player</th>
@@ -693,6 +700,7 @@
               <div class="home-squad-page">
                 <div class="home-table-wrap">
                   <table class="home-data-table home-squad-table home-squad-fixtures-table">
+                    <colgroup id="home-squad-fixtures-cols"></colgroup>
                     <thead>
                       <tr id="home-squad-fixtures-head"></tr>
                     </thead>
@@ -701,7 +709,7 @@
                 </div>
               </div>
             </div>
-            <div class="home-squad-dots" id="home-squad-dots" role="tablist" aria-label="Squad views">
+            <div class="home-squad-dots" id="home-squad-dots" role="tablist" aria-label="Team views">
               <button type="button" class="home-squad-dot is-active" role="tab" aria-selected="true" aria-label="Live scoring" data-page="0"></button>
               <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Upcoming fixtures" data-page="1"></button>
             </div>
@@ -1196,7 +1204,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=638"></script>
+<script src="app.js?v=644"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
