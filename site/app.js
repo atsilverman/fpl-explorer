@@ -95,9 +95,6 @@
   const FIXTURE_TT_COUNT = 7;
   const OWNERSHIP_FILTER_DEFAULT = 5;
   const OWNERSHIP_FILTER_MAX = 100;
-  // Lookback in check-ins (1 / 3 / 7). Maps to ~1 / 3 / 7 days once snapshots are daily.
-  // Chart + cards color only the top N risers/fallers for that window.
-  const OWNERSHIP_TREND_WINDOW_DEFAULT = 1;
   // Statistics-page fixture tooltip shading — wider than the players Enhance
   // default (10%) so tough/soft opponents read clearly in fixture tips.
   const FIXTURE_TT_ENHANCE_PCT = 30;
@@ -592,6 +589,8 @@
     compareSelection: { players: new Set(), teams: new Set() },
     sortKey: "price",
     sortDir: "desc",
+    statsPage: 1,
+    statsPageSize: 50,
     hiddenCols: new Set(),
     rankingsPins: [],
     expectedCat: "goals", // goals | assists | gi | conceded | cs
@@ -621,12 +620,13 @@
     teamCompareCodes: [], // pins + click-to-select, max MAX_COMPARE
     teamHoverCompareCode: null,
     teamSearchActiveCode: null,
-    teamMode: "actual", // planner | actual
-    teamSparkMetric: "form", // form | owned
-    ownershipTrendWindow: OWNERSHIP_TREND_WINDOW_DEFAULT,
-    ownershipRisersCollapsed: false,
-    ownershipFallersCollapsed: false,
+    plannerAnchor: null, // { gw, ft, bank, managerId }
+    plannerPlans: {}, // gw string -> { squad, captain, vice }
     actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
+    teamSparkMetric: "form", // form | owned
+    ownershipMoverKind: "risers", // risers | fallers
+    ownershipSortKey: "d14",
+    ownershipSortDir: "desc",
   };
   state.teamSearchPins = state.teamCompareCodes;
 
@@ -634,6 +634,7 @@
   // Relative defaults on when filters narrow; remembered off until filters clear.
   let enhanceRelativeUserOff = false;
   let lastOptaHighlightFilterKey = "";
+  let lastOptaPaginationKey = "";
 
   function compareSet() {
     return state.compareSelection[state.view];
@@ -892,25 +893,24 @@
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
     optaPage: $("#opta-page"),
+    optaTableFooter: $("#opta-table-footer"),
+    optaPagination: $("#opta-pagination"),
+    optaUpdatedText: $("#opta-updated-text"),
     rankingsPage: $("#rankings-page"),
     rankingsPinBar: $("#rankings-pin-bar"),
     rankingsGrid: $("#rankings-grid"),
     rankingsCountLabel: $("#rankings-count-label"),
+    rankingsUpdatedFooter: $("#rankings-updated-footer"),
     ownershipPage: $("#ownership-page"),
-    ownershipChart: $("#ownership-chart"),
-    ownershipChartWrap: $("#ownership-chart-wrap"),
-    ownershipChartTitle: $("#ownership-chart-title"),
-    ownershipTooltip: $("#ownership-tooltip"),
-    ownershipSelection: $("#ownership-selection"),
+    ownershipTableWrap: $("#ownership-table-wrap"),
+    ownershipTableHead: $("#ownership-table-head"),
+    ownershipTableBody: $("#ownership-table-body"),
+    ownershipMoverSeg: $("#ownership-mover-seg"),
     ownershipCountLabel: $("#ownership-count-label"),
-    ownershipTrendingGroup: $("#ownership-trending-group"),
-    ownershipTrendWindowSeg: $("#ownership-trend-window-seg"),
-    ownershipTrendCards: $("#ownership-trend-cards"),
-    ownershipTrendRisers: $("#ownership-trend-risers"),
-    ownershipTrendFallers: $("#ownership-trend-fallers"),
+    ownershipUpdatedFooter: $("#ownership-updated-footer"),
     teamPage: $("#team-page"),
+    teamUpdatedFooter: $("#team-updated-footer"),
     teamPageSubtitle: $("#team-page-subtitle"),
-    teamModeSeg: $("#team-mode-seg"),
     teamResyncBtn: $("#team-resync-btn"),
     teamResyncToolbar: $("#team-resync-toolbar"),
     teamClearBtn: $("#team-clear-btn"),
@@ -940,12 +940,13 @@
     teamCompareBody: $("#team-compare-body"),
     teamToolbarControls: $("#team-toolbar-controls"),
     teamHeaderInlineActions: $("#team-header-inline-actions"),
-    teamToolbarMode: $("#team-toolbar-mode"),
     teamPickerHeaderActions: $("#team-picker-header-actions"),
     teamPickerCancel: $("#team-picker-cancel"),
     searchHome: $(".topbar-end-cluster"),
     expectedPage: $("#expected-page"),
+    expectedUpdatedFooter: $("#expected-updated-footer"),
     schedulePage: $("#schedule-page"),
+    scheduleUpdatedFooter: $("#schedule-updated-footer"),
     scheduleGrid: $("#schedule-grid"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
@@ -1152,7 +1153,6 @@
     if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
     if (state.ownedMin !== coreDefaults.ownedMin) return true;
     if (state.minsMin !== coreDefaults.minsMin || state.minsMax !== coreDefaults.minsMax) return true;
-    if (state.ownershipTrendWindow !== OWNERSHIP_TREND_WINDOW_DEFAULT) return true;
     if (state.setPieceTakersOnly) return true;
     if (state.page === "team" && state.teamAffordableOnly) return true;
     if (state.valueMode !== "total") return true;
@@ -1183,8 +1183,6 @@
     state.ownedMin = coreDefaults.ownedMin;
     state.minsMin = coreDefaults.minsMin;
     state.minsMax = coreDefaults.minsMax;
-    state.ownershipTrendWindow = OWNERSHIP_TREND_WINDOW_DEFAULT;
-    syncOwnershipTrendWindowUI();
     state.search = "";
     if (el.search) el.search.value = "";
     if (el.searchWrap) el.searchWrap.classList.remove("search-open");
@@ -1555,7 +1553,6 @@
   const HOME_LEAGUE_ID = "954157";
   const HOME_LEAGUE_NAME = "SoCal Big Guy FPL";
   const TRACKED_MANAGER_IDS = [296817, 1404383, 5497737, 185072];
-  const TEAM_MODE_KEY = "fpl-explorer-team-mode";
   const TEAM_ACTUAL_KEY = "fpl-explorer-team-actual";
   let ownedCodes = new Set();
   let savedManagerId = null;
@@ -1631,7 +1628,7 @@
   }
 
   function teamIsEditable() {
-    return state.teamMode !== "actual";
+    return true;
   }
 
   function plannerDraftIsEmpty() {
@@ -1658,7 +1655,7 @@
 
   function refreshManagerDependentUI() {
     syncFplIdStatus();
-    syncTeamModeUI();
+    syncPlannerPageUI();
     if (state.page === "home") {
       // Defer DOM rebuild while Home enter is playing so squad/stats don't
       // flash a second paint mid-animation.
@@ -1809,30 +1806,22 @@
     confirmArmTimer = setTimeout(() => disarmConfirmButton(btn), timeoutMs);
   }
 
-  function syncTeamModeUI() {
+  function syncPlannerPageUI() {
     if (el.teamPage) {
-      el.teamPage.dataset.teamMode = state.teamMode;
-      el.teamPage.classList.toggle("is-actual-readonly", state.teamMode === "actual");
-    }
-    if (el.teamModeSeg) {
-      el.teamModeSeg.querySelectorAll("[data-team-mode]").forEach((btn) => {
-        btn.classList.toggle("active", btn.getAttribute("data-team-mode") === state.teamMode);
-      });
-      syncSegThumb(el.teamModeSeg, { animate: false });
+      el.teamPage.dataset.teamMode = "planner";
+      el.teamPage.classList.remove("is-actual-readonly");
     }
     if (el.teamPageSubtitle) {
-      el.teamPageSubtitle.textContent =
-        state.teamMode === "actual"
-          ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
-          : "Editable planner squad (£100.0m). Use Resync to replace this with your linked Actual team.";
+      el.teamPageSubtitle.textContent = savedManagerId
+        ? "Plan lineups and transfers by gameweek — synced from your FPL manager. Live squad is on Home."
+        : "Plan lineups and transfers by gameweek. Link a manager in Preferences to sync. Live squad is on Home.";
     }
     syncTeamPlannerPrefsBtns();
   }
 
   function syncTeamPlannerPrefsBtns() {
-    const planner = state.teamMode === "planner";
-    const canResync = !!savedManagerId && planner;
-    const canClear = planner && !!state.teamSquad.length;
+    const canResync = !!savedManagerId;
+    const canClear = !!state.teamSquad.length;
     const desktop = !NARROW_MQ.matches;
 
     const syncOne = (btn, { show, enabled }) => {
@@ -1845,43 +1834,13 @@
     // Prefs buttons: mobile only (desktop uses toolbar).
     syncOne(el.teamResyncBtn, { show: canResync && !desktop, enabled: canResync });
     syncOne(el.teamClearBtn, { show: canClear && !desktop, enabled: canClear });
-    // Toolbar: desktop Team page, Planner mode.
+    // Toolbar: desktop Planner page.
     const onTeamDesktop = desktop && state.page === "team";
     syncOne(el.teamResyncToolbar, { show: onTeamDesktop && canResync, enabled: canResync });
     syncOne(el.teamClearToolbar, { show: onTeamDesktop && canClear, enabled: canClear });
   }
 
-  function setTeamMode(mode, { render = true, persist = true } = {}) {
-    const next = mode === "actual" ? "actual" : "planner";
-    if (state.teamMode === "planner" && next !== "planner") {
-      saveTeamDraft();
-      closeTeamPicker({ silent: true });
-      cancelTeamSub({ silent: true });
-      hideTeamRowActionsPopup();
-    }
-    state.teamMode = next;
-    if (persist) {
-      try {
-        localStorage.setItem(TEAM_MODE_KEY, next);
-      } catch {
-        /* private browsing */
-      }
-    }
-    if (next === "actual") {
-      const snap = loadActualSnapshot() || { squad: [], captain: null, vice: null, meta: state.actualMeta };
-      state.actualMeta = snap.meta || state.actualMeta;
-      applySquadSnapshot(snap);
-      state.teamCompareMode = false;
-      state.teamCompareCodes = [];
-      state.teamSearchActiveCode = null;
-    } else {
-      loadTeamDraft();
-    }
-    syncTeamModeUI();
-    if (render) renderTeam();
-  }
-
-  async function ingestManagerSquad(payload, { seedPlannerIfEmpty = false } = {}) {
+  async function ingestManagerSquad(payload, { resetPlanner = false, seedPlannerIfEmpty = false } = {}) {
     const snap = {
       squad: normalizeSquadSlots(payload.squad),
       captain: payload.captain != null ? Number(payload.captain) || payload.captain : null,
@@ -1900,18 +1859,24 @@
     saveActualSnapshot(snap);
     state.actualMeta = snap.meta;
     ownedCodes = new Set(snap.squad.map((s) => s.code));
-    if (seedPlannerIfEmpty && payload.hasPicks && plannerDraftIsEmpty()) {
-      const prevMode = state.teamMode;
-      state.teamMode = "planner";
-      applySquadSnapshot(snap);
-      saveTeamDraft();
-      state.teamMode = prevMode;
-      if (prevMode === "actual") applySquadSnapshot(snap);
-    } else if (state.teamMode === "actual") {
-      applySquadSnapshot(snap);
+    const anchorGw = Number(payload.gw) || teamCurrentGw();
+    const planGw = planningGameweek();
+    const historyCurrent = Array.isArray(payload.historyCurrent) ? payload.historyCurrent : [];
+    state.plannerAnchor = {
+      gw: anchorGw,
+      ft: computeFreeTransfersAtGw(historyCurrent, planGw),
+      bank: payload.bank != null ? Number(payload.bank) : null,
+      managerId: String(payload.managerId || savedManagerId || ""),
+      squad: clonePlannerSquad(snap.squad),
+      captain: snap.captain ?? null,
+      vice: snap.vice ?? null,
+      historyCurrent,
+    };
+    if (resetPlanner || (seedPlannerIfEmpty && payload.hasPicks && plannerDraftIsEmpty())) {
+      resetPlannerFromSnap(snap, { gw: anchorGw });
     }
     syncFplIdStatus();
-    syncTeamModeUI();
+    syncPlannerPageUI();
     return snap;
   }
 
@@ -1922,8 +1887,8 @@
       showToast({
         title: payload.hasPicks ? "FPL squad synced" : "Manager linked",
         message: payload.hasPicks
-          ? `${payload.squad.length} picks · ${payload.gwLabel || "GW"}`
-          : payload.message || "No published picks yet — Actual stays empty until FPL publishes them.",
+          ? `${payload.squad.length} picks · ${payload.gwLabel || "GW"} · ${payload.freeTransfers ?? "?"} FT`
+          : payload.message || "No published picks yet — planner stays empty until FPL publishes them.",
         icon: payload.hasPicks ? "circle-check" : "info",
       });
     }
@@ -2072,7 +2037,7 @@
   let homeRenderQueued = false;
   let homeEnterMotionToken = 0;
   let homeLivePollAfterEnter = false;
-  const HOME_ENTER_ROLL_MS = 2800;
+  const HOME_ENTER_ROLL_MS = 3400;
 
   function homeIsEnterBusy() {
     return !!(
@@ -2526,20 +2491,45 @@
     };
   }
 
+  /** True when every GW fixture is finished and the player recorded 0 minutes. */
+  function homePlayerGwFinishedWithoutMinutes(player) {
+    if (!player) return false;
+    const mins = Number(player.minutes) || 0;
+    const fxs = homeSquadFixtures(player);
+    if (fxs.length) {
+      if (fxs.some((fx) => !fx.finished)) return false;
+      const fxMins = fxs.reduce((n, fx) => n + (Number(fx.minutes) || 0), 0);
+      return mins <= 0 && fxMins <= 0;
+    }
+    return player.matchStatus === "finished" && mins <= 0;
+  }
+
+  /**
+   * Mobile captains view: if the named captain finished with 0', show vice
+   * (FPL auto-captaincy) and mark the swap. Desktop keeps both columns.
+   */
+  function homeEffectiveCaptainPick(captain, vice) {
+    if (NARROW_MQ.matches && captain && vice && homePlayerGwFinishedWithoutMinutes(captain)) {
+      return { player: vice, autoSubbed: true, original: captain };
+    }
+    return { player: captain, autoSubbed: false, original: null };
+  }
+
   function homeLeagueMaxCaptainPts() {
     const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
     let max = null;
     for (const r of rows) {
-      const { captain } = homeCaptainsForEntry(Number(r.entry));
-      if (!captain) continue;
-      const pts = captain.gwPoints != null ? Number(captain.gwPoints) : null;
+      const { captain, vice } = homeCaptainsForEntry(Number(r.entry));
+      const { player } = homeEffectiveCaptainPick(captain, vice);
+      if (!player) continue;
+      const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
       if (!Number.isFinite(pts)) continue;
       if (max == null || pts > max) max = pts;
     }
     return max;
   }
 
-  function homeCaptainPickHTML(player, { isTopCaptain = false } = {}) {
+  function homeCaptainPickHTML(player, { isTopCaptain = false, autoSubbed = false, original = null } = {}) {
     if (!player) return "—";
     const teamBadge = badgeHTML(player.team, "home-crest home-crest-captain") ||
       `<span class="home-crest-fallback home-crest-captain">${escapeHtml((player.team || "?").slice(0, 3))}</span>`;
@@ -2548,7 +2538,11 @@
     const ptsHTML = Number.isFinite(pts)
       ? `<span class="home-captain-pts${ptsHi ? " is-hot" : ""}">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
       : "";
-    return `<span class="home-captain-pick">${teamBadge}<span class="home-captain-pick-text"><span class="home-captain-name">${escapeHtml(player.name || "—")}</span>${ptsHTML}</span></span>`;
+    const fromName = original && original.name ? original.name : "Captain";
+    const subHTML = autoSubbed
+      ? `<span class="home-captain-sub"${tipAttr(`Vice on as captain — ${fromName} did not play`)} aria-label="Vice on as captain">${iconHTML("repeat-2", "home-captain-sub-icon")}</span>`
+      : "";
+    return `<span class="home-captain-pick${autoSubbed ? " is-auto-sub" : ""}">${teamBadge}<span class="home-captain-pick-text"><span class="home-captain-name-row"><span class="home-captain-name">${escapeHtml(player.name || "—")}</span>${subHTML}</span>${ptsHTML}</span></span>`;
   }
 
   function homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther }) {
@@ -2623,16 +2617,22 @@
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const { captain, vice } = homeCaptainsForEntry(entry);
-    const captainPts = captain && captain.gwPoints != null ? Number(captain.gwPoints) : null;
+    const effective = homeEffectiveCaptainPick(captain, vice);
+    const shown = effective.player;
+    const shownPts = shown && shown.gwPoints != null ? Number(shown.gwPoints) : null;
     const isTopCaptain =
       Number.isFinite(topCaptainPts)
       && topCaptainPts > 0
-      && Number.isFinite(captainPts)
-      && captainPts === topCaptainPts;
+      && Number.isFinite(shownPts)
+      && shownPts === topCaptainPts;
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
       ${homeStandingsManagerCellsHTML(row)}
-      <td class="home-col-captain${isTopCaptain ? " is-top-captain" : ""}">${homeCaptainPickHTML(captain, { isTopCaptain })}</td>
+      <td class="home-col-captain${isTopCaptain ? " is-top-captain" : ""}">${homeCaptainPickHTML(shown, {
+        isTopCaptain,
+        autoSubbed: effective.autoSubbed,
+        original: effective.original,
+      })}</td>
       <td class="home-col-vice">${homeCaptainPickHTML(vice)}</td>
     </tr>`;
   }
@@ -3269,7 +3269,7 @@
         <div class="home-player-cell">
           ${teamBadge}
           <div class="home-player-text">
-            <div class="home-player-name">${escapeHtml(row.name || "—")}${tags.join("")}${pin}</div>
+            <div class="home-player-name"><span class="home-player-name-text">${escapeHtml(row.name || "—")}</span>${tags.join("")}${pin}</div>
           </div>
         </div>
       </td>`;
@@ -3850,6 +3850,10 @@
   }
 
   function openHomeSearchSheet() {
+    if (NARROW_MQ.matches) {
+      clearHomePlayerLookup({ rerender: false });
+      if (el.homeBento) el.homeBento.classList.add("is-search-open");
+    }
     openMobileSheet({
       title: "",
       html: homeSearchSheetHTML(""),
@@ -3864,6 +3868,8 @@
     const iconUse = el.homeSearchBtn.querySelector("use");
     if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
     const label = clearMode ? "Clear player search" : "Search players";
+    const dockLabel = el.homeSearchBtn.querySelector(".mobile-dock-label");
+    if (dockLabel) dockLabel.textContent = clearMode ? "Clear" : "Search";
     el.homeSearchBtn.title = label;
     el.homeSearchBtn.setAttribute("aria-label", label);
     el.homeSearchBtn.classList.toggle("is-clear", clearMode);
@@ -3895,6 +3901,7 @@
   function syncHomeLookupUI() {
     if (!el.homeBento) return;
     const active = !!homeLookupPlayer;
+    const mobileLookup = NARROW_MQ.matches;
     el.homeBento.classList.toggle("is-player-lookup", active);
 
     if (!active) {
@@ -3916,6 +3923,21 @@
     const elementId = homeLookupElementId(homeLookupPlayer);
     const hasOwners = homeLeagueOwnsElement(elementId);
     el.homeBento.classList.toggle("has-lookup-owners", hasOwners);
+
+    if (mobileLookup) {
+      if (el.homePlayerProfile) {
+        el.homePlayerProfile.hidden = true;
+        el.homePlayerProfile.innerHTML = "";
+      }
+      if (el.homePlayerMatchup) {
+        el.homePlayerMatchup.hidden = true;
+        el.homePlayerMatchup.innerHTML = "";
+      }
+      if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
+      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+      syncHomeOwnerHighlights();
+      return;
+    }
 
     let ownershipNote = "";
     if (Number.isFinite(elementId) && !hasOwners) {
@@ -4412,30 +4434,20 @@
     persistHomePrefs();
     if (el.fplManagerSelect) el.fplManagerSelect.value = "";
     rebuildLeagueSelect();
-    if (state.teamMode === "actual") {
-      applySquadSnapshot({ squad: [], captain: null, vice: null });
-    }
     syncFplIdStatus();
-    syncTeamModeUI();
+    syncPlannerPageUI();
     if (!quiet) {
-      showToast({ title: "FPL link cleared", message: "Actual team link removed. Planner draft is unchanged.", icon: "info" });
+      showToast({ title: "FPL link cleared", message: "Manager link removed. Planner draft is unchanged.", icon: "info" });
     }
     if (render) scheduleSiteRefreshForHomeTargets({ toast: !quiet });
   }
 
   async function restoreManagerId({ deferHome = false } = {}) {
     let saved = "";
-    let savedLeague = "";
-    let mode = "actual";
     try {
       saved = localStorage.getItem(FPL_ID_KEY) || "";
-      savedLeague = localStorage.getItem(FPL_LEAGUE_KEY) || "";
-      // Default Actual; only stay on Planner when explicitly stored.
-      mode = localStorage.getItem(TEAM_MODE_KEY) === "planner" ? "planner" : "actual";
     } catch {
       saved = "";
-      savedLeague = "";
-      mode = "actual";
     }
     const actual = loadActualSnapshot();
     if (actual) {
@@ -4444,12 +4456,11 @@
     }
     populateManagerSelect();
     syncFixedHomeLeague({ persist: true, quiet: true });
+    loadTeamDraft();
     if (saved && trackedManagerById(saved)) {
       savedManagerId = saved;
       if (el.fplManagerSelect) el.fplManagerSelect.value = saved;
       rebuildLeagueSelect();
-      state.teamMode = "planner";
-      loadTeamDraft();
       try {
         await syncManagerFromApi(saved, { seedPlannerIfEmpty: true, quiet: true });
       } catch {
@@ -4457,7 +4468,6 @@
       }
     } else {
       if (saved && !trackedManagerById(saved)) {
-        // Migrated free-text ID no longer in tracked list — leave unlinked.
         try {
           localStorage.removeItem(FPL_ID_KEY);
           localStorage.removeItem(FPL_LEAGUE_KEY);
@@ -4468,16 +4478,12 @@
       savedManagerId = null;
       syncFixedHomeLeague({ persist: true, quiet: true });
       rebuildLeagueSelect();
-      state.teamMode = "planner";
-      loadTeamDraft();
       syncFplIdStatus();
     }
-    setTeamMode(mode, { render: false, persist: false });
     persistHomePrefs();
     if (deferHome) {
-      // Init paints Home once via setPage → playPageEnter.
       syncFplIdStatus();
-      syncTeamModeUI();
+      syncPlannerPageUI();
     } else {
       refreshManagerDependentUI();
     }
@@ -4488,32 +4494,19 @@
       showToast({ title: "No manager linked", message: "Pick a manager in Preferences first.", icon: "triangle-alert" });
       return;
     }
-    if (state.teamMode !== "planner") {
-      showToast({ title: "Switch to Planner", message: "Resync copies Actual into the Planner draft.", icon: "info" });
-      return;
-    }
     const btn = fromBtn || el.teamResyncToolbar || el.teamResyncBtn;
     armConfirmButton(btn, {
       onConfirm: async () => {
         setPrefsOpen(false);
         try {
           const payload = await fetchManagerSquad(savedManagerId);
-          const snap = await ingestManagerSquad(payload, { seedPlannerIfEmpty: false });
-          state.teamMode = "planner";
-          try {
-            localStorage.setItem(TEAM_MODE_KEY, "planner");
-          } catch {
-            /* private browsing */
-          }
-          applySquadSnapshot(snap);
-          saveTeamDraft();
-          syncTeamModeUI();
+          await ingestManagerSquad(payload, { resetPlanner: true });
           renderTeam();
           showToast({
             title: "Planner resynced",
             message: payload.hasPicks
-              ? `Copied ${payload.squad.length} picks from Actual.`
-              : payload.message || "Actual had no published picks — planner cleared.",
+              ? `Copied ${payload.squad.length} picks · ${payload.freeTransfers ?? "?"} FT`
+              : payload.message || "FPL had no published picks — planner cleared.",
             icon: "circle-check",
           });
         } catch (err) {
@@ -4806,8 +4799,9 @@
       const posHTML = pos != null
         ? `<span class="team-league-pos"${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`
         : "";
-      const name = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span>${posHTML}</div>`;
-      return playerIdentityHTML(playerCrestHTML(row.team), name, "");
+      const name = `<div class="player-name-line"><span class="player-name">${escapeHtml(row.name)}</span></div>`;
+      const sub = posHTML ? `<div class="player-cell-sub">${posHTML}</div>` : "";
+      return playerIdentityHTML(playerCrestHTML(row.team), name, sub);
     }
     if (col.key === "price") {
       return fmtDisplayValue(displayValue(row, col), col);
@@ -4917,7 +4911,11 @@
     const vv = window.visualViewport;
     const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const top = scrollport.getBoundingClientRect().top;
-    const minH = Math.max(180, Math.floor(viewportBottom - top));
+    let footerH = 0;
+    if (state.page === "opta" && el.optaTableFooter && !el.optaTableFooter.hidden) {
+      footerH = Math.ceil(el.optaTableFooter.getBoundingClientRect().height);
+    }
+    const minH = Math.max(180, Math.floor(viewportBottom - top - footerH));
     root.style.setProperty("--mobile-scrollport-min-h", `${minH}px`);
   }
 
@@ -5369,17 +5367,20 @@
   let optaMobileNameColW = null;
   let optaMobileNameColRaf = 0;
 
-  function measureOptaTeamsNameColWidth(wrap) {
-    if (!wrap) return 80;
+  const OPTA_MOBILE_NAME_COL_MIN = 140;
+  const OPTA_MOBILE_NAME_COL_MAX_FRAC = 0.54;
+
+  function measureOptaNameColWidth(wrap) {
+    if (!wrap) return OPTA_MOBILE_NAME_COL_MIN;
     const prevColW = wrap.style.getPropertyValue("--name-col-w");
     wrap.style.removeProperty("--name-col-w");
     wrap.style.setProperty("--name-collapse", "0");
     void wrap.offsetWidth;
-    let max = 80;
-    wrap.querySelectorAll("tbody td.col-name").forEach((td) => {
+    let max = OPTA_MOBILE_NAME_COL_MIN;
+    wrap.querySelectorAll("tbody td.col-player, tbody td.col-name").forEach((td) => {
       max = Math.max(max, Math.ceil(td.scrollWidth));
     });
-    const head = wrap.querySelector("thead th.col-name");
+    const head = wrap.querySelector("thead th.col-player, thead th.col-name");
     if (head) max = Math.max(max, Math.ceil(head.scrollWidth));
     if (prevColW) wrap.style.setProperty("--name-col-w", prevColW);
     else wrap.style.removeProperty("--name-col-w");
@@ -5396,14 +5397,13 @@
       });
       return;
     }
-    const compareBtn = el.compareToggle;
     const mainWrap = wraps[0];
-    if (state.view === "teams" && mainWrap) {
-      optaMobileNameColW = measureOptaTeamsNameColWidth(mainWrap);
-    } else if (compareBtn && mainWrap && compareBtn.offsetParent !== null) {
-      optaMobileNameColW = Math.max(
-        72,
-        Math.round(compareBtn.getBoundingClientRect().right - mainWrap.getBoundingClientRect().left)
+    if (mainWrap) {
+      const measured = measureOptaNameColWidth(mainWrap);
+      const cap = Math.round(mainWrap.clientWidth * OPTA_MOBILE_NAME_COL_MAX_FRAC);
+      optaMobileNameColW = Math.min(
+        measured,
+        Math.max(cap, OPTA_MOBILE_NAME_COL_MIN)
       );
     } else {
       optaMobileNameColW = null;
@@ -5658,6 +5658,7 @@
     el.mobileSheet.classList.remove("is-home-search");
     el.mobileSheet.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("mobile-sheet-active");
+    if (el.homeBento) el.homeBento.classList.remove("is-search-open");
     if (el.mobileSheetPanel) {
       el.mobileSheetPanel.style.transform = "";
       el.mobileSheetPanel.style.transition = "";
@@ -6020,7 +6021,7 @@
     hideUiTooltip();
   });
 
-  function renderBody(rows) {
+  function renderBody(rows, highlightPopulation = null) {
     const vcols = visibleColumns();
     el.tableBody.innerHTML = "";
 
@@ -6036,7 +6037,9 @@
     }
 
     const highlightMaps = buildHighlightMaps(
-      state.enhanceRelative && state.page === "opta" ? rows : getRows()
+      state.enhanceRelative && state.page === "opta"
+        ? highlightPopulation || rows
+        : getRows()
     );
     rows.forEach((r) =>
       el.tableBody.appendChild(buildDataRow(r, vcols, highlightMaps))
@@ -6325,9 +6328,29 @@
       (opts.animateHighlights === true ||
         (highlightFilterKey && highlightFilterKey !== lastOptaHighlightFilterKey));
     if (state.page === "opta") lastOptaHighlightFilterKey = highlightFilterKey;
+
+    let bodyRows = sorted;
+    let highlightPopulation = null;
+    if (state.page === "opta") {
+      const pageKey = optaPaginationDatasetKey();
+      if (pageKey !== lastOptaPaginationKey) {
+        state.statsPage = 1;
+        lastOptaPaginationKey = pageKey;
+      }
+      const pageSize = state.statsPageSize || 50;
+      const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize) || 1);
+      if (state.statsPage > totalPages) state.statsPage = totalPages;
+      if (state.statsPage < 1) state.statsPage = 1;
+      const start = (state.statsPage - 1) * pageSize;
+      bodyRows = sorted.slice(start, start + pageSize);
+      if (state.enhanceRelative) highlightPopulation = sorted;
+    }
+
     renderHead();
-    renderBody(sorted);
+    renderBody(bodyRows, highlightPopulation);
     el.countLabel.textContent = `${filtered.length.toLocaleString()} of ${getRows().length.toLocaleString()} shown`;
+    if (state.page === "opta") syncOptaTableFooter(sorted);
+    else if (el.optaTableFooter) el.optaTableFooter.hidden = true;
     renderCompareTable();
     if (state.page === "expected") renderExpected();
     if (state.page === "rankings") renderRankings();
@@ -6990,23 +7013,20 @@
 
     if (state.page === "ownership") {
       const legend = [
-        spitRow(spitOwnershipLineSwatch("riser"), "Chart line — top-5 riser in the trend window"),
-        spitRow(spitOwnershipLineSwatch("faller"), "Chart line — top-5 faller in the trend window"),
-        spitRow(spitOwnershipLineSwatch("grey"), "Other lines — grey until selected or pinned"),
-        spitRow(spitOwnershipDeltaSwatch("up"), "Riser card delta — recent check-in change"),
-        spitRow(spitOwnershipDeltaSwatch("down"), "Faller card delta — recent check-in change"),
+        spitRow(`<span class="ownership-pill is-live spit-ui-swatch">12.4</span>`, "Live TSB% — latest check-in"),
+        spitRow(`<span class="ownership-delta is-up spit-ui-swatch">+1.2</span>`, "Ownership up over that window"),
+        spitRow(`<span class="ownership-delta is-down spit-ui-swatch">−0.8</span>`, "Ownership down over that window"),
+        spitRow(spitOwnershipLineSwatch("riser"), "14-day sparkline — start and end % labeled"),
       ];
       const reading = [
-        spitRow(spitRank("Players"), "Latest check-in’s top 100 owned names after filters. Grey lines until you pick one."),
-        spitRow(spitRank("Teams"), "Average ownership of each club’s top 20 most-owned players at that check-in."),
-        spitRow(spitRank("Trend"), "Last / Last 3 / Last 7 in Filters picks the lookback. Top 5 risers and fallers are ranked across the full ownership set (team/position chips only hide lines). Matching movers color green or red; everyone else stays grey. The chart x-axis zooms to the window."),
-        spitRow(spitRank("Axis"), "X is a snapshot date, not a gameweek. Y zooms to the lines on screen."),
-        spitRow(spitRank(mobile ? "Tap" : "Select"), mobile
-          ? "Tap a line or a Riser/Faller to pin it. A selection card appears above the chart — use ✕ to clear."
-          : "Click a Riser/Faller (or a line) to pin it in club color; other lines go faint. Click again or empty space to unpin. Hover a line for the player/club card."),
+        spitRow(spitRank("Risers"), "Top 20 14-day TSB% increases, ranked before team/position filters."),
+        spitRow(spitRank("Fallers"), "Top 20 14-day TSB% decreases. Toggle in the bar above the table."),
+        spitRow(spitRank("Players"), "Photo, name, team, price, and position. Sort any numeric column."),
+        spitRow(spitRank("Teams"), "Average TSB% of each club’s 20 most-owned players at that check-in."),
+        spitRow(spitRank("Windows"), "7d / 3d / 24h use the nearest snapshot on or before that many days before the latest check-in."),
       ];
       return `${spitHead("trending-up", "How Ownership works")}
-        ${spitIntro("FPL selected-by% (TSB%) across saved check-ins.")}
+        ${spitIntro("FPL selected-by% (TSB%) movers from the saved ownership cache.")}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
         ${spitNote("This page reads the saved ownership cache — it does not call the FPL API live.")}`;
@@ -7042,7 +7062,7 @@
           "Set-piece — FPL #1 (green check). FK/CK also show #2."
         ),
         spitRow(spitHighlightSwatch("top"), "Stat cell wash — rank among that position (same band as Statistics Enhance)."),
-        spitRow(iconHTML("plus"), "Empty row — add a player of that position (Planner only)"),
+        spitRow(iconHTML("plus"), "Empty row — add a player of that position"),
         spitRow(iconHTML("scale"), "Compare — pick up to 5 players in the squad or picker"),
       ];
       const reading = [
@@ -7052,9 +7072,8 @@
             ? "Tap a planner player for captain, vice, bench, replace, or remove."
             : "Right-click a planner player for captain, vice, bench, replace, or remove."
         ),
-        spitRow(spitRank("Actual"), "Read-only copy of your linked manager squad from the FPL API."),
-        spitRow(spitRank("Planner"), "Editable local draft. Survives refresh. Resync in Preferences overwrites it from Actual."),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
+        spitRow(spitRank("Live"), "Your live FPL squad and scoring are on Home — this page is for planning ahead."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). New signings / zero rows show –.`),
         spitRow(spitRank("Form"), "Sparkline of mock recent form. Tap it (or the column header) to switch to TSB% from ownership check-ins."),
@@ -7066,18 +7085,19 @@
             ? "Empty slot or Replace opens the player list and search. Back or Escape returns to the squad. Budget stats hide while picking."
             : "Empty slot or Replace opens the player list and search. Filters (including Affordable) open then. Back or Escape returns to the squad."
         ),
+        spitRow(spitRank("GW"), "Gameweek picker — plan lineups and transfers from your synced squad forward. Fixture heat columns start from the selected GW."),
+        spitRow(spitRank("Transfers"), "FT shows used/available this gameweek (e.g. 0/1). Unused FT roll over (+1 per GW, max 5). GW16 tops up to 5. Extra transfers cost −4 pts — shown as Hit."),
         spitRow(spitRank("Affordable"), "In Filters while picking — hides anyone above remaining Bank. Replace credits the outgoing player's price."),
-        spitRow(spitRank("Squad"), "Preferences → Resync or Clear planner. Actual is unchanged by Clear."),
+        spitRow(spitRank("Squad"), "Resync copies your linked FPL squad. Clear removes planned picks for this GW onward."),
         spitRow(spitRank("Pins"), mobile
           ? "Compare mode — tap squad or picker rows to pin up to 5. Compare mode is off while pins exist."
           : "Compare mode — click squad or picker rows to pin up to 5. Compare mode is off while pins exist."),
         spitRow(spitRank("Compare"), "With no pins, Compare mode selects instead of add/replace. Hover a squad or result row to highlight stat winners."),
-        spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager in Preferences to import Actual."),
+        spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager in Preferences to sync from FPL."),
       ];
-      const intro = state.teamMode === "actual"
-        ? "Read-only view of your linked FPL squad. Switch to Planner to draft changes."
-        : "Editable 15-man planner within £100.0m. Resync in Preferences replaces this with your linked Actual team.";
-      return `${spitHead("shirt", "How Team works")}
+      const intro =
+        "Plan your squad by gameweek — subs, transfers, and fixtures. Syncs from your linked FPL manager. Your live team is on Home.";
+      return `${spitHead("shirt", "How Planner works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}`;
@@ -7256,6 +7276,7 @@
       state.scheduleGwMin === state.scheduleGwMax
         ? `GW${state.scheduleGwMin}`
         : `GW${state.scheduleGwMin}–GW${state.scheduleGwMax}`;
+    syncPageUpdatedFooter(el.scheduleUpdatedFooter, DATA.generatedAt);
   }
 
   function popupDelayMs() {
@@ -7723,7 +7744,7 @@
       schedule: "How Matchups works",
       ownership: "How Ownership works",
       markets: "How Markets works",
-      team: "How Team works",
+      team: "How Planner works",
     };
     pageInfoButtons().forEach((btn) => {
       const pane = btn.closest(".page-pane");
@@ -8695,6 +8716,7 @@
       empty.textContent = "No rows match the current filters.";
       el.barbellBody.appendChild(empty);
       if (NARROW_MQ.matches) bindMobileChromeScrollHide();
+      syncPageUpdatedFooter(el.expectedUpdatedFooter, DATA.generatedAt);
       return;
     }
 
@@ -8722,6 +8744,7 @@
       });
     }
     requestAnimationFrame(() => syncMobileScrollportHeight());
+    syncPageUpdatedFooter(el.expectedUpdatedFooter, DATA.generatedAt);
   }
 
   // ---------------------------------------------------------------------
@@ -9065,6 +9088,7 @@
     if (!sections.length) {
       el.rankingsGrid.innerHTML = `<div class="empty-state">No ranking metrics are available for this view and venue split.</div>`;
       renderRankingsPinBar();
+      syncPageUpdatedFooter(el.rankingsUpdatedFooter, DATA.generatedAt);
       return;
     }
 
@@ -9086,6 +9110,7 @@
         bar.classList.add("is-drawn");
       });
     }
+    syncPageUpdatedFooter(el.rankingsUpdatedFooter, DATA.generatedAt);
   }
 
   if (el.rankingsGrid) {
@@ -9161,6 +9186,40 @@
   const TEAM_XI_MAX = { GK: 1, DEF: 5, MID: 5, FWD: 3 };
   const TEAM_HEAT_N = 6;
   const TEAM_DRAFT_KEY = "fpl-explorer-team-draft";
+  const TEAM_FT_MAX = 5;
+  const TEAM_FT_AFCON_GW = 16;
+
+  function computeFreeTransfersAtGw(historyCurrent, targetGw) {
+    if (!Array.isArray(historyCurrent) || !Number.isFinite(targetGw) || targetGw <= 1) return 1;
+    let ft = 1;
+    for (const row of historyCurrent) {
+      const ev = Number(row.event);
+      if (!Number.isFinite(ev) || ev >= targetGw) break;
+      if (ev <= 1) continue;
+      const transfers = Number(row.event_transfers) || 0;
+      const cost = Number(row.event_transfers_cost) || 0;
+      const paid = Math.round(cost / 4);
+      const freeUsed = Math.max(0, transfers - paid);
+      ft = Math.min(TEAM_FT_MAX, ft - freeUsed + 1);
+      if (ev + 1 === TEAM_FT_AFCON_GW) ft = TEAM_FT_MAX;
+    }
+    return ft;
+  }
+
+  function ftAtStartOfGw(gw) {
+    if (!Number.isFinite(gw) || gw <= 1) return 1;
+    const anchor = state.plannerAnchor;
+    const anchorGw = plannerAnchorGw();
+    if (gw === anchorGw && anchor && Number.isFinite(Number(anchor.ft))) {
+      return Number(anchor.ft);
+    }
+    const hist = anchor && anchor.historyCurrent;
+    if (Array.isArray(hist) && hist.length) {
+      return computeFreeTransfersAtGw(hist, gw);
+    }
+    return gw === 2 ? 1 : Number(anchor && anchor.ft) || 1;
+  }
+
   const TEAM_POS_LABEL = { GK: "GKP", DEF: "DEF", MID: "MID", FWD: "FWD" };
   // XI sections top-to-bottom (attack first), then Bench below.
   const TEAM_VIEW_POS_ORDER = ["FWD", "MID", "DEF", "GK"];
@@ -9198,24 +9257,18 @@
   }
 
   function teamClampGwStart(start) {
-    return Math.min(
-      SCHEDULE_GW_MAX,
-      Math.max(SCHEDULE_GW_MIN, Number(start) || SCHEDULE_GW_MIN)
-    );
+    return teamClampPlanGw(start);
   }
 
   function teamHeatGws() {
-    const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
+    const start = teamPlanGw();
     const gws = [];
     for (let i = 0; i < TEAM_HEAT_N; i++) gws.push(start + i);
     return gws;
   }
 
   function teamShiftGw(delta) {
-    const next = teamClampGwStart((state.teamGwStart ?? teamCurrentGw()) + delta);
-    if (next === state.teamGwStart) return;
-    state.teamGwStart = next;
-    renderTeam();
+    setTeamPlanGw(teamPlanGw() + delta);
   }
 
   let teamPriorByCodeCache = null;
@@ -9685,15 +9738,12 @@
     }
     el.teamCompareBtn.hidden = false;
     const on = !!state.teamCompareMode;
-    const blocked = !teamIsEditable();
     el.teamCompareBtn.classList.toggle("on", on);
-    el.teamCompareBtn.classList.toggle("is-disabled", blocked);
+    el.teamCompareBtn.classList.remove("is-disabled");
     el.teamCompareBtn.setAttribute("aria-pressed", on ? "true" : "false");
-    el.teamCompareBtn.setAttribute("aria-disabled", blocked ? "true" : "false");
-    el.teamCompareBtn.disabled = blocked;
-    el.teamCompareBtn.title = !teamIsEditable()
-      ? "Switch to Planner to compare and edit"
-      : "Click up to 5 players to compare";
+    el.teamCompareBtn.removeAttribute("aria-disabled");
+    el.teamCompareBtn.disabled = false;
+    el.teamCompareBtn.title = "Click up to 5 players to compare";
   }
 
   function renderTeamCompareWrap() {
@@ -9738,12 +9788,190 @@
     bindCompareScrollSync();
   }
 
+  function clonePlannerSquad(squad) {
+    return (Array.isArray(squad) ? squad : []).map((s) => ({
+      code: Number(s.code) || s.code,
+      position: s.position,
+      starter: !!s.starter,
+      benchOrder: Number.isFinite(s.benchOrder) ? s.benchOrder : 0,
+    }));
+  }
+
+  function plannerSnapFromState() {
+    return {
+      squad: clonePlannerSquad(state.teamSquad),
+      captain: state.teamCaptainCode,
+      vice: state.teamViceCode,
+    };
+  }
+
+  function plannerAnchorGw() {
+    const anchor = state.plannerAnchor;
+    if (anchor && Number.isFinite(Number(anchor.gw))) return Number(anchor.gw);
+    return teamCurrentGw();
+  }
+
+  function teamPlanGw() {
+    return teamClampPlanGw(state.teamGwStart ?? plannerAnchorGw());
+  }
+
+  function teamPlanGwMin() {
+    return plannerAnchorGw();
+  }
+
+  function teamClampPlanGw(start) {
+    return Math.min(SCHEDULE_GW_MAX, Math.max(teamPlanGwMin(), Number(start) || teamPlanGwMin()));
+  }
+
+  function plannerSnapKey(gw) {
+    return String(gw);
+  }
+
+  function plannerStoredSnap(gw) {
+    return state.plannerPlans[plannerSnapKey(gw)] || null;
+  }
+
+  function resolvePlannerSnap(gw) {
+    const key = plannerSnapKey(gw);
+    if (state.plannerPlans[key]) return state.plannerPlans[key];
+    for (let g = gw - 1; g >= plannerAnchorGw(); g--) {
+      const prev = state.plannerPlans[plannerSnapKey(g)];
+      if (prev) return prev;
+    }
+    const actual = loadActualSnapshot();
+    if (actual && actual.squad && actual.squad.length) {
+      return { squad: actual.squad, captain: actual.captain, vice: actual.vice };
+    }
+    return { squad: [], captain: null, vice: null };
+  }
+
+  function savePlannerGwState(gw) {
+    if (!Number.isFinite(gw)) return;
+    state.plannerPlans[plannerSnapKey(gw)] = plannerSnapFromState();
+    prunePlannerPlansAfter(gw);
+    saveTeamDraft();
+  }
+
+  function prunePlannerPlansAfter(gw) {
+    for (const key of Object.keys(state.plannerPlans)) {
+      if (Number(key) > gw) delete state.plannerPlans[key];
+    }
+  }
+
+  function loadPlannerGwState(gw) {
+    applySquadSnapshot(resolvePlannerSnap(gw));
+  }
+
+  function resetPlannerFromSnap(snap, { gw } = {}) {
+    const anchorGw = Number(gw) || plannerAnchorGw();
+    state.plannerPlans = {};
+    applySquadSnapshot(snap);
+    state.plannerPlans[plannerSnapKey(anchorGw)] = {
+      squad: clonePlannerSquad(snap.squad),
+      captain: snap.captain ?? null,
+      vice: snap.vice ?? null,
+    };
+    state.teamGwStart = teamClampPlanGw(planningGameweek());
+    saveTeamDraft();
+  }
+
+  function plannerSquadCodes(snap) {
+    return new Set((snap && snap.squad ? snap.squad : []).map((s) => Number(s.code) || s.code));
+  }
+
+  function countPlannerTransfers(prevSnap, nextSnap) {
+    if (!prevSnap || !nextSnap) return 0;
+    const prev = plannerSquadCodes(prevSnap);
+    const next = plannerSquadCodes(nextSnap);
+    let out = 0;
+    for (const code of prev) if (!next.has(code)) out += 1;
+    return out;
+  }
+
+
+  function plannerFtAvailable(gw) {
+    if (!Number.isFinite(gw) || gw <= 1) return 1;
+    const anchorGw = plannerAnchorGw();
+    if (gw <= anchorGw) return ftAtStartOfGw(gw);
+
+    let ft = ftAtStartOfGw(anchorGw);
+    let startG = anchorGw;
+
+    // GW1 allows unlimited transfers — first FT week (GW2) always opens with 1.
+    if (anchorGw < 2) {
+      ft = 1;
+      startG = 2;
+      if (gw <= 2) return 1;
+    } else {
+      ft = Math.min(TEAM_FT_MAX, ft - plannerTransfersUsed(anchorGw) + 1);
+      if (anchorGw + 1 === TEAM_FT_AFCON_GW) ft = TEAM_FT_MAX;
+      startG = anchorGw + 1;
+      if (gw <= startG) return Math.max(0, ft);
+    }
+
+    for (let g = startG; g < gw; g++) {
+      ft = Math.min(TEAM_FT_MAX, ft - plannerTransfersUsed(g) + 1);
+      if (g + 1 === TEAM_FT_AFCON_GW) ft = TEAM_FT_MAX;
+    }
+    return Math.max(0, ft);
+  }
+
+  function plannerAnchorBaselineSnap() {
+    const anchor = state.plannerAnchor;
+    if (anchor && Array.isArray(anchor.squad) && anchor.squad.length) {
+      return {
+        squad: clonePlannerSquad(anchor.squad),
+        captain: anchor.captain ?? null,
+        vice: anchor.vice ?? null,
+      };
+    }
+    const actual = loadActualSnapshot();
+    if (actual && actual.squad && actual.squad.length) {
+      return { squad: actual.squad, captain: actual.captain, vice: actual.vice };
+    }
+    return { squad: [], captain: null, vice: null };
+  }
+
+  function plannerTransfersUsed(gw) {
+    const anchorGw = plannerAnchorGw();
+    if (gw < anchorGw) return 0;
+    const prev =
+      gw === anchorGw ? plannerAnchorBaselineSnap() : resolvePlannerSnap(gw - 1);
+    const next = plannerStoredSnap(gw) || plannerSnapFromState();
+    return countPlannerTransfers(prev, next);
+  }
+
+  function plannerHitCost(gw) {
+    const used = plannerTransfersUsed(gw);
+    const avail = plannerFtAvailable(gw);
+    return Math.max(0, used - avail) * 4;
+  }
+
+  function setTeamPlanGw(gw, { saveCurrent = true } = {}) {
+    const next = teamClampPlanGw(gw);
+    const prev = teamPlanGw();
+    if (saveCurrent && prev !== next) savePlannerGwState(prev);
+    state.teamGwStart = next;
+    loadPlannerGwState(next);
+    renderTeam();
+  }
+
   function loadTeamDraft() {
     try {
       const raw = localStorage.getItem(TEAM_DRAFT_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.squad)) return;
+      if (!parsed) return;
+      if (parsed.version >= 2) {
+        state.plannerAnchor = parsed.anchor || state.plannerAnchor;
+        state.plannerPlans = parsed.plans && typeof parsed.plans === "object" ? parsed.plans : {};
+        if (Number.isFinite(Number(parsed.planGw))) {
+          state.teamGwStart = teamClampPlanGw(Number(parsed.planGw));
+        }
+        loadPlannerGwState(teamPlanGw());
+        return;
+      }
+      if (!Array.isArray(parsed.squad)) return;
       state.teamSquad = parsed.squad
         .filter((s) => s && s.code != null && TEAM_SQUAD_MAX[s.position])
         .slice(0, 15)
@@ -9756,21 +9984,24 @@
       state.teamCaptainCode = parsed.captain != null ? Number(parsed.captain) || parsed.captain : null;
       state.teamViceCode = parsed.vice != null ? Number(parsed.vice) || parsed.vice : null;
       normalizeTeamRoles();
+      const gw = teamClampPlanGw(planningGameweek());
+      state.teamGwStart = gw;
+      state.plannerPlans = { [plannerSnapKey(gw)]: plannerSnapFromState() };
     } catch {
       /* private browsing / bad JSON */
     }
   }
 
   function saveTeamDraft() {
-    if (state.teamMode === "actual") return;
     try {
+      state.plannerPlans[plannerSnapKey(teamPlanGw())] = plannerSnapFromState();
       localStorage.setItem(
         TEAM_DRAFT_KEY,
         JSON.stringify({
-          version: 1,
-          squad: state.teamSquad,
-          captain: state.teamCaptainCode,
-          vice: state.teamViceCode,
+          version: 2,
+          anchor: state.plannerAnchor,
+          plans: state.plannerPlans,
+          planGw: teamPlanGw(),
         })
       );
     } catch {
@@ -9913,10 +10144,6 @@
   }
 
   function addTeamPlayer(row, { starter, replaceCode } = {}) {
-    if (!teamIsEditable()) {
-      showToast({ title: "Actual is read-only", message: "Switch to Planner to change the squad.", icon: "info" });
-      return false;
-    }
     const err = teamAddError(row, { starter, replaceCode });
     if (err) {
       showToast({ title: "Can't add player", message: err, icon: "triangle-alert" });
@@ -9935,6 +10162,18 @@
     });
     normalizeTeamRoles();
     saveTeamDraft();
+    if (replaceCode != null) {
+      const gw = teamPlanGw();
+      const used = plannerTransfersUsed(gw);
+      const avail = plannerFtAvailable(gw);
+      if (used > avail) {
+        showToast({
+          title: "Transfer hit",
+          message: `${used}/${avail} FT used · −${plannerHitCost(gw)} pts this GW`,
+          icon: "info",
+        });
+      }
+    }
     return true;
   }
 
@@ -10107,10 +10346,10 @@
   }
 
   function clearTeamSquad() {
-    if (!teamIsEditable()) return;
     state.teamSquad = [];
     state.teamCaptainCode = null;
     state.teamViceCode = null;
+    prunePlannerPlansAfter(teamPlanGw() - 1);
     closeTeamPicker({ silent: true });
     cancelTeamSub({ silent: true });
     saveTeamDraft();
@@ -10143,10 +10382,6 @@
   }
 
   function requestClearTeamSquad(fromBtn) {
-    if (!teamIsEditable()) {
-      showToast({ title: "Actual is read-only", message: "Switch to Planner to clear the draft.", icon: "info" });
-      return;
-    }
     if (!state.teamSquad.length) return;
     const btn = fromBtn || el.teamClearToolbar || el.teamClearBtn;
     armConfirmButton(btn, {
@@ -10158,10 +10393,6 @@
   }
 
   function openTeamPicker({ position, starter, replaceCode }) {
-    if (!teamIsEditable()) {
-      showToast({ title: "Actual is read-only", message: "Switch to Planner to add or replace players.", icon: "info" });
-      return;
-    }
     cancelTeamSub({ silent: true });
     state.teamPickerSlot = { position, starter: !!starter, replaceCode: replaceCode ?? null };
     state.search = "";
@@ -10435,7 +10666,7 @@
   }
 
   function teamHeatWindowStart() {
-    return teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
+    return teamPlanGw();
   }
 
   function teamHeatGwInSeason(gw) {
@@ -10829,9 +11060,9 @@
 
   function renderTeamGwNav() {
     if (!el.teamGwNav) return;
-    const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
+    const start = teamPlanGw();
     state.teamGwStart = start;
-    const minStart = SCHEDULE_GW_MIN;
+    const minStart = teamPlanGwMin();
     const maxStart = SCHEDULE_GW_MAX;
     const label = `GW${start}`;
     if (preferMobileSheet()) {
@@ -10852,10 +11083,10 @@
   }
 
   function openTeamGwSheet() {
-    const start = teamClampGwStart(state.teamGwStart ?? teamCurrentGw());
+    const start = teamPlanGw();
     const windowGws = new Set(teamHeatGws().filter(teamHeatGwInSeason));
     const cells = [];
-    for (let gw = SCHEDULE_GW_MIN; gw <= SCHEDULE_GW_MAX; gw++) {
+    for (let gw = teamPlanGwMin(); gw <= SCHEDULE_GW_MAX; gw++) {
       const cls = [
         "team-gw-sheet-cell",
         gw === start ? "is-start" : "",
@@ -10881,11 +11112,10 @@
       btn.addEventListener("click", () => {
         const gw = Number(btn.getAttribute("data-team-gw"));
         if (!Number.isFinite(gw)) return;
-        const next = teamClampGwStart(gw);
+        const next = teamClampPlanGw(gw);
         closeMobileSheet();
-        if (next === state.teamGwStart) return;
-        state.teamGwStart = next;
-        renderTeam();
+        if (next === teamPlanGw()) return;
+        setTeamPlanGw(next);
       });
     });
   }
@@ -10899,6 +11129,12 @@
     const overClub = [...clubs.entries()].filter(([, c]) => c > TEAM_CLUB_MAX);
     const cap = teamPlayerByCode(state.teamCaptainCode);
     const vice = teamPlayerByCode(state.teamViceCode);
+    const planGw = teamPlanGw();
+    const ftAvail = plannerFtAvailable(planGw);
+    const ftUsed = plannerTransfersUsed(planGw);
+    const hitCost = plannerHitCost(planGw);
+    const ftOver = ftUsed > ftAvail;
+    const ftTone = ftOver ? " is-neg" : ftUsed < ftAvail ? " is-pos" : "";
     const bankTone = itb < -1e-9 ? "is-neg" : itb > 1e-9 ? "is-pos" : "";
     const picking = !!state.teamPickerSlot;
     el.teamBudgetBar.classList.toggle("is-picking", picking);
@@ -10929,6 +11165,15 @@
         <span class="team-budget-label">C / V</span>
         <strong>${cap ? escapeHtml(cap.name) : "–"} / ${vice ? escapeHtml(vice.name) : "–"}</strong>
       </div>
+      <div class="team-budget-stat${ftTone}" title="Free transfers used this gameweek / available at deadline">
+        <span class="team-budget-label">FT</span>
+        <strong>${ftUsed}/${ftAvail}</strong>
+      </div>
+      ${
+        hitCost > 0
+          ? `<div class="team-budget-stat is-neg"><span class="team-budget-label">Hit</span><strong>−${hitCost}</strong></div>`
+          : ""
+      }
       ${
         overClub.length
           ? `<div class="team-budget-warn">${overClub.map(([t, c]) => `${t} ${c}/${TEAM_CLUB_MAX}`).join(" · ")}</div>`
@@ -11262,6 +11507,7 @@
       );
     }
     if (el.teamSquadBody) el.teamSquadBody.innerHTML = rows.join("");
+    renderTeamSearchResults();
   }
 
   function renderTeamPicker() {
@@ -11312,11 +11558,11 @@
 
   function renderTeam(opts = {}) {
     if (!el.teamPage) return;
-    if (state.teamGwStart == null) state.teamGwStart = teamClampGwStart(teamCurrentGw());
+    if (state.teamGwStart == null) state.teamGwStart = teamClampPlanGw(planningGameweek());
     normalizeTeamRoles();
     state.teamHoverCompareCode = null;
     hideTeamRowActionsPopup();
-    syncTeamModeUI();
+    syncPlannerPageUI();
     const picking = !!state.teamPickerSlot;
     el.teamPage.classList.toggle(
       "is-comparing",
@@ -11353,6 +11599,7 @@
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     syncTeamLandscapeMode();
     scheduleTeamTableHeadHeightSync();
+    syncPageUpdatedFooter(el.teamUpdatedFooter, DATA.generatedAt);
   }
 
   function applyTeamPageBounds() {
@@ -11401,10 +11648,6 @@
       e.preventDefault();
       e.stopPropagation();
       if (!state.teamPickerSlot) return;
-      if (!teamIsEditable()) {
-        showToast({ title: "Actual is read-only", message: "Switch to Planner to compare and edit.", icon: "info" });
-        return;
-      }
       state.teamCompareMode = !state.teamCompareMode;
       if (state.teamCompareMode) {
         showToast({
@@ -11757,6 +12000,112 @@
     } catch {
       return iso;
     }
+  }
+
+  function pageUpdatedMeta(iso) {
+    if (!iso) return { text: "", title: null };
+    const when = fmtMarketsUpdated(iso);
+    if (!when) return { text: "", title: null };
+    return {
+      text: `Updated ${when}`,
+      title: `Data refreshed ${String(iso).replace("T", " ").replace("Z", " UTC")}`,
+    };
+  }
+
+  function syncPageUpdatedFooter(node, iso) {
+    if (!node) return;
+    const { text, title } = pageUpdatedMeta(iso);
+    if (!text) {
+      node.textContent = "";
+      node.removeAttribute("title");
+      node.hidden = true;
+      return;
+    }
+    node.textContent = text;
+    if (title) node.title = title;
+    else node.removeAttribute("title");
+    node.hidden = false;
+  }
+
+  function optaPaginationDatasetKey() {
+    return [
+      state.season,
+      state.view,
+      state.split,
+      state.valueMode,
+      state.search.trim().toLowerCase(),
+      [...state.posFilter].sort().join(","),
+      [...state.teamFilter].sort().join(","),
+      state.priceMin,
+      state.priceMax,
+      state.ownedMin,
+      state.minsMin,
+      state.minsMax,
+      state.setPieceTakersOnly ? 1 : 0,
+      state.sortKey,
+      state.sortDir,
+      state.showNewPrice ? 1 : 0,
+    ].join("|");
+  }
+
+  function bindOptaPagination() {
+    if (!el.optaPagination || el.optaPagination._bound) return;
+    el.optaPagination._bound = true;
+    el.optaPagination.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-stats-page]");
+      if (!btn || btn.disabled || !el.optaPagination.contains(btn)) return;
+      const next = Number(btn.dataset.statsPage);
+      if (!Number.isFinite(next) || next < 1 || next === state.statsPage) return;
+      state.statsPage = next;
+      renderTable({ resetScroll: true });
+    });
+  }
+
+  function syncOptaTableFooter(sorted) {
+    const footer = el.optaTableFooter;
+    const nav = el.optaPagination;
+    const updated = el.optaUpdatedText;
+    if (!footer) return;
+    if (state.page !== "opta") {
+      footer.hidden = true;
+      return;
+    }
+
+    const { text, title } = pageUpdatedMeta(DATA.generatedAt);
+    if (updated) {
+      updated.textContent = text;
+      if (title) updated.title = title;
+      else updated.removeAttribute("title");
+      updated.hidden = !text;
+    }
+
+    const total = Array.isArray(sorted) ? sorted.length : 0;
+    const pageSize = state.statsPageSize || 50;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+    const page = Math.min(Math.max(1, state.statsPage || 1), totalPages);
+    const showNav = total > pageSize;
+
+    if (nav) {
+      if (!showNav) {
+        nav.innerHTML = "";
+        nav.hidden = true;
+      } else {
+        const start = (page - 1) * pageSize + 1;
+        const end = Math.min(page * pageSize, total);
+        nav.hidden = false;
+        nav.innerHTML = `
+          <button type="button" class="ghost-btn opta-page-btn" data-stats-page="${page - 1}" ${page <= 1 ? "disabled" : ""} aria-label="Previous page">Prev</button>
+          <span class="opta-pagination-status">
+            <span class="opta-pagination-page">${page} of ${totalPages}</span>
+            <span class="opta-pagination-range">${start.toLocaleString()}–${end.toLocaleString()}</span>
+          </span>
+          <button type="button" class="ghost-btn opta-page-btn" data-stats-page="${page + 1}" ${page >= totalPages ? "disabled" : ""} aria-label="Next page">Next</button>
+        `;
+        bindOptaPagination();
+      }
+    }
+
+    footer.hidden = !text && !showNav;
   }
 
   function marketsBookLabel(key) {
@@ -12309,25 +12658,11 @@
     syncMarketsViewControls();
   }
 
-  // Ownership page — multi-line selected_by% over manual check-ins
+  // Ownership page — sortable TSB% mover table
   // ---------------------------------------------------------------------
-  const OWNERSHIP_TOP_PLAYERS = 100;
+  const OWNERSHIP_MOVER_N = 20;
   const OWNERSHIP_TEAM_TOP_N = 20;
-  const OWNERSHIP_PAD = { top: 18, right: 18, bottom: 32, left: 42 };
-  const OWNERSHIP_POINT_HIT = 16;
-  const OWNERSHIP_LINE_HIT = 10;
-  const OWNERSHIP_PLAYER_TREND_CARD_N = 5;
-  const OWNERSHIP_TEAM_TREND_CARD_N = 5;
-
-  let ownershipHoverKey = null;
-  let ownershipHoverIndex = null;
-  let ownershipTipStats = null;
-  let ownershipPinnedKey = null;
-  let ownershipPinnedFromChart = false;
-  let ownershipTipTimer = null;
-  let ownershipSeriesCache = [];
-  let ownershipLayout = null;
-  let ownershipRo = null;
+  const OWNERSHIP_LOOKBACK_DAYS = { d1: 1, d3: 3, d7: 7, d14: 14 };
 
   function ownershipCheckIns() {
     return Array.isArray(OWNERSHIP.checkIns) ? OWNERSHIP.checkIns : [];
@@ -12364,198 +12699,34 @@
     return Math.round((Number(curr) - Number(prev)) * 10) / 10;
   }
 
-  function ownershipTrendWindowSpan() {
-    const n = Number(state.ownershipTrendWindow);
-    return n === 3 || n === 7 ? n : 1;
+  function ownershipCheckInMs(iso) {
+    const [y, m, d] = String(iso || "").split("-").map(Number);
+    if (!y || !m || !d) return NaN;
+    return Date.UTC(y, m - 1, d);
   }
 
-  // Chart x-axis follows the trend window: span steps ⇒ span+1 check-ins
-  // (the endpoints of the delta used for risers/fallers).
-  function ownershipChartWindow(checkIns = ownershipCheckIns()) {
-    const all = Array.isArray(checkIns) ? checkIns : [];
-    const span = ownershipTrendWindowSpan();
-    const count = Math.min(all.length, span + 1);
-    const startIdx = Math.max(0, all.length - count);
-    const endIdx = all.length ? all.length - 1 : -1;
-    return {
-      startIdx,
-      endIdx,
-      count,
-      checkIns: count ? all.slice(startIdx) : [],
-    };
+  function ownershipMoverKind() {
+    return state.ownershipMoverKind === "fallers" ? "fallers" : "risers";
   }
 
-  function ownershipTrendCardLimit() {
-    return state.view === "teams" ? OWNERSHIP_TEAM_TREND_CARD_N : OWNERSHIP_PLAYER_TREND_CARD_N;
+  function resetOwnershipSortForKind(kind) {
+    state.ownershipSortKey = "d14";
+    state.ownershipSortDir = kind === "fallers" ? "asc" : "desc";
   }
 
-  // Rank movers without team/pos chips so filters only subset the chart —
-  // coloring stays the global top-N, not "top-N of this club".
-  function ownershipTrendRankSeries() {
-    return state.view === "teams"
-      ? buildOwnershipTeamSeries({ ignoreTeamPos: true })
-      : buildOwnershipPlayerSeries({ ignoreTeamPos: true });
+  function teamTopNAvg(players, n) {
+    if (!players || players.length < n) return null;
+    const sorted = players.slice().sort((a, b) => (b.owned || 0) - (a.owned || 0) || a.code - b.code);
+    const top = sorted.slice(0, n);
+    const sum = top.reduce((s, p) => s + (Number(p.owned) || 0), 0);
+    return { owned: Math.round((sum / n) * 10) / 10, n, sample: top[0] };
   }
 
-  function ownershipTrendColoredKeys(rankSeries) {
-    const scored = (rankSeries || []).map((s) => ({
-      series: s,
-      trend: ownershipTrendScore(s),
-    }));
-    const cardLimit = ownershipTrendCardLimit();
-    const keys = new Set();
-    scored
-      .filter((x) => x.trend.kind === "riser")
-      .sort(compareOwnershipTrends)
-      .slice(0, cardLimit)
-      .forEach((x) => keys.add(x.series.key));
-    scored
-      .filter((x) => x.trend.kind === "faller")
-      .sort(compareOwnershipTrends)
-      .slice(0, cardLimit)
-      .forEach((x) => keys.add(x.series.key));
-    return keys;
-  }
-
-  // Score the window delta only — top-N coloring is applied later via _trendCard.
-  function ownershipTrendScore(series) {
-    const owned = (series.points || [])
-      .filter((pt) => pt && pt.owned != null && !Number.isNaN(Number(pt.owned)))
-      .map((pt) => Number(pt.owned));
-    if (owned.length < 2) {
-      return {
-        kind: "flat",
-        recent: 0,
-        net: 0,
-        current: owned.length ? owned[owned.length - 1] : null,
-      };
-    }
-    const last = owned[owned.length - 1];
-    const span = ownershipTrendWindowSpan();
-    const fromIdx = Math.max(0, owned.length - 1 - span);
-    const recent = Math.round((last - owned[fromIdx]) * 10) / 10;
-    const net = Math.round((last - owned[0]) * 10) / 10;
-    const current = last;
-    let kind = "flat";
-    if (recent > 0) kind = "riser";
-    else if (recent < 0) kind = "faller";
-    return { kind, recent, net, current };
-  }
-
-  function fmtOwnershipTrendDelta(delta) {
-    if (delta == null || Number.isNaN(delta)) return "—";
-    const n = Number(delta);
-    if (n > 0) return `+${n.toFixed(1)}`;
-    return n.toFixed(1);
-  }
-
-  function ownershipTrendCardHTML(series, trend) {
-    const badge = series.team ? badgeHTML(series.team) : "";
-    const deltaCls =
-      trend.kind === "riser" ? "is-up" : trend.kind === "faller" ? "is-down" : "is-flat";
-    const meta =
-      series.kind === "team" ? "" : series.position ? series.position : "";
-    const owned = Number(trend.current);
-    const recent = Number(trend.recent);
-    const ownedAttr = Number.isFinite(owned)
-      ? ` data-count-to="${owned}" data-count-decimals="1"`
-      : "";
-    const deltaAttr = Number.isFinite(recent)
-      ? ` data-count-to="${recent}" data-count-decimals="1" data-count-signed="1"`
-      : "";
-    return `<button type="button" class="ownership-trend-row" data-ownership-key="${escapeHtml(series.key)}">
-      <span class="ownership-trend-identity">${badge}<span class="ownership-trend-name">${escapeHtml(series.name || "")}</span></span>
-      ${meta ? `<span class="ownership-trend-meta">${escapeHtml(meta)}</span>` : ""}
-      <span class="ownership-trend-owned"${ownedAttr}>${escapeHtml(fmtOwnedPct(trend.current))}</span>
-      <span class="ownership-trend-delta ${deltaCls}"${deltaAttr}>${escapeHtml(fmtOwnershipTrendDelta(trend.recent))}</span>
-    </button>`;
-  }
-
-  function compareOwnershipTrends(a, b) {
-    const ar = Math.abs(a.trend.recent);
-    const br = Math.abs(b.trend.recent);
-    if (ar !== br) return br - ar;
-    const an = Math.abs(a.trend.net);
-    const bn = Math.abs(b.trend.net);
-    if (an !== bn) return bn - an;
-    return (b.trend.current || 0) - (a.trend.current || 0);
-  }
-
-  function ownershipSeriesTrend(series) {
-    return series && (series._trend || ownershipTrendScore(series));
-  }
-
-  function ownershipSeriesTrendQualifies(series) {
-    // Colored only when this series made the top-N riser/faller cards.
-    return !!(series && series._trendCard);
-  }
-
-  function syncOwnershipTrendingUI() {
-    if (el.ownershipTrendCards) {
-      el.ownershipTrendCards.hidden = state.page !== "ownership";
-    }
-    syncOwnershipTrendWindowUI();
-  }
-
-  function syncOwnershipTrendWindowUI({ animate = false } = {}) {
-    if (!el.ownershipTrendWindowSeg) return;
-    const cur = String(ownershipTrendWindowSpan());
-    el.ownershipTrendWindowSeg.querySelectorAll("[data-trend-window]").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.trendWindow === cur);
-    });
-    syncSegThumb(el.ownershipTrendWindowSeg, { animate });
-  }
-
-  function renderOwnershipTrendCards(series, coloredKeys) {
-    if (!el.ownershipTrendRisers || !el.ownershipTrendFallers) return;
-    const keySet = coloredKeys || new Set();
-    const scored = (series || []).map((s) => ({
-      series: s,
-      trend: s._trend || ownershipTrendScore(s),
-    }));
-    // Cards list global top movers that remain after team/pos filters —
-    // not a re-ranked top-N of the filtered club/position alone.
-    const risers = scored
-      .filter((x) => keySet.has(x.series.key) && x.trend.kind === "riser")
-      .sort(compareOwnershipTrends);
-    const fallers = scored
-      .filter((x) => keySet.has(x.series.key) && x.trend.kind === "faller")
-      .sort(compareOwnershipTrends);
-    (series || []).forEach((item) => {
-      item._trendCard = keySet.has(item.key);
-    });
-    const empty = `<div class="ownership-trend-empty">No top movers match the current filters.</div>`;
-    el.ownershipTrendRisers.innerHTML = risers.length
-      ? risers.map((x) => ownershipTrendCardHTML(x.series, x.trend)).join("")
-      : empty;
-    el.ownershipTrendFallers.innerHTML = fallers.length
-      ? fallers.map((x) => ownershipTrendCardHTML(x.series, x.trend)).join("")
-      : empty;
-    syncOwnershipTrendCollapse();
-    syncOwnershipTrendingUI();
-  }
-
-  function syncOwnershipTrendCollapse() {
-    const riserCol = el.ownershipTrendCards && el.ownershipTrendCards.querySelector(".ownership-trend-col.is-risers");
-    const fallerCol = el.ownershipTrendCards && el.ownershipTrendCards.querySelector(".ownership-trend-col.is-fallers");
-    if (riserCol) {
-      riserCol.classList.toggle("is-collapsed", !!state.ownershipRisersCollapsed);
-      const btn = riserCol.querySelector("[data-ownership-collapse='risers']");
-      if (btn) btn.setAttribute("aria-expanded", state.ownershipRisersCollapsed ? "false" : "true");
-    }
-    if (fallerCol) {
-      fallerCol.classList.toggle("is-collapsed", !!state.ownershipFallersCollapsed);
-      const btn = fallerCol.querySelector("[data-ownership-collapse='fallers']");
-      if (btn) btn.setAttribute("aria-expanded", state.ownershipFallersCollapsed ? "false" : "true");
-    }
-  }
-
-  function ownershipPlayerPassesFilters(p, catalog, { ignoreTeamPos = false } = {}) {
-    if (!ignoreTeamPos && state.posFilter.size && !state.posFilter.has(p.position)) return false;
-    if (!ignoreTeamPos && state.teamFilter.size && !state.teamFilter.has(p.team)) return false;
+  function ownershipPlayerPassesDisplayFilters(p, catalog) {
+    if (state.posFilter.size && !state.posFilter.has(p.position)) return false;
+    if (state.teamFilter.size && !state.teamFilter.has(p.team)) return false;
     const price = Number(p.price);
     if (Number.isFinite(price) && (price < state.priceMin || price > state.priceMax)) return false;
-    if (!Number.isFinite(Number(p.owned)) || Number(p.owned) < state.ownedMin) return false;
     if (!isNextSeason() && HAS_PRICE_DATA) {
       const row = catalog.get(Number(p.code));
       if (excludeDepartedPlayer(row)) return false;
@@ -12568,8 +12739,8 @@
     return true;
   }
 
-  function ownershipTeamPassesFilters(team, name, { ignoreTeamPos = false } = {}) {
-    if (!ignoreTeamPos && state.teamFilter.size && !state.teamFilter.has(team)) return false;
+  function ownershipTeamPassesDisplayFilters(team, name) {
+    if (state.teamFilter.size && !state.teamFilter.has(team)) return false;
     const q = state.search.trim().toLowerCase();
     if (q) {
       const hay = `${name || ""} ${team || ""} ${teamNameForSeason(team) || ""}`.toLowerCase();
@@ -12578,61 +12749,97 @@
     return true;
   }
 
-  function teamTopNAvg(players, n) {
-    if (!players || players.length < n) return null;
-    const sorted = players.slice().sort((a, b) => (b.owned || 0) - (a.owned || 0) || a.code - b.code);
-    const top = sorted.slice(0, n);
-    const sum = top.reduce((s, p) => s + (Number(p.owned) || 0), 0);
-    return { owned: Math.round((sum / n) * 10) / 10, n, sample: top[0] };
+  function ownershipOwnedAtOrBefore(history, targetMs) {
+    if (!history || !history.length || !Number.isFinite(targetMs)) return null;
+    let hit = null;
+    for (const pt of history) {
+      const ms = ownershipCheckInMs(pt.checkedAt);
+      if (!Number.isFinite(ms) || ms > targetMs) continue;
+      if (pt.owned == null || Number.isNaN(Number(pt.owned))) continue;
+      hit = pt;
+    }
+    if (hit) return hit;
+    const first = history.find((pt) => pt.owned != null && !Number.isNaN(Number(pt.owned)));
+    return first || null;
   }
 
-  function ownershipOwnedValues(series, startIdx = null, endIdx = null) {
-    return (series || []).flatMap((item) =>
-      (item.points || [])
-        .filter((point) => {
-          if (!point) return false;
-          if (startIdx != null && point.i < startIdx) return false;
-          if (endIdx != null && point.i > endIdx) return false;
-          return true;
-        })
-        .map((point) => Number(point.owned))
-        .filter(Number.isFinite)
-    );
+  function ownershipScoreRow(history) {
+    const valid = (history || []).filter((pt) => pt && pt.owned != null && Number.isFinite(Number(pt.owned)));
+    if (valid.length < 2) return null;
+    const livePt = valid[valid.length - 1];
+    const live = Number(livePt.owned);
+    const liveMs = ownershipCheckInMs(livePt.checkedAt);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const pt14 = ownershipOwnedAtOrBefore(valid, liveMs - OWNERSHIP_LOOKBACK_DAYS.d14 * dayMs);
+    const pt7 = ownershipOwnedAtOrBefore(valid, liveMs - OWNERSHIP_LOOKBACK_DAYS.d7 * dayMs);
+    const pt3 = ownershipOwnedAtOrBefore(valid, liveMs - OWNERSHIP_LOOKBACK_DAYS.d3 * dayMs);
+    const pt1 = ownershipOwnedAtOrBefore(valid, liveMs - OWNERSHIP_LOOKBACK_DAYS.d1 * dayMs);
+    const sparkFromMs = liveMs - OWNERSHIP_LOOKBACK_DAYS.d14 * dayMs;
+    let spark = valid.filter((pt) => ownershipCheckInMs(pt.checkedAt) >= sparkFromMs);
+    if (spark.length < 2) spark = valid.slice(-Math.min(valid.length, 8));
+    const owned7 = pt7 ? Number(pt7.owned) : null;
+    const owned3 = pt3 ? Number(pt3.owned) : null;
+    const owned1 = pt1 ? Number(pt1.owned) : null;
+    const owned14 = pt14 ? Number(pt14.owned) : Number(spark[0].owned);
+    const d14 = ownershipDelta(live, owned14);
+    if (d14 == null) return null;
+    return {
+      live,
+      owned7,
+      owned3,
+      owned1,
+      owned14,
+      d7: ownershipDelta(live, owned7),
+      d3: ownershipDelta(live, owned3),
+      d1: ownershipDelta(live, owned1),
+      d14,
+      spark: spark.map((pt) => Number(pt.owned)),
+      sparkStart: Number(spark[0].owned),
+      sparkEnd: live,
+    };
   }
 
-  function ownershipScaleRange(series, startIdx = null, endIdx = null) {
-    const values = ownershipOwnedValues(series, startIdx, endIdx);
-    const dataMax = values.length ? Math.max(...values) : 10;
-    const dataMin = values.length ? Math.min(...values) : 0;
-    return niceOwnershipRange(dataMin, dataMax);
+  function ownershipPlayerHistoryMaps(checkIns) {
+    const byCode = new Map();
+    for (const ci of checkIns) {
+      for (const p of ci.players || []) {
+        if (!p || p.code == null) continue;
+        const k = Number(p.code);
+        let arr = byCode.get(k);
+        if (!arr) {
+          arr = [];
+          byCode.set(k, arr);
+        }
+        const owned = Number(p.owned);
+        arr.push({
+          checkedAt: ci.checkedAt,
+          owned: Number.isFinite(owned) ? owned : null,
+          player: p,
+        });
+      }
+    }
+    return byCode;
   }
 
-  function buildOwnershipPlayerSeries({ ignoreTeamPos = false } = {}) {
+  function buildOwnershipPlayerMoverUniverse() {
     const checkIns = ownershipCheckIns();
-    if (!checkIns.length) return [];
+    if (checkIns.length < 2) return [];
     const catalog = ownershipCatalogByCode();
+    const byCode = ownershipPlayerHistoryMaps(checkIns);
     const latest = checkIns[checkIns.length - 1];
-    const universe = (latest.players || []).filter((p) =>
-      ownershipPlayerPassesFilters(p, catalog, { ignoreTeamPos })
-    );
-    const top = universe
-      .slice()
-      .sort((a, b) => (b.owned || 0) - (a.owned || 0) || a.code - b.code)
-      .slice(0, OWNERSHIP_TOP_PLAYERS);
-    const byCodeAt = checkIns.map((ci) => {
-      const map = new Map();
-      (ci.players || []).forEach((p) => map.set(Number(p.code), p));
-      return map;
-    });
-    return top.map((seed) => {
-      const points = checkIns.map((ci, i) => {
-        const hit = byCodeAt[i].get(Number(seed.code));
-        if (!hit) return { i, checkedAt: ci.checkedAt, owned: null, player: null };
-        return { i, checkedAt: ci.checkedAt, owned: Number(hit.owned), player: hit };
-      });
-      const last = points.filter((pt) => pt.player).pop();
+    const rows = [];
+    for (const seed of latest.players || []) {
+      if (!seed || seed.code == null) continue;
+      if (!isNextSeason() && HAS_PRICE_DATA) {
+        const row = catalog.get(Number(seed.code));
+        if (excludeDepartedPlayer(row)) continue;
+      }
+      const history = byCode.get(Number(seed.code));
+      const score = ownershipScoreRow(history);
+      if (!score) continue;
+      const last = history.filter((pt) => pt.player).pop();
       const player = (last && last.player) || seed;
-      return {
+      rows.push({
         key: `p:${seed.code}`,
         kind: "player",
         code: Number(seed.code),
@@ -12640,15 +12847,15 @@
         team: player.team,
         position: player.position,
         price: player.price,
-        points,
-        filteredCount: universe.length,
-      };
-    });
+        ...score,
+      });
+    }
+    return rows;
   }
 
-  function buildOwnershipTeamSeries({ ignoreTeamPos = false } = {}) {
+  function buildOwnershipTeamMoverUniverse() {
     const checkIns = ownershipCheckIns();
-    if (!checkIns.length) return [];
+    if (checkIns.length < 2) return [];
     const perCheckIn = checkIns.map((ci) => {
       const byTeam = new Map();
       (ci.players || []).forEach((p) => {
@@ -12663,167 +12870,98 @@
       });
       return map;
     });
-    const latestMap = perCheckIn[perCheckIn.length - 1];
-    const teams = Array.from(latestMap.keys()).filter((team) =>
-      ownershipTeamPassesFilters(team, teamNameForSeason(team), { ignoreTeamPos })
-    );
-    teams.sort((a, b) => (latestMap.get(b).owned || 0) - (latestMap.get(a).owned || 0) || a.localeCompare(b));
-    return teams.map((team) => {
-      const points = checkIns.map((ci, i) => {
+    const teams = new Set();
+    perCheckIn.forEach((map) => map.forEach((_, team) => teams.add(team)));
+    const rows = [];
+    for (const team of teams) {
+      const history = checkIns.map((ci, i) => {
         const hit = perCheckIn[i].get(team);
-        if (!hit) return { i, checkedAt: ci.checkedAt, owned: null, n: null };
-        return { i, checkedAt: ci.checkedAt, owned: hit.owned, n: hit.n };
+        return {
+          checkedAt: ci.checkedAt,
+          owned: hit ? hit.owned : null,
+        };
       });
-      return {
+      const score = ownershipScoreRow(history);
+      if (!score) continue;
+      rows.push({
         key: `t:${team}`,
         kind: "team",
         team,
         name: teamNameForSeason(team) || team,
-        points,
-        filteredCount: teams.length,
-      };
+        ...score,
+      });
+    }
+    return rows;
+  }
+
+  function compareOwnershipMovers(a, b) {
+    const ar = Math.abs(a.d14);
+    const br = Math.abs(b.d14);
+    if (ar !== br) return br - ar;
+    const a7 = Math.abs(a.d7 || 0);
+    const b7 = Math.abs(b.d7 || 0);
+    if (a7 !== b7) return b7 - a7;
+    return (b.live || 0) - (a.live || 0);
+  }
+
+  function ownershipMoverUniverse() {
+    return state.view === "teams"
+      ? buildOwnershipTeamMoverUniverse()
+      : buildOwnershipPlayerMoverUniverse();
+  }
+
+  function ownershipRankedMovers() {
+    const kind = ownershipMoverKind();
+    const universe = ownershipMoverUniverse();
+    const pool = universe.filter((row) => (kind === "fallers" ? row.d14 < 0 : row.d14 > 0));
+    pool.sort(compareOwnershipMovers);
+    return pool.slice(0, OWNERSHIP_MOVER_N);
+  }
+
+  function ownershipVisibleMovers() {
+    const ranked = ownershipRankedMovers();
+    const catalog = ownershipCatalogByCode();
+    return ranked.filter((row) => {
+      if (row.kind === "team") return ownershipTeamPassesDisplayFilters(row.team, row.name);
+      return ownershipPlayerPassesDisplayFilters(row, catalog);
     });
   }
 
-  function ownershipPolylines(points, xAt, yAt, startIdx = null, endIdx = null) {
-    const lines = [];
-    let cur = [];
-    points.forEach((pt) => {
-      if (
-        startIdx != null &&
-        endIdx != null &&
-        (pt.i < startIdx || pt.i > endIdx)
-      ) {
-        if (cur.length) lines.push(cur);
-        cur = [];
-        return;
+  function ownershipSortValue(row, key) {
+    if (key === "name") return String(row.name || "").toLowerCase();
+    if (key === "owned7") return row.owned7 == null ? -Infinity : row.owned7;
+    if (key === "live") return row.live == null ? -Infinity : row.live;
+    if (key === "d7") return row.d7 == null ? -Infinity : row.d7;
+    if (key === "d3") return row.d3 == null ? -Infinity : row.d3;
+    if (key === "d1") return row.d1 == null ? -Infinity : row.d1;
+    if (key === "d14") return row.d14 == null ? -Infinity : row.d14;
+    return -Infinity;
+  }
+
+  function sortOwnershipRows(rows) {
+    const key = state.ownershipSortKey || "d14";
+    const dir = state.ownershipSortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      if (key === "name") {
+        return dir * String(a.name || "").localeCompare(String(b.name || ""));
       }
-      if (pt.owned == null || Number.isNaN(pt.owned)) {
-        if (cur.length) lines.push(cur);
-        cur = [];
-        return;
-      }
-      cur.push({ x: xAt(pt.i), y: yAt(pt.owned), i: pt.i, owned: pt.owned });
-    });
-    if (cur.length) lines.push(cur);
-    return lines;
-  }
-
-  // Catmull–Rom → cubic Bezier so series pass through each check-in smoothly
-  // instead of sharp polyline corners.
-  function pathFromPts(pts) {
-    if (!pts.length) return "";
-    if (pts.length === 1) return `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-    if (pts.length === 2) {
-      return `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} L${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
-    }
-    let d = `M${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2] || p2;
-      const c1x = p1.x + (p2.x - p0.x) / 6;
-      const c1y = p1.y + (p2.y - p0.y) / 6;
-      const c2x = p2.x - (p3.x - p1.x) / 6;
-      const c2y = p2.y - (p3.y - p1.y) / 6;
-      d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
-    }
-    return d;
-  }
-
-  function distPointSeg(px, py, ax, ay, bx, by) {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-6) {
-      const ex = px - ax;
-      const ey = py - ay;
-      return Math.hypot(ex, ey);
-    }
-    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-  }
-
-  function niceOwnershipStep(range) {
-    const span = Math.max(0, Number(range) || 0);
-    if (span <= 8) return 1;
-    if (span <= 16) return 2;
-    if (span <= 40) return 5;
-    return 10;
-  }
-
-  function niceOwnershipRange(rawMin, rawMax) {
-    const dataMax = Math.max(0, Number(rawMax) || 0);
-    const dataMin = Math.max(0, Number(rawMin) || 0);
-    const span = Math.max(dataMax - dataMin, 4);
-    const pad = Math.max(span * 0.06, 0.6);
-    let yMin = Math.max(0, dataMin - pad);
-    let yMax = Math.min(100, dataMax + pad);
-    if (yMax <= yMin) yMax = Math.min(100, yMin + span);
-    const step = niceOwnershipStep(yMax - yMin);
-    yMin = Math.floor(yMin / step) * step;
-    yMax = Math.ceil(yMax / step) * step;
-    if (yMax <= yMin) yMax = yMin + step;
-    return { yMin, yMax, step };
-  }
-
-  function ownershipUsesSelectionCard() {
-    // Touch / narrow: selection lives in a dedicated card, not a floating tip over the plot.
-    return NARROW_MQ.matches || !hasFineHover();
-  }
-
-  function hideOwnershipSelection() {
-    if (!el.ownershipSelection) return;
-    el.ownershipSelection.hidden = true;
-    el.ownershipSelection.innerHTML = "";
-  }
-
-  function clearOwnershipSelection() {
-    ownershipPinnedKey = null;
-    ownershipPinnedFromChart = false;
-    setOwnershipHover(null, null);
-    hideOwnershipTooltip();
-  }
-
-  function bindOwnershipTipPhotoFallback(root) {
-    if (!root) return;
-    root.querySelectorAll("img.own-tip-photo").forEach((img) => {
-      img.addEventListener("error", () => {
-        const fallback = document.createElement("span");
-        fallback.className = "own-tip-photo own-tip-photo-fallback";
-        fallback.setAttribute("aria-hidden", "true");
-        fallback.textContent = img.getAttribute("data-initials") || "?";
-        img.replaceWith(fallback);
-      }, { once: true });
+      const va = ownershipSortValue(a, key);
+      const vb = ownershipSortValue(b, key);
+      if (va !== vb) return dir * (va - vb);
+      return compareOwnershipMovers(a, b);
     });
   }
 
-  function showOwnershipSelection(series, ptIndex) {
-    if (!el.ownershipSelection || !series) return;
-    const rollFrom = ownershipTipStats && ownershipTipStats.key === series.key ? ownershipTipStats : null;
-    const body = ownershipTooltipHTML(series, ptIndex, rollFrom);
-    if (!body) return;
-    el.ownershipSelection.innerHTML = `<div class="ownership-selection-card">
-      <button type="button" class="ownership-selection-close" aria-label="Clear selection">${iconHTML("x")}</button>
-      ${body}
-    </div>`;
-    el.ownershipSelection.hidden = false;
-    bindOwnershipTipPhotoFallback(el.ownershipSelection);
-    mountAndAnimateStatRolls(el.ownershipSelection, { duration: 720 });
-    const data = ownershipTooltipPointData(series, ptIndex);
-    if (data) {
-      ownershipTipStats = snapshotOwnershipTipStats(series, data.idx, data.pt, data.delta, data.trend);
-    }
+  function fmtOwnershipTrendDelta(delta) {
+    if (delta == null || Number.isNaN(delta)) return "—";
+    const n = Number(delta);
+    if (n > 0) return `+${n.toFixed(1)}`;
+    return n.toFixed(1);
   }
 
-  function hideOwnershipTooltip() {
-    clearTimeout(ownershipTipTimer);
-    ownershipTipTimer = null;
-    ownershipTipStats = null;
-    if (el.ownershipTooltip) el.ownershipTooltip.style.display = "none";
-    hideOwnershipSelection();
+  function ownershipDeltaClass(delta) {
+    if (delta == null || Number.isNaN(delta) || Math.abs(delta) < 0.05) return "is-flat";
+    return delta > 0 ? "is-up" : "is-down";
   }
 
   function ownershipInitials(name) {
@@ -12836,13 +12974,179 @@
       .toUpperCase() || "?";
   }
 
-  function ownershipTooltipDeltaMeta(delta) {
-    if (delta == null) {
-      return { label: "Change", value: "First snapshot", cls: "is-flat", numeric: null };
+  function bindOwnershipPhotoFallback(root) {
+    if (!root) return;
+    root.querySelectorAll("img.ownership-photo").forEach((img) => {
+      img.addEventListener("error", () => {
+        const fallback = document.createElement("span");
+        fallback.className = "ownership-photo ownership-photo-fallback";
+        fallback.setAttribute("aria-hidden", "true");
+        fallback.textContent = img.getAttribute("data-initials") || "?";
+        img.replaceWith(fallback);
+      }, { once: true });
+    });
+  }
+
+  function ownershipPhotoHTML(row) {
+    const initials = ownershipInitials(row.name);
+    const photo = feedPlayerPhotoUrl(row.code);
+    if (!photo) {
+      return `<span class="ownership-photo ownership-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
     }
-    const cls = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
-    const sign = delta > 0 ? "+" : "";
-    return { label: "vs last check-in", value: `${sign}${delta.toFixed(1)} pp`, cls, numeric: delta };
+    return `<img class="ownership-photo" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="lazy" data-initials="${escapeHtml(initials)}" />`;
+  }
+
+  function ownershipIdCellHTML(row, rank) {
+    if (row.kind === "team") {
+      const crest = badgeHTML(row.team, "ownership-crest") ||
+        `<span class="ownership-photo ownership-photo-fallback">${escapeHtml((row.team || "?").slice(0, 3))}</span>`;
+      return `<div class="ownership-id">
+        <span class="ownership-rank">${rank}</span>
+        ${crest}
+        <div class="ownership-id-text">
+          <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span></div>
+        </div>
+      </div>`;
+    }
+    const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+    const teamStyle = accent ? ` style="color:${accent}"` : "";
+    const bits = [
+      row.team ? `<span class="ownership-id-team"${teamStyle}>${escapeHtml(row.team)}</span>` : "",
+      row.price != null && Number.isFinite(Number(row.price))
+        ? `<span>£${Number(row.price).toFixed(1)}m</span>`
+        : "",
+      row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
+    ].filter(Boolean);
+    return `<div class="ownership-id">
+      <span class="ownership-rank">${rank}</span>
+      ${ownershipPhotoHTML(row)}
+      <div class="ownership-id-text">
+        <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span></div>
+        ${bits.length ? `<div class="ownership-id-sub">${bits.join("<span class=\"ownership-id-sep\">|</span>")}</div>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function ownershipPillHTML(value, { live = false } = {}) {
+    if (value == null || Number.isNaN(Number(value))) {
+      return `<span class="ownership-pill is-empty">—</span>`;
+    }
+    return `<span class="ownership-pill${live ? " is-live" : ""}">${escapeHtml(fmtOwnedPct(value))}</span>`;
+  }
+
+  function ownershipDeltaPillHTML(delta, { quiet = false } = {}) {
+    const cls = ownershipDeltaClass(delta);
+    const quietCls = quiet && cls === "is-flat" ? " is-quiet" : "";
+    return `<span class="ownership-delta ${cls}${quietCls}">${escapeHtml(fmtOwnershipTrendDelta(delta))}</span>`;
+  }
+
+  function ownershipSparkHTML(row) {
+    const series = row.spark || [];
+    if (series.length < 2) {
+      return `<span class="ownership-spark-empty">—</span>`;
+    }
+    const w = 92;
+    const h = 28;
+    const padX = 2;
+    const padY = 4;
+    const lo = Math.min(...series);
+    const hi = Math.max(...series);
+    const rng = hi - lo || 1;
+    const n = series.length;
+    const pts = series.map((v, i) => {
+      const x = padX + (i / (n - 1)) * (w - padX * 2);
+      const y = h - padY - ((v - lo) / rng) * (h - padY * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const end = pts[pts.length - 1].split(",");
+    const tone = ownershipDeltaClass(row.d14);
+    const startLbl = fmtOwnedPct(row.sparkStart);
+    const endLbl = fmtOwnedPct(row.sparkEnd);
+    return `<span class="ownership-spark ${tone}">
+      <span class="ownership-spark-lab">${escapeHtml(startLbl)}</span>
+      <svg class="ownership-spark-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">
+        <polyline points="${pts.join(" ")}" />
+        <circle cx="${end[0]}" cy="${end[1]}" r="1.8" />
+      </svg>
+      <span class="ownership-spark-lab">${escapeHtml(endLbl)}</span>
+    </span>`;
+  }
+
+  function ownershipSortArrow(key) {
+    if (state.ownershipSortKey !== key) return "";
+    return `<span class="arrow">${iconHTML(state.ownershipSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
+  }
+
+  function ownershipHeadHTML() {
+    const th = (key, label, extra = "") =>
+      `<th class="${extra}${state.ownershipSortKey === key ? " sorted" : ""}" data-own-sort="${key}">${escapeHtml(label)}${ownershipSortArrow(key)}</th>`;
+    return `<tr>
+      ${th("name", state.view === "teams" ? "Club" : "Player", "col-player")}
+      ${th("owned7", "7d", "col-num")}
+      <th class="col-num ownership-col-arrow" aria-hidden="true"></th>
+      ${th("live", "Live", "col-num")}
+      ${th("d7", "7d Δ", "col-num")}
+      ${th("d3", "3d Δ", "col-num")}
+      ${th("d1", "24h", "col-num")}
+      ${th("d14", "14d trend", "col-num ownership-col-spark")}
+    </tr>`;
+  }
+
+  function ownershipRowHTML(row, rank) {
+    return `<tr data-own-key="${escapeHtml(row.key)}">
+      <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
+      <td class="col-num">${ownershipPillHTML(row.owned7)}</td>
+      <td class="col-num ownership-col-arrow"><span class="ownership-then-arrow" aria-hidden="true">→</span></td>
+      <td class="col-num">${ownershipPillHTML(row.live, { live: true })}</td>
+      <td class="col-num">${ownershipDeltaPillHTML(row.d7)}</td>
+      <td class="col-num">${ownershipDeltaPillHTML(row.d3)}</td>
+      <td class="col-num">${ownershipDeltaPillHTML(row.d1, { quiet: true })}</td>
+      <td class="col-num ownership-col-spark">${ownershipSparkHTML(row)}</td>
+    </tr>`;
+  }
+
+  function syncOwnershipMoverUI({ animate = false } = {}) {
+    if (!el.ownershipMoverSeg) return;
+    const cur = ownershipMoverKind();
+    el.ownershipMoverSeg.querySelectorAll("[data-ownership-kind]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.ownershipKind === cur);
+    });
+    syncSegThumb(el.ownershipMoverSeg, { animate });
+  }
+
+  function hideOwnershipTooltip() {}
+  function hideOwnershipSelection() {}
+
+  function renderOwnership() {
+    if (!el.ownershipTableBody || !el.ownershipTableHead) return;
+    syncOwnershipMoverUI();
+    const checkIns = ownershipCheckIns();
+    const ranked = ownershipRankedMovers();
+    const visible = sortOwnershipRows(ownershipVisibleMovers());
+    if (el.ownershipCountLabel) {
+      if (!checkIns.length) {
+        el.ownershipCountLabel.textContent = "No check-ins";
+      } else {
+        const noun = ownershipMoverKind() === "fallers" ? "fallers" : "risers";
+        const shown = visible.length;
+        const total = ranked.length;
+        el.ownershipCountLabel.textContent =
+          shown === total
+            ? `${shown} ${noun}`
+            : `${shown} of ${total} ${noun}`;
+      }
+    }
+    el.ownershipTableHead.innerHTML = ownershipHeadHTML();
+    if (!checkIns.length) {
+      el.ownershipTableBody.innerHTML = `<tr class="ownership-empty-row"><td class="col-player" colspan="8">No ownership check-ins yet. Run <code>python3 site/fetch_ownership.py</code> to capture selected-by-%.</td></tr>`;
+    } else if (!visible.length) {
+      el.ownershipTableBody.innerHTML = `<tr class="ownership-empty-row"><td class="col-player" colspan="8">No ${ownershipMoverKind()} match the current filters.</td></tr>`;
+    } else {
+      el.ownershipTableBody.innerHTML = visible.map((row, i) => ownershipRowHTML(row, i + 1)).join("");
+      bindOwnershipPhotoFallback(el.ownershipTableBody);
+    }
+    syncFiltersResetUI();
+    syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
   }
 
   function statRollFormat(value, decimals, signed) {
@@ -13044,751 +13348,11 @@
     requestAnimationFrame(run);
   }
 
-  function snapshotOwnershipTipStats(series, ptIndex, pt, delta, trend) {
-    return {
-      key: series.key,
-      index: ptIndex,
-      owned: pt && pt.owned != null ? Number(pt.owned) : null,
-      delta: delta != null ? Number(delta) : null,
-      trendRecent: trend && trend.kind !== "flat" ? Number(trend.recent) : null,
-      trendNet: trend && trend.kind !== "flat" ? Number(trend.net) : null,
-    };
-  }
-
-  function ownershipTooltipPointData(series, ptIndex) {
-    const pts = series.points || [];
-    let idx = ptIndex;
-    if (idx == null || !pts[idx] || pts[idx].owned == null) {
-      idx = -1;
-      for (let i = pts.length - 1; i >= 0; i--) {
-        if (pts[i] && pts[i].owned != null) {
-          idx = i;
-          break;
-        }
-      }
-    }
-    const pt = pts[idx];
-    if (!pt) return null;
-    let prev = null;
-    for (let i = idx - 1; i >= 0; i--) {
-      if (pts[i] && pts[i].owned != null) {
-        prev = pts[i];
-        break;
-      }
-    }
-    const delta = ownershipDelta(pt.owned, prev && prev.owned);
-    const trend = ownershipSeriesTrendQualifies(series) ? ownershipSeriesTrend(series) : null;
-    return { pt, idx, delta, trend };
-  }
-
-  function ownershipTooltipHTML(series, ptIndex, rollFrom) {
-    const data = ownershipTooltipPointData(series, ptIndex);
-    if (!data) return "";
-    const { pt, delta, trend } = data;
-    const deltaMeta = ownershipTooltipDeltaMeta(delta);
-    const trendCls =
-      trend && trend.kind === "riser"
-        ? "is-up"
-        : trend && trend.kind === "faller"
-          ? "is-down"
-          : "is-flat";
-    const when = fmtOwnershipDate(pt.checkedAt);
-    const ownedRoll = statRollSpan(pt.owned, {
-      ...(rollFrom && rollFrom.key === series.key && rollFrom.owned != null
-        ? { from: rollFrom.owned }
-        : {}),
-      decimals: 1,
-      className: "own-tip-owned-roll",
-    });
-    const deltaRoll =
-      deltaMeta.numeric != null
-        ? statRollSpan(deltaMeta.numeric, {
-            ...(rollFrom && rollFrom.key === series.key && rollFrom.delta != null
-              ? { from: rollFrom.delta }
-              : {}),
-            decimals: 1,
-            signed: true,
-            suffix: " pp",
-            className: "own-tip-change-roll",
-          })
-        : `<span class="own-tip-change-roll is-text">${escapeHtml(deltaMeta.value)}</span>`;
-    const trendBlock =
-      trend && trend.kind !== "flat"
-        ? `<div class="own-tip-trend ${trendCls}"><span class="own-tip-trend-label">Trend window</span><span class="own-tip-trend-val">${statRollSpan(
-            trend.recent,
-            {
-              ...(rollFrom && rollFrom.key === series.key && rollFrom.trendRecent != null
-                ? { from: rollFrom.trendRecent }
-                : {}),
-              decimals: 1,
-              signed: true,
-            }
-          )}<span class="stat-roll-static"> pp recent · </span>${statRollSpan(trend.net, {
-            ...(rollFrom && rollFrom.key === series.key && rollFrom.trendNet != null
-              ? { from: rollFrom.trendNet }
-              : {}),
-            decimals: 1,
-            signed: true,
-          })}<span class="stat-roll-static"> pp net</span></span></div>`
-        : "";
-
-    if (series.kind === "team") {
-      const badge = series.team ? badgeHTML(series.team) : "";
-      return `<div class="own-tip">
-        <div class="own-tip-head">
-          <div class="own-tip-id">
-            <div class="own-tip-name">${badge}${escapeHtml(series.name)}</div>
-          </div>
-        </div>
-        <div class="own-tip-stat">
-          <div class="own-tip-owned-block">
-            <span class="own-tip-owned">${ownedRoll}<span class="own-tip-unit">%</span></span>
-            <span class="own-tip-owned-label">TSB at snapshot</span>
-          </div>
-          <div class="own-tip-change ${deltaMeta.cls}">
-            <span class="own-tip-change-val">${deltaRoll}</span>
-            <span class="own-tip-change-label">${escapeHtml(deltaMeta.label)}</span>
-          </div>
-        </div>
-        ${trendBlock}
-        <div class="own-tip-when">${escapeHtml(when)}</div>
-      </div>`;
-    }
-
-    const player = pt.player || series;
-    const photo = feedPlayerPhotoUrl(series.code);
-    const initials = ownershipInitials(player.name || series.name);
-    const photoBlock = photo
-      ? `<img class="own-tip-photo" src="${escapeHtml(photo)}" alt="" width="40" height="50" data-initials="${escapeHtml(initials)}" />`
-      : `<span class="own-tip-photo own-tip-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
-    const badge = player.team ? badgeHTML(player.team) : "";
-    const metaBits = [];
-    if (player.position) metaBits.push(posBadgeHTML(player.position));
-    if (player.price != null) metaBits.push(`<span>£${Number(player.price).toFixed(1)}m</span>`);
-    return `<div class="own-tip">
-      <div class="own-tip-head">
-        ${photoBlock}
-        <div class="own-tip-id">
-          <div class="own-tip-name">${badge}${escapeHtml(player.name || series.name)}</div>
-          ${metaBits.length ? `<div class="own-tip-sub">${metaBits.join("")}</div>` : ""}
-        </div>
-      </div>
-      <div class="own-tip-stat">
-        <div class="own-tip-owned-block">
-          <span class="own-tip-owned">${ownedRoll}<span class="own-tip-unit">%</span></span>
-          <span class="own-tip-owned-label">TSB at snapshot</span>
-        </div>
-        <div class="own-tip-change ${deltaMeta.cls}">
-          <span class="own-tip-change-val">${deltaRoll}</span>
-          <span class="own-tip-change-label">${escapeHtml(deltaMeta.label)}</span>
-        </div>
-      </div>
-      ${trendBlock}
-      <div class="own-tip-when">${escapeHtml(when)}</div>
-    </div>`;
-  }
-
-  function showOwnershipTooltip(clientX, clientY, series, ptIndex) {
-    if (!series) return;
-    if (ownershipUsesSelectionCard()) {
-      if (el.ownershipTooltip) el.ownershipTooltip.style.display = "none";
-      showOwnershipSelection(series, ptIndex);
-      return;
-    }
-    if (!el.ownershipTooltip || !el.ownershipChartWrap) return;
-    hideOwnershipSelection();
-    const rollFrom = ownershipTipStats && ownershipTipStats.key === series.key ? ownershipTipStats : null;
-    const html = ownershipTooltipHTML(series, ptIndex, rollFrom);
-    if (!html) return;
-    el.ownershipTooltip.innerHTML = html;
-    bindOwnershipTipPhotoFallback(el.ownershipTooltip);
-    el.ownershipTooltip.style.display = "block";
-    positionOwnershipTooltip(clientX, clientY);
-    mountAndAnimateStatRolls(el.ownershipTooltip, { duration: 520 });
-    const data = ownershipTooltipPointData(series, ptIndex);
-    if (data) {
-      ownershipTipStats = snapshotOwnershipTipStats(series, data.idx, data.pt, data.delta, data.trend);
-    }
-  }
-
-  function positionOwnershipTooltip(clientX, clientY) {
-    if (!el.ownershipTooltip || !el.ownershipChartWrap) return;
-    const wrap = el.ownershipChartWrap.getBoundingClientRect();
-    let left = clientX - wrap.left + 14;
-    let top = clientY - wrap.top + 14;
-    const ttW = el.ownershipTooltip.offsetWidth || 220;
-    const ttH = el.ownershipTooltip.offsetHeight || 120;
-    if (left + ttW > wrap.width - 6) left = clientX - wrap.left - ttW - 14;
-    if (top + ttH > wrap.height - 6) top = clientY - wrap.top - ttH - 14;
-    el.ownershipTooltip.style.left = `${Math.max(6, left)}px`;
-    el.ownershipTooltip.style.top = `${Math.max(6, top)}px`;
-  }
-
-  function ownershipLastOwnedIndex(series) {
-    if (!series || !series.points) return null;
-    for (let i = series.points.length - 1; i >= 0; i--) {
-      if (series.points[i] && series.points[i].owned != null) return i;
-    }
-    return null;
-  }
-
-  function ownershipSeriesPointClient(series, ptIndex) {
-    if (!series || ptIndex == null) return null;
-    const svg = el.ownershipChart && el.ownershipChart.querySelector("svg");
-    if (!svg) return null;
-    const svgRect = svg.getBoundingClientRect();
-    if (!svgRect.width || !svgRect.height) return null;
-    let svgX = null;
-    let svgY = null;
-    (series._drawn || []).forEach((line) => {
-      if (svgX != null) return;
-      const pt = line.find((p) => p.i === ptIndex);
-      if (pt) {
-        svgX = pt.x;
-        svgY = pt.y;
-      }
-    });
-    if (svgX == null && ownershipLayout) {
-      const pt = series.points && series.points[ptIndex];
-      if (!pt || pt.owned == null) return null;
-      svgX = ownershipLayout.xAt(ptIndex);
-      svgY = ownershipLayout.yAt(pt.owned);
-    }
-    if (svgX == null) return null;
-    const vb = svg.viewBox.baseVal;
-    return {
-      clientX: svgRect.left + (svgX / vb.width) * svgRect.width,
-      clientY: svgRect.top + (svgY / vb.height) * svgRect.height,
-      index: ptIndex,
-    };
-  }
-
-  function showOwnershipTooltipForSeries(series, ptIndex) {
-    const pt = ownershipSeriesPointClient(series, ptIndex);
-    if (!pt) return;
-    showOwnershipTooltip(pt.clientX, pt.clientY, series, pt.index);
-  }
-
-  function scrollOwnershipChartIntoView(afterScroll) {
-    if (hasFineHover()) return;
-    const wrap = el.ownershipChartWrap;
-    if (!wrap) return;
-    const main = document.querySelector("main.main");
-    const behavior = prefersReducedMotion() ? "auto" : "smooth";
-    const done = () => {
-      if (typeof afterScroll === "function") afterScroll();
-    };
-    if (main) {
-      const wrapRect = wrap.getBoundingClientRect();
-      const mainRect = main.getBoundingClientRect();
-      const topGap = 12;
-      if (wrapRect.top < mainRect.top + topGap || wrapRect.bottom > mainRect.bottom - 8) {
-        main.scrollTo({
-          top: Math.max(0, main.scrollTop + wrapRect.top - mainRect.top - topGap),
-          behavior,
-        });
-        if (behavior === "auto") done();
-        else setTimeout(done, 400);
-      } else {
-        done();
-      }
-    } else {
-      wrap.scrollIntoView({ behavior, block: "start" });
-      if (behavior === "auto") done();
-      else setTimeout(done, 400);
-    }
-  }
-
-  function ownershipAccentForSeries(series) {
-    if (!series) return "";
-    return TEAM_SCATTER_ACCENT[series.team] || "";
-  }
-
-  function hoverOwnershipSeries(key, { index = null, showTip = false, tipClientX, tipClientY, fromChart = false } = {}) {
-    const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
-    if (!series) {
-      setOwnershipHover(null, null);
-      hideOwnershipTooltip();
-      return;
-    }
-    const idx = index != null ? index : ownershipLastOwnedIndex(series);
-    setOwnershipHover(key, idx, { fromChart });
-    if (showTip && tipClientX != null && tipClientY != null) {
-      showOwnershipTooltip(tipClientX, tipClientY, series, idx);
-    }
-  }
-
-  function restoreOwnershipPin() {
-    if (!ownershipPinnedKey) {
-      setOwnershipHover(null, null);
-      hideOwnershipTooltip();
-      return;
-    }
-    const series = ownershipSeriesCache.find((s) => s.key === ownershipPinnedKey);
-    if (!series) {
-      ownershipPinnedKey = null;
-      ownershipPinnedFromChart = false;
-      setOwnershipHover(null, null);
-      hideOwnershipTooltip();
-      return;
-    }
-    hoverOwnershipSeries(ownershipPinnedKey, { fromChart: ownershipPinnedFromChart });
-  }
-
-  function pinOwnershipSeries(key, { fromChart = false } = {}) {
-    if (!key || ownershipPinnedKey === key) {
-      ownershipPinnedKey = null;
-      ownershipPinnedFromChart = false;
-      setOwnershipHover(null, null);
-      hideOwnershipTooltip();
-      return false;
-    }
-    ownershipPinnedKey = key;
-    ownershipPinnedFromChart = fromChart;
-    hoverOwnershipSeries(key, { fromChart });
-    return true;
-  }
-
-  function setOwnershipHover(key, index, { fromChart = false } = {}) {
-    if (
-      index != null &&
-      ownershipLayout &&
-      ownershipLayout.startIdx != null &&
-      ownershipLayout.endIdx != null
-    ) {
-      index = Math.max(ownershipLayout.startIdx, Math.min(ownershipLayout.endIdx, index));
-    }
-    ownershipHoverKey = key;
-    ownershipHoverIndex = index;
-    if (el.ownershipChartWrap) {
-      el.ownershipChartWrap.classList.toggle("is-focused", !!key);
-    }
-    if (!el.ownershipChart) return;
-    const series = key ? ownershipSeriesCache.find((s) => s.key === key) : null;
-    const accent = ownershipAccentForSeries(series);
-    el.ownershipChart.querySelectorAll(".ownership-line").forEach((node) => {
-      const match = node.getAttribute("data-key") === key;
-      const isTrendLine = node.classList.contains("is-riser") || node.classList.contains("is-faller");
-      node.classList.toggle("is-active", !!key && match);
-      node.classList.toggle("is-dim", !!key && !match);
-      node.classList.toggle("is-chart-selected", !!key && match && fromChart);
-      if (match && fromChart && accent && !isTrendLine) {
-        node.style.setProperty("--ownership-accent", accent);
-        node.style.stroke = accent;
-      } else {
-        node.style.removeProperty("--ownership-accent");
-        node.style.stroke = "";
-      }
-    });
-    if (el.ownershipTrendCards) {
-      el.ownershipTrendCards.querySelectorAll("[data-ownership-key]").forEach((row) => {
-        row.classList.toggle("is-active", !!key && row.getAttribute("data-ownership-key") === key);
-      });
-    }
-    const svg = el.ownershipChart.querySelector("svg");
-    if (svg && key) {
-      svg.querySelectorAll(`.ownership-line[data-key="${key}"]`).forEach((node) => {
-        svg.appendChild(node);
-      });
-    }
-    const guide = el.ownershipChart.querySelector(".ownership-hover-guide");
-    if (guide && ownershipLayout && index != null && ownershipLayout.xAt) {
-      const x = ownershipLayout.xAt(index);
-      guide.setAttribute("x1", x.toFixed(1));
-      guide.setAttribute("x2", x.toFixed(1));
-      guide.style.display = key ? "" : "none";
-    } else if (guide) {
-      guide.style.display = "none";
-    }
-  }
-
-  function hitTestOwnershipAmong(candidates, px, py) {
-    if (!candidates.length || !ownershipLayout) return null;
-    let bestPoint = null;
-    let bestPointD = OWNERSHIP_POINT_HIT;
-    candidates.forEach((s) => {
-      (s._drawn || []).forEach((line) => {
-        line.forEach((pt) => {
-          const d = Math.hypot(px - pt.x, py - pt.y);
-          if (d < bestPointD) {
-            bestPointD = d;
-            bestPoint = { series: s, index: pt.i, d };
-          }
-        });
-      });
-    });
-    if (bestPoint) return bestPoint;
-    let bestLine = null;
-    let bestLineD = OWNERSHIP_LINE_HIT;
-    candidates.forEach((s) => {
-      (s._drawn || []).forEach((line) => {
-        for (let i = 1; i < line.length; i++) {
-          const a = line[i - 1];
-          const b = line[i];
-          const d = distPointSeg(px, py, a.x, a.y, b.x, b.y);
-          if (d < bestLineD) {
-            bestLineD = d;
-            const useB = Math.hypot(px - b.x, py - b.y) < Math.hypot(px - a.x, py - a.y);
-            bestLine = { series: s, index: useB ? b.i : a.i, d };
-          }
-        }
-        if (line.length === 1) {
-          const d = Math.hypot(px - line[0].x, py - line[0].y);
-          if (d < bestLineD) {
-            bestLineD = d;
-            bestLine = { series: s, index: line[0].i, d };
-          }
-        }
-      });
-    });
-    return bestLine;
-  }
-
-  function hitTestOwnership(px, py) {
-    const series = ownershipSeriesCache;
-    if (!series.length || !ownershipLayout) return null;
-    if (state.page === "ownership") {
-      const trend = series.filter((s) => ownershipSeriesTrendQualifies(s));
-      const hit = hitTestOwnershipAmong(trend, px, py);
-      if (hit) return hit;
-    }
-    return hitTestOwnershipAmong(series, px, py);
-  }
-
-  function ownershipPointerToSvg(evt) {
-    const svg = el.ownershipChart && el.ownershipChart.querySelector("svg");
-    if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    if (!rect.width || !rect.height) return null;
-    const vb = svg.viewBox.baseVal;
-    const x = ((evt.clientX - rect.left) / rect.width) * vb.width;
-    const y = ((evt.clientY - rect.top) / rect.height) * vb.height;
-    return { x, y };
-  }
-
-  function onOwnershipPointerMove(evt) {
-    const pt = ownershipPointerToSvg(evt);
-    if (!pt) return;
-    const hit = ownershipPinnedKey
-      ? hitTestOwnershipAmong(
-          ownershipSeriesCache.filter((s) => s.key === ownershipPinnedKey),
-          pt.x,
-          pt.y
-        )
-      : hitTestOwnership(pt.x, pt.y);
-    if (!hit) {
-      if (ownershipPinnedKey) {
-        hideOwnershipTooltip();
-        return;
-      }
-      if (ownershipHoverKey) {
-        setOwnershipHover(null, null);
-        hideOwnershipTooltip();
-      }
-      return;
-    }
-    const changed = ownershipHoverKey !== hit.series.key || ownershipHoverIndex !== hit.index;
-    setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
-    if (hasFineHover()) {
-      clearTimeout(ownershipTipTimer);
-      if (changed || !el.ownershipTooltip || el.ownershipTooltip.style.display === "none") {
-        showOwnershipTooltip(evt.clientX, evt.clientY, hit.series, hit.index);
-      } else {
-        positionOwnershipTooltip(evt.clientX, evt.clientY);
-      }
-    }
-  }
-
-  function onOwnershipPointerLeave() {
-    hideOwnershipTooltip();
-    restoreOwnershipPin();
-  }
-
-  function onOwnershipClick(evt) {
-    const pt = ownershipPointerToSvg(evt);
-    if (!pt) return;
-    const hit = hitTestOwnership(pt.x, pt.y);
-    if (!hit) {
-      if (ownershipPinnedKey) {
-        ownershipPinnedKey = null;
-        ownershipPinnedFromChart = false;
-        setOwnershipHover(null, null);
-      }
-      hideOwnershipTooltip();
-      return;
-    }
-    if (hasFineHover()) {
-      const pinned = pinOwnershipSeries(hit.series.key, { fromChart: true });
-      if (pinned) {
-        setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
-        showOwnershipTooltip(evt.clientX, evt.clientY, hit.series, hit.index);
-      }
-      return;
-    }
-    if (
-      el.ownershipTooltip &&
-      el.ownershipTooltip.style.display !== "none" &&
-      ownershipHoverKey === hit.series.key &&
-      ownershipHoverIndex === hit.index
-    ) {
-      ownershipPinnedKey = null;
-      ownershipPinnedFromChart = false;
-      hideOwnershipTooltip();
-      setOwnershipHover(null, null);
-      return;
-    }
-    ownershipPinnedKey = hit.series.key;
-    ownershipPinnedFromChart = true;
-    setOwnershipHover(hit.series.key, hit.index, { fromChart: true });
-    showOwnershipTooltip(evt.clientX, evt.clientY, hit.series, hit.index);
-  }
-
-  function ownershipChartTitleText() {
-    const base =
-      state.view === "teams" ? "Club average selected-by %" : "Selected-by % over check-ins";
-    const windowLabel =
-      state.ownershipTrendWindow === 1
-        ? "last check-in"
-        : state.ownershipTrendWindow === 3
-          ? "last 3 check-ins"
-          : "last 7 check-ins";
-    const n = ownershipTrendCardLimit();
-    return `${base} · ${windowLabel} · top ${n}`;
-  }
-
-  function syncOwnershipChartTitle() {
-    if (!el.ownershipChartTitle) return;
-    const title = ownershipChartTitleText();
-    el.ownershipChartTitle.textContent = title;
-    if (el.ownershipChart) {
-      el.ownershipChart.setAttribute("aria-label", title);
-    }
-  }
-
-  let ownershipLastSize = "";
-
-  function renderOwnership() {
-    if (!el.ownershipChart) return;
-    hideOwnershipTooltip();
-    syncOwnershipChartTitle();
-    const checkIns = ownershipCheckIns();
-    const rankSeries = ownershipTrendRankSeries();
-    rankSeries.forEach((s) => {
-      s._trend = ownershipTrendScore(s);
-    });
-    const coloredKeys = ownershipTrendColoredKeys(rankSeries);
-    const series =
-      state.view === "teams" ? buildOwnershipTeamSeries() : buildOwnershipPlayerSeries();
-    series.forEach((s) => {
-      s._trend = ownershipTrendScore(s);
-      s._trendCard = coloredKeys.has(s.key);
-    });
-    ownershipSeriesCache = series;
-    renderOwnershipTrendCards(series, coloredKeys);
-    if (el.ownershipChartWrap) {
-      el.ownershipChartWrap.classList.add("is-trending");
-    }
-
-    if (el.ownershipCountLabel) {
-      if (!checkIns.length) {
-        el.ownershipCountLabel.textContent = "No check-ins";
-      } else if (state.view === "teams") {
-        el.ownershipCountLabel.textContent = `${series.length} club${series.length === 1 ? "" : "s"}`;
-      } else {
-        const filtered = series.length ? series[0].filteredCount : 0;
-        el.ownershipCountLabel.textContent = `Top ${series.length} of ${filtered.toLocaleString()} players`;
-      }
-    }
-
-    const wrap = el.ownershipChartWrap || el.ownershipChart;
-    const chartBox = el.ownershipChart || wrap;
-    const w = Math.max(320, wrap.clientWidth || 640);
-    const mobileChart = NARROW_MQ.matches;
-    const measuredH = chartBox.clientHeight || Math.max(0, wrap.clientHeight - 42);
-    const h = mobileChart ? Math.max(240, measuredH || 280) : Math.max(260, measuredH || 380);
-    ownershipLastSize = `${wrap.clientWidth}x${chartBox.clientHeight || measuredH}`;
-    const pad = { ...OWNERSHIP_PAD };
-    if (mobileChart) pad.bottom = 56;
-    const innerW = Math.max(40, w - pad.left - pad.right);
-    const innerH = Math.max(40, h - pad.top - pad.bottom);
-    const view = ownershipChartWindow(checkIns);
-    const viewCheckIns = view.checkIns;
-    const n = viewCheckIns.length;
-    const xAt = (i) => {
-      if (n <= 1) return pad.left + innerW / 2;
-      const local = i - view.startIdx;
-      return pad.left + (local / (n - 1)) * innerW;
-    };
-    const { yMin, yMax, step: tickStep } = ownershipScaleRange(
-      series,
-      view.startIdx,
-      view.endIdx
-    );
-    const ySpan = Math.max(yMax - yMin, 1e-6);
-    const yAt = (owned) => pad.top + (1 - (owned - yMin) / ySpan) * innerH;
-    ownershipLayout = {
-      w,
-      h,
-      pad,
-      innerW,
-      innerH,
-      xAt,
-      yAt,
-      yMin,
-      yMax,
-      n,
-      startIdx: view.startIdx,
-      endIdx: view.endIdx,
-    };
-
-    if (!checkIns.length) {
-      el.ownershipChart.innerHTML = `<div class="ownership-empty">No ownership check-ins yet. Run <code>python3 site/fetch_ownership.py</code> to capture the current FPL selected-by-%.</div>`;
-      return;
-    }
-    if (!series.length) {
-      el.ownershipChart.innerHTML = `<div class="ownership-empty">No players or clubs match the current filters.</div>`;
-      return;
-    }
-
-    const yTicks = [];
-    for (let v = yMin; v <= yMax + 1e-6; v += tickStep) yTicks.push(v);
-
-    series.forEach((s) => {
-      s._drawn = ownershipPolylines(s.points, xAt, yAt, view.startIdx, view.endIdx);
-    });
-
-    const grid = yTicks
-      .map((v) => {
-        const y = yAt(v);
-        return `<line class="ownership-grid-line" x1="${pad.left}" x2="${w - pad.right}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" />
-          <text class="ownership-axis-label is-y" x="${pad.left - 8}" y="${(y + 3).toFixed(1)}">${Number.isInteger(v) ? v : v.toFixed(1)}%</text>`;
-      })
-      .join("");
-
-    const xLabels = viewCheckIns
-      .map((ci, localI) => {
-        const x = xAt(view.startIdx + localI);
-        return `<text class="ownership-axis-label is-x" x="${x.toFixed(1)}" y="${h - 10}">${escapeHtml(fmtOwnershipDate(ci.checkedAt))}</text>`;
-      })
-      .join("");
-
-    const trendClass = (s) => {
-      const trend = ownershipSeriesTrend(s);
-      if (!ownershipSeriesTrendQualifies(s) || !trend) return "";
-      if (trend.kind === "riser") return " is-riser";
-      if (trend.kind === "faller") return " is-faller";
-      return "";
-    };
-
-    const lineMarkup = (list) =>
-      list
-        .map((s) =>
-          (s._drawn || [])
-            .map((line) => {
-              if (line.length === 1) return "";
-              return `<path class="ownership-line${trendClass(s)}" data-key="${escapeHtml(s.key)}" d="${pathFromPts(line)}" />`;
-            })
-            .join("")
-        )
-        .join("");
-
-    const fieldSeries = series.filter((s) => !ownershipSeriesTrendQualifies(s));
-    const trendSeries = series.filter((s) => ownershipSeriesTrendQualifies(s));
-    const lines = lineMarkup(fieldSeries) + lineMarkup(trendSeries);
-
-    el.ownershipChart.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" aria-hidden="true">
-        ${grid}
-        <line class="ownership-hover-guide" x1="0" x2="0" y1="${pad.top}" y2="${h - pad.bottom}" style="display:none" />
-        ${lines}
-        ${xLabels}
-      </svg>`;
-
-    const svg = el.ownershipChart.querySelector("svg");
-    if (svg && !svg._ownershipBound) {
-      svg._ownershipBound = true;
-      svg.addEventListener("mousemove", onOwnershipPointerMove);
-      svg.addEventListener("mouseleave", onOwnershipPointerLeave);
-      svg.addEventListener("click", onOwnershipClick);
-    } else if (svg) {
-      // innerHTML replaced the node; rebind
-      svg.addEventListener("mousemove", onOwnershipPointerMove);
-      svg.addEventListener("mouseleave", onOwnershipPointerLeave);
-      svg.addEventListener("click", onOwnershipClick);
-    }
-
-    if (ownershipPinnedKey && !series.some((s) => s.key === ownershipPinnedKey)) {
-      ownershipPinnedKey = null;
-      ownershipPinnedFromChart = false;
-    }
-    const focusKey = ownershipPinnedKey || ownershipHoverKey;
-    if (focusKey) {
-      const still = series.find((s) => s.key === focusKey);
-      if (still) {
-        const fromChart = ownershipPinnedKey ? ownershipPinnedFromChart : false;
-        setOwnershipHover(still.key, ownershipHoverIndex, { fromChart });
-      }
-      else {
-        ownershipPinnedKey = null;
-        ownershipPinnedFromChart = false;
-        setOwnershipHover(null, null);
-      }
-    } else if (el.ownershipChartWrap) {
-      el.ownershipChartWrap.classList.remove("is-focused");
-    }
-
-    if (typeof ResizeObserver !== "undefined" && wrap && !ownershipRo) {
-      ownershipRo = new ResizeObserver(() => {
-        if (state.page !== "ownership") return;
-        const box = el.ownershipChartWrap || el.ownershipChart;
-        const key = `${box.clientWidth}x${box.clientHeight}`;
-        if (key === ownershipLastSize) return;
-        renderOwnership();
-      });
-      ownershipRo.observe(wrap);
-    }
-
-    syncFiltersResetUI();
-  }
-
   function prefersReducedMotion() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
-  function animateOwnershipLines() {
-    if (!el.ownershipChart || prefersReducedMotion()) return;
-    const paths = [...el.ownershipChart.querySelectorAll("path.ownership-line")];
-    paths.forEach((path, i) => {
-      let len = 0;
-      try {
-        len = path.getTotalLength();
-      } catch {
-        return;
-      }
-      if (!Number.isFinite(len) || len < 2) return;
-      path.style.strokeDasharray = `${len}`;
-      path.style.strokeDashoffset = `${len}`;
-      path.style.transition = "none";
-      void path.getBoundingClientRect();
-      const delay = Math.min(i, 28) * 0.012;
-      path.style.transition = `stroke-dashoffset 0.95s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) ${delay}s`;
-      path.style.strokeDashoffset = "0";
-      const clear = () => {
-        path.style.strokeDasharray = "";
-        path.style.strokeDashoffset = "";
-        path.style.transition = "";
-      };
-      path.addEventListener("transitionend", (evt) => {
-        if (evt.propertyName !== "stroke-dashoffset") return;
-        clear();
-      }, { once: true });
-      window.setTimeout(clear, 1400 + delay * 1000);
-    });
-  }
-
-  function startOwnershipEnterMotion(pane) {
-    animateOwnershipLines();
-    startStatCountUp(pane, ".ownership-trend-owned[data-count-to], .ownership-trend-delta[data-count-to]");
-  }
+  function startOwnershipEnterMotion() {}
 
 
   const PAGE_KEY = "fpl-explorer-page";
@@ -13943,7 +13507,6 @@
         pane.classList.remove("is-enter-pending");
         pane.classList.add("is-entering");
         if (marketsEnter) startStatCountUp(pane, ".markets-stat-value[data-count-to]");
-        if (ownershipEnter) startOwnershipEnterMotion(pane);
         if (rankingsEnter) animateRankingsBars();
         if (homeEnter) startHomeEnterMotion(pane);
         // Matchups cards cascade with scatter (no wait for scatter to finish).
@@ -13956,9 +13519,9 @@
               : marketsEnter
                 ? 3200
                 : ownershipEnter
-                  ? 2400
+                  ? 1600
                   : homeEnter
-                    ? 3800
+                    ? 4600
                     : optaEnter
                       ? 1600
                       : 1500;
@@ -14144,7 +13707,7 @@
       }
       if (page === "team") {
         applyTeamPageBounds();
-        if (prev !== "team") state.teamGwStart = teamClampGwStart(teamCurrentGw());
+        if (prev !== "team") state.teamGwStart = teamClampPlanGw(planningGameweek());
       }
       if (page === "schedule" && prev !== "schedule") {
         const [lo, hi] = defaultScheduleGwWindow();
@@ -14204,7 +13767,6 @@
     if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome ? "none" : "";
     if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
-    if (el.teamToolbarMode) el.teamToolbarMode.hidden = page !== "team";
     if (prev !== page) disarmConfirmButton();
     syncTeamPlannerPrefsBtns();
     if (el.columnsSidebar) {
@@ -14264,11 +13826,9 @@
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
       el.tableOnlyToggles.style.display = "none";
       if (el.compareToggle) el.compareToggle.style.display = "none";
-    }
-    if (el.ownershipTrendingGroup) {
-      el.ownershipTrendingGroup.style.display = page === "ownership" ? "" : "none";
     }
     if (page !== "home") {
       clearHomePlayerLookup({ rerender: false });
@@ -14285,12 +13845,6 @@
       }
       if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
       if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
-    }
-    if (page !== "ownership") {
-      if (el.ownershipTrendCards) el.ownershipTrendCards.hidden = true;
-      hideOwnershipSelection();
-    } else {
-      syncOwnershipTrendingUI();
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
     if (page === "rankings") {
@@ -14381,74 +13935,31 @@
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
-  if (el.ownershipTrendWindowSeg) {
-    el.ownershipTrendWindowSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-trend-window]");
-      if (!btn) return;
-      const next = Number(btn.dataset.trendWindow);
-      if (next !== 1 && next !== 3 && next !== 7) return;
-      if (next === state.ownershipTrendWindow) return;
-      state.ownershipTrendWindow = next;
-      syncOwnershipTrendWindowUI({ animate: true });
-      syncFiltersResetUI();
+  if (el.ownershipMoverSeg) {
+    el.ownershipMoverSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-ownership-kind]");
+      if (!btn || !el.ownershipMoverSeg.contains(btn)) return;
+      const next = btn.dataset.ownershipKind === "fallers" ? "fallers" : "risers";
+      if (next === ownershipMoverKind()) return;
+      state.ownershipMoverKind = next;
+      resetOwnershipSortForKind(next);
+      syncOwnershipMoverUI({ animate: true });
       if (state.page === "ownership") renderOwnership();
     });
   }
-  if (el.ownershipSelection) {
-    el.ownershipSelection.addEventListener("click", (e) => {
-      const close = e.target.closest(".ownership-selection-close");
-      if (!close || !el.ownershipSelection.contains(close)) return;
-      e.preventDefault();
-      clearOwnershipSelection();
-    });
-  }
-  if (el.ownershipTrendCards) {
-    el.ownershipTrendCards.addEventListener("pointerover", (e) => {
-      if (!hasFineHover()) return;
-      if (ownershipPinnedKey) return;
-      const row = e.target.closest("[data-ownership-key]");
-      if (!row || !el.ownershipTrendCards.contains(row)) return;
-      if (e.relatedTarget && row.contains(e.relatedTarget)) return;
-      const key = row.getAttribute("data-ownership-key");
-      if (!key || ownershipHoverKey === key) return;
-      const series = ownershipSeriesCache.find((s) => s.key === key);
-      hoverOwnershipSeries(key, { fromChart: false });
-      if (series) showOwnershipTooltipForSeries(series, ownershipLastOwnedIndex(series));
-    });
-    // Clear only when the pointer leaves the cards entirely — clearing per row
-    // would blink the chart while scrubbing between names.
-    el.ownershipTrendCards.addEventListener("pointerleave", () => {
-      if (!hasFineHover()) return;
-      if (ownershipPinnedKey) {
-        restoreOwnershipPin();
-        return;
+  if (el.ownershipTableWrap) {
+    el.ownershipTableWrap.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-own-sort]");
+      if (!th || !el.ownershipTableWrap.contains(th)) return;
+      const key = th.getAttribute("data-own-sort");
+      if (!key) return;
+      if (state.ownershipSortKey === key) {
+        state.ownershipSortDir = state.ownershipSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.ownershipSortKey = key;
+        state.ownershipSortDir = key === "name" ? "asc" : "desc";
       }
-      if (!ownershipHoverKey) return;
-      setOwnershipHover(null, null);
-      hideOwnershipTooltip();
-    });
-    el.ownershipTrendCards.addEventListener("click", (e) => {
-      const toggle = e.target.closest("[data-ownership-collapse]");
-      if (toggle && el.ownershipTrendCards.contains(toggle)) {
-        e.preventDefault();
-        const which = toggle.getAttribute("data-ownership-collapse");
-        if (which === "risers") state.ownershipRisersCollapsed = !state.ownershipRisersCollapsed;
-        else if (which === "fallers") state.ownershipFallersCollapsed = !state.ownershipFallersCollapsed;
-        else return;
-        syncOwnershipTrendCollapse();
-        return;
-      }
-      const row = e.target.closest("[data-ownership-key]");
-      if (!row) return;
-      const key = row.getAttribute("data-ownership-key");
-      const series = ownershipSeriesCache.find((s) => s.key === key);
-      if (!series) return;
-      const pinned = pinOwnershipSeries(key, { fromChart: false });
-      if (!pinned) return;
-      const lastIdx = ownershipLastOwnedIndex(series);
-      const showTip = () => showOwnershipTooltipForSeries(series, lastIdx);
-      showTip();
-      scrollOwnershipChartIntoView(showTip);
+      renderOwnership();
     });
   }
   if (el.pageTeam) el.pageTeam.addEventListener("click", () => setPage("team"));
@@ -14899,6 +14410,7 @@
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
     }
     state.enhancePct = view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
     updateEnhancePctSlider();
@@ -15942,7 +15454,8 @@
   // ---------------------------------------------------------------------
   // Appearance (device → light → dark). Default is always device/system.
   // Accent chrome color (tabs, toggles, selection, icons) via --blue-hsl.
-  // Data green/red (--positive / --negative) stay fixed and independent.
+  // Data spectrum (--positive / --negative) is Ownership-style blue/orange rise/fall;
+  // rise tracks accent, fall stays fixed orange.
   // ---------------------------------------------------------------------
   const THEME_KEY = "fpl-explorer-theme";
   const ACCENT_KEY = "fpl-explorer-accent";
@@ -16191,6 +15704,10 @@
     setPageTrayOpen(false);
     syncPageTrayTrigger();
     syncPageTabWheel();
+    if (state.page === "home") {
+      syncHomeLookupUI();
+      renderHome({ deferDuringEnter: true });
+    }
     if (state.page === "team") renderTeam();
     if (state.page === "opta") {
       syncCoreUnderName();
@@ -16242,14 +15759,6 @@
   }
   if (el.fplIdClear) {
     el.fplIdClear.addEventListener("click", () => clearManagerId());
-  }
-  if (el.teamModeSeg) {
-    el.teamModeSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-team-mode]");
-      if (!btn) return;
-      disarmConfirmButton();
-      setTeamMode(btn.getAttribute("data-team-mode"));
-    });
   }
   function bindTeamPlannerAction(btn, action) {
     if (!btn) return;

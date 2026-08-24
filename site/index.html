@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=623" />
+<link rel="stylesheet" href="styles.css?v=638" />
 <script>
 (() => {
   try {
@@ -90,6 +90,12 @@
     <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
     <path d="M16 16h5v5"/>
     <circle cx="12" cy="12" r="1"/>
+  </symbol>
+  <symbol id="i-repeat-2" viewBox="0 0 24 24">
+    <path d="m2 9 3-3 3 3"/>
+    <path d="M7 6v11a2 2 0 0 0 2 2h8"/>
+    <path d="m22 15-3 3-3-3"/>
+    <path d="M17 18V7a2 2 0 0 0-2-2H7"/>
   </symbol>
   <symbol id="i-podium" viewBox="0 0 24 24">
     <path d="M12 6V2h-1"/>
@@ -275,7 +281,7 @@
     </button>
     <button id="page-team" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
-      Team
+      Planner
     </button>
     <button id="page-expected" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
@@ -365,16 +371,16 @@
                 <button id="fpl-id-clear" class="ghost-btn prefs-action-btn" type="button">Clear</button>
               </div>
               <p id="fpl-id-status" class="prefs-status" aria-live="polite"></p>
-              <p class="prefs-field-hint">Links Actual team and ownership pins via the FPL API. Planner stays editable and separate until you Resync.</p>
+              <p class="prefs-field-hint">Links your FPL squad for ownership pins and seeds the Planner. Your live team is on Home.</p>
             </div>
           </section>
           <section class="settings-section" id="prefs-planner-section">
             <div class="settings-section-label">Planner</div>
             <div class="prefs-field">
-              <p class="prefs-field-hint prefs-planner-hint-mobile">Resync copies your linked Actual FPL squad into the Planner draft. Clear removes every Planner pick; Actual is unchanged.</p>
-              <p class="prefs-field-hint prefs-planner-hint-desktop">On desktop, Resync and Clear live in the Team toolbar next to the gameweek controls while Planner is selected.</p>
+              <p class="prefs-field-hint prefs-planner-hint-mobile">Resync copies your linked FPL squad into the Planner. Clear removes every planned pick.</p>
+              <p class="prefs-field-hint prefs-planner-hint-desktop">On desktop, Resync and Clear live in the Planner toolbar next to the gameweek controls.</p>
               <div class="prefs-action-row prefs-planner-actions">
-                <button type="button" class="ghost-btn prefs-action-btn" id="team-resync-btn" data-team-planner-action="resync">Resync from Actual</button>
+                <button type="button" class="ghost-btn prefs-action-btn" id="team-resync-btn" data-team-planner-action="resync">Resync from FPL</button>
                 <button type="button" class="ghost-btn prefs-action-btn" id="team-clear-btn" data-team-planner-action="clear">Clear planner</button>
               </div>
             </div>
@@ -387,17 +393,19 @@
 
 <div class="topbar" id="subtoolbar">
   <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
-    <button id="sidebar-toggle" class="ghost-btn icon-only-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters" aria-pressed="false">
+    <button id="sidebar-toggle" class="ghost-btn icon-label-btn" type="button" title="Hide/show filters" aria-label="Hide/show filters" aria-pressed="false">
       <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
+      <span class="btn-label">Filters</span>
+      <span class="mobile-dock-label">Filters</span>
     </button>
     <div class="tabs">
       <button id="tab-players" class="tab-btn active" type="button" aria-label="Players">
         <svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>
-        Players
+        <span class="mobile-dock-label">Players</span>
       </button>
       <button id="tab-teams" class="tab-btn" type="button" aria-label="Teams">
         <svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>
-        Teams
+        <span class="mobile-dock-label">Teams</span>
       </button>
     </div>
     <div class="dropdown-wrap expected-cat-toolbar" id="expected-cat-toolbar" hidden>
@@ -408,12 +416,6 @@
         <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
       </button>
       <div id="expected-cat-menu" class="dropdown-panel expected-cat-menu" role="menu" aria-label="xData categories"></div>
-    </div>
-    <div class="team-toolbar-mode" id="team-toolbar-mode" hidden>
-      <div class="team-mode-seg segmented" id="team-mode-seg" role="group" aria-label="Team mode">
-        <button type="button" data-team-mode="actual" id="team-mode-actual" class="active">Actual</button>
-        <button type="button" data-team-mode="planner" id="team-mode-planner">Planner</button>
-      </div>
     </div>
   </div>
 
@@ -441,12 +443,12 @@
         </button>
         <div class="team-toolbar-planner-actions" id="team-toolbar-planner-actions">
           <button type="button" class="ghost-btn icon-label-btn" id="team-resync-toolbar"
-            data-team-planner-action="resync" title="Copy linked Actual squad into Planner" hidden>
+            data-team-planner-action="resync" title="Copy linked FPL squad into Planner" hidden>
             <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
             <span class="btn-label">Resync</span>
           </button>
           <button type="button" class="ghost-btn icon-label-btn" id="team-clear-toolbar"
-            data-team-planner-action="clear" title="Remove every Planner pick" hidden>
+            data-team-planner-action="clear" title="Remove every planned pick" hidden>
             <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
             <span class="btn-label">Clear</span>
           </button>
@@ -563,15 +565,6 @@
       </div>
     </div>
 
-    <div class="filter-group" id="ownership-trending-group" style="display:none;">
-      <h3>Trend</h3>
-      <div class="segmented ownership-trend-window-seg" id="ownership-trend-window-seg" role="group" aria-label="Trend window">
-        <button type="button" data-trend-window="1" class="active" title="Change since the last check-in (will be ~24h once daily snapshots exist)">Last</button>
-        <button type="button" data-trend-window="3" title="Change over the last 3 check-ins">Last 3</button>
-        <button type="button" data-trend-window="7" title="Change over the last 7 check-ins">Last 7</button>
-      </div>
-    </div>
-
     <div class="filter-group" id="minutes-filter-group">
       <h3>Minutes</h3>
       <div class="slider-values"><span id="mins-min-label"></span><span id="mins-max-label"></span></div>
@@ -620,6 +613,7 @@
             <button id="home-search-btn" class="ghost-btn icon-only-btn home-search-btn" type="button"
               title="Search players" aria-label="Search players" aria-pressed="false" hidden>
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <span class="mobile-dock-label">Search</span>
             </button>
           </div>
         </div>
@@ -817,6 +811,10 @@
           <tbody id="table-body"></tbody>
         </table>
       </div>
+      <div class="page-data-footer opta-table-footer" id="opta-table-footer" hidden>
+        <nav class="opta-pagination" id="opta-pagination" aria-label="Statistics pages" hidden></nav>
+        <p class="page-updated-text" id="opta-updated-text" hidden></p>
+      </div>
     </div>
 
     <div id="ownership-page" class="page-pane" style="display:none;">
@@ -824,41 +822,24 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-trending-up"/></svg>Ownership<button class="page-info-btn" type="button" aria-label="How Ownership works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle">FPL selected-by-% across check-ins — top 5 movers color green/red (ranked before team/position filters); everyone else stays grey. Chart zooms to the trend window.</p>
-          </div>
-          <div class="page-header-meta">
-            <span class="count-label" id="ownership-count-label"></span>
+            <p class="page-subtitle">Biggest 14-day TSB% movers — 20 risers or fallers, with 7d / 3d / 24h change and a 14-day sparkline.</p>
           </div>
         </div>
       </div>
-      <div id="ownership-trend-cards" class="ownership-trend-cards">
-        <div class="ownership-trend-col is-risers">
-          <button type="button" class="ownership-trend-heading" data-ownership-collapse="risers"
-            aria-expanded="true" aria-controls="ownership-trend-risers">
-            <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
-            Risers
-            <svg class="icon ownership-trend-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-          </button>
-          <div class="ownership-trend-list" id="ownership-trend-risers"></div>
+      <div class="ownership-mover-bar">
+        <div class="segmented ownership-mover-seg" id="ownership-mover-seg" role="group" aria-label="Movers">
+          <button type="button" data-ownership-kind="risers" class="active">Risers</button>
+          <button type="button" data-ownership-kind="fallers">Fallers</button>
         </div>
-        <div class="ownership-trend-col is-fallers">
-          <button type="button" class="ownership-trend-heading" data-ownership-collapse="fallers"
-            aria-expanded="true" aria-controls="ownership-trend-fallers">
-            <svg class="icon" aria-hidden="true"><use href="#i-trending-down"/></svg>
-            Fallers
-            <svg class="icon ownership-trend-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-          </button>
-          <div class="ownership-trend-list" id="ownership-trend-fallers"></div>
-        </div>
+        <span class="count-label" id="ownership-count-label"></span>
       </div>
-      <div id="ownership-selection" class="ownership-selection" hidden></div>
-      <div class="ownership-chart-wrap" id="ownership-chart-wrap">
-        <div class="ownership-chart-head">
-          <h3 class="ownership-chart-title" id="ownership-chart-title">Selected-by %</h3>
-        </div>
-        <div id="ownership-chart" class="ownership-chart" role="img" aria-label="Ownership line chart"></div>
-        <div id="ownership-tooltip" class="chart-tooltip ownership-tooltip" style="display:none;"></div>
+      <div class="table-wrap" id="ownership-table-wrap">
+        <table class="ownership-table">
+          <thead id="ownership-table-head"></thead>
+          <tbody id="ownership-table-body"></tbody>
+        </table>
       </div>
+      <p class="page-updated-text page-data-footer" id="ownership-updated-footer" hidden></p>
     </div>
 
     <div id="rankings-page" class="page-pane" style="display:none;">
@@ -873,16 +854,17 @@
       <div class="rankings-pin-bar" id="rankings-pin-bar" style="display:none;"></div>
 
       <div class="rankings-grid" id="rankings-grid"></div>
+      <p class="page-updated-text page-data-footer" id="rankings-updated-footer" hidden></p>
     </div>
 
     <div id="team-page" class="page-pane" style="display:none;">
       <div class="page-header team-header">
         <div class="team-header-text">
           <div class="team-header-title-row">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Team<button class="page-info-btn" type="button" aria-label="How Team works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Planner<button class="page-info-btn" type="button" aria-label="How Planner works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <div class="team-header-inline-actions" id="team-header-inline-actions"></div>
           </div>
-          <p class="page-subtitle" id="team-page-subtitle">Build a 15-man FPL squad within £100.0m — season stats, set pieces, and six fixtures from the next gameweek.</p>
+          <p class="page-subtitle" id="team-page-subtitle">Plan transfers and lineups by gameweek — synced from your linked FPL manager. Your live squad is on Home.</p>
         </div>
         <div class="page-header-meta team-picker-header-actions" id="team-picker-header-actions">
           <button type="button" class="ghost-btn icon-label-btn team-picker-cancel" id="team-picker-cancel" hidden aria-label="Back to squad">
@@ -936,6 +918,7 @@
           </table>
         </div>
       </div>
+      <p class="page-updated-text page-data-footer" id="team-updated-footer" hidden></p>
     </div>
 
     <div id="expected-page" class="page-pane" style="display:none;">
@@ -958,6 +941,7 @@
         </div>
         <div id="expected-tooltip" class="chart-tooltip" style="display:none;"></div>
       </div>
+      <p class="page-updated-text page-data-footer" id="expected-updated-footer" hidden></p>
     </div>
 
     <div id="schedule-page" class="page-pane" style="display:none;">
@@ -972,6 +956,7 @@
           <button id="schedule-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
             title="Show matchup sliders" aria-label="Show matchup sliders" aria-expanded="false" aria-controls="schedule-controls">
             <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
+            <span class="mobile-dock-label">Sliders</span>
           </button>
         </div>
 
@@ -1062,6 +1047,7 @@
 
       <section id="schedule-scatter" class="schedule-scatter"></section>
       <div class="schedule-grid schedule-grid-matchups schedule-grid-analyze" id="schedule-grid"></div>
+      <p class="page-updated-text page-data-footer" id="schedule-updated-footer" hidden></p>
     </div>
 
     <div id="markets-page" class="page-pane" style="display:none;">
@@ -1084,6 +1070,7 @@
             <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
               title="Show color threshold sliders" aria-label="Show color threshold sliders" aria-expanded="false" aria-controls="markets-controls">
               <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
+              <span class="mobile-dock-label">Sliders</span>
             </button>
           </div>
         </div>
@@ -1204,7 +1191,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=644"></script>
+<script src="app.js?v=652"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

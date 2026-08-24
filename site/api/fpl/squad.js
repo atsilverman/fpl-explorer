@@ -60,6 +60,26 @@ function gwLabel(bootstrap, gw, hasPicks) {
   return name;
 }
 
+const FT_MAX = 5;
+const FT_AFCON_GW = 16;
+
+function computeFreeTransfersAtGw(historyCurrent, targetGw) {
+  if (!Array.isArray(historyCurrent) || !Number.isFinite(targetGw) || targetGw <= 1) return 1;
+  let ft = 1;
+  for (const row of historyCurrent) {
+    const ev = Number(row.event);
+    if (!Number.isFinite(ev) || ev >= targetGw) break;
+    if (ev <= 1) continue;
+    const transfers = Number(row.event_transfers) || 0;
+    const cost = Number(row.event_transfers_cost) || 0;
+    const paid = Math.round(cost / 4);
+    const freeUsed = Math.max(0, transfers - paid);
+    ft = Math.min(FT_MAX, ft - freeUsed + 1);
+    if (ev + 1 === FT_AFCON_GW) ft = FT_MAX;
+  }
+  return ft;
+}
+
 function mapPicks(bootstrap, picksPayload) {
   const byId = new Map((bootstrap.elements || []).map((e) => [e.id, e]));
   const picks = Array.isArray(picksPayload && picksPayload.picks) ? picksPayload.picks : [];
@@ -128,6 +148,10 @@ module.exports = async function handler(req, res) {
       delete slot.teamId;
     });
     const history = (picksRes.data && picksRes.data.entry_history) || {};
+    const histRes = await fplGet(`/entry/${id}/history/`);
+    const historyCurrent =
+      histRes.ok && histRes.data && Array.isArray(histRes.data.current) ? histRes.data.current : [];
+    const freeTransfers = computeFreeTransfersAtGw(historyCurrent, gw);
     return json(res, 200, {
       ok: true,
       managerId: id,
@@ -139,6 +163,8 @@ module.exports = async function handler(req, res) {
       syncedAt: new Date().toISOString(),
       bank: history.bank != null ? Number(history.bank) / 10 : null,
       value: history.value != null ? Number(history.value) / 10 : null,
+      freeTransfers,
+      historyCurrent,
       squad: mapped.squad,
       captain: mapped.captain,
       vice: mapped.vice,

@@ -79,6 +79,30 @@ def gw_label(bootstrap, gw, has_picks):
     return name
 
 
+FT_MAX = 5
+FT_AFCON_GW = 16
+
+
+def compute_free_transfers_at_gw(history_current, target_gw):
+    if not isinstance(history_current, list) or not isinstance(target_gw, int) or target_gw <= 1:
+        return 1
+    ft = 1
+    for row in history_current:
+        ev = int(row.get("event") or 0)
+        if ev >= target_gw:
+            break
+        if ev <= 1:
+            continue
+        transfers = int(row.get("event_transfers") or 0)
+        cost = int(row.get("event_transfers_cost") or 0)
+        paid = round(cost / 4)
+        free_used = max(0, transfers - paid)
+        ft = min(FT_MAX, ft - free_used + 1)
+        if ev + 1 == FT_AFCON_GW:
+            ft = FT_MAX
+    return ft
+
+
 def map_picks(bootstrap, picks_payload):
     by_id = {e["id"]: e for e in bootstrap.get("elements") or []}
     teams = {t["id"]: t.get("short_name") for t in bootstrap.get("teams") or []}
@@ -129,6 +153,9 @@ def build_squad_payload(manager_id: str):
     history = (picks or {}).get("entry_history") or {}
     bank = history.get("bank")
     value = history.get("value")
+    hstatus, hist_payload = fpl_get(f"/entry/{manager_id}/history/")
+    history_current = (hist_payload or {}).get("current") if hstatus == 200 else []
+    free_transfers = compute_free_transfers_at_gw(history_current or [], gw)
     return 200, {
         "ok": True,
         "managerId": manager_id,
@@ -142,6 +169,8 @@ def build_squad_payload(manager_id: str):
         "syncedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "bank": (bank / 10.0) if isinstance(bank, (int, float)) else None,
         "value": (value / 10.0) if isinstance(value, (int, float)) else None,
+        "freeTransfers": free_transfers,
+        "historyCurrent": history_current or [],
         "squad": squad,
         "captain": captain,
         "vice": vice,
