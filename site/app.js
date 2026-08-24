@@ -917,6 +917,10 @@
     homePage: $("#home-page"),
     homePageSubtitle: $("#home-page-subtitle"),
     homeCountLabel: $("#home-count-label"),
+    homeDesktopSearch: $("#home-desktop-search"),
+    homeDesktopSearchInput: $("#home-desktop-search-input"),
+    homeDesktopSearchClear: $("#home-desktop-search-clear"),
+    homeDesktopSearchResults: $("#home-desktop-search-results"),
     homeUpdatedFooter: $("#home-updated-footer"),
     homeEmpty: $("#home-empty"),
     homeEmptyTitle: $("#home-empty-title"),
@@ -4010,19 +4014,71 @@
     bindHomeSearchSheetEvents();
   }
 
+  function syncHomeDesktopSearchUI() {
+    const wrap = el.homeDesktopSearch;
+    const input = el.homeDesktopSearchInput;
+    const clearBtn = el.homeDesktopSearchClear;
+    const results = el.homeDesktopSearchResults;
+    if (!wrap) return;
+    const onHome = state.page === "home";
+    const desktop = !NARROW_MQ.matches;
+    wrap.hidden = !(onHome && desktop);
+    if (!onHome || !desktop) {
+      if (results) {
+        results.hidden = true;
+        results.innerHTML = "";
+      }
+      return;
+    }
+    if (clearBtn) clearBtn.hidden = !homeLookupPlayer && !(input && String(input.value || "").trim());
+    if (homeLookupPlayer && input && document.activeElement !== input) {
+      // Reflect the active lookup when not typing.
+      if (!String(input.value || "").trim()) {
+        input.placeholder = homeLookupPlayer.name || "Search players";
+      }
+    } else if (input && !homeLookupPlayer) {
+      input.placeholder = "Search players";
+    }
+  }
+
+  function renderHomeDesktopSearchResults(query) {
+    const results = el.homeDesktopSearchResults;
+    if (!results) return;
+    const q = String(query || "").trim();
+    if (!q) {
+      results.hidden = true;
+      results.innerHTML = "";
+      return;
+    }
+    const rows = homeSearchFilteredRows(q);
+    results.innerHTML = rows.length
+      ? rows.map(homeSearchResultRowHTML).join("")
+      : `<div class="home-search-empty">No players match “${escapeHtml(q)}”.</div>`;
+    results.hidden = false;
+  }
+
+  function hideHomeDesktopSearchResults() {
+    const results = el.homeDesktopSearchResults;
+    if (!results) return;
+    results.hidden = true;
+    results.innerHTML = "";
+  }
+
   function syncHomeSearchBtn() {
-    if (!el.homeSearchBtn) return;
-    const clearMode = !!homeLookupPlayer;
-    const iconUse = el.homeSearchBtn.querySelector("use");
-    if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
-    const label = clearMode ? "Clear player search" : "Search players";
-    el.homeSearchBtn.title = label;
-    el.homeSearchBtn.setAttribute("aria-label", label);
-    el.homeSearchBtn.classList.toggle("is-clear", clearMode);
-    el.homeSearchBtn.setAttribute("aria-pressed", clearMode ? "true" : "false");
-    el.homeSearchBtn.classList.toggle("on", clearMode);
-    // Nav chrome: icon-only search sits left of Preferences on Home (mobile + desktop).
-    el.homeSearchBtn.hidden = state.page !== "home";
+    if (el.homeSearchBtn) {
+      const clearMode = !!homeLookupPlayer;
+      const iconUse = el.homeSearchBtn.querySelector("use");
+      if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
+      const label = clearMode ? "Clear player search" : "Search players";
+      el.homeSearchBtn.title = label;
+      el.homeSearchBtn.setAttribute("aria-label", label);
+      el.homeSearchBtn.classList.toggle("is-clear", clearMode);
+      el.homeSearchBtn.setAttribute("aria-pressed", clearMode ? "true" : "false");
+      el.homeSearchBtn.classList.toggle("on", clearMode);
+      // Mobile nav only — desktop uses the expanded header search.
+      el.homeSearchBtn.hidden = state.page !== "home" || !NARROW_MQ.matches;
+    }
+    syncHomeDesktopSearchUI();
   }
 
   function clearHomePlayerLookup({ rerender = true } = {}) {
@@ -4031,6 +4087,11 @@
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
+    if (el.homeDesktopSearchInput) {
+      el.homeDesktopSearchInput.value = "";
+      el.homeDesktopSearchInput.placeholder = "Search players";
+    }
+    hideHomeDesktopSearchResults();
     syncHomeSearchBtn();
     if (rerender) syncHomeLookupUI();
   }
@@ -4042,6 +4103,12 @@
     }
     homeLookupPlayer = row;
     homeLookupStatMode = 0;
+    if (el.homeDesktopSearchInput) {
+      el.homeDesktopSearchInput.value = "";
+      el.homeDesktopSearchInput.placeholder = row.name || "Search players";
+      el.homeDesktopSearchInput.blur();
+    }
+    hideHomeDesktopSearchResults();
     syncHomeSearchBtn();
     syncHomeLookupUI();
   }
@@ -5143,8 +5210,8 @@
       ((!el.mobileFilterDock || !el.mobileFilterDock.hidden) ||
         (!el.mobileViewDock || !el.mobileViewDock.hidden));
     if (fade) {
-      fade.hidden = true;
-      fade.setAttribute("aria-hidden", "true");
+      fade.hidden = !show;
+      fade.setAttribute("aria-hidden", show ? "false" : "true");
     }
     document.documentElement.classList.toggle("has-mobile-bottom-dock", show);
     if (!show) resetMobileChromeScrollHide();
@@ -14730,23 +14797,10 @@
 
   function syncPageNavLabelCenter() {
     const cluster = el.pageNavCenter;
-    const label = el.pageTrayLabel;
-    const nav = el.pageNav;
-    if (!cluster || !label || !nav) return;
-    if (!preferMobileSheet()) {
-      cluster.style.removeProperty("--page-nav-label-offset");
-      return;
-    }
-    cluster.style.setProperty("--page-nav-label-offset", "0px");
-    requestAnimationFrame(() => {
-      // Center within the inset title band (not full nav) so Search/Settings
-      // stay clear of the page tray after the offset nudge.
-      const bandRect = cluster.getBoundingClientRect();
-      const bandMid = bandRect.left + bandRect.width / 2;
-      const labelRect = label.getBoundingClientRect();
-      const labelMid = labelRect.left + labelRect.width / 2;
-      cluster.style.setProperty("--page-nav-label-offset", `${bandMid - labelMid}px`);
-    });
+    if (!cluster) return;
+    // Center the whole tray group (icon + name/arrow + info) via CSS.
+    // Don't offset to the label mid — that skewed the flanking icons.
+    cluster.style.removeProperty("--page-nav-label-offset");
   }
 
   function syncPageTrayTrigger() {
@@ -15007,6 +15061,55 @@
       openHomeSearchSheet();
     });
   }
+  if (el.homeDesktopSearchInput) {
+    el.homeDesktopSearchInput.addEventListener("input", () => {
+      if (state.page !== "home" || NARROW_MQ.matches) return;
+      const q = el.homeDesktopSearchInput.value;
+      if (el.homeDesktopSearchClear) {
+        el.homeDesktopSearchClear.hidden = !homeLookupPlayer && !String(q || "").trim();
+      }
+      renderHomeDesktopSearchResults(q);
+    });
+    el.homeDesktopSearchInput.addEventListener("focus", () => {
+      if (state.page !== "home" || NARROW_MQ.matches) return;
+      const q = el.homeDesktopSearchInput.value;
+      if (String(q || "").trim()) renderHomeDesktopSearchResults(q);
+    });
+    el.homeDesktopSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        hideHomeDesktopSearchResults();
+        el.homeDesktopSearchInput.blur();
+      }
+    });
+  }
+  if (el.homeDesktopSearchClear) {
+    el.homeDesktopSearchClear.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearHomePlayerLookup();
+      if (el.homeDesktopSearchInput) el.homeDesktopSearchInput.focus();
+    });
+  }
+  if (el.homeDesktopSearchResults) {
+    el.homeDesktopSearchResults.addEventListener("click", (e) => {
+      const btn = e.target.closest(".home-search-row");
+      if (!btn || !el.homeDesktopSearchResults.contains(btn)) return;
+      const code = Number(btn.getAttribute("data-home-search-code"));
+      const id = Number(btn.getAttribute("data-home-search-id"));
+      const row = homeSearchCatalog().find((r) =>
+        (Number.isFinite(code) && Number(r.code) === code) ||
+        (Number.isFinite(id) && homeLookupElementId(r) === id)
+      );
+      if (!row) return;
+      setHomePlayerLookup(row);
+    });
+  }
+  document.addEventListener("pointerdown", (e) => {
+    const wrap = el.homeDesktopSearch;
+    if (!wrap || wrap.hidden) return;
+    if (wrap.contains(e.target)) return;
+    hideHomeDesktopSearchResults();
+  });
   if (el.homePlayerMatchup) {
     el.homePlayerMatchup.addEventListener("click", (e) => {
       if (e.target.closest("#mobile-sheet")) return;
@@ -16996,6 +17099,7 @@
         disarmConfirmButton();
         syncTeamPlannerPrefsBtns();
         syncHomeViewBanner();
+        syncHomeSearchBtn();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
@@ -17016,6 +17120,7 @@
         disarmConfirmButton();
         syncTeamPlannerPrefsBtns();
         syncHomeViewBanner();
+        syncHomeSearchBtn();
       });
     }
     bindAllNameColumnSimplifies();

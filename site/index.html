@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=698" />
+<link rel="stylesheet" href="styles.css?v=702" />
 <script>
 (() => {
   try {
@@ -604,6 +604,20 @@
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="home-count-label"></span>
+            <div class="home-desktop-search" id="home-desktop-search" hidden>
+              <div class="home-desktop-search-field">
+                <svg class="icon home-desktop-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <input id="home-desktop-search-input" class="home-desktop-search-input" type="search"
+                  placeholder="Search players" autocomplete="off" enterkeyhint="search"
+                  aria-label="Search players" aria-autocomplete="list"
+                  aria-controls="home-desktop-search-results" />
+                <button type="button" class="home-desktop-search-clear icon-only-btn" id="home-desktop-search-clear"
+                  hidden aria-label="Clear player search" title="Clear player search">
+                  <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+                </button>
+              </div>
+              <div class="home-desktop-search-results" id="home-desktop-search-results" hidden role="listbox"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1167,7 +1181,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=701"></script>
+<script src="app.js?v=704"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

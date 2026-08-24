@@ -436,21 +436,19 @@ a { color: var(--blue); }
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 36px;
+  width: 28px;
   pointer-events: none;
   z-index: 3;
   opacity: 0;
   transition: opacity 0.15s ease;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 .page-tabs-clip::before {
   left: 0;
   background: linear-gradient(
     to right,
     hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.88) 35%,
-    hsl(var(--card) / 0)
+    hsl(var(--card) / 0.55) 55%,
+    hsl(var(--card) / 0) 100%
   );
 }
 .page-tabs-clip::after {
@@ -458,13 +456,22 @@ a { color: var(--blue); }
   background: linear-gradient(
     to left,
     hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.88) 35%,
-    hsl(var(--card) / 0)
+    hsl(var(--card) / 0.55) 55%,
+    hsl(var(--card) / 0) 100%
   );
 }
 .page-tabs-clip.has-more-left::before,
 .page-tabs-clip.has-more-right::after {
   opacity: 1;
+}
+/* Desktop: no edge wash — the linear tab row should read clean when it
+   overflows slightly beside brand / actions. */
+@media (min-width: 721px) {
+  .page-tabs-clip::before,
+  .page-tabs-clip::after {
+    content: none;
+    display: none;
+  }
 }
 .page-tabs {
   display: flex;
@@ -2029,14 +2036,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .page-nav-center {
     display: inline-flex;
     align-items: center;
-    gap: 0;
+    /* Equal air: page icon ↔ name+arrow ↔ info, then center the whole group. */
+    gap: 6px;
     order: 2;
     position: absolute;
     /* Keep Home/title clear of brand + the search/settings cluster. */
     left: max(52px, calc(44px + env(safe-area-inset-left, 0px)));
     right: max(96px, calc(84px + env(safe-area-inset-right, 0px)));
     justify-content: center;
-    transform: translateX(var(--page-nav-label-offset, 0px));
     z-index: 5;
     max-width: none;
     pointer-events: none;
@@ -2046,8 +2053,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   .page-info-btn.page-info-nav-btn {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 28px;
     height: 32px;
+    padding: 0;
+    flex: none;
   }
   .page-tray-btn {
     display: inline-flex;
@@ -2055,9 +2066,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     left: auto;
     transform: none;
     justify-content: center;
+    align-items: center;
     height: 32px;
     max-width: min(52vw, 220px);
-    padding: 0 4px;
+    padding: 0;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -2065,7 +2077,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     font-size: 14px;
     font-weight: 600;
     color: hsl(var(--blue-hsl) / 0.9);
-    gap: 5px;
+    gap: 6px;
   }
   .page-tray-btn::before {
     content: none;
@@ -2077,6 +2089,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     height: 15px;
     font-size: 15px;
     color: inherit;
+    flex: none;
+  }
+  .page-tray-btn .page-tray-current {
+    gap: 2px;
   }
   .page-tray-btn .page-tab-caret {
     margin-left: 0;
@@ -2375,8 +2391,44 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   /* Mobile bottom chrome: floating view + filter docks.
      One system — muted tray or card surface, hairline border, soft lift;
      accent fill only for “on” (filter open / active affordance). */
+  /* Soft bottom wash so floating Filters / Players-Teams docks read clearly
+     over dense table content — keep it quiet, not a solid bar. */
   .mobile-chrome-fade {
-    display: none !important;
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    height: calc(var(--mobile-dock-clearance, 66px) + 20px);
+    pointer-events: none;
+    background: linear-gradient(
+      to top,
+      hsl(var(--background) / 0.55) 0%,
+      hsl(var(--background) / 0.22) 42%,
+      hsl(var(--background) / 0) 100%
+    );
+  }
+  .mobile-chrome-fade:not([hidden]) {
+    display: block;
+  }
+  :root[data-theme="dark"] .mobile-chrome-fade:not([hidden]) {
+    background: linear-gradient(
+      to top,
+      hsl(var(--background) / 0.72) 0%,
+      hsl(var(--background) / 0.32) 48%,
+      hsl(var(--background) / 0) 100%
+    );
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .mobile-chrome-fade:not([hidden]) {
+      background: linear-gradient(
+        to top,
+        hsl(var(--background) / 0.72) 0%,
+        hsl(var(--background) / 0.32) 48%,
+        hsl(var(--background) / 0) 100%
+      );
+    }
   }
   :root {
     --mobile-dock-size: 40px;
@@ -2640,6 +2692,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     transform: translateY(calc(100% + 36px + env(safe-area-inset-bottom, 0px)));
     opacity: 0;
     pointer-events: none;
+  }
+  html.mobile-chrome-scroll-hidden .mobile-chrome-fade:not([hidden]) {
+    opacity: 0;
+    transition: opacity 0.28s ease;
   }
 }
 
@@ -12589,14 +12645,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-search-btn[hidden] {
   display: none !important;
 }
-/* Desktop tabs are centered in the flex band between brand and actions.
-   Hiding the Home-only search control with display:none shrinks that band and
-   slides the whole tab cluster — keep the footprint, just make it inert. */
+/* Desktop: search lives under the Updated label — never reserve a nav slot. */
 @media (min-width: 721px) {
-  .page-nav-actions .home-search-btn[hidden] {
-    display: inline-flex !important;
-    visibility: hidden;
-    pointer-events: none;
+  .page-nav-actions .home-search-btn {
+    display: none !important;
   }
 }
 .page-nav-actions .home-search-btn {
@@ -12605,6 +12657,115 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .page-nav-actions .home-search-btn.is-clear,
 .page-nav-actions .home-search-btn.on {
   color: hsl(var(--blue-hsl));
+}
+
+/* Desktop Home: expanded search under the Updated timestamp. */
+.home-desktop-search {
+  display: none;
+  position: relative;
+  width: min(280px, 42vw);
+  flex: none;
+  margin-top: 2px;
+}
+.home-desktop-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.home-desktop-search-field:focus-within {
+  border-color: hsl(var(--blue-hsl) / 0.45);
+  box-shadow: var(--focus-ring);
+}
+.home-desktop-search-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--text-faint);
+}
+.home-desktop-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+}
+.home-desktop-search-input::placeholder {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.home-desktop-search-clear {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  box-shadow: none;
+}
+.home-desktop-search-clear:hover {
+  background: hsl(var(--muted) / 0.55);
+  color: var(--text);
+}
+.home-desktop-search-clear[hidden] {
+  display: none !important;
+}
+.home-desktop-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(360px, 52vh);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
+}
+.home-desktop-search-results[hidden] {
+  display: none !important;
+}
+.home-desktop-search-results .home-search-row {
+  border-radius: calc(var(--radius) - 2px);
+}
+.home-desktop-search-results .home-search-empty {
+  padding: 14px 10px;
+}
+@media (min-width: 721px) {
+  html[data-page="home"] .home-desktop-search {
+    display: block;
+  }
+  html[data-page="home"] .home-header .page-header-meta {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  html[data-page="home"] .home-header .count-label {
+    padding-top: 0;
+  }
+}
+@media (max-width: 720px) {
+  .home-desktop-search {
+    display: none !important;
+  }
 }
 .home-player-profile[hidden],
 .home-player-matchup[hidden] {
@@ -12640,6 +12801,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-dashboard.is-player-lookup > .home-summary-cards,
   .home-dashboard.is-player-lookup > .home-player-profile {
     grid-column: 1 / -1;
+  }
+  /* Player card replaces the summary strip (same slot mobile uses). */
+  .home-dashboard.is-player-lookup > .home-player-profile:not([hidden]) {
+    margin-bottom: 0;
   }
   .home-dashboard.is-player-lookup > .home-player-matchup {
     grid-column: 1;
