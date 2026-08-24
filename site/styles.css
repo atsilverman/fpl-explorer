@@ -654,7 +654,7 @@ a { color: var(--blue); }
   padding-bottom: 10px;
 }
 
-/* Mobile xData: category control lives next to Players/Teams. */
+/* xData category: end-cluster (beside search on mobile; start cluster is dock-hidden). */
 .expected-cat-toolbar {
   flex: none;
 }
@@ -2748,11 +2748,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation: page-enter-header 0.85s var(--ease-out) both;
 }
 #home-page.is-entering .home-deadline,
-#home-page.is-entering .home-view-banner,
 #home-page.is-entering .home-summary-cards > .home-panel,
 #home-page.is-entering .home-tables-grid > .home-panel {
   animation: page-enter-item 0.78s var(--ease-out) both;
   animation-delay: calc(0.2s + (min(var(--enter-i, 0), 16) * 0.065s));
+}
+#home-page.is-entering .home-view-banner {
+  animation: page-enter-fade 0.65s var(--ease-out) both;
+  animation-delay: 0.2s;
 }
 #home-page.is-entering .home-squad-table tbody tr > *,
 #home-page.is-entering .home-standings-table tbody tr > * {
@@ -3531,6 +3534,50 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 .table-wrap[data-view="teams"] td.col-name .team-league-pos {
   flex: none;
+}
+
+/* Ownership: scroll-linked identity shrink → photo/crest only (mobile JS).
+   Keep flex (xData-style) layout; never use `1fr` inside calc() — that
+   invalidates grid tracks and stacks rank/photo/name vertically. */
+#ownership-table-wrap.name-simplify-ready {
+  --name-col-compact-players: 44px;
+  --name-col-compact-teams: 44px;
+}
+#ownership-table-wrap.name-simplify-ready thead th.col-player,
+#ownership-table-wrap.name-simplify-ready tbody td.col-player {
+  overflow: hidden;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-id {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * (1 - var(--name-collapse) * 0.9));
+  min-width: 0;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-rank {
+  flex: none;
+  width: calc((1 - var(--name-collapse)) * 1.4em);
+  min-width: 0;
+  overflow: hidden;
+  opacity: calc(1 - var(--name-collapse));
+}
+#ownership-table-wrap.name-simplify-ready .ownership-id-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc((1 - var(--name-collapse)) * 220px);
+  overflow: hidden;
+  opacity: calc(1 - var(--name-collapse));
+}
+#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name,
+#ownership-table-wrap.name-simplify-ready .ownership-id-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#ownership-table-wrap.name-simplify-ready .ownership-photo,
+#ownership-table-wrap.name-simplify-ready .ownership-crest {
+  flex: none;
+  width: 28px;
+  height: 28px;
 }
 
 /* Identity: crest left of name/POS. Flat grid — crest column always hugs the badge. */
@@ -4382,15 +4429,40 @@ html[data-page="ownership"] .layout .main {
   margin: 0 0 10px;
   min-width: 0;
 }
-.ownership-mover-seg {
+.ownership-mover-seg,
+.ownership-window-seg {
   flex: 0 0 auto;
 }
-.ownership-mover-seg button {
+.ownership-mover-seg button,
+.ownership-window-seg button {
   min-width: 4.6em;
 }
-.ownership-mover-bar .count-label {
+.ownership-window-seg button {
+  min-width: 3.4em;
+}
+.ownership-mover-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   margin-left: auto;
+  min-width: 0;
+}
+.ownership-mover-bar .count-label {
   white-space: nowrap;
+}
+.ownership-treemap-toggle {
+  flex: none;
+  height: 30px;
+  padding: 0 10px;
+  gap: 6px;
+}
+.ownership-treemap-toggle .icon {
+  width: 15px;
+  height: 15px;
+}
+.ownership-treemap-toggle .btn-label {
+  font-size: 12px;
+  font-weight: 650;
 }
 #ownership-table-wrap {
   flex: 1 1 auto;
@@ -4398,6 +4470,153 @@ html[data-page="ownership"] .layout .main {
   overflow: auto;
   --name-col-w: 240px;
   --metric-col-w: 56px;
+}
+#ownership-table-wrap[hidden],
+.ownership-treemap[hidden],
+.ownership-mover-seg[hidden],
+.ownership-window-seg[hidden] {
+  display: none !important;
+}
+.ownership-treemap {
+  flex: 1 1 auto;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.ownership-treemap-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 260px;
+  width: 100%;
+  margin: 0;
+}
+.ownership-treemap-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 180px;
+  padding: 24px 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+.ownership-treemap-empty[hidden] {
+  display: none !important;
+}
+.ownership-treemap-cell {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid hsl(var(--border-hsl) / 0.55);
+  border-radius: 0;
+  background: var(--ot-bg, hsl(var(--muted)));
+  color: var(--ot-fg, var(--text));
+  cursor: default;
+  overflow: hidden;
+  text-align: left;
+  font: inherit;
+  transition: filter 0.12s var(--ease-out);
+}
+.ownership-treemap-cell:hover,
+.ownership-treemap-cell:focus-visible {
+  z-index: 2;
+  filter: brightness(1.08);
+  outline: none;
+}
+.ownership-treemap-cell:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+.ownership-treemap-photo,
+.ownership-treemap-crest {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: hsl(var(--muted));
+  margin-bottom: auto;
+}
+.ownership-treemap-crest {
+  border-radius: 6px;
+  object-fit: contain;
+  padding: 2px;
+}
+.ownership-treemap-name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ownership-treemap-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+.ownership-treemap-delta {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  opacity: 0.95;
+}
+.ownership-treemap-cell.is-aggregate {
+  border-style: dashed;
+  border-color: hsl(var(--border-hsl) / 0.75);
+}
+.ownership-treemap-cell.is-aggregate .ownership-treemap-name {
+  font-size: 11px;
+  font-weight: 650;
+  opacity: 0.95;
+}
+.ownership-treemap-cell.is-wide {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.ownership-treemap-cell.is-wide .ownership-treemap-photo,
+.ownership-treemap-cell.is-wide .ownership-treemap-crest {
+  margin-bottom: 0;
+}
+.ownership-treemap-cell.is-wide .ownership-treemap-meta {
+  flex: 1 1 auto;
+}
+
+/* Ownership desktop: keep Filters / Players·Teams / Search on one row. */
+html[data-page="ownership"] #subtoolbar {
+  flex-wrap: nowrap;
+}
+html[data-page="ownership"] #subtoolbar .topbar-end-cluster {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 8px;
+}
+html[data-page="ownership"] #subtoolbar #search-wrap {
+  flex: 0 1 280px;
+  min-width: 140px;
+  max-width: 320px;
 }
 #ownership-table-wrap > table {
   width: max-content;
@@ -4562,7 +4781,33 @@ html[data-page="ownership"] .layout .main {
     flex: none;
   }
   .ownership-mover-bar .count-label {
+    display: none;
+  }
+  #ownership-page.is-treemap .ownership-mover-bar .count-label {
     display: inline;
+    font-size: 12px;
+  }
+  .ownership-treemap-toggle .btn-label {
+    display: inline;
+  }
+  .ownership-treemap {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .ownership-treemap-plot {
+    min-height: 0;
+  }
+  .ownership-treemap-photo,
+  .ownership-treemap-crest {
+    width: 24px;
+    height: 24px;
+  }
+  .ownership-treemap-name {
+    font-size: 11px;
+  }
+  .ownership-treemap-delta {
+    font-size: 10px;
   }
   /* Ownership: table card is the scrollport — pin header like Statistics. */
   #ownership-table-wrap {
@@ -5138,8 +5383,8 @@ html[data-page="ownership"] .layout .main {
   background: hsl(var(--card));
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  --barbell-name-w: 148px;
-  --barbell-name-w-compare: 132px;
+  --barbell-name-w: 168px;
+  --barbell-name-w-compare: 152px;
   --barbell-min-w: 650px;
   --barbell-track-min: 220px;
   --barbell-num-w: 68px;
@@ -5374,6 +5619,26 @@ html[data-page="ownership"] .layout .main {
   overflow: hidden;
   --crest-gap: 8px;
 }
+.barbell-group-identity .rankings-identity,
+.barbell-label .rankings-identity {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.barbell-group-identity .ownership-photo,
+.barbell-group-identity .ownership-crest,
+.barbell-label .ownership-photo,
+.barbell-label .ownership-crest {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+.barbell-group-identity .player-name,
+.barbell-label .player-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+}
 /* Grid keeps icons in a trailing track beside the name — never at the rail. */
 .barbell-group-identity .player-name-line,
 .barbell-label .player-name-line {
@@ -5399,6 +5664,13 @@ html[data-page="ownership"] .layout .main {
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+.barbell-group-identity .ownership-id-sub .loc-tag,
+.barbell-label .ownership-id-sub .loc-tag {
+  height: 16px;
+  padding: 0 5px;
+  font-size: 9px;
+  vertical-align: middle;
 }
 .barbell-group-splits {
   display: flex;
@@ -5475,6 +5747,10 @@ html[data-page="ownership"] .layout .main {
   flex: 1;
   overflow: hidden;
   --crest-gap: 8px;
+}
+.barbell-label .rankings-identity {
+  min-width: 0;
+  flex: 1;
 }
 .barbell-label .loc-tag {
   flex: none;
@@ -5664,8 +5940,8 @@ html[data-page="ownership"] .layout .main {
     min-width: 0;
     max-width: 100%;
     max-height: none;
-    --barbell-name-w: 120px;
-    --barbell-name-w-compare: 112px;
+    --barbell-name-w: 140px;
+    --barbell-name-w-compare: 128px;
     --barbell-head-h: 32px;
     --crest-size: 26px;
     --badge-size: 26px;
@@ -5678,6 +5954,36 @@ html[data-page="ownership"] .layout .main {
     --barbell-gap: 6px;
     --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
     --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+  }
+  .barbell-wrap.name-simplify-ready {
+    --barbell-name-w-full: 140px;
+    --barbell-name-w-compare-full: 128px;
+    --barbell-name-w-compact: 42px;
+    --barbell-name-w: calc(
+      var(--barbell-name-w-full) -
+        var(--name-collapse) * (var(--barbell-name-w-full) - var(--barbell-name-w-compact))
+    );
+    --barbell-name-w-compare: calc(
+      var(--barbell-name-w-compare-full) -
+        var(--name-collapse) * (var(--barbell-name-w-compare-full) - var(--barbell-name-w-compact))
+    );
+  }
+  .barbell-wrap.name-simplify-ready .barbell-label,
+  .barbell-wrap.name-simplify-ready .barbell-head-cell:first-child,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity {
+    overflow: hidden;
+  }
+  .barbell-wrap.name-simplify-ready .rankings-identity-text,
+  .barbell-wrap.name-simplify-ready .barbell-label .player-name-line > .player-name,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity .player-name-line > .player-name,
+  .barbell-wrap.name-simplify-ready .barbell-label .ownership-id-sub,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity .ownership-id-sub,
+  .barbell-wrap.name-simplify-ready .barbell-label .player-name-icons,
+  .barbell-wrap.name-simplify-ready .barbell-group-identity .player-name-icons {
+    min-width: 0;
+    overflow: hidden;
+    opacity: calc(1 - var(--name-collapse));
+    max-width: calc((1 - var(--name-collapse)) * 140px);
   }
   .barbell-scroll {
     overflow: auto;
@@ -5727,9 +6033,20 @@ html[data-page="ownership"] .layout .main {
   .barbell-label .player-cell {
     --crest-gap: 6px;
   }
+  .barbell-group-identity .ownership-photo,
+  .barbell-group-identity .ownership-crest,
+  .barbell-label .ownership-photo,
+  .barbell-label .ownership-crest {
+    width: 30px;
+    height: 30px;
+  }
   .barbell-group-identity .player-name,
   .barbell-label .player-name {
-    font-size: 11px;
+    font-size: 11.5px;
+  }
+  .barbell-group-identity .ownership-id-sub,
+  .barbell-label .ownership-id-sub {
+    font-size: 9.5px;
   }
   .barbell-value {
     font-size: 10.5px;
@@ -11584,18 +11901,41 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-variant-numeric: tabular-nums;
 }
 .home-view-banner {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  z-index: 46;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  box-sizing: border-box;
+  width: calc(100vw - 20px);
+  max-width: calc(100vw - 20px);
   margin: 0;
-  padding: 10px 12px 10px 14px;
+  padding: 11px 6px 11px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: hsl(var(--card));
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md, var(--shadow-sm));
   color: var(--text);
-  border-left: 3px solid hsl(var(--primary));
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 12px);
+  transition:
+    opacity 0.22s var(--ease-out),
+    transform 0.22s var(--ease-out);
+}
+.home-view-banner.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.home-view-banner.is-leaving {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
 }
 .home-view-banner[hidden] {
   display: none !important;
@@ -11605,9 +11945,11 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  flex: 1 1 auto;
+  padding-right: 2px;
 }
 .home-view-banner-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -11615,7 +11957,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   line-height: 1.2;
 }
 .home-view-banner-name {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -11626,22 +11968,25 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-view-banner-clear {
   flex-shrink: 0;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
   border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--muted) / 0.35);
+  background: transparent;
   color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: color 0.12s ease;
+}
+.home-view-banner-clear .icon {
+  width: 16px;
+  height: 16px;
 }
 .home-view-banner-clear:hover {
-  background: hsl(var(--muted) / 0.55);
+  background: transparent;
   color: var(--text);
-  border-color: hsl(var(--border-hsl) / 0.9);
+  border: none;
 }
 .home-view-banner-clear:focus-visible {
   outline: 2px solid hsl(var(--primary) / 0.45);
@@ -11650,13 +11995,25 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-view-banner-clear:active {
   transform: translateY(0.5px);
 }
-@media (max-width: 900px) {
+html.has-mobile-bottom-dock .home-view-banner,
+html.has-mobile-filter-fab .home-view-banner {
+  bottom: calc(var(--mobile-dock-clearance, 80px) + 6px);
+}
+/* Desktop: subtitle already names the viewed manager — no floating toast. */
+@media (min-width: 721px) {
   .home-view-banner {
-    padding: 9px 10px 9px 12px;
-    border-radius: calc(var(--radius) + 2px);
+    display: none !important;
   }
-  .home-view-banner-name {
-    font-size: 13.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-view-banner,
+  .home-view-banner.is-visible,
+  .home-view-banner.is-leaving {
+    transition: none;
+    transform: translate(-50%, 0);
+  }
+  .home-view-banner.is-visible {
+    opacity: 1;
   }
 }
 @media (max-width: 900px) {
@@ -11678,37 +12035,36 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   gap: 12px;
   margin: 8px 0 32px;
 }
-/* Viewing another manager — colored banner only; other cards stay default. */
+/* Viewing another manager — floating chip gets fill; cards get border accent only. */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
+  --home-view-border: hsl(var(--blue-hsl) / 0.32);
+}
+.home-dashboard.is-viewing-manager .home-summary-cards > .home-panel,
+.home-dashboard.is-viewing-manager .home-tables-grid > .home-panel {
+  border-color: var(--home-view-border);
+  border-left: 3px solid var(--home-view-accent);
 }
 .home-dashboard.is-viewing-manager .home-view-banner {
-  background: linear-gradient(
-    135deg,
-    hsl(var(--blue-hsl) / 0.20),
-    hsl(var(--blue-hsl) / 0.10) 55%,
-    hsl(var(--blue-hsl) / 0.06)
-  );
-  border-color: hsl(var(--blue-hsl) / 0.32);
+  background: hsl(var(--card));
+  border-color: hsl(var(--blue-hsl) / 0.42);
   border-left: 3px solid var(--home-view-accent);
-  box-shadow:
-    0 0 0 1px hsl(var(--blue-hsl) / 0.08),
-    var(--shadow-sm);
+  box-shadow: var(--shadow-md, var(--shadow-sm));
 }
 .home-dashboard.is-viewing-manager .home-view-banner-label {
-  color: hsl(var(--blue-hsl) / 0.78);
+  color: hsl(var(--blue-hsl));
 }
 .home-dashboard.is-viewing-manager .home-view-banner-name {
   color: hsl(var(--blue-hsl));
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear {
-  background: hsl(var(--card) / 0.72);
-  border-color: hsl(var(--blue-hsl) / 0.28);
-  color: hsl(var(--blue-hsl) / 0.9);
+  background: transparent;
+  border: none;
+  color: hsl(var(--blue-hsl) / 0.85);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear:hover {
-  background: hsl(var(--card));
-  border-color: hsl(var(--blue-hsl) / 0.38);
+  background: transparent;
+  border: none;
   color: var(--home-view-accent);
 }
 .home-summary-cards {
@@ -11745,12 +12101,9 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   display: none;
 }
 .home-dashboard.is-player-lookup #home-squad-panel {
-  display: none;
+  display: none !important;
 }
 @media (max-width: 720px) {
-  .home-dashboard.is-player-lookup #home-squad-panel {
-    display: block;
-  }
   .home-dashboard.is-player-lookup .home-player-profile:not([hidden]) {
     position: sticky;
     top: 0;
@@ -11762,11 +12115,42 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
     display: none !important;
   }
 }
-.home-dashboard.is-player-lookup:not(.has-lookup-owners) #home-standings-panel {
-  display: none;
-}
 .home-dashboard.is-player-lookup .home-tables-grid {
   grid-template-columns: 1fr;
+}
+@media (min-width: 721px) {
+  .home-dashboard.is-player-lookup {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+  .home-dashboard.is-player-lookup > .home-deadline,
+  .home-dashboard.is-player-lookup > .home-view-banner,
+  .home-dashboard.is-player-lookup > .home-summary-cards,
+  .home-dashboard.is-player-lookup > .home-player-profile {
+    grid-column: 1 / -1;
+  }
+  .home-dashboard.is-player-lookup > .home-player-matchup {
+    grid-column: 1;
+    margin-bottom: 0;
+  }
+  .home-dashboard.is-player-lookup > .home-tables-grid {
+    grid-column: 2;
+    margin: 0;
+  }
+}
+.home-standings-lookup-empty {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.home-standings-lookup-empty[hidden] {
+  display: none !important;
 }
 .home-player-profile {
   margin-bottom: 12px;
@@ -11788,23 +12172,50 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   outline: 2px solid hsl(var(--primary) / 0.45);
   outline-offset: 2px;
 }
-.home-lookup-mode {
+.home-lookup-corner {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: calc(100% - 16px);
+  pointer-events: none;
+  z-index: 1;
+}
+.home-lookup-mode {
+  max-width: 100%;
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: hsl(var(--blue-hsl));
   line-height: 1.2;
-  pointer-events: none;
   white-space: nowrap;
+}
+.home-lookup-mode[hidden] {
+  display: none !important;
+}
+.home-lookup-tap-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--text-faint);
+  opacity: 0.55;
+}
+.home-lookup-card.is-lookup-tappable:hover .home-lookup-tap-icon,
+.home-lookup-card.is-lookup-tappable:focus-visible .home-lookup-tap-icon {
+  opacity: 0.85;
+  color: hsl(var(--blue-hsl) / 0.75);
 }
 .home-lookup-card.is-rank-overall .home-lookup-mode,
 .home-lookup-card.is-rank-pos .home-lookup-mode {
   color: hsl(var(--blue-hsl));
+}
+.home-lookup-card.is-rank-overall .home-lookup-tap-icon,
+.home-lookup-card.is-rank-pos .home-lookup-tap-icon {
+  color: hsl(var(--blue-hsl) / 0.7);
+  opacity: 0.7;
 }
 .home-lookup-stat.is-rank-val {
   background: hsl(var(--blue-hsl) / 0.08);
@@ -11929,12 +12340,6 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   text-transform: uppercase;
   color: var(--text-faint);
   line-height: 1.1;
-}
-.home-lookup-ownership-note {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  line-height: 1.35;
-  color: var(--text-dim);
 }
 .home-player-profile-close {
   position: absolute;
@@ -12896,8 +13301,22 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   }
 }
 .home-standings-name {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
   font-weight: 600;
+}
+.home-standings-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-standings-name .owned-flag,
+.home-standings-name .home-owned-flag {
+  flex: none;
 }
 .home-standings-entry {
   display: block;

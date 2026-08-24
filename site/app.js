@@ -625,6 +625,8 @@
     actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
     teamSparkMetric: "form", // form | owned
     ownershipMoverKind: "risers", // risers | fallers
+    ownershipViewMode: "table", // table | treemap
+    ownershipTreeWindow: "d7", // d7 | d3 | d1
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
   };
@@ -886,6 +888,7 @@
     homeSummaryCards: $("#home-summary-cards"),
     homeSquadPanel: $("#home-squad-panel"),
     homeStandingsPanel: $("#home-standings-panel"),
+    homeStandingsLookupEmpty: $("#home-standings-lookup-empty"),
     homePlayerProfile: $("#home-player-profile"),
     homePlayerMatchup: $("#home-player-matchup"),
     homeSearchBtn: $("#home-search-btn"),
@@ -906,7 +909,12 @@
     ownershipTableHead: $("#ownership-table-head"),
     ownershipTableBody: $("#ownership-table-body"),
     ownershipMoverSeg: $("#ownership-mover-seg"),
+    ownershipWindowSeg: $("#ownership-window-seg"),
     ownershipCountLabel: $("#ownership-count-label"),
+    ownershipTreemapToggle: $("#ownership-treemap-toggle"),
+    ownershipTreemap: $("#ownership-treemap"),
+    ownershipTreemapPlot: $("#ownership-treemap-plot"),
+    ownershipTreemapEmpty: $("#ownership-treemap-empty"),
     ownershipUpdatedFooter: $("#ownership-updated-footer"),
     teamPage: $("#team-page"),
     teamUpdatedFooter: $("#team-updated-footer"),
@@ -2037,6 +2045,9 @@
   let homeEnterMotionToken = 0;
   let homeLivePollAfterEnter = false;
   const HOME_ENTER_ROLL_MS = 3400;
+  const HOME_VIEW_SWITCH_ROLL_MS = 2600;
+  const HOME_SCROLL_TOP_MS = 920;
+  let homeScrollAnimToken = 0;
 
   function homeIsEnterBusy() {
     return !!(
@@ -2391,30 +2402,86 @@
 
   function setHomeViewEntry(entryId) {
     const id = Number(entryId);
-    if (!Number.isFinite(id)) return;
+    if (!Number.isFinite(id)) return false;
     const configured = homeConfiguredEntryId();
-    if (id === homeViewEntryId || (homeViewEntryId == null && id === configured)) {
-      clearHomeViewEntry();
-      return;
+    if (id === homeViewEntryId) {
+      return clearHomeViewEntry();
+    }
+    if (homeViewEntryId == null && id === configured) {
+      return false;
     }
     homeViewEntryId = id;
     homeOwnerPin = null;
-    renderHome({ deferDuringEnter: true });
+    homeRenderQueued = false;
+    renderHome({ animateView: true });
+    return true;
   }
 
   function clearHomeViewEntry() {
-    if (homeViewEntryId == null) return;
+    if (homeViewEntryId == null) return false;
     homeViewEntryId = null;
     homeOwnerPin = null;
-    renderHome({ deferDuringEnter: true });
+    homeRenderQueued = false;
+    renderHome({ animateView: true });
+    return true;
+  }
+
+  function hideHomeViewBannerToast() {
+    const banner = el.homeViewBanner;
+    if (!banner || banner.hidden) return;
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!banner.classList.contains("is-visible") || reduceMotion) {
+      banner.hidden = true;
+      banner.classList.remove("is-visible", "is-leaving");
+      return;
+    }
+    banner.classList.remove("is-visible");
+    banner.classList.add("is-leaving");
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      banner.hidden = true;
+      banner.classList.remove("is-leaving");
+      banner.removeEventListener("transitionend", onEnd);
+    };
+    const onEnd = (e) => {
+      if (e.target !== banner || e.propertyName !== "opacity") return;
+      finish();
+    };
+    banner.addEventListener("transitionend", onEnd);
+    window.setTimeout(finish, 320);
   }
 
   function syncHomeViewBanner() {
     const viewingOther = homeIsViewingOtherManager();
-    if (el.homeViewBanner) el.homeViewBanner.hidden = !viewingOther;
     if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
-    if (viewingOther && el.homeViewBannerName) {
+    const banner = el.homeViewBanner;
+    if (!banner) return;
+    // Desktop relies on the page subtitle; toast is mobile-only.
+    const show = viewingOther && NARROW_MQ.matches;
+    if (!show) {
+      hideHomeViewBannerToast();
+      return;
+    }
+    if (el.homeViewBannerName) {
       el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
+    }
+    if (banner.hidden) {
+      banner.classList.remove("is-visible", "is-leaving");
+      banner.hidden = false;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!banner.hidden && homeIsViewingOtherManager() && NARROW_MQ.matches) {
+            banner.classList.add("is-visible");
+          }
+        });
+      });
+    } else {
+      banner.classList.remove("is-leaving");
+      banner.classList.add("is-visible");
     }
   }
 
@@ -2568,14 +2635,22 @@
     });
   }
 
-  function homeStandingsManagerCellsHTML(row) {
+  function homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther } = {}) {
+    const entry = Number(row.entry);
     const rankVal = row.rankLive != null ? Number(row.rankLive) : (row.rankOfficial != null ? Number(row.rankOfficial) : null);
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
       ? statRollSpan(rankVal, { from: 0, decimals: 0, className: "home-stat-roll" })
       : "—";
+    const showConfiguredPin =
+      !!viewingOther &&
+      Number.isFinite(configuredEntry) &&
+      entry === configuredEntry;
+    const pin = showConfiguredPin
+      ? `<span class="owned-flag home-owned-flag"${tipAttr("Your manager")} aria-label="Your manager">${ownedPinSVG()}</span>`
+      : "";
     return `<td class="home-col-rank">${rankHTML}</td>
       <td class="home-col-manager">
-        <span class="home-standings-name">${escapeHtml(row.playerName || "—")}</span>
+        <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${pin}</span>
         <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
       </td>`;
   }
@@ -2604,7 +2679,7 @@
       : "—";
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row)}
+      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
       <td class="home-col-live">${liveHTML}</td>
       <td class="home-col-left">${leftHTML}</td>
       <td class="home-col-gw">${gwHTML}</td>
@@ -2626,7 +2701,7 @@
       && shownPts === topCaptainPts;
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row)}
+      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
       <td class="home-col-captain${isTopCaptain ? " is-top-captain" : ""}">${homeCaptainPickHTML(shown, {
         isTopCaptain,
         autoSubbed: effective.autoSubbed,
@@ -2661,7 +2736,7 @@
     }).join("");
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row)}
+      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
       ${cells}
     </tr>`;
   }
@@ -3060,16 +3135,46 @@
     });
   }
 
+  function animateHomeScrollTo(node, { top = 0, left = 0, duration = HOME_SCROLL_TOP_MS } = {}) {
+    const isWin = node === window;
+    const startTop = isWin ? window.scrollY : node.scrollTop;
+    const startLeft = isWin ? window.scrollX : node.scrollLeft;
+    const token = ++homeScrollAnimToken;
+    if (prefersReducedMotion() || duration <= 0) {
+      if (isWin) window.scrollTo(left, top);
+      else {
+        node.scrollTop = top;
+        node.scrollLeft = left;
+      }
+      return;
+    }
+    const start = performance.now();
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const frame = (now) => {
+      if (token !== homeScrollAnimToken) return;
+      const t = Math.min(1, (now - start) / duration);
+      const e = ease(t);
+      const y = startTop + (top - startTop) * e;
+      const x = startLeft + (left - startLeft) * e;
+      if (isWin) window.scrollTo(x, y);
+      else {
+        node.scrollTop = y;
+        node.scrollLeft = x;
+      }
+      if (t < 1) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
   function homeScrollPageToTop() {
     if (!NARROW_MQ.matches) return;
-    const behavior = prefersReducedMotion() ? "auto" : "smooth";
     const main = document.querySelector("main.main");
     requestAnimationFrame(() => {
       if (main) {
-        main.scrollTo({ top: 0, left: 0, behavior });
+        animateHomeScrollTo(main, { top: 0, left: 0, duration: HOME_SCROLL_TOP_MS });
         return;
       }
-      window.scrollTo({ top: 0, left: 0, behavior });
+      animateHomeScrollTo(window, { top: 0, left: 0, duration: HOME_SCROLL_TOP_MS });
     });
   }
 
@@ -3196,7 +3301,8 @@
       if (homeIsViewingOtherManager()) {
         homeViewEntryId = null;
         homeOwnerPin = togglingOff ? null : next;
-        renderHome({ deferDuringEnter: true });
+        homeRenderQueued = false;
+        renderHome({ animateView: true });
         if (!togglingOff) homeScrollStandingsIntoView();
         return;
       }
@@ -3211,8 +3317,7 @@
       if (!tr || !el.homeStandingsTrack.contains(tr)) return;
       const entry = Number(tr.dataset.entry);
       if (!Number.isFinite(entry)) return;
-      setHomeViewEntry(entry);
-      homeScrollPageToTop();
+      if (setHomeViewEntry(entry)) homeScrollPageToTop();
     }
 
     el.homeSquadTrack.addEventListener("click", (e) => {
@@ -3575,7 +3680,7 @@
   function homeLookupStatDisplay(row, spec, modeKey, rankMaps) {
     if (modeKey !== "values") {
       const rank = rankMaps.get(spec.id)?.get(homeLookupPlayerKey(row));
-      return { value: rank != null ? String(rank) : "—", hot: false, isRank: true };
+      return { value: fmtHomeLookupRank(rank), hot: false, isRank: true };
     }
     const elementId = homeLookupElementId(row);
     switch (spec.id) {
@@ -3615,6 +3720,13 @@
     const rankCls = isRank ? " is-rank-val" : "";
     const hotCls = hot ? " is-hot" : "";
     return `<div class="home-lookup-stat${hotCls}${rankCls}"><span class="home-lookup-stat-val">${escapeHtml(String(value ?? "—"))}</span><span class="home-lookup-stat-lbl">${escapeHtml(label)}</span></div>`;
+  }
+
+  function fmtHomeLookupRank(rank) {
+    const n = Number(rank);
+    if (!Number.isFinite(n) || n <= 0) return "—";
+    const i = Math.round(n);
+    return `${i}${ordinalSuffix(i)}`;
   }
 
   function homePlayerProfileCardsHTML(row, modeKey = "values") {
@@ -3704,7 +3816,7 @@
     return byPos[pos] || byPos.FWD;
   }
 
-  function homePlayerProfileHTML(row, { ownershipNote = "" } = {}) {
+  function homePlayerProfileHTML(row) {
     if (!row) return "";
     const initials = String(row.name || "?")
       .split(/[\s.]+/)
@@ -3724,7 +3836,10 @@
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
     const mode = homeLookupStatModeMeta();
     return `<article class="home-lookup-card is-lookup-tappable${mode.className ? ` ${mode.className}` : ""}" data-rank-mode="${escapeHtml(mode.key)}" role="button" tabindex="0" aria-label="Player stats. Tap to cycle rank views."${accentStyle ? ` style="${accentStyle}"` : ""}>
-      <span class="home-lookup-mode"${mode.label ? "" : " hidden"}>${escapeHtml(mode.label)}</span>
+      <span class="home-lookup-corner" aria-hidden="true">
+        <span class="home-lookup-mode"${mode.label ? "" : " hidden"}>${escapeHtml(mode.label)}</span>
+        ${iconHTML("mouse-pointer-click", "home-lookup-tap-icon")}
+      </span>
       <div class="home-lookup-head">
         <div class="home-lookup-photo-wrap">
           <div class="home-lookup-photo-clip">${photoBlock}</div>
@@ -3736,7 +3851,6 @@
         </div>
       </div>
       <div class="home-lookup-stats">${homePlayerProfileCardsHTML(row, mode.key)}</div>
-      ${ownershipNote ? `<p class="home-lookup-ownership-note">${escapeHtml(ownershipNote)}</p>` : ""}
     </article>`;
   }
 
@@ -3897,10 +4011,31 @@
     syncHomeLookupUI();
   }
 
+  function syncHomeStandingsLookupEmpty(hasOwners) {
+    const empty = el.homeStandingsLookupEmpty;
+    const pager = el.homeStandingsPanel && el.homeStandingsPanel.querySelector(".home-standings-pager");
+    if (!empty) return;
+    if (!homeLookupPlayer) {
+      empty.hidden = true;
+      empty.textContent = "";
+      if (pager) pager.hidden = false;
+      return;
+    }
+    if (hasOwners) {
+      empty.hidden = true;
+      empty.textContent = "";
+      if (pager) pager.hidden = false;
+      return;
+    }
+    const leagueLabel = HOME.leagueName || "this league";
+    empty.textContent = `No managers in ${leagueLabel} own this player.`;
+    empty.hidden = false;
+    if (pager) pager.hidden = true;
+  }
+
   function syncHomeLookupUI() {
     if (!el.homeBento) return;
     const active = !!homeLookupPlayer;
-    const mobileLookup = NARROW_MQ.matches;
     el.homeBento.classList.toggle("is-player-lookup", active);
 
     if (!active) {
@@ -3915,6 +4050,7 @@
       }
       if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
       if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+      syncHomeStandingsLookupEmpty(true);
       syncHomeOwnerHighlights();
       return;
     }
@@ -3929,15 +4065,9 @@
       homeOwnerPin = null;
     }
 
-    let ownershipNote = "";
-    if (Number.isFinite(elementId) && !hasOwners) {
-      const leagueLabel = HOME.leagueName || "this league";
-      ownershipNote = `No managers in ${leagueLabel} own this player.`;
-    }
-
     if (el.homePlayerProfile) {
       el.homePlayerProfile.hidden = false;
-      el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer, { ownershipNote });
+      el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer);
       bindHomeLookupCard();
       el.homePlayerProfile.querySelectorAll("img.home-lookup-photo").forEach((img) => {
         img.addEventListener("error", () => {
@@ -3950,23 +4080,15 @@
       });
     }
 
-    if (mobileLookup) {
-      if (el.homePlayerMatchup) {
-        el.homePlayerMatchup.hidden = true;
-        el.homePlayerMatchup.innerHTML = "";
-      }
-      if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
-      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
-    } else {
-      if (el.homeSquadPanel) el.homeSquadPanel.hidden = true;
-      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
-      if (el.homePlayerMatchup) {
-        el.homePlayerMatchup.hidden = false;
-        el.homePlayerMatchup.innerHTML = homePlayerMatchupHTML(homeLookupPlayer.team);
-        upgradeNativeTitles(el.homePlayerMatchup);
-      }
+    // Lookup replaces Team with the club matchup; Standings shows ownership.
+    if (el.homeSquadPanel) el.homeSquadPanel.hidden = true;
+    if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+    if (el.homePlayerMatchup) {
+      el.homePlayerMatchup.hidden = false;
+      el.homePlayerMatchup.innerHTML = homePlayerMatchupHTML(homeLookupPlayer.team);
+      upgradeNativeTitles(el.homePlayerMatchup);
     }
-
+    syncHomeStandingsLookupEmpty(hasOwners);
     syncHomeOwnerHighlights();
   }
 
@@ -4086,9 +4208,16 @@
     requestAnimationFrame(() => requestAnimationFrame(draw));
   }
 
-  function startHomeEnterMotion(pane) {
-    if (!pane || prefersReducedMotion()) return;
+  function startHomeEnterMotion(pane, { duration = HOME_ENTER_ROLL_MS } = {}) {
+    if (!pane || prefersReducedMotion()) {
+      if (pane) {
+        finishHomeStatRolls(pane);
+        animateHomeImpBars(pane, { animate: false });
+      }
+      return;
+    }
     const token = ++homeEnterMotionToken;
+    const rollMs = Math.max(400, Number(duration) || HOME_ENTER_ROLL_MS);
     prepareHomeStatRolls();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -4102,7 +4231,7 @@
         syncHomeStandingsTrackHeight(0, { animate: false });
         syncHomeSquadTrackHeight(0, { animate: false });
         mountAndAnimateStatRolls(pane, {
-          duration: HOME_ENTER_ROLL_MS,
+          duration: rollMs,
           selector: ".home-stat-roll[data-count-to]",
         });
         animateHomeImpBars(pane);
@@ -4110,7 +4239,7 @@
         window.setTimeout(() => {
           if (token !== homeEnterMotionToken) return;
           finishHomeStatRolls(pane);
-        }, HOME_ENTER_ROLL_MS + 80);
+        }, rollMs + 80);
       });
     });
   }
@@ -4150,7 +4279,7 @@
     });
   }
 
-  function renderHome({ deferDuringEnter = false } = {}) {
+  function renderHome({ deferDuringEnter = false, animateView = false } = {}) {
     if (deferDuringEnter && homeIsEnterBusy()) {
       homeRenderQueued = true;
       return;
@@ -4348,14 +4477,16 @@
     syncHomeOwnerHighlights();
     syncHomeLookupUI();
     requestAnimationFrame(() => {
-      if (!enterBusy) {
+      if (animateView) {
+        startHomeEnterMotion(el.homePage, { duration: HOME_VIEW_SWITCH_ROLL_MS });
+      } else if (!enterBusy) {
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });
       }
       syncHomeSquadLayout();
       syncHomeStandingsLayout();
     });
-    // During enter, leave odometers empty and IMP bars undrawn so
+    // During enter / view-switch, leave odometers empty and IMP bars undrawn so
     // startHomeEnterMotion can animate everything in one synchronized pass.
   }
 
@@ -5326,8 +5457,8 @@
 
   // Team picker table: scroll-linked Player name morph (full ↔ compact).
   // Dead zone after the default (Price/GW) origin so the landing view stays full.
-  const NAME_SIMPLIFY_START = 24;
-  const NAME_SIMPLIFY_END = 140;
+  const NAME_SIMPLIFY_START = 28;
+  const NAME_SIMPLIFY_END = 220;
   const nameSimplifyRafs = new WeakMap();
 
   function nameSimplifyWraps() {
@@ -5348,13 +5479,28 @@
         el.teamCompareWrap.querySelector(".team-table-wrap");
       if (teamCompare) wraps.push(teamCompare);
     }
+    if (state.page === "ownership" && el.ownershipTableWrap && !el.ownershipTableWrap.hidden) {
+      wraps.push(el.ownershipTableWrap);
+    }
+    if (state.page === "expected") {
+      const scroll = expectedScrollWrap();
+      if (scroll) wraps.push(scroll);
+    }
     return wraps;
   }
 
-  function nameSimplifyActive() {
-    if (NARROW_MQ.matches || !hasFineHover()) {
-      if (state.page === "team" && state.teamPickerSlot) return true;
+  function nameSimplifyHost(scrollEl) {
+    if (!scrollEl) return null;
+    if (scrollEl.classList.contains("barbell-scroll")) {
+      return scrollEl.closest(".barbell-wrap") || scrollEl;
     }
+    return scrollEl;
+  }
+
+  function nameSimplifyActive() {
+    if (!(NARROW_MQ.matches || !hasFineHover())) return false;
+    if (state.page === "ownership" || state.page === "expected") return true;
+    if (state.page === "team" && state.teamPickerSlot) return true;
     return false;
   }
 
@@ -5424,17 +5570,23 @@
   function nameSimplifyProgress(scrollLeft, origin = 0) {
     const rel = Math.max(0, scrollLeft - origin);
     if (rel <= NAME_SIMPLIFY_START) return 0;
-    return Math.min(1, (rel - NAME_SIMPLIFY_START) / (NAME_SIMPLIFY_END - NAME_SIMPLIFY_START));
+    const linear = Math.min(
+      1,
+      (rel - NAME_SIMPLIFY_START) / (NAME_SIMPLIFY_END - NAME_SIMPLIFY_START)
+    );
+    // smoothstep — soft after the initial drag, soft landing at compact
+    return linear * linear * (3 - 2 * linear);
   }
 
   function withFullNameColumn(wrap, fn) {
-    const prev = wrap.style.getPropertyValue("--name-collapse");
-    wrap.style.setProperty("--name-collapse", "0");
-    wrap.classList.remove("is-name-simplifying");
-    void wrap.offsetWidth;
+    const host = nameSimplifyHost(wrap) || wrap;
+    const prev = host.style.getPropertyValue("--name-collapse");
+    host.style.setProperty("--name-collapse", "0");
+    host.classList.remove("is-name-simplifying");
+    void host.offsetWidth;
     const result = fn();
-    if (prev) wrap.style.setProperty("--name-collapse", prev);
-    else wrap.style.removeProperty("--name-collapse");
+    if (prev) host.style.setProperty("--name-collapse", prev);
+    else host.style.removeProperty("--name-collapse");
     return result;
   }
 
@@ -5475,25 +5627,30 @@
     });
   }
 
-  function clearNameColumnSimplify(wrap) {
-    if (!wrap) return;
-    wrap.classList.remove("name-simplify-ready", "is-name-simplifying");
-    wrap.style.removeProperty("--name-collapse");
-    wrap.removeAttribute("data-view");
-    invalidateNameSimplifyOrigin(wrap);
+  function clearNameColumnSimplify(scrollEl) {
+    if (!scrollEl) return;
+    const host = nameSimplifyHost(scrollEl);
+    [scrollEl, host].forEach((node) => {
+      if (!node) return;
+      node.classList.remove("name-simplify-ready", "is-name-simplifying");
+      node.style.removeProperty("--name-collapse");
+      node.removeAttribute("data-view");
+    });
+    invalidateNameSimplifyOrigin(scrollEl);
   }
 
-  function updateNameColumnSimplify(wrap, scrollLeftOverride) {
-    if (!wrap || !nameSimplifyActive()) {
-      clearNameColumnSimplify(wrap);
+  function updateNameColumnSimplify(scrollEl, scrollLeftOverride) {
+    if (!scrollEl || !nameSimplifyActive()) {
+      clearNameColumnSimplify(scrollEl);
       return;
     }
-    const scrollLeft = scrollLeftOverride != null ? scrollLeftOverride : wrap.scrollLeft;
-    const t = nameSimplifyProgress(scrollLeft, nameSimplifyOrigin(wrap));
-    wrap.classList.add("name-simplify-ready");
-    wrap.dataset.view = state.page === "team" ? "players" : state.view;
-    wrap.style.setProperty("--name-collapse", String(t));
-    wrap.classList.toggle("is-name-simplifying", t > 0.02);
+    const host = nameSimplifyHost(scrollEl);
+    const scrollLeft = scrollLeftOverride != null ? scrollLeftOverride : scrollEl.scrollLeft;
+    const t = nameSimplifyProgress(scrollLeft, nameSimplifyOrigin(scrollEl));
+    host.classList.add("name-simplify-ready");
+    host.dataset.view = state.page === "team" ? "players" : state.view;
+    host.style.setProperty("--name-collapse", String(t));
+    host.classList.toggle("is-name-simplifying", t > 0.02);
   }
 
   function bindNameColumnSimplify(wrap) {
@@ -5523,9 +5680,15 @@
   function bindAllNameColumnSimplifies() {
     if (!nameSimplifyActive()) {
       nameSimplifyWraps().forEach(clearNameColumnSimplify);
+      if (el.ownershipTableWrap) clearNameColumnSimplify(el.ownershipTableWrap);
+      const barbellScroll = expectedScrollWrap();
+      if (barbellScroll) clearNameColumnSimplify(barbellScroll);
       return;
     }
-    nameSimplifyWraps().forEach(bindNameColumnSimplify);
+    nameSimplifyWraps().forEach((wrap) => {
+      bindNameColumnSimplify(wrap);
+      updateNameColumnSimplify(wrap);
+    });
   }
 
   function syncPointerMode() {
@@ -7015,6 +7178,7 @@
       const reading = [
         spitRow(spitRank("Risers"), "Top 20 14-day TSB% increases, ranked before team/position filters."),
         spitRow(spitRank("Fallers"), "Top 20 14-day TSB% decreases. Toggle in the bar above the table."),
+        spitRow(spitRank("Treemap"), "Top movers by 7d / 3d / 24h Δ as tiles (largest changes only). Toggle beside the count."),
         spitRow(spitRank("Players"), "Photo, name, team, price, and position. Sort any numeric column."),
         spitRow(spitRank("Teams"), "Average TSB% of each club’s 20 most-owned players at that check-in."),
         spitRow(spitRank("Windows"), "7d / 3d / 24h use the nearest snapshot on or before that many days before the latest check-in."),
@@ -8398,30 +8562,10 @@
       if (row.team) label.dataset.team = String(currentTeamCode(row) || row.team);
       label.dataset.rowName = row.name || "";
       label.dataset.rowKey = String(rowKey(row));
-      const tagHTML = locSuffix
-        ? `<span class="loc-tag">${locSuffix === "Home" ? "H" : "A"}</span>`
-        : "";
-      let subHTML = "";
-      if (state.view === "players" && row.position) {
-        subHTML = `<div class="player-cell-sub">${posBadgeHTML(row.position)}${tagHTML}</div>`;
-      } else if (state.view === "teams") {
-        const leaguePos = LEAGUE_POSITIONS[row.team];
-        const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
-        const leagueHTML =
-          leaguePos != null
-            ? `<span class="team-league-pos"${tipAttr(`${leaguePos}${ordinalSuffix(leaguePos)} in the ${seasonLabel}`)}>${leaguePos}${ordinalSuffix(leaguePos)}</span>`
-            : "";
-        if (leagueHTML || tagHTML) {
-          subHTML = `<div class="player-cell-sub">${leagueHTML}${tagHTML}</div>`;
-        }
-      } else if (tagHTML) {
-        subHTML = `<div class="player-cell-sub">${tagHTML}</div>`;
-      }
-      label.innerHTML = playerIdentityHTML(
-        playerCrestHTML(row.team),
-        playerNameHTML(row),
-        subHTML
-      );
+      const extraBits = locSuffix
+        ? [`<span class="loc-tag">${locSuffix === "Home" ? "H" : "A"}</span>`]
+        : [];
+      label.innerHTML = `<div class="rankings-identity ownership-style-id">${ownershipStyleIdentityHTML(row, { extraBits })}</div>`;
       setTip(label, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
       div.appendChild(label);
     }
@@ -8520,21 +8664,7 @@
     if (row.team) identity.dataset.team = String(currentTeamCode(row) || row.team);
     identity.dataset.rowName = row.name || "";
     identity.dataset.rowKey = String(rowKey(row));
-    let subHTML = "";
-    if (state.view === "players" && row.position) {
-      subHTML = `<div class="player-cell-sub">${posBadgeHTML(row.position)}</div>`;
-    } else if (state.view === "teams") {
-      const leaguePos = LEAGUE_POSITIONS[row.team];
-      const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
-      if (leaguePos != null) {
-        subHTML = `<div class="player-cell-sub"><span class="team-league-pos"${tipAttr(`${leaguePos}${ordinalSuffix(leaguePos)} in the ${seasonLabel}`)}>${leaguePos}${ordinalSuffix(leaguePos)}</span></div>`;
-      }
-    }
-    identity.innerHTML = playerIdentityHTML(
-      playerCrestHTML(row.team),
-      playerNameHTML(row),
-      subHTML
-    );
+    identity.innerHTML = `<div class="rankings-identity ownership-style-id">${ownershipStyleIdentityHTML(row)}</div>`;
     setTip(identity, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
     return identity;
   }
@@ -8730,6 +8860,7 @@
         );
       });
     }
+    bindOwnershipPhotoFallback(el.barbellBody);
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     if (opts.resetScroll) {
       requestAnimationFrame(() => {
@@ -8739,6 +8870,7 @@
     }
     requestAnimationFrame(() => syncMobileScrollportHeight());
     syncPageUpdatedFooter(el.expectedUpdatedFooter, DATA.generatedAt);
+    bindAllNameColumnSimplifies();
   }
 
   // ---------------------------------------------------------------------
@@ -8902,7 +9034,7 @@
     }));
   }
 
-  function rankingsIdentityHTML(row) {
+  function ownershipStyleIdentityHTML(row, { extraBits = [] } = {}) {
     let thumb = "";
     let meta = "";
     if (state.view === "players") {
@@ -8916,6 +9048,7 @@
           ? `<span>£${Number(price).toFixed(1)}m</span>`
           : "",
         row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
+        ...extraBits,
       ].filter(Boolean);
       meta = bits.length
         ? `<div class="ownership-id-sub">${bits.join('<span class="ownership-id-sep">|</span>')}</div>`
@@ -8926,14 +9059,25 @@
         badgeHTML(teamCode, "ownership-crest") ||
         `<span class="ownership-photo ownership-photo-fallback" aria-hidden="true">${escapeHtml(String(row.team || "?").slice(0, 3))}</span>`;
       const pos = LEAGUE_POSITIONS[row.team];
+      const bits = [];
       if (pos != null) {
         const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
-        meta = `<div class="ownership-id-sub"><span${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span></div>`;
+        bits.push(
+          `<span${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`
+        );
       }
+      bits.push(...extraBits.filter(Boolean));
+      meta = bits.length
+        ? `<div class="ownership-id-sub">${bits.join('<span class="ownership-id-sep">|</span>')}</div>`
+        : "";
     }
-    const nameHTML = `<span class="player-name rankings-name">${escapeHtml(row.name)}</span>`;
-    const nameLine = `<span class="player-name-line rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>`;
-    return `${thumb}<span class="rankings-identity-text ownership-id-text">${nameLine}${meta}</span>`;
+    const nameHTML = `<span class="player-name">${escapeHtml(row.name)}</span>`;
+    const nameLine = `<span class="player-name-line">${nameHTML}${ownedFlagHTML(row)}</span>`;
+    return `${thumb}<span class="ownership-id-text rankings-identity-text">${nameLine}${meta}</span>`;
+  }
+
+  function rankingsIdentityHTML(row) {
+    return ownershipStyleIdentityHTML(row);
   }
 
   function rankingsCardHTML(col, rows, referenceRows) {
@@ -13112,6 +13256,290 @@
     </tr>`;
   }
 
+  const OWNERSHIP_TREE_LAYOUT_W = 1000;
+  const OWNERSHIP_TREE_LAYOUT_H = 620;
+  const OWNERSHIP_TREE_WEIGHT_FLOOR = 0.15;
+  /** Top risers / fallers shown as named tiles (no “rest of” bucket). */
+  const OWNERSHIP_TREE_TOP_N = 8;
+
+  function ownershipTreemapLayoutSize() {
+    const plot = el.ownershipTreemapPlot;
+    const cw = plot && plot.clientWidth > 40 ? plot.clientWidth : 0;
+    const ch = plot && plot.clientHeight > 40 ? plot.clientHeight : 0;
+    let aspect =
+      cw && ch
+        ? cw / ch
+        : NARROW_MQ.matches
+          ? 0.55
+          : OWNERSHIP_TREE_LAYOUT_W / OWNERSHIP_TREE_LAYOUT_H;
+    // Phone: keep a portrait layout so squarify prefers horizontal bands.
+    if (NARROW_MQ.matches && aspect > 0.7) aspect = 0.55;
+    const h = OWNERSHIP_TREE_LAYOUT_H;
+    const w = Math.max(280, Math.round(h * aspect));
+    return { w, h, preferHorizontal: NARROW_MQ.matches };
+  }
+
+  function ownershipTreeWindow() {
+    const w = state.ownershipTreeWindow;
+    return w === "d3" || w === "d1" ? w : "d7";
+  }
+
+  function ownershipIsTreemap() {
+    return state.ownershipViewMode === "treemap";
+  }
+
+  function ownershipTreeWindowLabel(key = ownershipTreeWindow()) {
+    if (key === "d3") return "3d";
+    if (key === "d1") return "24h";
+    return "7d";
+  }
+
+  function ownershipTreeDelta(row, key = ownershipTreeWindow()) {
+    const v = row && row[key];
+    return v == null || Number.isNaN(Number(v)) ? null : Number(v);
+  }
+
+  function ownershipTreemapShortName(row, maxChars = 10) {
+    const limit = Math.max(3, Math.min(18, Number(maxChars) || 10));
+    const name = String(row && row.name || "").trim();
+    if (!name) return "?";
+    if (row.kind === "team") return String(row.team || name).slice(0, Math.min(3, limit));
+    const parts = name.split(/\s+/).filter(Boolean);
+    const base = parts.length === 1 ? parts[0] : parts[parts.length - 1];
+    if (base.length <= limit) return base;
+    return `${base.slice(0, Math.max(2, limit - 1))}…`;
+  }
+
+  // Squarified treemap (Bruls et al.) — items need { value, ... }.
+  function squarifyRects(items, width, height, { preferHorizontal = false } = {}) {
+    const total = items.reduce((sum, d) => sum + d.value, 0);
+    if (!total || width <= 0 || height <= 0) return [];
+    const nodes = items.map((d) => ({
+      ...d,
+      area: (d.value / total) * width * height,
+    }));
+    const out = [];
+    let x0 = 0;
+    let y0 = 0;
+    let x1 = width;
+    let y1 = height;
+    let row = [];
+    let i = 0;
+
+    const shortest = () => Math.min(x1 - x0, y1 - y0);
+    const worst = (areas, side) => {
+      if (!areas.length) return Infinity;
+      const s = areas.reduce((a, b) => a + b, 0);
+      const mx = Math.max(...areas);
+      const mn = Math.min(...areas);
+      return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
+    };
+
+    const flush = (rowNodes) => {
+      if (!rowNodes.length) return;
+      const sum = rowNodes.reduce((a, b) => a + b.area, 0);
+      const remW = x1 - x0;
+      const remH = y1 - y0;
+      // Mobile: bias toward horizontal bands so big movers read as wide tiles.
+      const wide = preferHorizontal ? remW > remH * 1.35 : remW >= remH;
+      if (wide) {
+        const rw = sum / remH;
+        let y = y0;
+        for (const node of rowNodes) {
+          const h = node.area / rw;
+          out.push({ ...node, x: x0, y, w: rw, h });
+          y += h;
+        }
+        x0 += rw;
+      } else {
+        const rh = sum / remW;
+        let x = x0;
+        for (const node of rowNodes) {
+          const w = node.area / rh;
+          out.push({ ...node, x, y: y0, w, h: rh });
+          x += w;
+        }
+        y0 += rh;
+      }
+    };
+
+    while (i < nodes.length) {
+      const side = shortest();
+      const next = nodes[i];
+      const rowAreas = row.map((n) => n.area);
+      if (!row.length || worst(rowAreas.concat(next.area), side) <= worst(rowAreas, side)) {
+        row.push(next);
+        i += 1;
+      } else {
+        flush(row);
+        row = [];
+      }
+    }
+    flush(row);
+    return out;
+  }
+
+  function ownershipTreemapPopulation() {
+    const catalog = ownershipCatalogByCode();
+    const universe = ownershipMoverUniverse();
+    return universe.filter((row) => {
+      if (row.kind === "team") return ownershipTeamPassesDisplayFilters(row.team, row.name);
+      return ownershipPlayerPassesDisplayFilters(row, catalog);
+    });
+  }
+
+  function ownershipTreemapItems(windowKey) {
+    const raw = ownershipTreemapPopulation()
+      .map((row) => {
+        const delta = ownershipTreeDelta(row, windowKey);
+        if (delta == null || Math.abs(delta) < 0.05) return null;
+        return {
+          row,
+          delta,
+          value: Math.max(Math.abs(delta), OWNERSHIP_TREE_WEIGHT_FLOOR),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || compareOwnershipMovers(a.row, b.row));
+
+    const risers = raw.filter((it) => it.delta > 0).slice(0, OWNERSHIP_TREE_TOP_N);
+    const fallers = raw.filter((it) => it.delta < 0).slice(0, OWNERSHIP_TREE_TOP_N);
+    return [...risers, ...fallers].sort(
+      (a, b) => Math.abs(b.delta) - Math.abs(a.delta) || (b.value || 0) - (a.value || 0)
+    );
+  }
+
+  function ownershipTreeFill(delta) {
+    const tone = ownershipDeltaClass(delta);
+    if (tone === "is-flat" || delta == null) {
+      return { bg: "hsl(var(--muted))", fg: "var(--text-dim)", tone };
+    }
+    const mag = Math.min(1, Math.abs(Number(delta)) / 8);
+    const a = (0.28 + mag * 0.55).toFixed(3);
+    if (tone === "is-up") {
+      return { bg: `hsl(var(--positive) / ${a})`, fg: "#fff", tone };
+    }
+    return { bg: `hsl(var(--negative) / ${a})`, fg: "#fff", tone };
+  }
+
+  function ownershipTreemapCellHTML(cell, layoutW, layoutH, windowKey) {
+    const left = (cell.x / layoutW) * 100;
+    const topPct = (cell.y / layoutH) * 100;
+    const width = (cell.w / layoutW) * 100;
+    const height = (cell.h / layoutH) * 100;
+    const area = cell.w * cell.h;
+    const isWide = cell.w >= cell.h * 1.05;
+    const showDelta = area > 2800 || (isWide && cell.h > 24) || cell.w > 56;
+    const showName = isWide
+      ? cell.w > 54 && cell.h > 22
+      : cell.w > 48 && cell.h > 30;
+    const showThumb = isWide
+      ? cell.w > 100 && cell.h > 30
+      : cell.w > 70 && cell.h > 52;
+    const delta = cell.delta;
+    const paint = ownershipTreeFill(delta);
+    const deltaLbl = fmtOwnershipTrendDelta(delta);
+    const charBudget = Math.max(3, Math.floor((cell.w - (showThumb ? 36 : 10)) / 7.2));
+    const short = ownershipTreemapShortName(cell.row, charBudget);
+    let thumb = "";
+    if (showThumb) {
+      if (cell.row.kind === "team") {
+        thumb =
+          badgeHTML(cell.row.team, "ownership-treemap-crest") ||
+          `<span class="ownership-treemap-crest ownership-photo-fallback">${escapeHtml(String(cell.row.team || "?").slice(0, 3))}</span>`;
+      } else {
+        thumb = ownershipPhotoHTML(cell.row).replace(
+          /class="ownership-photo/g,
+          'class="ownership-photo ownership-treemap-photo'
+        );
+      }
+    }
+    const tip = `${cell.row.name} · live ${fmtOwnedPct(cell.row.live)} · ${ownershipTreeWindowLabel(windowKey)} ${deltaLbl}`;
+    const cls = [
+      "ownership-treemap-cell",
+      paint.tone,
+      isWide ? "is-wide" : "",
+    ].filter(Boolean).join(" ");
+    return `<button type="button" class="${cls}"
+      style="left:${left.toFixed(2)}%;top:${topPct.toFixed(2)}%;width:${width.toFixed(2)}%;height:${height.toFixed(2)}%;--ot-bg:${paint.bg};--ot-fg:${paint.fg}"
+      data-own-key="${escapeHtml(cell.row.key)}"
+      aria-label="${escapeHtml(tip)}"${tipAttr(tip)}>
+      ${thumb}
+      ${showName || showDelta ? `<span class="ownership-treemap-meta">${
+        showName ? `<span class="ownership-treemap-name">${escapeHtml(short)}</span>` : ""
+      }${showDelta ? `<span class="ownership-treemap-delta">${escapeHtml(deltaLbl)}</span>` : ""}</span>` : ""}
+    </button>`;
+  }
+
+  function renderOwnershipTreemap() {
+    if (!el.ownershipTreemapPlot) return;
+    const windowKey = ownershipTreeWindow();
+    const items = ownershipTreemapItems(windowKey);
+    const noun = state.view === "teams" ? "teams" : "movers";
+
+    if (el.ownershipCountLabel) {
+      el.ownershipCountLabel.textContent = items.length
+        ? `${items.length} ${noun}`
+        : `No ${noun}`;
+    }
+
+    if (!items.length) {
+      el.ownershipTreemapPlot.innerHTML = "";
+      if (el.ownershipTreemapEmpty) el.ownershipTreemapEmpty.hidden = false;
+      return;
+    }
+    if (el.ownershipTreemapEmpty) el.ownershipTreemapEmpty.hidden = true;
+
+    const { w: layoutW, h: layoutH, preferHorizontal } = ownershipTreemapLayoutSize();
+    const layout = squarifyRects(items, layoutW, layoutH, { preferHorizontal });
+    el.ownershipTreemapPlot.innerHTML = layout
+      .map((cell) => ownershipTreemapCellHTML(cell, layoutW, layoutH, windowKey))
+      .join("");
+    bindOwnershipPhotoFallback(el.ownershipTreemapPlot);
+    // First paint while flex is settling often has a 0×0 plot — reflow once sized.
+    const plot = el.ownershipTreemapPlot;
+    if (plot && (plot.clientWidth < 40 || plot.clientHeight < 40)) {
+      requestAnimationFrame(() => {
+        if (!(state.page === "ownership" && ownershipIsTreemap())) return;
+        const next = ownershipTreemapLayoutSize();
+        if (next.w === layoutW && next.h === layoutH) return;
+        scheduleOwnershipTreemapRelayout();
+      });
+    }
+  }
+
+  let ownershipTreemapRelayoutTimer = 0;
+  function scheduleOwnershipTreemapRelayout() {
+    if (!(state.page === "ownership" && ownershipIsTreemap())) return;
+    window.clearTimeout(ownershipTreemapRelayoutTimer);
+    ownershipTreemapRelayoutTimer = window.setTimeout(() => {
+      if (state.page === "ownership" && ownershipIsTreemap()) renderOwnershipTreemap();
+    }, 80);
+  }
+
+  function syncOwnershipWindowUI({ animate = false } = {}) {
+    if (!el.ownershipWindowSeg) return;
+    const cur = ownershipTreeWindow();
+    el.ownershipWindowSeg.querySelectorAll("[data-ownership-window]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.ownershipWindow === cur);
+    });
+    syncSegThumb(el.ownershipWindowSeg, { animate });
+  }
+
+  function syncOwnershipViewMode() {
+    const treemap = ownershipIsTreemap();
+    if (el.ownershipPage) el.ownershipPage.classList.toggle("is-treemap", treemap);
+    if (el.ownershipMoverSeg) el.ownershipMoverSeg.hidden = treemap;
+    if (el.ownershipWindowSeg) el.ownershipWindowSeg.hidden = !treemap;
+    if (el.ownershipTableWrap) el.ownershipTableWrap.hidden = treemap;
+    if (el.ownershipTreemap) el.ownershipTreemap.hidden = !treemap;
+    if (el.ownershipTreemapToggle) {
+      el.ownershipTreemapToggle.classList.toggle("on", treemap);
+      el.ownershipTreemapToggle.setAttribute("aria-pressed", treemap ? "true" : "false");
+    }
+    if (treemap) syncOwnershipWindowUI();
+  }
+
   function syncOwnershipMoverUI({ animate = false } = {}) {
     if (!el.ownershipMoverSeg) return;
     const cur = ownershipMoverKind();
@@ -13126,8 +13554,30 @@
 
   function renderOwnership() {
     if (!el.ownershipTableBody || !el.ownershipTableHead) return;
+    syncOwnershipViewMode();
     syncOwnershipMoverUI();
     const checkIns = ownershipCheckIns();
+
+    if (ownershipIsTreemap()) {
+      if (!checkIns.length) {
+        if (el.ownershipCountLabel) el.ownershipCountLabel.textContent = "No check-ins";
+        if (el.ownershipTreemapPlot) el.ownershipTreemapPlot.innerHTML = "";
+        if (el.ownershipTreemapEmpty) {
+          el.ownershipTreemapEmpty.hidden = false;
+          el.ownershipTreemapEmpty.textContent =
+            "No ownership check-ins yet. Run python3 site/fetch_ownership.py to capture selected-by-%.";
+        }
+      } else {
+        if (el.ownershipTreemapEmpty) {
+          el.ownershipTreemapEmpty.textContent = "No movers match the current filters.";
+        }
+        renderOwnershipTreemap();
+      }
+      syncFiltersResetUI();
+      syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
+      return;
+    }
+
     const ranked = ownershipRankedMovers();
     const visible = sortOwnershipRows(ownershipVisibleMovers());
     if (el.ownershipCountLabel) {
@@ -13154,6 +13604,7 @@
     }
     syncFiltersResetUI();
     syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
+    bindAllNameColumnSimplifies();
   }
 
   function statRollFormat(value, decimals, signed) {
@@ -13405,6 +13856,7 @@
       // Invalidate any in-flight enter rolls; don't settle numbers here —
       // startHomeEnterMotion (or reduced-motion path) owns the single paint.
       homeEnterMotionToken += 1;
+      flushHomeEnterDeferred();
     }
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
@@ -13729,7 +14181,7 @@
     syncTeamCompareHost();
     syncSearchClearBtns();
     syncPageInfoButton();
-    syncAllNameColumnSimplifies();
+    bindAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
     if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
@@ -13852,6 +14304,13 @@
       }
       if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
       if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+      if (el.homeStandingsLookupEmpty) {
+        el.homeStandingsLookupEmpty.hidden = true;
+        el.homeStandingsLookupEmpty.textContent = "";
+      }
+      const standingsPager =
+        el.homeStandingsPanel && el.homeStandingsPanel.querySelector(".home-standings-pager");
+      if (standingsPager) standingsPager.hidden = false;
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
     if (page === "rankings") {
@@ -13954,6 +14413,24 @@
       if (state.page === "ownership") renderOwnership();
     });
   }
+  if (el.ownershipTreemapToggle) {
+    el.ownershipTreemapToggle.addEventListener("click", () => {
+      state.ownershipViewMode = ownershipIsTreemap() ? "table" : "treemap";
+      if (state.page === "ownership") renderOwnership();
+    });
+  }
+  if (el.ownershipWindowSeg) {
+    el.ownershipWindowSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-ownership-window]");
+      if (!btn || !el.ownershipWindowSeg.contains(btn)) return;
+      const next = btn.dataset.ownershipWindow;
+      if (next !== "d7" && next !== "d3" && next !== "d1") return;
+      if (next === ownershipTreeWindow()) return;
+      state.ownershipTreeWindow = next;
+      syncOwnershipWindowUI({ animate: true });
+      if (state.page === "ownership" && ownershipIsTreemap()) renderOwnershipTreemap();
+    });
+  }
   if (el.ownershipTableWrap) {
     el.ownershipTableWrap.addEventListener("click", (e) => {
       const th = e.target.closest("th[data-own-sort]");
@@ -14015,6 +14492,7 @@
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncBarbellHeadHeight();
+    scheduleOwnershipTreemapRelayout();
     if (preferMobileSheet()) setExpectedCatMenuOpen(false);
   });
 
@@ -15858,6 +16336,7 @@
         scheduleTeamTableHeadHeightSync();
         disarmConfirmButton();
         syncTeamPlannerPrefsBtns();
+        syncHomeViewBanner();
       });
     } else if (typeof NARROW_MQ.addListener === "function") {
       NARROW_MQ.addListener(() => {
@@ -15877,6 +16356,7 @@
         scheduleTeamTableHeadHeightSync();
         disarmConfirmButton();
         syncTeamPlannerPrefsBtns();
+        syncHomeViewBanner();
       });
     }
     bindAllNameColumnSimplifies();
