@@ -1021,7 +1021,6 @@
     pageInfoTooltip: $("#page-info-tooltip"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
-    accentSwatches: $("#accent-swatches"),
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplManagerSelect: $("#fpl-manager-select"),
@@ -3924,19 +3923,10 @@
     const hasOwners = homeLeagueOwnsElement(elementId);
     el.homeBento.classList.toggle("has-lookup-owners", hasOwners);
 
-    if (mobileLookup) {
-      if (el.homePlayerProfile) {
-        el.homePlayerProfile.hidden = true;
-        el.homePlayerProfile.innerHTML = "";
-      }
-      if (el.homePlayerMatchup) {
-        el.homePlayerMatchup.hidden = true;
-        el.homePlayerMatchup.innerHTML = "";
-      }
-      if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
-      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
-      syncHomeOwnerHighlights();
-      return;
+    if (Number.isFinite(elementId)) {
+      homeOwnerPin = { type: "element", id: elementId };
+    } else if (homeOwnerPin && homeOwnerPin.type === "element") {
+      homeOwnerPin = null;
     }
 
     let ownershipNote = "";
@@ -3959,21 +3949,25 @@
         }, { once: true });
       });
     }
-    if (el.homeSquadPanel) el.homeSquadPanel.hidden = true;
-    if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
 
-    if (Number.isFinite(elementId)) {
-      homeOwnerPin = { type: "element", id: elementId };
-    } else if (homeOwnerPin && homeOwnerPin.type === "element") {
-      homeOwnerPin = null;
+    if (mobileLookup) {
+      if (el.homePlayerMatchup) {
+        el.homePlayerMatchup.hidden = true;
+        el.homePlayerMatchup.innerHTML = "";
+      }
+      if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
+      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+    } else {
+      if (el.homeSquadPanel) el.homeSquadPanel.hidden = true;
+      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+      if (el.homePlayerMatchup) {
+        el.homePlayerMatchup.hidden = false;
+        el.homePlayerMatchup.innerHTML = homePlayerMatchupHTML(homeLookupPlayer.team);
+        upgradeNativeTitles(el.homePlayerMatchup);
+      }
     }
+
     syncHomeOwnerHighlights();
-
-    if (el.homePlayerMatchup) {
-      el.homePlayerMatchup.hidden = false;
-      el.homePlayerMatchup.innerHTML = homePlayerMatchupHTML(homeLookupPlayer.team);
-      upgradeNativeTitles(el.homePlayerMatchup);
-    }
   }
 
   function homeRankRollSpec(v) {
@@ -4622,8 +4616,8 @@
   // for the columns visible in the current view. Default bands use the full
   // player/team population; Relative mode passes the filtered rows and a
   // boosted topN so small cohorts still get a readable highlight band.
-  // Players rank only the best values (green). Teams — a much smaller
-  // population — rank both the best and worst (green "target" / red "avoid"),
+  // Players rank only the best values (blue). Teams — a much smaller
+  // population — rank both the best and worst (blue "target" / orange "avoid"),
   // with the bottom set drawn only from values outside the top set so the
   // two never overlap. Zero-valued cells are excluded from ranking (they're
   // always visually demoted instead). Intensity blends rank order with value
@@ -6473,7 +6467,7 @@
     // Tooltip always shows ranks + enhance-style highlighting. Colours are
     // inverted relative to the main table: these are the *opponent's*
     // figures, so being top of a category (rank 1) is a hard fixture and
-    // reads red, bottom reads green.
+    // reads orange, bottom reads blue.
     let style = "";
     let extraClass = "";
     const ranks = highlightMaps[split] && highlightMaps[split][key];
@@ -6727,7 +6721,7 @@
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · soft green = easier, red = tougher (quieter green in dark mode)</div>` : ""}`;
+      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · soft blue = easier, orange = tougher (quieter blue in dark mode)</div>` : ""}`;
   }
 
   function fixtureTooltipHTML(teamCode, options = {}) {
@@ -6871,7 +6865,7 @@
           <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then count.</span></li>
           <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s home/away attack &amp; defence ranks.</span></li>
           <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — home for the team on the card.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Soft green / tough red cell tint (quieter green in dark mode).</span></li>
+          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Soft blue / tough orange cell tint (quieter blue in dark mode).</span></li>
           <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
         </ol>
       </div>
@@ -6943,8 +6937,8 @@
         spitRow(
           spitRank("Fixtures"),
           mobile
-            ? "Swipe for the next 4 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."
-            : "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy green → hard red)."
+            ? "Swipe for the next 4 GWs — crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
+            : "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
         ),
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
         ...(mobile
@@ -6998,7 +6992,7 @@
         spitRow(spitRank("Bar"), "Expected → actual. Moving dashes show the gap direction."),
         spitRow(
           spitRank("Diff"),
-          "Actual − expected. Pill intensity scales with gap size. For xGC, a negative Diff can still be green (conceded less than expected)."
+          "Actual − expected. Pill intensity scales with gap size. For xGC, a negative Diff can still be blue (conceded less than expected)."
         ),
       ];
       const intro = isNextSeason()
@@ -7008,7 +7002,7 @@
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
-        ${spitNote("Green/red here is over/under vs expectation — not Matchups fixture difficulty. Soft green is quieter in dark mode.")}`;
+        ${spitNote("Blue/orange here is over/under vs expectation — not Matchups fixture difficulty. Soft blue is quieter in dark mode.")}`;
     }
 
     if (state.page === "ownership") {
@@ -7034,8 +7028,8 @@
 
     if (state.page === "markets") {
       const legend = [
-        spitRow(spitMarketsStatSwatch("high", "1.82"), "Goals / CS% — above your green threshold"),
-        spitRow(spitMarketsStatSwatch("low", "18%"), "Goals / CS% — below your red threshold"),
+        spitRow(spitMarketsStatSwatch("high", "1.82"), "Goals / CS% — above your blue threshold"),
+        spitRow(spitMarketsStatSwatch("low", "18%"), "Goals / CS% — below your orange threshold"),
         spitRow(spitMarketsDeltaSwatch("up"), "Compare mode — moved up vs earlier pull"),
         spitRow(spitMarketsDeltaSwatch("down"), "Compare mode — moved down vs earlier pull"),
       ];
@@ -7045,7 +7039,7 @@
         spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
         spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
         spitRow(spitRank("Scoreline"), "Exact-score matrix (% in cells). Goals view lists top likely scores."),
-        spitRow(spitRank("Color"), "Green/red bands on Goals and CS%; deeper past the threshold. Soft green is quieter in dark mode."),
+        spitRow(spitRank("Color"), "Blue/orange bands on Goals and CS%; deeper past the threshold. Soft blue is quieter in dark mode."),
         spitRow(spitRank("Compare"), "Last run or Last 72 hr — movement vs prior odds pull."),
       ];
       return `${spitHead("candlestick", "How Markets works")}
@@ -7059,7 +7053,7 @@
         spitRow(`${spitTeamRoleSwatch("c")}${spitTeamRoleSwatch("v")}`, "Captain / vice on the squad"),
         spitRow(
           spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
-          "Set-piece — FPL #1 (green check). FK/CK also show #2."
+          "Set-piece — FPL #1 (check mark). FK/CK also show #2."
         ),
         spitRow(spitHighlightSwatch("top"), "Stat cell wash — rank among that position (same band as Statistics Enhance)."),
         spitRow(iconHTML("plus"), "Empty row — add a player of that position"),
@@ -7077,7 +7071,7 @@
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). New signings / zero rows show –.`),
         spitRow(spitRank("Form"), "Sparkline of mock recent form. Tap it (or the column header) to switch to TSB% from ownership check-ins."),
-        spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (green check). FK/CK also show #2."),
+        spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (check mark). FK/CK also show #2."),
         spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Defaults to the next GW once the current one has started, so you can plan ahead."),
         spitRow(
           spitRank("Select"),
@@ -7118,7 +7112,7 @@
       ),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
-        "Set-piece — FPL #1 (green check). FK/CK also show #2."
+        "Set-piece — FPL #1 (check mark). FK/CK also show #2."
       ),
       spitRow(iconHTML("refresh-ccw-dot"), "2026/27 matched price, club, and position on 2025/26 rows"),
       spitRow(iconHTML("scale"), "Compare — tap the toolbar button, then pick up to five rows"),
@@ -7128,7 +7122,7 @@
       spitRow(spitRank("TSB%"), "FPL selected-by-% from the latest ownership check-in."),
       spitRow(
         spitRank("Tint"),
-        "Green/red Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them unless Relative is on. Stronger wash when a leader pulls clear of the band; soft green is quieter in dark mode."
+        "Blue/orange Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them unless Relative is on. Stronger wash when a leader pulls clear of the band; soft blue is quieter in dark mode."
       ),
       spitRow(
         spitRank("Fixtures"),
@@ -8132,7 +8126,7 @@
   // team-only since there's no player-level "expected clean sheets" stat
   // anywhere in the FPL API to pair against actual clean sheets — see
   // expectedCats(). lowerBetter flips the over/underperform color so that,
-  // e.g., conceding fewer goals than xGC reads as green even though
+  // e.g., conceding fewer goals than xGC reads as blue even though
   // actual < expected.
   //
   // combinedOnly marks categories whose fields only exist on the combined
@@ -8909,25 +8903,37 @@
   }
 
   function rankingsIdentityHTML(row) {
+    let thumb = "";
     let meta = "";
     if (state.view === "players") {
-      const pos = row.position || "";
+      thumb = ownershipPhotoHTML(row);
+      const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+      const teamStyle = accent ? ` style="color:${accent}"` : "";
       const price = effectivePrice(row);
-      const priceLabel = price ? `£${Number(price).toFixed(1)}m` : "";
-      const bits = [];
-      if (pos) bits.push(posBadgeHTML(pos));
-      if (priceLabel) bits.push(`<span>${escapeHtml(priceLabel)}</span>`);
-      meta = bits.join("");
+      const bits = [
+        row.team ? `<span class="ownership-id-team"${teamStyle}>${escapeHtml(row.team)}</span>` : "",
+        price != null && Number.isFinite(Number(price))
+          ? `<span>£${Number(price).toFixed(1)}m</span>`
+          : "",
+        row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
+      ].filter(Boolean);
+      meta = bits.length
+        ? `<div class="ownership-id-sub">${bits.join('<span class="ownership-id-sep">|</span>')}</div>`
+        : "";
     } else {
+      const teamCode = currentTeamCode(row) || row.team;
+      thumb =
+        badgeHTML(teamCode, "ownership-crest") ||
+        `<span class="ownership-photo ownership-photo-fallback" aria-hidden="true">${escapeHtml(String(row.team || "?").slice(0, 3))}</span>`;
       const pos = LEAGUE_POSITIONS[row.team];
       if (pos != null) {
         const seasonLabel = LEAGUE_POSITIONS_META.seasonLabel || "Premier League";
-        meta = `<span${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span>`;
+        meta = `<div class="ownership-id-sub"><span${tipAttr(`${pos}${ordinalSuffix(pos)} in the ${seasonLabel}`)}>${pos}${ordinalSuffix(pos)}</span></div>`;
       }
     }
-    const nameHTML = `<span class="rankings-name">${escapeHtml(row.name)}</span>`;
-    const metaHTML = meta ? `<span class="rankings-meta">${meta}</span>` : "";
-    return `${playerCrestHTML(row.team)}<span class="rankings-identity-text"><span class="rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>${metaHTML}</span>`;
+    const nameHTML = `<span class="player-name rankings-name">${escapeHtml(row.name)}</span>`;
+    const nameLine = `<span class="player-name-line rankings-name-line">${nameHTML}${ownedFlagHTML(row)}</span>`;
+    return `${thumb}<span class="rankings-identity-text ownership-id-text">${nameLine}${meta}</span>`;
   }
 
   function rankingsCardHTML(col, rows, referenceRows) {
@@ -9102,6 +9108,7 @@
         return `<div class="rankings-divider"><span>${escapeHtml(section.label)}</span></div>${cards}`;
       })
       .join("");
+    bindOwnershipPhotoFallback(el.rankingsGrid);
     renderRankingsPinBar();
     if (animateBars) {
       animateRankingsBars();
@@ -15359,7 +15366,7 @@
     btn.setAttribute("aria-pressed", state.enhanceRelative ? "true" : "false");
     const tip = state.enhanceRelative
       ? "Highlights ranked against the filtered rows — click for full-table bands"
-      : "Rank green/red highlights against the current filtered rows";
+      : "Rank blue/orange highlights against the current filtered rows";
     setTip(btn, tip);
     syncHighlightUI();
   }
@@ -15407,7 +15414,7 @@
       if (state.enhanceRelative) {
         showToast({
           title: "Relative highlights",
-          message: "Green/red bands now rank within the filtered rows.",
+          message: "Blue/orange bands now rank within the filtered rows.",
           icon: "sparkles",
         });
       } else {
@@ -15453,37 +15460,19 @@
 
   // ---------------------------------------------------------------------
   // Appearance (device → light → dark). Default is always device/system.
-  // Accent chrome color (tabs, toggles, selection, icons) via --blue-hsl.
-  // Data spectrum (--positive / --negative) is Ownership-style blue/orange rise/fall;
-  // rise tracks accent, fall stays fixed orange.
+  // UI chrome and data-rise color use fixed --blue-hsl from CSS.
   // ---------------------------------------------------------------------
   const THEME_KEY = "fpl-explorer-theme";
-  const ACCENT_KEY = "fpl-explorer-accent";
   const THEME_ORDER = ["system", "light", "dark"];
   const THEME_META = {
     system: { icon: "monitor", label: "Device" },
     light: { icon: "sun", label: "Light" },
     dark: { icon: "moon", label: "Dark" },
   };
-  const ACCENT_OPTIONS = [
-    { id: "blue", label: "Blue", light: "217 91% 60%", dark: "217 91% 60%", swatch: "217 91% 60%" },
-    { id: "teal", label: "Teal", light: "173 80% 36%", dark: "172 66% 50%", swatch: "172 66% 45%" },
-    { id: "emerald", label: "Emerald", light: "160 84% 39%", dark: "160 70% 45%", swatch: "160 72% 40%" },
-    { id: "indigo", label: "Indigo", light: "239 84% 67%", dark: "239 84% 72%", swatch: "239 84% 67%" },
-    { id: "violet", label: "Violet", light: "262 72% 50%", dark: "263 70% 65%", swatch: "262 72% 58%" },
-    { id: "rose", label: "Rose", light: "346 77% 50%", dark: "347 77% 60%", swatch: "346 77% 55%" },
-    { id: "amber", label: "Amber", light: "32 95% 44%", dark: "38 92% 50%", swatch: "32 95% 48%" },
-  ];
-  const ACCENT_BY_ID = Object.fromEntries(ACCENT_OPTIONS.map((a) => [a.id, a]));
 
   function currentThemeMode() {
     const stored = localStorage.getItem(THEME_KEY);
     return THEME_ORDER.includes(stored) ? stored : "system";
-  }
-
-  function currentAccentId() {
-    const stored = localStorage.getItem(ACCENT_KEY);
-    return ACCENT_BY_ID[stored] ? stored : "blue";
   }
 
   function themePrefersDark(mode = currentThemeMode()) {
@@ -15510,33 +15499,6 @@
     if (typeof syncSegThumb === "function") syncSegThumb(el.themeSeg, { animate: false });
   }
 
-  function syncAccentSwatches(id) {
-    if (!el.accentSwatches) return;
-    Array.from(el.accentSwatches.querySelectorAll(".prefs-accent-swatch")).forEach((btn) => {
-      const on = btn.dataset.accent === id;
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-    });
-  }
-
-  function applyAccent(id, { persist = true } = {}) {
-    const accent = ACCENT_BY_ID[id] || ACCENT_BY_ID.blue;
-    const hsl = themePrefersDark() ? accent.dark : accent.light;
-    document.documentElement.style.setProperty("--blue-hsl", hsl);
-    // Clear any earlier experiment that wrote data colours onto the root.
-    document.documentElement.style.removeProperty("--positive");
-    document.documentElement.style.removeProperty("--negative");
-    document.documentElement.removeAttribute("data-accent");
-    if (persist) {
-      try {
-        localStorage.setItem(ACCENT_KEY, accent.id);
-      } catch {
-        // ignore
-      }
-    }
-    syncAccentSwatches(accent.id);
-  }
-
   function applyTheme(mode) {
     const next = THEME_ORDER.includes(mode) ? mode : "system";
     if (next === "system") {
@@ -15547,17 +15509,6 @@
     localStorage.setItem(THEME_KEY, next);
     syncThemeCycleButton(next);
     syncThemeSeg(next);
-    applyAccent(currentAccentId(), { persist: false });
-  }
-
-  function buildAccentSwatches() {
-    if (!el.accentSwatches) return;
-    el.accentSwatches.innerHTML = ACCENT_OPTIONS.map(
-      (a) =>
-        `<button type="button" class="prefs-accent-swatch" role="radio"
-          data-accent="${a.id}" title="${a.label}" aria-label="${a.label} accent"
-          style="--swatch-hsl: ${a.swatch}"></button>`
-    ).join("");
   }
 
   if (el.themeCycleBtn) {
@@ -15577,24 +15528,7 @@
     });
   }
 
-  if (el.accentSwatches) {
-    el.accentSwatches.addEventListener("click", (e) => {
-      const btn = e.target.closest(".prefs-accent-swatch");
-      if (!btn || !el.accentSwatches.contains(btn)) return;
-      applyAccent(btn.dataset.accent || "blue");
-    });
-  }
-
-  const systemThemeMq = window.matchMedia("(prefers-color-scheme: dark)");
-  const onSystemThemeChange = () => {
-    if (currentThemeMode() === "system") applyAccent(currentAccentId(), { persist: false });
-  };
-  if (systemThemeMq.addEventListener) systemThemeMq.addEventListener("change", onSystemThemeChange);
-  else if (systemThemeMq.addListener) systemThemeMq.addListener(onSystemThemeChange);
-
-  buildAccentSwatches();
   applyTheme(currentThemeMode());
-  applyAccent(currentAccentId());
 
   // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
   try {
@@ -15603,10 +15537,15 @@
     localStorage.removeItem("fpl-explorer-font-pair-v2");
     localStorage.removeItem("fpl-explorer-clock-format");
     localStorage.removeItem("fpl-explorer-fixture-tt-delay");
+    localStorage.removeItem("fpl-explorer-accent");
   } catch {
     /* private browsing */
   }
   document.documentElement.style.removeProperty("--ui-scale");
+  document.documentElement.style.removeProperty("--blue-hsl");
+  document.documentElement.style.removeProperty("--positive");
+  document.documentElement.style.removeProperty("--negative");
+  document.documentElement.removeAttribute("data-accent");
 
   syncPageInfoButton();
 

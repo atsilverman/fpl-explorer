@@ -7,28 +7,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=638" />
+<link rel="stylesheet" href="styles.css?v=643" />
 <script>
 (() => {
   try {
     const root = document.documentElement;
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
-    const accents = {
-      blue: { light: "217 91% 60%", dark: "217 91% 60%" },
-      teal: { light: "173 80% 36%", dark: "172 66% 50%" },
-      emerald: { light: "160 84% 39%", dark: "160 70% 45%" },
-      indigo: { light: "239 84% 67%", dark: "239 84% 72%" },
-      violet: { light: "262 72% 50%", dark: "263 70% 65%" },
-      rose: { light: "346 77% 50%", dark: "347 77% 60%" },
-      amber: { light: "32 95% 44%", dark: "38 92% 50%" },
-    };
-    const id = localStorage.getItem("fpl-explorer-accent") || "blue";
-    const accent = accents[id] || accents.blue;
-    const dark =
-      theme === "dark" ||
-      (theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    root.style.setProperty("--blue-hsl", dark ? accent.dark : accent.light);
+    try { localStorage.removeItem("fpl-explorer-accent"); } catch (_) {}
     const PAGE_KEY = "fpl-explorer-page";
     // Keep in sync with app.js PAGES — missing entries flash the wrong shell
     // before JS loads (e.g. omitting "home" painted Statistics on every refresh).
@@ -338,10 +324,6 @@
                 <button type="button" data-theme-mode="light" title="Always light">Light</button>
                 <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
               </div>
-            </div>
-            <div class="prefs-field">
-              <span class="prefs-field-label" id="accent-swatch-label">Accent</span>
-              <div class="prefs-accent-swatches" id="accent-swatches" role="radiogroup" aria-labelledby="accent-swatch-label"></div>
             </div>
           </section>
           <section class="settings-section">
@@ -1191,7 +1173,7 @@
 <script src="home_data.js?v=14"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=652"></script>
+<script src="app.js?v=656"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

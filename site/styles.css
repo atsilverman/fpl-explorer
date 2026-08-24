@@ -30,24 +30,27 @@
   --input: 240 5.9% 90%;
   --ring: 240 5.9% 10%;
 
-  /* Data spectrum — Ownership-style blue/orange ramp (rise / fall).
-     --positive/--negative alias these for heat, deltas, and highlights.
-     Rise tracks accent (--blue-hsl); fall is fixed orange.
+  /* Data spectrum — Ownership palette (blue / orange / grey / black).
+     --blue-hsl is the fixed UI + data-rise color (no user override).
      Position badges and destructive UI use separate tokens. */
+  --blue-hsl: 217 91% 60%;
   --fall: 24 90% 52%;
   --fall-highlight: 24 85% 46%;
+  --spectrum-rise: var(--blue-hsl);
+  --spectrum-fall: var(--fall);
+  --spectrum-neutral: var(--muted);
+  --spectrum-emphasis: var(--foreground);
+  --positive: var(--spectrum-rise);
+  --positive-highlight: var(--spectrum-rise);
+  --negative: var(--spectrum-fall);
+  --matchup-defence: var(--spectrum-rise);
+  --matchup-attack: var(--spectrum-fall);
+  --fdr-easy: var(--spectrum-rise);
+  --fdr-hard: var(--spectrum-fall);
   --pos-mid: 134 61% 49%;
   --pos-fwd: 3 92% 71%;
   --semantic-red: 3 92% 71%;
-  --positive: var(--blue-hsl);
-  --positive-highlight: var(--blue-hsl);
-  --negative: var(--fall);
-  --blue-hsl: 217 91% 60%;
-  --matchup-attack: var(--fall);
-  --matchup-defence: var(--blue-hsl);
   --amber-hsl: 38 92% 50%;
-  --fdr-easy: var(--matchup-defence);
-  --fdr-hard: var(--matchup-attack);
 
   --radius: 0.5rem;
   --shadow-sm: 0 1px 2px 0 hsl(240 6% 10% / 0.05);
@@ -85,7 +88,7 @@
   --red: hsl(var(--semantic-red));
   --row-divider: hsl(var(--border-hsl) / 0.7);
   /* Shared club crest size for Statistics + Rankings identity cells */
-  --badge-size: 22px;
+  --badge-size: 28px;
   --metric-col-w: 52px;
   --check-col-w: 36px;
   /* Check glyph on filled set-piece / owned pins — white on light, dark on dark. */
@@ -117,15 +120,21 @@
     --ring: 240 4.9% 83.9%;
     --fall: 24 90% 58%;
     --fall-highlight: 24 85% 52%;
+    --spectrum-rise: var(--blue-hsl);
+    --spectrum-fall: var(--fall);
+    --spectrum-neutral: var(--muted);
+    --spectrum-emphasis: var(--foreground);
+    --positive: var(--spectrum-rise);
+    --positive-highlight: var(--spectrum-rise);
+    --negative: var(--spectrum-fall);
+    --matchup-defence: var(--spectrum-rise);
+    --matchup-attack: var(--spectrum-fall);
+    --fdr-easy: var(--spectrum-rise);
+    --fdr-hard: var(--spectrum-fall);
     --pos-mid: 142 42% 46%;
     --pos-fwd: 3 92% 71%;
     --semantic-red: 3 92% 71%;
-    --positive: var(--blue-hsl);
-    --positive-highlight: var(--blue-hsl);
-    --negative: var(--fall);
     --blue-hsl: 217 91% 60%;
-    --matchup-attack: var(--fall);
-    --matchup-defence: var(--blue-hsl);
     --amber-hsl: 43 74% 49%;
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
     --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.5), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
@@ -161,15 +170,21 @@
   --ring: 240 4.9% 83.9%;
   --fall: 24 90% 58%;
   --fall-highlight: 24 85% 52%;
+  --spectrum-rise: var(--blue-hsl);
+  --spectrum-fall: var(--fall);
+  --spectrum-neutral: var(--muted);
+  --spectrum-emphasis: var(--foreground);
+  --positive: var(--spectrum-rise);
+  --positive-highlight: var(--spectrum-rise);
+  --negative: var(--spectrum-fall);
+  --matchup-defence: var(--spectrum-rise);
+  --matchup-attack: var(--spectrum-fall);
+  --fdr-easy: var(--spectrum-rise);
+  --fdr-hard: var(--spectrum-fall);
   --pos-mid: 142 42% 46%;
   --pos-fwd: 3 92% 71%;
   --semantic-red: 3 92% 71%;
-  --positive: var(--blue-hsl);
-  --positive-highlight: var(--blue-hsl);
-  --negative: var(--fall);
   --blue-hsl: 217 91% 60%;
-  --matchup-attack: var(--fall);
-  --matchup-defence: var(--blue-hsl);
   --amber-hsl: 43 74% 49%;
   --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
   --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.5), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
@@ -221,7 +236,7 @@ html, body {
     overflow: hidden;
   }
   :root {
-    --badge-size: 16px;
+    --badge-size: 26px;
     --metric-col-w: 44px;
     --check-col-w: 32px;
   }
@@ -969,38 +984,6 @@ a { color: var(--blue); }
   .prefs-tooltips-section {
     display: none;
   }
-}
-
-.prefs-accent-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 0 4px;
-}
-.prefs-accent-swatch {
-  appearance: none;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 2px solid hsl(var(--background));
-  border-radius: 50%;
-  background: hsl(var(--swatch-hsl));
-  box-shadow: 0 0 0 1px hsl(var(--border-hsl) / 0.9);
-  cursor: pointer;
-  transition: box-shadow 0.15s ease, transform 0.15s var(--ease-out);
-}
-.prefs-accent-swatch:hover {
-  transform: scale(1.06);
-}
-.prefs-accent-swatch:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-.prefs-accent-swatch[aria-checked="true"] {
-  box-shadow:
-    0 0 0 2px hsl(var(--background)),
-    0 0 0 4px hsl(var(--blue-hsl));
 }
 
 .prefs-slider {
@@ -3017,8 +3000,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
        horizontal column scroll on this element. */
     touch-action: pan-x;
     --name-col-w: 152px;
-    --crest-size: 21px;
-    --badge-size: 21px;
+    --crest-size: 26px;
+    --badge-size: 26px;
     --table-sec-h: 16px;
   }
   .table-wrap.name-simplify-ready {
@@ -3176,8 +3159,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     font-size: 10px;
   }
   .table-wrap .team-tag .badge-img {
-    width: 19px;
-    height: 19px;
+    width: 24px;
+    height: 24px;
   }
 }
 
@@ -4640,14 +4623,14 @@ html[data-page="ownership"] .layout .main {
 }
 
 /* ---------- Expected vs. actual page (barbell chart) ---------- */
-/* Five pin slots — categorical hues (not the rise/fall data ramp). */
+/* Five pin slots — on-palette distinguishers (blue / orange / grey / black). */
 .rankings-pin-bar,
 .rankings-grid {
   --pin-1: var(--blue-hsl);
-  --pin-2: var(--amber-hsl);
-  --pin-3: var(--pos-mid);
-  --pin-4: var(--fall);
-  --pin-5: 262 83% 62%;
+  --pin-2: var(--fall);
+  --pin-3: var(--foreground);
+  --pin-4: var(--muted-foreground);
+  --pin-5: 217 55% 48%;
 }
 
 .rankings-pin-bar {
@@ -4849,10 +4832,10 @@ html[data-page="ownership"] .layout .main {
 }
 
 .rankings-row.is-cross-hover {
-  background: hsl(var(--amber-hsl) / 0.14);
+  background: hsl(var(--blue-hsl) / 0.14);
   box-shadow:
-    inset 3px 0 0 hsl(var(--amber-hsl)),
-    inset 0 0 0 1px hsl(var(--amber-hsl) / 0.18);
+    inset 3px 0 0 hsl(var(--blue-hsl)),
+    inset 0 0 0 1px hsl(var(--blue-hsl) / 0.18);
 }
 
 .rankings-row.is-cross-hover:not(.is-pinned) .rankings-name,
@@ -4862,7 +4845,7 @@ html[data-page="ownership"] .layout .main {
 }
 
 .rankings-row.is-cross-hover:not(.is-pinned) .rankings-rank {
-  color: hsl(var(--amber-hsl) / 0.85);
+  color: hsl(var(--blue-hsl) / 0.85);
 }
 
 /* Pins win over hover: a pinned row keeps its own colour while the pointer
@@ -4906,9 +4889,9 @@ html[data-page="ownership"] .layout .main {
   font-variant-numeric: tabular-nums;
 }
 
-.rankings-row.medal-gold { --medal: #e0ac12; }
-.rankings-row.medal-silver { --medal: #7b8fad; }
-.rankings-row.medal-bronze { --medal: #d07a2c; }
+.rankings-row.medal-gold { --medal: hsl(var(--blue-hsl)); }
+.rankings-row.medal-silver { --medal: hsl(var(--muted-foreground)); }
+.rankings-row.medal-bronze { --medal: hsl(var(--fall)); }
 
 .rankings-row.medal-gold .rankings-rank,
 .rankings-row.medal-silver .rankings-rank,
@@ -4947,19 +4930,21 @@ html[data-page="ownership"] .layout .main {
 .rankings-row.is-cross-hover:not(.is-pinned).medal-gold,
 .rankings-row.is-cross-hover:not(.is-pinned).medal-silver,
 .rankings-row.is-cross-hover:not(.is-pinned).medal-bronze {
-  box-shadow: inset 0 0 0 1px hsl(var(--amber-hsl) / 0.18);
+  box-shadow: inset 0 0 0 1px hsl(var(--blue-hsl) / 0.18);
 }
 
 .rankings-identity {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
-.rankings-identity .player-cell-crest {
-  width: var(--badge-size);
-  height: var(--badge-size);
+.rankings-identity .ownership-photo,
+.rankings-identity .ownership-crest {
+  width: 36px;
+  height: 36px;
+  flex: none;
 }
 
 .rankings-identity-text {
@@ -4967,6 +4952,13 @@ html[data-page="ownership"] .layout .main {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  flex: 1;
+}
+
+.rankings-identity .player-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .rankings-name {
@@ -4974,8 +4966,6 @@ html[data-page="ownership"] .layout .main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
-  font-weight: 650;
   line-height: 1.2;
 }
 
@@ -5051,19 +5041,19 @@ html[data-page="ownership"] .layout .main {
 }
 
 .rankings-row.medal-gold .rankings-bar {
-  background: color-mix(in srgb, var(--medal) 52%, hsl(var(--card)));
+  background: color-mix(in srgb, hsl(var(--blue-hsl)) 52%, hsl(var(--card)));
 }
 .rankings-row.medal-silver .rankings-bar {
-  background: color-mix(in srgb, var(--medal) 50%, hsl(var(--card)));
+  background: color-mix(in srgb, hsl(var(--muted-foreground)) 50%, hsl(var(--card)));
 }
 .rankings-row.medal-bronze .rankings-bar {
-  background: color-mix(in srgb, var(--medal) 50%, hsl(var(--card)));
+  background: color-mix(in srgb, hsl(var(--fall)) 50%, hsl(var(--card)));
 }
 .rankings-row.is-pinned .rankings-bar {
   background: hsl(var(--pin) / 0.42);
 }
 .rankings-row.is-cross-hover:not(.is-pinned) .rankings-bar {
-  background: hsl(var(--amber-hsl) / 0.32);
+  background: hsl(var(--blue-hsl) / 0.32);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5089,7 +5079,7 @@ html[data-page="ownership"] .layout .main {
   }
 
   #rankings-page {
-    --badge-size: 22px;
+    --badge-size: 26px;
   }
 
   .rankings-card {
@@ -5108,8 +5098,18 @@ html[data-page="ownership"] .layout .main {
     padding: 0 6px;
   }
 
-  .rankings-name {
-    font-size: 11px;
+  .rankings-identity .player-name {
+    font-size: 11.5px;
+  }
+
+  .rankings-identity .ownership-photo,
+  .rankings-identity .ownership-crest {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rankings-identity .ownership-id-sub {
+    font-size: 9.5px;
   }
 
   .rankings-pin-bar {
@@ -5667,8 +5667,8 @@ html[data-page="ownership"] .layout .main {
     --barbell-name-w: 120px;
     --barbell-name-w-compare: 112px;
     --barbell-head-h: 32px;
-    --crest-size: 21px;
-    --badge-size: 21px;
+    --crest-size: 26px;
+    --badge-size: 26px;
     /* Keep head / scale / rows on the same width — mismatched min-widths
        left a blank strip past Diff when scrolled right. Give the track
        more length; xG / Goals / Diff sit off to the right. */
@@ -6739,9 +6739,9 @@ html[data-page="ownership"] .layout .main {
   border-radius: 50%;
   flex: none;
 }
-.spit-medal.gold { background: #e0ac12; }
-.spit-medal.silver { background: #7b8fad; }
-.spit-medal.bronze { background: #d07a2c; }
+.spit-medal.gold { background: hsl(var(--blue-hsl)); }
+.spit-medal.silver { background: hsl(var(--muted-foreground)); }
+.spit-medal.bronze { background: hsl(var(--fall)); }
 
 .spit-owned-pin {
   width: 14px;
@@ -9802,7 +9802,7 @@ html[data-page="team"] .layout .main {
 /* ---------- Team builder ---------- */
 #team-page {
   --name-col-w: 280px;
-  --crest-size: 28px;
+  --crest-size: 30px;
   --crest-gap: 10px;
   --team-price-w: var(--metric-col-w, 52px);
   --team-owned-w: var(--metric-col-w, 52px);
@@ -10327,7 +10327,7 @@ html[data-page="team"] .layout .main {
   min-width: 100%;
 }
 #team-page .player-cell {
-  --crest-size: 28px;
+  --crest-size: 30px;
 }
 #team-page .player-cell .player-name {
   font-size: 13.5px;
@@ -10878,8 +10878,8 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   }
   #team-page {
     --name-col-w: 130px;
-    --crest-size: 21px;
-    --badge-size: 21px;
+    --crest-size: 26px;
+    --badge-size: 26px;
     --crest-gap: 6px;
     --team-row-h: 42px;
     flex: 1 1 auto;
@@ -11003,7 +11003,7 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
     position: static;
   }
   #team-page .player-cell {
-    --crest-size: 21px;
+    --crest-size: 26px;
   }
   #team-page .player-cell .player-name {
     font-size: 11px;
@@ -11258,7 +11258,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 
 /* ---- Planner page accent ---- */
 #team-page[data-team-mode="planner"] {
-  --team-mode-accent: hsl(28 85% 48%);
+  --team-mode-accent: hsl(var(--fall));
 }
 #team-page[data-team-mode="planner"] .team-header h2 {
   color: color-mix(in srgb, var(--team-mode-accent) 75%, var(--text));
@@ -11678,57 +11678,38 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   gap: 12px;
   margin: 8px 0 32px;
 }
-/* Viewing another manager from standings — tint banner + data cards; standings stays neutral. */
+/* Viewing another manager — colored banner only; other cards stay default. */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
 }
 .home-dashboard.is-viewing-manager .home-view-banner {
   background: linear-gradient(
     135deg,
-    hsl(var(--blue-hsl) / 0.22),
-    hsl(var(--blue-hsl) / 0.10) 52%,
+    hsl(var(--blue-hsl) / 0.20),
+    hsl(var(--blue-hsl) / 0.10) 55%,
     hsl(var(--blue-hsl) / 0.06)
   );
-  border-color: hsl(var(--blue-hsl) / 0.34);
-  border-left-color: var(--home-view-accent);
+  border-color: hsl(var(--blue-hsl) / 0.32);
+  border-left: 3px solid var(--home-view-accent);
   box-shadow:
     0 0 0 1px hsl(var(--blue-hsl) / 0.08),
     var(--shadow-sm);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-label {
-  color: hsl(var(--blue-hsl) / 0.82);
+  color: hsl(var(--blue-hsl) / 0.78);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-name {
-  color: var(--home-view-accent);
+  color: hsl(var(--blue-hsl));
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear {
-  background: hsl(var(--blue-hsl) / 0.14);
-  border-color: hsl(var(--blue-hsl) / 0.32);
-  color: hsl(var(--blue-hsl) / 0.92);
+  background: hsl(var(--card) / 0.72);
+  border-color: hsl(var(--blue-hsl) / 0.28);
+  color: hsl(var(--blue-hsl) / 0.9);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear:hover {
-  background: hsl(var(--blue-hsl) / 0.22);
-  border-color: hsl(var(--blue-hsl) / 0.42);
+  background: hsl(var(--card));
+  border-color: hsl(var(--blue-hsl) / 0.38);
   color: var(--home-view-accent);
-}
-.home-dashboard.is-viewing-manager .home-summary-cards > .home-panel,
-.home-dashboard.is-viewing-manager #home-squad-panel,
-.home-dashboard.is-viewing-manager .home-player-profile .home-lookup-card,
-.home-dashboard.is-viewing-manager .home-player-matchup .schedule-card {
-  background: linear-gradient(
-    180deg,
-    hsl(var(--blue-hsl) / 0.13),
-    hsl(var(--blue-hsl) / 0.05)
-  );
-  border-color: hsl(var(--blue-hsl) / 0.26);
-  border-left: 3px solid hsl(var(--blue-hsl) / 0.52);
-  box-shadow:
-    0 0 0 1px hsl(var(--blue-hsl) / 0.06),
-    var(--shadow-sm);
-}
-.home-dashboard.is-viewing-manager .home-summary-cards > .home-panel .home-panel-heading,
-.home-dashboard.is-viewing-manager #home-squad-panel > .home-panel-heading {
-  color: hsl(var(--blue-hsl) / 0.78);
 }
 .home-summary-cards {
   display: grid;
@@ -11767,11 +11748,14 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   display: none;
 }
 @media (max-width: 720px) {
-  .home-dashboard.is-player-lookup .home-summary-cards {
-    display: grid;
-  }
   .home-dashboard.is-player-lookup #home-squad-panel {
     display: block;
+  }
+  .home-dashboard.is-player-lookup .home-player-profile:not([hidden]) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: 8px;
   }
   .home-dashboard.is-search-open .home-player-profile,
   .home-dashboard.is-search-open .home-player-matchup {
@@ -12841,7 +12825,7 @@ html[data-pointer="coarse"] .home-search-btn.mobile-filter-fab.is-clear:hover {
   overflow: hidden;
 }
 .home-imp-track::after {
-  /* Vertical ticks sit above fill + groove so they read through green/red. */
+  /* Vertical ticks sit above fill + groove so they read through blue/orange. */
   content: "";
   position: absolute;
   inset: 0;
