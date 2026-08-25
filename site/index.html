@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=727" />
+<link rel="stylesheet" href="styles.css?v=737" />
 <script>
 (() => {
   try {
@@ -607,7 +607,7 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-house"/></svg>Home<button class="page-info-btn" type="button" aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle" id="home-page-subtitle">SoCal Big Guy FPL — pick your manager in Preferences for live Home data.</p>
+            <p class="page-subtitle" id="home-page-subtitle">SoCal Big Guy FPL — pick your manager for live Home data.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="home-count-label"></span>
@@ -629,8 +629,8 @@
         </div>
       </div>
       <div id="home-empty" class="home-empty" hidden>
-        <p class="home-empty-title" id="home-empty-title">Pick a manager</p>
-        <p class="home-empty-copy" id="home-empty-copy">Choose one of the four SoCal Big Guy managers in Preferences for live Home data.</p>
+        <p class="home-empty-title" id="home-empty-title">Home cache not loaded</p>
+        <p class="home-empty-copy" id="home-empty-copy">Manager and league are linked. Run refresh home (or refresh data) to build the dashboard cache.</p>
       </div>
       <div id="home-bento" class="home-dashboard" hidden>
         <p class="home-deadline" id="home-deadline" hidden></p>
@@ -1180,6 +1180,20 @@
     </div>
   </div>
 </div>
+<div id="home-manager-modal" class="home-manager-modal" hidden>
+  <div class="home-manager-modal-backdrop" aria-hidden="true"></div>
+  <div class="home-manager-modal-panel" role="dialog" aria-modal="true" aria-labelledby="home-manager-modal-title" aria-describedby="home-manager-modal-copy">
+    <h3 id="home-manager-modal-title">Pick a manager</h3>
+    <p id="home-manager-modal-copy">Choose your SoCal Big Guy manager to personalize Home.</p>
+    <label class="home-manager-modal-label" for="home-manager-select">Manager</label>
+    <select id="home-manager-select" class="home-manager-modal-select" aria-describedby="home-manager-modal-copy">
+      <option value="">Select manager…</option>
+    </select>
+    <div class="home-manager-modal-actions">
+      <button type="button" class="home-manager-modal-continue" id="home-manager-continue" disabled>Continue</button>
+    </div>
+  </div>
+</div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
 <script src="data.js?v=38"></script>
 <script src="markets_data.js?v=11"></script>
@@ -1188,7 +1202,7 @@
 <script src="home_data.js?v=17"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=724"></script>
+<script src="app.js?v=732"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

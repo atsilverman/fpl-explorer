@@ -12384,7 +12384,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   border: 1px dashed hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--muted) / 0.35);
-  max-width: 520px;
+  max-width: 420px;
 }
 .home-empty-title {
   margin: 0 0 8px;
@@ -12396,6 +12396,96 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: var(--text-dim);
   font-size: 13.5px;
   line-height: 1.45;
+}
+.home-manager-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.home-manager-modal[hidden] {
+  display: none !important;
+}
+.home-manager-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--foreground) / 0.34);
+}
+.home-manager-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(400px, 100%);
+  padding: 20px 18px 16px;
+  background: hsl(var(--card));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.home-manager-modal-panel h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.home-manager-modal-panel > p {
+  margin: 0 0 14px;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.home-manager-modal-label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-dim);
+}
+.home-manager-modal-select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--text);
+  background: hsl(var(--background));
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  font: inherit;
+  font-size: 13px;
+}
+.home-manager-modal-select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.home-manager-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.home-manager-modal-continue {
+  height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-manager-modal-continue:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.home-manager-modal-continue:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.home-manager-modal-continue:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Home "Updated …" — bottom center on mobile and desktop. */
@@ -14225,23 +14315,11 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: hsl(var(--text-faint) / 0.55);
+  background: var(--imp-fill, hsl(var(--text-faint) / 0.55));
   transition: width 3.4s var(--ease-out);
-  transition-delay: 0s;
 }
 .home-imp-fill.is-drawn {
   width: var(--imp-pct, 0%);
-}
-#home-page.is-entering .home-imp-fill {
-  /* Match summary/squad odometer duration; grow L→R together, not staggered. */
-  transition: width 3.4s var(--ease-out);
-  transition-delay: 0.15s;
-}
-.home-imp-fill.is-pos {
-  background: hsl(var(--positive));
-}
-.home-imp-fill.is-neg {
-  background: hsl(0 72% 48%);
 }
 .home-imp-pct {
   flex: 0 0 auto;
@@ -14335,8 +14413,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-captain-pick .home-crest-captain,
 .home-captain-pick .home-crest-fallback.home-crest-captain {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
 }
 .home-captains-table th.home-col-captain,
@@ -14348,7 +14426,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-captain-pick-text {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  align-items: flex-start;
+  gap: 1px;
   min-width: 0;
 }
 .home-captain-name-row {
@@ -14358,9 +14437,11 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   min-width: 0;
   max-width: 100%;
 }
+/* Match manager name / team-name hierarchy. */
 .home-captain-name {
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -14374,8 +14455,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: var(--text-faint);
 }
 .home-captain-sub-icon {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
 }
 .home-captain-pick.is-auto-sub .home-captain-sub {
   color: hsl(var(--amber-hsl) / 0.95);
@@ -14391,11 +14472,12 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.5em;
-  padding: 1px 6px;
-  border-radius: 6px;
+  min-width: 1.35em;
+  padding: 0 4px;
+  border-radius: 4px;
   background: hsl(var(--positive) / 0.16);
   color: hsl(var(--positive));
+  font-weight: 600;
 }
 .home-captains-table td.home-col-captain.is-top-captain {
   --home-row-bg: hsl(var(--positive) / 0.14);
@@ -14767,9 +14849,6 @@ html[data-page="home"] #subtoolbar {
 @media (max-width: 720px) {
   .home-squad-row {
     touch-action: pan-x pan-y;
-    cursor: default;
-  }
-  .home-squad-row .home-col-player {
     cursor: pointer;
   }
 }
@@ -14797,8 +14876,9 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tr.is-view-active > td:first-child {
   border-left-color: hsl(var(--blue-hsl));
 }
-.home-squad-row.is-owner-pinned > td:first-child {
-  border-left-color: hsl(var(--blue-hsl));
+/* Player-tap ownership: wash + name only — no standings left rail. */
+.home-dashboard.is-player-lookup .home-standings-table tr[data-entry] > td:first-child {
+  border-left-color: transparent;
 }
 .home-standings-table tbody tr[data-entry] > td {
   vertical-align: middle;
