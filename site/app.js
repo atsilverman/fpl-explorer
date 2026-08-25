@@ -14797,10 +14797,32 @@
 
   function syncPageNavLabelCenter() {
     const cluster = el.pageNavCenter;
-    if (!cluster) return;
-    // Center the whole tray group (icon + name/arrow + info) via CSS.
-    // Don't offset to the label mid — that skewed the flanking icons.
-    cluster.style.removeProperty("--page-nav-label-offset");
+    const label = el.pageTrayLabel;
+    if (!cluster || !label) return;
+    if (!preferMobileSheet()) {
+      cluster.style.removeProperty("--page-nav-label-offset");
+      return;
+    }
+    // Measure from a zero offset, then shift so the page name (not the
+    // flanking icon/caret/info) sits on the screen midpoint.
+    cluster.style.setProperty("--page-nav-label-offset", "0px");
+    requestAnimationFrame(() => {
+      if (!preferMobileSheet() || !el.pageNavCenter || !el.pageTrayLabel) return;
+      const vv = window.visualViewport;
+      const screenMid = vv
+        ? vv.offsetLeft + vv.width / 2
+        : window.innerWidth / 2;
+      const labelRect = el.pageTrayLabel.getBoundingClientRect();
+      if (!labelRect.width) {
+        el.pageNavCenter.style.removeProperty("--page-nav-label-offset");
+        return;
+      }
+      const labelMid = labelRect.left + labelRect.width / 2;
+      el.pageNavCenter.style.setProperty(
+        "--page-nav-label-offset",
+        `${screenMid - labelMid}px`
+      );
+    });
   }
 
   function syncPageTrayTrigger() {
