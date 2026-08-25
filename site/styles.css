@@ -2658,11 +2658,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.has-mobile-bottom-dock .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Statistics / Expected / Ownership: the table card is the scrollport —
-     extend it under the floating docks instead of shrinking the flex area. */
-  html.has-mobile-bottom-dock[data-page="opta"] .main,
+  /* Expected + Ownership treemap: nested card scrollports fill under docks.
+     Stats / Ownership table / Planner: page (.main) scroll — dock clearance on main. */
   html.has-mobile-bottom-dock[data-page="expected"] .main,
-  html.has-mobile-bottom-dock[data-page="ownership"] .main {
+  html.has-mobile-bottom-dock[data-page="ownership"]:has(#ownership-page.is-treemap) .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
   html.has-mobile-bottom-dock[data-page="expected"] #expected-page .barbell-wrap {
@@ -2672,11 +2671,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding-bottom: var(--mobile-dock-clearance);
     scroll-padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Statistics: pager sits under the table, above the floating docks. */
-  html.has-mobile-bottom-dock[data-page="opta"] #opta-page > .table-wrap {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    scroll-padding-bottom: 0;
+  html.has-mobile-bottom-dock[data-page="opta"] .main,
+  html.has-mobile-bottom-dock[data-page="ownership"]:not(:has(#ownership-page.is-treemap)) .main,
+  html.has-mobile-bottom-dock[data-page="team"] .main {
+    padding-bottom: var(--mobile-dock-clearance);
   }
   html.mobile-chrome-scroll-hidden .mobile-view-dock:not([hidden]),
   html.mobile-chrome-scroll-hidden .mobile-filter-dock:not([hidden]) {
@@ -3149,8 +3147,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 
 @media (max-width: 720px) {
   .table-wrap {
-    /* Nested scrollports (Stats / Ownership / Expected) override with
-       overflow-y:auto + pan-x pan-y. Horizontal-only wraps stay pan-x. */
+    /* Page-scroll tables: horizontal pan only; JS chains vertical → .main + fling.
+       Expected / Ownership treemap override with nested overflow-y:auto. */
     position: relative;
     top: auto;
     overflow-x: auto;
@@ -3172,39 +3170,36 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --name-col-compact-teams: 40px;
   }
 
-  /* Statistics / Ownership / Expected: cards are nested scrollports (xData pattern).
-     iOS will not vertical-scroll .main through an overflow-x table — the card
-     must own both axes so drag-on-table works with native momentum. */
-  html[data-page="opta"] .main,
-  html[data-page="expected"] .main,
-  html[data-page="ownership"] .main {
+  /* Expected: nested card. Stats / Ownership table: full content, .main scrolls. */
+  html[data-page="expected"] .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
 
-  /* Statistics: table card scrolls vertically + horizontally; thead sticks. */
+  /* Statistics: content-sized table; .main is the vertical scroller (Rankings-style). */
   html[data-page="opta"] .main {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    padding-bottom: var(--main-pad-x, 8px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
   }
   html[data-page="opta"] #opta-page {
-    flex: 1 1 auto;
+    display: block;
+    flex: none;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
   }
   html[data-page="opta"] #opta-page > .table-wrap {
-    overflow: auto;
-    overflow-y: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
     max-height: none;
-    flex: 1 1 auto;
-    min-height: var(--mobile-scrollport-min-h, 0px);
-    overscroll-behavior: none;
+    flex: none;
+    min-height: 0;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
   }
   html[data-page="opta"] #opta-page > .opta-table-footer {
-    flex: 0 0 auto;
+    flex: none;
     width: 100%;
     margin: 8px 0 0;
     padding: 4px 2px 0;
@@ -3218,11 +3213,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     text-overflow: clip;
   }
   html[data-page="opta"] #opta-page.has-compare > .compare-wrap {
-    flex: 0 0 auto;
+    flex: none;
     min-height: auto;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
     margin-bottom: 8px;
   }
 
@@ -5052,20 +5046,33 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 }
 
 @media (max-width: 720px) {
-  /* Ownership: mover bar stays put; table / treemap fill remaining height
-     as nested scrollports (same as Expected / Statistics). */
+  /* Ownership table: full content in document flow; .main scrolls (Rankings-style).
+     Treemap keeps a nested fill scrollport. */
   html[data-page="ownership"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+    padding-bottom: var(--main-pad-x, 8px);
+  }
+  html[data-page="ownership"]:has(#ownership-page.is-treemap) .layout .main {
     display: flex;
     flex-direction: column;
     overflow: hidden;
     overflow-x: hidden;
-    min-height: 0;
   }
   html[data-page="ownership"] #ownership-page {
+    display: block;
+    flex: none;
+    min-width: 0;
+    min-height: 0;
+    overflow: visible;
+  }
+  html[data-page="ownership"] #ownership-page.is-treemap {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
-    min-width: 0;
     min-height: 0;
     overflow: hidden;
   }
@@ -5121,29 +5128,18 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .ownership-treemap-delta {
     font-size: 10px;
   }
-  /* Ownership table: card is the scrollport — pin headers like Statistics. */
+  /* Ownership table: content-sized; horizontal pan; vertical → .main via JS fling. */
   #ownership-table-wrap {
-    flex: 1 1 auto;
-    min-height: var(--mobile-scrollport-min-h, 0px);
+    flex: none;
+    min-height: 0;
     max-height: none;
-    overflow: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
     --name-col-w: 176px;
     --metric-col-w: 58px;
-  }
-  #ownership-table-wrap > table > thead {
-    position: sticky;
-    top: 0;
-    z-index: 6;
-    background: hsl(var(--card));
-    isolation: isolate;
-  }
-  #ownership-table-wrap > table > thead tr:not(.section-row) th {
-    position: static;
-    top: auto;
   }
   #ownership-table-wrap > table > thead tr:not(.section-row) th.col-player {
     position: sticky;
@@ -11794,11 +11790,12 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   font-size: 13.5px;
 }
 @media (max-width: 720px) {
-  /* Planner: nested table scrollport like Statistics / Expected. */
+  /* Planner: page scroll — tables size to content (Rankings-style). */
   html[data-page="team"] .layout .main {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
   }
   #team-page {
     --name-col-w: 130px;
@@ -11806,19 +11803,13 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
     --badge-size: 26px;
     --crest-gap: 6px;
     --team-row-h: 42px;
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    overflow: visible;
+    display: block;
   }
   #team-page .page-header,
   #team-page .team-budget-bar {
-    flex: none;
-  }
-  #team-page > #team-compare-wrap,
-  #team-page > .team-sub-bar,
-  #team-page > #team-updated-footer {
     flex: none;
   }
   #team-page .team-budget-bar {
@@ -11845,11 +11836,10 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   }
   #team-squad-view,
   #team-picker-view {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    overflow: visible;
+    display: block;
   }
   #team-search-results,
   #team-page:not(.is-picking) #team-compare-wrap {
@@ -11859,41 +11849,39 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   #team-picker-view #team-compare-wrap:not([hidden]) {
     flex: 0 0 auto;
     min-height: auto;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
     margin-bottom: 8px;
   }
   #team-picker-view #team-compare-wrap:not([hidden]) .team-table-wrap {
-    flex: 0 0 auto;
-    min-height: auto;
+    flex: none;
+    min-height: 0;
     max-height: none;
     overflow-x: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
-    touch-action: pan-x pan-y;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-x;
     -webkit-overflow-scrolling: touch;
   }
   #team-picker-view:has(#team-compare-wrap:not([hidden])) .team-picker-table-wrap {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
   }
   #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) {
     flex: 0 0 auto;
     min-height: auto;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
     margin-bottom: 8px;
   }
   #team-page.is-picking.is-comparing #team-compare-wrap:not([hidden]) .team-table-wrap {
-    flex: 0 0 auto;
-    min-height: auto;
+    flex: none;
+    min-height: 0;
     max-height: none;
     overflow-x: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
-    touch-action: pan-x pan-y;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-x;
     -webkit-overflow-scrolling: touch;
   }
   #team-squad-view:has(#team-search-results:not([hidden])) > .team-table-wrap {
@@ -11912,19 +11900,19 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
     max-height: none;
   }
   html.has-mobile-filter-fab[data-page="team"] .layout .main {
-    padding-bottom: var(--main-pad-x, 8px);
+    padding-bottom: var(--mobile-dock-clearance);
   }
   #team-page .team-table-wrap,
   #team-picker-view .team-table-wrap.team-picker-table-wrap,
   #team-page #team-search-results .team-table-wrap {
-    flex: 1 1 auto;
-    min-height: var(--mobile-scrollport-min-h, 0px);
+    flex: none;
+    min-height: 0;
     max-height: none;
-    overflow: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
     position: relative;
     top: auto;
   }
@@ -11940,9 +11928,6 @@ html[data-page="team"].is-team-picking #team-compare-btn:not([hidden]) {
   #team-picker-view .team-table-wrap.team-picker-table-wrap {
     --name-col-w: 130px;
     --name-col-compact-players: 72px;
-  }
-  html.has-mobile-bottom-dock[data-page="team"] #team-updated-footer:not([hidden]) {
-    padding-bottom: calc(var(--mobile-dock-clearance, 80px) + 4px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

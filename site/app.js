@@ -5223,32 +5223,16 @@
     const root = document.documentElement;
     const ownershipTree =
       NARROW_MQ.matches && state.page === "ownership" && ownershipIsTreemap();
-    const ownershipTable =
-      NARROW_MQ.matches && state.page === "ownership" && !ownershipIsTreemap();
-    const teamFill = NARROW_MQ.matches && state.page === "team";
-    // Stats / Ownership / Expected / Planner: nested card scrollports fill viewport.
-    if (
-      !NARROW_MQ.matches ||
-      (state.page !== "expected" &&
-        state.page !== "opta" &&
-        !ownershipTree &&
-        !ownershipTable &&
-        !teamFill)
-    ) {
+    // Expected + Ownership treemap: nested fill. Stats / Ownership table /
+    // Planner: page-level .main scroll (no fill height).
+    const expectedFill = state.page === "expected";
+    if (!NARROW_MQ.matches || (!expectedFill && !ownershipTree)) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
-    let scrollport = null;
-    if (ownershipTree) scrollport = el.ownershipTreemap;
-    else if (ownershipTable) scrollport = el.ownershipTableWrap;
-    else if (state.page === "opta") {
-      scrollport = document.querySelector("#opta-page > .table-wrap");
-    } else if (state.page === "team") {
-      const wraps = teamTableScrollWraps();
-      scrollport = wraps.find((w) => w && !w.hidden && w.offsetParent !== null) || null;
-    } else {
-      scrollport = document.querySelector("#expected-page .barbell-wrap");
-    }
+    const scrollport = ownershipTree
+      ? el.ownershipTreemap
+      : document.querySelector("#expected-page .barbell-wrap");
     if (!scrollport || scrollport.hidden || scrollport.offsetParent === null) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
@@ -5257,26 +5241,18 @@
     const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const top = scrollport.getBoundingClientRect().top;
     let reserve = 0;
-    if (state.page === "opta" && el.optaTableFooter && !el.optaTableFooter.hidden) {
-      reserve = Math.ceil(el.optaTableFooter.getBoundingClientRect().height);
-    } else if (
-      (ownershipTree || ownershipTable) &&
+    if (
+      ownershipTree &&
       el.ownershipUpdatedFooter &&
       !el.ownershipUpdatedFooter.hidden
     ) {
       reserve = Math.ceil(el.ownershipUpdatedFooter.getBoundingClientRect().height) + 8;
     } else if (
-      state.page === "expected" &&
+      expectedFill &&
       el.expectedUpdatedFooter &&
       !el.expectedUpdatedFooter.hidden
     ) {
       reserve = Math.ceil(el.expectedUpdatedFooter.getBoundingClientRect().height) + 8;
-    } else if (
-      state.page === "team" &&
-      el.teamUpdatedFooter &&
-      !el.teamUpdatedFooter.hidden
-    ) {
-      reserve = Math.ceil(el.teamUpdatedFooter.getBoundingClientRect().height) + 8;
     }
     const minH = Math.max(
       ownershipTree ? 320 : 180,
@@ -5342,17 +5318,7 @@
     const main = document.querySelector("main.main");
     if (main) sources.push(main);
     if (NARROW_MQ.matches) {
-      if (state.page === "opta") {
-        optaTableWraps().forEach((wrap) => {
-          if (wrap && !sources.includes(wrap)) sources.push(wrap);
-        });
-      } else if (state.page === "ownership" && el.ownershipTableWrap && !ownershipIsTreemap()) {
-        sources.push(el.ownershipTableWrap);
-      } else if (state.page === "team") {
-        teamTableScrollWraps().forEach((wrap) => {
-          if (wrap && !sources.includes(wrap)) sources.push(wrap);
-        });
-      } else if (state.page === "expected") {
+      if (state.page === "expected") {
         const barbell = expectedScrollWrap();
         if (barbell && !sources.includes(barbell)) sources.push(barbell);
       }
@@ -5558,9 +5524,10 @@
     requestAnimationFrame(() => syncMobileScrollportHeight());
   }
 
-  // Nested card scrollports (Stats / Ownership / Expected / Planner) own both
-  // axes natively — do not JS-drive touch verticals (kills iOS momentum).
-  // Wheel chaining is only for desktop when a wrap somehow isn't the scroller.
+  // Expected (and Ownership treemap) own both axes natively.
+  // Stats / Ownership table / Planner: content-sized tables + .main page scroll.
+  // iOS won't vertical-scroll .main through overflow-x wraps, so we chain
+  // vertical touch to .main and apply a short fling for free-scroll feel.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -5572,28 +5539,133 @@
     function pageOwnsVerticalScroll() {
       return (
         state.page === "expected" ||
-        state.page === "opta" ||
-        state.page === "ownership" ||
-        state.page === "team"
+        (state.page === "ownership" && ownershipIsTreemap())
       );
+    }
+
+    function needsMainTouchChain() {
+      return (
+        NARROW_MQ.matches &&
+        (state.page === "opta" ||
+          state.page === "team" ||
+          (state.page === "ownership" && !ownershipIsTreemap()))
+      );
+    }
+
+    let flingRaf = 0;
+    function stopMainFling() {
+      if (flingRaf) {
+        cancelAnimationFrame(flingRaf);
+        flingRaf = 0;
+      }
+    }
+
+    function startMainFling(velocityPxPerMs) {
+      stopMainFling();
+      let v = velocityPxPerMs;
+      if (Math.abs(v) < 0.15) return;
+      // Cap so a hard flick doesn't teleport.
+      v = Math.max(-2.8, Math.min(2.8, v));
+      const friction = 0.0035;
+      let last = performance.now();
+      const step = (now) => {
+        const dt = Math.min(34, now - last);
+        last = now;
+        const max = mainMax();
+        const next = Math.min(max, Math.max(0, main.scrollTop + v * dt));
+        main.scrollTop = next;
+        const sign = v < 0 ? -1 : 1;
+        v -= sign * friction * dt;
+        if (sign * v <= 0.02 || next <= 0 || next >= max - 0.5) {
+          flingRaf = 0;
+          return;
+        }
+        flingRaf = requestAnimationFrame(step);
+      };
+      flingRaf = requestAnimationFrame(step);
     }
 
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
 
-      inner.addEventListener("wheel", (e) => {
-        if (!NARROW_MQ.matches || pageOwnsVerticalScroll()) return;
-        if (inner.scrollTop > 0) return;
-        const max = mainMax();
-        if (e.deltaY > 0 && main.scrollTop < max - 1) {
-          main.scrollTop += e.deltaY;
-          e.preventDefault();
-        } else if (e.deltaY < 0 && main.scrollTop > 0) {
-          main.scrollTop += e.deltaY;
-          e.preventDefault();
-        }
-      }, { passive: false });
+      inner.addEventListener(
+        "wheel",
+        (e) => {
+          if (!NARROW_MQ.matches || pageOwnsVerticalScroll()) return;
+          if (inner.scrollTop > 0) return;
+          const max = mainMax();
+          if (e.deltaY > 0 && main.scrollTop < max - 1) {
+            main.scrollTop += e.deltaY;
+            e.preventDefault();
+          } else if (e.deltaY < 0 && main.scrollTop > 0) {
+            main.scrollTop += e.deltaY;
+            e.preventDefault();
+          }
+        },
+        { passive: false }
+      );
+
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchLastY = 0;
+      let touchLastT = 0;
+      let touchAxis = null;
+      let touchVelY = 0;
+
+      inner.addEventListener(
+        "touchstart",
+        (e) => {
+          if (!needsMainTouchChain() || e.touches.length !== 1) return;
+          stopMainFling();
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          touchLastY = touchStartY;
+          touchLastT = performance.now();
+          touchAxis = null;
+          touchVelY = 0;
+        },
+        { passive: true }
+      );
+
+      inner.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!needsMainTouchChain() || e.touches.length !== 1) return;
+          const x = e.touches[0].clientX;
+          const y = e.touches[0].clientY;
+          const dx = x - touchStartX;
+          const dy = y - touchStartY;
+          if (touchAxis == null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+            touchAxis = Math.abs(dy) > Math.abs(dx) * 1.15 ? "y" : "x";
+          }
+          if (touchAxis !== "y") return;
+          const now = performance.now();
+          const dt = Math.max(1, now - touchLastT);
+          const delta = touchLastY - y;
+          touchVelY = delta / dt;
+          touchLastY = y;
+          touchLastT = now;
+          const max = mainMax();
+          const next = Math.min(max, Math.max(0, main.scrollTop + delta));
+          if (next !== main.scrollTop) {
+            main.scrollTop = next;
+            e.preventDefault();
+          } else if ((delta > 0 && main.scrollTop >= max) || (delta < 0 && main.scrollTop <= 0)) {
+            // At edge — still claim the gesture so iOS doesn't rubber-band oddly.
+            e.preventDefault();
+          }
+        },
+        { passive: false }
+      );
+
+      const endTouch = () => {
+        if (!needsMainTouchChain() || touchAxis !== "y") return;
+        startMainFling(touchVelY);
+        touchAxis = null;
+      };
+      inner.addEventListener("touchend", endTouch, { passive: true });
+      inner.addEventListener("touchcancel", endTouch, { passive: true });
     });
   }
 
