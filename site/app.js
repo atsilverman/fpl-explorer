@@ -5223,20 +5223,16 @@
     const root = document.documentElement;
     const ownershipTree =
       NARROW_MQ.matches && state.page === "ownership" && ownershipIsTreemap();
-    const ownershipTable =
-      NARROW_MQ.matches && state.page === "ownership" && !ownershipIsTreemap();
-    // Expected: nested card scrollport on all widths (sticky head/scale).
-    // Ownership: nested on mobile. Statistics: page-level .main scroll.
+    // Expected: nested card scrollport. Ownership treemap: nested fill.
+    // Ownership table + Statistics: page-level .main scroll (no fill height).
     const expectedFill = state.page === "expected";
-    if (!expectedFill && !ownershipTree && !ownershipTable) {
+    if (!expectedFill && !ownershipTree) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
     const scrollport = ownershipTree
       ? el.ownershipTreemap
-      : ownershipTable
-        ? el.ownershipTableWrap
-        : document.querySelector("#expected-page .barbell-wrap");
+      : document.querySelector("#expected-page .barbell-wrap");
     if (!scrollport || scrollport.hidden || scrollport.offsetParent === null) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
@@ -5246,7 +5242,7 @@
     const top = scrollport.getBoundingClientRect().top;
     let reserve = 0;
     if (
-      (ownershipTree || ownershipTable) &&
+      ownershipTree &&
       el.ownershipUpdatedFooter &&
       !el.ownershipUpdatedFooter.hidden
     ) {
@@ -5272,7 +5268,7 @@
   let mobileChromeScrollHidden = false;
 
   function mobileChromeScrollActive() {
-    if (state.page === "ownership") return false;
+    if (state.page === "ownership" && ownershipIsTreemap()) return false;
     return (
       preferMobileSheet() &&
       (document.documentElement.classList.contains("has-mobile-bottom-dock") ||
@@ -5537,8 +5533,9 @@
   }
 
   // Nested card scrollports (Ownership / Expected) own both axes.
-  // Statistics + Planner use page-level .main scroll; wheel/touch vertical
-  // deltas chain to `.main` when the page is the scroller.
+  // Statistics + Planner use page-level `.main` scroll — do not JS-drive
+  // touch verticals (preventDefault kills iOS momentum). Those wraps use
+  // touch-action: pan-x so the browser scrolls `.main` natively.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -5548,13 +5545,15 @@
     }
 
     function pageOwnsVerticalScroll() {
-      return state.page === "expected" || state.page === "ownership";
+      return state.page === "expected";
     }
 
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
 
+      // Desktop/trackpad: chain vertical wheel into `.main` when the wrap
+      // only pans horizontally. Touch stays native (see CSS touch-action).
       inner.addEventListener("wheel", (e) => {
         if (!NARROW_MQ.matches || pageOwnsVerticalScroll()) return;
         if (inner.scrollTop > 0) return;
@@ -5567,46 +5566,6 @@
           e.preventDefault();
         }
       }, { passive: false });
-
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let touchLastY = 0;
-      let touchAxis = null;
-      inner.addEventListener(
-        "touchstart",
-        (e) => {
-          if (!NARROW_MQ.matches || e.touches.length !== 1) return;
-          touchStartX = e.touches[0].clientX;
-          touchStartY = e.touches[0].clientY;
-          touchLastY = touchStartY;
-          touchAxis = null;
-        },
-        { passive: true }
-      );
-      inner.addEventListener(
-        "touchmove",
-        (e) => {
-          if (!NARROW_MQ.matches || e.touches.length !== 1) return;
-          if (pageOwnsVerticalScroll()) return;
-          const x = e.touches[0].clientX;
-          const y = e.touches[0].clientY;
-          const dx = x - touchStartX;
-          const dy = y - touchStartY;
-          if (touchAxis == null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-            touchAxis = Math.abs(dy) > Math.abs(dx) * 1.15 ? "y" : "x";
-          }
-          if (touchAxis !== "y") return;
-          const delta = touchLastY - y;
-          touchLastY = y;
-          const max = mainMax();
-          const next = Math.min(max, Math.max(0, main.scrollTop + delta));
-          if (next !== main.scrollTop) {
-            main.scrollTop = next;
-            e.preventDefault();
-          }
-        },
-        { passive: false }
-      );
     });
   }
 

@@ -2658,10 +2658,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.has-mobile-bottom-dock .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Expected / Ownership: the table card is the scrollport —
+  /* Expected / Ownership treemap: card is the scrollport —
      extend it under the floating docks instead of shrinking the flex area. */
   html.has-mobile-bottom-dock[data-page="expected"] .main,
-  html.has-mobile-bottom-dock[data-page="ownership"] .main {
+  html.has-mobile-bottom-dock[data-page="ownership"]:has(#ownership-page.is-treemap) .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
   html.has-mobile-bottom-dock[data-page="expected"] #expected-page .barbell-wrap {
@@ -2671,7 +2671,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding-bottom: var(--mobile-dock-clearance);
     scroll-padding-bottom: var(--mobile-dock-clearance);
   }
-  /* Statistics: pager sits under the full table in page scroll. */
+  /* Statistics: full content in page scroll. */
   html.has-mobile-bottom-dock[data-page="opta"] .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
@@ -3151,8 +3151,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 
 @media (max-width: 720px) {
   .table-wrap {
-    /* Default: horizontal pan only. Statistics / Ownership / Expected override
-       with nested vertical scrollports so sticky thead / barbell heads stay put. */
+    /* Page (.main) is the vertical scroller on most pages. Horizontal-only
+       touch-action lets vertical gestures reach .main with native momentum. */
     position: relative;
     top: auto;
     overflow-x: auto;
@@ -3163,7 +3163,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     max-height: none;
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
     --name-col-w: 168px;
     --crest-size: 26px;
     --badge-size: 26px;
@@ -3174,9 +3174,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --name-col-compact-teams: 40px;
   }
 
-  /* Ownership / Expected: shrink page chrome; cards are scrollports.
-     Statistics: page (.main) scrolls so all rows + pager sit in document flow. */
-  html[data-page="ownership"] .main,
+  /* Expected: card is the scrollport. Ownership table + Statistics: page scroll. */
   html[data-page="expected"] .main {
     padding-bottom: var(--main-pad-x, 8px);
   }
@@ -3202,7 +3200,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     min-height: 0;
     overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    /* Vertical → .main (momentum); horizontal pans columns here. */
+    touch-action: pan-x;
   }
   html[data-page="opta"] #opta-page > .opta-table-footer {
     flex: none;
@@ -5052,19 +5051,33 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 }
 
 @media (max-width: 720px) {
-  /* Ownership: mover bar stays put; table / treemap fill remaining height. */
+  /* Ownership table: full table in document flow; .main scrolls (Rankings-style).
+     Treemap keeps a nested fill scrollport below. */
   html[data-page="ownership"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+    padding-bottom: var(--main-pad-x, 8px);
+  }
+  html[data-page="ownership"]:has(#ownership-page.is-treemap) .layout .main {
     display: flex;
     flex-direction: column;
     overflow: hidden;
     overflow-x: hidden;
-    min-height: 0;
   }
   html[data-page="ownership"] #ownership-page {
+    display: block;
+    flex: none;
+    min-width: 0;
+    min-height: 0;
+    overflow: visible;
+  }
+  html[data-page="ownership"] #ownership-page.is-treemap {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
-    min-width: 0;
     min-height: 0;
     overflow: hidden;
   }
@@ -5120,16 +5133,16 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   .ownership-treemap-delta {
     font-size: 10px;
   }
-  /* Ownership table: card is the scrollport — pin column headers like Statistics. */
+  /* Ownership table: content-sized wrap; horizontal pan only (vertical → .main). */
   #ownership-table-wrap {
-    flex: 1 1 auto;
-    min-height: var(--mobile-scrollport-min-h, 0px);
+    flex: none;
+    min-height: 0;
     max-height: none;
-    overflow: auto;
-    overflow-y: auto;
-    overscroll-behavior: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
     --name-col-w: 176px;
     --metric-col-w: 58px;
   }
