@@ -5223,16 +5223,32 @@
     const root = document.documentElement;
     const ownershipTree =
       NARROW_MQ.matches && state.page === "ownership" && ownershipIsTreemap();
-    // Expected: nested card scrollport. Ownership treemap: nested fill.
-    // Ownership table + Statistics: page-level .main scroll (no fill height).
-    const expectedFill = state.page === "expected";
-    if (!expectedFill && !ownershipTree) {
+    const ownershipTable =
+      NARROW_MQ.matches && state.page === "ownership" && !ownershipIsTreemap();
+    const teamFill = NARROW_MQ.matches && state.page === "team";
+    // Stats / Ownership / Expected / Planner: nested card scrollports fill viewport.
+    if (
+      !NARROW_MQ.matches ||
+      (state.page !== "expected" &&
+        state.page !== "opta" &&
+        !ownershipTree &&
+        !ownershipTable &&
+        !teamFill)
+    ) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
     }
-    const scrollport = ownershipTree
-      ? el.ownershipTreemap
-      : document.querySelector("#expected-page .barbell-wrap");
+    let scrollport = null;
+    if (ownershipTree) scrollport = el.ownershipTreemap;
+    else if (ownershipTable) scrollport = el.ownershipTableWrap;
+    else if (state.page === "opta") {
+      scrollport = document.querySelector("#opta-page > .table-wrap");
+    } else if (state.page === "team") {
+      const wraps = teamTableScrollWraps();
+      scrollport = wraps.find((w) => w && !w.hidden && w.offsetParent !== null) || null;
+    } else {
+      scrollport = document.querySelector("#expected-page .barbell-wrap");
+    }
     if (!scrollport || scrollport.hidden || scrollport.offsetParent === null) {
       root.style.removeProperty("--mobile-scrollport-min-h");
       return;
@@ -5241,18 +5257,26 @@
     const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const top = scrollport.getBoundingClientRect().top;
     let reserve = 0;
-    if (
-      ownershipTree &&
+    if (state.page === "opta" && el.optaTableFooter && !el.optaTableFooter.hidden) {
+      reserve = Math.ceil(el.optaTableFooter.getBoundingClientRect().height);
+    } else if (
+      (ownershipTree || ownershipTable) &&
       el.ownershipUpdatedFooter &&
       !el.ownershipUpdatedFooter.hidden
     ) {
       reserve = Math.ceil(el.ownershipUpdatedFooter.getBoundingClientRect().height) + 8;
     } else if (
-      expectedFill &&
+      state.page === "expected" &&
       el.expectedUpdatedFooter &&
       !el.expectedUpdatedFooter.hidden
     ) {
       reserve = Math.ceil(el.expectedUpdatedFooter.getBoundingClientRect().height) + 8;
+    } else if (
+      state.page === "team" &&
+      el.teamUpdatedFooter &&
+      !el.teamUpdatedFooter.hidden
+    ) {
+      reserve = Math.ceil(el.teamUpdatedFooter.getBoundingClientRect().height) + 8;
     }
     const minH = Math.max(
       ownershipTree ? 320 : 180,
@@ -5322,6 +5346,8 @@
         optaTableWraps().forEach((wrap) => {
           if (wrap && !sources.includes(wrap)) sources.push(wrap);
         });
+      } else if (state.page === "ownership" && el.ownershipTableWrap && !ownershipIsTreemap()) {
+        sources.push(el.ownershipTableWrap);
       } else if (state.page === "team") {
         teamTableScrollWraps().forEach((wrap) => {
           if (wrap && !sources.includes(wrap)) sources.push(wrap);
@@ -5532,10 +5558,9 @@
     requestAnimationFrame(() => syncMobileScrollportHeight());
   }
 
-  // Nested card scrollports (Ownership / Expected) own both axes.
-  // Statistics + Planner use page-level `.main` scroll — do not JS-drive
-  // touch verticals (preventDefault kills iOS momentum). Those wraps use
-  // touch-action: pan-x so the browser scrolls `.main` natively.
+  // Nested card scrollports (Stats / Ownership / Expected / Planner) own both
+  // axes natively — do not JS-drive touch verticals (kills iOS momentum).
+  // Wheel chaining is only for desktop when a wrap somehow isn't the scroller.
   function bindNestedTableScroll() {
     const main = document.querySelector("main.main");
     if (!main) return;
@@ -5545,15 +5570,18 @@
     }
 
     function pageOwnsVerticalScroll() {
-      return state.page === "expected";
+      return (
+        state.page === "expected" ||
+        state.page === "opta" ||
+        state.page === "ownership" ||
+        state.page === "team"
+      );
     }
 
     document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
 
-      // Desktop/trackpad: chain vertical wheel into `.main` when the wrap
-      // only pans horizontally. Touch stays native (see CSS touch-action).
       inner.addEventListener("wheel", (e) => {
         if (!NARROW_MQ.matches || pageOwnsVerticalScroll()) return;
         if (inner.scrollTop > 0) return;
