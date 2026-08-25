@@ -353,10 +353,52 @@ def active_pick_progress(
     return in_play, to_play
 
 
+def resolve_manager_gw_points(
+    picks: list[dict],
+    stats: dict,
+    match_status: dict[int, str],
+    autosub_status: dict[int, str],
+    etypes: dict[int, int],
+    chip: str | None,
+    entry_history: dict | None,
+    *,
+    any_fixture_live: bool,
+) -> tuple[int, list[dict], list[dict]]:
+    """Live GW points with safeguards against post-FT autosub drift.
+
+    While matches are live we compute from element points + cautious autosubs
+    (final fixture flag only). Once nothing is live, trust FPL's
+    entry_history.points — autosubs often lag behind finished_provisional.
+    """
+    live_pts, active, subs = calculate_manager_points_from_live(
+        picks,
+        stats,
+        match_status,
+        etypes,
+        chip,
+        autosub_match_status=autosub_status,
+    )
+    eh = entry_history if isinstance(entry_history, dict) else {}
+    try:
+        cost = int(eh.get("event_transfers_cost") or 0)
+    except (TypeError, ValueError):
+        cost = 0
+    live_pts = max(0, int(live_pts) - cost)
+
+    if not any_fixture_live:
+        try:
+            official = eh.get("points")
+            if official is not None:
+                return int(official), active, subs
+        except (TypeError, ValueError):
+            pass
+    return live_pts, active, subs
+
+
 def build_squad_rows(
     picks: list[dict],
     active_ids: set[int],
-    auto_sub_in: set[int],
+    auto_subs: list[dict],
     live_stats: dict[int, dict],
     match_status: dict[int, str],
     elements: dict[int, dict],
@@ -367,6 +409,24 @@ def build_squad_rows(
 ) -> list[dict]:
     rows = []
     ordered = sorted(picks, key=lambda p: int(p.get("position") or 0))
+    auto_sub_in = {int(s["in"]) for s in (auto_subs or []) if s.get("in") is not None}
+    auto_sub_out = {int(s["out"]) for s in (auto_subs or []) if s.get("out") is not None}
+    partner_for: dict[int, int] = {}
+    for s in auto_subs or []:
+        try:
+            out_id = int(s["out"])
+            in_id = int(s["in"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        partner_for[out_id] = in_id
+        partner_for[in_id] = out_id
+
+    def partner_name(eid: int) -> str | None:
+        other = partner_for.get(eid)
+        if other is None:
+            return None
+        return player_display_name(elements.get(other) or {})
+
     for pick in ordered:
         eid = int(pick["element"])
         el = elements.get(eid) or {}
@@ -411,6 +471,8 @@ def build_squad_rows(
                 }
             ]
 
+        with_id = partner_for.get(eid)
+        with_name = partner_name(eid) if with_id is not None else None
         rows.append(
             {
                 "code": el.get("code"),
@@ -434,6 +496,10 @@ def build_squad_rows(
                 "oppHa": fixture_rows[0]["oppHa"],
                 "kickoff": fixture_rows[0]["kickoff"],
                 "imp": imp,
+                "autoSubIn": eid in auto_sub_in,
+                "autoSubOut": eid in auto_sub_out,
+                "autoSubWith": with_id,
+                "autoSubWithName": with_name,
             }
         )
     return rows
@@ -552,14 +618,28 @@ def main() -> int:
         match_status = build_match_status_by_element(
             list(elements.values()), fixtures
         )
+        # Auto-subs only after FPL's full `finished` flag — provisional FT still
+        # leaves blank starters with multiplier 1 until GW processing.
+        autosub_status = build_match_status_by_element(
+            list(elements.values()), fixtures, final_only=True
+        )
+        any_fixture_live = any(fixture_is_live(fx) for fx in fixtures)
 
         focus_picks = picks_payload.get("picks") or []
         focus_chip = picks_payload.get("active_chip")
         focus_history_chips = list(history_payload.get("chips") or [])
         chip_windows = chip_windows_from_bootstrap(bootstrap)
         chip_half = season_chip_half(gw, chip_windows)
-        focus_pts, focus_active, focus_subs = calculate_manager_points_from_live(
-            focus_picks, stats, match_status, etypes, focus_chip
+        focus_hist = picks_payload.get("entry_history") or {}
+        focus_pts, focus_active, focus_subs = resolve_manager_gw_points(
+            focus_picks,
+            stats,
+            match_status,
+            autosub_status,
+            etypes,
+            focus_chip,
+            focus_hist,
+            any_fixture_live=any_fixture_live,
         )
         active_ids = {int(p["element"]) for p in focus_active}
         auto_in = {s["in"] for s in focus_subs}
@@ -618,12 +698,15 @@ def main() -> int:
                     other_picks = mp.get("picks") or []
                     chip = mp.get("active_chip")
                     note_owners(eid, other_picks)
-                    live_gw, active, subs = calculate_manager_points_from_live(
+                    live_gw, active, subs = resolve_manager_gw_points(
                         other_picks,
                         stats,
                         match_status,
+                        autosub_status,
                         etypes,
                         chip,
+                        mp.get("entry_history") or {},
+                        any_fixture_live=any_fixture_live,
                     )
                     other_mults = effective_element_multipliers(other_picks, active)
                     mults_by_entry[eid] = other_mults
@@ -711,6 +794,7 @@ def main() -> int:
                     "overallPoints": int(ed.get("overall_points") or 0)
                     or int(row.get("total") or 0),
                     "rankOfficial": int(row.get("rank") or 0),
+                    "rankPrev": positive_rank(row.get("last_rank")),
                     "inPlay": in_play,
                     "toPlay": to_play,
                     "activeChip": chip_by_entry.get(eid),
@@ -728,11 +812,10 @@ def main() -> int:
             active = ed.get("active") or []
             subs = ed.get("subs") or []
             active_ids = {int(p["element"]) for p in active}
-            auto_in = {s["in"] for s in subs}
             squads_by_entry[str(eid)] = build_squad_rows(
                 picks,
                 active_ids,
-                auto_in,
+                subs,
                 stats,
                 match_status,
                 elements,
@@ -743,7 +826,22 @@ def main() -> int:
             )
         squad = squads_by_entry.get(str(manager_id), [])
 
-        standing_rows.sort(key=lambda r: (-r["gwPointsLive"], r["rankOfficial"] or 9999))
+        # Once nobody has picks still to play / in play, trust FPL event_total
+        # for GW points + live rank (our live engine can drift after the whistle).
+        settled = bool(standing_rows) and all(
+            int(r.get("inPlay") or 0) == 0 and int(r.get("toPlay") or 0) == 0
+            for r in standing_rows
+        )
+        if settled:
+            for row in standing_rows:
+                row["gwPointsLive"] = int(row.get("eventTotalOfficial") or 0)
+
+        standing_rows.sort(
+            key=lambda r: (
+                -int(r.get("gwPointsLive") or 0),
+                int(r.get("rankOfficial") or 9999),
+            )
+        )
         for i, row in enumerate(standing_rows, start=1):
             row["rankLive"] = i
 

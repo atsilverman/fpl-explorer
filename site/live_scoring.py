@@ -1,10 +1,15 @@
 """Live FPL gameweek scoring — port of Defcon gameweekPoints.js (v1).
 
 XI vs bench: pick.position 1–11 start, 12–15 bench order.
-Auto-subs: starter 0' + match finished → first compatible bench with minutes
-(GK↔GK, outfield↔outfield), preferring formation-valid swaps.
+Auto-subs: starter 0' + match *fully* finished (`finished`, not merely
+finished_provisional) → first compatible bench with minutes (GK↔GK,
+outfield↔outfield), preferring formation-valid swaps. Provisional FT still
+leaves blank starters at multiplier 1 until FPL processes the GW — do not
+autosub on provisional alone.
 Bench Boost (active_chip == 'bboost'): all 15 count, no auto-subs.
 Points: live stats.total_points × pick.multiplier.
+When no fixtures are live, fetch_home prefers entry_history.points over the
+engine so standings match FPL while autosubs/BPS settle.
 """
 from __future__ import annotations
 
@@ -120,7 +125,7 @@ def apply_auto_substitution(
 
 
 def fixture_is_finished(fx: dict | None) -> bool:
-    """True when FPL marks the fixture complete (incl. provisional FT).
+    """True when the match is done for UI progress (incl. provisional FT).
 
     Official `finished` often stays false while `finished_provisional` is true
     right after full time. Also treat started + minutes ≥ 90 as finished when
@@ -137,6 +142,18 @@ def fixture_is_finished(fx: dict | None) -> bool:
     return bool(fx.get("started")) and mins >= 90
 
 
+def fixture_is_final(fx: dict | None) -> bool:
+    """True only when FPL has fully finalized the fixture.
+
+    Auto-subs on picks (multipliers) usually land after `finished` flips true —
+    not merely `finished_provisional`. Treating provisional FT as final caused us
+    to sub bench players in while FPL still scored the blank starter at 0.
+    """
+    if not fx:
+        return False
+    return bool(fx.get("finished"))
+
+
 def fixture_is_live(fx: dict | None) -> bool:
     if not fx:
         return False
@@ -146,8 +163,14 @@ def fixture_is_live(fx: dict | None) -> bool:
 def build_match_status_by_element(
     elements: list[dict],
     fixtures: list[dict],
+    *,
+    final_only: bool = False,
 ) -> dict[int, str]:
-    """Map element id → scheduled | live | finished from fixtures + element.team."""
+    """Map element id → scheduled | live | finished from fixtures + element.team.
+
+    final_only=True uses fully finalized fixtures only (for auto-subs).
+    """
+    is_done = fixture_is_final if final_only else fixture_is_finished
     team_status: dict[int, str] = {}
     for fx in fixtures:
         try:
@@ -155,7 +178,7 @@ def build_match_status_by_element(
             ta = int(fx["team_a"])
         except (KeyError, TypeError, ValueError):
             continue
-        if fixture_is_finished(fx):
+        if is_done(fx):
             status = "finished"
         elif fixture_is_live(fx):
             status = "live"
@@ -186,20 +209,27 @@ def calculate_manager_points_from_live(
     match_status: dict[int, str],
     element_types: dict[int, int],
     active_chip: str | None = None,
+    *,
+    autosub_match_status: dict[int, str] | None = None,
 ) -> tuple[int, list[dict], list[dict]]:
-    """Return (total_points, active_picks, auto_subs)."""
+    """Return (total_points, active_picks, auto_subs).
+
+    Auto-subs use autosub_match_status when provided (typically final-only
+    finished flags). Scoring still uses live_stats.total_points × multiplier.
+    """
     if not picks:
         return 0, [], []
 
     # FPL chip id is 'bboost'; accept a few aliases.
     chip = (active_chip or "").lower()
     bench_boost = chip in {"bboost", "benchboost", "bench_boost"}
+    sub_status = autosub_match_status if autosub_match_status is not None else match_status
     if bench_boost:
         active = list(picks)
         auto_subs: list[dict] = []
     else:
         active, auto_subs = apply_auto_substitution(
-            picks, live_stats, match_status, element_types
+            picks, live_stats, sub_status, element_types
         )
 
     total = 0

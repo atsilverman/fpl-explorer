@@ -72,9 +72,24 @@ Social Feed + X API pulls are parked under [`archive/feed/`](archive/feed/README
 
 `python3 site/fetch_ownership.py` — pulls `bootstrap-static`, writes `snapshots/bootstrap-static_YYYY-MM-DD.json` if that calendar day is new (overwrites same-day), then rebuilds a slim check-in history from every non-archived bootstrap snapshot. `python3 site/fetch_ownership.py --rebuild-only` skips the live fetch. The page never calls the FPL API.
 
+**Cadence:** one useful check-in per calendar day. The Ownership UI’s **24h / 3d / 7d** columns compare against the nearest prior daily snapshot — they are not live transfer ticks — so refreshing more than once a day only overwrites today’s point.
+
 ### Markets (`markets_data.js`)
 
 `python3 site/fetch_markets.py` — [The Odds API](https://the-odds-api.com/) (`ODDS_API_KEY`), sport `soccer_epl`, UK/EU regions. Prefers Pinnacle (then Betfair), de-vigs 1X2 + totals, fits independent Poisson λ for goals / CS% / top scores. The API key never ships to the browser; the page only reads the static JS cache.
+
+### Scheduled refreshes (GitHub Actions → Vercel)
+
+Workflow [`.github/workflows/refresh-caches.yml`](.github/workflows/refresh-caches.yml) commits updated caches to `main` (Vercel redeploys):
+
+| When (Pacific) | What |
+|----------------|------|
+| **Midnight** | Markets |
+| **Noon** | Markets + Ownership |
+
+Cron is UTC (`07:00` / `19:00` ≈ PDT). In winter (PST) those fire one hour later local. Manual run: Actions → **Refresh caches** → Run workflow.
+
+Requires repo secret **`ODDS_API_KEY`**. Home still uses the DigitalOcean live server (60s live / ≤1h idle) — not this workflow. Statistics / Rankings / Matchups / xData still need a manual `build.py` + deploy.
 
 ### Reference docs
 

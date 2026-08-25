@@ -38,7 +38,7 @@
   };
   // Badge SVGs have no index.html ?v= — bump when crest tiles change so browsers
   // don't keep serving cached legacy tall shields under the same path.
-  const BADGE_CACHE_V = "2";
+  const BADGE_CACHE_V = "5";
   function badgeSrc(src) {
     if (!src) return src;
     const join = src.includes("?") ? "&" : "?";
@@ -1521,8 +1521,7 @@
   }
 
   // Check beside CBIT/R only when the player has actually earned DefCon
-  // points (hit the match threshold at least once). Color: blue in light
-  // mode, red in dark mode (see .threshold-dot).
+  // points (hit the match threshold at least once). Teal via .threshold-dot.
   function defconDotHTML(row) {
     const status = defconStatus(row);
     if (!status || !status.meets) return "";
@@ -1754,7 +1753,7 @@
       // flash a second paint mid-animation.
       renderHome({ deferDuringEnter: true, settleQuiet: true });
       syncHomeLivePolling({ waitForEnter: true });
-    } else if (state.page === "rankings") renderRankings();
+    } else if (state.page === "rankings") renderRankings({ animateBars: false });
     else if (state.page === "team") renderTeam();
     else if (state.page === "opta") renderTable();
     else renderTable();
@@ -2243,8 +2242,10 @@
     const setLabels = (text, { title = null, showFooter = false } = {}) => {
       if (el.homeCountLabel) {
         el.homeCountLabel.classList.remove("is-live", "is-live-stale", "is-live-offline");
-        el.homeCountLabel.textContent = text;
-        if (title) el.homeCountLabel.title = title;
+        // Timestamp lives in the bottom footer; status strings stay in the header.
+        const headerText = showFooter ? "" : text;
+        el.homeCountLabel.textContent = headerText;
+        if (!showFooter && title) el.homeCountLabel.title = title;
         else el.homeCountLabel.removeAttribute("title");
       }
       if (el.homeUpdatedFooter) {
@@ -2316,6 +2317,26 @@
     return prev - cur;
   }
 
+  // TODO(GW2+): flip false once standings `rankPrev` + summary *RankPrev populate
+  // during live play (last_rank / prior GW overall). Mock keeps the UI reviewable
+  // while GW1 has nothing to compare.
+  const HOME_MOCK_RANK_DELTAS = true;
+
+  function homeMockRankDeltaPlaces(seed) {
+    const n = Math.abs(Number(seed) || 0);
+    const bucket = n % 11;
+    if (bucket === 0) return 0;
+    if (bucket <= 5) return bucket;
+    return -(bucket - 5);
+  }
+
+  function homeResolvedRankDeltaPlaces(current, previous, mockSeed) {
+    const real = homeRankDeltaPlaces(current, previous);
+    if (real != null) return real;
+    if (!HOME_MOCK_RANK_DELTAS) return null;
+    return homeMockRankDeltaPlaces(mockSeed ?? current);
+  }
+
   function formatHomeRankDelta(places) {
     const abs = Math.abs(Number(places) || 0);
     if (abs >= 1e6) return `${(abs / 1e6).toFixed(1)}M`;
@@ -2323,10 +2344,23 @@
     return abs.toLocaleString();
   }
 
+  function homeRankDeltaHTML(places, { compact = false } = {}) {
+    if (places == null || !Number.isFinite(places)) return "";
+    const up = places > 0;
+    const flat = places === 0;
+    const cls = flat ? "is-flat" : up ? "is-up" : "is-down";
+    const icon = flat ? "minus" : up ? "caret-up" : "caret-down";
+    const n = formatHomeRankDelta(places);
+    const label = flat
+      ? "Rank unchanged vs last gameweek"
+      : `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
+    const mockBit = HOME_MOCK_RANK_DELTAS ? " (sample)" : "";
+    return `<span class="home-rank-delta${compact ? " is-compact" : ""} ${cls}"${tipAttr(label + mockBit)} aria-label="${escapeHtml(label)}">${iconHTML(icon)}<span class="home-rank-delta-n">${flat ? "0" : n}</span></span>`;
+  }
+
   function setHomeRankDelta(elDelta, places) {
     if (!elDelta) return;
-    const delta = places;
-    if (delta == null || !Number.isFinite(delta)) {
+    if (places == null || !Number.isFinite(places)) {
       elDelta.hidden = true;
       elDelta.className = "home-rank-delta";
       elDelta.innerHTML = "";
@@ -2334,18 +2368,20 @@
       elDelta.removeAttribute("aria-label");
       return;
     }
-    const up = delta > 0;
-    const flat = delta === 0;
+    const up = places > 0;
+    const flat = places === 0;
     const cls = flat ? "is-flat" : up ? "is-up" : "is-down";
-    const icon = flat ? "minus" : up ? "trending-up" : "trending-down";
+    const icon = flat ? "minus" : up ? "caret-up" : "caret-down";
+    const n = formatHomeRankDelta(places);
     const label = flat
       ? "Rank unchanged vs last gameweek"
-      : `${up ? "Up" : "Down"} ${formatHomeRankDelta(delta)} places vs last gameweek`;
+      : `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
+    const mockBit = HOME_MOCK_RANK_DELTAS ? " (sample)" : "";
     elDelta.hidden = false;
     elDelta.className = `home-rank-delta ${cls}`;
-    elDelta.title = label;
+    elDelta.title = label + mockBit;
     elDelta.setAttribute("aria-label", label);
-    elDelta.innerHTML = iconHTML(icon);
+    elDelta.innerHTML = `${iconHTML(icon)}<span class="home-rank-delta-n">${flat ? "0" : n}</span>`;
   }
 
   function homeTopPercentLabel(rank, totalPlayers) {
@@ -2392,6 +2428,10 @@
   let homeStandingsPagerReady = false;
   let homeSquadPagerReady = false;
   let homeViewEntryId = null;
+  // Live standings sort — default league rank; Live/Left/GW/Total are clickable.
+  let homeStandingsSortKey = "rank";
+  let homeStandingsSortDir = "asc";
+  let homeStandingsSortBound = false;
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
   let homeLookupStatMode = 0;
@@ -2726,9 +2766,12 @@
 
   function homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther } = {}) {
     const entry = Number(row.entry);
-    const rankVal = row.rankLive != null ? Number(row.rankLive) : (row.rankOfficial != null ? Number(row.rankOfficial) : null);
+    const rankVal = homeStandingsRankValue(row);
+    const rankPrev = row.rankPrev != null ? Number(row.rankPrev) : (row.lastRank != null ? Number(row.lastRank) : null);
+    const deltaPlaces = homeResolvedRankDeltaPlaces(rankVal, rankPrev, entry);
+    const deltaHTML = homeRankDeltaHTML(deltaPlaces, { compact: true });
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
-      ? statRollSpan(rankVal, { from: 0, decimals: 0, className: "home-stat-roll" })
+      ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${statRollSpan(rankVal, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>${deltaHTML}</span>`
       : "—";
     const showConfiguredPin =
       !!viewingOther &&
@@ -2739,32 +2782,166 @@
       : "";
     return `<td class="home-col-rank">${rankHTML}</td>
       <td class="home-col-manager">
-        <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${pin}</span>
-        <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
+        <div class="home-standings-manager">
+          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${pin}</span>
+          <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
+        </div>
       </td>`;
   }
 
-  function homeStandingsLiveRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
+  function homeStandingsSortValue(row, key) {
+    if (key === "live") {
+      const n = Number(row.inPlay);
+      return Number.isFinite(n) ? n : null;
+    }
+    if (key === "left") {
+      const n = Number(row.toPlay);
+      return Number.isFinite(n) ? n : null;
+    }
+    if (key === "gw") {
+      return homeStandingsGwPoints(row);
+    }
+    if (key === "total") {
+      const n = row.total != null ? Number(row.total) : null;
+      return n != null && Number.isFinite(n) ? n : null;
+    }
+    const rank = homeStandingsRankValue(row);
+    return rank != null && Number.isFinite(rank) ? rank : null;
+  }
+
+  /** True when this manager has no picks still playing this GW. */
+  function homeStandingsRowSettled(row) {
+    const inPlay = Number(row.inPlay);
+    const toPlay = Number(row.toPlay);
+    const noLive = !Number.isFinite(inPlay) || inPlay <= 0;
+    const noLeft = !Number.isFinite(toPlay) || toPlay <= 0;
+    return noLive && noLeft;
+  }
+
+  /**
+   * GW points for display/sort. Prefer FPL event_total once the row is settled —
+   * our live engine can drift (autosubs / hits) and made GW1 look higher than Total.
+   */
+  function homeStandingsGwPoints(row) {
+    const official = row.eventTotalOfficial != null ? Number(row.eventTotalOfficial) : null;
+    const live = row.gwPointsLive != null ? Number(row.gwPointsLive) : null;
+    if (homeStandingsRowSettled(row) && official != null && Number.isFinite(official)) {
+      return official;
+    }
+    if (live != null && Number.isFinite(live)) return live;
+    return official != null && Number.isFinite(official) ? official : null;
+  }
+
+  function homeStandingsRankValue(row) {
+    if (homeStandingsRowSettled(row) && row.rankOfficial != null) {
+      const n = Number(row.rankOfficial);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    if (row.rankLive != null) {
+      const n = Number(row.rankLive);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    if (row.rankOfficial != null) {
+      const n = Number(row.rankOfficial);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+
+  function sortedHomeStandingsRows(rows) {
+    const key = homeStandingsSortKey || "rank";
+    const dir = homeStandingsSortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      const av = homeStandingsSortValue(a, key);
+      const bv = homeStandingsSortValue(b, key);
+      const aOk = av != null;
+      const bOk = bv != null;
+      if (!aOk && !bOk) return 0;
+      if (!aOk) return 1;
+      if (!bOk) return -1;
+      if (av !== bv) return av < bv ? -dir : dir;
+      const ar = homeStandingsSortValue(a, "rank");
+      const br = homeStandingsSortValue(b, "rank");
+      if (ar == null && br == null) return 0;
+      if (ar == null) return 1;
+      if (br == null) return -1;
+      return ar - br;
+    });
+  }
+
+  // Top-5 GW / Total band with Statistics-style rank+value fade intensity.
+  function buildHomeStandingsTopMaps(rows) {
+    const TOP_N = 5;
+    const maps = { gw: new Map(), total: new Map() };
+    function fill(map, key) {
+      const withVals = rows
+        .map((r) => ({ entry: Number(r.entry), val: homeStandingsSortValue(r, key) }))
+        .filter((x) => Number.isFinite(x.entry) && x.val != null && Math.abs(x.val) > 1e-9);
+      if (withVals.length < 2) return;
+      withVals.sort((a, b) => b.val - a.val);
+      const maxV = withVals[0].val;
+      const minV = withVals[withVals.length - 1].val;
+      if (maxV === minV) return;
+      const slice = withVals.slice(0, Math.min(TOP_N, withVals.length));
+      const best = slice[0].val;
+      const worst = slice[slice.length - 1].val;
+      slice.forEach((x, i) => {
+        map.set(x.entry, enhanceBandIntensity(i, slice.length, x.val, best, worst));
+      });
+    }
+    fill(maps.gw, "gw");
+    fill(maps.total, "total");
+    return maps;
+  }
+
+  function homeStandingsPillHTML(value, intensity) {
+    const roll = statRollSpan(value, { from: 0, decimals: 0, className: "home-stat-roll" });
+    if (intensity == null || !(intensity > 0)) {
+      if (value === 0) {
+        return `<span class="home-standings-metric is-zero">${roll}</span>`;
+      }
+      return `<span class="home-standings-metric">${roll}</span>`;
+    }
+    const paint = enhanceHighlightPaint("top", intensity);
+    if (paint.skip) {
+      if (value === 0) {
+        return `<span class="home-standings-metric is-zero">${roll}</span>`;
+      }
+      return `<span class="home-standings-metric">${roll}</span>`;
+    }
+    const parts = [`--hl-fill:${paint.backgroundColor}`];
+    if (paint.color) parts.push(`color:${paint.color}`);
+    const cls = [
+      "home-standings-pill",
+      paint.emphasize ? "is-emphasize" : "",
+      paint.strong ? "is-strong" : "",
+    ].filter(Boolean).join(" ");
+    return `<span class="${cls}" style="${parts.join(";")}">${roll}</span>`;
+  }
+
+  function homeStandingsLiveRowHTML(row, { configuredEntry, viewEntry, viewingOther, topMaps }) {
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const inPlay = Number(row.inPlay);
     const toPlay = Number(row.toPlay);
     const liveTitle = "Active picks in play (Bench Boost can exceed 11)";
     const leftTitle = "Still to play this gameweek";
-    const gwPts = row.gwPointsLive != null ? Number(row.gwPointsLive) : null;
+    const gwPts = homeStandingsGwPoints(row);
     const totalPts = row.total != null ? Number(row.total) : null;
     const hasPlay = Number.isFinite(inPlay) && Number.isFinite(toPlay);
     const liveHTML = hasPlay
-      ? `<span class="home-play-live${inPlay > 0 ? " is-active" : ""}" title="${escapeHtml(liveTitle)}">${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+      ? `<span class="home-play-live${inPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(liveTitle)}">${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
       : "—";
     const leftHTML = hasPlay
-      ? `<span class="home-play-left${toPlay > 0 ? " is-active" : ""}" title="${escapeHtml(leftTitle)}">${statRollSpan(toPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+      ? `<span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(leftTitle)}">${statRollSpan(toPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
       : "—";
+    const gwIntensity = topMaps && topMaps.gw ? topMaps.gw.get(entry) : null;
+    const totalIntensity = topMaps && topMaps.total ? topMaps.total.get(entry) : null;
     const gwHTML = gwPts != null && Number.isFinite(gwPts)
-      ? statRollSpan(gwPts, { from: 0, decimals: 0, className: "home-stat-roll" })
+      ? homeStandingsPillHTML(gwPts, gwIntensity)
       : "—";
     const totalHTML = totalPts != null && Number.isFinite(totalPts)
-      ? statRollSpan(totalPts, { from: 0, decimals: 0, className: "home-stat-roll" })
+      ? homeStandingsPillHTML(totalPts, totalIntensity)
       : "—";
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
@@ -2774,6 +2951,72 @@
       <td class="home-col-gw">${gwHTML}</td>
       <td class="home-col-total">${totalHTML}</td>
     </tr>`;
+  }
+
+  function syncHomeStandingsSortHeaders() {
+    const table = el.homeStandingsBody && el.homeStandingsBody.closest("table");
+    if (!table) return;
+    table.querySelectorAll("thead th[data-home-sort]").forEach((th) => {
+      const key = th.getAttribute("data-home-sort");
+      const sorted = key === homeStandingsSortKey;
+      th.classList.toggle("sorted", sorted);
+      th.setAttribute("aria-sort", sorted
+        ? (homeStandingsSortDir === "asc" ? "ascending" : "descending")
+        : "none");
+      let arrow = th.querySelector(".arrow");
+      if (sorted) {
+        if (!arrow) {
+          arrow = document.createElement("span");
+          arrow.className = "arrow";
+          th.appendChild(arrow);
+        }
+        arrow.innerHTML = iconHTML(homeStandingsSortDir === "asc" ? "chevron-up" : "chevron-down");
+      } else if (arrow) {
+        arrow.remove();
+      }
+    });
+  }
+
+  function renderHomeStandingsLiveBody() {
+    if (!el.homeStandingsBody) return;
+    const configuredEntry = homeConfiguredEntryId();
+    const viewEntry = homeActiveViewEntryId();
+    const viewingOther = homeIsViewingOtherManager();
+    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const sorted = sortedHomeStandingsRows(rows);
+    const topMaps = buildHomeStandingsTopMaps(rows);
+    const opts = { configuredEntry, viewEntry, viewingOther, topMaps };
+    el.homeStandingsBody.innerHTML = sorted.map((r) =>
+      homeStandingsLiveRowHTML(r, opts)
+    ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
+    // Sort re-renders skip page-enter motion — settle odometers so cells aren't blank.
+    finishHomeStatRolls(el.homeStandingsBody);
+    syncHomeStandingsSortHeaders();
+    syncHomeOwnerHighlights();
+    syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false });
+  }
+
+  function bindHomeStandingsSort() {
+    if (homeStandingsSortBound) return;
+    const table = el.homeStandingsBody && el.homeStandingsBody.closest("table");
+    if (!table) return;
+    homeStandingsSortBound = true;
+    table.querySelectorAll("thead th[data-home-sort]").forEach((th) => {
+      th.classList.add("is-sortable");
+      th.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = th.getAttribute("data-home-sort");
+        if (!key) return;
+        if (homeStandingsSortKey === key) {
+          homeStandingsSortDir = homeStandingsSortDir === "asc" ? "desc" : "asc";
+        } else {
+          homeStandingsSortKey = key;
+          homeStandingsSortDir = key === "rank" ? "asc" : "desc";
+        }
+        renderHomeStandingsLiveBody();
+      });
+    });
   }
 
   function homeCaptainsRowHTML(row, { configuredEntry, viewEntry, viewingOther, topCaptainPts }) {
@@ -3340,6 +3583,17 @@
     const tags = [];
     if (row.isCaptain) tags.push(`<span class="home-role-tag home-role-c">C</span>`);
     if (row.isVice) tags.push(`<span class="home-role-tag home-role-a">A</span>`);
+    if (row.autoSubIn) {
+      const from = row.autoSubWithName || "starter";
+      tags.push(
+        `<span class="home-autosub-tag is-in"${tipAttr(`Auto-sub on for ${from}`)} aria-label="Auto-sub on for ${escapeHtml(from)}">${iconHTML("caret-up", "home-autosub-icon")}</span>`
+      );
+    } else if (row.autoSubOut) {
+      const to = row.autoSubWithName || "bench";
+      tags.push(
+        `<span class="home-autosub-tag is-out"${tipAttr(`Auto-subbed off — ${to} on`)} aria-label="Auto-subbed off for ${escapeHtml(to)}">${iconHTML("caret-down", "home-autosub-icon")}</span>`
+      );
+    }
     const pin = configuredPin
       ? `<span class="owned-flag home-owned-flag"${tipAttr("In your team")} aria-label="In your team">${ownedPinSVG()}</span>`
       : "";
@@ -4473,7 +4727,13 @@
     renderHomeSummaryStats(summary);
     setHomeRankDelta(
       el.homeOverallRankDelta,
-      viewingOther ? null : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
+      viewingOther
+        ? null
+        : homeResolvedRankDeltaPlaces(
+            summary.overallRank,
+            summary.overallRankPrev,
+            HOME.managerId || summary.overallRank
+          )
     );
     setHomeOverallPct(
       el.homeOverallPct,
@@ -4482,7 +4742,13 @@
     );
     setHomeRankDelta(
       el.homeLeagueRankDelta,
-      viewingOther ? null : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
+      viewingOther
+        ? null
+        : homeResolvedRankDeltaPlaces(
+            summary.leagueRank,
+            summary.leagueRankPrev,
+            (HOME.managerId || 0) + 17
+          )
     );
     if (el.homeGwMeta) {
       const chip = summary.activeChip ? String(summary.activeChip) : "";
@@ -4560,12 +4826,8 @@
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
     }
     if (el.homeStandingsBody) {
-      const configuredEntry = homeConfiguredEntryId();
-      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
-      const opts = { configuredEntry, viewEntry, viewingOther };
-      el.homeStandingsBody.innerHTML = rows.map((r) =>
-        homeStandingsLiveRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
+      bindHomeStandingsSort();
+      renderHomeStandingsLiveBody();
     }
     if (el.homeStandingsCaptainsBody) {
       const configuredEntry = homeConfiguredEntryId();
@@ -6986,7 +7248,16 @@
     else if (el.optaTableFooter) el.optaTableFooter.hidden = true;
     renderCompareTable();
     if (state.page === "expected") renderExpected();
-    if (state.page === "rankings") renderRankings();
+    if (state.page === "rankings") {
+      // Avoid a second DOM rebuild while page-enter is in flight (init calls
+      // renderTable() right after setPage). That wipe+replay looked like a reload.
+      const pane = el.rankingsPage;
+      const entering =
+        pane &&
+        (pane.classList.contains("is-entering") ||
+          pane.classList.contains("is-enter-pending"));
+      if (!entering) renderRankings({ animateBars: false });
+    }
     bindAllNameColumnSimplifies();
     if (state.page === "opta") bindMobileChromeScrollHide();
     syncFiltersResetUI();
@@ -7749,7 +8020,7 @@
       spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)"),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold"),
-        "DefCon check — earned DC points by hitting the match threshold (DEF 10 CBIT / MID·FWD 12 CBIRT). Not a per-90 rate. Blue in light mode, red in dark mode."
+        "DefCon check — earned DC points by hitting the match threshold (DEF 10 CBIT / MID·FWD 12 CBIRT). Not a per-90 rate."
       ),
       spitRow(
         spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
@@ -9826,7 +10097,7 @@
     el.rankingsPinBar.addEventListener("click", (e) => {
       if (e.target.closest("#rankings-pin-clear")) {
         state.rankingsPins.length = 0;
-        if (state.page === "rankings") renderRankings();
+        if (state.page === "rankings") renderRankings({ animateBars: false });
         else syncRankingsPinClasses();
         return;
       }
@@ -14822,7 +15093,6 @@
     syncSearchClearBtns();
     if (rerender) {
       if (state.page === "opta" || state.page === "rankings" || state.page === "team" || state.page === "ownership") renderTable();
-      if (state.page === "rankings") renderRankings();
     }
   }
 
@@ -15077,7 +15347,8 @@
     }
     if (page !== "expected") setExpectedCatMenuOpen(false);
     if (page === "rankings") {
-      renderRankings();
+      // Bars animate once via playPageEnter → animateRankingsBars.
+      renderRankings({ animateBars: false });
     } else if (page === "home") {
       if (el.homePage) el.homePage.classList.add("is-enter-pending");
       renderHome();
@@ -15809,7 +16080,13 @@
 
   function mainSearchAlwaysOpen() {
     if (state.page === "team") return teamSearchAlwaysOpen();
-    return state.page === "opta" && !preferMobileSheet();
+    // Desktop: expanded field like Statistics (mobile uses mobileSearchAlwaysOpen).
+    return (
+      !preferMobileSheet() &&
+      (state.page === "opta" ||
+        state.page === "ownership" ||
+        state.page === "expected")
+    );
   }
 
   function mobileSearchAlwaysOpen() {
@@ -15843,7 +16120,7 @@
     el.searchWrap.classList.toggle("team-search-always-open", teamSearchAlwaysOpen());
     el.searchWrap.classList.toggle(
       "stats-search-always-open",
-      state.page === "opta" && !preferMobileSheet()
+      mainSearchAlwaysOpen() && state.page !== "team"
     );
     el.searchWrap.classList.toggle("mobile-search-always-open", mobileSearchAlwaysOpen());
     if (state.page === "rankings") {
@@ -16518,7 +16795,7 @@
     if (rerender) {
       renderTable();
       if (state.page === "expected") renderExpected();
-      if (state.page === "rankings") renderRankings();
+      if (state.page === "rankings") renderRankings({ animateBars: false });
       if (state.page === "schedule") renderSchedule();
       if (state.page === "team") renderTeam();
     }

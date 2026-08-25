@@ -1,0 +1,127 @@
+# Scheduled cache refreshes for static Vercel deploys.
+# Times are UTC ≈ Pacific Daylight (UTC-7). In winter (PST) they land 1h later local.
+#
+#   07:00 UTC ≈ midnight PT  → Markets
+#   19:00 UTC ≈ noon PT      → Markets + Ownership
+#
+# Requires repo secret: ODDS_API_KEY
+name: Refresh caches
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: What to refresh
+        type: choice
+        options:
+          - both
+          - markets
+          - ownership
+        default: both
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Decide targets
+        id: plan
+        run: |
+          set -euo pipefail
+          MARKETS=0
+          OWNERSHIP=0
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ inputs.targets }}" in
+              markets) MARKETS=1 ;;
+              ownership) OWNERSHIP=1 ;;
+              *) MARKETS=1; OWNERSHIP=1 ;;
+            esac
+          elif [[ "${{ github.event.schedule }}" == "0 7 * * *" ]]; then
+            # ~midnight Pacific — markets only
+            MARKETS=1
+          else
+            # ~noon Pacific (or unknown schedule) — markets + ownership
+            MARKETS=1
+            OWNERSHIP=1
+          fi
+          echo "markets=$MARKETS" >> "$GITHUB_OUTPUT"
+          echo "ownership=$OWNERSHIP" >> "$GITHUB_OUTPUT"
+          echo "Plan: markets=$MARKETS ownership=$OWNERSHIP"
+
+      - name: Refresh Markets
+        if: steps.plan.outputs.markets == '1'
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ODDS_API_KEY}" ]]; then
+            echo "ODDS_API_KEY secret is missing — add it under Repo → Settings → Secrets."
+            exit 1
+          fi
+          python3 site/fetch_markets.py
+
+      - name: Refresh Ownership
+        if: steps.plan.outputs.ownership == '1'
+        run: python3 site/fetch_ownership.py
+
+      - name: Bump cache-bust query params
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          path = Path("site/index.html")
+          text = path.read_text(encoding="utf-8")
+
+          def dirty(rel: str) -> bool:
+              return subprocess.run(["git", "diff", "--quiet", "--", rel]).returncode != 0
+
+          bumps = []
+          if dirty("site/markets_data.js"):
+              bumps.append("markets_data.js")
+          # Same-day ownership overwrite still updates the JS bundle; snapshots too.
+          if dirty("site/ownership_data.js") or dirty("snapshots"):
+              bumps.append("ownership_data.js")
+
+          for name in bumps:
+              pat = re.compile(rf'(src="{re.escape(name)}\?v=)(\d+)(")')
+
+              def repl(m, _name=name):
+                  return f"{m.group(1)}{int(m.group(2)) + 1}{m.group(3)}"
+
+              text, n = pat.subn(repl, text)
+              print(f"{'Bumped' if n else 'No cache param for'} {name}")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/markets_data.js site/ownership_data.js site/index.html snapshots/bootstrap-static_*.json || true
+          if git diff --staged --quiet; then
+            echo "No cache changes to commit."
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          Refresh scheduled Markets/Ownership caches.
+
+          EOF
+          )"
+          git push

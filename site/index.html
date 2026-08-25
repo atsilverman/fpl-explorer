@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=709" />
+<link rel="stylesheet" href="styles.css?v=727" />
 <script>
 (() => {
   try {
@@ -233,6 +233,13 @@
   </symbol>
   <symbol id="i-trending-down" viewBox="0 0 24 24">
     <polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>
+  </symbol>
+  <!-- Filled rank-move triangles (Home deltas). -->
+  <symbol id="i-caret-up" viewBox="0 0 24 24">
+    <path fill="currentColor" stroke="none" d="M12 7.5 18.5 16.5h-13z"/>
+  </symbol>
+  <symbol id="i-caret-down" viewBox="0 0 24 24">
+    <path fill="currentColor" stroke="none" d="M12 16.5 5.5 7.5h13z"/>
   </symbol>
   <symbol id="i-minus" viewBox="0 0 24 24">
     <path d="M5 12h14"/>
@@ -739,12 +746,12 @@
                   <table class="home-data-table home-standings-table home-standings-live-table">
                     <thead>
                       <tr>
-                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-rank is-sortable" data-home-sort="rank" aria-sort="ascending">#</th>
                         <th scope="col" class="home-col-manager">Manager</th>
-                        <th scope="col" class="home-col-live" title="Active picks in play (Bench Boost can exceed 11)">Live</th>
-                        <th scope="col" class="home-col-left" title="Still to play this gameweek">Left</th>
-                        <th scope="col" class="home-col-gw">GW</th>
-                        <th scope="col" class="home-col-total">Total</th>
+                        <th scope="col" class="home-col-live is-sortable" data-home-sort="live" title="Active picks in play (Bench Boost can exceed 11)" aria-sort="none">Live</th>
+                        <th scope="col" class="home-col-left is-sortable" data-home-sort="left" title="Still to play this gameweek" aria-sort="none">Left</th>
+                        <th scope="col" class="home-col-gw is-sortable" data-home-sort="gw" aria-sort="none">GW</th>
+                        <th scope="col" class="home-col-total is-sortable" data-home-sort="total" aria-sort="none">Total</th>
                       </tr>
                     </thead>
                     <tbody id="home-standings-body"></tbody>
@@ -1178,10 +1185,10 @@
 <script src="markets_data.js?v=11"></script>
 <script src="ownership_data.js?v=10"></script>
 <script src="leagues_data.js?v=4"></script>
-<script src="home_data.js?v=14"></script>
+<script src="home_data.js?v=17"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=709"></script>
+<script src="app.js?v=724"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -20,6 +20,8 @@ Scripts load API keys from the project-root `.env` (`ODDS_API_KEY`). Need networ
 
 Then bump the matching cache-bust query params in `site/index.html` (`markets_data.js?v=`, `ownership_data.js?v=`, `leagues_data.js?v=`, `home_data.js?v=`). Do not bump `app.js` / `styles.css` unless those files also changed.
 
+Scheduled production refreshes (separate from this chat rule): GitHub Actions `.github/workflows/refresh-caches.yml` — Markets at ~midnight + noon PT, Ownership at ~noon PT — commits to `main` for Vercel. Requires `ODDS_API_KEY` repo secret.
+
 Do **not**:
 - Run `site/build.py` unless they also want a CSV/Statistics rebuild
 - Commit or deploy unless they ask
