@@ -1,0 +1,39 @@
+# Rebuild site/data.js after each GW matchday completes (UK calendar day).
+# Polls every 20 minutes; no-op when no matchday is settled yet.
+name: Rebuild after matchday
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check only — do not rebuild or commit
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Matchday rebuild
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            ARGS="--dry-run"
+          else
+            ARGS="--commit"
+          fi
+          python3 site/matchday_rebuild.py $ARGS

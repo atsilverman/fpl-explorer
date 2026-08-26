@@ -25,7 +25,9 @@ Then bump the matching cache-bust query params in `site/index.html` (`data.js?v=
 
 **Updated footers** on each page must show the embedded bundle's `generatedAt` (when `fetch_*.py` / `build.py` last wrote that cache) — never `Date.now()` or browser reload time. Statistics / Team / Rankings in 2026/27 mode use the newer of `data.js` and `ownership_data.js` because live £ + owned % come from ownership check-ins.
 
-Scheduled production refreshes (separate from this chat rule): GitHub Actions `.github/workflows/refresh-caches.yml` — Markets at ~midnight + noon PT, Ownership at ~noon PT — commits to `main` for Vercel. Requires `ODDS_API_KEY` repo secret.
+Scheduled production refreshes (separate from this chat rule):
+- `.github/workflows/refresh-caches.yml` — Markets ~1×/day + Ownership ~noon PT (`ODDS_API_KEY` secret).
+- `.github/workflows/rebuild-after-matchday.yml` — polls every 20 min; runs `build.py` once per settled GW matchday (UK calendar day, 45 min after last FT). Updates Statistics / Rankings / Matchups / 2026/27 stats — not Home live, not xData expected (CSV).
 
 Do **not**:
 - Commit or deploy unless they ask
