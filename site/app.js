@@ -874,6 +874,11 @@
       .filter((player) => player && player.code != null)
       .map((player) => [Number(player.code), Number(player.owned)])
   );
+  const latestOwnershipPriceByCode = new Map(
+    ((latestOwnershipCheckIn && latestOwnershipCheckIn.players) || [])
+      .filter((player) => player && player.code != null && player.price != null)
+      .map((player) => [Number(player.code), Number(player.price)])
+  );
 
   function currentOwnership(code) {
     if (code == null || code === "") return null;
@@ -1364,9 +1369,14 @@
   }
 
   // Active price for display / Per £m / price filter: next-season price while
-  // Updates is on (when matched). In 2026/27 mode the row price is already remapped.
+  // Updates is on (when matched). In 2026/27 mode prefer ownership check-in £
+  // (refreshed with bootstrap) over build-time data.js.
   function effectivePrice(row) {
     if (updatesOverlayOn() && row.price2627 != null) return row.price2627;
+    if (isNextSeason() && row && row.code != null) {
+      const live = latestOwnershipPriceByCode.get(Number(row.code));
+      if (Number.isFinite(live)) return live;
+    }
     return row.price || 0;
   }
 
@@ -2347,10 +2357,11 @@
       return;
     }
 
-    const when = fmtMarketsUpdated(HOME.generatedAt);
+    const when = fmtMarketsUpdated(pageDataUpdatedIso("home"));
+    const homeUpdatedIso = pageDataUpdatedIso("home");
     const text = when ? `Updated ${when}` : "";
-    const title = HOME.generatedAt
-      ? `Data refreshed ${HOME.generatedAt.replace("T", " ").replace("Z", " UTC")}`
+    const title = homeUpdatedIso
+      ? `Data refreshed ${String(homeUpdatedIso).replace("T", " ").replace("Z", " UTC")}`
       : null;
     setLabels(text, { title, showFooter: !!text });
   }
@@ -4185,9 +4196,10 @@
     const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
     const metaBits = [];
     if (row.position) metaBits.push(posBadgeHTML(row.position));
-    if (row.price != null && Number.isFinite(Number(row.price))) {
+    const price = effectivePrice(row);
+    if (price) {
       metaBits.push(
-        `<span class="home-lookup-price">£${escapeHtml(Number(row.price).toFixed(1))}m</span>`
+        `<span class="home-lookup-price">£${escapeHtml(Number(price).toFixed(1))}m</span>`
       );
     }
     const photoBlock = photo
@@ -8262,7 +8274,7 @@
       state.scheduleGwMin === state.scheduleGwMax
         ? `GW${state.scheduleGwMin}`
         : `GW${state.scheduleGwMin}–GW${state.scheduleGwMax}`;
-    syncPageUpdatedFooter(el.scheduleUpdatedFooter, DATA.generatedAt);
+    syncPageUpdatedFooter(el.scheduleUpdatedFooter, pageDataUpdatedIso("schedule"));
   }
 
   function popupDelayMs() {
@@ -9674,7 +9686,7 @@
       empty.textContent = "No rows match the current filters.";
       el.barbellBody.appendChild(empty);
       if (NARROW_MQ.matches) bindMobileChromeScrollHide();
-      syncPageUpdatedFooter(el.expectedUpdatedFooter, DATA.generatedAt);
+      syncPageUpdatedFooter(el.expectedUpdatedFooter, pageDataUpdatedIso("expected"));
       return;
     }
 
@@ -9705,7 +9717,7 @@
       restoreScrollWraps([scrollSnap]);
     }
     requestAnimationFrame(() => syncMobileScrollportHeight());
-    syncPageUpdatedFooter(el.expectedUpdatedFooter, DATA.generatedAt);
+    syncPageUpdatedFooter(el.expectedUpdatedFooter, pageDataUpdatedIso("expected"));
     bindAllNameColumnSimplifies();
   }
 
@@ -10097,7 +10109,7 @@
     if (!sections.length) {
       el.rankingsGrid.innerHTML = `<div class="empty-state">No ranking metrics are available for this view and venue split.</div>`;
       renderRankingsPinBar();
-      syncPageUpdatedFooter(el.rankingsUpdatedFooter, DATA.generatedAt);
+      syncPageUpdatedFooter(el.rankingsUpdatedFooter, pageDataUpdatedIso("rankings"));
       return;
     }
 
@@ -10120,7 +10132,7 @@
         bar.classList.add("is-drawn");
       });
     }
-    syncPageUpdatedFooter(el.rankingsUpdatedFooter, DATA.generatedAt);
+    syncPageUpdatedFooter(el.rankingsUpdatedFooter, pageDataUpdatedIso("rankings"));
   }
 
   if (el.rankingsGrid) {
@@ -12702,7 +12714,7 @@
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     syncTeamLandscapeMode();
     scheduleTeamTableHeadHeightSync();
-    syncPageUpdatedFooter(el.teamUpdatedFooter, DATA.generatedAt);
+    syncPageUpdatedFooter(el.teamUpdatedFooter, pageDataUpdatedIso("team"));
   }
 
   function applyTeamPageBounds() {
@@ -13105,6 +13117,49 @@
     }
   }
 
+  function parseDataIso(iso) {
+    if (!iso) return NaN;
+    const t = Date.parse(String(iso));
+    return Number.isFinite(t) ? t : NaN;
+  }
+
+  /** Latest non-empty ISO timestamp from embedded cache bundles (never client "now"). */
+  function latestDataIso(...isos) {
+    let best = "";
+    let bestT = -Infinity;
+    for (const iso of isos) {
+      if (!iso) continue;
+      const t = parseDataIso(iso);
+      if (!Number.isFinite(t) || t <= bestT) continue;
+      bestT = t;
+      best = String(iso);
+    }
+    return best;
+  }
+
+  /** Per-page "Updated" stamp — always from fetch/build bundles, not browser reload. */
+  function pageDataUpdatedIso(page = state.page) {
+    switch (page) {
+      case "home":
+        return HOME.generatedAt || null;
+      case "ownership":
+        return OWNERSHIP.generatedAt || null;
+      case "markets":
+        return MARKETS.generatedAt || null;
+      case "opta":
+      case "team":
+      case "rankings":
+        // 2026/27 £ + owned % track ownership check-ins between build.py runs.
+        return isNextSeason()
+          ? latestDataIso(DATA.generatedAt, OWNERSHIP.generatedAt)
+          : DATA.generatedAt || null;
+      case "expected":
+      case "schedule":
+      default:
+        return DATA.generatedAt || null;
+    }
+  }
+
   function pageUpdatedMeta(iso) {
     if (!iso) return { text: "", title: null };
     const when = fmtMarketsUpdated(iso);
@@ -13174,7 +13229,7 @@
       return;
     }
 
-    const { text, title } = pageUpdatedMeta(DATA.generatedAt);
+    const { text, title } = pageUpdatedMeta(pageDataUpdatedIso("opta"));
     if (updated) {
       updated.textContent = text;
       if (title) updated.title = title;
@@ -14598,7 +14653,7 @@
         renderOwnershipTreemap();
       }
       syncFiltersResetUI();
-      syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
+      syncPageUpdatedFooter(el.ownershipUpdatedFooter, pageDataUpdatedIso("ownership"));
       requestAnimationFrame(() => {
         syncMobileScrollportHeight();
         scheduleOwnershipTreemapRelayout();
@@ -14631,7 +14686,7 @@
       bindOwnershipPhotoFallback(el.ownershipTableBody);
     }
     syncFiltersResetUI();
-    syncPageUpdatedFooter(el.ownershipUpdatedFooter, OWNERSHIP.generatedAt);
+    syncPageUpdatedFooter(el.ownershipUpdatedFooter, pageDataUpdatedIso("ownership"));
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
     if (scrollSnap) restoreScrollWraps(scrollSnap);

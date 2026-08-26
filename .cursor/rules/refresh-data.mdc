@@ -7,24 +7,30 @@ alwaysApply: true
 
 If the user says **refresh data** (or "check in", "refresh ownership/markets"), run the live cache pulls. Do not wait for extra confirmation.
 
-Default **refresh data** = all four, in parallel where possible:
+Default **refresh data** = all four fetches, then **rebuild Statistics bundle**, in parallel where possible:
 
 ```bash
 python3 site/fetch_ownership.py
 python3 site/fetch_markets.py
 python3 site/fetch_leagues.py
 python3 site/fetch_home.py
+python3 site/build.py
 ```
+
+`fetch_ownership.py` writes the newest `snapshots/bootstrap-static_*.json`; `build.py` reads that snapshot to refresh `site/data.js` (2026/27 prices, ownership %, GW stats, fixtures). Run ownership fetch before `build.py` so price changes and stat adjustments land in Statistics / Team / Rankings / xData / Matchups.
 
 Scripts load API keys from the project-root `.env` (`ODDS_API_KEY`). Need network. Home uses `site/home_prefs.json` (managerId + leagueId) when present.
 
-Then bump the matching cache-bust query params in `site/index.html` (`markets_data.js?v=`, `ownership_data.js?v=`, `leagues_data.js?v=`, `home_data.js?v=`). Do not bump `app.js` / `styles.css` unless those files also changed.
+Then bump the matching cache-bust query params in `site/index.html` (`data.js?v=`, `markets_data.js?v=`, `ownership_data.js?v=`, `leagues_data.js?v=`, `home_data.js?v=`). Do not bump `app.js` / `styles.css` unless those files also changed.
+
+**Updated footers** on each page must show the embedded bundle's `generatedAt` (when `fetch_*.py` / `build.py` last wrote that cache) — never `Date.now()` or browser reload time. Statistics / Team / Rankings in 2026/27 mode use the newer of `data.js` and `ownership_data.js` because live £ + owned % come from ownership check-ins.
 
 Scheduled production refreshes (separate from this chat rule): GitHub Actions `.github/workflows/refresh-caches.yml` — Markets at ~midnight + noon PT, Ownership at ~noon PT — commits to `main` for Vercel. Requires `ODDS_API_KEY` repo secret.
 
 Do **not**:
-- Run `site/build.py` unless they also want a CSV/Statistics rebuild
 - Commit or deploy unless they ask
 - Run Feed / X social pulls — archived under `archive/feed/` (see that README to restore)
 
-Subset phrases: "refresh ownership" / "refresh markets" / "refresh leagues" / "refresh home" run only that pipeline.
+Live Home polling (DigitalOcean / `/api/home`) can stay ahead of the static bundles between refreshes; the next full refresh + `build.py` brings Statistics / Team / etc. back in line.
+
+Subset phrases: "refresh ownership" / "refresh markets" / "refresh leagues" / "refresh home" run only that pipeline (no `build.py` unless they ask for Statistics too).
