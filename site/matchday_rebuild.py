@@ -38,6 +38,8 @@ UA = "fpl-explorer/1.0 (+matchday-rebuild)"
 MATCHDAY_TZ = ZoneInfo("Europe/London")
 DEFAULT_SETTLE_MINUTES = 45
 DEFAULT_MATCH_DURATION_MINUTES = 105
+# First GW where post-matchday GHA rebuilds run (GW1 handled manually).
+AUTOMATION_START_GW = 2
 
 sys.path.insert(0, str(SITE))
 from fpl_gameweeks import active_gameweek_id, extract_gameweeks  # noqa: E402
@@ -135,18 +137,26 @@ def matchday_settled(day_fixtures: list[dict], *, settle_minutes: int, now: date
 
 
 def load_state() -> dict:
+    base = {"automationStartGw": AUTOMATION_START_GW, "rebuilt": []}
     if not STATE_PATH.exists():
-        return {"rebuilt": []}
+        return base
     try:
         data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {"rebuilt": []}
+        return base
     if not isinstance(data, dict):
-        return {"rebuilt": []}
+        return base
     rebuilt = data.get("rebuilt")
     if not isinstance(rebuilt, list):
         rebuilt = []
-    return {"rebuilt": rebuilt}
+    try:
+        start_gw = int(data.get("automationStartGw") or AUTOMATION_START_GW)
+    except (TypeError, ValueError):
+        start_gw = AUTOMATION_START_GW
+    out = {"automationStartGw": start_gw, "rebuilt": rebuilt}
+    if data.get("note"):
+        out["note"] = data["note"]
+    return out
 
 
 def save_state(state: dict) -> None:
@@ -284,6 +294,12 @@ def main() -> int:
         print("No active gameweek — skip.")
         return 0
 
+    state = load_state()
+    start_gw = int(state.get("automationStartGw") or AUTOMATION_START_GW)
+    if gw < start_gw:
+        print(f"GW{gw} is before automation start (GW{start_gw}) — skip.")
+        return 0
+
     if args.dry_run:
         fixtures = fpl_get("/fixtures/")
         if not isinstance(fixtures, list):
@@ -296,7 +312,6 @@ def main() -> int:
             print("unexpected fixtures payload", file=sys.stderr)
             return 1
 
-    state = load_state()
     now = utc_now()
     groups = group_gw_fixtures_by_matchday(fixtures, gw)
     pending = find_pending_matchday(

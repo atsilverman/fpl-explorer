@@ -1,0 +1,10 @@
+{
+  "automationStartGw": 2,
+  "note": "GW1 matchdays seeded — first automated post-matchday rebuild runs for GW2 (Fri 2026-08-28 kickoff).",
+  "rebuilt": [
+    {"gw": 1, "matchday": "2026-08-21", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
+    {"gw": 1, "matchday": "2026-08-22", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
+    {"gw": 1, "matchday": "2026-08-23", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
+    {"gw": 1, "matchday": "2026-08-24", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true}
+  ]
+}

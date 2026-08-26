@@ -2337,13 +2337,13 @@
         // Timestamp lives in the bottom footer; status strings stay in the header.
         const headerText = showFooter ? "" : text;
         el.homeCountLabel.textContent = headerText;
-        if (!showFooter && title) el.homeCountLabel.title = title;
-        else el.homeCountLabel.removeAttribute("title");
+        if (!showFooter && title) setTip(el.homeCountLabel, title);
+        else setTip(el.homeCountLabel, "");
       }
       if (el.homeUpdatedFooter) {
         el.homeUpdatedFooter.textContent = text;
-        if (title) el.homeUpdatedFooter.title = title;
-        else el.homeUpdatedFooter.removeAttribute("title");
+        if (title) setTip(el.homeUpdatedFooter, title);
+        else setTip(el.homeUpdatedFooter, "");
         el.homeUpdatedFooter.hidden = !showFooter || !text;
       }
     };
@@ -2450,7 +2450,7 @@
       : `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
     elDelta.hidden = false;
     elDelta.className = `home-rank-delta ${cls}`;
-    elDelta.title = label;
+    setTip(elDelta, label);
     elDelta.setAttribute("aria-label", label);
     elDelta.innerHTML = `${iconHTML(icon)}<span class="home-rank-delta-n">${flat ? "0" : n}</span>`;
   }
@@ -4442,7 +4442,7 @@
       const iconUse = el.homeSearchBtn.querySelector("use");
       if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
       const label = clearMode ? "Clear player search" : "Search players";
-      el.homeSearchBtn.title = label;
+      setTip(el.homeSearchBtn, label);
       el.homeSearchBtn.setAttribute("aria-label", label);
       el.homeSearchBtn.classList.toggle("is-clear", clearMode);
       el.homeSearchBtn.setAttribute("aria-pressed", clearMode ? "true" : "false");
@@ -9216,8 +9216,8 @@
     }
     const cat = currentExpectedCat();
     el.expectedCatLabel.textContent = cat.label;
-    el.expectedCatBtn.title = cat.label;
-    el.expectedCatBtn.setAttribute("aria-label", `xData category: ${cat.label}`);
+    setTip(el.expectedCatBtn, "");
+    el.expectedCatBtn.setAttribute("aria-label", `Change category, ${cat.label}`);
     const expanded = preferMobileSheet()
       ? mobileSheetOpen && mobileSheetKey === "expected-cats"
       : el.expectedCatMenu?.classList.contains("open");
@@ -10765,7 +10765,7 @@
     el.teamCompareBtn.setAttribute("aria-pressed", on ? "true" : "false");
     el.teamCompareBtn.removeAttribute("aria-disabled");
     el.teamCompareBtn.disabled = false;
-    el.teamCompareBtn.title = "Click up to 5 players to compare";
+    setTip(el.teamCompareBtn, "Click up to 5 players to compare");
   }
 
   function renderTeamCompareWrap() {
@@ -13181,13 +13181,13 @@
     const { text, title } = pageUpdatedMeta(iso);
     if (!text) {
       node.textContent = "";
-      node.removeAttribute("title");
+      setTip(node, "");
       node.hidden = true;
       return;
     }
     node.textContent = text;
-    if (title) node.title = title;
-    else node.removeAttribute("title");
+    if (title) setTip(node, title);
+    else setTip(node, "");
     node.hidden = false;
   }
 
@@ -13238,8 +13238,8 @@
     const { text, title } = pageUpdatedMeta(pageDataUpdatedIso("opta"));
     if (updated) {
       updated.textContent = text;
-      if (title) updated.title = title;
-      else updated.removeAttribute("title");
+      if (title) setTip(updated, title);
+      else setTip(updated, "");
       updated.hidden = !text;
     }
 
@@ -16721,7 +16721,7 @@
         });
         el.marketsSlidersToggle.classList.add("on");
         el.marketsSlidersToggle.setAttribute("aria-expanded", "true");
-        el.marketsSlidersToggle.title = "Hide compare options";
+        setTip(el.marketsSlidersToggle, "Hide compare options");
         el.marketsSlidersToggle.setAttribute("aria-label", "Hide compare options");
         requestAnimationFrame(() => {
           syncMarketsCompareSeg();
@@ -16734,7 +16734,7 @@
         el.marketsControls.classList.add("is-collapsed");
         el.marketsSlidersToggle.classList.remove("on");
         el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
-        el.marketsSlidersToggle.title = "Show compare options";
+        setTip(el.marketsSlidersToggle, "Show compare options");
         el.marketsSlidersToggle.setAttribute("aria-label", "Show compare options");
       }
       return;
@@ -16743,7 +16743,10 @@
     el.marketsControls.classList.toggle("is-collapsed", !open);
     el.marketsSlidersToggle.classList.toggle("on", open);
     el.marketsSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    el.marketsSlidersToggle.title = open ? "Hide compare options" : "Show compare options";
+    setTip(
+      el.marketsSlidersToggle,
+      open ? "Hide compare options" : "Show compare options"
+    );
     el.marketsSlidersToggle.setAttribute(
       "aria-label",
       open ? "Hide compare options" : "Show compare options"
@@ -16785,7 +16788,7 @@
         });
         el.scheduleSlidersToggle.classList.add("on");
         el.scheduleSlidersToggle.setAttribute("aria-expanded", "true");
-        el.scheduleSlidersToggle.title = "Hide matchup sliders";
+        setTip(el.scheduleSlidersToggle, "Hide matchup sliders");
         el.scheduleSlidersToggle.setAttribute("aria-label", "Hide matchup sliders");
         requestAnimationFrame(() => {
           updateScheduleGwSlider();
@@ -16800,7 +16803,7 @@
         el.scheduleControls.classList.add("is-collapsed");
         el.scheduleSlidersToggle.classList.remove("on");
         el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
-        el.scheduleSlidersToggle.title = "Show matchup sliders";
+        setTip(el.scheduleSlidersToggle, "Show matchup sliders");
         el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup sliders");
       }
       return;
@@ -16809,7 +16812,10 @@
     el.scheduleControls.classList.toggle("is-collapsed", !open);
     el.scheduleSlidersToggle.classList.toggle("on", open);
     el.scheduleSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    el.scheduleSlidersToggle.title = open ? "Hide matchup sliders" : "Show matchup sliders";
+    setTip(
+      el.scheduleSlidersToggle,
+      open ? "Hide matchup sliders" : "Show matchup sliders"
+    );
     el.scheduleSlidersToggle.setAttribute("aria-label", open ? "Hide matchup sliders" : "Show matchup sliders");
     if (open) {
       // Fills were measured while collapsed — refresh now that layout is visible.
