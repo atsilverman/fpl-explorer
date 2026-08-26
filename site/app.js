@@ -4394,6 +4394,7 @@
         results.hidden = true;
         results.innerHTML = "";
       }
+      wrap.classList.remove("is-open");
       return;
     }
     if (clearBtn) clearBtn.hidden = !homeLookupPlayer && !(input && String(input.value || "").trim());
@@ -4409,11 +4410,13 @@
 
   function renderHomeDesktopSearchResults(query) {
     const results = el.homeDesktopSearchResults;
+    const wrap = el.homeDesktopSearch;
     if (!results) return;
     const q = String(query || "").trim();
     if (!q) {
       results.hidden = true;
       results.innerHTML = "";
+      if (wrap) wrap.classList.remove("is-open");
       return;
     }
     const rows = homeSearchFilteredRows(q);
@@ -4421,13 +4424,16 @@
       ? rows.map(homeSearchResultRowHTML).join("")
       : `<div class="home-search-empty">No players match “${escapeHtml(q)}”.</div>`;
     results.hidden = false;
+    if (wrap) wrap.classList.add("is-open");
   }
 
   function hideHomeDesktopSearchResults() {
     const results = el.homeDesktopSearchResults;
+    const wrap = el.homeDesktopSearch;
     if (!results) return;
     results.hidden = true;
     results.innerHTML = "";
+    if (wrap) wrap.classList.remove("is-open");
   }
 
   function syncHomeSearchBtn() {

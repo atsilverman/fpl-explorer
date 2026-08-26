@@ -12795,6 +12795,9 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   flex: none;
   margin-top: 2px;
 }
+.home-desktop-search.is-open {
+  z-index: 2;
+}
 .home-desktop-search-field {
   display: flex;
   align-items: center;
@@ -12855,7 +12858,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   top: calc(100% + 6px);
   right: 0;
   left: 0;
-  z-index: 28;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -12880,6 +12883,16 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 @media (min-width: 721px) {
   html[data-page="home"] .home-desktop-search {
     display: block;
+  }
+  /* Dropdown extends over summary cards — keep header above dashboard content. */
+  html[data-page="home"] #home-page > .home-header {
+    position: relative;
+    z-index: 60;
+    overflow: visible;
+  }
+  html[data-page="home"] .home-header .opta-header-top,
+  html[data-page="home"] .home-header .page-header-meta {
+    overflow: visible;
   }
   html[data-page="home"] .home-header .page-header-meta {
     flex-direction: column;
