@@ -2364,6 +2364,17 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.is-mobile-layout[data-page="opta"] #stats-toolbar-start > .tabs {
     display: none !important;
   }
+  /* Live mobile: filters live in the bottom FAB — never flash inline beside DefCon. */
+  html.is-mobile-layout[data-page="live"] #stats-toolbar-start {
+    display: none !important;
+  }
+  html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start #sidebar-toggle,
+  html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start > .tabs {
+    display: none !important;
+  }
+  html.is-mobile-layout[data-page="expected"] #stats-toolbar-start #sidebar-toggle {
+    display: none !important;
+  }
   html:not([data-page="opta"]) #compare-toggle,
   html:not([data-page="opta"]) #enhance-relative-btn {
     display: none !important;
@@ -2771,7 +2782,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html.has-mobile-bottom-dock[data-page="opta"] .main,
   html.has-mobile-bottom-dock[data-page="ownership"]:not(:has(#ownership-page.is-treemap)) .main,
-  html.has-mobile-bottom-dock[data-page="team"] .main {
+  html.has-mobile-bottom-dock[data-page="team"] .main,
+  html.has-mobile-bottom-dock[data-page="live"] .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
   html.mobile-chrome-scroll-hidden .mobile-view-dock:not([hidden]),
@@ -3317,6 +3329,42 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: block;
     overflow: visible;
     margin-bottom: 8px;
+  }
+
+  /* Live: page (.main) scrolls vertically — same model as Statistics / Ownership table. */
+  html[data-page="live"] .main {
+    padding-bottom: var(--main-pad-x, 8px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
+  }
+  html[data-page="live"] #live-page {
+    display: block;
+    flex: none;
+    min-height: 0;
+  }
+  html[data-page="live"] #live-page .live-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: none;
+    flex: none;
+    min-height: 0;
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+  html[data-page="live"] #live-page .live-table-wrap:has(.live-defcon-table) {
+    overflow-x: hidden;
+    touch-action: auto;
+  }
+  html[data-page="live"] #live-page .live-bonus-wrap {
+    overflow: visible;
+    flex: none;
+    min-height: 0;
+  }
+  html.has-mobile-bottom-dock[data-page="live"] #live-page .page-data-footer:not([hidden]) {
+    padding-bottom: calc(var(--mobile-dock-clearance, 80px) + 4px);
   }
 
   /* Expected Data: barbell card is the scrollport on mobile. */
@@ -15254,7 +15302,7 @@ html[data-page="live"] #team-filters .chip.team-chip {
   min-width: 0;
   display: flex;
   align-items: center;
-  --defcon-pct: 0%;
+  --defcon-scale: 0;
 }
 .live-defcon-bar[data-defcon-units="10"] {
   --defcon-units: 10;
@@ -15301,12 +15349,14 @@ html[data-page="live"] #team-filters .chip.team-chip {
   z-index: 0;
   border-radius: inherit;
   background: hsl(var(--positive) / 0.55);
-  clip-path: inset(0 100% 0 0);
-  transition: clip-path 0.65s var(--ease-out);
-  transition-delay: calc(min(var(--enter-i, 0), 18) * 0.028s);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+  transition: transform 0.88s var(--ease-out);
+  transition-delay: 0s;
 }
 .live-defcon-fill.is-drawn {
-  clip-path: inset(0 calc(100% - var(--defcon-pct, 0%)) 0 0);
+  transform: scaleX(var(--defcon-scale, 0));
 }
 .live-defcon-bar.is-complete .live-defcon-fill {
   background: hsl(var(--positive) / 0.88);
@@ -15388,6 +15438,25 @@ html[data-page="live"] #team-filters .chip.team-chip {
   width: 14px;
   height: 14px;
 }
+.live-dc-check-enter {
+  opacity: 0;
+  transform: scale(0.35);
+  transition:
+    opacity 0.45s var(--ease-out),
+    transform 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(0.1s + min(var(--enter-i, 0), 16) * 0.02s);
+}
+.live-dc-check-enter.is-drawn {
+  opacity: 1;
+  transform: scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dc-check-enter {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
 .live-empty-row td {
   color: var(--text-faint);
   padding: 18px 12px;
@@ -15412,11 +15481,47 @@ html[data-page="live"] #team-filters .chip.team-chip {
   opacity: 1;
 }
 .live-defcon-frac .live-stat-roll,
-.live-bonus-track .rankings-value .live-stat-roll {
+.live-bonus-track .rankings-value .live-stat-roll,
+.live-points-pill .live-stat-roll {
   min-height: 1em;
 }
-.live-defcon-frac .stat-roll-digit {
+.live-defcon-frac .stat-roll-digit,
+.live-points-pill .stat-roll-digit {
   height: 1em;
+}
+.live-points-pill .live-stat-roll {
+  display: inline-flex;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* Points pills — transparent until drawn; bg eases in over --pill-enter-ms (set in JS). */
+.live-points-pill-enter:not(.is-drawn) {
+  background: transparent !important;
+  color: transparent;
+  box-shadow: none !important;
+}
+.live-points-pill-enter.is-drawn {
+  transition:
+    background-color var(--pill-enter-ms, 420ms) var(--ease-out),
+    color calc(var(--pill-enter-ms, 420ms) * 0.88) var(--ease-out),
+    box-shadow var(--pill-enter-ms, 420ms) var(--ease-out);
+}
+/* DC check inside pill rides the pill bg reveal. */
+.live-points-pill-enter .live-dc-check-enter {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-points-pill-enter:not(.is-drawn) {
+    background: transparent !important;
+    color: inherit;
+  }
+  .live-points-pill-enter.is-drawn {
+    transition: none;
+  }
 }
 
 @media (min-width: 721px) {
@@ -15429,11 +15534,6 @@ html[data-page="live"] #team-filters .chip.team-chip {
   #live-page {
     max-width: none;
     margin-inline: 0;
-  }
-  #live-page .live-table-wrap:has(.live-defcon-table) {
-    overflow-x: hidden;
-    overflow-y: hidden;
-    max-height: none;
   }
   #live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player,
   #live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
@@ -15668,6 +15768,12 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-good {
   background: hsl(var(--positive));
   color: #fff;
+}
+/* G/A ≥2 — outer ring separated from fill by a narrow gap. */
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-good.is-ga-ring {
+  box-shadow:
+    0 0 0 2px hsl(var(--background)),
+    0 0 0 3.5px hsl(var(--positive));
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus {
   color: #fff;
@@ -16007,9 +16113,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   margin: 0;
   border-radius: 0;
   transition:
-    width 0.55s var(--ease-out),
+    width 0.82s var(--ease-out),
     background-color 0.12s ease;
-  transition-delay: calc(var(--bar-i, 0) * 0.04s);
+  transition-delay: calc(var(--bar-i, 0) * 0.045s);
 }
 .live-bonus-card .live-bonus-track .rankings-bar.is-drawn {
   width: var(--bar-pct, 0%);

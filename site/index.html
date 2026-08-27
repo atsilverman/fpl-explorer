@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=777" />
+<link rel="stylesheet" href="styles.css?v=784" />
 <script>
 (() => {
   try {
@@ -54,6 +54,10 @@
       'html[data-page="live"] #table-only-toggles{display:none!important}' +
       'html[data-page="live"] #live-mode-seg{display:flex!important}' +
       'html:not([data-page="live"]) #live-mode-seg{display:none!important}' +
+      'html.is-mobile-layout[data-page="live"] #stats-toolbar-start{display:none!important}' +
+      'html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start #sidebar-toggle,' +
+      'html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start>.tabs{display:none!important}' +
+      'html.is-mobile-layout[data-page="expected"] #stats-toolbar-start #sidebar-toggle{display:none!important}' +
       'html[data-page="team"] #subtoolbar .tabs{display:none!important}' +
       'html.is-mobile-layout[data-page="rankings"] #subtoolbar{display:none!important}';
     document.head.appendChild(boot);
@@ -1298,7 +1302,7 @@
 <script src="home_data.js?v=20"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=765"></script>
+<script src="app.js?v=775"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

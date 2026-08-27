@@ -1209,7 +1209,7 @@
       chip.addEventListener("click", () => {
         toggleSetValue(state.teamFilter, code);
         chip.classList.toggle("active");
-        if (state.page === "live") renderLive();
+        if (state.page === "live") renderLive({ animate: true });
         else renderTable();
       });
       el.teamFilters.appendChild(chip);
@@ -1227,7 +1227,7 @@
         if (state.page === "team" && state.teamPickerSlot) return;
         toggleSetValue(state.posFilter, p);
         chip.classList.toggle("active");
-        if (state.page === "live") renderLive();
+        if (state.page === "live") renderLive({ animate: true });
         else renderTable();
       });
       el.posFilters.appendChild(chip);
@@ -1321,7 +1321,7 @@
     renderColumnsPanel();
     renderTable();
     if (state.page === "ownership") renderOwnership();
-    if (state.page === "live") renderLive();
+    if (state.page === "live") renderLive({ animate: true });
   }
 
   // ---------------------------------------------------------------------
@@ -1794,7 +1794,7 @@
       renderHome({ deferDuringEnter: true, settleQuiet: true });
       syncHomeLivePolling({ waitForEnter: true });
     } else if (state.page === "live") {
-      renderLive();
+      renderLive({ quiet: true });
       syncHomeLivePolling();
     } else if (state.page === "rankings") renderRankings({ animateBars: false });
     else if (state.page === "team") renderTeam();
@@ -5948,6 +5948,7 @@
         NARROW_MQ.matches &&
         (state.page === "opta" ||
           state.page === "team" ||
+          state.page === "live" ||
           (state.page === "ownership" && !ownershipIsTreemap()))
       );
     }
@@ -5985,7 +5986,7 @@
       flingRaf = requestAnimationFrame(step);
     }
 
-    document.querySelectorAll(".table-wrap, .barbell-scroll").forEach((inner) => {
+    document.querySelectorAll(".table-wrap, .barbell-scroll, .live-bonus-wrap").forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
 
@@ -7420,7 +7421,7 @@
       return;
     }
     if (state.page === "live") {
-      renderLive();
+      renderLive({ quiet: true });
       syncFiltersResetUI();
       return;
     }
@@ -14147,17 +14148,19 @@
     const acts = Number.isFinite(Number(actions)) ? Math.max(0, Number(actions)) : 0;
     const pct = Math.min(100, (acts / thr) * 100);
     const hit = acts >= thr;
+    const scale = pct < 0.5 ? 0 : Number((pct / 100).toFixed(4));
     return {
       barPct: pct,
       complete: hit,
-      fillStyle: `--defcon-pct:${pct < 0.5 ? 0 : pct.toFixed(2)}%;--defcon-units:${thr}`,
+      // scaleX is far more reliable than clip-path on iOS Safari.
+      fillStyle: `--defcon-scale:${scale};--defcon-units:${thr}`,
     };
   }
 
   function liveAchievedDotHTML(actions, threshold, pos) {
     if (!Number.isFinite(actions) || actions < threshold) return "";
     const title = `DefCon achieved — ${actions} ≥ ${threshold} ${pos} actions (+2 pts)`;
-    return `<span class="threshold-dot live-defcon-achieved"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+    return `<span class="threshold-dot live-defcon-achieved live-dc-check-enter"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
   }
 
   function liveFilteredRows(rows) {
@@ -14283,14 +14286,21 @@
     return "";
   }
 
-  function livePointsPillHTML(colKey, text, { bonusPts = null } = {}) {
+  function livePointsPillHTML(colKey, text, { bonusPts = null, statCount = null } = {}) {
     const tone = livePointsPillTone(colKey);
     let extra = "";
     if (colKey === "bonus" && bonusPts != null) {
       const n = Math.max(1, Math.min(3, Math.round(Number(bonusPts)) || 1));
       extra = ` is-bonus-${n}`;
     }
-    return `<span class="ownership-pill live-points-pill${tone ? ` ${tone}` : ""}${extra}">${text}</span>`;
+    if (
+      (colKey === "goals" || colKey === "assists") &&
+      Number.isFinite(Number(statCount)) &&
+      Number(statCount) > 1
+    ) {
+      extra += " is-ga-ring";
+    }
+    return `<span class="ownership-pill live-points-pill live-points-pill-enter${tone ? ` ${tone}` : ""}${extra}">${text}</span>`;
   }
 
   function livePointsCellHTML(entry, col) {
@@ -14305,22 +14315,18 @@
       );
     }
     if (col.key === "saves" && pos !== "GK") return "";
-    if (col.key === "yellowCards") {
-      const n = Number(eg.yellowCards);
-      if (!Number.isFinite(n) || n <= 0) return "";
-      return livePointsPillHTML(col.key, escapeHtml(String(n)));
-    }
-    if (col.key === "redCards") {
-      const n = Number(eg.redCards);
-      if (!Number.isFinite(n) || n <= 0) return "";
-      return livePointsPillHTML(col.key, escapeHtml(String(n)));
-    }
     const n = Number(eg[col.key]);
     if (!Number.isFinite(n) || n === 0) return "";
-    if (col.key === "bonus") {
-      return livePointsPillHTML(col.key, escapeHtml(String(n)), { bonusPts: n });
-    }
-    return livePointsPillHTML(col.key, escapeHtml(String(n)));
+    const roll = statRollSpan(n, {
+      from: 0,
+      decimals: 0,
+      className: "live-stat-roll",
+      rollKind: col.key === "pts" ? "pts" : "stat",
+    });
+    return livePointsPillHTML(col.key, roll, {
+      bonusPts: col.key === "bonus" ? n : null,
+      statCount: n,
+    });
   }
 
   function livePointsRowHTML(entry, enterI) {
@@ -14614,7 +14620,7 @@
     }
   }
 
-  function renderLive({ quiet = false } = {}) {
+  function renderLive({ quiet = false, animate = false } = {}) {
     if (quiet && liveIsEnterBusy()) {
       liveRenderQueued = true;
       return;
@@ -14646,24 +14652,33 @@
     liveUpdateFooter(gw);
     syncLiveNavChrome();
     syncLivePointsCoreUnder();
+
+    if (quiet) {
+      snapLiveBarsDrawn(el.livePage);
+      finishLiveStatRolls(el.livePage);
+      deferLiveTableLayout();
+    } else if (liveEnterAwaitingPlay) {
+      /* empty rolls / undrawn bars — playLiveEnter owns motion */
+    } else if (liveIsEnterBusy()) {
+      /* page enter already started playLiveMotion — avoid stacking a second run */
+    } else if (animate) {
+      startLiveEnterMotion(el.livePage);
+    }
+  }
+
+  /** Points name-col measure reflows mid-odometer and replays the roll — defer until enter settles. */
+  function deferLiveTableLayout() {
     scheduleOptaMobileNameColWidth();
     bindAllNameColumnSimplifies();
     if (el.liveTableWrap && state.liveMode === "points") {
       updateNameColumnSimplify(el.liveTableWrap);
     }
-
-    if (quiet) {
-      snapLiveBarsDrawn(el.livePage);
-      finishLiveStatRolls(el.livePage);
-    } else if (liveIsEnterBusy()) {
-      /* playLiveEnter owns motion */
-    } else {
-      startLiveEnterMotion(el.livePage);
-    }
   }
 
   let liveEnterMotionToken = 0;
   let liveRenderQueued = false;
+  /** setPage marks this so renderLive leaves rolls empty until playLiveEnter. */
+  let liveEnterAwaitingPlay = false;
 
   function liveIsEnterBusy() {
     return !!(el.livePage && el.livePage.classList.contains("is-live-entering"));
@@ -14696,65 +14711,162 @@
       bar.style.transition = "none";
       bar.classList.add("is-drawn");
     });
+    root.querySelectorAll(".live-dc-check-enter").forEach((el) => el.classList.add("is-drawn"));
+    root.querySelectorAll(".live-points-pill-enter").forEach((el) => el.classList.add("is-drawn"));
   }
 
-  /** Draw DefCon fills / Bonus meters + roll action/BPS counts. Fresh path — no page-enter pending. */
-  function playLiveMotion(root, { settleMs = 1300 } = {}) {
+  const LIVE_ROLL_BATCH = 40;
+
+  function livePtsRollDurationMs(value) {
+    const mag = Math.abs(Number(value));
+    if (!Number.isFinite(mag)) return 680;
+    return Math.round(Math.min(1500, Math.max(680, 600 + Math.sqrt(mag) * 140)));
+  }
+
+  /** Snappy pill stats (G/A/B/1…) — still rolls from 0. */
+  function liveStatRollDurationMs(value) {
+    const mag = Math.abs(Number(value));
+    if (!Number.isFinite(mag)) return 420;
+    return Math.round(Math.min(600, Math.max(380, 340 + Math.sqrt(mag) * 38)));
+  }
+
+  function liveDefconRollDurationMs(value) {
+    const mag = Math.abs(Number(value));
+    if (!Number.isFinite(mag)) return 560;
+    return Math.round(Math.min(960, Math.max(560, 500 + Math.sqrt(mag) * 60)));
+  }
+
+  function liveRollDurationForNode(node) {
+    const to = node.dataset.countTo;
+    if (node.dataset.countRoll === "pts") return livePtsRollDurationMs(to);
+    if (node.closest(".live-defcon-row, .live-bonus-list")) {
+      return node.closest(".live-defcon-row")
+        ? liveDefconRollDurationMs(to)
+        : liveStatRollDurationMs(to);
+    }
+    return liveStatRollDurationMs(to);
+  }
+
+  /** Points pills — bg + odometer start in the same tick (no global batch desync). */
+  function animateLivePointsEnter(root, token) {
+    const rows = [...root.querySelectorAll(".live-points-row")];
+    let maxEnd = 0;
+    rows.forEach((row, rowI) => {
+      const rowDelay = Math.min(rowI, 22) * 12;
+      row.querySelectorAll(".live-points-pill-enter").forEach((pill) => {
+        const roll = pill.querySelector(".live-stat-roll[data-count-to]");
+        const rollMs = roll ? liveRollDurationForNode(roll) : 360;
+        pill.style.setProperty("--pill-enter-ms", `${rollMs}ms`);
+        maxEnd = Math.max(maxEnd, rowDelay + rollMs);
+        window.setTimeout(() => {
+          if (token !== liveEnterMotionToken) return;
+          pill.classList.add("is-drawn");
+          if (roll) animateStatRollNode(roll, { duration: rollMs });
+        }, rowDelay);
+      });
+    });
+    return maxEnd;
+  }
+
+  /** Batch odometer mounts (DefCon counts + Bonus BPS only). */
+  function animateLiveStatRollsBatched(nodes, token) {
+    if (!nodes.length) return { maxRoll: 420, tailMs: 0 };
+    let maxRoll = 420;
+    nodes.forEach((node) => {
+      maxRoll = Math.max(maxRoll, liveRollDurationForNode(node));
+    });
+    const tailMs = Math.ceil(nodes.length / LIVE_ROLL_BATCH) * 17;
+    let i = 0;
+    const runBatch = () => {
+      if (token !== liveEnterMotionToken) return;
+      const end = Math.min(i + LIVE_ROLL_BATCH, nodes.length);
+      for (; i < end; i += 1) {
+        const node = nodes[i];
+        animateStatRollNode(node, { duration: liveRollDurationForNode(node) });
+      }
+      if (i < nodes.length) requestAnimationFrame(runBatch);
+    };
+    runBatch();
+    return { maxRoll, tailMs };
+  }
+
+  /** Draw DefCon fills / Bonus meters + roll action/BPS/Pts counts. */
+  function playLiveMotion(root, { settleMs = 1100, onSettled } = {}) {
     if (!root) return;
     liveEnterMotionToken += 1;
     const token = liveEnterMotionToken;
+    clearTimeout(root._liveMotionSettle);
 
     const fills = [...root.querySelectorAll(".live-defcon-fill")];
     const bars = [...root.querySelectorAll(".live-bonus-track .rankings-bar")];
     const rolls = [...root.querySelectorAll(".live-stat-roll[data-count-to]")];
+    const dcChecks = [...root.querySelectorAll(".live-dc-check-enter")].filter(
+      (el) => !el.closest(".live-points-pill-enter")
+    );
+    const pointsPills = [...root.querySelectorAll(".live-points-pill-enter")];
+    const tableRolls = rolls.filter((node) => !node.closest(".live-points-pill-enter"));
+
+    const settle = () => {
+      if (token !== liveEnterMotionToken) return;
+      finishLiveStatRolls(root);
+      deferLiveTableLayout();
+      if (onSettled) onSettled();
+    };
 
     if (prefersReducedMotion()) {
-      fills.forEach((fill) => fill.classList.add("is-drawn"));
-      bars.forEach((bar) => bar.classList.add("is-drawn"));
+      fills.forEach((fill) => {
+        fill.style.transition = "none";
+        fill.classList.add("is-drawn");
+      });
+      bars.forEach((bar) => {
+        bar.style.transition = "none";
+        bar.classList.add("is-drawn");
+      });
       rolls.forEach(finishStatRollNode);
+      dcChecks.forEach((el) => el.classList.add("is-drawn"));
+      pointsPills.forEach((el) => el.classList.add("is-drawn"));
+      settle();
       return;
     }
 
-    fills.forEach((fill) => {
-      fill.style.transition = "";
-      fill.classList.remove("is-drawn");
-    });
-    bars.forEach((bar) => {
-      bar.style.transition = "";
-      bar.classList.remove("is-drawn");
-    });
+    // Rankings-style: batch undraw, one paint, then draw — no per-bar forced reflow.
+    fills.forEach((fill) => fill.classList.remove("is-drawn"));
+    bars.forEach((bar) => bar.classList.remove("is-drawn"));
+    dcChecks.forEach((el) => el.classList.remove("is-drawn"));
+    pointsPills.forEach((el) => el.classList.remove("is-drawn"));
 
-    // One frame so the undrawn state paints, then draw + roll together.
-    requestAnimationFrame(() => {
+    const draw = () => {
       if (token !== liveEnterMotionToken) return;
       fills.forEach((fill) => fill.classList.add("is-drawn"));
       bars.forEach((bar) => bar.classList.add("is-drawn"));
+      dcChecks.forEach((el) => el.classList.add("is-drawn"));
+      const pointsEnd = animateLivePointsEnter(root, token);
+      const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
+      const motionEnd = Math.max(pointsEnd, tailMs + tableMax);
+      root._liveMotionSettle = window.setTimeout(
+        settle,
+        Math.max(settleMs, motionEnd + 120)
+      );
+    };
 
-      let maxRoll = 480;
-      rolls.forEach((node) => {
-        const mag = Math.abs(Number(node.dataset.countTo) || 0);
-        const ms = Math.round(Math.min(900, Math.max(480, 420 + Math.sqrt(mag) * 95)));
-        maxRoll = Math.max(maxRoll, ms);
-        animateStatRollNode(node, { duration: ms });
-      });
-
-      window.setTimeout(() => {
-        if (token !== liveEnterMotionToken) return;
-        finishLiveStatRolls(root);
-      }, Math.max(settleMs, maxRoll + 80));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(draw);
     });
   }
 
-  /** Dedicated Live page enter — skips generic pending/blank + <tr> stagger. */
+  /** Dedicated Live page enter / mode-switch motion. */
   function playLiveEnter(pane) {
     if (!pane) return;
+    liveEnterAwaitingPlay = false;
     clearTimeout(pane._enterClear);
+    clearTimeout(pane._liveMotionSettle);
+    pane._enterClear = 0;
     pane.classList.remove("is-entering", "is-enter-pending", "is-live-entering");
-    liveEnterMotionToken += 1;
 
     if (prefersReducedMotion()) {
       snapLiveBarsDrawn(pane);
       finishLiveStatRolls(pane);
+      deferLiveTableLayout();
       flushLiveEnterDeferred();
       return;
     }
@@ -14762,24 +14874,32 @@
     pane.querySelectorAll(".live-bonus-card").forEach((card, i) => {
       card.style.setProperty("--enter-i", String(i));
     });
-    pane.querySelectorAll(".live-defcon-row").forEach((row, i) => {
+    pane.querySelectorAll(".live-defcon-row, .live-points-row").forEach((row, i) => {
       row.style.setProperty("--enter-i", String(i));
     });
 
     pane.classList.add("is-live-entering", "is-entering");
-    playLiveMotion(pane, { settleMs: 1200 });
-
-    pane._enterClear = window.setTimeout(() => {
-      liveEnterMotionToken += 1;
-      finishLiveStatRolls(pane);
-      snapLiveBarsDrawn(pane);
-      pane.classList.remove("is-live-entering", "is-entering");
-      flushLiveEnterDeferred();
-    }, 1400);
+    playLiveMotion(pane, {
+      onSettled: () => {
+        snapLiveBarsDrawn(pane);
+        pane.classList.remove("is-live-entering", "is-entering");
+        flushLiveEnterDeferred();
+      },
+    });
   }
 
   function startLiveEnterMotion(pane) {
-    playLiveMotion(pane, { settleMs: 1200 });
+    if (!pane) return;
+    clearTimeout(pane._enterClear);
+    clearTimeout(pane._liveMotionSettle);
+    pane._enterClear = 0;
+    pane.querySelectorAll(".live-bonus-card").forEach((card, i) => {
+      card.style.setProperty("--enter-i", String(i));
+    });
+    pane.querySelectorAll(".live-defcon-row, .live-points-row").forEach((row, i) => {
+      row.style.setProperty("--enter-i", String(i));
+    });
+    playLiveMotion(pane);
   }
 
   // Ownership page — sortable TSB% mover table
@@ -15745,6 +15865,7 @@
     if (signed) attrs.push('data-count-signed="1"');
     if (suffix) attrs.push(`data-count-suffix="${suffix}"`);
     if (from != null && Number.isFinite(Number(from))) attrs.push(`data-count-from="${Number(from)}"`);
+    if (opts.rollKind) attrs.push(`data-count-roll="${escapeHtml(String(opts.rollKind))}"`);
     return `<span ${attrs.join(" ")}></span>`;
   }
 
@@ -16477,6 +16598,7 @@
       renderHome();
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
+      liveEnterAwaitingPlay = true;
       if (el.livePage) el.livePage.classList.add("is-live-entering");
       renderLive();
     } else if (page === "ownership") {
@@ -16626,11 +16748,17 @@
       const next = btn.dataset.liveMode;
       if (next !== "defcon" && next !== "points" && next !== "bonus") return;
       if (next === state.liveMode) return;
+      if (el.livePage) {
+        clearTimeout(el.livePage._enterClear);
+        clearTimeout(el.livePage._liveMotionSettle);
+        el.livePage._enterClear = 0;
+        el.livePage.classList.remove("is-live-entering", "is-entering");
+      }
       state.liveMode = next;
       const defSort = liveDefaultSortForMode(next);
       state.liveSortKey = defSort.key;
       state.liveSortDir = defSort.dir;
-      renderLive();
+      renderLive({ animate: true });
     });
   }
   if (el.liveMatchupFilters) {
@@ -16640,7 +16768,7 @@
       const id = btn.dataset.liveMatchup;
       if (!id) return;
       toggleSetValue(state.liveMatchups, id);
-      renderLive();
+      renderLive({ animate: true });
     });
   }
   if (el.liveStatusSeg) {
@@ -16651,7 +16779,7 @@
       if (next !== "all" && next !== "live" && next !== "owned") return;
       if (next === state.liveStatus) return;
       state.liveStatus = next;
-      renderLive();
+      renderLive({ animate: true });
       syncFiltersResetUI();
     });
   }
@@ -16667,7 +16795,7 @@
         state.liveSortKey = key;
         state.liveSortDir = key === "name" ? "asc" : "desc";
       }
-      renderLive();
+      renderLive({ animate: true });
     });
   }
   if (el.ownershipMoverSeg) {
@@ -18710,7 +18838,8 @@
     }
     setPage(storedPage());
     syncLiveNavChrome();
-    renderTable();
+    // setPage already rendered Live (and started enter motion); renderTable would stack it.
+    if (state.page !== "live") renderTable();
   }
 
   init();
