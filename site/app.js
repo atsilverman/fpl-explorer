@@ -2338,8 +2338,8 @@
       else if (state.page === "live") {
         if (liveIsEnterBusy()) liveRenderQueued = true;
         else {
-          renderLive();
-          startLiveEnterMotion(el.livePage);
+          renderLive({ quiet: true });
+          livePollRefreshMotion();
         }
       } else syncLiveNavChrome();
     } catch {
@@ -10322,7 +10322,7 @@
     });
   }
 
-  function renderRankings({ animateBars = true } = {}) {
+  function renderRankings({ animateBars = true, skipBarDraw = false } = {}) {
     if (!el.rankingsGrid) return;
     clearRankingsCrossHover();
     const filtered = applyFilters(getRows());
@@ -10351,7 +10351,7 @@
     renderRankingsPinBar();
     if (animateBars) {
       animateRankingsBars();
-    } else {
+    } else if (!skipBarDraw) {
       el.rankingsGrid.querySelectorAll(".rankings-bar").forEach((bar) => {
         bar.classList.add("is-drawn");
       });
@@ -14720,7 +14720,11 @@
     } else if (liveEnterAwaitingPlay) {
       /* empty rolls / undrawn bars — playLiveEnter owns motion */
     } else if (liveIsEnterBusy()) {
-      /* page enter already started playLiveMotion — avoid stacking a second run */
+      if (animate) liveAnimateQueued = true;
+      else {
+        snapLiveBarsDrawn(el.livePage);
+        finishLiveStatRolls(el.livePage);
+      }
     } else if (animate) {
       startLiveEnterMotion(el.livePage);
     }
@@ -14737,6 +14741,7 @@
 
   let liveEnterMotionToken = 0;
   let liveRenderQueued = false;
+  let liveAnimateQueued = false;
   /** setPage marks this so renderLive leaves rolls empty until playLiveEnter. */
   let liveEnterAwaitingPlay = false;
 
@@ -14747,11 +14752,21 @@
     return false;
   }
 
+  function livePollRefreshMotion() {
+    if (state.liveMode === "defcon" || state.liveMode === "bonus") {
+      startLiveEnterMotion(el.livePage);
+    }
+  }
+
   function flushLiveEnterDeferred() {
     if (el.livePage) finishLiveStatRolls(el.livePage);
     if (liveRenderQueued) {
       liveRenderQueued = false;
-      renderLive();
+      renderLive({ quiet: true });
+      if (!liveAnimateQueued) livePollRefreshMotion();
+    }
+    if (liveAnimateQueued && el.livePage && !liveIsEnterBusy()) {
+      liveAnimateQueued = false;
       startLiveEnterMotion(el.livePage);
     }
     if (homeLivePollAfterEnter) {
@@ -14872,6 +14887,7 @@
 
     const settle = () => {
       if (token !== liveEnterMotionToken) return;
+      root._liveMotionSettle = 0;
       finishLiveStatRolls(root);
       deferLiveTableLayout();
       if (onSettled) onSettled();
@@ -16656,7 +16672,7 @@
     if (page !== "expected") setExpectedCatMenuOpen(false);
     if (page === "rankings") {
       // Bars animate once via playPageEnter → animateRankingsBars.
-      renderRankings({ animateBars: false });
+      renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
       if (el.homePage) el.homePage.classList.add("is-enter-pending");
       renderHome();
