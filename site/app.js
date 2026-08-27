@@ -14298,9 +14298,9 @@
     { key: "goals", label: "G", title: "Goals scored" },
     { key: "assists", label: "A", title: "Assists" },
     { key: "cleanSheets", label: "CS", title: "Clean sheets" },
-    { key: "saves", label: "Sv", title: "Saves (GK)" },
     { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
     { key: "bonus", label: "B", title: "Bonus points" },
+    { key: "saves", label: "Sv", title: "Saves (GK)" },
     { key: "yellowCards", label: "YC", title: "Yellow cards" },
     { key: "redCards", label: "RC", title: "Red cards" },
     { key: "ownGoals", label: "OG", title: "Own goals", narrow: true },
@@ -14757,9 +14757,7 @@
   }
 
   function livePollRefreshMotion() {
-    if (state.liveMode === "defcon" || state.liveMode === "bonus") {
-      startLiveEnterMotion(el.livePage);
-    }
+    startLiveEnterMotion(el.livePage);
   }
 
   function flushLiveEnterDeferred() {
@@ -14919,15 +14917,17 @@
     fills.forEach((fill) => fill.classList.remove("is-drawn"));
     bars.forEach((bar) => bar.classList.remove("is-drawn"));
     dcChecks.forEach((el) => el.classList.remove("is-drawn"));
-    if (!pointsMode) pointsPills.forEach((el) => el.classList.remove("is-drawn"));
+    pointsPills.forEach((el) => el.classList.remove("is-drawn"));
 
     const draw = () => {
       if (token !== liveEnterMotionToken) return;
       fills.forEach((fill) => fill.classList.add("is-drawn"));
       bars.forEach((bar) => bar.classList.add("is-drawn"));
       dcChecks.forEach((el) => el.classList.add("is-drawn"));
-      if (pointsMode) pointsPills.forEach((el) => el.classList.add("is-drawn"));
-      const pointsEnd = animateLivePointsEnter(root, token);
+      const pointsEnd = pointsMode
+        ? animateLivePointsEnter(root, token)
+        : 0;
+      if (!pointsMode) pointsPills.forEach((el) => el.classList.add("is-drawn"));
       const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
       const motionEnd = Math.max(pointsEnd, tailMs + tableMax);
       root._liveMotionSettle = window.setTimeout(
@@ -14978,6 +14978,7 @@
     clearTimeout(pane._enterClear);
     clearTimeout(pane._liveMotionSettle);
     pane._enterClear = 0;
+    pane._liveMotionSettle = 0;
     pane.querySelectorAll(".live-bonus-card").forEach((card, i) => {
       card.style.setProperty("--enter-i", String(i));
     });
@@ -16376,6 +16377,33 @@
     mountAndAnimateStatRolls(pane, { duration: 2000 });
   }
 
+  function clearLiveViewFilters() {
+    state.liveMatchups.clear();
+    state.liveStatus = "all";
+    state.posFilter.clear();
+    state.teamFilter.clear();
+    state.search = "";
+    if (el.search) el.search.value = "";
+    if (el.searchWrap) el.searchWrap.classList.remove("search-open");
+    if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
+    syncFilterChipUI();
+    syncSearchClearBtns();
+    syncLiveStatusSeg();
+    syncFiltersResetUI();
+  }
+
+  function resetLiveMotionState(pane = el.livePage) {
+    liveEnterMotionToken += 1;
+    liveRenderQueued = false;
+    liveAnimateQueued = false;
+    if (!pane) return;
+    clearTimeout(pane._enterClear);
+    clearTimeout(pane._liveMotionSettle);
+    pane._enterClear = 0;
+    pane._liveMotionSettle = 0;
+    pane.classList.remove("is-live-entering", "is-entering", "is-enter-pending");
+  }
+
   function resetSearchAndFiltersForNavigation({ rerender = false } = {}) {
     state.search = "";
     if (el.search) el.search.value = "";
@@ -16384,6 +16412,8 @@
 
     state.posFilter.clear();
     state.teamFilter.clear();
+    state.liveMatchups.clear();
+    state.liveStatus = "all";
     state.setPieceTakersOnly = false;
     if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
     state.teamAffordableOnly = false;
@@ -16399,6 +16429,7 @@
     if (typeof updateOwnedSlider === "function") updateOwnedSlider();
     if (typeof updateMinsSlider === "function") updateMinsSlider();
     if (typeof syncFiltersResetUI === "function") syncFiltersResetUI();
+    syncLiveStatusSeg();
 
     syncSearchClearBtns();
     if (rerender) {
@@ -16504,6 +16535,9 @@
     hideTeamRowActionsPopup();
     closeMobileSheet();
     if (prev !== page) {
+      if (prev === "live" && page !== "live") {
+        resetLiveMotionState(el.livePage);
+      }
       if (prev === "team") {
         restoreSeasonFilterBounds();
         closeTeamPicker({ silent: true });
@@ -16837,12 +16871,8 @@
       const next = btn.dataset.liveMode;
       if (next !== "defcon" && next !== "points" && next !== "bonus") return;
       if (next === state.liveMode) return;
-      if (el.livePage) {
-        clearTimeout(el.livePage._enterClear);
-        clearTimeout(el.livePage._liveMotionSettle);
-        el.livePage._enterClear = 0;
-        el.livePage.classList.remove("is-live-entering", "is-entering");
-      }
+      clearLiveViewFilters();
+      resetLiveMotionState(el.livePage);
       state.liveMode = next;
       const defSort = liveDefaultSortForMode(next);
       state.liveSortKey = defSort.key;
