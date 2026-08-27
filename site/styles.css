@@ -15557,37 +15557,15 @@ html[data-page="live"] #team-filters .chip.team-chip {
 }
 .live-points-pill .live-stat-roll {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-
-/* Points pills — bg ease optional; numerals must stay readable if undrawn. */
-.live-points-pill-enter:not(.is-drawn) {
-  background: transparent !important;
-  box-shadow: none !important;
-  color: hsl(var(--foreground)) !important;
-}
-.live-points-pill-enter.is-drawn {
-  transition:
-    background-color var(--pill-enter-ms, 420ms) var(--ease-out),
-    color calc(var(--pill-enter-ms, 420ms) * 0.88) var(--ease-out),
-    box-shadow var(--pill-enter-ms, 420ms) var(--ease-out);
-}
-/* DC check inside pill rides the pill bg reveal. */
-.live-points-pill-enter .live-dc-check-enter {
-  opacity: 1;
-  transform: none;
-  transition: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-points-pill-enter:not(.is-drawn) {
-    background: transparent !important;
-    color: inherit;
-  }
-  .live-points-pill-enter.is-drawn {
-    transition: none;
-  }
+.live-points-pill .stat-roll-digit {
+  height: 1em;
+  overflow: hidden;
 }
 
 @media (min-width: 721px) {
@@ -15816,6 +15794,12 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   flex: none;
   width: auto;
   height: auto;
+}
+/* Points DC pills — check visible with pill (no DefCon-track enter fade). */
+#live-page .live-points-table tbody td.col-num .live-points-pill .live-dc-check-enter {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill .check-mark-icon {
   width: 12px;

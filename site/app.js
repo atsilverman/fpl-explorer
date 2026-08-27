@@ -14334,14 +14334,93 @@
 
   function snapLivePointsCell(td) {
     if (!td) return;
-    td.querySelectorAll(".live-points-pill-enter").forEach((pill) => pill.classList.add("is-drawn"));
     td.querySelectorAll(".live-stat-roll[data-count-to]").forEach(finishStatRollNode);
   }
 
+  function livePointsRollNodes(root) {
+    return [
+      ...(root || el.livePage || document).querySelectorAll(
+        ".live-points-pill .live-stat-roll[data-count-to]"
+      ),
+    ];
+  }
+
+  function finishLivePointsStatRolls(root) {
+    if (livePointsMotionActive(root)) return;
+    livePointsRollNodes(root).forEach(finishStatRollNode);
+  }
+
+  function livePointsMotionActive(root = el.livePage) {
+    return !!(root && root.dataset.livePointsRolling === "1");
+  }
+
   function snapLivePointsVisible(root = el.livePage) {
-    if (!root) return;
-    root.querySelectorAll(".live-points-pill-enter").forEach((pill) => pill.classList.add("is-drawn"));
-    finishLiveStatRolls(root);
+    finishLivePointsStatRolls(root);
+  }
+
+  /** Same curve as Ownership — shorter for G/A/B, slightly longer for Pts. */
+  function livePointsRollDurationMs(node) {
+    const to = Number(node.dataset.countTo);
+    const mag = Math.abs(to);
+    if (!Number.isFinite(mag)) return 420;
+    const isPts = node.dataset.countRoll === "pts";
+    const min = isPts ? 480 : 380;
+    const max = isPts ? 1200 : 720;
+    const scaled = min + Math.sqrt(mag) * (isPts ? 120 : 38);
+    return Math.round(Math.min(max, Math.max(min, scaled)));
+  }
+
+  let livePointsEnterMotionToken = 0;
+  const LIVE_POINTS_ROLL_BATCH = 48;
+
+  /** Ownership-style batched odometer — pills stay colored; rolls start immediately. */
+  function startLivePointsEnterMotion(pane, { onSettled } = {}) {
+    if (!pane) return;
+    livePointsEnterMotionToken += 1;
+    const token = livePointsEnterMotionToken;
+    clearTimeout(pane._livePointsMotionSettle);
+    pane.dataset.livePointsRolling = "1";
+
+    const nodes = livePointsRollNodes(pane);
+    const finish = () => {
+      if (token !== livePointsEnterMotionToken) return;
+      pane._livePointsMotionSettle = 0;
+      delete pane.dataset.livePointsRolling;
+      finishLivePointsStatRolls(pane);
+      deferLiveTableLayout();
+      if (onSettled) onSettled();
+    };
+
+    if (prefersReducedMotion()) {
+      finish();
+      return;
+    }
+
+    if (!nodes.length) {
+      delete pane.dataset.livePointsRolling;
+      deferLiveTableLayout();
+      if (onSettled) onSettled();
+      return;
+    }
+
+    let maxMs = 420;
+    nodes.forEach((node) => {
+      maxMs = Math.max(maxMs, livePointsRollDurationMs(node));
+    });
+    const tailMs = Math.ceil(nodes.length / LIVE_POINTS_ROLL_BATCH) * 17;
+    let i = 0;
+    const runBatch = () => {
+      if (token !== livePointsEnterMotionToken) return;
+      const end = Math.min(i + LIVE_POINTS_ROLL_BATCH, nodes.length);
+      for (; i < end; i += 1) {
+        const node = nodes[i];
+        animateStatRollNode(node, { duration: livePointsRollDurationMs(node) });
+      }
+      if (i < nodes.length) requestAnimationFrame(runBatch);
+    };
+    // Table is fresh from renderLive — start first batch sync (no double-rAF gap).
+    runBatch();
+    pane._livePointsMotionSettle = window.setTimeout(finish, maxMs + tailMs + 80);
   }
 
   /** In-place GW poll update — same player set, no full table rebuild or re-roll. */
@@ -14432,7 +14511,7 @@
     ) {
       extra += " is-ga-ring";
     }
-    return `<span class="ownership-pill live-points-pill live-points-pill-enter${tone ? ` ${tone}` : ""}${extra}">${text}</span>`;
+    return `<span class="ownership-pill live-points-pill${tone ? ` ${tone}` : ""}${extra}">${text}</span>`;
   }
 
   function livePointsCellHTML(entry, col) {
@@ -14725,11 +14804,6 @@
       el.liveTableBody.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">No points rows for the current filters.</td></tr>`;
     } else {
       el.liveTableBody.innerHTML = rows.map((r, i) => livePointsRowHTML(r, i)).join("");
-      // Keep pill chrome visible — odometer rolls handle the reveal (hiding bg
-      // left white-on-transparent text invisible until the ease finished).
-      el.liveTableBody.querySelectorAll(".live-points-pill-enter").forEach((pill) => {
-        pill.classList.add("is-drawn");
-      });
     }
     if (el.liveCountLabel) {
       el.liveCountLabel.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · GW${gw}`;
@@ -14762,6 +14836,7 @@
   function settleLiveVisible(root = el.livePage) {
     if (!root) return;
     snapLiveBarsDrawn(root);
+    if (state.liveMode === "points" && livePointsMotionActive(root)) return;
     finishLiveStatRolls(root);
   }
 
@@ -14803,14 +14878,17 @@
       else settleLiveVisible();
       deferLiveTableLayout();
     } else if (liveEnterAwaitingPlay) {
-      /* rolls / bars stay empty until playLiveEnter */
+      /* Points / DefCon rolls empty until playLiveEnter or mode motion */
     } else if (liveIsEnterBusy()) {
       if (animate) liveAnimateQueued = true;
-      settleLiveVisible();
+      if (state.liveMode !== "points") settleLiveVisible();
     } else if (animate) {
-      startLiveEnterMotion(el.livePage);
+      if (state.liveMode === "points") startLivePointsEnterMotion(el.livePage);
+      else startLiveEnterMotion(el.livePage);
     } else {
-      settleLiveVisible();
+      if (state.liveMode === "points") finishLivePointsStatRolls(el.livePage);
+      else settleLiveVisible();
+      deferLiveTableLayout();
     }
   }
 
@@ -14832,7 +14910,9 @@
   function liveIsEnterBusy() {
     if (!el.livePage) return false;
     if (el.livePage.classList.contains("is-live-entering")) return true;
+    if (livePointsMotionActive(el.livePage)) return true;
     if (el.livePage._liveMotionSettle) return true;
+    if (el.livePage._livePointsMotionSettle) return true;
     return false;
   }
 
@@ -14842,7 +14922,8 @@
   }
 
   function flushLiveEnterDeferred() {
-    settleLiveVisible();
+    if (livePointsMotionActive(el.livePage)) snapLiveBarsDrawn(el.livePage);
+    else settleLiveVisible();
     if (liveRenderQueued) {
       liveRenderQueued = false;
       renderLive({ quiet: true });
@@ -14850,7 +14931,8 @@
     }
     if (liveAnimateQueued && el.livePage && !liveIsEnterBusy()) {
       liveAnimateQueued = false;
-      startLiveEnterMotion(el.livePage);
+      if (state.liveMode === "points") startLivePointsEnterMotion(el.livePage);
+      else startLiveEnterMotion(el.livePage);
     }
     if (homeLivePollAfterEnter) {
       homeLivePollAfterEnter = false;
@@ -14860,7 +14942,11 @@
 
   function finishLiveStatRolls(root) {
     if (!root) return;
-    root.querySelectorAll(".live-stat-roll[data-count-to]").forEach(finishStatRollNode);
+    root.querySelectorAll(".live-stat-roll[data-count-to]").forEach((node) => {
+      // Points pills have their own enter / poll settle path.
+      if (node.closest(".live-points-pill")) return;
+      finishStatRollNode(node);
+    });
   }
 
   function snapLiveBarsDrawn(root) {
@@ -14885,7 +14971,6 @@
       });
     });
     root.querySelectorAll(".live-dc-check-enter").forEach((el) => el.classList.add("is-drawn"));
-    root.querySelectorAll(".live-points-pill-enter").forEach((el) => el.classList.add("is-drawn"));
   }
 
   const LIVE_DEFCON_BAR_MS = 1150;
@@ -14933,24 +15018,6 @@
     return liveStatRollDurationMs(to);
   }
 
-  /** Points — all columns roll together; pill backgrounds stay visible. */
-  function animateLivePointsEnter(root, token) {
-    const pills = [...root.querySelectorAll(".live-points-pill-enter")];
-    let maxRoll = 360;
-    pills.forEach((pill) => {
-      const roll = pill.querySelector(".live-stat-roll[data-count-to]");
-      const rollMs = roll ? liveRollDurationForNode(roll) : 360;
-      pill.style.setProperty("--pill-enter-ms", `${rollMs}ms`);
-      maxRoll = Math.max(maxRoll, rollMs);
-    });
-    if (token !== liveEnterMotionToken) return maxRoll;
-    pills.forEach((pill) => {
-      const roll = pill.querySelector(".live-stat-roll[data-count-to]");
-      if (roll) animateStatRollNode(roll, { duration: liveRollDurationForNode(roll) });
-    });
-    return maxRoll;
-  }
-
   /** Batch odometer mounts (DefCon counts + Bonus BPS only). */
   function animateLiveStatRollsBatched(nodes, token) {
     if (!nodes.length) return { maxRoll: 420, tailMs: 0 };
@@ -14983,11 +15050,8 @@
     const fills = [...root.querySelectorAll(".live-defcon-fill")];
     const bars = [...root.querySelectorAll(".live-bonus-track .rankings-bar")];
     const rolls = [...root.querySelectorAll(".live-stat-roll[data-count-to]")];
-    const dcChecks = [...root.querySelectorAll(".live-dc-check-enter")].filter(
-      (el) => !el.closest(".live-points-pill-enter")
-    );
-    const pointsPills = [...root.querySelectorAll(".live-points-pill-enter")];
-    const tableRolls = rolls.filter((node) => !node.closest(".live-points-pill-enter"));
+    const dcChecks = [...root.querySelectorAll(".live-dc-check-enter")];
+    const tableRolls = rolls.filter((node) => !node.closest(".live-points-pill"));
 
     const settle = () => {
       if (token !== liveEnterMotionToken) return;
@@ -15008,14 +15072,17 @@
       });
       rolls.forEach(finishStatRollNode);
       dcChecks.forEach((el) => el.classList.add("is-drawn"));
-      pointsPills.forEach((el) => el.classList.add("is-drawn"));
       settle();
       return;
     }
 
     const pointsMode = state.liveMode === "points";
+    if (pointsMode) {
+      startLivePointsEnterMotion(root, { onSettled: () => settle() });
+      return;
+    }
 
-    // Rankings-style: batch undraw, reflow, restore CSS transitions, then draw.
+    // DefCon / Bonus motion below.
     fills.forEach((fill) => {
       fill.style.transition = "none";
       fill.classList.remove("is-drawn");
@@ -15025,7 +15092,6 @@
       bar.classList.remove("is-drawn");
     });
     dcChecks.forEach((el) => el.classList.remove("is-drawn"));
-    if (!pointsMode) pointsPills.forEach((el) => el.classList.remove("is-drawn"));
 
     const draw = () => {
       if (token !== liveEnterMotionToken) return;
@@ -15035,21 +15101,6 @@
       fills.forEach((fill) => fill.classList.add("is-drawn"));
       bars.forEach((bar) => bar.classList.add("is-drawn"));
       dcChecks.forEach((el) => el.classList.add("is-drawn"));
-      if (pointsMode) {
-        const pointsEnd = animateLivePointsEnter(root, token);
-        const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
-        const motionEnd = Math.max(
-          pointsEnd,
-          tailMs + tableMax,
-          liveDefconBarMotionEndMs(root)
-        );
-        root._liveMotionSettle = window.setTimeout(
-          settle,
-          Math.max(settleMs, motionEnd + 120)
-        );
-        return;
-      }
-      if (!pointsMode) pointsPills.forEach((el) => el.classList.add("is-drawn"));
       const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
       const motionEnd = Math.max(
         tailMs + tableMax,
@@ -16519,13 +16570,17 @@
 
   function resetLiveMotionState(pane = el.livePage) {
     liveEnterMotionToken += 1;
+    livePointsEnterMotionToken += 1;
     liveRenderQueued = false;
     liveAnimateQueued = false;
     if (!pane) return;
     clearTimeout(pane._enterClear);
     clearTimeout(pane._liveMotionSettle);
+    clearTimeout(pane._livePointsMotionSettle);
     pane._enterClear = 0;
     pane._liveMotionSettle = 0;
+    pane._livePointsMotionSettle = 0;
+    delete pane.dataset.livePointsRolling;
     pane.classList.remove("is-live-entering", "is-entering", "is-enter-pending");
   }
 
