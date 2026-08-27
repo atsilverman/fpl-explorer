@@ -1071,6 +1071,7 @@
     marketsViewSeg: $("#markets-view-seg"),
     marketsViewControl: $("#markets-view-control"),
     marketsHeaderActions: $("#markets-header-actions"),
+    marketsHeaderTop: $("#markets-page .markets-header-top"),
     scheduleScatter: $("#schedule-scatter"),
     scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
     uiTooltip: $("#ui-tooltip"),
@@ -2336,7 +2337,10 @@
       if (state.page === "home") renderHome({ deferDuringEnter: true, settleQuiet: true });
       else if (state.page === "live") {
         if (liveIsEnterBusy()) liveRenderQueued = true;
-        else renderLive({ quiet: true });
+        else {
+          renderLive();
+          startLiveEnterMotion(el.livePage);
+        }
       } else syncLiveNavChrome();
     } catch {
       homeLiveLastPollOk = false;
@@ -3613,12 +3617,75 @@
     });
   }
 
+  function bindHomeScrollHoverGuard() {
+    if (!el.homePage) return;
+    const main = document.querySelector("main.main");
+    let clearTimer = 0;
+    const arm = () => {
+      if (state.page !== "home") return;
+      el.homePage.classList.add("is-scroll-interaction");
+      clearTimeout(clearTimer);
+      clearTimer = window.setTimeout(() => {
+        el.homePage.classList.remove("is-scroll-interaction");
+      }, 160);
+    };
+    [main, el.homeSquadTrack, el.homeStandingsTrack].filter(Boolean).forEach((node) => {
+      node.addEventListener("scroll", arm, { passive: true });
+      node.addEventListener("touchmove", arm, { passive: true });
+    });
+  }
+
   function bindHomeOwnerHighlighting() {
     if (homeOwnerBindingsReady) return;
     if (!el.homeSquadTrack || !el.homeStandingsTrack) return;
     homeOwnerBindingsReady = true;
     bindHomeStandingsPager();
     bindHomeSquadPager();
+    bindHomeScrollHoverGuard();
+
+    function bindHomeRowTap(container, rowSelector, onRow) {
+      if (!container) return;
+      let touchStart = null;
+      let touchMoved = false;
+      const MOVE_PX = 10;
+
+      container.addEventListener(
+        "touchstart",
+        (e) => {
+          if (e.touches.length !== 1) return;
+          touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          touchMoved = false;
+        },
+        { passive: true }
+      );
+      container.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!touchStart || e.touches.length !== 1) return;
+          const dx = e.touches[0].clientX - touchStart.x;
+          const dy = e.touches[0].clientY - touchStart.y;
+          if (Math.hypot(dx, dy) > MOVE_PX) touchMoved = true;
+        },
+        { passive: true }
+      );
+      container.addEventListener(
+        "touchend",
+        () => {
+          touchStart = null;
+        },
+        { passive: true }
+      );
+      container.addEventListener("click", (e) => {
+        const tr = e.target.closest(rowSelector);
+        if (!tr || !container.contains(tr)) return;
+        if (touchMoved) {
+          touchMoved = false;
+          return;
+        }
+        e.preventDefault();
+        onRow(tr);
+      });
+    }
 
     function toggleSquadOwner(tr) {
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
@@ -3657,19 +3724,8 @@
       if (setHomeViewEntry(entry)) homeScrollPageToTop();
     }
 
-    el.homeSquadTrack.addEventListener("click", (e) => {
-      const tr = e.target.closest("tr.home-squad-row");
-      if (!tr || !el.homeSquadTrack.contains(tr)) return;
-      e.preventDefault();
-      toggleSquadOwner(tr);
-    });
-
-    el.homeStandingsTrack.addEventListener("click", (e) => {
-      const tr = e.target.closest("tr[data-entry]");
-      if (!tr || !el.homeStandingsTrack.contains(tr)) return;
-      e.preventDefault();
-      toggleStandingOwner(tr);
-    });
+    bindHomeRowTap(el.homeSquadTrack, "tr.home-squad-row", toggleSquadOwner);
+    bindHomeRowTap(el.homeStandingsTrack, "tr[data-entry]", toggleStandingOwner);
 
     el.homeSquadTrack.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -6383,7 +6439,10 @@
     }
     const mainWrap = wraps[0];
     if (mainWrap) {
-      const measured = measureNameColWidth(mainWrap, { minW: MOBILE_NAME_COL_MIN });
+      const measured = measureNameColWidth(mainWrap, {
+        minW: MOBILE_NAME_COL_MIN,
+        hugContent: true,
+      });
       const cap = Math.round(mainWrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
       optaMobileNameColW = Math.max(
         MOBILE_NAME_COL_MIN,
@@ -13803,19 +13862,20 @@
         );
       }
     }
-    // Sliders live under Markets only: header on desktop; mobile FAB dock.
-    if (el.marketsSlidersToggle && el.marketsHeaderActions) {
+    // Filters toggle lives in header-top (Matchups-style); mobile FAB dock moves it.
+    const marketsToggleHome = el.marketsHeaderTop || el.marketsHeaderActions;
+    if (el.marketsSlidersToggle && marketsToggleHome) {
       if (marketsMobile) {
         if (
-          el.marketsSlidersToggle.parentElement !== el.marketsHeaderActions &&
+          el.marketsSlidersToggle.parentElement !== marketsToggleHome &&
           el.marketsSlidersToggle.parentElement !== el.mobileFilterDock
         ) {
-          el.marketsHeaderActions.appendChild(el.marketsSlidersToggle);
+          marketsToggleHome.appendChild(el.marketsSlidersToggle);
         }
         el.marketsSlidersToggle.hidden = false;
       } else {
-        if (el.marketsSlidersToggle.parentElement !== el.marketsHeaderActions) {
-          el.marketsHeaderActions.appendChild(el.marketsSlidersToggle);
+        if (el.marketsSlidersToggle.parentElement !== marketsToggleHome) {
+          marketsToggleHome.appendChild(el.marketsSlidersToggle);
         }
         el.marketsSlidersToggle.hidden = !marketsDesktop;
       }
@@ -14681,14 +14741,18 @@
   let liveEnterAwaitingPlay = false;
 
   function liveIsEnterBusy() {
-    return !!(el.livePage && el.livePage.classList.contains("is-live-entering"));
+    if (!el.livePage) return false;
+    if (el.livePage.classList.contains("is-live-entering")) return true;
+    if (el.livePage._liveMotionSettle) return true;
+    return false;
   }
 
   function flushLiveEnterDeferred() {
     if (el.livePage) finishLiveStatRolls(el.livePage);
     if (liveRenderQueued) {
       liveRenderQueued = false;
-      renderLive({ quiet: true });
+      renderLive();
+      startLiveEnterMotion(el.livePage);
     }
     if (homeLivePollAfterEnter) {
       homeLivePollAfterEnter = false;
@@ -17870,7 +17934,7 @@
     if (!hasFineHover()) {
       if (open) {
         openMobileSheetHost({
-          title: "Compare",
+          title: "Filters",
           key: "markets-filters",
           hostEl: el.marketsControls,
           prepare(host) {
@@ -17884,8 +17948,8 @@
         });
         el.marketsSlidersToggle.classList.add("on");
         el.marketsSlidersToggle.setAttribute("aria-expanded", "true");
-        setTip(el.marketsSlidersToggle, "Hide compare options");
-        el.marketsSlidersToggle.setAttribute("aria-label", "Hide compare options");
+        setTip(el.marketsSlidersToggle, "Hide filters");
+        el.marketsSlidersToggle.setAttribute("aria-label", "Hide filters");
         requestAnimationFrame(() => {
           syncMarketsCompareSeg();
           syncMarketsViewSeg();
@@ -17897,8 +17961,8 @@
         el.marketsControls.classList.add("is-collapsed");
         el.marketsSlidersToggle.classList.remove("on");
         el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
-        setTip(el.marketsSlidersToggle, "Show compare options");
-        el.marketsSlidersToggle.setAttribute("aria-label", "Show compare options");
+        setTip(el.marketsSlidersToggle, "Show filters");
+        el.marketsSlidersToggle.setAttribute("aria-label", "Show filters");
       }
       return;
     }
@@ -17908,11 +17972,11 @@
     el.marketsSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
     setTip(
       el.marketsSlidersToggle,
-      open ? "Hide compare options" : "Show compare options"
+      open ? "Hide filters" : "Show filters"
     );
     el.marketsSlidersToggle.setAttribute(
       "aria-label",
-      open ? "Hide compare options" : "Show compare options"
+      open ? "Hide filters" : "Show filters"
     );
     if (open) {
       requestAnimationFrame(() => {

@@ -3981,6 +3981,11 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #live-page .live-table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id-text .player-name-line > .player-name {
   flex: 0 1 auto;
 }
+/* Statistics at rest — pin beside name like Rankings. */
+#opta-page .table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id .player-name,
+#opta-page .table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id-text .player-name-line > .player-name {
+  flex: 0 1 auto;
+}
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
@@ -5929,6 +5934,8 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   min-height: 0;
   overflow: auto;
   max-height: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 .barbell-scroll img,
 .barbell-scroll svg {
@@ -8447,6 +8454,37 @@ html[data-pointer="coarse"] tbody tr:hover {
   background: transparent;
 }
 
+html[data-pointer="coarse"] .home-squad-table tbody tr.home-squad-row:hover > td,
+html[data-pointer="coarse"] .home-standings-table tbody tr[data-entry]:hover > td,
+html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-squad-table tbody tr.home-squad-row:hover > td,
+html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-standings-table tbody tr[data-entry]:hover > td {
+  --home-row-bg: hsl(var(--card));
+  background: hsl(var(--card));
+}
+html[data-pointer="coarse"] .home-squad-table tbody tr.home-squad-row:nth-child(even):hover > td,
+html[data-pointer="coarse"] .home-standings-table tbody tr[data-entry]:nth-child(even):hover > td {
+  --home-row-bg: color-mix(in srgb, hsl(var(--foreground)) 2.5%, hsl(var(--card)));
+  background: var(--home-row-bg);
+}
+html[data-pointer="coarse"] .home-squad-row.is-owner-pinned:hover > td {
+  --home-row-bg: hsl(var(--blue-hsl) / 0.16);
+  background: var(--home-row-bg);
+}
+html[data-pointer="coarse"] .home-standings-table tr.is-owner-match:hover td {
+  --home-row-bg: hsl(var(--blue-hsl) / 0.12);
+  background: var(--home-row-bg);
+}
+html[data-pointer="coarse"] .home-standings-table tr.is-owner-demote:hover td {
+  background: transparent;
+}
+html[data-pointer="coarse"] .home-standings-table tr.is-view-active:hover td {
+  --home-row-bg: hsl(var(--blue-hsl) / 0.10);
+  background: var(--home-row-bg);
+}
+html[data-pointer="coarse"] .home-search-row:hover {
+  background: transparent;
+}
+
 html[data-pointer="coarse"] tbody tr.row-selected {
   background: hsl(var(--primary) / 0.1);
 }
@@ -9676,7 +9714,8 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   min-width: 228px;
   flex: none;
 }
-.markets-header-actions .markets-sliders-toggle {
+.markets-header-actions .markets-sliders-toggle,
+.markets-header-top > .markets-sliders-toggle {
   flex: 0 0 auto;
   flex-shrink: 0;
 }
@@ -13155,10 +13194,15 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: var(--text-faint);
   opacity: 0.55;
 }
-.home-lookup-card.is-lookup-tappable:hover .home-lookup-tap-icon,
 .home-lookup-card.is-lookup-tappable:focus-visible .home-lookup-tap-icon {
   opacity: 0.85;
   color: hsl(var(--blue-hsl) / 0.75);
+}
+@media (hover: hover) and (pointer: fine) {
+  .home-lookup-card.is-lookup-tappable:hover .home-lookup-tap-icon {
+    opacity: 0.85;
+    color: hsl(var(--blue-hsl) / 0.75);
+  }
 }
 .home-lookup-card.is-rank-overall .home-lookup-mode,
 .home-lookup-card.is-rank-pos .home-lookup-mode {
@@ -13449,10 +13493,14 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   text-align: left;
   cursor: pointer;
 }
-.home-search-row:hover,
 .home-search-row:focus-visible {
   background: hsl(var(--muted) / 0.55);
   outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .home-search-row:hover {
+    background: hsl(var(--muted) / 0.55);
+  }
 }
 .home-search-row .badge-img {
   width: 22px;
@@ -14380,8 +14428,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   cursor: pointer;
   user-select: none;
 }
-.home-standings-table thead th.is-sortable:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .home-standings-table thead th.is-sortable:hover {
+    color: var(--text);
+  }
 }
 .home-standings-table thead th.sorted {
   color: var(--text);
@@ -14980,10 +15030,12 @@ html[data-page="home"] #subtoolbar {
   --home-row-bg: color-mix(in srgb, hsl(var(--foreground)) 2.5%, hsl(var(--card)));
   background: var(--home-row-bg);
 }
-.home-squad-table tbody tr.home-squad-row:hover > td,
-.home-standings-table tbody tr[data-entry]:hover > td {
-  --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
-  background: var(--home-row-bg);
+@media (hover: hover) and (pointer: fine) {
+  #home-page:not(.is-scroll-interaction) .home-squad-table tbody tr.home-squad-row:hover > td,
+  #home-page:not(.is-scroll-interaction) .home-standings-table tbody tr[data-entry]:hover > td {
+    --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
+    background: var(--home-row-bg);
+  }
 }
 
 /* Home ownership cross-highlight (squad ↔ standings).
@@ -15040,16 +15092,14 @@ html[data-page="home"] #subtoolbar {
   margin-left: 4px;
   vertical-align: -0.15em;
 }
-.home-squad-row.is-owner-pinned > td,
-.home-squad-row.is-owner-pinned:hover > td {
+.home-squad-row.is-owner-pinned > td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.16);
   background: var(--home-row-bg);
 }
 .home-squad-row.is-owner-pinned .home-player-name {
   color: hsl(var(--blue-hsl));
 }
-.home-standings-table tr.is-owner-match td,
-.home-standings-table tr.is-owner-match:hover td {
+.home-standings-table tr.is-owner-match td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.12);
   background: var(--home-row-bg);
 }
@@ -15059,15 +15109,31 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tr.is-owner-demote {
   opacity: 0.38;
 }
-.home-standings-table tr.is-owner-demote td,
-.home-standings-table tr.is-owner-demote:hover td {
+.home-standings-table tr.is-owner-demote td {
   --home-row-bg: hsl(var(--card));
   background: transparent;
 }
-.home-standings-table tr.is-view-active td,
-.home-standings-table tr.is-view-active:hover td {
+.home-standings-table tr.is-view-active td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.10);
   background: var(--home-row-bg);
+}
+@media (hover: hover) and (pointer: fine) {
+  #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned:hover > td {
+    --home-row-bg: hsl(var(--blue-hsl) / 0.16);
+    background: var(--home-row-bg);
+  }
+  #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-match:hover td {
+    --home-row-bg: hsl(var(--blue-hsl) / 0.12);
+    background: var(--home-row-bg);
+  }
+  #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-demote:hover td {
+    --home-row-bg: hsl(var(--card));
+    background: transparent;
+  }
+  #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-view-active:hover td {
+    --home-row-bg: hsl(var(--blue-hsl) / 0.10);
+    background: var(--home-row-bg);
+  }
 }
 /* Configured manager: primary left rail only — keep zebra / hover like peers. */
 

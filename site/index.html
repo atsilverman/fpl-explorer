@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=784" />
+<link rel="stylesheet" href="styles.css?v=786" />
 <script>
 (() => {
   try {
@@ -41,6 +41,7 @@
       'html[data-page="schedule"] #schedule-page,' +
       'html[data-page="markets"] #markets-page,' +
       'html[data-page="team"] #team-page{display:block}' +
+      'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
       'html[data-page="schedule"] #subtoolbar,' +
       'html[data-page="markets"] #subtoolbar{display:none!important}' +
@@ -1188,12 +1189,12 @@
                 <button type="button" data-markets-view="scoreline">Scoreline</button>
               </div>
             </div>
-            <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
-              title="Show compare options" aria-label="Show compare options" aria-expanded="false" aria-controls="markets-controls">
-              <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
-              <span class="mobile-dock-label">Compare</span>
-            </button>
           </div>
+          <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
+            title="Show filters" aria-label="Show filters" aria-expanded="false" aria-controls="markets-controls">
+            <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
+            <span class="mobile-dock-label">Filters</span>
+          </button>
         </div>
 
         <div class="markets-controls is-collapsed" id="markets-controls" hidden>
@@ -1302,7 +1303,7 @@
 <script src="home_data.js?v=20"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=775"></script>
+<script src="app.js?v=777"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
