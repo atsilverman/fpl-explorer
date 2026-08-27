@@ -4067,6 +4067,35 @@
     return String(row.code ?? homeLookupElementId(row) ?? "");
   }
 
+  let optaPlayerByCodeCache = null;
+
+  function optaPlayerByCode() {
+    if (optaPlayerByCodeCache) return optaPlayerByCodeCache;
+    optaPlayerByCodeCache = new Map();
+    ((DATA.players && DATA.players.combined) || []).forEach((p) => {
+      if (p.code != null) optaPlayerByCodeCache.set(Number(p.code), p);
+    });
+    return optaPlayerByCodeCache;
+  }
+
+  // Home search uses the 2026/27 bootstrap catalog; OPTA-only season stats
+  // (xPts, etc.) stay zero there until Hub projections land — pull from the
+  // matched 2025/26 OPTA row by FPL code so ranks/values aren't all tied at 0.
+  function homeLookupRowStatValue(row, key) {
+    if (!row) return null;
+    if (key === "__gi") return (Number(row.goals) || 0) + (Number(row.assists) || 0);
+    if (PLAYER_OPTA_ONLY_KEYS.includes(key)) {
+      const code = row.code;
+      if (code != null) {
+        const opta = optaPlayerByCode().get(Number(code));
+        const raw = opta && opta[key];
+        if (raw != null && raw !== "" && !Number.isNaN(Number(raw))) return Number(raw);
+      }
+      return null;
+    }
+    return feedRowStatValue(row, key);
+  }
+
   function homeLookupStatSpecList(row) {
     const season = homePlayerStatSpecs(row.position).map((s) => ({
       id: s.key,
@@ -4107,7 +4136,7 @@
         return tsb != null && Number.isFinite(Number(tsb)) ? Number(tsb) : null;
       }
       default: {
-        const raw = feedRowStatValue(row, spec.key);
+        const raw = homeLookupRowStatValue(row, spec.key);
         return raw == null || raw === "" || Number.isNaN(Number(raw)) ? null : Number(raw);
       }
     }
@@ -4167,7 +4196,7 @@
         };
       }
       default: {
-        const raw = feedRowStatValue(row, spec.key);
+        const raw = homeLookupRowStatValue(row, spec.key);
         return {
           value: feedStatDisplay(raw, spec.decimals),
           hot: false,
