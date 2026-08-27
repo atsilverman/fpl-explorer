@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fpl_gameweeks import active_gameweek_id, extract_gameweeks
+from gw_element_stats import normalize_element_gw_record
 from live_scoring import (
     build_match_status_by_element,
     calculate_manager_points_from_live,
@@ -860,15 +861,38 @@ def main() -> int:
         last = (entry.get("player_last_name") or "").strip()
         manager_name = " ".join(p for p in (first, last) if p) or f"Manager {manager_id}"
 
+        # team id → fixture id for this GW (DGW: last write wins; rare).
+        fixture_id_by_team: dict[int, int] = {}
+        for fx in fixtures:
+            try:
+                fid = int(fx["id"])
+                th = int(fx["team_h"])
+                ta = int(fx["team_a"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            fixture_id_by_team[th] = fid
+            fixture_id_by_team[ta] = fid
+
         element_gw: dict[str, dict] = {}
         for eid, st in stats.items():
             status = match_status.get(eid) or "scheduled"
-            element_gw[str(eid)] = {
-                "pts": int(st.get("total_points") or 0),
-                "minutes": int(st.get("minutes") or 0),
-                "live": status == "live",
-                "status": status,
-            }
+            el_meta = elements.get(eid) or {}
+            try:
+                etype = int(el_meta.get("element_type") or etypes.get(eid) or 0)
+            except (TypeError, ValueError):
+                etype = int(etypes.get(eid) or 0)
+            try:
+                team_id = int(el_meta.get("team") or 0)
+            except (TypeError, ValueError):
+                team_id = 0
+            element_gw[str(eid)] = normalize_element_gw_record(
+                st,
+                element_type=etype,
+                team_id=team_id,
+                fixture_id=fixture_id_by_team.get(team_id),
+                live=status == "live",
+                status=status,
+            )
 
         payload = {
             "generatedAt": generated_at(),

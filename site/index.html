@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=738" />
+<link rel="stylesheet" href="styles.css?v=770" />
 <script>
 (() => {
   try {
@@ -17,8 +17,8 @@
     try { localStorage.removeItem("fpl-explorer-accent"); } catch (_) {}
     const PAGE_KEY = "fpl-explorer-page";
     // Keep in sync with app.js PAGES — missing entries flash the wrong shell
-    // before JS loads (e.g. omitting "home" painted Statistics on every refresh).
-    const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
+    // before JS loads (e.g. omitting "live" painted Home on every refresh).
+    const PAGES = ["home", "live", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
     let page = "home";
     try {
       const saved = localStorage.getItem(PAGE_KEY);
@@ -26,6 +26,20 @@
       else if (PAGES.includes(saved)) page = saved;
     } catch (_) {}
     root.dataset.page = page;
+    const boot = document.createElement("style");
+    boot.id = "page-boot-css";
+    boot.textContent =
+      ".page-pane{display:none}" +
+      'html[data-page="home"] #home-page,' +
+      'html[data-page="live"] #live-page,' +
+      'html[data-page="opta"] #opta-page,' +
+      'html[data-page="rankings"] #rankings-page,' +
+      'html[data-page="ownership"] #ownership-page,' +
+      'html[data-page="expected"] #expected-page,' +
+      'html[data-page="schedule"] #schedule-page,' +
+      'html[data-page="markets"] #markets-page,' +
+      'html[data-page="team"] #team-page{display:block}';
+    document.head.appendChild(boot);
     if (window.matchMedia("(max-width: 720px)").matches) {
       root.classList.add("is-mobile-layout");
     }
@@ -37,6 +51,9 @@
 
 <!-- Lucide icons (lucide.dev, ISC licence) inlined as a sprite -->
 <svg class="icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>
+  </symbol>
   <symbol id="i-table" viewBox="0 0 24 24">
     <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
   </symbol>
@@ -270,6 +287,10 @@
       <svg class="icon" aria-hidden="true"><use href="#i-house"/></svg>
       Home
     </button>
+    <button id="page-live" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>
+      Live
+    </button>
     <button id="page-opta" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-table"/></svg>
       Statistics
@@ -469,6 +490,11 @@
         </button>
         <div id="expected-cat-menu" class="dropdown-panel expected-cat-menu" role="menu" aria-label="xData categories"></div>
       </div>
+      <div class="segmented segmented-block live-mode-seg" id="live-mode-seg" hidden role="group" aria-label="Live view">
+        <button type="button" data-live-mode="defcon" class="active">DefCon</button>
+        <button type="button" data-live-mode="points">Points</button>
+        <button type="button" data-live-mode="bonus">Bonus</button>
+      </div>
       <div class="search-wrap" id="search-wrap">
         <button id="search-toggle" class="ghost-btn icon-only-btn search-toggle" type="button" title="Search" aria-label="Search" aria-expanded="false" aria-controls="search-input">
           <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -524,6 +550,17 @@
           <svg class="icon" aria-hidden="true"><use href="#i-plane-takeoff"/></svg>
           Away
         </button>
+      </div>
+    </div>
+
+    <div class="filter-group" id="live-filters-group" style="display:none;">
+      <h3>Matchups</h3>
+      <div class="chip-row live-matchup-chips" id="live-matchup-filters"></div>
+      <h3 class="live-filter-subhead">Status</h3>
+      <div class="segmented segmented-block" id="live-status-seg" role="group" aria-label="Status">
+        <button type="button" data-live-status="all" class="active">All</button>
+        <button type="button" data-live-status="live">Live</button>
+        <button type="button" data-live-status="owned">Owned</button>
       </div>
     </div>
 
@@ -801,6 +838,30 @@
         </div>
       </div>
       <p id="home-updated-footer" class="home-updated-footer" hidden></p>
+    </div>
+
+    <div id="live-page" class="page-pane" style="display:none;">
+      <div class="page-header live-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-activity"/></svg>Live<button class="page-info-btn" type="button" aria-label="How Live works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle" id="live-page-subtitle">DefCon tracker — progress toward the +2 defensive contribution threshold (DEF 10 CBIT · MID/FWD 12 CBIRT).</p>
+          </div>
+          <div class="page-header-meta">
+            <span class="count-label" id="live-count-label"></span>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap live-table-wrap" id="live-table-wrap">
+        <table class="live-defcon-table ownership-table" id="live-table">
+          <thead id="live-table-head"></thead>
+          <tbody id="live-table-body"></tbody>
+        </table>
+      </div>
+      <div class="live-bonus-wrap" id="live-bonus-wrap" hidden>
+        <div class="rankings-grid" id="live-bonus-grid"></div>
+      </div>
+      <p class="page-updated-text page-data-footer" id="live-updated-footer" hidden></p>
     </div>
 
     <div id="opta-page" class="page-pane" style="display:none;">
@@ -1143,6 +1204,24 @@
   </aside>
 </div>
 
+<script>
+(() => {
+  // Show the saved page pane before app.js — #home-page is visible by default in HTML.
+  try {
+    const page = document.documentElement.dataset.page || "home";
+    document.querySelectorAll(".page-pane").forEach((pane) => {
+      pane.style.display = "none";
+    });
+    const pane = document.getElementById(`${page}-page`);
+    if (pane) pane.style.display = "";
+    document.querySelectorAll("#page-tabs .page-tab-btn[id^='page-']").forEach((btn) => {
+      const key = btn.id.slice("page-".length);
+      btn.classList.toggle("active", key === page);
+    });
+  } catch (_) {}
+})();
+</script>
+
 <div id="ui-tooltip" class="ui-tooltip" role="tooltip" style="display:none;"></div>
 <div id="fixture-tooltip" class="fixture-tooltip" style="display:none;"></div>
 <div id="team-rank-tooltip" class="fixture-tooltip team-rank-tooltip" role="tooltip" style="display:none;"></div>
@@ -1195,14 +1274,14 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=39"></script>
+<script src="data.js?v=42"></script>
 <script src="markets_data.js?v=12"></script>
 <script src="ownership_data.js?v=11"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=18"></script>
+<script src="home_data.js?v=20"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=735"></script>
+<script src="app.js?v=759"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

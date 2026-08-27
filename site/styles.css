@@ -632,6 +632,48 @@ a { color: var(--blue); }
 .page-tab-btn.active .icon {
   color: hsl(var(--blue-hsl) / 0.9);
 }
+
+/* Live tab + page title — green while a GW fixture is in play */
+html.has-gw-live #page-live,
+html.has-gw-live #page-live .icon,
+html.has-gw-live [data-page-clone="live"] .page-tab-btn,
+html.has-gw-live [data-page-clone="live"] .page-tab-btn .icon {
+  color: hsl(142 55% 38%);
+}
+html.has-gw-live #page-live.active,
+html.has-gw-live #page-live.active .icon {
+  color: hsl(142 55% 38%);
+}
+html.has-gw-live[data-page="live"] #page-tray-btn,
+html.has-gw-live[data-page="live"] #page-tray-btn .icon {
+  color: hsl(142 55% 38%);
+}
+html.has-gw-live #live-page .page-header h2,
+html.has-gw-live #live-page .page-title-icon {
+  color: hsl(142 55% 38%);
+}
+html.has-gw-live #live-page .page-header .page-info-btn {
+  color: var(--text-dim);
+}
+html.has-gw-live[data-theme="dark"] #page-live,
+html.has-gw-live[data-theme="dark"] #page-live .icon,
+html.has-gw-live[data-theme="dark"] [data-page-clone="live"] .page-tab-btn,
+html.has-gw-live[data-theme="dark"] [data-page-clone="live"] .page-tab-btn .icon,
+html.has-gw-live[data-theme="dark"] #live-page .page-header h2,
+html.has-gw-live[data-theme="dark"] #live-page .page-title-icon {
+  color: hsl(142 48% 52%);
+}
+@media (prefers-color-scheme: dark) {
+  html.has-gw-live:not([data-theme="light"]) #page-live,
+  html.has-gw-live:not([data-theme="light"]) #page-live .icon,
+  html.has-gw-live:not([data-theme="light"]) [data-page-clone="live"] .page-tab-btn,
+  html.has-gw-live:not([data-theme="light"]) [data-page-clone="live"] .page-tab-btn .icon,
+  html.has-gw-live:not([data-theme="light"]) #live-page .page-header h2,
+  html.has-gw-live:not([data-theme="light"]) #live-page .page-title-icon {
+    color: hsl(142 48% 52%);
+  }
+}
+
 .page-tab-btn:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -2416,6 +2458,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #rankings-page .page-header,
   #ownership-page .page-header,
   #team-page .page-header,
+  #live-page .page-header,
   #feed-page .page-header,
   #expected-page .page-header {
     display: none;
@@ -3751,7 +3794,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
    Rank fades/collapses beside the photo on Ownership. */
 #ownership-table-wrap.name-simplify-ready,
 #opta-page .table-wrap.name-simplify-ready,
-#team-page .table-wrap.name-simplify-ready {
+#team-page .table-wrap.name-simplify-ready,
+#live-page .live-table-wrap.name-simplify-ready {
   --name-col-compact-players: 54px;
   --name-col-compact-teams: 54px;
   --own-photo: 30px;
@@ -3767,7 +3811,9 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #team-page .table-wrap.name-simplify-ready tbody th.col-player,
 #team-page .table-wrap.name-simplify-ready thead tr.section-row th.sec-sticky-lead,
 #team-picker-view .table-wrap.name-simplify-ready thead th.col-player,
-#team-picker-view .table-wrap.name-simplify-ready tbody td.col-player {
+#team-picker-view .table-wrap.name-simplify-ready tbody td.col-player,
+#live-page .live-table-wrap.name-simplify-ready thead th.col-player,
+#live-page .live-table-wrap.name-simplify-ready tbody td.col-player {
   width: var(--name-col-w-morph);
   min-width: var(--name-col-w-morph);
   max-width: var(--name-col-w-morph);
@@ -3791,13 +3837,16 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   #team-page .table-wrap.name-simplify-ready tbody th.col-player,
   #team-page .table-wrap.name-simplify-ready thead tr.section-row th.sec-sticky-lead,
   #team-picker-view .table-wrap.name-simplify-ready thead th.col-player,
-  #team-picker-view .table-wrap.name-simplify-ready tbody td.col-player {
+  #team-picker-view .table-wrap.name-simplify-ready tbody td.col-player,
+  #live-page .live-table-wrap.name-simplify-ready thead th.col-player,
+  #live-page .live-table-wrap.name-simplify-ready tbody td.col-player {
     padding-left: 10px;
   }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id,
 #opta-page .table-wrap.name-simplify-ready .ownership-id,
-#team-page .table-wrap.name-simplify-ready .ownership-id {
+#team-page .table-wrap.name-simplify-ready .ownership-id,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -3810,7 +3859,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #opta-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
-#team-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id {
+#team-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
+#live-page .live-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id {
   max-height: calc(var(--own-photo, 36px) + 8px);
   overflow: hidden;
 }
@@ -3828,14 +3878,17 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #opta-page .table-wrap.name-simplify-ready .ownership-photo,
 #opta-page .table-wrap.name-simplify-ready .ownership-crest,
 #team-page .table-wrap.name-simplify-ready .ownership-photo,
-#team-page .table-wrap.name-simplify-ready .ownership-crest {
+#team-page .table-wrap.name-simplify-ready .ownership-crest,
+#live-page .live-table-wrap.name-simplify-ready .ownership-photo,
+#live-page .live-table-wrap.name-simplify-ready .ownership-crest {
   flex: 0 0 var(--own-photo);
   width: var(--own-photo);
   height: var(--own-photo);
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text,
-#team-page .table-wrap.name-simplify-ready .ownership-id-text {
+#team-page .table-wrap.name-simplify-ready .ownership-id-text,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-text {
   flex: 1 1 auto;
   min-width: 0;
   /* Don't cap text at rest — column width already fits measured content.
@@ -3847,7 +3900,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
-#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -3858,7 +3912,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
 #opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
-#team-page .table-wrap.name-simplify-ready .ownership-id .player-name {
+#team-page .table-wrap.name-simplify-ready .ownership-id .player-name,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id .player-name {
   display: block;
   overflow: hidden;
   text-overflow: clip;
@@ -3871,17 +3926,25 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #team-page .ownership-id-text .player-name-line > .player-name {
   flex: 0 1 auto;
 }
+/* Live Points at rest — pin beside name; clip only once scroll starts. */
+#live-page .live-table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id .player-name,
+#live-page .live-table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id-text .player-name-line > .player-name {
+  flex: 0 1 auto;
+}
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
-#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge {
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge {
   flex: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub,
-#team-page .table-wrap.name-simplify-ready .ownership-id-sub {
+#team-page .table-wrap.name-simplify-ready .ownership-id-sub,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-sub {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -3894,7 +3957,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub > *,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
-#team-page .table-wrap.name-simplify-ready .ownership-id-sub > * {
+#team-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-sub > * {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -5044,6 +5108,16 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   font-weight: 700;
   font-family: var(--mono);
   letter-spacing: 0.02em;
+  color: var(--team-accent, var(--text-dim));
+}
+/* Dark mode: keep brand hue but lift toward white so navy/black clubs (NEW, TOT) stay readable. */
+:root[data-theme="dark"] .ownership-id-team {
+  color: color-mix(in srgb, var(--team-accent, hsl(var(--foreground))) 55%, white);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ownership-id-team {
+    color: color-mix(in srgb, var(--team-accent, hsl(var(--foreground))) 55%, white);
+  }
 }
 .ownership-id-sep {
   color: var(--text-faint);
@@ -11603,10 +11677,6 @@ html[data-page="team"] .layout .main {
   text-align: center;
   padding-left: 8px;
   padding-right: 8px;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
 }
 .team-spark-empty {
   color: var(--text-faint);
@@ -12226,13 +12296,6 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-size: 12px;
 }
 
-/* ---- Planner page accent ---- */
-#team-page[data-team-mode="planner"] {
-  --team-mode-accent: hsl(var(--fall));
-}
-#team-page[data-team-mode="planner"] .team-header h2 {
-  color: color-mix(in srgb, var(--team-mode-accent) 75%, var(--text));
-}
 #team-compare-btn.is-disabled,
 #team-compare-btn:disabled {
   pointer-events: none;
@@ -14837,16 +14900,16 @@ html[data-page="home"] #subtoolbar {
   border-radius: 5px;
 }
 
-/* Subtle zebra — softens large white table areas; hover steps up one notch.
-   Highlight states below override both. --home-row-bg feeds IMP track ticks. */
+/* Subtle zebra — quiet grey lift only. Hover uses a blue wash so it reads
+   clearly apart from both base and even rows. --home-row-bg feeds IMP ticks. */
 .home-squad-table tbody tr.home-squad-row:nth-child(even) > td,
 .home-standings-table tbody tr[data-entry]:nth-child(even) > td {
-  --home-row-bg: hsl(var(--muted) / 0.42);
+  --home-row-bg: color-mix(in srgb, hsl(var(--foreground)) 2.5%, hsl(var(--card)));
   background: var(--home-row-bg);
 }
 .home-squad-table tbody tr.home-squad-row:hover > td,
 .home-standings-table tbody tr[data-entry]:hover > td {
-  --home-row-bg: hsl(var(--muted) / 0.78);
+  --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
   background: var(--home-row-bg);
 }
 
@@ -14934,3 +14997,934 @@ html[data-page="home"] #subtoolbar {
   background: var(--home-row-bg);
 }
 /* Configured manager: primary left rail only — keep zebra / hover like peers. */
+
+/* ---- Live DefCon tracker ---- */
+#live-page {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+#live-page .live-table-wrap {
+  width: 100%;
+  max-width: none;
+  /* Keep rows inside the rounded card (default overflow:auto + max-height).
+     overflow:visible let the table paint past the frame while the footer sat mid-list. */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+#live-page .live-defcon-table {
+  width: 100%;
+  table-layout: fixed;
+}
+/* No sticky/freezer header or name column on Live DefCon — two equal scroll columns. */
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead {
+  position: static;
+  top: auto;
+  z-index: auto;
+  isolation: auto;
+  background: transparent;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player,
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-live-defcon,
+#live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
+  position: static;
+  left: auto;
+  z-index: auto;
+  box-shadow: none;
+}
+/* Drop fixed 170px name col so % widths shrink on phones.
+   max-width:0 only on body cells so the Player header label still paints. */
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player,
+#live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
+  width: 46%;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 12px;
+  vertical-align: middle;
+  background-color: transparent;
+  background-image: none;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
+  max-width: 0;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player {
+  max-width: none;
+  background-color: hsl(var(--muted));
+}
+#live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-live-defcon,
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead th.col-live-defcon {
+  width: 54%;
+  min-width: 0;
+  max-width: none;
+  padding-left: 8px;
+  padding-right: 16px;
+  overflow: hidden;
+}
+/* Keep identity inside the DefCon Player column — no spill onto the bar. */
+#live-page .live-table-wrap:has(.live-defcon-table) .ownership-id {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) .ownership-id-text {
+  min-width: 0;
+  overflow: hidden;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) .ownership-id-text .player-name-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) .ownership-id .player-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Base .ownership-id-sub is flex; keep flex but clip so TEAM|£|POS can't overrun. */
+#live-page .live-table-wrap:has(.live-defcon-table) .ownership-id-sub {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+#live-page .live-table-wrap:has(.live-defcon-table) .ownership-id-sub > * {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-page="live"] .main {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--foreground) / 0.14) transparent;
+}
+html[data-page="live"] .main::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+html[data-page="live"] .main::-webkit-scrollbar-track {
+  background: transparent;
+}
+html[data-page="live"] .main::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.14);
+  border-radius: 999px;
+}
+html[data-page="live"] .main::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.22);
+}
+
+/* Live filters: fill the card / sheet width */
+html[data-page="live"] #live-filters-group .live-filter-subhead {
+  margin-top: 14px;
+}
+html[data-page="live"] #live-filters-group .live-gw-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+}
+html[data-page="live"] #live-filters-group .live-gw-chip {
+  appearance: none;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  box-sizing: border-box;
+}
+html[data-page="live"] #live-filters-group .live-gw-chip.is-active {
+  background: hsl(var(--accent-hsl));
+  color: var(--text);
+  border-color: transparent;
+}
+html[data-page="live"] #live-filters-group .live-matchup-chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+html[data-page="live"] #live-filters-group .live-matchup-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: 10px;
+}
+html[data-page="live"] #live-filters-group .live-matchup-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+html[data-page="live"] #live-filters-group .live-matchup-badge {
+  width: 20px;
+  height: 20px;
+}
+html[data-page="live"] #live-filters-group .live-matchup-vs {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: lowercase;
+}
+html[data-page="live"] #live-filters-group #live-status-seg {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+html[data-page="live"] #live-filters-group #live-status-seg button {
+  width: 100%;
+}
+
+/* Live: GK hidden — use 3 equal position chips (4-col grid leaves a dead track). */
+html[data-page="live"] #pos-filters.chip-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+html[data-page="live"] #pos-filters .chip[hidden] {
+  display: none !important;
+}
+html[data-page="live"] #team-filters.chip-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+html[data-page="live"] #team-filters .chip.team-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+.live-defcon-table thead th.col-live-defcon {
+  text-align: left;
+  cursor: pointer;
+}
+.live-defcon-table tbody td.col-live-defcon {
+  vertical-align: middle;
+}
+.live-defcon-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+/* % complete bar — same track width every row; fill = actions/threshold. */
+.live-defcon-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  --defcon-pct: 0%;
+}
+.live-defcon-bar[data-defcon-units="10"] {
+  --defcon-units: 10;
+}
+.live-defcon-bar[data-defcon-units="12"] {
+  --defcon-units: 12;
+}
+.live-defcon-track {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 64px;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: color-mix(
+    in srgb,
+    var(--home-row-bg, hsl(var(--card))) 62%,
+    hsl(var(--foreground) / 0.14)
+  );
+}
+/* One vertical marker per action unit (DEF 10 · MID/FWD 12). */
+.live-defcon-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(100% - 1px),
+    hsl(var(--card)) calc(100% - 1px),
+    hsl(var(--card)) 100%
+  );
+  background-size: calc(100% / var(--defcon-units, 10)) 100%;
+  background-position: 0 0;
+  background-repeat: repeat-x;
+}
+.live-defcon-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: hsl(var(--positive) / 0.55);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 3.4s var(--ease-out);
+}
+.live-defcon-fill.is-drawn {
+  clip-path: inset(0 calc(100% - var(--defcon-pct, 0%)) 0 0);
+}
+.live-defcon-bar.is-complete .live-defcon-fill {
+  background: hsl(var(--positive) / 0.88);
+}
+:root[data-theme="dark"] .live-defcon-fill {
+  background: hsl(var(--positive) / 0.5);
+}
+:root[data-theme="dark"] .live-defcon-bar.is-complete .live-defcon-fill {
+  background: hsl(var(--positive) / 0.82);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .live-defcon-fill {
+    background: hsl(var(--positive) / 0.5);
+  }
+  :root:not([data-theme="light"]) .live-defcon-bar.is-complete .live-defcon-fill {
+    background: hsl(var(--positive) / 0.82);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-defcon-fill {
+    transition: none;
+  }
+}
+/* Fixed trailing column so x/y + check share one left edge down the list. */
+.live-defcon-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex: 0 0 4.9rem;
+  width: 4.9rem;
+  min-width: 4.9rem;
+  padding-right: 2px;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  box-sizing: border-box;
+}
+.live-defcon-frac {
+  flex: 0 0 2.85em;
+  width: 2.85em;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.live-defcon-check-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+.live-defcon-achieved {
+  margin: 0;
+  display: inline-flex;
+  line-height: 0;
+}
+.live-defcon-achieved .check-mark-icon {
+  width: 14px;
+  height: 14px;
+}
+.live-empty-row td {
+  color: var(--text-faint);
+  padding: 18px 12px;
+  text-align: center;
+}
+
+@media (min-width: 721px) {
+  html[data-page="live"] #live-filters-group .live-matchup-chips {
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  #live-page {
+    max-width: none;
+    margin-inline: 0;
+  }
+  #live-page .live-table-wrap:has(.live-defcon-table) {
+    overflow-x: hidden;
+    overflow-y: hidden;
+    max-height: none;
+  }
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player,
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
+    width: 40%;
+    padding-right: 10px;
+  }
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-live-defcon,
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > thead th.col-live-defcon {
+    width: 60%;
+    padding-left: 6px;
+  }
+  #live-page .ownership-photo,
+  #live-page .ownership-crest {
+    width: 30px;
+    height: 30px;
+  }
+  #live-page .ownership-id {
+    gap: 6px;
+  }
+  /* Drop £ on phones so TEAM|POS fits beside the bar. */
+  #live-page .ownership-id-price,
+  #live-page .ownership-id-price + .ownership-id-sep {
+    display: none;
+  }
+  .live-defcon-cell {
+    gap: 8px;
+  }
+  .live-defcon-count {
+    flex-basis: 4.55rem;
+    width: 4.55rem;
+    min-width: 4.55rem;
+    font-size: 11px;
+  }
+  .live-defcon-frac {
+    flex-basis: 2.7em;
+    width: 2.7em;
+  }
+  /* Mobile filter sheet: denser full-bleed controls */
+  html[data-page="live"] .mobile-sheet-body #live-filters-group .live-matchup-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html[data-page="live"] .mobile-sheet-body #team-filters.chip-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 400px) {
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player,
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
+    width: 36%;
+  }
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-live-defcon,
+  #live-page .live-table-wrap:has(.live-defcon-table) > table > thead th.col-live-defcon {
+    width: 64%;
+  }
+}
+
+/* Live mode toggle (DefCon / Points / Bonus) — topbar beside search */
+html[data-page="live"] #live-mode-seg {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+}
+html[data-page="live"] #live-mode-seg button {
+  flex: none;
+  min-width: 4.1em;
+  padding: 0 10px;
+  font-size: 12px;
+}
+html[data-page="live"] #topbar-end-cluster {
+  gap: 8px;
+}
+@media (max-width: 900px) {
+  html[data-page="live"] #live-mode-seg button {
+    min-width: 3.4em;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+}
+/* Mobile: full-width 3-up mode slider — search is hidden on Live */
+@media (max-width: 720px) {
+  html[data-page="live"] #subtoolbar #stats-toolbar-actions {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+  html[data-page="live"] #subtoolbar .topbar-end-cluster {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    justify-content: stretch;
+  }
+  html[data-page="live"] #live-mode-seg {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  html[data-page="live"] #live-mode-seg button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+}
+html.is-mobile-layout[data-page="live"] #subtoolbar #stats-toolbar-actions {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+}
+html.is-mobile-layout[data-page="live"] #subtoolbar .topbar-end-cluster {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  justify-content: stretch;
+}
+html.is-mobile-layout[data-page="live"] #live-mode-seg {
+  flex: 1 1 auto;
+  width: 100%;
+}
+html.is-mobile-layout[data-page="live"] #live-mode-seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+/* Points mode — stat table with horizontal scroll + name-simplify on mobile */
+#live-page .live-table-wrap:has(.live-points-table) {
+  overflow-x: auto;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: none;
+}
+#live-page .live-points-table {
+  width: 100%;
+  min-width: 720px;
+  table-layout: fixed;
+}
+@media (min-width: 721px) {
+  #live-page .live-points-table thead th.col-player,
+  #live-page .live-points-table tbody td.col-player {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: hsl(var(--card));
+    background-image: none;
+    box-shadow: 1px 0 0 var(--border);
+    width: var(--name-col-w, 170px);
+    min-width: var(--name-col-w, 170px);
+    max-width: var(--name-col-w, 170px);
+    padding-left: 16px;
+    padding-right: 8px;
+    vertical-align: middle;
+  }
+}
+#live-page .live-points-table thead th.col-num,
+#live-page .live-points-table tbody td.col-num {
+  width: auto;
+  min-width: 3.1em;
+  padding-left: 12px;
+  padding-right: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+#live-page .live-points-table thead th.col-num-narrow,
+#live-page .live-points-table tbody td.col-num-narrow {
+  min-width: 2.5em;
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+#live-page .live-points-table tbody td.col-num {
+  font-size: 13px;
+  font-weight: 600;
+}
+#live-page .live-points-table tbody td.col-num.has-value {
+  background-color: hsl(var(--blue-hsl) / 0.11);
+}
+#live-page .live-points-table tbody td.col-num.has-pts {
+  background-color: hsl(var(--blue-hsl) / 0.16);
+  font-weight: 700;
+}
+#live-page .live-points-table tbody td.col-num.has-goals,
+#live-page .live-points-table tbody td.col-num.has-assists,
+#live-page .live-points-table tbody td.col-num.has-cleanSheets,
+#live-page .live-points-table tbody td.col-num.has-saves,
+#live-page .live-points-table tbody td.col-num.has-penaltiesSaved {
+  background-color: hsl(var(--positive-highlight, var(--blue-hsl)) / 0.14);
+}
+#live-page .live-points-table tbody td.col-num.has-bonus {
+  background-color: hsl(var(--amber-hsl) / 0.2);
+}
+#live-page .live-points-table tbody td.col-num.has-defConHit {
+  background-color: hsl(142 55% 38% / 0.14);
+}
+#live-page .live-points-table tbody td.col-num.has-yellowCards {
+  background-color: hsl(48 96% 53% / 0.22);
+}
+#live-page .live-points-table tbody td.col-num.has-redCards,
+#live-page .live-points-table tbody td.col-num.has-ownGoals,
+#live-page .live-points-table tbody td.col-num.has-penaltiesMissed {
+  background-color: hsl(var(--destructive-hsl, 0 72% 51%) / 0.14);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-value {
+  background-color: hsl(var(--blue-hsl) / 0.18);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-pts {
+  background-color: hsl(var(--blue-hsl) / 0.22);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-goals,
+#live-page .live-points-table tbody tr:hover td.col-num.has-assists,
+#live-page .live-points-table tbody tr:hover td.col-num.has-cleanSheets,
+#live-page .live-points-table tbody tr:hover td.col-num.has-saves,
+#live-page .live-points-table tbody tr:hover td.col-num.has-penaltiesSaved {
+  background-color: hsl(var(--positive-highlight, var(--blue-hsl)) / 0.2);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-bonus {
+  background-color: hsl(var(--amber-hsl) / 0.28);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-defConHit {
+  background-color: hsl(142 55% 38% / 0.2);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-yellowCards {
+  background-color: hsl(48 96% 53% / 0.3);
+}
+#live-page .live-points-table tbody tr:hover td.col-num.has-redCards,
+#live-page .live-points-table tbody tr:hover td.col-num.has-ownGoals,
+#live-page .live-points-table tbody tr:hover td.col-num.has-penaltiesMissed {
+  background-color: hsl(var(--destructive-hsl, 0 72% 51%) / 0.2);
+}
+#live-page .live-points-table thead th.col-num {
+  font-size: 11px;
+}
+
+/* Live Points — photo | name+pin / TEAM · POS (simplify rules shared with Statistics) */
+#live-page .live-points-table .live-points-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+#live-page .live-points-table .ownership-id-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  align-items: flex-start;
+}
+#live-page .live-points-table .ownership-id-text .player-name-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+#live-page .live-points-table .ownership-id-text .player-name-line > .owned-flag,
+#live-page .live-points-table .ownership-id-text .player-name-line > .team-role-badge {
+  flex: none;
+}
+#live-page .live-points-table .ownership-id .player-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+#live-page .live-points-table .ownership-id-sub {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0 4px;
+  margin-top: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.2;
+}
+#live-page .live-points-table .ownership-id-sub > * {
+  flex: 0 0 auto;
+}
+#live-page .live-points-table .ownership-id-sub .pos-badge {
+  flex: none;
+  font-size: 9px;
+  padding: 0 5px;
+}
+#live-page .live-table-wrap.is-name-col-measure .live-points-table .ownership-id-text,
+#live-page .live-table-wrap.is-name-col-measure .live-points-table .player-name-line {
+  width: max-content;
+  max-width: none;
+}
+#live-page .live-points-table tbody td.col-player {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  vertical-align: middle;
+}
+
+@media (max-width: 720px) {
+  #live-page .live-table-wrap:has(.live-points-table) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: none;
+    touch-action: pan-x;
+  }
+  #live-page .live-points-table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+  #live-page .live-points-table .ownership-photo,
+  #live-page .live-points-table .ownership-crest {
+    width: 30px;
+    height: 30px;
+  }
+  #live-page .live-points-table .ownership-id .player-name {
+    font-size: 12px;
+  }
+  #live-page .live-points-table .ownership-id-sub {
+    font-size: 9.5px;
+  }
+}
+
+.live-card-dot {
+  display: inline-block;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.live-card-dot.is-yc {
+  background: hsl(48 96% 53%);
+  box-shadow: inset 0 0 0 1px hsl(45 80% 35% / 0.35);
+}
+.live-card-dot.is-rc {
+  background: hsl(var(--destructive-hsl, 0 72% 51%));
+  box-shadow: inset 0 0 0 1px hsl(0 60% 30% / 0.35);
+}
+
+/* Bonus mode — per-fixture cards */
+#live-page .live-bonus-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 0 12px;
+}
+#live-page .live-bonus-wrap[hidden] {
+  display: none !important;
+}
+#live-page #live-bonus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+@media (min-width: 960px) {
+  #live-page #live-bonus-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  }
+}
+/* Wide desktop: max 3 cards per row so identity + BPS bars don't collide. */
+@media (min-width: 1200px) {
+  #live-page #live-bonus-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.live-bonus-card {
+  padding: 0;
+  overflow: hidden;
+}
+.live-bonus-card.is-fixture-live {
+  border-color: hsl(142 55% 38% / 0.55);
+  box-shadow:
+    0 0 0 1px hsl(142 55% 38% / 0.18),
+    var(--shadow-sm);
+}
+.live-bonus-card-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px 8px;
+  background: hsl(var(--muted) / 0.35);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.live-bonus-card.is-fixture-live .live-bonus-card-head {
+  background: hsl(142 55% 38% / 0.08);
+}
+.live-bonus-matchup-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 220px;
+  margin-inline: auto;
+}
+.live-bonus-team {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.live-bonus-center {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 2.4em;
+  align-self: stretch;
+}
+.live-bonus-badge {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: none;
+  display: block;
+}
+.live-bonus-team-code {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.live-bonus-vs {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: lowercase;
+  line-height: 1;
+}
+.live-bonus-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 650;
+  color: var(--text-muted);
+  white-space: nowrap;
+  line-height: 1.1;
+}
+.live-bonus-status.is-live {
+  color: hsl(142 55% 38%);
+}
+.live-bonus-status.is-upcoming {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.live-bonus-status.is-finished {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 8.5px;
+}
+.live-bonus-card .live-bonus-list {
+  padding: 4px 8px 10px;
+}
+.live-bonus-card .live-bonus-row {
+  grid-template-columns: 22px minmax(0, 1.2fr) minmax(100px, 1fr);
+  gap: 10px;
+  min-height: 36px;
+  padding: 5px 6px;
+}
+.live-bonus-card .rankings-identity {
+  min-width: 0;
+  overflow: hidden;
+}
+.live-bonus-card .rankings-identity-text {
+  min-width: 0;
+  overflow: hidden;
+}
+.live-bonus-card .rankings-identity .ownership-id-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-bonus-card .rankings-meter.live-bonus-meter {
+  gap: 10px;
+  min-width: 0;
+}
+.live-bonus-card .live-bonus-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  border-radius: 6px;
+  background: hsl(var(--muted-foreground) / 0.14);
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+}
+.live-bonus-card .live-bonus-track .rankings-bar {
+  width: 0;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  transition:
+    width 0.55s var(--ease-out),
+    background-color 0.12s ease;
+  transition-delay: calc(var(--bar-i, 0) * 0.04s);
+}
+.live-bonus-card .live-bonus-track .rankings-bar.is-drawn {
+  width: var(--bar-pct, 0%);
+  min-width: 0;
+  padding: 0 7px;
+  overflow: hidden;
+}
+.live-bonus-card .live-bonus-row.medal-gold .live-bonus-track .rankings-bar {
+  background: color-mix(in srgb, hsl(var(--blue-hsl)) 72%, hsl(var(--card)));
+}
+.live-bonus-card .live-bonus-row.medal-silver .live-bonus-track .rankings-bar {
+  background: color-mix(in srgb, hsl(var(--muted-foreground)) 58%, hsl(var(--card)));
+}
+.live-bonus-card .live-bonus-row.medal-bronze .live-bonus-track .rankings-bar {
+  background: color-mix(in srgb, hsl(var(--fall)) 62%, hsl(var(--card)));
+}
+.live-bonus-card .live-bonus-row:not(.medal-gold):not(.medal-silver):not(.medal-bronze) .live-bonus-track .rankings-bar {
+  background: hsl(var(--muted-foreground) / 0.36);
+}
+.live-bonus-proj {
+  flex: none;
+  min-width: 2em;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+  line-height: 1;
+}
+.live-bonus-proj.is-empty {
+  visibility: hidden;
+}
+@media (max-width: 720px) {
+  #live-page #live-bonus-grid {
+    grid-template-columns: 1fr;
+  }
+  .live-bonus-matchup-center {
+    gap: 12px;
+    max-width: none;
+  }
+  .live-bonus-card .live-bonus-row {
+    grid-template-columns: 20px minmax(0, 1fr) minmax(96px, 1.25fr);
+  }
+}

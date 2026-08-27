@@ -533,6 +533,7 @@
           newPosition: src.position,
           status: "ok",
           code: src.code,
+          element: src.element ?? null,
           penaltiesOrder: src.penaltiesOrder ?? null,
           directFreekicksOrder: src.directFreekicksOrder ?? null,
           cornersOrder: src.cornersOrder ?? null,
@@ -630,7 +631,7 @@
   // State
   // ---------------------------------------------------------------------
   const state = {
-    page: "home", // home | opta | rankings | ownership | expected | schedule | markets | team
+    page: "home", // home | live | opta | rankings | ownership | expected | schedule | markets | team
     season: "2026-27", // 2025-26 | 2026-27
     view: "players", // players | teams
     split: "combined", // combined | home | away
@@ -690,12 +691,16 @@
     plannerAnchor: null, // { gw, ft, bank, managerId }
     plannerPlans: {}, // gw string -> { squad, captain, vice }
     actualMeta: null, // { syncedAt, gw, gwLabel, teamName, managerName, hasPicks, message }
-    teamSparkMetric: "form", // form | owned
     ownershipMoverKind: "risers", // risers | fallers
     ownershipViewMode: "table", // table | treemap
     ownershipTreeWindow: "d7", // d7 | d3 | d1
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
+    liveMode: "defcon", // defcon | points | bonus
+    liveMatchups: new Set(), // empty = all matchups
+    liveStatus: "all", // all | live | owned
+    liveSortKey: "actions", // defcon: actions|name|progress; points: pts|goals|…; bonus: bps
+    liveSortDir: "desc",
   };
   state.teamSearchPins = state.teamCompareCodes;
 
@@ -900,6 +905,7 @@
 
   const el = {
     pageHome: $("#page-home"),
+    pageLive: $("#page-live"),
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
     pageOwnership: $("#page-ownership"),
@@ -920,6 +926,20 @@
     pageSchedule: $("#page-schedule"),
     pageMarkets: $("#page-markets"),
     homePage: $("#home-page"),
+    livePage: $("#live-page"),
+    livePageSubtitle: $("#live-page-subtitle"),
+    liveCountLabel: $("#live-count-label"),
+    liveTable: $("#live-table"),
+    liveTableHead: $("#live-table-head"),
+    liveTableBody: $("#live-table-body"),
+    liveTableWrap: $("#live-table-wrap"),
+    liveBonusWrap: $("#live-bonus-wrap"),
+    liveBonusGrid: $("#live-bonus-grid"),
+    liveUpdatedFooter: $("#live-updated-footer"),
+    liveFiltersGroup: $("#live-filters-group"),
+    liveModeSeg: $("#live-mode-seg"),
+    liveMatchupFilters: $("#live-matchup-filters"),
+    liveStatusSeg: $("#live-status-seg"),
     homePageSubtitle: $("#home-page-subtitle"),
     homeCountLabel: $("#home-count-label"),
     homeDesktopSearch: $("#home-desktop-search"),
@@ -1189,7 +1209,8 @@
       chip.addEventListener("click", () => {
         toggleSetValue(state.teamFilter, code);
         chip.classList.toggle("active");
-        renderTable();
+        if (state.page === "live") renderLive();
+        else renderTable();
       });
       el.teamFilters.appendChild(chip);
     });
@@ -1206,7 +1227,8 @@
         if (state.page === "team" && state.teamPickerSlot) return;
         toggleSetValue(state.posFilter, p);
         chip.classList.toggle("active");
-        renderTable();
+        if (state.page === "live") renderLive();
+        else renderTable();
       });
       el.posFilters.appendChild(chip);
     });
@@ -1236,6 +1258,8 @@
     if (state.posFilter.size) return true;
     if (state.teamFilter.size) return true;
     if (state.search.trim() && !(state.page === "team" && !state.teamPickerSlot)) return true;
+    if (state.page === "live" && state.liveMatchups.size) return true;
+    if (state.page === "live" && state.liveStatus !== "all") return true;
     const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
     if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
     if (state.ownedMin !== coreDefaults.ownedMin) return true;
@@ -1264,6 +1288,8 @@
   function resetFiltersToDefault() {
     state.posFilter.clear();
     state.teamFilter.clear();
+    state.liveMatchups.clear();
+    state.liveStatus = "all";
     const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
     state.priceMin = coreDefaults.priceMin;
     state.priceMax = coreDefaults.priceMax;
@@ -1295,6 +1321,7 @@
     renderColumnsPanel();
     renderTable();
     if (state.page === "ownership") renderOwnership();
+    if (state.page === "live") renderLive();
   }
 
   // ---------------------------------------------------------------------
@@ -1766,6 +1793,9 @@
       // flash a second paint mid-animation.
       renderHome({ deferDuringEnter: true, settleQuiet: true });
       syncHomeLivePolling({ waitForEnter: true });
+    } else if (state.page === "live") {
+      renderLive();
+      syncHomeLivePolling();
     } else if (state.page === "rankings") renderRankings({ animateBars: false });
     else if (state.page === "team") renderTeam();
     else if (state.page === "opta") renderTable();
@@ -2100,6 +2130,7 @@
     homeOwnerPin = null;
     homeViewEntryId = null;
     homeElementGwCache = null;
+    syncLiveNavChrome();
     return true;
   }
 
@@ -2264,8 +2295,7 @@
 
   async function pollHomeFromLiveServer() {
     const url = homeLiveApiUrl();
-    if (!url || state.page !== "home") return;
-    if (!savedManagerId || !savedLeagueId) return;
+    if (!url || !savedManagerId || !savedLeagueId) return;
     if (homeLivePollInFlight) return;
     homeLivePollInFlight = true;
     homeLiveLastPollAt = Date.now();
@@ -2298,25 +2328,32 @@
         String(HOME.managerId || "") === String(data.home.managerId || "") &&
         String(HOME.leagueId || "") === String(data.home.leagueId || "");
       if (sameStamp) {
-        syncHomeCountLabel();
+        syncLiveNavChrome();
+        if (state.page === "home") syncHomeCountLabel();
         return;
       }
       applyHomePayload(data.home);
-      renderHome({ deferDuringEnter: true, settleQuiet: true });
+      if (state.page === "home") renderHome({ deferDuringEnter: true, settleQuiet: true });
+      else if (state.page === "live") renderLive();
+      else syncLiveNavChrome();
     } catch {
       homeLiveLastPollOk = false;
-      syncHomeCountLabel();
+      if (state.page === "home") syncHomeCountLabel();
     } finally {
       homeLivePollInFlight = false;
     }
   }
 
   function syncHomeLivePolling({ waitForEnter = false } = {}) {
-    if (!homeLiveApiUrl() || state.page !== "home" || !savedManagerId || !savedLeagueId) {
+    if (!homeLiveApiUrl() || !savedManagerId || !savedLeagueId) {
       stopHomeLivePolling();
+      syncLiveNavChrome();
       return;
     }
-    if (homeLivePollTimer) return;
+    if (homeLivePollTimer) {
+      syncLiveNavChrome();
+      return;
+    }
     if (waitForEnter && homeIsEnterBusy()) {
       homeLivePollAfterEnter = true;
       return;
@@ -2982,14 +3019,15 @@
 
   function homeStandingsPillHTML(value, intensity) {
     const roll = statRollSpan(value, { from: 0, decimals: 0, className: "home-stat-roll" });
-    if (intensity == null || !(intensity > 0)) {
+    // null = outside top-5 band. 0 = weakest of the five (still tinted).
+    if (intensity == null || !Number.isFinite(Number(intensity))) {
       if (value === 0) {
         return `<span class="home-standings-metric is-zero">${roll}</span>`;
       }
       return `<span class="home-standings-metric">${roll}</span>`;
     }
-    // Lift the top-5 floor so weaker band members still read as tinted pills.
-    const boosted = 0.4 + 0.6 * Math.min(1, Number(intensity));
+    // Floor so 5th never melts to bare white; leaders still reach full strength.
+    const boosted = 0.34 + 0.66 * Math.min(1, Math.max(0, Number(intensity)));
     const paint = enhanceHighlightPaint("top", boosted);
     if (paint.skip) {
       if (value === 0) {
@@ -6176,6 +6214,14 @@
       const scroll = expectedScrollWrap();
       if (scroll) wraps.push(scroll);
     }
+    if (
+      state.page === "live" &&
+      state.liveMode === "points" &&
+      el.liveTableWrap &&
+      !el.liveTableWrap.hidden
+    ) {
+      wraps.push(el.liveTableWrap);
+    }
     return wraps;
   }
 
@@ -6193,12 +6239,14 @@
       state.page === "ownership" ||
       state.page === "expected" ||
       state.page === "opta" ||
-      state.page === "team"
+      state.page === "team" ||
+      (state.page === "live" && state.liveMode === "points")
     );
   }
 
   let optaMobileNameColW = null;
   let ownershipMobileNameColW = null;
+  let liveMobileNameColW = null;
   let mobileNameColRaf = 0;
 
   // Hug identity content (Planner-tight). Cap is only a safety rail — not a target.
@@ -6222,14 +6270,29 @@
     return Math.ceil(el.scrollWidth || 0);
   }
 
-  function measureNameColWidth(wrap, { minW = MOBILE_NAME_COL_MIN } = {}) {
+  function measureNameLineIntrinsicWidth(nameLine) {
+    if (!nameLine) return 0;
+    const cs = getComputedStyle(nameLine);
+    const gap = parseFloat(cs.gap) || 0;
+    const kids = nameLine.querySelectorAll(":scope > *");
+    let w = 0;
+    kids.forEach((el, i) => {
+      w += Math.ceil(el.getBoundingClientRect().width);
+      if (i > 0) w += gap;
+    });
+    return w;
+  }
+
+  function measureNameColWidth(wrap, { minW = MOBILE_NAME_COL_MIN, hugContent = false, slack = MOBILE_NAME_COL_SLACK } = {}) {
     if (!wrap) return minW;
+    const hug = hugContent || !!wrap.querySelector(".live-points-table");
     const prevColW = wrap.style.getPropertyValue("--name-col-w");
     const prevCollapse = wrap.style.getPropertyValue("--name-collapse");
     // Expand so sub-line chips aren't clipped while measuring intrinsic widths.
-    wrap.style.setProperty("--name-col-w", "640px");
+    wrap.style.setProperty("--name-col-w", hug ? `${minW}px` : "640px");
     wrap.style.setProperty("--name-collapse", "0");
     wrap.classList.remove("is-name-simplifying");
+    if (hug) wrap.classList.add("is-name-col-measure");
     void wrap.offsetWidth;
     let max = minW;
     wrap.querySelectorAll("tbody td.col-player, tbody td.col-name").forEach((td) => {
@@ -6254,10 +6317,14 @@
           parts += 1;
         }
         if (text) {
+          const nameLine = text.querySelector(".player-name-line");
           const name = text.querySelector(".player-name");
           const sub = text.querySelector(".ownership-id-sub");
-          // Range width — name.scrollWidth mirrors the stretched flex box.
-          const nameW = measureInlineContentWidth(name);
+          const nameW = nameLine
+            ? hug
+              ? measureNameLineIntrinsicWidth(nameLine)
+              : measureInlineContentWidth(nameLine)
+            : measureInlineContentWidth(name);
           let subW = 0;
           if (sub) {
             const bits = Array.from(sub.children);
@@ -6297,7 +6364,8 @@
     else wrap.style.removeProperty("--name-col-w");
     if (prevCollapse) wrap.style.setProperty("--name-collapse", prevCollapse);
     else wrap.style.removeProperty("--name-collapse");
-    return max + MOBILE_NAME_COL_SLACK;
+    wrap.classList.remove("is-name-col-measure");
+    return max + slack;
   }
 
   function syncOptaMobileNameColWidth() {
@@ -6360,12 +6428,39 @@
     }
   }
 
+  const LIVE_POINTS_NAME_COL_MIN = 128;
+
+  function syncLivePointsNameColWidth() {
+    const wrap = el.liveTableWrap;
+    if (state.page !== "live" || state.liveMode !== "points" || !wrap || wrap.hidden) {
+      liveMobileNameColW = null;
+      if (wrap) {
+        wrap.style.removeProperty("--name-col-w");
+        wrap.removeAttribute("data-view");
+      }
+      return;
+    }
+    const measured = measureNameColWidth(wrap, {
+      minW: LIVE_POINTS_NAME_COL_MIN,
+      hugContent: true,
+      slack: 4,
+    });
+    const capFrac = NARROW_MQ.matches ? 0.52 : 0.28;
+    const cap = Math.round(wrap.clientWidth * capFrac);
+    liveMobileNameColW = Math.max(LIVE_POINTS_NAME_COL_MIN, Math.min(measured, cap));
+    const prev = wrap.style.getPropertyValue("--name-col-w");
+    wrap.dataset.view = "players";
+    wrap.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
+    if (prev !== `${liveMobileNameColW}px`) invalidateNameSimplifyOrigin(wrap);
+  }
+
   function scheduleOptaMobileNameColWidth() {
     if (mobileNameColRaf) cancelAnimationFrame(mobileNameColRaf);
     mobileNameColRaf = requestAnimationFrame(() => {
       mobileNameColRaf = 0;
       syncOptaMobileNameColWidth();
       syncOwnershipMobileNameColWidth();
+      syncLivePointsNameColWidth();
     });
   }
 
@@ -6381,7 +6476,9 @@
     const rel = Math.max(0, scrollLeft - origin);
     if (rel <= NAME_SIMPLIFY_START) return 0;
     const end =
-      state.page === "opta" || state.page === "team"
+      state.page === "opta" ||
+      state.page === "team" ||
+      (state.page === "live" && state.liveMode === "points")
         ? OPTA_NAME_SIMPLIFY_END
         : NAME_SIMPLIFY_END;
     const linear = Math.min(1, (rel - NAME_SIMPLIFY_START) / Math.max(1, end - NAME_SIMPLIFY_START));
@@ -6409,7 +6506,9 @@
     return withFullNameColumn(wrap, () => {
       const headRow = wrap.querySelector("thead tr:not(.section-row)");
       const pin = headRow && headRow.querySelector("th.col-player, th.col-name");
-      const price = headRow && headRow.querySelector("th.col-core");
+      const price =
+        headRow &&
+        headRow.querySelector("th.col-core, th.col-num[data-live-sort='pts'], th.col-num");
       if (!pin || !price) return 0;
       const delta = price.getBoundingClientRect().left - pin.getBoundingClientRect().right;
       return Math.max(0, Math.round(wrap.scrollLeft + delta));
@@ -6457,7 +6556,10 @@
     const scrollLeft = scrollLeftOverride != null ? scrollLeftOverride : scrollEl.scrollLeft;
     const t = nameSimplifyProgress(scrollLeft, nameSimplifyOrigin(scrollEl), scrollEl);
     host.classList.add("name-simplify-ready");
-    host.dataset.view = state.page === "team" ? "players" : state.view;
+    host.dataset.view =
+      state.page === "team" || (state.page === "live" && state.liveMode === "points")
+        ? "players"
+        : state.view;
     host.style.setProperty("--name-collapse", String(t));
     host.classList.toggle("is-name-simplifying", t > 0.02);
   }
@@ -7253,6 +7355,15 @@
     });
   }
 
+  function syncLivePointsCoreUnder() {
+    const wrap = el.liveTableWrap;
+    if (!wrap) return;
+    const under =
+      NARROW_MQ.matches && state.page === "live" && state.liveMode === "points" && !wrap.hidden;
+    wrap.classList.toggle("is-core-under", under);
+    invalidateNameSimplifyOrigin(wrap);
+  }
+
   function snapOptaToGameStats() {
     optaTableWraps().forEach((wrap) => {
       if (!wrap.classList.contains("is-core-under")) {
@@ -7304,6 +7415,11 @@
       renderOwnership();
       syncFiltersResetUI();
       syncTeamSearchHost();
+      return;
+    }
+    if (state.page === "live") {
+      renderLive();
+      syncFiltersResetUI();
       return;
     }
     if (state.page === "team") {
@@ -8036,6 +8152,33 @@
         ${spitNote("This page reads the saved ownership cache — it does not call the FPL API live.")}`;
     }
 
+    if (state.page === "live") {
+      const legend = [
+        spitRow(
+          `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span></span>`,
+          "DefCon mode — progress toward threshold; solid blue fill when achieved."
+        ),
+        spitRow(
+          `<span class="threshold-dot"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
+          "DefCon achieved this match (+2 pts)."
+        ),
+        spitRow(`<span class="live-card-dot is-yc spit-home-swatch" aria-hidden="true"></span>`, "Yellow card (Points mode)."),
+        spitRow(`<span class="live-bonus-status is-live spit-home-swatch" aria-hidden="true"><span class="home-status-dot is-live"></span> Live</span>`, "Bonus fixture card — green border + Live label while that match is in play; live cards sort to the top."),
+        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
+      ];
+      const reading = [
+        spitRow(spitRank("Modes"), "DefCon / Points / Bonus toggle beside search — current gameweek only."),
+        spitRow(spitRank("Threshold"), "DEF needs 10 CBIT. MID/FWD need 12 CBIRT. GK ineligible for DefCon."),
+        spitRow(spitRank("Points"), "Sortable GW stats — Pts, G, A, CS, Sv, DC check, bonus, cards."),
+        spitRow(spitRank("Bonus"), "One card per fixture; BPS bars; top three get projected 3/2/1 (tie-break rules not modeled)."),
+        spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned status."),
+      ];
+      return `${spitHead("activity", "How Live works")}
+        ${spitIntro("Current-GW live stats — DefCon progress, gameweek points, and per-fixture bonus projections.")}
+        ${spitSection("Legend", legend)}
+        ${spitSection("Reading", reading)}`;
+    }
+
     if (state.page === "markets") {
       const legend = [
         spitRow(spitMarketsStatSwatch("high", "1.82"), "Goals / CS% — above your blue threshold"),
@@ -8080,7 +8223,7 @@
         spitRow(spitRank("Live"), "Your live FPL squad and scoring are on Home — this page is for planning ahead."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). New signings / zero rows show –.`),
-        spitRow(spitRank("Form"), "Sparkline of mock recent form. Tap it (or the column header) to switch to TSB% from ownership check-ins."),
+        spitRow(spitRank("Form"), "Sparkline of GW points (needs 2+ gameweeks for a line)."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (check mark). FK/CK also show #2."),
         spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Defaults to the next GW once the current one has started, so you can plan ahead."),
         spitRow(
@@ -8742,6 +8885,7 @@
   function syncPageInfoButton() {
     const labels = {
       home: "How Home works",
+      live: "How Live works",
       opta: "How Statistics works",
       rankings: "How Rankings works",
       expected: "How Expected Data works",
@@ -8755,6 +8899,7 @@
       let page = state.page;
       if (pane) {
         if (pane.id === "home-page") page = "home";
+        else if (pane.id === "live-page") page = "live";
         else if (pane.id === "opta-page") page = "opta";
         else if (pane.id === "rankings-page") page = "rankings";
         else if (pane.id === "expected-page") page = "expected";
@@ -9898,6 +10043,7 @@
     teamTip = "",
     posTip = "",
     omitPrice = false,
+    usePosBadge = false,
   } = {}) {
     const isPlayers = (kind != null ? kind : state.view) !== "teams";
     let thumb = "";
@@ -9907,17 +10053,19 @@
       const displayPos = position || row.position;
       thumb = ownershipPhotoHTML(row, displayTeam);
       const accent = TEAM_SCATTER_ACCENT[displayTeam] || "";
-      const teamStyle = accent ? ` style="color:${accent}"` : "";
+      const teamStyle = accent ? ` style="--team-accent:${accent}"` : "";
       const price = omitPrice ? null : effectivePrice(row);
       const bits = [
         displayTeam
           ? `<span class="ownership-id-team"${teamStyle}${teamTip || ""}>${escapeHtml(displayTeam)}</span>`
           : "",
         price != null && Number.isFinite(Number(price))
-          ? `<span>£${Number(price).toFixed(1)}m</span>`
+          ? `<span class="ownership-id-price">£${Number(price).toFixed(1)}m</span>`
           : "",
         displayPos
-          ? `<span${posTip || ""}>${escapeHtml(displayPos)}</span>`
+          ? usePosBadge
+            ? posBadgeHTML(displayPos)
+            : `<span${posTip || ""}>${escapeHtml(displayPos)}</span>`
           : "",
         ...extraBits,
       ].filter(Boolean);
@@ -9953,8 +10101,16 @@
     return `<div class="ownership-id">${ownershipStyleIdentityHTML(row, opts)}</div>`;
   }
 
-  function rankingsIdentityHTML(row) {
-    return ownershipStyleIdentityHTML(row);
+  function livePointsIdentityHTML(player, position) {
+    return `<div class="ownership-id live-points-id">${ownershipStyleIdentityHTML(player, {
+      omitPrice: true,
+      usePosBadge: true,
+      position: position || player.position,
+    })}</div>`;
+  }
+
+  function rankingsIdentityHTML(row, opts = {}) {
+    return ownershipStyleIdentityHTML(row, opts);
   }
 
   function rankingsCardHTML(col, rows, referenceRows) {
@@ -10383,22 +10539,11 @@
     return `<th class="${extraClass}${sorted ? " sorted" : ""}" data-team-sort="${escapeHtml(key)}"${tipAttr(title || label)}>${escapeHtml(label)}${arrow}</th>`;
   }
 
-  function teamSparkMetricIsOwned() {
-    return state.teamSparkMetric === "owned";
-  }
-
   function teamSparkHeadHTML(opts) {
-    const owned = teamSparkMetricIsOwned();
-    const label = owned ? "TSB%" : "Form";
     if (opts && opts.plain) {
-      return `<th class="col-team-spark">${escapeHtml(label)}</th>`;
+      return `<th class="col-team-spark">Form</th>`;
     }
-    return `<th class="col-team-spark" data-team-spark-toggle="1">${escapeHtml(label)}</th>`;
-  }
-
-  function toggleTeamSparkMetric() {
-    state.teamSparkMetric = teamSparkMetricIsOwned() ? "form" : "owned";
-    renderTeam();
+    return `<th class="col-team-spark"${tipAttr("GW points sparkline")}>Form</th>`;
   }
 
   function teamMetricHeadHTML(opts) {
@@ -10470,52 +10615,32 @@
     </tr>`;
   }
 
-  /** Live GW points for form spark — HOME.elementGw (current season). */
+  /** GW points series for Form spark — baked formPts from event-live (build.py). */
   function teamFormSeries(row) {
     if (!row || row.code == null) return [];
+    const prior = teamPriorRow(row.code) || row;
+    let series = Array.isArray(prior.formPts)
+      ? prior.formPts.map(Number).filter((v) => Number.isFinite(v))
+      : [];
+    // Live overlay: refresh/append current GW from Home when a fixture has started.
     const element = fplElementIdForRow(row);
-    if (element == null) return [];
-    const eg = (HOME && HOME.elementGw && HOME.elementGw[String(element)]) || null;
-    if (!eg) return [];
-    // Fixture not started (e.g. Chelsea / Fulham GW1) — no spark yet.
-    if (eg.status === "scheduled") return [];
-    const pts = Number(eg.pts);
-    if (!Number.isFinite(pts)) return [];
-    // One real GW datapoint for now; later GWs append to this series.
-    return [pts];
-  }
-
-  let teamOwnedSeriesCache = new Map();
-  let teamOwnedSeriesCacheN = -1;
-  function teamOwnedSeries(code) {
-    const checkIns = ownershipCheckIns();
-    if (teamOwnedSeriesCacheN !== checkIns.length) {
-      const map = new Map();
-      for (const ci of checkIns) {
-        for (const p of ci.players || []) {
-          if (p == null || p.code == null) continue;
-          const v = Number(p.owned);
-          if (!Number.isFinite(v)) continue;
-          const k = Number(p.code);
-          let arr = map.get(k);
-          if (!arr) {
-            arr = [];
-            map.set(k, arr);
-          }
-          arr.push(v);
+    if (element != null) {
+      const eg = (HOME && HOME.elementGw && HOME.elementGw[String(element)]) || null;
+      if (eg && eg.status !== "scheduled") {
+        const pts = Number(eg.pts);
+        if (Number.isFinite(pts)) {
+          const homeGw = Number(HOME && HOME.gw);
+          if (!series.length) series = [pts];
+          else if (Number.isFinite(homeGw) && homeGw > series.length) series = series.concat(pts);
+          else series = series.slice(0, -1).concat(pts);
         }
       }
-      teamOwnedSeriesCache = map;
-      teamOwnedSeriesCacheN = checkIns.length;
     }
-    const arr = teamOwnedSeriesCache.get(Number(code));
-    if (!arr || !arr.length) return [];
-    return arr.length > 12 ? arr.slice(-12) : arr;
+    return series;
   }
 
   function teamSparkSeries(row) {
     if (!row || row.code == null) return [];
-    if (teamSparkMetricIsOwned()) return teamOwnedSeries(row.code);
     return teamFormSeries(row);
   }
 
@@ -10540,14 +10665,14 @@
   function teamSparkCellHTML(row) {
     const series = teamSparkSeries(row);
     if (!series.length) {
-      return `<td class="col-team-spark is-blank" data-team-spark-toggle="1"><span class="team-spark-empty">–</span></td>`;
+      return `<td class="col-team-spark is-blank"><span class="team-spark-empty">–</span></td>`;
     }
     const first = series[0];
     const last = series[series.length - 1];
     const delta = last - first;
     const span = Math.max(...series) - Math.min(...series) || 1;
     const tone = series.length < 2 || Math.abs(delta) < span * 0.12 ? "is-flat" : delta > 0 ? "is-up" : "is-down";
-    return `<td class="col-team-spark" data-team-spark-toggle="1">${teamSparkSvg(series, tone)}</td>`;
+    return `<td class="col-team-spark">${teamSparkSvg(series, tone)}</td>`;
   }
 
   function teamSortValue(row, key) {
@@ -12020,7 +12145,7 @@
     const metrics = TEAM_STAT_COLS.map(
       (col) => `<td class="col-num col-team-stat is-blank"></td>`
     ).join("");
-    const spark = `<td class="col-team-spark is-blank" data-team-spark-toggle="1"></td>`;
+    const spark = `<td class="col-team-spark is-blank"></td>`;
     const heat = teamHeatGws()
       .map(
         (gw, i) =>
@@ -12787,13 +12912,6 @@
       renderTeam();
       return;
     }
-    const sparkHit = e.target.closest("td.col-team-spark, th.col-team-spark");
-    if (sparkHit && (sparkHit.matches("th.col-team-spark") || hasFineHover())) {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleTeamSparkMetric();
-      return;
-    }
     const searchPinRow = e.target.closest("#team-search-results tr.team-search-row[data-team-code]");
     if (searchPinRow) {
       e.preventDefault();
@@ -13148,6 +13266,8 @@
     switch (page) {
       case "home":
         return HOME.generatedAt || null;
+      case "live":
+        return latestDataIso(HOME.generatedAt, DATA.generatedAt);
       case "ownership":
         return OWNERSHIP.generatedAt || null;
       case "markets":
@@ -13865,6 +13985,618 @@
     syncMarketsViewControls();
   }
 
+  // Live page — DefCon progress tracker
+  // ---------------------------------------------------------------------
+  const LIVE_POS_BY_TYPE = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+
+  function liveDefaultGw() {
+    const homeGw = Number(HOME && HOME.gw);
+    if (Number.isFinite(homeGw) && homeGw > 0) return homeGw;
+    const cur = Number(
+      (DATA.gameweeks && DATA.gameweeks.current) ||
+        (DATA.fixturesMeta && DATA.fixturesMeta.currentGw)
+    );
+    if (Number.isFinite(cur) && cur > 0) return cur;
+    return 1;
+  }
+
+  function liveEgIsActive(eg) {
+    return !!(eg && (eg.live || eg.status === "live"));
+  }
+
+  /** True when at least one fixture in the current GW is in play. */
+  function liveGwHasActiveGames() {
+    const gw = liveDefaultGw();
+    const homeGw = Number(HOME && HOME.gw);
+    if (Number.isFinite(homeGw) && homeGw === gw && HOME.elementGw && typeof HOME.elementGw === "object") {
+      for (const eg of Object.values(HOME.elementGw)) {
+        if (liveEgIsActive(eg)) return true;
+      }
+    }
+    if (Number.isFinite(homeGw) && homeGw === gw && Array.isArray(HOME.squad)) {
+      for (const row of HOME.squad) {
+        if (!row) continue;
+        if (row.live) return true;
+        for (const fx of row.fixtures || []) {
+          if (fx && fx.live) return true;
+        }
+      }
+    }
+    const baked = (DATA.defconByGw || {})[String(gw)] || (DATA.defconByGw || {})[gw] || {};
+    for (const eg of Object.values(baked)) {
+      if (liveEgIsActive(eg)) return true;
+    }
+    return false;
+  }
+
+  function syncLiveNavChrome() {
+    document.documentElement.classList.toggle("has-gw-live", liveGwHasActiveGames());
+  }
+
+  function liveElementMapForGw(gw) {
+    const baked = (DATA.defconByGw || {})[String(gw)] || (DATA.defconByGw || {})[gw] || {};
+    const homeGw = Number(HOME && HOME.gw);
+    if (!(Number.isFinite(homeGw) && homeGw === gw && HOME.elementGw && typeof HOME.elementGw === "object")) {
+      return baked;
+    }
+    const out = { ...baked };
+    for (const [id, eg] of Object.entries(HOME.elementGw)) {
+      if (!eg || typeof eg !== "object") continue;
+      out[id] = { ...(baked[id] || {}), ...eg };
+    }
+    return out;
+  }
+
+  function livePlayerByElement() {
+    const map = new Map();
+    const rows = (season2627Data().players && season2627Data().players.combined) || [];
+    for (const row of rows) {
+      if (!row) continue;
+      let eid = row.element != null ? Number(row.element) : NaN;
+      if (!Number.isFinite(eid)) eid = Number(fplElementIdForRow(row));
+      if (!Number.isFinite(eid)) continue;
+      map.set(eid, row);
+    }
+    return map;
+  }
+
+  function liveMatchupsForGw(gw) {
+    const seen = new Set();
+    const out = [];
+    for (const [team, list] of Object.entries(FIXTURES_BY_TEAM)) {
+      for (const fx of list || []) {
+        if (Number(fx.gw) !== gw) continue;
+        const home = fx.ha === "H" ? team : fx.opp;
+        const away = fx.ha === "H" ? fx.opp : team;
+        if (!home || !away) continue;
+        const key = `${home}|${away}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ id: key, home, away, kickoff: fx.kickoff || null });
+      }
+    }
+    out.sort((a, b) => {
+      const ka = a.kickoff || "";
+      const kb = b.kickoff || "";
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+    return out;
+  }
+
+  function liveBuildRows(gw, opts = {}) {
+    const includeGk = opts.includeGk === true;
+    const egMap = liveElementMapForGw(gw);
+    const byElement = livePlayerByElement();
+    const matchups = liveMatchupsForGw(gw);
+    const matchupByTeam = new Map();
+    for (const m of matchups) {
+      matchupByTeam.set(m.home, m.id);
+      matchupByTeam.set(m.away, m.id);
+    }
+    const rows = [];
+    for (const [eidStr, eg] of Object.entries(egMap)) {
+      const eid = Number(eidStr);
+      const etype = Number(eg.elementType) || 0;
+      const pos = LIVE_POS_BY_TYPE[etype];
+      if (!pos) continue;
+      if (!includeGk && pos === "GK") continue;
+      const mins = Number(eg.minutes) || 0;
+      const bps = Number(eg.bps) || 0;
+      if (includeGk && opts.forBonus && mins <= 0 && bps <= 0) continue;
+      // Outfield players who played, or currently live (0' still shown).
+      if (!includeGk && mins <= 0 && !(!!eg.live || eg.status === "live")) continue;
+      if (includeGk && !opts.forBonus && mins <= 0 && !(!!eg.live || eg.status === "live")) continue;
+      const player = byElement.get(eid);
+      if (!player) continue;
+      const team = player.team || currentTeamCode(player);
+      const matchupId = matchupByTeam.get(team) || null;
+      const rule = DEFCON_RULES[pos];
+      const threshold = rule ? rule.threshold : null;
+      const actions = pos === "GK" ? null : liveDefconActions(eg, pos);
+      rows.push({
+        player,
+        eg,
+        eid,
+        pos,
+        team,
+        matchupId,
+        threshold,
+        actions: actions == null ? 0 : actions,
+        minutes: mins,
+        live: !!eg.live || eg.status === "live",
+        status: eg.status || "scheduled",
+        progress: threshold ? Math.min(1, (actions == null ? 0 : actions) / threshold) : 0,
+      });
+    }
+    return rows;
+  }
+
+  function liveDefconActions(eg, pos) {
+    const rule = DEFCON_RULES[pos];
+    if (!rule || !eg) return null;
+    const raw = eg[rule.field];
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function liveDefconBarVisual(actions, threshold) {
+    const thr = Number(threshold) || 1;
+    const acts = Number.isFinite(Number(actions)) ? Math.max(0, Number(actions)) : 0;
+    const pct = Math.min(100, (acts / thr) * 100);
+    const hit = acts >= thr;
+    return {
+      barPct: pct,
+      complete: hit,
+      fillStyle: `--defcon-pct:${pct < 0.5 ? 0 : pct.toFixed(2)}%`,
+    };
+  }
+
+  function liveAchievedDotHTML(actions, threshold, pos) {
+    if (!Number.isFinite(actions) || actions < threshold) return "";
+    const title = `DefCon achieved — ${actions} ≥ ${threshold} ${pos} actions (+2 pts)`;
+    return `<span class="threshold-dot live-defcon-achieved"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+  }
+
+  function liveFilteredRows(rows) {
+    let out = rows;
+    if (state.liveMatchups.size) {
+      out = out.filter((r) => r.matchupId && state.liveMatchups.has(r.matchupId));
+    }
+    if (state.teamFilter.size) {
+      out = out.filter((r) => state.teamFilter.has(r.team));
+    }
+    if (state.posFilter.size) {
+      out = out.filter((r) => state.posFilter.has(r.pos));
+    }
+    if (state.liveStatus === "live") {
+      out = out.filter((r) => r.live);
+    } else if (state.liveStatus === "owned") {
+      out = out.filter((r) => r.player && r.player.code != null && ownedCodes.has(r.player.code));
+    }
+    const q = state.search.trim().toLowerCase();
+    if (q) {
+      out = out.filter((r) => {
+        const name = String(r.player.name || "").toLowerCase();
+        const team = String(r.team || "").toLowerCase();
+        return name.includes(q) || team.includes(q);
+      });
+    }
+    return out;
+  }
+
+  function liveSortRows(rows) {
+    const dir = state.liveSortDir === "asc" ? 1 : -1;
+    const key = state.liveSortKey;
+    const numEg = (entry, field) => {
+      const n = Number(entry.eg && entry.eg[field]);
+      return Number.isFinite(n) ? n : 0;
+    };
+    return rows.slice().sort((a, b) => {
+      let cmp = 0;
+      if (key === "name") {
+        cmp = String(a.player.name || "").localeCompare(String(b.player.name || ""));
+      } else if (key === "progress") {
+        cmp = a.progress - b.progress;
+      } else if (key === "actions") {
+        cmp = a.actions - b.actions;
+        if (cmp === 0) cmp = a.progress - b.progress;
+      } else if (key === "defConHit") {
+        cmp = (a.eg.defConHit ? 1 : 0) - (b.eg.defConHit ? 1 : 0);
+      } else if (
+        key === "pts" ||
+        key === "goals" ||
+        key === "assists" ||
+        key === "cleanSheets" ||
+        key === "saves" ||
+        key === "bps" ||
+        key === "bonus" ||
+        key === "yellowCards" ||
+        key === "redCards" ||
+        key === "ownGoals" ||
+        key === "penaltiesMissed" ||
+        key === "penaltiesSaved" ||
+        key === "goalsConceded"
+      ) {
+        cmp = numEg(a, key) - numEg(b, key);
+      } else {
+        cmp = a.actions - b.actions;
+        if (cmp === 0) cmp = a.progress - b.progress;
+      }
+      if (cmp === 0) cmp = String(a.player.name || "").localeCompare(String(b.player.name || ""));
+      return cmp * dir;
+    });
+  }
+
+  const LIVE_POINTS_COLS = [
+    { key: "pts", label: "Pts", title: "Gameweek points" },
+    { key: "goals", label: "G", title: "Goals scored" },
+    { key: "assists", label: "A", title: "Assists" },
+    { key: "cleanSheets", label: "CS", title: "Clean sheets" },
+    { key: "saves", label: "Sv", title: "Saves (GK)" },
+    { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
+    { key: "bonus", label: "B", title: "Bonus points" },
+    { key: "yellowCards", label: "YC", title: "Yellow cards" },
+    { key: "redCards", label: "RC", title: "Red cards" },
+    { key: "ownGoals", label: "OG", title: "Own goals", narrow: true },
+    { key: "penaltiesMissed", label: "PM", title: "Penalties missed", narrow: true },
+    { key: "penaltiesSaved", label: "PS", title: "Penalties saved", narrow: true },
+  ];
+
+  function liveDefaultSortForMode(mode) {
+    if (mode === "points") return { key: "pts", dir: "desc" };
+    if (mode === "bonus") return { key: "bps", dir: "desc" };
+    return { key: "actions", dir: "desc" };
+  }
+
+  function liveCardDotHTML(kind, count) {
+    const n = Number(count);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    const cls = kind === "yc" ? "live-card-dot is-yc" : "live-card-dot is-rc";
+    const label = kind === "yc" ? "Yellow card" : "Red card";
+    return `<span class="${cls}" aria-label="${label}"></span>`;
+  }
+
+  function livePointsCellHTML(entry, col) {
+    const { eg, pos } = entry;
+    if (col.key === "defConHit") {
+      if (!eg.defConHit) return "";
+      const thr = entry.threshold || (pos === "DEF" ? 10 : 12);
+      const acts = entry.actions;
+      return `<span class="live-defcon-check-slot">${liveAchievedDotHTML(acts, thr, pos)}</span>`;
+    }
+    if (col.key === "saves" && pos !== "GK") return "";
+    if (col.key === "yellowCards") return liveCardDotHTML("yc", eg.yellowCards);
+    if (col.key === "redCards") return liveCardDotHTML("rc", eg.redCards);
+    const n = Number(eg[col.key]);
+    if (!Number.isFinite(n) || n === 0) return "";
+    return escapeHtml(String(n));
+  }
+
+  function livePointsRowHTML(entry, enterI) {
+    const { player, pos } = entry;
+    const cells = LIVE_POINTS_COLS.map((col) => {
+      const inner = livePointsCellHTML(entry, col);
+      const hasValue = inner !== "";
+      const cls = [
+        "col-num",
+        col.narrow ? "col-num-narrow" : "",
+        hasValue ? "has-value" : "",
+        hasValue ? `has-${col.key}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `<td class="${cls}">${inner}</td>`;
+    }).join("");
+    return `<tr class="live-points-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
+      <td class="col-player">${livePointsIdentityHTML(player, pos)}</td>
+      ${cells}
+    </tr>`;
+  }
+
+  function liveSortTh(key, label, extraClass, title) {
+    const sorted = state.liveSortKey === key;
+    const arrow = sorted
+      ? `<span class="arrow">${iconHTML(state.liveSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`
+      : "";
+    return `<th class="${extraClass || ""}${sorted ? " sorted" : ""}" data-live-sort="${escapeHtml(key)}"${tipAttr(title || label)}>${escapeHtml(label)}${arrow}</th>`;
+  }
+
+  function liveRowHTML(entry, enterI) {
+    const { player, pos, threshold, actions } = entry;
+    const thr = threshold || 12;
+    const bar = liveDefconBarVisual(actions, thr);
+    const achieved = liveAchievedDotHTML(actions, thr, pos);
+    const label = `${actions}/${thr}`;
+    const completeCls = bar.complete ? " is-complete" : "";
+    return `<tr class="live-defcon-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
+      <td class="col-player">${tableOwnershipIdentityHTML(player)}</td>
+      <td class="col-live-defcon">
+        <div class="live-defcon-cell">
+          <span class="live-defcon-bar${completeCls}" style="${bar.fillStyle}" data-defcon-units="${thr}">
+            <span class="live-defcon-track"><span class="live-defcon-fill is-drawn"></span></span>
+          </span>
+          <span class="live-defcon-count">
+            <span class="live-defcon-frac">${escapeHtml(label)}</span>
+            <span class="live-defcon-check-slot">${achieved}</span>
+          </span>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  function liveMatchupKickoffState(matchup, entries) {
+    const kickoffMs = matchup && matchup.kickoff ? Date.parse(matchup.kickoff) : NaN;
+    const isLive = (entries || []).some((r) => r.live || liveEgIsActive(r.eg));
+    const hasPlayed = (entries || []).some((r) => (Number(r.eg && r.eg.minutes) || 0) > 0);
+    const upcoming =
+      Number.isFinite(kickoffMs) && kickoffMs > Date.now() && !isLive && !hasPlayed;
+    const finished = !isLive && hasPlayed;
+    return { isLive, upcoming, finished, kickoffMs };
+  }
+
+  function liveBonusMatchupHeadHTML(matchup, entries) {
+    if (!matchup) return "";
+    const { isLive, upcoming, finished } = liveMatchupKickoffState(matchup, entries);
+    const parts = fmtMarketsKickoffParts(matchup.kickoff);
+    let statusHTML = "";
+    if (isLive) {
+      statusHTML =
+        '<span class="live-bonus-status is-live"><span class="home-status-dot is-live" aria-hidden="true"></span> Live</span>';
+    } else if (upcoming) {
+      const when = [parts.day, parts.date, parts.time].filter(Boolean).join(" · ");
+      statusHTML = when
+        ? `<span class="live-bonus-status is-upcoming">${escapeHtml(when)}</span>`
+        : "";
+    } else if (finished) {
+      statusHTML = '<span class="live-bonus-status is-finished">Full time</span>';
+    } else if (matchup.kickoff) {
+      const when = [parts.day, parts.date, parts.time].filter(Boolean).join(" · ");
+      statusHTML = when
+        ? `<span class="live-bonus-status">${escapeHtml(when)}</span>`
+        : "";
+    }
+    return `<header class="live-bonus-card-head">
+      <div class="live-bonus-matchup-center">
+        <div class="live-bonus-team">
+          ${badgeHTML(matchup.home, "live-bonus-badge")}
+          <span class="live-bonus-team-code">${escapeHtml(matchup.home)}</span>
+        </div>
+        <div class="live-bonus-center">
+          <span class="live-bonus-vs">v</span>
+          ${statusHTML || ""}
+        </div>
+        <div class="live-bonus-team">
+          ${badgeHTML(matchup.away, "live-bonus-badge")}
+          <span class="live-bonus-team-code">${escapeHtml(matchup.away)}</span>
+        </div>
+      </div>
+    </header>`;
+  }
+
+  const LIVE_BONUS_TOP_N = 10;
+
+  function liveBonusFixtureCardHTML(matchup, entries) {
+    const sorted = entries
+      .slice()
+      .sort((a, b) => (Number(b.eg.bps) || 0) - (Number(a.eg.bps) || 0))
+      .slice(0, LIVE_BONUS_TOP_N);
+    const scale = sorted.reduce((m, e) => Math.max(m, Number(e.eg.bps) || 0), 0) || 1;
+    const { isLive } = liveMatchupKickoffState(matchup, sorted);
+    const body = sorted.length
+      ? `<ol class="rankings-list live-bonus-list">${sorted
+          .map((entry, barI) => {
+            const bps = Number(entry.eg.bps) || 0;
+            const bonus = Number(entry.eg.bonus) || 0;
+            const rank = barI + 1;
+            const medal = rank === 1 ? "gold" : rank === 2 ? "silver" : rank === 3 ? "bronze" : "";
+            const pct = Math.max(4, Math.min(100, (bps / scale) * 100));
+            const projected = rank <= 3 ? 4 - rank : 0;
+            const outsideBonus = bonus > 0 ? bonus : projected;
+            const bonusOut =
+              outsideBonus > 0
+                ? `<span class="live-bonus-proj">+${outsideBonus}</span>`
+                : `<span class="live-bonus-proj is-empty" aria-hidden="true"></span>`;
+            const ariaBonus =
+              outsideBonus > 0 ? `, +${outsideBonus} bonus` : "";
+            return `<li class="rankings-row live-bonus-row${medal ? ` medal-${medal}` : ""}"
+              data-player-code="${escapeHtml(String(entry.player.code || ""))}" role="button" tabindex="0"
+              aria-label="${escapeHtml(`${rank}. ${entry.player.name}, ${bps} BPS${ariaBonus}`)}">
+              <span class="rankings-rank">${rank}</span>
+              <span class="rankings-identity">${rankingsIdentityHTML(entry.player, { omitPrice: true })}</span>
+              <span class="rankings-meter live-bonus-meter">
+                <span class="live-bonus-track" aria-hidden="true">
+                  <span class="rankings-bar is-drawn" style="--bar-pct:${pct.toFixed(2)}%;--bar-i:${barI}">
+                    <span class="rankings-value">${escapeHtml(String(bps))}</span>
+                  </span>
+                </span>
+                ${bonusOut}
+              </span>
+            </li>`;
+          })
+          .join("")}</ol>`
+      : `<div class="rankings-empty">No BPS rows for the current filters.</div>`;
+    return `<article class="rankings-card live-bonus-card${isLive ? " is-fixture-live" : ""}">
+      ${liveBonusMatchupHeadHTML(matchup, sorted)}
+      ${body}
+    </article>`;
+  }
+
+  function liveBonusSortFixtures(fixtures, byMatchup) {
+    return fixtures.slice().sort((a, b) => {
+      const aEntries = byMatchup.get(a.id) || [];
+      const bEntries = byMatchup.get(b.id) || [];
+      const aLive = liveMatchupKickoffState(a, aEntries).isLive;
+      const bLive = liveMatchupKickoffState(b, bEntries).isLive;
+      if (aLive !== bLive) return aLive ? -1 : 1;
+      const ka = a.kickoff || "";
+      const kb = b.kickoff || "";
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  function syncLiveMatchupFilters() {
+    if (!el.liveMatchupFilters) return;
+    const gw = liveDefaultGw();
+    const matchups = liveMatchupsForGw(gw);
+    const valid = new Set(matchups.map((m) => m.id));
+    for (const id of Array.from(state.liveMatchups)) {
+      if (!valid.has(id)) state.liveMatchups.delete(id);
+    }
+    el.liveMatchupFilters.innerHTML = matchups
+      .map((m) => {
+        const active = state.liveMatchups.has(m.id) ? " active" : "";
+        const label = `${m.home} vs ${m.away}`;
+        return `<button type="button" class="chip live-matchup-chip${active}" data-live-matchup="${escapeHtml(m.id)}"${tipAttr(label)} aria-pressed="${state.liveMatchups.has(m.id) ? "true" : "false"}">
+          <span class="live-matchup-badges">${badgeHTML(m.home, "live-matchup-badge")}<span class="live-matchup-vs">v</span>${badgeHTML(m.away, "live-matchup-badge")}</span>
+        </button>`;
+      })
+      .join("");
+  }
+
+  function syncLiveStatusSeg() {
+    if (!el.liveStatusSeg) return;
+    el.liveStatusSeg.querySelectorAll("[data-live-status]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.liveStatus === state.liveStatus);
+    });
+    syncSegThumb(el.liveStatusSeg);
+  }
+
+  function syncLiveModeSeg() {
+    if (!el.liveModeSeg) return;
+    el.liveModeSeg.querySelectorAll("[data-live-mode]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.liveMode === state.liveMode);
+    });
+    syncSegThumb(el.liveModeSeg);
+  }
+
+  function syncLivePosFilterGk() {
+    if (state.page !== "live") return;
+    const showGk = state.liveMode === "points" || state.liveMode === "bonus";
+    $$("#pos-filters .chip").forEach((c) => {
+      c.hidden = c.dataset.pos === "GK" && !showGk;
+    });
+  }
+
+  function liveUpdateFooter(gw) {
+    if (!el.liveUpdatedFooter) return;
+    const iso =
+      Number(HOME && HOME.gw) === gw && HOME.generatedAt ? HOME.generatedAt : pageDataUpdatedIso("live");
+    const { text, title } = pageUpdatedMeta(iso);
+    el.liveUpdatedFooter.textContent = text || "";
+    if (title) setTip(el.liveUpdatedFooter, title);
+    else setTip(el.liveUpdatedFooter, "");
+    el.liveUpdatedFooter.hidden = !text;
+  }
+
+  function liveUpdateSubtitle(mode) {
+    if (!el.livePageSubtitle) return;
+    if (mode === "points") {
+      el.livePageSubtitle.textContent =
+        "Gameweek stat table — points, goals, assists, saves, bonus, cards, and DefCon hits for the current GW.";
+    } else if (mode === "bonus") {
+      el.livePageSubtitle.textContent =
+        "Bonus Points System rankings per fixture — top three projected 3/2/1 from BPS within each match (FPL tie-break rules not modeled).";
+    } else {
+      el.livePageSubtitle.textContent =
+        "DefCon tracker — progress toward the +2 defensive contribution threshold (DEF 10 CBIT · MID/FWD 12 CBIRT).";
+    }
+  }
+
+  function renderLiveDefcon(gw) {
+    const rows = liveSortRows(liveFilteredRows(liveBuildRows(gw)));
+    el.liveTableHead.innerHTML = `<tr>
+      ${liveSortTh("name", "Player", "col-player")}
+      ${liveSortTh("actions", "DefCon", "col-live-defcon", "Position-correct actions toward threshold (DEF 10 CBIT · MID/FWD 12 CBIRT)")}
+    </tr>`;
+    if (!rows.length) {
+      el.liveTableBody.innerHTML = `<tr class="live-empty-row"><td colspan="2">No DefCon rows for the current filters.</td></tr>`;
+    } else {
+      el.liveTableBody.innerHTML = rows.map((r, i) => liveRowHTML(r, i)).join("");
+    }
+    if (el.liveCountLabel) {
+      el.liveCountLabel.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · GW${gw}`;
+    }
+  }
+
+  function renderLivePoints(gw) {
+    const rows = liveSortRows(liveFilteredRows(liveBuildRows(gw, { includeGk: true })));
+    const colCount = LIVE_POINTS_COLS.length + 1;
+    el.liveTableHead.innerHTML = `<tr>
+      ${liveSortTh("name", "Player", "col-player")}
+      ${LIVE_POINTS_COLS.map((col) =>
+        liveSortTh(col.key, col.label, `col-num${col.narrow ? " col-num-narrow" : ""}`, col.title)
+      ).join("")}
+    </tr>`;
+    if (!rows.length) {
+      el.liveTableBody.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">No points rows for the current filters.</td></tr>`;
+    } else {
+      el.liveTableBody.innerHTML = rows.map((r, i) => livePointsRowHTML(r, i)).join("");
+    }
+    if (el.liveCountLabel) {
+      el.liveCountLabel.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · GW${gw}`;
+    }
+  }
+
+  function renderLiveBonus(gw) {
+    if (!el.liveBonusGrid) return;
+    const matchups = liveMatchupsForGw(gw);
+    let fixtures = matchups;
+    if (state.liveMatchups.size) {
+      fixtures = matchups.filter((m) => state.liveMatchups.has(m.id));
+    }
+    const allRows = liveFilteredRows(liveBuildRows(gw, { includeGk: true, forBonus: true }));
+    const byMatchup = new Map();
+    for (const row of allRows) {
+      if (!row.matchupId) continue;
+      if (!byMatchup.has(row.matchupId)) byMatchup.set(row.matchupId, []);
+      byMatchup.get(row.matchupId).push(row);
+    }
+    fixtures = liveBonusSortFixtures(fixtures, byMatchup);
+    const cards = fixtures.map((m) => liveBonusFixtureCardHTML(m, byMatchup.get(m.id) || []));
+    el.liveBonusGrid.innerHTML = cards.join("");
+    if (el.liveCountLabel) {
+      const playerCount = allRows.length;
+      el.liveCountLabel.textContent = `${fixtures.length} fixture${fixtures.length === 1 ? "" : "s"} · ${playerCount} player${playerCount === 1 ? "" : "s"} · GW${gw}`;
+    }
+  }
+
+  function renderLive() {
+    const gw = liveDefaultGw();
+    syncLiveMatchupFilters();
+    syncLiveStatusSeg();
+    syncLiveModeSeg();
+    syncLivePosFilterGk();
+
+    const mode = state.liveMode;
+    if (el.liveTableWrap) el.liveTableWrap.hidden = mode === "bonus";
+    if (el.liveBonusWrap) el.liveBonusWrap.hidden = mode !== "bonus";
+    if (el.liveTable) {
+      el.liveTable.classList.toggle("live-defcon-table", mode === "defcon");
+      el.liveTable.classList.toggle("live-points-table", mode === "points");
+    }
+    liveUpdateSubtitle(mode);
+
+    if (mode === "bonus") {
+      renderLiveBonus(gw);
+    } else if (mode === "points") {
+      if (!el.liveTableBody || !el.liveTableHead) return;
+      renderLivePoints(gw);
+    } else {
+      if (!el.liveTableBody || !el.liveTableHead) return;
+      renderLiveDefcon(gw);
+    }
+    liveUpdateFooter(gw);
+    syncLiveNavChrome();
+    syncLivePointsCoreUnder();
+    scheduleOptaMobileNameColWidth();
+    bindAllNameColumnSimplifies();
+    if (el.liveTableWrap && state.liveMode === "points") {
+      updateNameColumnSimplify(el.liveTableWrap);
+    }
+  }
+
   // Ownership page — sortable TSB% mover table
   // ---------------------------------------------------------------------
   const OWNERSHIP_MOVER_N = 20;
@@ -14229,11 +14961,11 @@
       </div>`;
     }
     const accent = TEAM_SCATTER_ACCENT[row.team] || "";
-    const teamStyle = accent ? ` style="color:${accent}"` : "";
+    const teamStyle = accent ? ` style="--team-accent:${accent}"` : "";
     const bits = [
       row.team ? `<span class="ownership-id-team"${teamStyle}>${escapeHtml(row.team)}</span>` : "",
       row.price != null && Number.isFinite(Number(row.price))
-        ? `<span>£${Number(row.price).toFixed(1)}m</span>`
+        ? `<span class="ownership-id-price">£${Number(row.price).toFixed(1)}m</span>`
         : "",
       row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
     ].filter(Boolean);
@@ -14965,7 +15697,7 @@
 
 
   const PAGE_KEY = "fpl-explorer-page";
-  const PAGES = ["home", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
+  const PAGES = ["home", "live", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
 
   function storedPage() {
     try {
@@ -14980,6 +15712,7 @@
 
   function pagePaneFor(page) {
     if (page === "home") return el.homePage;
+    if (page === "live") return el.livePage;
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
     if (page === "ownership") return el.ownershipPage;
@@ -15363,6 +16096,7 @@
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
     if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
+    if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
     el.pageExpected.classList.toggle("active", page === "expected");
     el.pageSchedule.classList.toggle("active", page === "schedule");
@@ -15373,6 +16107,7 @@
     syncPageTrayTrigger();
     setPageTrayOpen(false);
     if (el.homePage) el.homePage.style.display = page === "home" ? "" : "none";
+    if (el.livePage) el.livePage.style.display = page === "live" ? "" : "none";
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
@@ -15383,6 +16118,7 @@
     syncTeamLandscapeMode();
     const isMarkets = page === "markets";
     const isHome = page === "home";
+    const isLive = page === "live";
     // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
     const hideSubtoolbar =
       page === "schedule" ||
@@ -15402,6 +16138,7 @@
         page === "team" && !state.teamPickerSlot ? "none" : "";
     }
     if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome ? "none" : "";
+    if (el.liveModeSeg) el.liveModeSeg.hidden = !isLive;
     if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
     if (prev !== page) disarmConfirmButton();
@@ -15428,12 +16165,15 @@
     // Expected Data keeps its own Fixture Location control (adds Compare),
     // swapped into the same sidebar slot as the shared Total/Home/Away group.
     el.splitGroup.style.display =
-      page === "expected" || page === "team" || page === "ownership" ? "none" : "";
+      page === "expected" || page === "team" || page === "ownership" || isLive ? "none" : "";
     if (el.expectedSplitGroup) {
       el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
     }
+    if (el.liveFiltersGroup) {
+      el.liveFiltersGroup.style.display = isLive ? "" : "none";
+    }
     const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
-    if (viewTabs) viewTabs.style.display = page === "team" ? "none" : "";
+    if (viewTabs) viewTabs.style.display = page === "team" || isLive ? "none" : "";
     if (page === "team") {
       if (state.view !== "players") {
         state.view = "players";
@@ -15447,6 +16187,15 @@
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "";
       if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "";
+    } else if (isLive) {
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      el.priceFilterGroup.style.display = "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "none";
+      el.positionFilterGroup.style.display = "";
+      syncLivePosFilterGk();
     } else {
       el.valueModeGroup.style.display = state.view === "players" ? "" : "none";
       el.minutesFilterGroup.style.display = state.view === "players" ? "" : "none";
@@ -15457,6 +16206,9 @@
         el.setpieceFilterGroup.style.display = state.view === "players" ? "" : "none";
       }
       if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "none";
+      $$("#pos-filters .chip").forEach((c) => {
+        c.hidden = false;
+      });
     }
     if (page === "ownership") {
       el.valueModeGroup.style.display = "none";
@@ -15497,6 +16249,10 @@
     } else if (page === "home") {
       if (el.homePage) el.homePage.classList.add("is-enter-pending");
       renderHome();
+    } else if (page === "live") {
+      if (el.livePage) el.livePage.classList.add("is-enter-pending");
+      renderLive();
+      syncHomeLivePolling();
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
       renderOwnership();
@@ -15530,6 +16286,7 @@
   }
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
+  if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
   if (el.homeViewBannerClear) {
     el.homeViewBannerClear.addEventListener("click", (e) => {
       e.preventDefault();
@@ -15636,6 +16393,57 @@
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
+  if (el.liveModeSeg) {
+    el.liveModeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-live-mode]");
+      if (!btn || !el.liveModeSeg.contains(btn)) return;
+      const next = btn.dataset.liveMode;
+      if (next !== "defcon" && next !== "points" && next !== "bonus") return;
+      if (next === state.liveMode) return;
+      state.liveMode = next;
+      const defSort = liveDefaultSortForMode(next);
+      state.liveSortKey = defSort.key;
+      state.liveSortDir = defSort.dir;
+      renderLive();
+    });
+  }
+  if (el.liveMatchupFilters) {
+    el.liveMatchupFilters.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-live-matchup]");
+      if (!btn || !el.liveMatchupFilters.contains(btn)) return;
+      const id = btn.dataset.liveMatchup;
+      if (!id) return;
+      toggleSetValue(state.liveMatchups, id);
+      renderLive();
+    });
+  }
+  if (el.liveStatusSeg) {
+    el.liveStatusSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-live-status]");
+      if (!btn || !el.liveStatusSeg.contains(btn)) return;
+      const next = btn.dataset.liveStatus;
+      if (next !== "all" && next !== "live" && next !== "owned") return;
+      if (next === state.liveStatus) return;
+      state.liveStatus = next;
+      renderLive();
+      syncFiltersResetUI();
+    });
+  }
+  if (el.liveTableHead) {
+    el.liveTableHead.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-live-sort]");
+      if (!th || !el.liveTableHead.contains(th)) return;
+      const key = th.dataset.liveSort;
+      if (!key) return;
+      if (state.liveSortKey === key) {
+        state.liveSortDir = state.liveSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.liveSortKey = key;
+        state.liveSortDir = key === "name" ? "asc" : "desc";
+      }
+      renderLive();
+    });
+  }
   if (el.ownershipMoverSeg) {
     el.ownershipMoverSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-ownership-kind]");
@@ -16260,6 +17068,7 @@
     // Team squad view: search only while picking a player.
     const hideSearch =
       state.page === "rankings" ||
+      state.page === "live" ||
       (state.page === "team" && !state.teamPickerSlot);
     el.searchWrap.style.display = hideSearch ? "none" : "";
     el.searchWrap.classList.toggle("team-search-always-open", teamSearchAlwaysOpen());
@@ -16268,7 +17077,7 @@
       mainSearchAlwaysOpen() && state.page !== "team"
     );
     el.searchWrap.classList.toggle("mobile-search-always-open", mobileSearchAlwaysOpen());
-    if (state.page === "rankings") {
+    if (state.page === "rankings" || state.page === "live") {
       el.searchWrap.classList.remove("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     } else if (
@@ -17621,6 +18430,7 @@
         syncTeamPickerCancelHost();
         syncPageNavLabelCenter();
         syncCoreUnderName();
+        syncLivePointsCoreUnder();
         syncTeamPickerCoreUnder();
         bindAllNameColumnSimplifies();
         refreshNameSimplifyOrigins();
@@ -17642,6 +18452,7 @@
         syncTeamPickerCancelHost();
         syncPageNavLabelCenter();
         syncCoreUnderName();
+        syncLivePointsCoreUnder();
         syncTeamPickerCoreUnder();
         bindAllNameColumnSimplifies();
         refreshNameSimplifyOrigins();
@@ -17667,6 +18478,7 @@
       syncFplIdStatus();
     }
     setPage(storedPage());
+    syncLiveNavChrome();
     renderTable();
   }
 
