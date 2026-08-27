@@ -2334,8 +2334,10 @@
       }
       applyHomePayload(data.home);
       if (state.page === "home") renderHome({ deferDuringEnter: true, settleQuiet: true });
-      else if (state.page === "live") renderLive();
-      else syncLiveNavChrome();
+      else if (state.page === "live") {
+        if (liveIsEnterBusy()) liveRenderQueued = true;
+        else renderLive({ quiet: true });
+      } else syncLiveNavChrome();
     } catch {
       homeLiveLastPollOk = false;
       if (state.page === "home") syncHomeCountLabel();
@@ -2354,7 +2356,7 @@
       syncLiveNavChrome();
       return;
     }
-    if (waitForEnter && homeIsEnterBusy()) {
+    if (waitForEnter && (homeIsEnterBusy() || liveIsEnterBusy())) {
       homeLivePollAfterEnter = true;
       return;
     }
@@ -14148,7 +14150,7 @@
     return {
       barPct: pct,
       complete: hit,
-      fillStyle: `--defcon-pct:${pct < 0.5 ? 0 : pct.toFixed(2)}%`,
+      fillStyle: `--defcon-pct:${pct < 0.5 ? 0 : pct.toFixed(2)}%;--defcon-units:${thr}`,
     };
   }
 
@@ -14257,35 +14259,75 @@
     return `<span class="${cls}" aria-label="${label}"></span>`;
   }
 
+  function livePointsPillTone(colKey) {
+    if (colKey === "pts") return "is-pts";
+    if (
+      colKey === "goals" ||
+      colKey === "assists" ||
+      colKey === "cleanSheets" ||
+      colKey === "saves" ||
+      colKey === "penaltiesSaved"
+    ) {
+      return "is-good";
+    }
+    if (colKey === "bonus") return "is-bonus";
+    if (colKey === "defConHit") return "is-defcon";
+    if (colKey === "yellowCards") return "is-warn";
+    if (
+      colKey === "redCards" ||
+      colKey === "ownGoals" ||
+      colKey === "penaltiesMissed"
+    ) {
+      return "is-bad";
+    }
+    return "";
+  }
+
+  function livePointsPillHTML(colKey, text, { bonusPts = null } = {}) {
+    const tone = livePointsPillTone(colKey);
+    let extra = "";
+    if (colKey === "bonus" && bonusPts != null) {
+      const n = Math.max(1, Math.min(3, Math.round(Number(bonusPts)) || 1));
+      extra = ` is-bonus-${n}`;
+    }
+    return `<span class="ownership-pill live-points-pill${tone ? ` ${tone}` : ""}${extra}">${text}</span>`;
+  }
+
   function livePointsCellHTML(entry, col) {
     const { eg, pos } = entry;
     if (col.key === "defConHit") {
       if (!eg.defConHit) return "";
       const thr = entry.threshold || (pos === "DEF" ? 10 : 12);
       const acts = entry.actions;
-      return `<span class="live-defcon-check-slot">${liveAchievedDotHTML(acts, thr, pos)}</span>`;
+      return livePointsPillHTML(
+        col.key,
+        `<span class="live-defcon-check-slot">${liveAchievedDotHTML(acts, thr, pos)}</span>`
+      );
     }
     if (col.key === "saves" && pos !== "GK") return "";
-    if (col.key === "yellowCards") return liveCardDotHTML("yc", eg.yellowCards);
-    if (col.key === "redCards") return liveCardDotHTML("rc", eg.redCards);
+    if (col.key === "yellowCards") {
+      const n = Number(eg.yellowCards);
+      if (!Number.isFinite(n) || n <= 0) return "";
+      return livePointsPillHTML(col.key, escapeHtml(String(n)));
+    }
+    if (col.key === "redCards") {
+      const n = Number(eg.redCards);
+      if (!Number.isFinite(n) || n <= 0) return "";
+      return livePointsPillHTML(col.key, escapeHtml(String(n)));
+    }
     const n = Number(eg[col.key]);
     if (!Number.isFinite(n) || n === 0) return "";
-    return escapeHtml(String(n));
+    if (col.key === "bonus") {
+      return livePointsPillHTML(col.key, escapeHtml(String(n)), { bonusPts: n });
+    }
+    return livePointsPillHTML(col.key, escapeHtml(String(n)));
   }
 
   function livePointsRowHTML(entry, enterI) {
     const { player, pos } = entry;
     const cells = LIVE_POINTS_COLS.map((col) => {
       const inner = livePointsCellHTML(entry, col);
-      const hasValue = inner !== "";
-      const cls = [
-        "col-num",
-        col.narrow ? "col-num-narrow" : "",
-        hasValue ? "has-value" : "",
-        hasValue ? `has-${col.key}` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
+      const cls = ["col-num", col.narrow ? "col-num-narrow" : ""].filter(Boolean).join(" ");
       return `<td class="${cls}">${inner}</td>`;
     }).join("");
     return `<tr class="live-points-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
@@ -14307,17 +14349,22 @@
     const thr = threshold || 12;
     const bar = liveDefconBarVisual(actions, thr);
     const achieved = liveAchievedDotHTML(actions, thr, pos);
-    const label = `${actions}/${thr}`;
+    const acts = Number.isFinite(Number(actions)) ? Math.max(0, Number(actions)) : 0;
     const completeCls = bar.complete ? " is-complete" : "";
+    const roll = statRollSpan(acts, {
+      from: 0,
+      decimals: 0,
+      className: "live-stat-roll",
+    });
     return `<tr class="live-defcon-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
       <td class="col-player">${tableOwnershipIdentityHTML(player)}</td>
       <td class="col-live-defcon">
         <div class="live-defcon-cell">
           <span class="live-defcon-bar${completeCls}" style="${bar.fillStyle}" data-defcon-units="${thr}">
-            <span class="live-defcon-track"><span class="live-defcon-fill is-drawn"></span></span>
+            <span class="live-defcon-track"><span class="live-defcon-fill"></span></span>
           </span>
           <span class="live-defcon-count">
-            <span class="live-defcon-frac">${escapeHtml(label)}</span>
+            <span class="live-defcon-frac">${roll}<span class="live-defcon-thr">/${escapeHtml(String(thr))}</span></span>
             <span class="live-defcon-check-slot">${achieved}</span>
           </span>
         </div>
@@ -14399,6 +14446,11 @@
                 : `<span class="live-bonus-proj is-empty" aria-hidden="true"></span>`;
             const ariaBonus =
               outsideBonus > 0 ? `, +${outsideBonus} bonus` : "";
+            const roll = statRollSpan(bps, {
+              from: 0,
+              decimals: 0,
+              className: "live-stat-roll",
+            });
             return `<li class="rankings-row live-bonus-row${medal ? ` medal-${medal}` : ""}"
               data-player-code="${escapeHtml(String(entry.player.code || ""))}" role="button" tabindex="0"
               aria-label="${escapeHtml(`${rank}. ${entry.player.name}, ${bps} BPS${ariaBonus}`)}">
@@ -14406,8 +14458,8 @@
               <span class="rankings-identity">${rankingsIdentityHTML(entry.player, { omitPrice: true })}</span>
               <span class="rankings-meter live-bonus-meter">
                 <span class="live-bonus-track" aria-hidden="true">
-                  <span class="rankings-bar is-drawn" style="--bar-pct:${pct.toFixed(2)}%;--bar-i:${barI}">
-                    <span class="rankings-value">${escapeHtml(String(bps))}</span>
+                  <span class="rankings-bar" style="--bar-pct:${pct.toFixed(2)}%;--bar-i:${barI}">
+                    <span class="rankings-value">${roll}</span>
                   </span>
                 </span>
                 ${bonusOut}
@@ -14562,7 +14614,11 @@
     }
   }
 
-  function renderLive() {
+  function renderLive({ quiet = false } = {}) {
+    if (quiet && liveIsEnterBusy()) {
+      liveRenderQueued = true;
+      return;
+    }
     const gw = liveDefaultGw();
     syncLiveMatchupFilters();
     syncLiveStatusSeg();
@@ -14595,6 +14651,135 @@
     if (el.liveTableWrap && state.liveMode === "points") {
       updateNameColumnSimplify(el.liveTableWrap);
     }
+
+    if (quiet) {
+      snapLiveBarsDrawn(el.livePage);
+      finishLiveStatRolls(el.livePage);
+    } else if (liveIsEnterBusy()) {
+      /* playLiveEnter owns motion */
+    } else {
+      startLiveEnterMotion(el.livePage);
+    }
+  }
+
+  let liveEnterMotionToken = 0;
+  let liveRenderQueued = false;
+
+  function liveIsEnterBusy() {
+    return !!(el.livePage && el.livePage.classList.contains("is-live-entering"));
+  }
+
+  function flushLiveEnterDeferred() {
+    if (el.livePage) finishLiveStatRolls(el.livePage);
+    if (liveRenderQueued) {
+      liveRenderQueued = false;
+      renderLive({ quiet: true });
+    }
+    if (homeLivePollAfterEnter) {
+      homeLivePollAfterEnter = false;
+      syncHomeLivePolling();
+    }
+  }
+
+  function finishLiveStatRolls(root) {
+    if (!root) return;
+    root.querySelectorAll(".live-stat-roll[data-count-to]").forEach(finishStatRollNode);
+  }
+
+  function snapLiveBarsDrawn(root) {
+    if (!root) return;
+    root.querySelectorAll(".live-defcon-fill").forEach((fill) => {
+      fill.style.transition = "none";
+      fill.classList.add("is-drawn");
+    });
+    root.querySelectorAll(".live-bonus-track .rankings-bar").forEach((bar) => {
+      bar.style.transition = "none";
+      bar.classList.add("is-drawn");
+    });
+  }
+
+  /** Draw DefCon fills / Bonus meters + roll action/BPS counts. Fresh path — no page-enter pending. */
+  function playLiveMotion(root, { settleMs = 1300 } = {}) {
+    if (!root) return;
+    liveEnterMotionToken += 1;
+    const token = liveEnterMotionToken;
+
+    const fills = [...root.querySelectorAll(".live-defcon-fill")];
+    const bars = [...root.querySelectorAll(".live-bonus-track .rankings-bar")];
+    const rolls = [...root.querySelectorAll(".live-stat-roll[data-count-to]")];
+
+    if (prefersReducedMotion()) {
+      fills.forEach((fill) => fill.classList.add("is-drawn"));
+      bars.forEach((bar) => bar.classList.add("is-drawn"));
+      rolls.forEach(finishStatRollNode);
+      return;
+    }
+
+    fills.forEach((fill) => {
+      fill.style.transition = "";
+      fill.classList.remove("is-drawn");
+    });
+    bars.forEach((bar) => {
+      bar.style.transition = "";
+      bar.classList.remove("is-drawn");
+    });
+
+    // One frame so the undrawn state paints, then draw + roll together.
+    requestAnimationFrame(() => {
+      if (token !== liveEnterMotionToken) return;
+      fills.forEach((fill) => fill.classList.add("is-drawn"));
+      bars.forEach((bar) => bar.classList.add("is-drawn"));
+
+      let maxRoll = 480;
+      rolls.forEach((node) => {
+        const mag = Math.abs(Number(node.dataset.countTo) || 0);
+        const ms = Math.round(Math.min(900, Math.max(480, 420 + Math.sqrt(mag) * 95)));
+        maxRoll = Math.max(maxRoll, ms);
+        animateStatRollNode(node, { duration: ms });
+      });
+
+      window.setTimeout(() => {
+        if (token !== liveEnterMotionToken) return;
+        finishLiveStatRolls(root);
+      }, Math.max(settleMs, maxRoll + 80));
+    });
+  }
+
+  /** Dedicated Live page enter — skips generic pending/blank + <tr> stagger. */
+  function playLiveEnter(pane) {
+    if (!pane) return;
+    clearTimeout(pane._enterClear);
+    pane.classList.remove("is-entering", "is-enter-pending", "is-live-entering");
+    liveEnterMotionToken += 1;
+
+    if (prefersReducedMotion()) {
+      snapLiveBarsDrawn(pane);
+      finishLiveStatRolls(pane);
+      flushLiveEnterDeferred();
+      return;
+    }
+
+    pane.querySelectorAll(".live-bonus-card").forEach((card, i) => {
+      card.style.setProperty("--enter-i", String(i));
+    });
+    pane.querySelectorAll(".live-defcon-row").forEach((row, i) => {
+      row.style.setProperty("--enter-i", String(i));
+    });
+
+    pane.classList.add("is-live-entering", "is-entering");
+    playLiveMotion(pane, { settleMs: 1200 });
+
+    pane._enterClear = window.setTimeout(() => {
+      liveEnterMotionToken += 1;
+      finishLiveStatRolls(pane);
+      snapLiveBarsDrawn(pane);
+      pane.classList.remove("is-live-entering", "is-entering");
+      flushLiveEnterDeferred();
+    }, 1400);
+  }
+
+  function startLiveEnterMotion(pane) {
+    playLiveMotion(pane, { settleMs: 1200 });
   }
 
   // Ownership page — sortable TSB% mover table
@@ -14937,7 +15122,7 @@
     });
   }
 
-  function ownershipPhotoHTML(row, teamCode) {
+  function ownershipPhotoHTML(row, teamCode, { eager = false } = {}) {
     const initials = ownershipInitials(row.name);
     const photo = feedPlayerPhotoUrl(row.code);
     const team = teamCode || currentTeamCode(row) || row.team;
@@ -14945,7 +15130,8 @@
     if (!photo) {
       return `<span class="ownership-photo ownership-photo-fallback${ring.className}" aria-hidden="true"${ring.attr}>${escapeHtml(initials)}</span>`;
     }
-    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="lazy" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
+    const loading = eager ? "eager" : "lazy";
+    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
   }
 
   function ownershipIdCellHTML(row, rank) {
@@ -15261,7 +15447,7 @@
           badgeHTML(cell.row.team, "ownership-treemap-crest") ||
           teamCrestFallbackHTML(cell.row.team, "ownership-treemap-crest ownership-photo-fallback");
       } else {
-        thumb = ownershipPhotoHTML(cell.row).replace(
+        thumb = ownershipPhotoHTML(cell.row, null, { eager: true }).replace(
           /class="ownership-photo/g,
           'class="ownership-photo ownership-treemap-photo'
         );
@@ -15284,7 +15470,24 @@
     </button>`;
   }
 
-  function renderOwnershipTreemap() {
+  let ownershipTreemapLayoutSig = "";
+  let ownershipTreemapRelayoutTimer = 0;
+
+  function ownershipTreemapSignature(windowKey, items, layout) {
+    const codes = (items || [])
+      .map((it) => `${it.row && it.row.key}:${Math.round((it.value || 0) * 1000)}`)
+      .join(",");
+    return [
+      windowKey,
+      state.view,
+      layout.w,
+      layout.h,
+      layout.preferHorizontal ? 1 : 0,
+      codes,
+    ].join("|");
+  }
+
+  function renderOwnershipTreemap({ force = false } = {}) {
     if (!el.ownershipTreemapPlot) return;
     const windowKey = ownershipTreeWindow();
     const items = ownershipTreemapItems(windowKey);
@@ -15297,6 +15500,7 @@
     }
 
     if (!items.length) {
+      ownershipTreemapLayoutSig = "";
       el.ownershipTreemapPlot.innerHTML = "";
       if (el.ownershipTreemapEmpty) el.ownershipTreemapEmpty.hidden = false;
       return;
@@ -15304,6 +15508,21 @@
     if (el.ownershipTreemapEmpty) el.ownershipTreemapEmpty.hidden = true;
 
     const { w: layoutW, h: layoutH, preferHorizontal } = ownershipTreemapLayoutSize();
+    const sig = ownershipTreemapSignature(windowKey, items, {
+      w: layoutW,
+      h: layoutH,
+      preferHorizontal,
+    });
+    // Skip identical rebuilds — wiping thumbs/crests and reloading imgs is the
+    // flicker when opening treemap (size-settle + scrollport height both retrigger).
+    if (
+      !force &&
+      sig === ownershipTreemapLayoutSig &&
+      el.ownershipTreemapPlot.childElementCount > 0
+    ) {
+      return;
+    }
+    ownershipTreemapLayoutSig = sig;
     const layout = squarifyRects(items, layoutW, layoutH, { preferHorizontal });
     el.ownershipTreemapPlot.innerHTML = layout
       .map((cell) => ownershipTreemapCellHTML(cell, layoutW, layoutH, windowKey))
@@ -15321,7 +15540,6 @@
     }
   }
 
-  let ownershipTreemapRelayoutTimer = 0;
   function scheduleOwnershipTreemapRelayout() {
     if (!(state.page === "ownership" && ownershipIsTreemap())) return;
     window.clearTimeout(ownershipTreemapRelayoutTimer);
@@ -15392,9 +15610,9 @@
       }
       syncFiltersResetUI();
       syncPageUpdatedFooter(el.ownershipUpdatedFooter, pageDataUpdatedIso("ownership"));
+      // Height settle may change plot size once; signature skip avoids a no-op wipe.
       requestAnimationFrame(() => {
         syncMobileScrollportHeight();
-        scheduleOwnershipTreemapRelayout();
       });
       return;
     }
@@ -15725,7 +15943,7 @@
 
   function playPageEnter(pane) {
     if (!pane) return;
-    pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
+    pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering", "is-live-entering");
     clearTimeout(pane._enterClear);
     if (pane._countUpRaf) {
       cancelAnimationFrame(pane._countUpRaf);
@@ -15743,6 +15961,11 @@
     }
     if (pane.id === "ownership-page") {
       ownershipEnterMotionToken += 1;
+    }
+    if (pane.id === "live-page") {
+      // Live uses its own enter path — no pending blank, no <tr> stagger.
+      playLiveEnter(pane);
+      return;
     }
     // Cancel a previous double-rAF start if setPage/playPageEnter raced.
     pane._enterGen = (pane._enterGen || 0) + 1;
@@ -15807,7 +16030,7 @@
         node.style.setProperty("--enter-i", String(i));
       });
     }
-    // Rankings rows: same index within every card so all lists cascade together.
+    // Rankings rows: same index within every card so lists cascade together.
     pane.querySelectorAll(".rankings-list").forEach((list) => {
       list.querySelectorAll(":scope > .rankings-row").forEach((row, i) => {
         row.style.setProperty("--enter-i", String(i));
@@ -16138,7 +16361,10 @@
         page === "team" && !state.teamPickerSlot ? "none" : "";
     }
     if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome ? "none" : "";
-    if (el.liveModeSeg) el.liveModeSeg.hidden = !isLive;
+    if (el.liveModeSeg) {
+      el.liveModeSeg.hidden = !isLive;
+      el.liveModeSeg.setAttribute("aria-hidden", isLive ? "false" : "true");
+    }
     if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
     if (prev !== page) disarmConfirmButton();
@@ -16250,9 +16476,9 @@
       if (el.homePage) el.homePage.classList.add("is-enter-pending");
       renderHome();
     } else if (page === "live") {
-      if (el.livePage) el.livePage.classList.add("is-enter-pending");
+      // Mark busy before render so we do not double-start motion before playLiveEnter.
+      if (el.livePage) el.livePage.classList.add("is-live-entering");
       renderLive();
-      syncHomeLivePolling();
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
       renderOwnership();
@@ -16281,7 +16507,7 @@
     syncExpectedCatToolbar();
     syncMarketsViewControls();
     syncMobileChrome();
-    syncHomeLivePolling({ waitForEnter: page === "home" });
+    syncHomeLivePolling({ waitForEnter: page === "home" || page === "live" });
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
@@ -18368,8 +18594,8 @@
     window.addEventListener("pageshow", () => {
       // BFCache restore can leave enter classes mid-flight; clear so we don't
       // resume a half-finished cascade when the user scrolls.
-      document.querySelectorAll(".page-pane.is-entering, .page-pane.is-enter-pending, .page-pane.is-hl-entering").forEach((pane) => {
-        pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering");
+      document.querySelectorAll(".page-pane.is-entering, .page-pane.is-enter-pending, .page-pane.is-hl-entering, .page-pane.is-live-entering").forEach((pane) => {
+        pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering", "is-live-entering");
       });
       if (el.homePage) {
         homeEnterMotionToken += 1;
@@ -18379,6 +18605,11 @@
       if (el.ownershipPage) {
         ownershipEnterMotionToken += 1;
         finishOwnershipStatRolls(el.ownershipPage);
+      }
+      if (el.livePage) {
+        liveEnterMotionToken += 1;
+        snapLiveBarsDrawn(el.livePage);
+        finishLiveStatRolls(el.livePage);
       }
       syncAllSegThumbs({ animate: false });
       scrollActivePageTabIntoView({ instant: true });

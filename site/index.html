@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=770" />
+<link rel="stylesheet" href="styles.css?v=777" />
 <script>
 (() => {
   try {
@@ -28,6 +28,8 @@
     root.dataset.page = page;
     const boot = document.createElement("style");
     boot.id = "page-boot-css";
+    // Pane visibility + toolbar chrome that app.js later syncs — prevent FOUC of
+    // Statistics controls (Players/Teams, Columns, Compare, Search) on Live/etc.
     boot.textContent =
       ".page-pane{display:none}" +
       'html[data-page="home"] #home-page,' +
@@ -38,7 +40,22 @@
       'html[data-page="expected"] #expected-page,' +
       'html[data-page="schedule"] #schedule-page,' +
       'html[data-page="markets"] #markets-page,' +
-      'html[data-page="team"] #team-page{display:block}';
+      'html[data-page="team"] #team-page{display:block}' +
+      'html[data-page="home"] #subtoolbar,' +
+      'html[data-page="schedule"] #subtoolbar,' +
+      'html[data-page="markets"] #subtoolbar{display:none!important}' +
+      'html[data-page="live"] #subtoolbar .tabs,' +
+      'html[data-page="live"] #search-wrap,' +
+      'html[data-page="live"] #compare-toggle,' +
+      'html[data-page="live"] #columns-btn,' +
+      'html[data-page="live"] #enhance-relative-btn,' +
+      'html[data-page="live"] #expected-cat-toolbar,' +
+      'html[data-page="live"] #team-toolbar-controls,' +
+      'html[data-page="live"] #table-only-toggles{display:none!important}' +
+      'html[data-page="live"] #live-mode-seg{display:flex!important}' +
+      'html:not([data-page="live"]) #live-mode-seg{display:none!important}' +
+      'html[data-page="team"] #subtoolbar .tabs{display:none!important}' +
+      'html.is-mobile-layout[data-page="rankings"] #subtoolbar{display:none!important}';
     document.head.appendChild(boot);
     if (window.matchMedia("(max-width: 720px)").matches) {
       root.classList.add("is-mobile-layout");
@@ -1281,7 +1298,7 @@
 <script src="home_data.js?v=20"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=759"></script>
+<script src="app.js?v=765"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

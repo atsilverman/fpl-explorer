@@ -329,8 +329,9 @@ a { color: var(--blue); }
   border: none;
   background: transparent;
 }
+/* Solid disc behind cutout PNGs so treemap / row color doesn't show through. */
 .ownership-photo.has-team-ring {
-  background: transparent;
+  background: #fff;
 }
 .home-crest-fallback.has-team-ring {
   background: var(--team-accent);
@@ -2871,11 +2872,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 }
 /* Never put opacity/transform on <tr> — WebKit takes transformed rows out of
    table layout, which paints as a header-only line until the tbody is rebuilt. */
-#opta-page.is-entering .table-wrap > table > tbody > tr {
+#opta-page.is-entering .table-wrap > table > tbody > tr,
+#live-page.is-entering .table-wrap > table > tbody > tr {
   animation: none !important;
 }
 
-.page-pane:not(#opta-page).is-entering .table-wrap > table > tbody > tr,
+.page-pane:not(#opta-page):not(#live-page).is-entering .table-wrap > table > tbody > tr,
 .page-pane.is-entering .barbell-body > .barbell-row,
 .page-pane.is-entering .barbell-body > .barbell-group,
 .page-pane.is-entering .schedule-grid > .schedule-card,
@@ -4943,13 +4945,22 @@ html[data-page="ownership"] .layout .main {
   border-radius: 50%;
   object-fit: cover;
   object-position: top center;
-  background: hsl(var(--muted));
+  background: #fff;
   margin-bottom: auto;
 }
 .ownership-treemap-crest {
   border-radius: 6px;
   object-fit: contain;
   padding: 2px;
+  background: hsl(var(--muted));
+}
+:root[data-theme="dark"] .ownership-treemap-photo {
+  background: hsl(220 18% 10%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ownership-treemap-photo {
+    background: hsl(220 18% 10%);
+  }
 }
 .ownership-treemap-name {
   font-size: 12px;
@@ -5068,12 +5079,13 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   border-radius: 50%;
   object-fit: cover;
   object-position: top center;
-  background: hsl(var(--muted));
+  background: #fff;
 }
 .ownership-crest {
   border-radius: 8px;
   object-fit: contain;
   padding: 2px;
+  background: hsl(var(--muted));
 }
 .ownership-photo-fallback {
   display: inline-flex;
@@ -5082,6 +5094,19 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   font-size: 11px;
   font-weight: 700;
   color: var(--text-dim);
+  background: #fff;
+}
+:root[data-theme="dark"] .ownership-photo,
+:root[data-theme="dark"] .ownership-photo.has-team-ring,
+:root[data-theme="dark"] .ownership-photo-fallback {
+  background: hsl(220 18% 10%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ownership-photo,
+  :root:not([data-theme="light"]) .ownership-photo.has-team-ring,
+  :root:not([data-theme="light"]) .ownership-photo-fallback {
+    background: hsl(220 18% 10%);
+  }
 }
 .ownership-id-text {
   min-width: 0;
@@ -15277,7 +15302,8 @@ html[data-page="live"] #team-filters .chip.team-chip {
   border-radius: inherit;
   background: hsl(var(--positive) / 0.55);
   clip-path: inset(0 100% 0 0);
-  transition: clip-path 3.4s var(--ease-out);
+  transition: clip-path 0.65s var(--ease-out);
+  transition-delay: calc(min(var(--enter-i, 0), 18) * 0.028s);
 }
 .live-defcon-fill.is-drawn {
   clip-path: inset(0 calc(100% - var(--defcon-pct, 0%)) 0 0);
@@ -15321,11 +15347,29 @@ html[data-page="live"] #team-filters .chip.team-chip {
   box-sizing: border-box;
 }
 .live-defcon-frac {
+  display: inline-flex;
+  align-items: baseline;
   flex: 0 0 2.85em;
   width: 2.85em;
   text-align: left;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.live-defcon-thr {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.live-defcon-frac .live-stat-roll {
+  display: inline-flex;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.live-bonus-track .rankings-value .live-stat-roll {
+  display: inline-flex;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .live-defcon-check-slot {
   display: inline-flex;
@@ -15348,6 +15392,31 @@ html[data-page="live"] #team-filters .chip.team-chip {
   color: var(--text-faint);
   padding: 18px 12px;
   text-align: center;
+}
+
+/* Live enter — never fade/transform <tr> (WebKit table bug). Bars + odometers only. */
+#live-page.is-entering > .page-header {
+  animation: page-enter-header 0.35s var(--ease-out) both;
+}
+#live-page.is-entering .live-bonus-card {
+  animation: page-enter-item 0.36s var(--ease-out) both;
+  animation-delay: calc(0.06s + (min(var(--enter-i, 0), 12) * 0.04s));
+}
+#live-page.is-entering .live-bonus-track .rankings-bar.is-drawn {
+  transition-delay: calc(0.12s + (var(--bar-i, 0) * 0.035s));
+}
+/* Live never uses enter-pending blanking — content stays visible. */
+#live-page.is-enter-pending > .page-header,
+#live-page.is-enter-pending > .table-wrap,
+#live-page.is-enter-pending > .live-bonus-wrap {
+  opacity: 1;
+}
+.live-defcon-frac .live-stat-roll,
+.live-bonus-track .rankings-value .live-stat-roll {
+  min-height: 1em;
+}
+.live-defcon-frac .stat-roll-digit {
+  height: 1em;
 }
 
 @media (min-width: 721px) {
@@ -15422,8 +15491,25 @@ html[data-page="live"] #team-filters .chip.team-chip {
   }
 }
 
-/* Live mode toggle (DefCon / Points / Bonus) — topbar beside search */
+/* Live mode toggle — Live only (never Statistics / other pages) */
+html:not([data-page="live"]) #live-mode-seg {
+  display: none !important;
+}
+/* Live chrome — paint correct toolbar before app.js (avoid Statistics flash). */
+html[data-page="live"] #subtoolbar .tabs,
+html[data-page="live"] #search-wrap,
+html[data-page="live"] #compare-toggle,
+html[data-page="live"] #columns-btn,
+html[data-page="live"] #enhance-relative-btn,
+html[data-page="live"] #expected-cat-toolbar,
+html[data-page="live"] #team-toolbar-controls,
+html[data-page="live"] #table-only-toggles,
+html[data-page="live"] #newprice-wrap {
+  display: none !important;
+}
+/* Live mode toggle (DefCon / Points / Bonus) — topbar; override HTML [hidden] at boot */
 html[data-page="live"] #live-mode-seg {
+  display: flex !important;
   flex: 0 0 auto;
   width: auto;
   min-width: 0;
@@ -15436,6 +15522,18 @@ html[data-page="live"] #live-mode-seg button {
 }
 html[data-page="live"] #topbar-end-cluster {
   gap: 8px;
+}
+/* Pages that hide the whole subtoolbar until JS — avoid empty/wrong chrome flash */
+html[data-page="home"] #subtoolbar,
+html[data-page="schedule"] #subtoolbar,
+html[data-page="markets"] #subtoolbar {
+  display: none !important;
+}
+html[data-page="team"] #subtoolbar .tabs {
+  display: none !important;
+}
+html.is-mobile-layout[data-page="rankings"] #subtoolbar {
+  display: none !important;
 }
 @media (max-width: 900px) {
   html[data-page="live"] #live-mode-seg button {
@@ -15542,60 +15640,89 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   font-size: 13px;
   font-weight: 600;
 }
-#live-page .live-points-table tbody td.col-num.has-value {
-  background-color: hsl(var(--blue-hsl) / 0.11);
-}
-#live-page .live-points-table tbody td.col-num.has-pts {
-  background-color: hsl(var(--blue-hsl) / 0.16);
+#live-page .live-points-table tbody td.col-num .live-points-pill {
+  min-width: 2.4em;
+  padding: 3px 8px;
+  font-size: 12px;
   font-weight: 700;
 }
-#live-page .live-points-table tbody td.col-num.has-goals,
-#live-page .live-points-table tbody td.col-num.has-assists,
-#live-page .live-points-table tbody td.col-num.has-cleanSheets,
-#live-page .live-points-table tbody td.col-num.has-saves,
-#live-page .live-points-table tbody td.col-num.has-penaltiesSaved {
-  background-color: hsl(var(--positive-highlight, var(--blue-hsl)) / 0.14);
+#live-page .live-points-table tbody td.col-num .live-points-pill .live-defcon-check-slot {
+  flex: none;
+  width: auto;
+  height: auto;
 }
-#live-page .live-points-table tbody td.col-num.has-bonus {
-  background-color: hsl(var(--amber-hsl) / 0.2);
+#live-page .live-points-table tbody td.col-num .live-points-pill .check-mark-icon {
+  width: 12px;
+  height: 12px;
 }
-#live-page .live-points-table tbody td.col-num.has-defConHit {
-  background-color: hsl(142 55% 38% / 0.14);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon circle {
+  fill: #fff;
 }
-#live-page .live-points-table tbody td.col-num.has-yellowCards {
-  background-color: hsl(48 96% 53% / 0.22);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon path {
+  stroke: hsl(142 55% 32%);
 }
-#live-page .live-points-table tbody td.col-num.has-redCards,
-#live-page .live-points-table tbody td.col-num.has-ownGoals,
-#live-page .live-points-table tbody td.col-num.has-penaltiesMissed {
-  background-color: hsl(var(--destructive-hsl, 0 72% 51%) / 0.14);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-pts {
+  background: hsl(var(--foreground) / 0.88);
+  color: hsl(var(--background));
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-value {
-  background-color: hsl(var(--blue-hsl) / 0.18);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-good {
+  background: hsl(var(--positive));
+  color: #fff;
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-pts {
-  background-color: hsl(var(--blue-hsl) / 0.22);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus {
+  color: #fff;
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-goals,
-#live-page .live-points-table tbody tr:hover td.col-num.has-assists,
-#live-page .live-points-table tbody tr:hover td.col-num.has-cleanSheets,
-#live-page .live-points-table tbody tr:hover td.col-num.has-saves,
-#live-page .live-points-table tbody tr:hover td.col-num.has-penaltiesSaved {
-  background-color: hsl(var(--positive-highlight, var(--blue-hsl)) / 0.2);
+/* Bonus intensity: 3 full amber → 1 soft / less saturated. */
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-3 {
+  background: hsl(var(--amber-hsl));
+  color: #fff;
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-bonus {
-  background-color: hsl(var(--amber-hsl) / 0.28);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-2 {
+  background: hsl(38 72% 58%);
+  color: #fff;
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-defConHit {
-  background-color: hsl(142 55% 38% / 0.2);
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-1 {
+  background: hsl(40 48% 72%);
+  color: hsl(35 35% 22%);
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-yellowCards {
-  background-color: hsl(48 96% 53% / 0.3);
+:root[data-theme="dark"] #live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-2 {
+  background: hsl(38 58% 48%);
 }
-#live-page .live-points-table tbody tr:hover td.col-num.has-redCards,
-#live-page .live-points-table tbody tr:hover td.col-num.has-ownGoals,
-#live-page .live-points-table tbody tr:hover td.col-num.has-penaltiesMissed {
-  background-color: hsl(var(--destructive-hsl, 0 72% 51%) / 0.2);
+:root[data-theme="dark"] #live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-1 {
+  background: hsl(40 32% 38%);
+  color: hsl(40 40% 92%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-2 {
+    background: hsl(38 58% 48%);
+  }
+  :root:not([data-theme="light"]) #live-page .live-points-table tbody td.col-num .live-points-pill.is-bonus-1 {
+    background: hsl(40 32% 38%);
+    color: hsl(40 40% 92%);
+  }
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon {
+  background: hsl(142 55% 38%);
+  color: #fff;
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-warn {
+  background: hsl(48 96% 53%);
+  color: hsl(40 50% 18%);
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-bad {
+  background: hsl(var(--negative));
+  color: #fff;
+}
+:root[data-theme="dark"] #live-page .live-points-table tbody td.col-num .live-points-pill.is-pts,
+:root:not([data-theme="light"]) #live-page .live-points-table tbody td.col-num .live-points-pill.is-pts {
+  background: hsl(0 0% 92%);
+  color: hsl(220 20% 12%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #live-page .live-points-table tbody td.col-num .live-points-pill.is-pts {
+    background: hsl(0 0% 92%);
+    color: hsl(220 20% 12%);
+  }
 }
 #live-page .live-points-table thead th.col-num {
   font-size: 11px;
