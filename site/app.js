@@ -996,10 +996,12 @@
     statsToolbarStart: $("#stats-toolbar-start"),
     statsToolbarActions: $("#stats-toolbar-actions"),
     optaPage: $("#opta-page"),
+    optaPageSubtitle: $("#opta-page-subtitle"),
     optaTableFooter: $("#opta-table-footer"),
     optaPagination: $("#opta-pagination"),
     optaUpdatedText: $("#opta-updated-text"),
     rankingsPage: $("#rankings-page"),
+    rankingsPageSubtitle: $("#rankings-page-subtitle"),
     rankingsPinBar: $("#rankings-pin-bar"),
     rankingsGrid: $("#rankings-grid"),
     rankingsCountLabel: $("#rankings-count-label"),
@@ -4067,35 +4069,6 @@
     return String(row.code ?? homeLookupElementId(row) ?? "");
   }
 
-  let optaPlayerByCodeCache = null;
-
-  function optaPlayerByCode() {
-    if (optaPlayerByCodeCache) return optaPlayerByCodeCache;
-    optaPlayerByCodeCache = new Map();
-    ((DATA.players && DATA.players.combined) || []).forEach((p) => {
-      if (p.code != null) optaPlayerByCodeCache.set(Number(p.code), p);
-    });
-    return optaPlayerByCodeCache;
-  }
-
-  // Home search uses the 2026/27 bootstrap catalog; OPTA-only season stats
-  // (xPts, etc.) stay zero there until Hub projections land — pull from the
-  // matched 2025/26 OPTA row by FPL code so ranks/values aren't all tied at 0.
-  function homeLookupRowStatValue(row, key) {
-    if (!row) return null;
-    if (key === "__gi") return (Number(row.goals) || 0) + (Number(row.assists) || 0);
-    if (PLAYER_OPTA_ONLY_KEYS.includes(key)) {
-      const code = row.code;
-      if (code != null) {
-        const opta = optaPlayerByCode().get(Number(code));
-        const raw = opta && opta[key];
-        if (raw != null && raw !== "" && !Number.isNaN(Number(raw))) return Number(raw);
-      }
-      return null;
-    }
-    return feedRowStatValue(row, key);
-  }
-
   function homeLookupStatSpecList(row) {
     const season = homePlayerStatSpecs(row.position).map((s) => ({
       id: s.key,
@@ -4105,17 +4078,9 @@
       lowerBetter: LOWER_BETTER.has(s.key),
       rankable: true,
     }));
+    // Home search always uses the 2026/27 FPL catalog — omit Hub/OPTA-only stats.
     return [
       { id: "gwPts", label: "GW pts", lowerBetter: false, allowHot: true, rankable: true },
-      // Season expected points — game-stat stand-in for price (price lives in the header).
-      {
-        id: "xPts",
-        key: "xPts",
-        label: "xPts",
-        decimals: 1,
-        lowerBetter: false,
-        rankable: true,
-      },
       ...season,
       { id: "league", label: "League", lowerBetter: false, rankable: false },
       { id: "tsb", label: "TSB", lowerBetter: false, rankable: false },
@@ -4136,7 +4101,7 @@
         return tsb != null && Number.isFinite(Number(tsb)) ? Number(tsb) : null;
       }
       default: {
-        const raw = homeLookupRowStatValue(row, spec.key);
+        const raw = feedRowStatValue(row, spec.key);
         return raw == null || raw === "" || Number.isNaN(Number(raw)) ? null : Number(raw);
       }
     }
@@ -4196,7 +4161,7 @@
         };
       }
       default: {
-        const raw = homeLookupRowStatValue(row, spec.key);
+        const raw = feedRowStatValue(row, spec.key);
         return {
           value: feedStatDisplay(raw, spec.decimals),
           hot: false,
@@ -8185,7 +8150,9 @@
         ),
       ];
       return `${spitHead("podium", "How Rankings works")}
-        ${spitIntro("Top 10 boards for OPTA and FPL metrics, grouped Key Stats, Attacking, and Defending.")}
+        ${spitIntro(isNextSeason()
+          ? "Top 10 leaderboards for FPL season stats, grouped into Key Stats, Attacking, and Defending."
+          : "Top 10 boards for OPTA and FPL metrics, grouped Key Stats, Attacking, and Defending.")}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}`;
     }
@@ -8313,7 +8280,9 @@
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("Live"), "Your live FPL squad and scoring are on Home — this page is for planning ahead."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
-        spitRow(spitRank("Stats"), `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). New signings / zero rows show –.`),
+        spitRow(spitRank("Stats"), isNextSeason()
+          ? `Pts, xGI, xG, xA from ${teamStatsSeasonLabel()} FPL season totals. New signings / zero rows show –.`
+          : `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). New signings / zero rows show –.`),
         spitRow(spitRank("Form"), "Sparkline of GW points (needs 2+ gameweeks for a line)."),
         spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (check mark). FK/CK also show #2."),
         spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Defaults to the next GW once the current one has started, so you can plan ahead."),
@@ -8377,7 +8346,9 @@
       spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
     ];
     return `${spitHead("table", "How Statistics works")}
-      ${spitIntro("Season OPTA and FPL stats — filter, sort, and compare Players or Teams.")}
+      ${spitIntro(isNextSeason()
+        ? "2026/27 FPL season stats for players or teams — filter, sort, rank, and compare."
+        : "Season OPTA and FPL stats — filter, sort, and compare Players or Teams.")}
       ${spitSection("Legend", legend)}
       ${spitSection("Reading", reading)}`;
   }
@@ -10505,6 +10476,11 @@
     { key: "xg", label: "xG", decimals: 1, title: "Expected goals" },
     { key: "xa", label: "xA", decimals: 1, title: "Expected assists" },
   ];
+
+  function teamStatCols() {
+    if (!isNextSeason()) return TEAM_STAT_COLS;
+    return TEAM_STAT_COLS.filter((c) => !PLAYER_OPTA_ONLY_COL_KEYS.has(c.key));
+  }
   const TEAM_SETPIECE_COLS = [
     { key: "penaltiesOrder", label: "PK", title: "1st-choice penalty taker" },
     { key: "directFreekicksOrder", label: "FK", title: "1st-choice direct free kick taker" },
@@ -10581,7 +10557,7 @@
     const prior = isNextSeason()
       ? (season2627Data().players.combined || [])
       : ((DATA.players && DATA.players.combined) || []);
-    TEAM_STAT_COLS.forEach((col) => {
+    teamStatCols().forEach((col) => {
       maps[col.key] = {};
       POSITIONS.forEach((pos) => {
         const entries = prior
@@ -10610,7 +10586,7 @@
     const price = opts.price ? 1 : 0;
     const ownership = opts.ownership ? 1 : 0;
     const setp = opts.setPieces ? TEAM_SETPIECE_COLS.length : 0;
-    return 1 + price + ownership + TEAM_STAT_COLS.length + 1 + setp + teamHeatGws().length;
+    return 1 + price + ownership + teamStatCols().length + 1 + setp + teamHeatGws().length;
   }
 
   function teamDefaultSortDir(key) {
@@ -10639,7 +10615,7 @@
 
   function teamMetricHeadHTML(opts) {
     const plain = !!(opts && opts.plain);
-    const stats = TEAM_STAT_COLS.map((col, i) =>
+    const stats = teamStatCols().map((col, i) =>
       teamSortTh(
         col.key,
         col.label,
@@ -10663,7 +10639,7 @@
     const statsN =
       (opts.price ? 1 : 0) +
       (opts.ownership ? 1 : 0) +
-      TEAM_STAT_COLS.length +
+      teamStatCols().length +
       1 +
       (opts.setPieces ? TEAM_SETPIECE_COLS.length : 0);
     const heatN = teamHeatGws().length;
@@ -10848,7 +10824,7 @@
 
   function teamMetricCellsHTML(row, opts) {
     const prior = teamPriorRow(row.code);
-    const stats = TEAM_STAT_COLS.map((col) => teamStatCellHTML(prior, row.position, col)).join("");
+    const stats = teamStatCols().map((col) => teamStatCellHTML(prior, row.position, col)).join("");
     const spark = teamSparkCellHTML(row);
     const setp =
       opts && opts.setPieces
@@ -10889,7 +10865,7 @@
   function teamCompareHighlightMap(rows) {
     const maps = {};
     const list = (rows || []).filter(Boolean);
-    TEAM_STAT_COLS.forEach((col) => {
+    teamStatCols().forEach((col) => {
       const withVals = list
         .map((r) => {
           const prior = teamPriorRow(r.code);
@@ -12233,7 +12209,7 @@
 
   function teamEmptyRowHTML(pos, starter, enterI) {
     const label = starter ? `Add ${TEAM_POS_LABEL[pos]}` : `Add ${TEAM_POS_LABEL[pos]} to bench`;
-    const metrics = TEAM_STAT_COLS.map(
+    const metrics = teamStatCols().map(
       (col) => `<td class="col-num col-team-stat is-blank"></td>`
     ).join("");
     const spark = `<td class="col-team-spark is-blank"></td>`;
@@ -14337,6 +14313,73 @@
     { key: "penaltiesSaved", label: "PS", title: "Penalties saved", narrow: true },
   ];
 
+  function livePointsRowCode(entry) {
+    return String(entry.player?.code ?? entry.eid ?? "");
+  }
+
+  function livePointsCellSignature(entry, col) {
+    if (col.key === "defConHit") return entry.eg.defConHit ? "1" : "";
+    if (col.key === "saves" && entry.pos !== "GK") return "";
+    const n = Number(entry.eg[col.key]);
+    if (!Number.isFinite(n) || n === 0) return "";
+    return String(n);
+  }
+
+  function livePointsCellSignatureFromTd(td, col) {
+    if (col.key === "defConHit") return td.querySelector(".live-defcon-achieved") ? "1" : "";
+    const roll = td.querySelector(".live-stat-roll[data-count-to]");
+    if (!roll) return "";
+    return roll.dataset.countTo || "";
+  }
+
+  function snapLivePointsCell(td) {
+    if (!td) return;
+    td.querySelectorAll(".live-points-pill-enter").forEach((pill) => pill.classList.add("is-drawn"));
+    td.querySelectorAll(".live-stat-roll[data-count-to]").forEach(finishStatRollNode);
+  }
+
+  function snapLivePointsVisible(root = el.livePage) {
+    if (!root) return;
+    root.querySelectorAll(".live-points-pill-enter").forEach((pill) => pill.classList.add("is-drawn"));
+    finishLiveStatRolls(root);
+  }
+
+  /** In-place GW poll update — same player set, no full table rebuild or re-roll. */
+  function patchLivePointsTable(rows, gw) {
+    const tbody = el.liveTableBody;
+    if (!tbody || tbody.querySelector(".live-empty-row")) return false;
+
+    const byCode = new Map(
+      [...tbody.querySelectorAll(".live-points-row")].map((tr) => [tr.dataset.playerCode, tr])
+    );
+    const nextCodes = rows.map(livePointsRowCode);
+    if (byCode.size !== nextCodes.length) return false;
+    for (const code of nextCodes) {
+      if (!byCode.has(code)) return false;
+    }
+
+    rows.forEach((entry, i) => {
+      const tr = byCode.get(livePointsRowCode(entry));
+      if (!tr) return;
+      tr.style.setProperty("--enter-i", String(i));
+      const numCells = tr.querySelectorAll("td.col-num");
+      LIVE_POINTS_COLS.forEach((col, ci) => {
+        const td = numCells[ci];
+        if (!td) return;
+        const nextSig = livePointsCellSignature(entry, col);
+        if (livePointsCellSignatureFromTd(td, col) === nextSig) return;
+        td.innerHTML = livePointsCellHTML(entry, col);
+        snapLivePointsCell(td);
+      });
+      tbody.appendChild(tr);
+    });
+
+    if (el.liveCountLabel) {
+      el.liveCountLabel.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · GW${gw}`;
+    }
+    return true;
+  }
+
   function liveDefaultSortForMode(mode) {
     if (mode === "points") return { key: "pts", dir: "desc" };
     if (mode === "bonus") return { key: "bps", dir: "desc" };
@@ -14667,8 +14710,10 @@
     }
   }
 
-  function renderLivePoints(gw) {
+  function renderLivePoints(gw, { patch = false } = {}) {
     const rows = liveSortRows(liveFilteredRows(liveBuildRows(gw, { includeGk: true })));
+    if (patch && patchLivePointsTable(rows, gw)) return;
+
     const colCount = LIVE_POINTS_COLS.length + 1;
     el.liveTableHead.innerHTML = `<tr>
       ${liveSortTh("name", "Player", "col-player")}
@@ -14680,6 +14725,11 @@
       el.liveTableBody.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">No points rows for the current filters.</td></tr>`;
     } else {
       el.liveTableBody.innerHTML = rows.map((r, i) => livePointsRowHTML(r, i)).join("");
+      // Keep pill chrome visible — odometer rolls handle the reveal (hiding bg
+      // left white-on-transparent text invisible until the ease finished).
+      el.liveTableBody.querySelectorAll(".live-points-pill-enter").forEach((pill) => {
+        pill.classList.add("is-drawn");
+      });
     }
     if (el.liveCountLabel) {
       el.liveCountLabel.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · GW${gw}`;
@@ -14739,7 +14789,7 @@
       renderLiveBonus(gw);
     } else if (mode === "points") {
       if (!el.liveTableBody || !el.liveTableHead) return;
-      renderLivePoints(gw);
+      renderLivePoints(gw, { patch: quiet });
     } else {
       if (!el.liveTableBody || !el.liveTableHead) return;
       renderLiveDefcon(gw);
@@ -14749,7 +14799,8 @@
     syncLivePointsCoreUnder();
 
     if (quiet) {
-      settleLiveVisible();
+      if (state.liveMode === "points") snapLivePointsVisible(el.livePage);
+      else settleLiveVisible();
       deferLiveTableLayout();
     } else if (liveEnterAwaitingPlay) {
       /* rolls / bars stay empty until playLiveEnter */
@@ -14786,6 +14837,7 @@
   }
 
   function livePollRefreshMotion() {
+    if (state.liveMode === "points") return;
     startLiveEnterMotion(el.livePage);
   }
 
@@ -14794,7 +14846,7 @@
     if (liveRenderQueued) {
       liveRenderQueued = false;
       renderLive({ quiet: true });
-      if (!liveAnimateQueued) livePollRefreshMotion();
+      if (state.liveMode !== "points" && !liveAnimateQueued) livePollRefreshMotion();
     }
     if (liveAnimateQueued && el.livePage && !liveIsEnterBusy()) {
       liveAnimateQueued = false;
@@ -14813,16 +14865,40 @@
 
   function snapLiveBarsDrawn(root) {
     if (!root) return;
-    root.querySelectorAll(".live-defcon-fill").forEach((fill) => {
+    const fills = [...root.querySelectorAll(".live-defcon-fill")];
+    const bars = [...root.querySelectorAll(".live-bonus-track .rankings-bar")];
+    fills.forEach((fill) => {
       fill.style.transition = "none";
       fill.classList.add("is-drawn");
     });
-    root.querySelectorAll(".live-bonus-track .rankings-bar").forEach((bar) => {
+    bars.forEach((bar) => {
       bar.style.transition = "none";
       bar.classList.add("is-drawn");
     });
+    // Drop inline transition after paint so the next motion pass can ease.
+    requestAnimationFrame(() => {
+      fills.forEach((fill) => {
+        if (fill.isConnected) fill.style.removeProperty("transition");
+      });
+      bars.forEach((bar) => {
+        if (bar.isConnected) bar.style.removeProperty("transition");
+      });
+    });
     root.querySelectorAll(".live-dc-check-enter").forEach((el) => el.classList.add("is-drawn"));
     root.querySelectorAll(".live-points-pill-enter").forEach((el) => el.classList.add("is-drawn"));
+  }
+
+  const LIVE_DEFCON_BAR_MS = 1150;
+  const LIVE_DEFCON_BAR_STAGGER_MS = 22;
+
+  function liveDefconBarMotionEndMs(root) {
+    if (!root || state.liveMode !== "defcon") return 0;
+    let maxDelay = 0;
+    root.querySelectorAll(".live-defcon-row").forEach((row) => {
+      const i = Number.parseInt(row.style.getPropertyValue("--enter-i"), 10);
+      if (Number.isFinite(i)) maxDelay = Math.max(maxDelay, Math.min(i, 24) * LIVE_DEFCON_BAR_STAGGER_MS);
+    });
+    return maxDelay + LIVE_DEFCON_BAR_MS;
   }
 
   const LIVE_ROLL_BATCH = 40;
@@ -14857,25 +14933,22 @@
     return liveStatRollDurationMs(to);
   }
 
-  /** Points pills — bg + odometer start in the same tick (no global batch desync). */
+  /** Points — all columns roll together; pill backgrounds stay visible. */
   function animateLivePointsEnter(root, token) {
-    const rows = [...root.querySelectorAll(".live-points-row")];
-    let maxEnd = 0;
-    rows.forEach((row, rowI) => {
-      const rowDelay = Math.min(rowI, 22) * 12;
-      row.querySelectorAll(".live-points-pill-enter").forEach((pill) => {
-        const roll = pill.querySelector(".live-stat-roll[data-count-to]");
-        const rollMs = roll ? liveRollDurationForNode(roll) : 360;
-        pill.style.setProperty("--pill-enter-ms", `${rollMs}ms`);
-        maxEnd = Math.max(maxEnd, rowDelay + rollMs);
-        window.setTimeout(() => {
-          if (token !== liveEnterMotionToken) return;
-          pill.classList.add("is-drawn");
-          if (roll) animateStatRollNode(roll, { duration: rollMs });
-        }, rowDelay);
-      });
+    const pills = [...root.querySelectorAll(".live-points-pill-enter")];
+    let maxRoll = 360;
+    pills.forEach((pill) => {
+      const roll = pill.querySelector(".live-stat-roll[data-count-to]");
+      const rollMs = roll ? liveRollDurationForNode(roll) : 360;
+      pill.style.setProperty("--pill-enter-ms", `${rollMs}ms`);
+      maxRoll = Math.max(maxRoll, rollMs);
     });
-    return maxEnd;
+    if (token !== liveEnterMotionToken) return maxRoll;
+    pills.forEach((pill) => {
+      const roll = pill.querySelector(".live-stat-roll[data-count-to]");
+      if (roll) animateStatRollNode(roll, { duration: liveRollDurationForNode(roll) });
+    });
+    return maxRoll;
   }
 
   /** Batch odometer mounts (DefCon counts + Bonus BPS only). */
@@ -14942,23 +15015,46 @@
 
     const pointsMode = state.liveMode === "points";
 
-    // Rankings-style: batch undraw, one paint, then draw — no per-bar forced reflow.
-    fills.forEach((fill) => fill.classList.remove("is-drawn"));
-    bars.forEach((bar) => bar.classList.remove("is-drawn"));
+    // Rankings-style: batch undraw, reflow, restore CSS transitions, then draw.
+    fills.forEach((fill) => {
+      fill.style.transition = "none";
+      fill.classList.remove("is-drawn");
+    });
+    bars.forEach((bar) => {
+      bar.style.transition = "none";
+      bar.classList.remove("is-drawn");
+    });
     dcChecks.forEach((el) => el.classList.remove("is-drawn"));
-    pointsPills.forEach((el) => el.classList.remove("is-drawn"));
+    if (!pointsMode) pointsPills.forEach((el) => el.classList.remove("is-drawn"));
 
     const draw = () => {
       if (token !== liveEnterMotionToken) return;
+      void root.offsetWidth;
+      fills.forEach((fill) => fill.style.removeProperty("transition"));
+      bars.forEach((bar) => bar.style.removeProperty("transition"));
       fills.forEach((fill) => fill.classList.add("is-drawn"));
       bars.forEach((bar) => bar.classList.add("is-drawn"));
       dcChecks.forEach((el) => el.classList.add("is-drawn"));
-      const pointsEnd = pointsMode
-        ? animateLivePointsEnter(root, token)
-        : 0;
+      if (pointsMode) {
+        const pointsEnd = animateLivePointsEnter(root, token);
+        const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
+        const motionEnd = Math.max(
+          pointsEnd,
+          tailMs + tableMax,
+          liveDefconBarMotionEndMs(root)
+        );
+        root._liveMotionSettle = window.setTimeout(
+          settle,
+          Math.max(settleMs, motionEnd + 120)
+        );
+        return;
+      }
       if (!pointsMode) pointsPills.forEach((el) => el.classList.add("is-drawn"));
       const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
-      const motionEnd = Math.max(pointsEnd, tailMs + tableMax);
+      const motionEnd = Math.max(
+        tailMs + tableMax,
+        liveDefconBarMotionEndMs(root)
+      );
       root._liveMotionSettle = window.setTimeout(
         settle,
         Math.max(settleMs, motionEnd + 120)
@@ -18225,6 +18321,16 @@
     }
     syncSeasonSeg();
     if (el.newpriceWrap) el.newpriceWrap.style.display = "none";
+    if (el.optaPageSubtitle) {
+      el.optaPageSubtitle.textContent = next
+        ? "2026/27 FPL season stats for players or teams — filter, sort, rank, and compare."
+        : "Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.";
+    }
+    if (el.rankingsPageSubtitle) {
+      el.rankingsPageSubtitle.textContent = next
+        ? "Top 10 leaderboards for FPL season stats, grouped into Key Stats, Attacking, and Defending."
+        : "Top 10 leaderboards for OPTA and FPL metrics, grouped into Key Stats, Attacking, and Defending.";
+    }
   }
 
   function setSeason(season, { rerender = true } = {}) {
@@ -18235,6 +18341,9 @@
     teamPriorByCodeSeason = null;
     teamPosRankCache = null;
     teamPosRankSeason = null;
+    if (isNextSeason() && PLAYER_OPTA_ONLY_COL_KEYS.has(state.teamSortKey)) {
+      state.teamSortKey = null;
+    }
     // Drop team filters that don't exist in the destination season's chip set.
     const allowed = new Set(teamCodesForSeason());
     state.teamFilter.forEach((code) => {
@@ -18247,6 +18356,12 @@
     if (state.view === "players") {
       state.sortKey = "pts";
       state.sortDir = "desc";
+    } else if (isNextSeason()) {
+      const hide = TEAM_OPTA_ONLY_COL_KEYS;
+      if (hide.has(state.sortKey)) {
+        state.sortKey = "pts";
+        state.sortDir = "desc";
+      }
     }
     hideToast();
     applySeasonBounds();

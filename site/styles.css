@@ -15418,8 +15418,8 @@ html[data-page="live"] #team-filters .chip.team-chip {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
-  transition: transform 0.88s var(--ease-out);
-  transition-delay: 0s;
+  transition: transform 1.15s var(--ease-out);
+  transition-delay: calc(min(var(--enter-i, 0), 24) * 22ms);
 }
 .live-defcon-fill.is-drawn {
   transform: scaleX(var(--defcon-scale, 0));
@@ -15562,11 +15562,11 @@ html[data-page="live"] #team-filters .chip.team-chip {
   line-height: 1;
 }
 
-/* Points pills — bg eases in over --pill-enter-ms; keep numerals readable even
-   if a motion pass is interrupted before is-drawn lands. */
+/* Points pills — bg ease optional; numerals must stay readable if undrawn. */
 .live-points-pill-enter:not(.is-drawn) {
   background: transparent !important;
   box-shadow: none !important;
+  color: hsl(var(--foreground)) !important;
 }
 .live-points-pill-enter.is-drawn {
   transition:

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=787" />
+<link rel="stylesheet" href="styles.css?v=788" />
 <script>
 (() => {
   try {
@@ -891,7 +891,7 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics<button class="page-info-btn" type="button" aria-label="How Statistics works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle">Season OPTA and FPL stats for players or teams — filter, sort, rank, and compare.</p>
+            <p class="page-subtitle" id="opta-page-subtitle">2026/27 FPL season stats for players or teams — filter, sort, rank, and compare.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="count-label"></span>
@@ -968,7 +968,7 @@
       <div class="page-header">
         <div>
           <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-podium"/></svg>Rankings<button class="page-info-btn" type="button" aria-label="How Rankings works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-          <p class="page-subtitle">Top 10 leaderboards for OPTA and FPL metrics, grouped into Key Stats, Attacking, and Defending.</p>
+          <p class="page-subtitle" id="rankings-page-subtitle">Top 10 leaderboards for FPL season stats, grouped into Key Stats, Attacking, and Defending.</p>
         </div>
         <span class="count-label" id="rankings-count-label"></span>
       </div>
@@ -1303,7 +1303,7 @@
 <script src="home_data.js?v=20"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=782"></script>
+<script src="app.js?v=787"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
