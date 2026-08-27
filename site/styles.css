@@ -15562,10 +15562,10 @@ html[data-page="live"] #team-filters .chip.team-chip {
   line-height: 1;
 }
 
-/* Points pills — transparent until drawn; bg eases in over --pill-enter-ms (set in JS). */
+/* Points pills — bg eases in over --pill-enter-ms; keep numerals readable even
+   if a motion pass is interrupted before is-drawn lands. */
 .live-points-pill-enter:not(.is-drawn) {
   background: transparent !important;
-  color: transparent;
   box-shadow: none !important;
 }
 .live-points-pill-enter.is-drawn {

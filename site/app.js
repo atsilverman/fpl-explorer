@@ -14680,6 +14680,12 @@
     }
   }
 
+  function settleLiveVisible(root = el.livePage) {
+    if (!root) return;
+    snapLiveBarsDrawn(root);
+    finishLiveStatRolls(root);
+  }
+
   function renderLive({ quiet = false, animate = false } = {}) {
     if (quiet && liveIsEnterBusy()) {
       liveRenderQueued = true;
@@ -14714,19 +14720,17 @@
     syncLivePointsCoreUnder();
 
     if (quiet) {
-      snapLiveBarsDrawn(el.livePage);
-      finishLiveStatRolls(el.livePage);
+      settleLiveVisible();
       deferLiveTableLayout();
     } else if (liveEnterAwaitingPlay) {
-      /* empty rolls / undrawn bars — playLiveEnter owns motion */
+      /* rolls / bars stay empty until playLiveEnter */
     } else if (liveIsEnterBusy()) {
       if (animate) liveAnimateQueued = true;
-      else {
-        snapLiveBarsDrawn(el.livePage);
-        finishLiveStatRolls(el.livePage);
-      }
+      settleLiveVisible();
     } else if (animate) {
       startLiveEnterMotion(el.livePage);
+    } else {
+      settleLiveVisible();
     }
   }
 
@@ -14759,7 +14763,7 @@
   }
 
   function flushLiveEnterDeferred() {
-    if (el.livePage) finishLiveStatRolls(el.livePage);
+    settleLiveVisible();
     if (liveRenderQueued) {
       liveRenderQueued = false;
       renderLive({ quiet: true });
@@ -14888,7 +14892,7 @@
     const settle = () => {
       if (token !== liveEnterMotionToken) return;
       root._liveMotionSettle = 0;
-      finishLiveStatRolls(root);
+      settleLiveVisible(root);
       deferLiveTableLayout();
       if (onSettled) onSettled();
     };
@@ -14909,17 +14913,20 @@
       return;
     }
 
+    const pointsMode = state.liveMode === "points";
+
     // Rankings-style: batch undraw, one paint, then draw — no per-bar forced reflow.
     fills.forEach((fill) => fill.classList.remove("is-drawn"));
     bars.forEach((bar) => bar.classList.remove("is-drawn"));
     dcChecks.forEach((el) => el.classList.remove("is-drawn"));
-    pointsPills.forEach((el) => el.classList.remove("is-drawn"));
+    if (!pointsMode) pointsPills.forEach((el) => el.classList.remove("is-drawn"));
 
     const draw = () => {
       if (token !== liveEnterMotionToken) return;
       fills.forEach((fill) => fill.classList.add("is-drawn"));
       bars.forEach((bar) => bar.classList.add("is-drawn"));
       dcChecks.forEach((el) => el.classList.add("is-drawn"));
+      if (pointsMode) pointsPills.forEach((el) => el.classList.add("is-drawn"));
       const pointsEnd = animateLivePointsEnter(root, token);
       const { maxRoll: tableMax, tailMs } = animateLiveStatRollsBatched(tableRolls, token);
       const motionEnd = Math.max(pointsEnd, tailMs + tableMax);
@@ -14944,8 +14951,7 @@
     pane.classList.remove("is-entering", "is-enter-pending", "is-live-entering");
 
     if (prefersReducedMotion()) {
-      snapLiveBarsDrawn(pane);
-      finishLiveStatRolls(pane);
+      settleLiveVisible(pane);
       deferLiveTableLayout();
       flushLiveEnterDeferred();
       return;
@@ -14961,7 +14967,6 @@
     pane.classList.add("is-live-entering", "is-entering");
     playLiveMotion(pane, {
       onSettled: () => {
-        snapLiveBarsDrawn(pane);
         pane.classList.remove("is-live-entering", "is-entering");
         flushLiveEnterDeferred();
       },
@@ -14979,7 +14984,11 @@
     pane.querySelectorAll(".live-defcon-row, .live-points-row").forEach((row, i) => {
       row.style.setProperty("--enter-i", String(i));
     });
-    playLiveMotion(pane);
+    playLiveMotion(pane, {
+      onSettled: () => {
+        flushLiveEnterDeferred();
+      },
+    });
   }
 
   // Ownership page — sortable TSB% mover table
