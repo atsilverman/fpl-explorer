@@ -13615,6 +13615,19 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     0 0 0 1px hsl(142 55% 38% / 0.18),
     var(--shadow-sm);
 }
+/* No live starters — rank delta borders on summary rank cards only. */
+.home-dashboard:not(.has-live-minutes) .home-stat-panel.is-rank-border-up {
+  border-color: hsl(var(--positive) / 0.55);
+  box-shadow:
+    0 0 0 1px hsl(var(--positive) / 0.18),
+    var(--shadow-sm);
+}
+.home-dashboard:not(.has-live-minutes) .home-stat-panel.is-rank-border-down {
+  border-color: hsl(var(--negative) / 0.55);
+  box-shadow:
+    0 0 0 1px hsl(var(--negative) / 0.18),
+    var(--shadow-sm);
+}
 .home-standings-live-pill {
   min-width: 2em;
   padding: 2px 7px;
@@ -13689,6 +13702,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-stat-rank {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
 }
@@ -13731,7 +13745,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 3px;
   min-width: 0;
   line-height: 1.1;
@@ -14156,9 +14170,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-col-manager {
   text-align: left;
 }
-/* Rank+delta is wider now — keep space before Manager. */
+/* Rank+delta — left-align rank; delta sits beside when present. */
 .home-standings-table th.home-col-rank,
 .home-standings-table td.home-col-rank {
+  text-align: left;
   padding-left: 6px;
   padding-right: 14px;
   white-space: nowrap;
@@ -14876,26 +14891,40 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
 }
-.home-captain-pts.is-hot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.35em;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: hsl(var(--positive) / 0.16);
-  color: hsl(var(--positive));
-  font-weight: 600;
-}
-.home-captains-table td.home-col-captain.is-top-captain {
+/* Top captain — cell fill only (must beat zebra / row washes). */
+.home-captains-table tbody tr[data-entry] > td.home-col-captain.is-top-captain {
   --home-row-bg: hsl(var(--positive) / 0.14);
   background: var(--home-row-bg);
 }
-.home-captains-table tr.is-you td.home-col-captain.is-top-captain {
+.home-captains-table tbody tr[data-entry]:nth-child(even) > td.home-col-captain.is-top-captain {
+  --home-row-bg: hsl(var(--positive) / 0.14);
+  background: var(--home-row-bg);
+}
+.home-captains-table tr.is-you > td.home-col-captain.is-top-captain {
   --home-row-bg: hsl(var(--positive) / 0.18);
+  background: var(--home-row-bg);
+}
+.home-captains-table tr.is-view-active > td.home-col-captain.is-top-captain {
+  --home-row-bg: hsl(var(--positive) / 0.16);
+  background: var(--home-row-bg);
+}
+.home-captains-table td.home-col-captain.is-top-captain .home-captain-pts {
+  color: hsl(var(--positive));
+  font-weight: 600;
+}
+@media (hover: hover) and (pointer: fine) {
+  #home-page:not(.is-scroll-interaction)
+    .home-captains-table tbody tr[data-entry]:hover
+    > td.home-col-captain.is-top-captain {
+    --home-row-bg: hsl(var(--positive) / 0.18);
+    background: var(--home-row-bg);
+  }
 }
 .home-captains-table tr.is-you .home-captain-pts {
   color: hsl(var(--primary));
+}
+.home-captains-table tr.is-you td.home-col-captain.is-top-captain .home-captain-pts {
+  color: hsl(var(--positive));
 }
 .home-chips-table .home-col-chip {
   text-align: center;
@@ -16182,22 +16211,62 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: none;
     touch-action: pan-x;
+    /* Fixed before JS measure — avoids player | PTS column jump on load. */
+    --name-col-w: 118px;
   }
   #live-page .live-points-table {
     width: max-content;
     min-width: 100%;
-    table-layout: auto;
+    table-layout: fixed;
+  }
+  #live-page .live-points-table thead th.col-player,
+  #live-page .live-points-table tbody td.col-player {
+    width: var(--name-col-w, 118px);
+    min-width: var(--name-col-w, 118px);
+    max-width: var(--name-col-w, 118px);
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: hsl(var(--card));
+    background-image: none;
+    box-shadow: 1px 0 0 var(--border);
+    overflow: hidden;
+    padding-left: 10px;
+    padding-right: 6px;
+    vertical-align: middle;
+  }
+  #live-page .live-points-table thead th.col-player {
+    z-index: 8;
+    background-color: hsl(var(--muted));
+  }
+  #live-page .live-points-table tbody tr:hover > td.col-player {
+    background-color: color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card)));
+  }
+  #live-page .live-points-table .ownership-id-text {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #live-page .live-points-table .ownership-id-text .player-name-line {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #live-page .live-points-table .ownership-id .player-name {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
   #live-page .live-points-table .ownership-photo,
   #live-page .live-points-table .ownership-crest {
     width: 30px;
     height: 30px;
   }
-  #live-page .live-points-table .ownership-id .player-name {
-    font-size: 12px;
-  }
   #live-page .live-points-table .ownership-id-sub {
     font-size: 9.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

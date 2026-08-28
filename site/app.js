@@ -2585,21 +2585,18 @@
   }
 
   function homeRankDeltaHTML(places, { compact = false } = {}) {
-    if (places == null || !Number.isFinite(places)) return "";
+    if (places == null || !Number.isFinite(places) || places === 0) return "";
     const up = places > 0;
-    const flat = places === 0;
-    const cls = flat ? "is-flat" : up ? "is-up" : "is-down";
-    const icon = flat ? "minus" : up ? "caret-up" : "caret-down";
+    const cls = up ? "is-up" : "is-down";
+    const icon = up ? "caret-up" : "caret-down";
     const n = formatHomeRankDelta(places);
-    const label = flat
-      ? "Rank unchanged vs last gameweek"
-      : `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
-    return `<span class="home-rank-delta${compact ? " is-compact" : ""} ${cls}"${tipAttr(label)} aria-label="${escapeHtml(label)}">${iconHTML(icon)}<span class="home-rank-delta-n">${flat ? "0" : n}</span></span>`;
+    const label = `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
+    return `<span class="home-rank-delta${compact ? " is-compact" : ""} ${cls}"${tipAttr(label)} aria-label="${escapeHtml(label)}">${iconHTML(icon)}<span class="home-rank-delta-n">${n}</span></span>`;
   }
 
-  function setHomeRankDelta(elDelta, places, { hideFlat = true } = {}) {
+  function setHomeRankDelta(elDelta, places) {
     if (!elDelta) return;
-    if (places == null || !Number.isFinite(places) || (hideFlat && places === 0)) {
+    if (places == null || !Number.isFinite(places) || places === 0) {
       elDelta.hidden = true;
       elDelta.className = "home-rank-delta";
       elDelta.innerHTML = "";
@@ -2608,18 +2605,15 @@
       return;
     }
     const up = places > 0;
-    const flat = places === 0;
-    const cls = flat ? "is-flat" : up ? "is-up" : "is-down";
-    const icon = flat ? "minus" : up ? "caret-up" : "caret-down";
+    const cls = up ? "is-up" : "is-down";
+    const icon = up ? "caret-up" : "caret-down";
     const n = formatHomeRankDelta(places);
-    const label = flat
-      ? "Rank unchanged vs last gameweek"
-      : `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
+    const label = `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
     elDelta.hidden = false;
     elDelta.className = `home-rank-delta ${cls}`;
     setTip(elDelta, label);
     elDelta.setAttribute("aria-label", label);
-    elDelta.innerHTML = `${iconHTML(icon)}<span class="home-rank-delta-n">${flat ? "0" : n}</span>`;
+    elDelta.innerHTML = `${iconHTML(icon)}<span class="home-rank-delta-n">${n}</span>`;
   }
 
   function homeTopPercentLabel(rank, totalPlayers) {
@@ -3003,14 +2997,13 @@
     return max;
   }
 
-  function homeCaptainPickHTML(player, { isTopCaptain = false, autoSubbed = false, original = null } = {}) {
+  function homeCaptainPickHTML(player, { autoSubbed = false, original = null } = {}) {
     if (!player) return "—";
     const teamBadge = badgeHTML(player.team, "home-crest home-crest-captain") ||
       teamCrestFallbackHTML(player.team, "home-crest-fallback home-crest-captain");
     const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
-    const ptsHi = isTopCaptain && Number.isFinite(pts);
     const ptsHTML = Number.isFinite(pts)
-      ? `<span class="home-captain-pts${ptsHi ? " is-hot" : ""}">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+      ? `<span class="home-captain-pts">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
       : "";
     const fromName = original && original.name ? original.name : "Captain";
     const subHTML = autoSubbed
@@ -3130,7 +3123,34 @@
 
   function syncHomeLiveChrome() {
     if (!el.homeBento) return;
-    el.homeBento.classList.toggle("has-live-minutes", homeConfiguredHasLiveMinutes());
+    const live = homeConfiguredHasLiveMinutes();
+    el.homeBento.classList.toggle("has-live-minutes", live);
+
+    const overallPanel = el.homeOverallRank && el.homeOverallRank.closest(".home-stat-panel");
+    const leaguePanel = el.homeLeagueRank && el.homeLeagueRank.closest(".home-stat-panel");
+    [overallPanel, leaguePanel].forEach((panel) => {
+      if (panel) panel.classList.remove("is-rank-border-up", "is-rank-border-down");
+    });
+
+    if (live) return;
+
+    const viewingOther = homeIsViewingOtherManager();
+    const summary = homeSummaryForView(homeActiveViewEntryId());
+    const overallDelta =
+      viewingOther || summary.overallRankPrev == null
+        ? null
+        : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev);
+    const leagueDelta =
+      viewingOther || summary.leagueRankPrev == null
+        ? null
+        : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev);
+
+    if (overallPanel && Number.isFinite(overallDelta) && overallDelta !== 0) {
+      overallPanel.classList.add(overallDelta > 0 ? "is-rank-border-up" : "is-rank-border-down");
+    }
+    if (leaguePanel && Number.isFinite(leagueDelta) && leagueDelta !== 0) {
+      leaguePanel.classList.add(leagueDelta > 0 ? "is-rank-border-up" : "is-rank-border-down");
+    }
   }
 
   function homeStandingsRankValue(row) {
@@ -3353,7 +3373,6 @@
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
       ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
       <td class="home-col-captain${isTopCaptain ? " is-top-captain" : ""}">${homeCaptainPickHTML(shown, {
-        isTopCaptain,
         autoSubbed: effective.autoSubbed,
         original: effective.original,
       })}</td>${
@@ -3413,11 +3432,7 @@
   function homeTransfersCellHTML(transfers) {
     if (!transfers || typeof transfers !== "object") return "—";
     const moves = Array.isArray(transfers.moves) ? transfers.moves : [];
-    if (!moves.length) {
-      const count = Number(transfers.count);
-      if (Number.isFinite(count) && count <= 0) return "No transfers";
-      return "—";
-    }
+    if (!moves.length) return "—";
     const moveHTML = moves.map((m) => homeTransferMoveHTML(m)).filter(Boolean).join("");
     const hit = transfers.hit ? `<span class="home-transfer-hit">−${Number(transfers.cost) || 4}</span>` : "";
     const chip = transfers.activeChip === "freehit"
@@ -6793,6 +6808,7 @@
   }
 
   const LIVE_POINTS_NAME_COL_MIN = 128;
+  const LIVE_POINTS_MOBILE_NAME_COL_W = 118;
 
   function syncLivePointsNameColWidth() {
     const wrap = el.liveTableWrap;
@@ -6804,18 +6820,43 @@
       }
       return;
     }
+    if (NARROW_MQ.matches) {
+      liveMobileNameColW = LIVE_POINTS_MOBILE_NAME_COL_W;
+      wrap.dataset.view = "players";
+      wrap.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
+      return;
+    }
     const measured = measureNameColWidth(wrap, {
       minW: LIVE_POINTS_NAME_COL_MIN,
       hugContent: true,
       slack: 4,
     });
-    const capFrac = NARROW_MQ.matches ? 0.52 : 0.28;
-    const cap = Math.round(wrap.clientWidth * capFrac);
+    const cap = Math.round(wrap.clientWidth * 0.28);
     liveMobileNameColW = Math.max(LIVE_POINTS_NAME_COL_MIN, Math.min(measured, cap));
     const prev = wrap.style.getPropertyValue("--name-col-w");
     wrap.dataset.view = "players";
     wrap.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
     if (prev !== `${liveMobileNameColW}px`) invalidateNameSimplifyOrigin(wrap);
+  }
+
+  /** Lock Live Points name column before enter motion so PTS doesn't jump after measure. */
+  function primeLivePointsTableLayout() {
+    if (
+      state.page !== "live" ||
+      state.liveMode !== "points" ||
+      !el.liveTableWrap ||
+      el.liveTableWrap.hidden ||
+      !nameSimplifyActive()
+    ) {
+      return;
+    }
+    syncLivePointsNameColWidth();
+    const wrap = el.liveTableWrap;
+    const host = nameSimplifyHost(wrap) || wrap;
+    host.classList.add("name-simplify-ready");
+    host.dataset.view = "players";
+    host.style.setProperty("--name-collapse", "0");
+    host.classList.remove("is-name-simplifying");
   }
 
   function scheduleOptaMobileNameColWidth() {
@@ -15181,6 +15222,7 @@
     liveUpdateFooter(gw);
     syncLiveNavChrome();
     syncLivePointsCoreUnder();
+    if (mode === "points") primeLivePointsTableLayout();
 
     if (quiet) {
       if (state.liveMode === "points") snapLivePointsVisible(el.livePage);
