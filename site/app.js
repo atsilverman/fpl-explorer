@@ -377,6 +377,32 @@
     };
   }
 
+  function scheduleHighlightFill(alpha) {
+    return `hsl(var(--schedule-spectrum-fall) / ${alpha})`;
+  }
+
+  function scheduleHighlightPaint(kind, intensity) {
+    return spectrumHighlightPaint(kind === "top", intensity, {
+      easy: "hsl(var(--blue-hsl))",
+      hard: "hsl(var(--schedule-spectrum-fall))",
+      easyFill: (alpha) => `hsl(var(--blue-hsl) / ${alpha})`,
+      hardFill: scheduleHighlightFill,
+    });
+  }
+
+  function scheduleHighlightInlineStyle(kind, intensity) {
+    const paint = scheduleHighlightPaint(kind, intensity);
+    if (paint.skip) return { style: "", strongClass: "" };
+    const color = paint.color ? `;color:${paint.color}` : "";
+    const kindClass =
+      paint.emphasize || paint.strong ? (kind === "top" ? " highlight-top" : " highlight-bottom") : "";
+    const strong = paint.strong ? " highlight-strong" : "";
+    return {
+      style: `background-color:${paint.backgroundColor}${color}`,
+      strongClass: `${kindClass}${strong}`,
+    };
+  }
+
   function fdrHighlightInlineStyle(kind, intensity) {
     const paint = fdrHighlightPaint(kind, intensity);
     if (paint.skip) return { style: "", strongClass: "" };
@@ -1042,6 +1068,9 @@
     homeSquadFixturesBody: $("#home-squad-fixtures-body"),
     homeSquadFixturesHead: $("#home-squad-fixtures-head"),
     homeSquadFixturesCols: $("#home-squad-fixtures-cols"),
+    homeSquadPtsBody: $("#home-squad-pts-body"),
+    homeSquadPtsHead: $("#home-squad-pts-head"),
+    homeSquadPtsCols: $("#home-squad-pts-cols"),
     homeSquadTrack: $("#home-squad-track"),
     homeSquadDots: $("#home-squad-dots"),
     homeStandingsBody: $("#home-standings-body"),
@@ -1952,6 +1981,9 @@
     if (el.homeSquadFixturesBody) el.homeSquadFixturesBody.innerHTML = "";
     if (el.homeSquadFixturesHead) el.homeSquadFixturesHead.innerHTML = "";
     if (el.homeSquadFixturesCols) el.homeSquadFixturesCols.innerHTML = "";
+    if (el.homeSquadPtsBody) el.homeSquadPtsBody.innerHTML = "";
+    if (el.homeSquadPtsHead) el.homeSquadPtsHead.innerHTML = "";
+    if (el.homeSquadPtsCols) el.homeSquadPtsCols.innerHTML = "";
     if (el.homeStandingsBody) el.homeStandingsBody.innerHTML = "";
     if (el.homeStandingsTransfersBody) el.homeStandingsTransfersBody.innerHTML = "";
     if (el.homeStandingsCaptainsBody) el.homeStandingsCaptainsBody.innerHTML = "";
@@ -2899,6 +2931,9 @@
     if (el.homeSquadFixturesBody) {
       el.homeSquadFixturesBody.classList.remove("has-owner-filter");
     }
+    if (el.homeSquadPtsBody) {
+      el.homeSquadPtsBody.classList.remove("has-owner-filter");
+    }
     forEachHomeSquadRow((tr) => {
       const eid = Number(tr.dataset.element);
       const isPinned =
@@ -3030,7 +3065,7 @@
   }
 
   function forEachHomeSquadRow(fn) {
-    [el.homeSquadBody, el.homeSquadFixturesBody].forEach((body) => {
+    [el.homeSquadBody, el.homeSquadFixturesBody, el.homeSquadPtsBody].forEach((body) => {
       if (!body) return;
       body.querySelectorAll("tr.home-squad-row").forEach(fn);
     });
@@ -3760,6 +3795,7 @@
   function syncHomeSquadRowHeights() {
     const tables = [
       el.homeSquadBody && el.homeSquadBody.closest("table"),
+      el.homeSquadPtsBody && el.homeSquadPtsBody.closest("table"),
       el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table"),
     ].filter(Boolean);
     if (!tables.length) return;
@@ -4293,6 +4329,112 @@
       minutes: Number(row.minutes) || 0,
       status: row.status || "scheduled",
     };
+  }
+
+  const HOME_SQUAD_PTS_PREFERRED = [
+    { key: "pts", label: "Pts", title: "Gameweek points" },
+    { key: "goals", label: "G", title: "Goals scored" },
+    { key: "assists", label: "A", title: "Assists" },
+    { key: "cleanSheets", label: "CS", title: "Clean sheets" },
+    { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
+    { key: "bonus", label: "B", title: "Bonus points" },
+    { key: "saves", label: "Sv", title: "Saves (GK)", flexible: true },
+  ];
+
+  const HOME_SQUAD_PTS_FALLBACKS = [
+    { key: "yellowCards", label: "YC", title: "Yellow cards" },
+    { key: "redCards", label: "RC", title: "Red cards" },
+    { key: "penaltiesSaved", label: "PS", title: "Penalties saved" },
+    { key: "ownGoals", label: "OG", title: "Own goals", narrow: true },
+    { key: "penaltiesMissed", label: "PM", title: "Penalties missed", narrow: true },
+  ];
+
+  function homeElementGwRecord(elementId) {
+    const map = homeElementGwMap();
+    return map[String(elementId)] || map[elementId] || {};
+  }
+
+  function homeSquadPtsEntry(row) {
+    const eg = homeElementGwRecord(row.element);
+    const etype = Number(eg.elementType) || Number(row.elementType) || 0;
+    const pos = LIVE_POS_BY_TYPE[etype] || null;
+    const rule = pos && DEFCON_RULES[pos];
+    const threshold = rule ? rule.threshold : null;
+    const actions = pos && pos !== "GK" ? liveDefconActions(eg, pos) : null;
+    return {
+      row,
+      eg,
+      pos,
+      threshold,
+      actions: actions == null ? 0 : actions,
+    };
+  }
+
+  function homeSquadPtsColHasValue(entries, colKey) {
+    for (const entry of entries) {
+      const { eg, pos } = entry;
+      if (colKey === "defConHit") {
+        if (eg.defConHit) return true;
+        continue;
+      }
+      if (colKey === "saves") {
+        if (pos === "GK" && Number(eg.saves) > 0) return true;
+        continue;
+      }
+      const n = Number(eg[colKey]);
+      if (Number.isFinite(n) && n !== 0) return true;
+    }
+    return false;
+  }
+
+  function homeSquadPtsColumns(entries) {
+    const used = new Set(["pts"]);
+    const cols = [{ ...HOME_SQUAD_PTS_PREFERRED[0] }];
+    for (const col of HOME_SQUAD_PTS_PREFERRED.slice(1)) {
+      let pick = col;
+      if (col.flexible && !homeSquadPtsColHasValue(entries, col.key)) {
+        const fb = HOME_SQUAD_PTS_FALLBACKS.find(
+          (c) => !used.has(c.key) && homeSquadPtsColHasValue(entries, c.key)
+        );
+        if (fb) pick = fb;
+      }
+      cols.push(pick);
+      used.add(pick.key);
+    }
+    return cols;
+  }
+
+  function homeSquadPtsCellHTML(entry, col) {
+    if (col.key === "pts") {
+      const raw =
+        entry.row.gwPoints != null ? Number(entry.row.gwPoints) : Number(entry.eg.pts);
+      if (!Number.isFinite(raw)) return "";
+      const roll = statRollSpan(raw, {
+        from: 0,
+        decimals: 0,
+        className: "home-stat-roll live-stat-roll",
+        rollKind: "pts",
+      });
+      return livePointsPillHTML("pts", roll);
+    }
+    return livePointsCellHTML(entry, col);
+  }
+
+  function homeSquadPtsRowHTML(entry, cols, opts = {}) {
+    const cells = cols
+      .map((col) => {
+        const inner = homeSquadPtsCellHTML(entry, col);
+        const cls = ["home-col-stat", "col-num", col.narrow ? "col-num-narrow" : ""]
+          .filter(Boolean)
+          .join(" ");
+        return `<td class="${cls}">${inner}</td>`;
+      })
+      .join("");
+    const benchCls = entry.row.onBench ? " home-row-bench" : "";
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(entry.row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(entry.row.name))}">
+      ${homeSquadPlayerCellHTML(entry.row, opts)}
+      ${cells}
+    </tr>`;
   }
 
   function homeSearchGwTier(stats) {
@@ -5038,7 +5180,9 @@
 
   function finishHomeStatRolls(root) {
     if (!root) return;
-    root.querySelectorAll(".home-stat-roll[data-count-to]").forEach(finishStatRollNode);
+    root.querySelectorAll(
+      ".home-stat-roll[data-count-to], .home-squad-pts-table .live-stat-roll[data-count-to]"
+    ).forEach(finishStatRollNode);
   }
 
   function prepareHomeStatRolls() {
@@ -5132,7 +5276,11 @@
         syncHomeSquadRowHeights();
         syncHomeStandingsTrackHeight(0, { animate: false, allowShrink: false });
         syncHomeSquadTrackHeight(0, { animate: false });
-        const rollNodes = [...pane.querySelectorAll(".home-stat-roll[data-count-to]")].filter(
+        const rollNodes = [
+          ...pane.querySelectorAll(
+            ".home-stat-roll[data-count-to], .home-squad-pts-table .live-stat-roll[data-count-to]"
+          ),
+        ].filter(
           (node) =>
             !(
               el.homeStandingsPanel &&
@@ -5268,7 +5416,7 @@
     if (el.homeLeagueTitle) {
       el.homeLeagueTitle.textContent = HOME.leagueName || "";
     }
-    if (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead) {
+    if (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead || el.homeSquadPtsBody) {
       const rows = homeSquadForEntry(viewEntry);
       const configuredOwned = viewingOther && homeConfiguredEntryId() != null
         ? homeElementsForEntry(homeConfiguredEntryId())
@@ -5276,6 +5424,9 @@
       const pinOpts = (r) => ({
         configuredPin: viewingOther && configuredOwned.has(Number(r.element)),
       });
+      const ptsEntries = rows.map(homeSquadPtsEntry);
+      const ptsCols = homeSquadPtsColumns(ptsEntries);
+      const ptsColCount = 1 + ptsCols.length;
       if (el.homeSquadBody) {
         const parts = [];
         let benchLabeled = false;
@@ -5327,6 +5478,38 @@
       }
       const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
+      if (el.homeSquadPtsCols) {
+        el.homeSquadPtsCols.innerHTML =
+          `<col class="home-col-player" />` +
+          ptsCols.map(() => `<col class="home-col-stat" />`).join("");
+      }
+      if (el.homeSquadPtsHead) {
+        el.homeSquadPtsHead.innerHTML =
+          `<th scope="col" class="home-col-player">Player</th>` +
+          ptsCols
+            .map(
+              (col) =>
+                `<th scope="col" class="home-col-stat col-num${col.narrow ? " col-num-narrow" : ""}"${tipAttr(col.title || col.label)}>${escapeHtml(col.label)}</th>`
+            )
+            .join("");
+      }
+      if (el.homeSquadPtsBody) {
+        const parts = [];
+        let benchLabeled = false;
+        for (const entry of ptsEntries) {
+          if (entry.row.onBench && !benchLabeled) {
+            parts.push(
+              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${ptsColCount}">Bench</th></tr>`
+            );
+            benchLabeled = true;
+          }
+          parts.push(homeSquadPtsRowHTML(entry, ptsCols, pinOpts(entry.row)));
+        }
+        el.homeSquadPtsBody.innerHTML = parts.join("") ||
+          (homeSquadShowLoading(viewEntry)
+            ? homeSquadLoadingHTML(ptsColCount)
+            : homeSquadEmptyHTML(ptsColCount));
+      }
     }
     if (el.homeStandingsBody) {
       bindHomeStandingsSort();
@@ -8026,23 +8209,23 @@
     return maps;
   }
 
-  function fixtureStatCell(teamCode, split, key, value, decimals, highlightMaps, rankMaps) {
+  function fixtureStatCell(teamCode, split, key, value, decimals, highlightMaps, rankMaps, { schedulePalette = false } = {}) {
     // Tooltip always shows ranks + enhance-style highlighting. Colours are
     // inverted relative to the main table: these are the *opponent's*
     // figures, so being top of a category (rank 1) is a hard fixture and
-    // reads orange, bottom reads blue.
+    // reads pink on Matchups cards, orange elsewhere; bottom reads blue.
+    const highlight = schedulePalette ? scheduleHighlightInlineStyle : enhanceHighlightInlineStyle;
     let style = "";
     let extraClass = "";
     const ranks = highlightMaps[split] && highlightMaps[split][key];
     const topIntensity = ranks && ranks.top.get(teamCode);
     const bottomIntensity = ranks && ranks.bottom.get(teamCode);
     if (topIntensity !== undefined) {
-      // Opponent top = hard fixture → red.
-      const paint = enhanceHighlightInlineStyle("bottom", topIntensity);
+      const paint = highlight("bottom", topIntensity);
       style = ` style="${paint.style}"`;
       extraClass = paint.strongClass;
     } else if (bottomIntensity !== undefined) {
-      const paint = enhanceHighlightInlineStyle("top", bottomIntensity);
+      const paint = highlight("top", bottomIntensity);
       style = ` style="${paint.style}"`;
       extraClass = paint.strongClass;
     }
@@ -8256,15 +8439,16 @@
       const stats = opponentStatsForFixture(fx);
       const split = fx.ha === "H" ? "away" : "home";
       const verdict = showMatchups ? matchupVerdictCell(teamCode, fx, rankMaps) : null;
+      const cellOpts = { schedulePalette: showMatchups };
       return `<tr>
         <td class="ftt-gw">${fx.gw}</td>
         <td class="ftt-opp"><span>${badgeHTML(fx.opp)}${escapeHtml(fx.opp)}</span></td>
         <td class="ftt-ha">${fx.ha}${fx.ha === "H" ? iconHTML("star", "ftt-home-star") : ""}</td>
-        ${fixtureStatCell(fx.opp, split, "xg", stats && stats.xg, 1, highlightMaps, rankMaps)}
-        ${fixtureStatCell(fx.opp, split, "goals", stats && stats.goals, 0, highlightMaps, rankMaps)}
-        ${fixtureStatCell(fx.opp, split, "xgc", stats && stats.xgc, 1, highlightMaps, rankMaps)}
-        ${fixtureStatCell(fx.opp, split, "goalsConceded", stats && stats.goalsConceded, 0, highlightMaps, rankMaps)}
-        ${fixtureStatCell(fx.opp, split, "cleanSheets", stats && stats.cleanSheets, 0, highlightMaps, rankMaps)}
+        ${fixtureStatCell(fx.opp, split, "xg", stats && stats.xg, 1, highlightMaps, rankMaps, cellOpts)}
+        ${fixtureStatCell(fx.opp, split, "goals", stats && stats.goals, 0, highlightMaps, rankMaps, cellOpts)}
+        ${fixtureStatCell(fx.opp, split, "xgc", stats && stats.xgc, 1, highlightMaps, rankMaps, cellOpts)}
+        ${fixtureStatCell(fx.opp, split, "goalsConceded", stats && stats.goalsConceded, 0, highlightMaps, rankMaps, cellOpts)}
+        ${fixtureStatCell(fx.opp, split, "cleanSheets", stats && stats.cleanSheets, 0, highlightMaps, rankMaps, cellOpts)}
         ${verdict ? verdict.html : ""}
       </tr>`;
     }).join("");
@@ -8284,7 +8468,7 @@
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · soft blue = easier, orange = tougher (quieter blue in dark mode)</div>` : ""}`;
+      ${showMeta ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best, 20 = worst; promoted ranks provisional) · soft blue = easier, pink = tougher (quieter blue in dark mode)</div>` : ""}`;
   }
 
   function fixtureTooltipHTML(teamCode, options = {}) {
@@ -8428,7 +8612,7 @@
           <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then count.</span></li>
           <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s home/away attack &amp; defence ranks.</span></li>
           <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — home for the team on the card.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Soft blue / tough orange cell tint (quieter blue in dark mode).</span></li>
+          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Soft blue / tough pink cell tint (quieter blue in dark mode).</span></li>
           <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
         </ol>
       </div>
@@ -8494,13 +8678,19 @@
         spitRow(
           spitRank("Own"),
           mobile
-            ? "Tap a player name to highlight owners in standings (others fade). Swipe the team card for fixtures. Click a standings manager to view their team — Exit returns to yours."
+            ? "Tap a player name to highlight owners in standings (others fade). Swipe the team card for points breakdown and fixtures. Click a standings manager to view their team — Exit returns to yours."
             : "Click a team player to highlight owners in standings (others fade). Click a standings manager to view their team — Exit returns to yours."
+        ),
+        spitRow(
+          spitRank("Pts"),
+          mobile
+            ? "Second team swipe — GW stat pills (G, A, CS, DC, B, Sv) matching Live Points colors; Sv swaps to YC when no keeper saves."
+            : "Team card page 2 — GW stat pills (G, A, CS, DC, B, Sv) matching Live Points; Sv swaps to YC when no keeper saves."
         ),
         spitRow(
           spitRank("Fixtures"),
           mobile
-            ? "Swipe for the next 4 GWs — crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
+            ? "Third swipe — next 4 GWs with crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
             : "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
         ),
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),

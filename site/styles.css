@@ -36,6 +36,8 @@
   --blue-hsl: 217 91% 60%;
   --fall: 24 90% 52%;
   --fall-highlight: 24 85% 46%;
+  --schedule-spectrum-fall: 328 76% 57%;
+  --schedule-spectrum-fall-highlight: 328 72% 50%;
   --spectrum-rise: var(--blue-hsl);
   --spectrum-fall: var(--fall);
   --spectrum-neutral: var(--muted);
@@ -123,6 +125,8 @@
     --ring: 240 4.9% 83.9%;
     --fall: 24 90% 58%;
     --fall-highlight: 24 85% 52%;
+    --schedule-spectrum-fall: 328 70% 62%;
+    --schedule-spectrum-fall-highlight: 328 68% 54%;
     --spectrum-rise: var(--blue-hsl);
     --spectrum-fall: var(--fall);
     --spectrum-neutral: var(--muted);
@@ -175,6 +179,8 @@
   --ring: 240 4.9% 83.9%;
   --fall: 24 90% 58%;
   --fall-highlight: 24 85% 52%;
+  --schedule-spectrum-fall: 328 70% 62%;
+  --schedule-spectrum-fall-highlight: 328 68% 54%;
   --spectrum-rise: var(--blue-hsl);
   --spectrum-fall: var(--fall);
   --spectrum-neutral: var(--muted);
@@ -7865,6 +7871,12 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 
 /* Analyze stays a single responsive grid. The verdict column needs slightly
    wider cards, but every team keeps equal visual weight and appears once. */
+#schedule-page,
+.home-player-matchup,
+.fixture-tooltip:has(.ftt-table-matchups) {
+  --matchup-attack: var(--schedule-spectrum-fall);
+}
+
 .schedule-grid-matchups {
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
 }
@@ -13995,9 +14007,127 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   outline-offset: 2px;
 }
 .home-squad-live-table,
-.home-squad-fixtures-table {
+.home-squad-fixtures-table,
+.home-squad-pts-table {
   table-layout: fixed;
   width: 100%;
+}
+.home-squad-pts-table {
+  min-width: 0;
+}
+.home-squad-pts-table .home-col-player {
+  width: 34%;
+  min-width: 0;
+}
+.home-squad-pts-table .home-col-stat {
+  width: 9.4%;
+  padding-left: 1px;
+  padding-right: 1px;
+  text-align: center;
+  vertical-align: middle;
+}
+.home-squad-pts-table thead th.home-col-stat {
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  white-space: nowrap;
+}
+.home-squad-pts-table tbody td.home-col-stat {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35em;
+  height: 1.35em;
+  min-width: 1.35em;
+  max-width: 1.35em;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon {
+  width: 1.25em;
+  height: 1.25em;
+  min-width: 1.25em;
+  max-width: 1.25em;
+  padding: 0;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-stat-roll,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill .stat-roll-digit {
+  line-height: 1;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-defcon-check-slot {
+  flex: none;
+  width: auto;
+  height: auto;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill .check-mark-icon {
+  width: 10px;
+  height: 10px;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon circle {
+  fill: #fff;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon path {
+  stroke: hsl(142 55% 32%);
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
+  background: hsl(var(--foreground) / 0.88);
+  color: hsl(var(--background));
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-good {
+  background: hsl(var(--positive));
+  color: #fff;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-good.is-ga-ring {
+  box-shadow:
+    0 0 0 1px hsl(var(--background)),
+    0 0 0 2px hsl(var(--positive));
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus {
+  color: #fff;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus-3 {
+  background: hsl(38 92% 50%);
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus-2 {
+  background: hsl(38 80% 58%);
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus-1 {
+  background: hsl(38 55% 68%);
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon {
+  background: hsl(142 55% 32%);
+  color: #fff;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-warn {
+  background: hsl(45 93% 47%);
+  color: hsl(30 80% 12%);
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bad {
+  background: hsl(var(--destructive));
+  color: #fff;
+}
+:root[data-theme="dark"] .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts,
+:root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
+  background: hsl(var(--foreground) / 0.92);
+  color: hsl(var(--background));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
+    background: hsl(var(--foreground) / 0.92);
+    color: hsl(var(--background));
+  }
 }
 .home-squad-fixtures-table .home-col-fx {
   text-align: center;
@@ -14225,6 +14355,12 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   }
   .home-squad-live-table col.home-col-imp {
     width: 26%;
+  }
+  .home-squad-pts-table col.home-col-player {
+    width: 30%;
+  }
+  .home-squad-pts-table col.home-col-stat {
+    width: 10%;
   }
   .home-squad-fixtures-table col.home-col-player {
     width: 30%;
@@ -15017,7 +15153,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     table-layout: fixed;
   }
   .home-squad-live-table,
-  .home-squad-fixtures-table {
+  .home-squad-fixtures-table,
+  .home-squad-pts-table {
     table-layout: fixed;
   }
   .home-squad-table th,
@@ -15055,6 +15192,15 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   }
   .home-squad-live-table .home-col-imp {
     width: 24%;
+  }
+  .home-squad-pts-table col.home-col-player,
+  .home-squad-pts-table .home-col-player {
+    width: 34%;
+    min-width: 0;
+  }
+  .home-squad-pts-table col.home-col-stat,
+  .home-squad-pts-table .home-col-stat {
+    width: 9.4%;
   }
   .home-squad-fixtures-table col.home-col-player {
     width: 34%;
