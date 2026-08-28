@@ -1233,7 +1233,7 @@ def main() -> int:
 
         standing_rows.sort(
             key=lambda r: (
-                -int(r.get("gwPointsLive") or 0),
+                -int(r.get("total") or 0),
                 int(r.get("rankOfficial") or 9999),
             )
         )

@@ -13609,6 +13609,32 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   padding: 10px 12px;
   min-width: 0;
 }
+.home-dashboard.has-live-minutes .home-panel {
+  border-color: hsl(142 55% 38% / 0.55);
+  box-shadow:
+    0 0 0 1px hsl(142 55% 38% / 0.18),
+    var(--shadow-sm);
+}
+.home-standings-live-pill {
+  min-width: 2em;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 650;
+}
+.home-standings-live-pill.is-active {
+  background: hsl(142 55% 38%);
+  color: #fff;
+}
+.home-standings-live-pill.is-zero {
+  background: hsl(var(--muted));
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.home-standings-live-pill .home-stat-roll,
+.home-standings-live-pill .stat-roll-digit {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
 .home-panel-heading {
   display: flex;
   align-items: baseline;

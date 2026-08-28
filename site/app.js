@@ -2651,9 +2651,9 @@
   let homeStandingsPagerReady = false;
   let homeSquadPagerReady = false;
   let homeViewEntryId = null;
-  // Live standings sort — default league rank; Live/Left/GW/Total are clickable.
-  let homeStandingsSortKey = "rank";
-  let homeStandingsSortDir = "asc";
+  // Live standings sort — default total pts desc; Live/Left/GW/Total/# are clickable.
+  let homeStandingsSortKey = "total";
+  let homeStandingsSortDir = "desc";
   let homeStandingsSortBound = false;
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
@@ -2724,7 +2724,7 @@
         overallPoints,
         overallRank,
         overallRankPrev: payloadSummary?.overallRankPrev ?? null,
-        leagueRank: row.rankLive ?? row.rankOfficial,
+        leagueRank: row.rankOfficial ?? row.rankLive,
         leagueRankPrev: payloadSummary?.leagueRankPrev ?? null,
         totalPlayers: HOME.summary?.totalPlayers,
         eventPointsOfficial: row.eventTotalOfficial,
@@ -3095,17 +3095,35 @@
     return official != null && Number.isFinite(official) ? official : null;
   }
 
+  /** True when the linked manager has a starter on the pitch with minutes in a live fixture. */
+  function homeConfiguredHasLiveMinutes() {
+    const entry = homeConfiguredEntryId();
+    if (entry == null) return false;
+    const squad = homeSquadForEntry(entry);
+    return squad.some((row) => {
+      if (!row || !row.starter) return false;
+      const mins = Number(row.minutes) || 0;
+      if (mins <= 0) return false;
+      if (row.matchStatus === "live" || row.live) return true;
+      if (Array.isArray(row.fixtures)) {
+        return row.fixtures.some((fx) => fx && fx.live);
+      }
+      return false;
+    });
+  }
+
+  function syncHomeLiveChrome() {
+    if (!el.homeBento) return;
+    el.homeBento.classList.toggle("has-live-minutes", homeConfiguredHasLiveMinutes());
+  }
+
   function homeStandingsRankValue(row) {
-    if (homeStandingsRowSettled(row) && row.rankOfficial != null) {
+    if (row.rankOfficial != null) {
       const n = Number(row.rankOfficial);
       if (Number.isFinite(n) && n > 0) return n;
     }
     if (row.rankLive != null) {
       const n = Number(row.rankLive);
-      if (Number.isFinite(n) && n > 0) return n;
-    }
-    if (row.rankOfficial != null) {
-      const n = Number(row.rankOfficial);
       if (Number.isFinite(n) && n > 0) return n;
     }
     return null;
@@ -3196,7 +3214,9 @@
     const totalPts = row.total != null ? Number(row.total) : null;
     const hasPlay = Number.isFinite(inPlay) && Number.isFinite(toPlay);
     const liveHTML = hasPlay
-      ? `<span class="home-play-live${inPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(liveTitle)}">${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+      ? (inPlay > 0
+        ? `<span class="ownership-pill home-standings-live-pill is-active"${tipAttr(liveTitle)}>${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+        : `<span class="ownership-pill home-standings-live-pill is-zero"${tipAttr(liveTitle)}>${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`)
       : "—";
     const leftHTML = hasPlay
       ? `<span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(leftTitle)}">${statRollSpan(toPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
@@ -5107,6 +5127,7 @@
     setHomeManagerModalOpen(false);
     if (el.homeEmpty) el.homeEmpty.hidden = !showEmpty;
     if (el.homeBento) el.homeBento.hidden = showEmpty;
+    if (showEmpty && el.homeBento) el.homeBento.classList.remove("has-live-minutes");
     if (showEmpty) {
       clearHomeDashboardStats();
       if (el.homeEmptyTitle && el.homeEmptyCopy) {
@@ -5286,6 +5307,7 @@
     syncHomeViewBanner();
     syncHomeOwnerBanner();
     syncHomeOwnerHighlights();
+    syncHomeLiveChrome();
     syncHomeLookupUI();
     // During page enter, leave odometers empty for startHomeEnterMotion.
     // Quiet/live rebuilds settle in the same turn so iOS never paints empty

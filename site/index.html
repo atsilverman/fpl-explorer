@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=800" />
+<link rel="stylesheet" href="styles.css?v=801" />
 <script>
 (() => {
   try {
@@ -805,12 +805,12 @@
                   <table class="home-data-table home-standings-table home-standings-live-table">
                     <thead>
                       <tr>
-                        <th scope="col" class="home-col-rank is-sortable" data-home-sort="rank" aria-sort="ascending">#</th>
+                        <th scope="col" class="home-col-rank is-sortable" data-home-sort="rank" aria-sort="none">#</th>
                         <th scope="col" class="home-col-manager">Manager</th>
                         <th scope="col" class="home-col-live is-sortable" data-home-sort="live" title="Active picks in play (Bench Boost can exceed 11)" aria-sort="none">Live</th>
                         <th scope="col" class="home-col-left is-sortable" data-home-sort="left" title="Still to play this gameweek" aria-sort="none">Left</th>
                         <th scope="col" class="home-col-gw is-sortable" data-home-sort="gw" aria-sort="none">GW</th>
-                        <th scope="col" class="home-col-total is-sortable" data-home-sort="total" aria-sort="none">Total</th>
+                        <th scope="col" class="home-col-total is-sortable" data-home-sort="total" aria-sort="descending">Total</th>
                       </tr>
                     </thead>
                     <tbody id="home-standings-body"></tbody>
@@ -1316,10 +1316,10 @@
 <script src="markets_data.js?v=15"></script>
 <script src="ownership_data.js?v=12"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=21"></script>
+<script src="home_data.js?v=22"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=800"></script>
+<script src="app.js?v=801"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
