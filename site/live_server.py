@@ -28,7 +28,12 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from fpl_gameweeks import active_gameweek_id, extract_gameweeks
+from fpl_gameweeks import (
+    DEADLINE_POLL_TAIL_SEC,
+    active_gameweek_id,
+    deadline_poll_window_active,
+    extract_gameweeks,
+)
 from live_scoring import fixture_is_finished, fixture_is_live
 
 SITE = Path(__file__).resolve().parent
@@ -41,6 +46,10 @@ UA = "Mozilla/5.0 (compatible; FPL-Explorer/1.0; +live-server)"
 # Wake this many seconds before the next kickoff so the first live poll
 # lands near KO instead of sleeping a blind idle hour past it.
 KICKOFF_LEAD_SEC = 120
+BOOTSTRAP_CACHE_SEC = 120
+
+_bootstrap_cache: dict | None = None
+_bootstrap_cache_at: float = 0.0
 
 
 class LiveState:
@@ -143,6 +152,38 @@ def seconds_until_next_kickoff(fixtures: list[dict], now: float | None = None) -
     return soonest
 
 
+def load_bootstrap_gameweeks() -> dict:
+    """Cached bootstrap gameweeks (short TTL for deadline polling)."""
+    global _bootstrap_cache, _bootstrap_cache_at
+    now = time.time()
+    if _bootstrap_cache and now - _bootstrap_cache_at < BOOTSTRAP_CACHE_SEC:
+        return _bootstrap_cache
+    try:
+        bootstrap = fpl_get("/bootstrap-static/")
+        if isinstance(bootstrap, dict):
+            gws = extract_gameweeks(bootstrap, source="bootstrap")
+            _bootstrap_cache = gws
+            _bootstrap_cache_at = now
+            return gws
+    except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError):
+        pass
+    return _bootstrap_cache or {}
+
+
+def league_picks_need_poll() -> bool:
+    """Poll aggressively while league picks GW is set but transfers aren't ready."""
+    payload = read_home_payload()
+    if not payload:
+        return False
+    status = payload.get("leaguePicksStatus")
+    if not isinstance(status, dict):
+        return False
+    picks_gw = status.get("picksGw")
+    if picks_gw is None:
+        return False
+    return not bool(status.get("transfersReady"))
+
+
 def resolve_active_gw() -> int | None:
     cached = read_home_payload()
     if cached and cached.get("gw") is not None:
@@ -201,6 +242,12 @@ def run_fetch_home(manager_id: int, league_id: int) -> tuple[bool, str | None]:
 
 
 def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOFF_LEAD_SEC) -> int:
+    gws = load_bootstrap_gameweeks()
+    now = time.time()
+    if deadline_poll_window_active(gws, now, DEADLINE_POLL_TAIL_SEC):
+        return max(15, live_sec)
+    if league_picks_need_poll():
+        return max(15, live_sec)
     gw = resolve_active_gw()
     fixtures = load_gw_fixtures(gw)
     if fixtures_have_live_action(fixtures):

@@ -14125,6 +14125,18 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-captains-table .home-col-manager {
     width: 42%;
   }
+  .home-transfers-table {
+    table-layout: fixed;
+  }
+  .home-transfers-table .home-col-rank {
+    width: 16%;
+  }
+  .home-transfers-table .home-col-manager {
+    width: 38%;
+  }
+  .home-transfers-table .home-col-transfers {
+    width: 46%;
+  }
   .home-chips-table {
     table-layout: fixed;
   }
@@ -14603,6 +14615,71 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   white-space: normal;
   width: auto;
 }
+.home-transfers-table .home-col-transfers {
+  text-align: left;
+  white-space: normal;
+  width: auto;
+}
+.home-transfers-status {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: hsl(var(--amber-hsl) / 0.95);
+  background: hsl(var(--amber-hsl) / 0.12);
+  border: 1px solid hsl(var(--amber-hsl) / 0.22);
+}
+.home-transfers-status[hidden] {
+  display: none;
+}
+.home-transfers-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+.home-transfer-move {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+.home-transfer-out {
+  color: hsl(var(--negative) / 0.85);
+  font-weight: 500;
+}
+.home-transfer-in {
+  color: hsl(var(--positive));
+  font-weight: 600;
+}
+.home-transfer-arrow {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.home-transfer-hit {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: hsl(var(--negative));
+  font-variant-numeric: tabular-nums;
+}
+.home-transfer-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.12);
+}
 .home-captain-pick {
   display: inline-flex;
   align-items: center;
@@ -14865,6 +14942,18 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   }
   .home-captains-table .home-col-vice {
     display: none;
+  }
+  .home-transfers-table {
+    table-layout: fixed;
+  }
+  .home-transfers-table .home-col-rank {
+    width: 16%;
+  }
+  .home-transfers-table .home-col-manager {
+    width: 34%;
+  }
+  .home-transfers-table .home-col-transfers {
+    width: 50%;
   }
   .home-chips-table {
     table-layout: fixed;

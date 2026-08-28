@@ -21,6 +21,8 @@
     chipWindow: null,
     ownersByElement: {},
     elementGw: {},
+    leaguePicksStatus: null,
+    transfersByEntry: {},
     error: null,
   };
   window.FPL_HOME = HOME;
@@ -981,8 +983,10 @@
     homeSquadTrack: $("#home-squad-track"),
     homeSquadDots: $("#home-squad-dots"),
     homeStandingsBody: $("#home-standings-body"),
+    homeStandingsTransfersBody: $("#home-standings-transfers-body"),
     homeStandingsCaptainsBody: $("#home-standings-captains-body"),
     homeStandingsChipsBody: $("#home-standings-chips-body"),
+    homeTransfersStatus: $("#home-transfers-status"),
     homeStandingsTrack: $("#home-standings-track"),
     homeStandingsDots: $("#home-standings-dots"),
     homeSummaryCards: $("#home-summary-cards"),
@@ -1887,8 +1891,13 @@
     if (el.homeSquadFixturesHead) el.homeSquadFixturesHead.innerHTML = "";
     if (el.homeSquadFixturesCols) el.homeSquadFixturesCols.innerHTML = "";
     if (el.homeStandingsBody) el.homeStandingsBody.innerHTML = "";
+    if (el.homeStandingsTransfersBody) el.homeStandingsTransfersBody.innerHTML = "";
     if (el.homeStandingsCaptainsBody) el.homeStandingsCaptainsBody.innerHTML = "";
     if (el.homeStandingsChipsBody) el.homeStandingsChipsBody.innerHTML = "";
+    if (el.homeTransfersStatus) {
+      el.homeTransfersStatus.hidden = true;
+      el.homeTransfersStatus.textContent = "";
+    }
     if (el.homeStandingsLookupEmpty) {
       el.homeStandingsLookupEmpty.hidden = true;
       el.homeStandingsLookupEmpty.textContent = "";
@@ -2127,6 +2136,12 @@
     HOME.ownersByElement = payload.ownersByElement || {};
     HOME.elementGw = payload.elementGw && typeof payload.elementGw === "object"
       ? payload.elementGw
+      : {};
+    HOME.leaguePicksStatus = payload.leaguePicksStatus && typeof payload.leaguePicksStatus === "object"
+      ? payload.leaguePicksStatus
+      : null;
+    HOME.transfersByEntry = payload.transfersByEntry && typeof payload.transfersByEntry === "object"
+      ? payload.transfersByEntry
       : {};
     HOME.error = payload.error ?? null;
     window.FPL_HOME = HOME;
@@ -2781,6 +2796,9 @@
       tr.classList.toggle("is-owner-pinned", isPinned);
     });
     if (el.homeStandingsBody) el.homeStandingsBody.classList.remove("has-owner-filter");
+    if (el.homeStandingsTransfersBody) {
+      el.homeStandingsTransfersBody.classList.remove("has-owner-filter");
+    }
     if (el.homeStandingsCaptainsBody) {
       el.homeStandingsCaptainsBody.classList.remove("has-owner-filter");
     }
@@ -2882,7 +2900,7 @@
   }
 
   function forEachHomeStandingsRow(fn) {
-    [el.homeStandingsBody, el.homeStandingsCaptainsBody, el.homeStandingsChipsBody].forEach((body) => {
+    [el.homeStandingsBody, el.homeStandingsTransfersBody, el.homeStandingsCaptainsBody, el.homeStandingsChipsBody].forEach((body) => {
       if (!body) return;
       body.querySelectorAll("tr[data-entry]").forEach(fn);
     });
@@ -3207,6 +3225,68 @@
     </tr>`;
   }
 
+  function homeTransferMoveHTML(move) {
+    const out = move && move.out ? move.out : null;
+    const inn = move && move.in ? move.in : null;
+    const parts = [];
+    if (out && out.name) {
+      parts.push(`<span class="home-transfer-out">${escapeHtml(out.name)}</span>`);
+    }
+    if (out && inn) {
+      parts.push(`<span class="home-transfer-arrow" aria-hidden="true">→</span>`);
+    }
+    if (inn && inn.name) {
+      parts.push(`<span class="home-transfer-in">${escapeHtml(inn.name)}</span>`);
+    }
+    return parts.length ? `<span class="home-transfer-move">${parts.join("")}</span>` : "";
+  }
+
+  function homeTransfersCellHTML(transfers) {
+    if (!transfers || typeof transfers !== "object") return "—";
+    const moves = Array.isArray(transfers.moves) ? transfers.moves : [];
+    if (!moves.length) {
+      const count = Number(transfers.count);
+      if (Number.isFinite(count) && count <= 0) return "No transfers";
+      return "—";
+    }
+    const moveHTML = moves.map((m) => homeTransferMoveHTML(m)).filter(Boolean).join("");
+    const hit = transfers.hit ? `<span class="home-transfer-hit">−${Number(transfers.cost) || 4}</span>` : "";
+    const chip = transfers.activeChip === "freehit"
+      ? `<span class="home-transfer-chip">FH</span>`
+      : transfers.activeChip === "wildcard"
+        ? `<span class="home-transfer-chip">WC</span>`
+        : "";
+    return `<span class="home-transfers-cell">${moveHTML}${hit}${chip}</span>`;
+  }
+
+  function homeTransfersStatusLabel() {
+    const status = HOME.leaguePicksStatus;
+    if (!status || typeof status !== "object") return "";
+    if (status.transfersReady) return "";
+    const ready = status.ready != null ? Number(status.ready) : 0;
+    const total = status.total != null ? Number(status.total) : 0;
+    if (status.blackout) {
+      return `Waiting for FPL… (${ready}/${total} squads ready)`;
+    }
+    if (total > 0 && ready < total) {
+      return `Waiting for FPL… (${ready}/${total} squads ready)`;
+    }
+    return "";
+  }
+
+  function homeTransfersRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
+    const entry = Number(row.entry);
+    const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
+    const transfers = row.transfers
+      || (HOME.transfersByEntry && HOME.transfersByEntry[String(row.entry)])
+      || null;
+    const labelName = row.playerName || row.entryName || "this manager";
+    return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
+      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
+      <td class="home-col-transfers">${homeTransfersCellHTML(transfers)}</td>
+    </tr>`;
+  }
+
   function syncHomeStandingsPagerDots(activeIndex) {
     if (!el.homeStandingsDots) return;
     el.homeStandingsDots.querySelectorAll(".home-standings-dot").forEach((dot, i) => {
@@ -3260,6 +3340,7 @@
   function syncHomeStandingsRowHeights() {
     const tables = [
       el.homeStandingsBody && el.homeStandingsBody.closest("table"),
+      el.homeStandingsTransfersBody && el.homeStandingsTransfersBody.closest("table"),
       el.homeStandingsCaptainsBody && el.homeStandingsCaptainsBody.closest("table"),
       el.homeStandingsChipsBody && el.homeStandingsChipsBody.closest("table"),
     ].filter(Boolean);
@@ -5016,6 +5097,24 @@
     if (el.homeStandingsBody) {
       bindHomeStandingsSort();
       renderHomeStandingsLiveBody();
+    }
+    if (el.homeStandingsTransfersBody) {
+      const configuredEntry = homeConfiguredEntryId();
+      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+      const opts = { configuredEntry, viewEntry, viewingOther };
+      const statusLabel = homeTransfersStatusLabel();
+      if (el.homeTransfersStatus) {
+        if (statusLabel) {
+          el.homeTransfersStatus.hidden = false;
+          el.homeTransfersStatus.textContent = statusLabel;
+        } else {
+          el.homeTransfersStatus.hidden = true;
+          el.homeTransfersStatus.textContent = "";
+        }
+      }
+      el.homeStandingsTransfersBody.innerHTML = rows.map((r) =>
+        homeTransfersRowHTML(r, opts)
+      ).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
     }
     if (el.homeStandingsCaptainsBody) {
       const configuredEntry = homeConfiguredEntryId();

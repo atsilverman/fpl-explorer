@@ -24,7 +24,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fpl_gameweeks import active_gameweek_id, extract_gameweeks
+from fpl_gameweeks import active_gameweek_id, extract_gameweeks, picks_gameweek_id
 from gw_element_stats import normalize_element_gw_record
 from live_scoring import (
     build_match_status_by_element,
@@ -78,6 +78,158 @@ def fpl_get(path: str) -> dict | list:
     if data is None:
         raise RuntimeError(f"empty payload from {path}")
     return data
+
+
+def fpl_get_result(path: str) -> tuple[dict | list | None, str | None]:
+    """Like fpl_get but returns (data, error) instead of raising."""
+    url = f"{FPL_BASE}{path}"
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": UA, "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            raw = resp.read().decode("utf-8")
+        data = json.loads(raw) if raw else None
+        if data is None:
+            return None, f"empty payload from {path}"
+        return data, None
+    except urllib.error.HTTPError as exc:
+        return None, f"HTTP {exc.code} {path}"
+    except (urllib.error.URLError, RuntimeError, json.JSONDecodeError, OSError) as exc:
+        return None, str(exc)
+
+
+def read_home_cache() -> dict | None:
+    if not JSON_PATH.exists():
+        return None
+    try:
+        data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def fetch_entry_event_picks(entry_id: int, gw: int) -> tuple[dict | None, str | None]:
+    """Fetch entry GW picks. Ready when 15 picks returned."""
+    data, err = fpl_get_result(f"/entry/{entry_id}/event/{gw}/picks/")
+    if err:
+        return None, err
+    if not isinstance(data, dict):
+        return None, "invalid picks payload"
+    picks = data.get("picks") or []
+    if len(picks) < 15:
+        return data, None
+    return data, None
+
+
+def picks_payload_ready(payload: dict | None) -> bool:
+    if not payload or not isinstance(payload, dict):
+        return False
+    return len(payload.get("picks") or []) >= 15
+
+
+def compute_transfers(
+    prev_picks: list,
+    curr_picks: list,
+    elements: dict[int, dict],
+    entry_history: dict | None,
+    active_chip: str | None,
+) -> dict:
+    """Diff previous vs current squad picks into transfer moves."""
+    prev_ids = [
+        int(p["element"])
+        for p in (prev_picks or [])
+        if isinstance(p, dict) and p.get("element") is not None
+    ]
+    curr_ids = [
+        int(p["element"])
+        for p in (curr_picks or [])
+        if isinstance(p, dict) and p.get("element") is not None
+    ]
+    prev_set = set(prev_ids)
+    curr_set = set(curr_ids)
+    outs = [eid for eid in prev_ids if eid not in curr_set]
+    ins = [eid for eid in curr_ids if eid not in prev_set]
+
+    def el_name(eid: int) -> str:
+        return player_display_name(elements.get(eid) or {})
+
+    moves: list[dict] = []
+    pair_count = max(len(outs), len(ins))
+    for i in range(pair_count):
+        move: dict = {}
+        if i < len(outs):
+            out_eid = outs[i]
+            move["out"] = {"id": out_eid, "name": el_name(out_eid)}
+        if i < len(ins):
+            in_eid = ins[i]
+            move["in"] = {"id": in_eid, "name": el_name(in_eid)}
+        if move:
+            moves.append(move)
+
+    eh = entry_history if isinstance(entry_history, dict) else {}
+    try:
+        count = int(eh.get("event_transfers") if eh.get("event_transfers") is not None else len(moves))
+    except (TypeError, ValueError):
+        count = len(moves)
+    try:
+        cost = int(eh.get("event_transfers_cost") or 0)
+    except (TypeError, ValueError):
+        cost = 0
+
+    return {
+        "count": count,
+        "cost": cost,
+        "hit": cost > 0,
+        "moves": moves,
+        "activeChip": active_chip,
+    }
+
+
+def build_league_picks_status(
+    entry_ids: list[int],
+    picks_gw: int,
+    compare_gw: int,
+    picks_by_entry: dict[int, dict | None],
+    prev_by_entry: dict[int, dict | None],
+    errors: dict[int, str],
+) -> dict:
+    total = len(entry_ids)
+    ready = 0
+    pending: list[int] = []
+    blackout = False
+
+    for eid in entry_ids:
+        payload = picks_by_entry.get(eid)
+        if picks_payload_ready(payload):
+            ready += 1
+        else:
+            pending.append(eid)
+            err = errors.get(eid) or ""
+            if "503" in err or "HTTP 503" in err:
+                blackout = True
+
+    picks_ready = total > 0 and ready >= total
+
+    transfers_ready = picks_ready
+    if transfers_ready and compare_gw >= 1:
+        for eid in entry_ids:
+            if not picks_payload_ready(prev_by_entry.get(eid)):
+                transfers_ready = False
+                break
+
+    return {
+        "picksGw": picks_gw,
+        "compareGw": compare_gw,
+        "total": total,
+        "ready": ready,
+        "picksReady": picks_ready,
+        "transfersReady": transfers_ready,
+        "blackout": blackout,
+        "checkedAt": generated_at(),
+        "pendingEntries": pending,
+    }
 
 
 def load_json(path: Path) -> dict:
@@ -550,6 +702,8 @@ def main() -> int:
             "standings": [],
             "ownersByElement": {},
             "elementGw": {},
+            "leaguePicksStatus": None,
+            "transfersByEntry": {},
             "error": "No manager/league configured. Set Preferences or pass --manager/--league.",
         }
         write_home_outputs(empty)
@@ -559,26 +713,88 @@ def main() -> int:
     print(f"Home targets: manager={manager_id} league={league_id}")
 
     try:
-        bootstrap = fpl_get("/bootstrap-static/")
-        assert isinstance(bootstrap, dict)
+        bootstrap, bootstrap_err = fpl_get_result("/bootstrap-static/")
+        if bootstrap_err or not isinstance(bootstrap, dict):
+            raise RuntimeError(bootstrap_err or "bootstrap-static failed")
         gws = extract_gameweeks(bootstrap, source="bootstrap")
-        gw = args.gw or active_gameweek_id(gws)
-        if not gw:
+        live_gw = active_gameweek_id(gws)
+        picks_gw = args.gw or picks_gameweek_id(gws) or live_gw
+        if not picks_gw:
             raise RuntimeError("Could not resolve active gameweek")
+        gw = picks_gw
+        compare_gw = max(0, gw - 1)
 
-        live = fpl_get(f"/event/{gw}/live/")
-        assert isinstance(live, dict)
-        fixtures_raw = fpl_get(f"/fixtures/?event={gw}")
+        live_raw, live_err = fpl_get_result(f"/event/{gw}/live/")
+        live = live_raw if isinstance(live_raw, dict) else {}
+        if live_err:
+            print(f"  live failed GW{gw}: {live_err}", file=sys.stderr)
+
+        fixtures_raw, fixtures_err = fpl_get_result(f"/fixtures/?event={gw}")
         fixtures = fixtures_raw if isinstance(fixtures_raw, list) else []
+        if fixtures_err:
+            print(f"  fixtures failed GW{gw}: {fixtures_err}", file=sys.stderr)
 
-        entry = fpl_get(f"/entry/{manager_id}/")
-        assert isinstance(entry, dict)
-        picks_payload = fpl_get(f"/entry/{manager_id}/event/{gw}/picks/")
-        assert isinstance(picks_payload, dict)
-        history_payload = fpl_get(f"/entry/{manager_id}/history/")
-        assert isinstance(history_payload, dict)
+        entry, entry_err = fpl_get_result(f"/entry/{manager_id}/")
+        if not isinstance(entry, dict):
+            entry = {}
+        if entry_err:
+            print(f"  entry failed: {entry_err}", file=sys.stderr)
+        history_payload, history_err = fpl_get_result(f"/entry/{manager_id}/history/")
+        if not isinstance(history_payload, dict):
+            history_payload = {}
+        if history_err:
+            print(f"  history failed: {history_err}", file=sys.stderr)
 
         results, league_meta = fetch_all_standings(league_id)
+        entry_ids: list[int] = []
+        seen_entries: set[int] = set()
+        for row in results:
+            try:
+                eid = int(row["entry"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if eid not in seen_entries:
+                seen_entries.add(eid)
+                entry_ids.append(eid)
+        if manager_id not in seen_entries:
+            entry_ids.append(manager_id)
+
+        picks_by_entry: dict[int, dict | None] = {}
+        prev_by_entry: dict[int, dict | None] = {}
+        pick_errors: dict[int, str] = {}
+
+        focus_picks_payload, focus_pick_err = fetch_entry_event_picks(manager_id, gw)
+        if focus_pick_err:
+            pick_errors[manager_id] = focus_pick_err
+        picks_by_entry[manager_id] = focus_picks_payload
+
+        if compare_gw >= 1:
+            prev_focus, prev_focus_err = fetch_entry_event_picks(manager_id, compare_gw)
+            if prev_focus_err:
+                pick_errors.setdefault(manager_id, prev_focus_err)
+            prev_by_entry[manager_id] = prev_focus
+
+        for eid in entry_ids:
+            if eid == manager_id:
+                continue
+            payload, err = fetch_entry_event_picks(eid, gw)
+            picks_by_entry[eid] = payload
+            if err:
+                pick_errors[eid] = err
+            if compare_gw >= 1:
+                prev_payload, prev_err = fetch_entry_event_picks(eid, compare_gw)
+                prev_by_entry[eid] = prev_payload
+                if prev_err:
+                    pick_errors.setdefault(eid, prev_err)
+
+        league_picks_status = build_league_picks_status(
+            entry_ids,
+            gw,
+            compare_gw,
+            picks_by_entry,
+            prev_by_entry,
+            pick_errors,
+        )
 
         total_players = int(bootstrap.get("total_players") or 0)
         api_overall_prev = None
@@ -619,19 +835,18 @@ def main() -> int:
         match_status = build_match_status_by_element(
             list(elements.values()), fixtures
         )
-        # Auto-subs only after FPL's full `finished` flag — provisional FT still
-        # leaves blank starters with multiplier 1 until GW processing.
         autosub_status = build_match_status_by_element(
             list(elements.values()), fixtures, final_only=True
         )
         any_fixture_live = any(fixture_is_live(fx) for fx in fixtures)
 
-        focus_picks = picks_payload.get("picks") or []
-        focus_chip = picks_payload.get("active_chip")
+        focus_picks_payload = picks_by_entry.get(manager_id)
+        focus_picks = (focus_picks_payload or {}).get("picks") or []
+        focus_chip = (focus_picks_payload or {}).get("active_chip")
         focus_history_chips = list(history_payload.get("chips") or [])
         chip_windows = chip_windows_from_bootstrap(bootstrap)
         chip_half = season_chip_half(gw, chip_windows)
-        focus_hist = picks_payload.get("entry_history") or {}
+        focus_hist = (focus_picks_payload or {}).get("entry_history") or {}
         focus_pts, focus_active, focus_subs = resolve_manager_gw_points(
             focus_picks,
             stats,
@@ -643,15 +858,37 @@ def main() -> int:
             any_fixture_live=any_fixture_live,
         )
         active_ids = {int(p["element"]) for p in focus_active}
-        auto_in = {s["in"] for s in focus_subs}
         focus_mults = effective_element_multipliers(focus_picks, focus_active)
         focus_in_play, focus_to_play = active_pick_progress(
             focus_active, elements, fixtures, match_status
         )
 
+        transfers_by_entry: dict[str, dict] = {}
+        for eid in entry_ids:
+            curr_payload = picks_by_entry.get(eid)
+            prev_payload = prev_by_entry.get(eid)
+            if not picks_payload_ready(curr_payload):
+                continue
+            curr_picks = (curr_payload or {}).get("picks") or []
+            prev_picks = (prev_payload or {}).get("picks") or [] if prev_payload else []
+            transfers_by_entry[str(eid)] = compute_transfers(
+                prev_picks,
+                curr_picks,
+                elements,
+                (curr_payload or {}).get("entry_history") or {},
+                (curr_payload or {}).get("active_chip"),
+            )
+
         standing_rows: list[dict] = []
-        entry_data: dict[int, dict] = {
-            manager_id: {
+        entry_data: dict[int, dict] = {}
+        mults_by_entry: dict[int, dict[int, int]] = {}
+        owners_by_element: dict[int, list[int]] = {}
+        progress_by_entry: dict[int, tuple[int, int]] = {}
+        chip_by_entry: dict[int, str | None] = {}
+        history_chips_by_entry: dict[int, list] = {}
+
+        if picks_payload_ready(focus_picks_payload):
+            entry_data[manager_id] = {
                 "picks": focus_picks,
                 "active": focus_active,
                 "subs": focus_subs,
@@ -661,14 +898,10 @@ def main() -> int:
                 "overall_rank": int(entry.get("summary_overall_rank") or 0),
                 "overall_points": int(entry.get("summary_overall_points") or 0),
             }
-        }
-        mults_by_entry: dict[int, dict[int, int]] = {manager_id: focus_mults}
-        owners_by_element: dict[int, list[int]] = {}
-        progress_by_entry: dict[int, tuple[int, int]] = {
-            manager_id: (focus_in_play, focus_to_play)
-        }
-        chip_by_entry: dict[int, str | None] = {manager_id: focus_chip}
-        history_chips_by_entry: dict[int, list] = {manager_id: focus_history_chips}
+            mults_by_entry[manager_id] = focus_mults
+            progress_by_entry[manager_id] = (focus_in_play, focus_to_play)
+            chip_by_entry[manager_id] = focus_chip
+            history_chips_by_entry[manager_id] = focus_history_chips
 
         def note_owners(entry_id: int, picks: list) -> None:
             for pick in picks or []:
@@ -680,7 +913,8 @@ def main() -> int:
                 if entry_id not in bucket:
                     bucket.append(entry_id)
 
-        note_owners(manager_id, focus_picks)
+        if focus_picks:
+            note_owners(manager_id, focus_picks)
 
         for row in results:
             try:
@@ -688,25 +922,25 @@ def main() -> int:
             except (KeyError, TypeError, ValueError):
                 continue
             try:
+                mp = picks_by_entry.get(eid)
+                other_picks = (mp or {}).get("picks") or []
+                chip = (mp or {}).get("active_chip") if mp else None
+
                 if eid == manager_id:
-                    live_gw = focus_pts
+                    live_gw_pts = focus_pts
                     active = focus_active
                     subs = focus_subs
                     chip = focus_chip
-                else:
-                    mp = fpl_get(f"/entry/{eid}/event/{gw}/picks/")
-                    assert isinstance(mp, dict)
-                    other_picks = mp.get("picks") or []
-                    chip = mp.get("active_chip")
+                elif picks_payload_ready(mp):
                     note_owners(eid, other_picks)
-                    live_gw, active, subs = resolve_manager_gw_points(
+                    live_gw_pts, active, subs = resolve_manager_gw_points(
                         other_picks,
                         stats,
                         match_status,
                         autosub_status,
                         etypes,
                         chip,
-                        mp.get("entry_history") or {},
+                        (mp or {}).get("entry_history") or {},
                         any_fixture_live=any_fixture_live,
                     )
                     other_mults = effective_element_multipliers(other_picks, active)
@@ -734,12 +968,17 @@ def main() -> int:
                         "active": active,
                         "subs": subs,
                         "chip": chip,
-                        "live_gw": live_gw,
+                        "live_gw": live_gw_pts,
                         "mults": other_mults,
                         "overall_rank": overall_rank,
                         "overall_points": overall_points,
                     }
-                # Season chip uses — history/chips[] (half-scoped later).
+                else:
+                    live_gw_pts = int(row.get("event_total") or 0)
+                    active = []
+                    subs = []
+                    mults_by_entry.setdefault(eid, {})
+
                 if eid != manager_id:
                     try:
                         hist = fpl_get(f"/entry/{eid}/history/")
@@ -768,7 +1007,7 @@ def main() -> int:
                 json.JSONDecodeError,
             ) as exc:
                 print(f"  picks failed entry={eid}: {exc}", file=sys.stderr)
-                live_gw = int(row.get("event_total") or 0)
+                live_gw_pts = int(row.get("event_total") or 0)
                 mults_by_entry.setdefault(eid, {})
                 progress_by_entry.setdefault(eid, (0, 0))
                 chip_by_entry.setdefault(eid, None)
@@ -783,12 +1022,13 @@ def main() -> int:
                 chip_windows,
                 gw,
             )
+            transfer_summary = transfers_by_entry.get(str(eid))
             standing_rows.append(
                 {
                     "entry": eid,
                     "playerName": row.get("player_name") or "",
                     "entryName": row.get("entry_name") or "",
-                    "gwPointsLive": live_gw,
+                    "gwPointsLive": live_gw_pts,
                     "eventTotalOfficial": int(row.get("event_total") or 0),
                     "total": int(row.get("total") or 0),
                     "overallRank": int(ed.get("overall_rank") or 0) or None,
@@ -800,6 +1040,7 @@ def main() -> int:
                     "toPlay": to_play,
                     "activeChip": chip_by_entry.get(eid),
                     "chips": chips_half,
+                    "transfers": transfer_summary,
                 }
             )
 
@@ -826,6 +1067,30 @@ def main() -> int:
                 top_third_mult_maps,
             )
         squad = squads_by_entry.get(str(manager_id), [])
+
+        cached = read_home_cache()
+        focus_picks_not_ready = not picks_payload_ready(focus_picks_payload)
+        if focus_picks_not_ready and cached and cached.get("managerId") == manager_id:
+            if cached.get("squad"):
+                squad = cached["squad"]
+            if cached.get("squadsByEntry"):
+                for key, rows in cached["squadsByEntry"].items():
+                    if key not in squads_by_entry:
+                        squads_by_entry[key] = rows
+            if cached.get("summary") and isinstance(cached["summary"], dict):
+                cached_summary = cached["summary"]
+                focus_pts = cached_summary.get("gwPoints", focus_pts)
+
+        degraded_msgs: list[str] = []
+        if league_picks_status.get("blackout"):
+            degraded_msgs.append("FPL picks API blackout — showing cached squad where available")
+        if entry_err:
+            degraded_msgs.append(entry_err)
+        if history_err:
+            degraded_msgs.append(history_err)
+        if focus_picks_not_ready:
+            degraded_msgs.append("Focus manager picks not ready")
+        error_msg = "; ".join(degraded_msgs) if degraded_msgs else None
 
         # Once nobody has picks still to play / in play, trust FPL event_total
         # for GW points + live rank (our live engine can drift after the whistle).
@@ -922,17 +1187,37 @@ def main() -> int:
                 for el_id, entry_ids in sorted(owners_by_element.items())
             },
             "elementGw": element_gw,
-            "error": None,
+            "leaguePicksStatus": league_picks_status,
+            "transfersByEntry": transfers_by_entry,
+            "error": error_msg,
         }
 
         write_home_outputs(payload)
         print(
             f"Wrote {OUT_PATH.name}: GW{gw} pts={focus_pts} "
-            f"squad={len(squad)} standings={len(standing_rows)}"
+            f"squad={len(squad)} standings={len(standing_rows)} "
+            f"picks={league_picks_status.get('ready')}/{league_picks_status.get('total')}"
         )
         return 0
     except Exception as exc:
         print(f"fetch_home failed: {exc}", file=sys.stderr)
+        cached = read_home_cache()
+        if cached and isinstance(cached, dict):
+            status = cached.get("leaguePicksStatus")
+            if not isinstance(status, dict):
+                status = {}
+            status = dict(status)
+            status["blackout"] = True
+            status["checkedAt"] = generated_at()
+            cached["leaguePicksStatus"] = status
+            cached["generatedAt"] = generated_at()
+            cached["error"] = str(exc)
+            try:
+                write_home_outputs(cached)
+                print(f"Updated {OUT_PATH.name} with blackout flag", file=sys.stderr)
+                return 0
+            except OSError as write_exc:
+                print(f"Could not write degraded cache: {write_exc}", file=sys.stderr)
         return 1
 
 
