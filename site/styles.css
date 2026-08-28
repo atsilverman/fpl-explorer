@@ -233,14 +233,25 @@ html, body {
     overflow: hidden;
     overscroll-behavior: none;
   }
+  html.is-mobile-layout {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
   body {
     min-height: 100dvh;
     height: 100dvh;
+    /* Chrome iOS can scroll the layout viewport despite overflow:hidden on
+       html/body — pin the shell so .page-nav never slides under the URL bar. */
+    position: fixed;
+    inset: 0;
+    width: 100%;
   }
   .layout {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+    padding-top: var(--mobile-top-chrome-h, 52px);
   }
   :root {
     --badge-size: 26px;
@@ -2065,7 +2076,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
 
   .topbar {
-    top: calc(49px + env(safe-area-inset-top, 0px));
+    position: fixed;
+    top: calc(var(--vv-offset-top, 0px) + var(--mobile-page-nav-h, 48px));
+    left: 0;
+    right: 0;
+    z-index: 31;
     padding: 8px 10px;
     gap: 6px;
     flex-wrap: nowrap;
@@ -2097,7 +2112,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --page-nav-pad-y: 8px;
     /* viewport-fit=cover: keep brand/page tray clear of the Dynamic Island.
        iOS search/keyboard often collapses the URL bar and leaves chrome under
-       the status region without this inset. */
+       the status region without this inset. --vv-offset-top covers Chrome iOS
+       layout-viewport drift when the URL bar collapses/expands. */
+    position: fixed;
+    top: var(--vv-offset-top, 0px);
+    left: 0;
+    right: 0;
+    z-index: 32;
+    flex-shrink: 0;
     padding:
       calc(var(--page-nav-pad-y) + env(safe-area-inset-top, 0px))
       10px
@@ -5460,8 +5482,8 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 
 .rankings-grid {
   display: grid;
-  /* ~3 cards on typical desktop (was ~4 at 300px) so names + bars have room. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  /* ~3 cards only when each column is wide enough for identity + bar. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   gap: 14px;
   align-items: stretch;
 }
@@ -5560,8 +5582,8 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 
 .rankings-row {
   display: grid;
-  /* Wider bar track relative to the name column. */
-  grid-template-columns: 22px minmax(0, 0.95fr) minmax(96px, 1.35fr);
+  /* Identity column gets more track than the bar so TEAM|£|POS stays readable. */
+  grid-template-columns: 22px minmax(0, 1.15fr) minmax(72px, 0.85fr);
   align-items: center;
   gap: 8px;
   min-height: 34px;
@@ -5689,6 +5711,7 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .rankings-identity .ownership-photo,
@@ -5704,12 +5727,33 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   gap: 1px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .rankings-identity .player-name {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.15;
+}
+
+.rankings-identity .ownership-id-sub {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rankings-identity .ownership-id-sub > * {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rankings-identity .ownership-id-sub .pos-badge {
+  flex: none;
+  overflow: visible;
 }
 
 .rankings-name {
@@ -5755,6 +5799,7 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   width: 100%;
   display: flex;
   align-items: center;
+  overflow: hidden;
 }
 
 .rankings-bar {
@@ -5778,9 +5823,9 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 }
 .rankings-bar.is-drawn {
   width: var(--bar-pct, 0%);
-  min-width: fit-content;
+  min-width: min(100%, fit-content);
   padding: 0 7px;
-  overflow: visible;
+  overflow: hidden;
 }
 .rankings-bar .rankings-value {
   opacity: 0;
@@ -5822,6 +5867,19 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   color: var(--text-faint);
   font-size: 13px;
   text-align: center;
+}
+
+@media (min-width: 721px) and (max-width: 1320px) {
+  .rankings-row {
+    grid-template-columns: 22px minmax(0, 1.25fr) minmax(64px, 0.75fr);
+    gap: 6px;
+  }
+
+  .rankings-identity .ownership-photo,
+  .rankings-identity .ownership-crest {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 @media (max-width: 720px) {
