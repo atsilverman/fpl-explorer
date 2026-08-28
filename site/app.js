@@ -2622,6 +2622,11 @@
     return [];
   }
 
+  function homePositiveRank(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
   function homeSummaryForView(entryId) {
     const configured = homeConfiguredEntryId();
     const id = Number(entryId);
@@ -2630,10 +2635,16 @@
     const payloadSummary =
       HOME.summary && Number(HOME.managerId) === id ? HOME.summary : null;
     if (row) {
+      const overallRank =
+        homePositiveRank(row.overallRank) ?? homePositiveRank(payloadSummary?.overallRank);
+      const overallPoints =
+        Number(row.overallPoints ?? row.total) ||
+        Number(payloadSummary?.overallPoints) ||
+        null;
       return {
         gwPoints: row.gwPointsLive,
-        overallPoints: row.overallPoints ?? row.total,
-        overallRank: row.overallRank,
+        overallPoints,
+        overallRank,
         overallRankPrev: payloadSummary?.overallRankPrev ?? null,
         leagueRank: row.rankLive ?? row.rankOfficial,
         leagueRankPrev: payloadSummary?.leagueRankPrev ?? null,

@@ -1006,6 +1006,14 @@ def main() -> int:
         history_chips_by_entry: dict[int, list] = {}
 
         if picks_payload_ready(focus_picks_payload):
+            mgr_overall_rank = (
+                positive_rank(entry.get("summary_overall_rank"))
+                or positive_rank(focus_hist.get("overall_rank"))
+                or 0
+            )
+            mgr_overall_points = int(entry.get("summary_overall_points") or 0)
+            if mgr_overall_points <= 0:
+                mgr_overall_points = int(focus_hist.get("total_points") or 0)
             entry_data[manager_id] = {
                 "picks": focus_picks,
                 "active": focus_active,
@@ -1013,8 +1021,8 @@ def main() -> int:
                 "chip": focus_chip,
                 "live_gw": focus_pts,
                 "mults": focus_mults,
-                "overall_rank": int(entry.get("summary_overall_rank") or 0),
-                "overall_points": int(entry.get("summary_overall_points") or 0),
+                "overall_rank": mgr_overall_rank,
+                "overall_points": mgr_overall_points,
             }
             mults_by_entry[manager_id] = focus_mults
             progress_by_entry[manager_id] = (focus_in_play, focus_to_play)
