@@ -265,6 +265,53 @@ def positive_rank(value: object) -> int | None:
     return rank if rank > 0 else None
 
 
+def resolve_focus_summary_fields(
+    manager_id: int,
+    entry: dict,
+    picks_history: dict | None,
+    cached_summary: dict | None = None,
+) -> dict[str, object]:
+    """Overall rank/points/name — entry API, then GW picks entry_history, then cache."""
+    picks_history = picks_history if isinstance(picks_history, dict) else {}
+    cached_summary = cached_summary if isinstance(cached_summary, dict) else {}
+
+    overall_rank = positive_rank(entry.get("summary_overall_rank"))
+    if overall_rank is None:
+        overall_rank = positive_rank(picks_history.get("overall_rank"))
+    if overall_rank is None:
+        overall_rank = positive_rank(cached_summary.get("overallRank"))
+
+    overall_points = int(entry.get("summary_overall_points") or 0)
+    if overall_points <= 0:
+        overall_points = int(picks_history.get("total_points") or 0)
+    if overall_points <= 0:
+        overall_points = int(cached_summary.get("overallPoints") or 0)
+
+    event_points = int(entry.get("summary_event_points") or 0)
+    if event_points <= 0:
+        event_points = int(picks_history.get("points") or 0)
+    if event_points <= 0:
+        event_points = int(cached_summary.get("eventPointsOfficial") or 0)
+
+    team_name = (entry.get("name") or "").strip() or (cached_summary.get("teamName") or "").strip()
+
+    first = (entry.get("player_first_name") or "").strip()
+    last = (entry.get("player_last_name") or "").strip()
+    manager_name = " ".join(p for p in (first, last) if p).strip()
+    if not manager_name:
+        manager_name = (cached_summary.get("managerName") or "").strip()
+    if not manager_name:
+        manager_name = f"Manager {manager_id}"
+
+    return {
+        "overallRank": overall_rank or 0,
+        "overallPoints": overall_points,
+        "eventPointsOfficial": event_points,
+        "teamName": team_name,
+        "managerName": manager_name,
+    }
+
+
 def chip_windows_from_bootstrap(bootstrap: dict) -> dict[str, list[tuple[int, int]]]:
     """name -> [(start, stop), ...] ordered by start_event (half 1, then half 2)."""
     by_name: dict[str, list[tuple[int, int]]] = {}
@@ -1095,7 +1142,6 @@ def main() -> int:
             )
         squad = squads_by_entry.get(str(manager_id), [])
 
-        cached = read_home_cache()
         focus_picks_not_ready = not picks_payload_ready(focus_picks_payload)
         if focus_picks_not_ready and cached and cached.get("managerId") == manager_id:
             if cached.get("squad"):
@@ -1149,9 +1195,18 @@ def main() -> int:
                     focus_league_rank = int(row.get("rank") or 0)
                     break
 
-        first = (entry.get("player_first_name") or "").strip()
-        last = (entry.get("player_last_name") or "").strip()
-        manager_name = " ".join(p for p in (first, last) if p) or f"Manager {manager_id}"
+        cached = read_home_cache()
+        cached_summary = (
+            cached.get("summary")
+            if cached and cached.get("managerId") == manager_id and isinstance(cached.get("summary"), dict)
+            else None
+        )
+        focus_summary = resolve_focus_summary_fields(
+            manager_id,
+            entry,
+            focus_hist,
+            cached_summary,
+        )
 
         # team id → fixture id for this GW (DGW: last write wins; rare).
         fixture_id_by_team: dict[int, int] = {}
@@ -1194,15 +1249,15 @@ def main() -> int:
             "leagueName": league_meta.get("name") or f"League {league_id}",
             "summary": {
                 "gwPoints": focus_pts,
-                "overallPoints": int(entry.get("summary_overall_points") or 0),
-                "overallRank": int(entry.get("summary_overall_rank") or 0),
+                "overallPoints": int(focus_summary["overallPoints"]),
+                "overallRank": int(focus_summary["overallRank"]),
                 "overallRankPrev": overall_rank_prev,
                 "leagueRank": focus_league_rank,
                 "leagueRankPrev": league_rank_prev,
                 "totalPlayers": total_players or None,
-                "eventPointsOfficial": int(entry.get("summary_event_points") or 0),
-                "teamName": entry.get("name") or "",
-                "managerName": manager_name,
+                "eventPointsOfficial": int(focus_summary["eventPointsOfficial"]),
+                "teamName": focus_summary["teamName"],
+                "managerName": focus_summary["managerName"],
                 "activeChip": focus_chip,
             },
             "squad": squad,
