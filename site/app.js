@@ -2181,6 +2181,22 @@
 
   function applyHomePayload(payload) {
     if (!payload || typeof payload !== "object") return false;
+    if (payload.summary && HOME.summary && typeof payload.summary === "object") {
+      const incoming = payload.summary;
+      const prev = HOME.summary;
+      const inRank = Number(incoming.overallRank);
+      const inPrev = Number(incoming.overallRankPrev);
+      const curRank = Number(prev.overallRank);
+      const curPrev = Number(prev.overallRankPrev);
+      // Live server can briefly serve picks-stale overall rank (== prev) mid-GW.
+      if (
+        Number.isFinite(inRank) && Number.isFinite(curRank) && inRank > 0 && curRank > 0
+        && Number.isFinite(inPrev) && Number.isFinite(curPrev) && inPrev > 0 && curPrev > 0
+        && inRank === inPrev && curRank !== inRank && curPrev === inPrev
+      ) {
+        incoming.overallRank = curRank;
+      }
+    }
     HOME.generatedAt = payload.generatedAt ?? null;
     HOME.gw = payload.gw ?? null;
     HOME.managerId = payload.managerId ?? null;

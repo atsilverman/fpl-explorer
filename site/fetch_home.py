@@ -270,16 +270,22 @@ def resolve_focus_summary_fields(
     entry: dict,
     picks_history: dict | None,
     cached_summary: dict | None = None,
+    *,
+    gw_in_play: bool = False,
 ) -> dict[str, object]:
-    """Overall rank/points/name — entry API, then GW picks entry_history, then cache."""
+    """Overall rank/points/name — entry API, cache, then picks (deadline snapshot).
+
+    During a live GW, picks entry_history.overall_rank is still the pre-deadline /
+    post-previous-GW stamp — use entry.summary_overall_rank or the last good cache.
+    """
     picks_history = picks_history if isinstance(picks_history, dict) else {}
     cached_summary = cached_summary if isinstance(cached_summary, dict) else {}
 
     overall_rank = positive_rank(entry.get("summary_overall_rank"))
     if overall_rank is None:
-        overall_rank = positive_rank(picks_history.get("overall_rank"))
-    if overall_rank is None:
         overall_rank = positive_rank(cached_summary.get("overallRank"))
+    if overall_rank is None and not gw_in_play:
+        overall_rank = positive_rank(picks_history.get("overall_rank"))
 
     overall_points = int(entry.get("summary_overall_points") or 0)
     if overall_points <= 0:
@@ -1005,10 +1011,22 @@ def main() -> int:
         chip_by_entry: dict[int, str | None] = {}
         history_chips_by_entry: dict[int, list] = {}
 
+        gw_in_play = any_fixture_live or focus_in_play > 0 or focus_to_play > 0
+        cached_summary = (
+            cached.get("summary")
+            if cached and cached.get("managerId") == manager_id and isinstance(cached.get("summary"), dict)
+            else None
+        )
+
         if picks_payload_ready(focus_picks_payload):
             mgr_overall_rank = (
                 positive_rank(entry.get("summary_overall_rank"))
-                or positive_rank(focus_hist.get("overall_rank"))
+                or positive_rank((cached_summary or {}).get("overallRank"))
+                or (
+                    positive_rank(focus_hist.get("overall_rank"))
+                    if not gw_in_play
+                    else None
+                )
                 or 0
             )
             mgr_overall_points = int(entry.get("summary_overall_points") or 0)
@@ -1251,16 +1269,12 @@ def main() -> int:
                     focus_league_rank = int(row.get("rank") or 0)
                     break
 
-        cached_summary = (
-            cached.get("summary")
-            if cached and cached.get("managerId") == manager_id and isinstance(cached.get("summary"), dict)
-            else None
-        )
         focus_summary = resolve_focus_summary_fields(
             manager_id,
             entry,
             focus_hist,
             cached_summary,
+            gw_in_play=gw_in_play,
         )
 
         # team id → fixture id for this GW (DGW: last write wins; rare).
