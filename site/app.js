@@ -2553,9 +2553,9 @@
     return `<span class="home-rank-delta${compact ? " is-compact" : ""} ${cls}"${tipAttr(label)} aria-label="${escapeHtml(label)}">${iconHTML(icon)}<span class="home-rank-delta-n">${flat ? "0" : n}</span></span>`;
   }
 
-  function setHomeRankDelta(elDelta, places) {
+  function setHomeRankDelta(elDelta, places, { hideFlat = true } = {}) {
     if (!elDelta) return;
-    if (places == null || !Number.isFinite(places)) {
+    if (places == null || !Number.isFinite(places) || (hideFlat && places === 0)) {
       elDelta.hidden = true;
       elDelta.className = "home-rank-delta";
       elDelta.innerHTML = "";
@@ -5096,7 +5096,7 @@
     renderHomeSummaryStats(summary);
     setHomeRankDelta(
       el.homeOverallRankDelta,
-      viewingOther
+      viewingOther || summary.overallRankPrev == null
         ? null
         : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
     );
@@ -5107,7 +5107,7 @@
     );
     setHomeRankDelta(
       el.homeLeagueRankDelta,
-      viewingOther
+      viewingOther || summary.leagueRankPrev == null
         ? null
         : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
     );
