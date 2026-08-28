@@ -257,6 +257,11 @@ def bump_data_js_cache() -> bool:
 
 
 def git_commit_push(gw: int, matchday: str) -> bool:
+    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
+    subprocess.run(
+        ["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
+        check=False,
+    )
     subprocess.run(["git", "add", "site/data.js", "site/index.html", "snapshots", "reports"], check=True)
     if subprocess.run(["git", "diff", "--staged", "--quiet"]).returncode == 0:
         print("No file changes to commit.")
@@ -338,12 +343,19 @@ def main() -> int:
 
     run_build()
     bump_data_js_cache()
-    mark_rebuilt_for_gw_through(state, gw, matchday, groups)
 
     if args.commit:
-        if git_commit_push(gw, matchday):
-            print("Committed and pushed.")
+        try:
+            if git_commit_push(gw, matchday):
+                print("Committed and pushed.")
+            else:
+                print("No file changes to commit.")
+        except subprocess.CalledProcessError:
+            print("Git commit/push failed.", file=sys.stderr)
+            return 1
+        mark_rebuilt_for_gw_through(state, gw, matchday, groups)
     else:
+        mark_rebuilt_for_gw_through(state, gw, matchday, groups)
         print("Rebuild complete (local only — pass --commit to push).")
 
     return 0
