@@ -13771,8 +13771,49 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-tables-grid > .home-table-panel {
   height: 100%;
 }
+#home-standings-panel {
+  container-type: inline-size;
+  container-name: home-standings;
+}
+@container home-standings (max-width: 900px) {
+  .home-captains-table .home-col-vice {
+    display: none;
+  }
+}
+.home-captains-table.is-compact-captains .home-col-vice {
+  display: none;
+}
 .home-table-panel > .home-panel-heading {
   flex: none;
+}
+.home-squad-loading-row td {
+  padding: 9px 8px;
+  border-bottom: 1px solid hsl(var(--border) / 0.45);
+}
+.home-squad-loading-bar {
+  display: block;
+  height: 13px;
+  width: min(100%, calc(100% - var(--load-i, 0) * 8%));
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted) / 0.55) 0%,
+    hsl(var(--muted) / 0.28) 45%,
+    hsl(var(--muted) / 0.55) 100%
+  );
+  background-size: 200% 100%;
+  animation: home-squad-shimmer 1.15s ease-in-out infinite;
+  animation-delay: calc(var(--load-i, 0) * 70ms);
+}
+@keyframes home-squad-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-squad-loading-bar {
+    animation: none;
+    opacity: 0.55;
+  }
 }
 .home-table-panel > .home-table-wrap,
 .home-table-panel > .home-squad-pager,

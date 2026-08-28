@@ -1861,7 +1861,7 @@
       // Defer DOM rebuild while Home enter is playing so squad/stats don't
       // flash a second paint mid-animation.
       renderHome({ deferDuringEnter: true, settleQuiet: true });
-      syncHomeLivePolling({ waitForEnter: true });
+      syncHomeLivePolling();
     } else if (state.page === "live") {
       renderLive({ quiet: true });
       syncHomeLivePolling();
@@ -2224,7 +2224,7 @@
       el.homePage.classList.add("is-enter-pending");
       renderHome();
       playPageEnter(el.homePage);
-      syncHomeLivePolling({ waitForEnter: true });
+      syncHomeLivePolling();
     } else {
       // Owned pins / tables update immediately from the live squad sync.
       refreshManagerDependentUI();
@@ -2316,6 +2316,7 @@
   let homeRenderQueued = false;
   let homeEnterMotionToken = 0;
   let homeLivePollAfterEnter = false;
+  let homeLivePrefetchStarted = false;
   const HOME_ENTER_ROLL_MS = 3400;
   const HOME_VIEW_SWITCH_ROLL_MS = 2600;
   const HOME_SCROLL_TOP_MS = 920;
@@ -2374,23 +2375,46 @@
     return TRACKED_MANAGER_IDS.map(String).includes(String(savedManagerId));
   }
 
+  function homeSquadShowLoading(viewEntry) {
+    if (!savedManagerId || !savedLeagueId) return false;
+    if ((homeSquadForEntry(viewEntry) || []).length) return false;
+    if (homeLivePollInFlight) return true;
+    if (!homeLiveLastSuccessAt) return true;
+    return false;
+  }
+
+  function homeSquadLoadingHTML(colspan, rows = 5) {
+    let html = "";
+    for (let i = 0; i < rows; i += 1) {
+      html += `<tr class="home-squad-loading-row" aria-hidden="true"><td colspan="${colspan}"><span class="home-squad-loading-bar" style="--load-i:${i}"></span></td></tr>`;
+    }
+    return html;
+  }
+
+  function homeSquadEmptyHTML(colspan) {
+    return `<tr><td colspan="${colspan}">No team picks in cache.</td></tr>`;
+  }
+
   async function pollHomeFromLiveServer() {
     const url = homeLiveApiUrl();
     if (!url || !savedManagerId || !savedLeagueId) return;
     if (homeLivePollInFlight) return;
     homeLivePollInFlight = true;
     homeLiveLastPollAt = Date.now();
+    const squadWasEmpty = !(Array.isArray(HOME.squad) && HOME.squad.length);
     try {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
         homeLiveLastPollOk = false;
         syncHomeCountLabel();
+        if (state.page === "home" && squadWasEmpty) renderHome({ settleQuiet: true });
         return;
       }
       const data = await res.json();
       if (!(data && data.ok && data.home)) {
         homeLiveLastPollOk = false;
         syncHomeCountLabel();
+        if (state.page === "home" && squadWasEmpty) renderHome({ settleQuiet: true });
         return;
       }
       if (!homeLivePayloadMatchesPrefs(data.home)) {
@@ -2400,8 +2424,6 @@
       }
       homeLiveLastPollOk = true;
       homeLiveLastSuccessAt = Date.now();
-      // Same snapshot as the static cache — update live label only; skip a
-      // second squad/standings rebuild that would restart enter motion.
       const sameStamp =
         HOME.generatedAt &&
         data.home.generatedAt &&
@@ -2414,8 +2436,10 @@
         return;
       }
       applyHomePayload(data.home);
-      if (state.page === "home") renderHome({ deferDuringEnter: true, settleQuiet: true });
-      else if (state.page === "live") {
+      if (state.page === "home") {
+        const deferEnter = homeIsEnterBusy() && !squadWasEmpty;
+        renderHome({ deferDuringEnter: deferEnter, settleQuiet: true });
+      } else if (state.page === "live") {
         if (liveIsEnterBusy()) liveRenderQueued = true;
         else {
           renderLive({ quiet: true });
@@ -2424,29 +2448,33 @@
       } else syncLiveNavChrome();
     } catch {
       homeLiveLastPollOk = false;
-      if (state.page === "home") syncHomeCountLabel();
+      if (state.page === "home") {
+        syncHomeCountLabel();
+        if (squadWasEmpty) renderHome({ settleQuiet: true });
+      }
     } finally {
       homeLivePollInFlight = false;
     }
   }
 
-  function syncHomeLivePolling({ waitForEnter = false } = {}) {
+  function syncHomeLivePolling() {
     if (!homeLiveApiUrl() || !savedManagerId || !savedLeagueId) {
       stopHomeLivePolling();
       syncLiveNavChrome();
       return;
     }
-    if (homeLivePollTimer) {
-      syncLiveNavChrome();
-      return;
+    if (!homeLivePollTimer) {
+      pollHomeFromLiveServer();
+      homeLivePollTimer = setInterval(pollHomeFromLiveServer, 60_000);
     }
-    if (waitForEnter && (homeIsEnterBusy() || liveIsEnterBusy())) {
-      homeLivePollAfterEnter = true;
-      return;
-    }
-    homeLivePollAfterEnter = false;
-    pollHomeFromLiveServer();
-    homeLivePollTimer = setInterval(pollHomeFromLiveServer, 60_000);
+    syncLiveNavChrome();
+  }
+
+  function prefetchHomeLiveCache() {
+    if (homeLivePrefetchStarted) return;
+    if (!homeLiveApiUrl() || !savedManagerId || !savedLeagueId) return;
+    homeLivePrefetchStarted = true;
+    syncHomeLivePolling();
   }
 
   function syncHomeCountLabel() {
@@ -2922,12 +2950,24 @@
     return player.matchStatus === "finished" && mins <= 0;
   }
 
+  /** Single Captain column when the League card is narrow (mobile or split grid). */
+  function homeLeagueCompactCaptains() {
+    const track = el.homeStandingsTrack;
+    if (track && track.clientWidth > 0) return track.clientWidth <= 900;
+    return NARROW_MQ.matches || window.innerWidth <= 900;
+  }
+
   /**
-   * Mobile captains view: if the named captain finished with 0', show vice
-   * (FPL auto-captaincy) and mark the swap. Desktop keeps both columns.
+   * Compact captains view: if the named captain finished with 0', show vice
+   * (FPL auto-captaincy) and mark the swap. Wide desktop keeps both columns.
    */
   function homeEffectiveCaptainPick(captain, vice) {
-    if (NARROW_MQ.matches && captain && vice && homePlayerGwFinishedWithoutMinutes(captain)) {
+    if (
+      homeLeagueCompactCaptains()
+      && captain
+      && vice
+      && homePlayerGwFinishedWithoutMinutes(captain)
+    ) {
       return { player: vice, autoSubbed: true, original: captain };
     }
     return { player: captain, autoSubbed: false, original: null };
@@ -3203,6 +3243,22 @@
     });
   }
 
+  function renderHomeStandingsCaptainsBody() {
+    if (!el.homeStandingsCaptainsBody) return;
+    const configuredEntry = homeConfiguredEntryId();
+    const viewEntry = homeActiveViewEntryId();
+    const viewingOther = homeIsViewingOtherManager();
+    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const compact = homeLeagueCompactCaptains();
+    const topCaptainPts = homeLeagueMaxCaptainPts();
+    const opts = { configuredEntry, viewEntry, viewingOther, topCaptainPts };
+    const captainsTable = el.homeStandingsCaptainsBody.closest("table");
+    if (captainsTable) captainsTable.classList.toggle("is-compact-captains", compact);
+    el.homeStandingsCaptainsBody.innerHTML = rows.map((r) =>
+      homeCaptainsRowHTML(r, opts)
+    ).join("") || `<tr><td colspan="${compact ? 3 : 4}">No standings.</td></tr>`;
+  }
+
   function renderHomeStandingsLiveBody() {
     if (!el.homeStandingsBody) return;
     const configuredEntry = homeConfiguredEntryId();
@@ -3264,8 +3320,11 @@
         isTopCaptain,
         autoSubbed: effective.autoSubbed,
         original: effective.original,
-      })}</td>
-      <td class="home-col-vice">${homeCaptainPickHTML(vice)}</td>
+      })}</td>${
+        homeLeagueCompactCaptains()
+          ? ""
+          : `<td class="home-col-vice">${homeCaptainPickHTML(vice)}</td>`
+      }
     </tr>`;
   }
 
@@ -3370,31 +3429,27 @@
     });
   }
 
+  function homeStandingsPageWidth() {
+    return el.homeStandingsTrack ? el.homeStandingsTrack.clientWidth || 1 : 1;
+  }
+
+  function homeStandingsPageScrollLeft(index) {
+    return Math.max(0, index) * homeStandingsPageWidth();
+  }
+
   function homeStandingsActivePageIndex() {
     if (!el.homeStandingsTrack) return 0;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     if (!pages.length) return 0;
-    const scroll = el.homeStandingsTrack.scrollLeft;
-    const mid = scroll + el.homeStandingsTrack.clientWidth / 2;
-    let best = 0;
-    let bestDist = Infinity;
-    pages.forEach((page, i) => {
-      const center = page.offsetLeft + page.offsetWidth / 2;
-      const dist = Math.abs(mid - center);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    });
-    return best;
+    const w = homeStandingsPageWidth();
+    return Math.max(0, Math.min(pages.length - 1, Math.round(el.homeStandingsTrack.scrollLeft / w)));
   }
 
   function snapHomeStandingsPage(index) {
     if (!el.homeStandingsTrack) return;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
-    const page = pages[index];
-    if (!page) return;
-    const target = page.offsetLeft;
+    if (!pages[index]) return;
+    const target = homeStandingsPageScrollLeft(index);
     if (Math.abs(el.homeStandingsTrack.scrollLeft - target) > 1) {
       el.homeStandingsTrack.scrollTo({ left: target, behavior: "auto" });
     }
@@ -3490,10 +3545,9 @@
   function setHomeStandingsPage(index, { smooth = true } = {}) {
     if (!el.homeStandingsTrack) return;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
-    const page = pages[index];
-    if (!page) return;
+    if (!pages[index]) return;
     el.homeStandingsTrack.scrollTo({
-      left: page.offsetLeft,
+      left: homeStandingsPageScrollLeft(index),
       behavior: smooth ? "smooth" : "auto",
     });
     syncHomeStandingsPagerDots(index);
@@ -3526,11 +3580,18 @@
     };
     el.homeStandingsTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeStandingsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    let lastCompactCaptains = homeLeagueCompactCaptains();
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
       const idx = homeStandingsActivePageIndex();
       snapHomeStandingsPage(idx);
       syncHomeStandingsLayout(idx, { animate: false });
+      const compact = homeLeagueCompactCaptains();
+      if (compact !== lastCompactCaptains) {
+        lastCompactCaptains = compact;
+        renderHomeStandingsCaptainsBody();
+        syncHomeStandingsRowHeights();
+      }
     });
     requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false }));
   }
@@ -5144,7 +5205,9 @@
           parts.push(homeSquadRowHTML(r, pinOpts(r)));
         }
         el.homeSquadBody.innerHTML = parts.join("") ||
-          `<tr><td colspan="5">No team picks in cache.</td></tr>`;
+          (homeSquadShowLoading(viewEntry)
+            ? homeSquadLoadingHTML(5)
+            : homeSquadEmptyHTML(5));
       }
       const gws = homeSquadFixtureGwList();
       if (el.homeSquadFixturesCols) {
@@ -5174,7 +5237,9 @@
           parts.push(homeSquadFixturesRowHTML(r, gws, pinOpts(r)));
         }
         el.homeSquadFixturesBody.innerHTML = parts.join("") ||
-          `<tr><td colspan="${colspan}">No team picks in cache.</td></tr>`;
+          (homeSquadShowLoading(viewEntry)
+            ? homeSquadLoadingHTML(colspan)
+            : homeSquadEmptyHTML(colspan));
       }
       const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
@@ -5202,13 +5267,7 @@
       ).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
     }
     if (el.homeStandingsCaptainsBody) {
-      const configuredEntry = homeConfiguredEntryId();
-      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
-      const topCaptainPts = homeLeagueMaxCaptainPts();
-      const opts = { configuredEntry, viewEntry, viewingOther, topCaptainPts };
-      el.homeStandingsCaptainsBody.innerHTML = rows.map((r) =>
-        homeCaptainsRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
+      renderHomeStandingsCaptainsBody();
     }
     if (el.homeStandingsChipsBody) {
       const configuredEntry = homeConfiguredEntryId();
@@ -5346,6 +5405,7 @@
       savedManagerId = saved;
       if (el.fplManagerSelect) el.fplManagerSelect.value = saved;
       rebuildLeagueSelect();
+      prefetchHomeLiveCache();
       try {
         await syncManagerFromApi(saved, { seedPlannerIfEmpty: true, quiet: true });
       } catch {
@@ -17146,7 +17206,7 @@
     syncMobileChrome();
     syncMobileTopChromeInset();
     requestAnimationFrame(syncMobileTopChromeInset);
-    syncHomeLivePolling({ waitForEnter: page === "home" || page === "live" });
+    syncHomeLivePolling();
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
@@ -19375,6 +19435,7 @@
     } catch {
       syncFplIdStatus();
     }
+    prefetchHomeLiveCache();
     setPage(storedPage());
     syncLiveNavChrome();
     // setPage already rendered Live (and started enter motion); renderTable would stack it.
