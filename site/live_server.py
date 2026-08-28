@@ -202,13 +202,29 @@ def resolve_active_gw() -> int | None:
 
 
 def read_home_payload() -> dict | None:
-    if not JSON_PATH.exists():
+    js_path = SITE / "home_data.js"
+    candidates: list[dict] = []
+    if JSON_PATH.exists():
+        try:
+            data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                candidates.append(data)
+        except (OSError, json.JSONDecodeError):
+            pass
+    if js_path.exists():
+        try:
+            raw = js_path.read_text(encoding="utf-8")
+            payload = raw.split("=", 1)[1].strip().rstrip(";")
+            data = json.loads(payload)
+            if isinstance(data, dict):
+                candidates.append(data)
+        except (OSError, json.JSONDecodeError, IndexError):
+            pass
+    if not candidates:
         return None
-    try:
-        data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except (OSError, json.JSONDecodeError):
-        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    return max(candidates, key=lambda item: str(item.get("generatedAt") or ""))
 
 
 def run_fetch_home(manager_id: int, league_id: int) -> tuple[bool, str | None]:

@@ -104,14 +104,41 @@ def fpl_get_result(path: str) -> tuple[dict | list | None, str | None]:
         return None, str(exc)
 
 
-def read_home_cache() -> dict | None:
-    if not JSON_PATH.exists():
-        return None
+def _parse_home_js_payload(raw: str) -> dict | None:
     try:
-        data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+        payload = raw.split("=", 1)[1].strip().rstrip(";")
+        data = json.loads(payload)
         return data if isinstance(data, dict) else None
-    except (OSError, json.JSONDecodeError):
+    except (json.JSONDecodeError, IndexError, TypeError):
         return None
+
+
+def read_home_cache() -> dict | None:
+    """Read the newest embedded Home cache (JSON API mirror or home_data.js)."""
+    candidates: list[dict] = []
+    if JSON_PATH.exists():
+        try:
+            data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                candidates.append(data)
+        except (OSError, json.JSONDecodeError):
+            pass
+    if OUT_PATH.exists():
+        try:
+            data = _parse_home_js_payload(OUT_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                candidates.append(data)
+        except OSError:
+            pass
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    def stamp(item: dict) -> str:
+        return str(item.get("generatedAt") or "")
+
+    return max(candidates, key=stamp)
 
 
 def fetch_entry_event_picks(entry_id: int, gw: int) -> tuple[dict | None, str | None]:
