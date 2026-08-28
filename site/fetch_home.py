@@ -605,12 +605,14 @@ def resolve_manager_gw_points(
     entry_history: dict | None,
     *,
     any_fixture_live: bool,
+    entry_official: int | None = None,
 ) -> tuple[int, list[dict], list[dict]]:
     """Live GW points with safeguards against post-FT autosub drift.
 
     While matches are live we compute from element points + cautious autosubs
-    (final fixture flag only). Once nothing is live, trust FPL's
-    entry_history.points — autosubs often lag behind finished_provisional.
+    (final fixture flag only). Once nothing is live, trust FPL's stamped GW
+    total when available — picks entry_history.points often stays 0 mid-GW
+    until FPL processes the gameweek; entry summary_event_points can lead.
     """
     live_pts, active, subs = calculate_manager_points_from_live(
         picks,
@@ -628,12 +630,12 @@ def resolve_manager_gw_points(
     live_pts = max(0, int(live_pts) - cost)
 
     if not any_fixture_live:
-        try:
-            official = eh.get("points")
-            if official is not None:
-                return int(official), active, subs
-        except (TypeError, ValueError):
-            pass
+        for src in (eh.get("points"), entry_official):
+            try:
+                if src is not None and int(src) > 0:
+                    return int(src), active, subs
+            except (TypeError, ValueError):
+                continue
     return live_pts, active, subs
 
 
@@ -999,6 +1001,7 @@ def main() -> int:
         chip_windows = chip_windows_from_bootstrap(bootstrap)
         chip_half = season_chip_half(gw, chip_windows)
         focus_hist = (focus_picks_payload or {}).get("entry_history") or {}
+        focus_entry_official = int(entry.get("summary_event_points") or 0) or None
         focus_pts, focus_active, focus_subs = resolve_manager_gw_points(
             focus_picks,
             stats,
@@ -1008,6 +1011,7 @@ def main() -> int:
             focus_chip,
             focus_hist,
             any_fixture_live=any_fixture_live,
+            entry_official=focus_entry_official,
         )
         active_ids = {int(p["element"]) for p in focus_active}
         focus_mults = effective_element_multipliers(focus_picks, focus_active)
@@ -1109,6 +1113,7 @@ def main() -> int:
                     chip = focus_chip
                 elif picks_payload_ready(mp):
                     note_owners(eid, other_picks)
+                    league_entry_official = int(row.get("event_total") or 0) or None
                     live_gw_pts, active, subs = resolve_manager_gw_points(
                         other_picks,
                         stats,
@@ -1118,6 +1123,7 @@ def main() -> int:
                         chip,
                         (mp or {}).get("entry_history") or {},
                         any_fixture_live=any_fixture_live,
+                        entry_official=league_entry_official,
                     )
                     other_mults = effective_element_multipliers(other_picks, active)
                     mults_by_entry[eid] = other_mults
