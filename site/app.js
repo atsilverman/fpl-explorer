@@ -138,9 +138,22 @@
     return SCHEDULE_GW_MIN;
   }
 
+  /** True after next GW deadline while FPL still marks the prior GW as current. */
+  function postDeadlineBeforeNextCurrent() {
+    const cur = GAMEWEEKS.current;
+    const nxt = GAMEWEEKS.next;
+    if (!cur || !nxt || cur.id == null || nxt.id == null) return false;
+    if (Number(cur.id) >= Number(nxt.id)) return false;
+    const dl = Date.parse(nxt.deadlineTime);
+    return Number.isFinite(dl) && Date.now() >= dl;
+  }
+
   // Planning horizon: next GW while current is live; else next/active.
-  // Used by Team heat, Matchups defaults, and fixture tooltips.
+  // During post-deadline blackout, stay on current until FPL flips is_current.
   function planningGameweek() {
+    if (postDeadlineBeforeNextCurrent()) {
+      return activeGameweek();
+    }
     const cur = Number(GAMEWEEKS.current && GAMEWEEKS.current.id);
     const nxt = Number(GAMEWEEKS.next && GAMEWEEKS.next.id);
     let n;
@@ -3300,8 +3313,30 @@
     if (!el.homeStandingsTrack) return 0;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     if (!pages.length) return 0;
-    const w = el.homeStandingsTrack.clientWidth || 1;
-    return Math.max(0, Math.min(pages.length - 1, Math.round(el.homeStandingsTrack.scrollLeft / w)));
+    const scroll = el.homeStandingsTrack.scrollLeft;
+    const mid = scroll + el.homeStandingsTrack.clientWidth / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    pages.forEach((page, i) => {
+      const center = page.offsetLeft + page.offsetWidth / 2;
+      const dist = Math.abs(mid - center);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  function snapHomeStandingsPage(index) {
+    if (!el.homeStandingsTrack) return;
+    const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
+    const page = pages[index];
+    if (!page) return;
+    const target = page.offsetLeft;
+    if (Math.abs(el.homeStandingsTrack.scrollLeft - target) > 1) {
+      el.homeStandingsTrack.scrollTo({ left: target, behavior: "auto" });
+    }
   }
 
   function syncHomeStandingsTrackHeight(activeIndex, { animate = true, allowShrink = true } = {}) {
@@ -3408,46 +3443,35 @@
     if (homeStandingsPagerReady) return;
     if (!el.homeStandingsTrack || !el.homeStandingsDots) return;
     homeStandingsPagerReady = true;
-    const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     const dots = [...el.homeStandingsDots.querySelectorAll(".home-standings-dot")];
     dots.forEach((dot, i) => {
       dot.addEventListener("click", () => {
         setHomeStandingsPage(i);
       });
     });
-    const onPageChange = (idx) => {
+    let scrollSettleTimer = null;
+    const onScrollSettled = () => {
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = null;
+      const idx = homeStandingsActivePageIndex();
+      snapHomeStandingsPage(idx);
       syncHomeStandingsPagerDots(idx);
       syncHomeStandingsLayout(idx, homeIsEnterBusy() ? { animate: false } : undefined);
     };
-    if (typeof IntersectionObserver !== "function") {
-      el.homeStandingsTrack.addEventListener(
-        "scroll",
-        () => {
-          onPageChange(homeStandingsActivePageIndex());
-        },
-        { passive: true }
-      );
-    } else {
-      const io = new IntersectionObserver(
-        (entries) => {
-          let best = null;
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            if (!best || entry.intersectionRatio > best.ratio) {
-              best = { idx: pages.indexOf(entry.target), ratio: entry.intersectionRatio };
-            }
-          });
-          if (best && best.idx >= 0) onPageChange(best.idx);
-        },
-        { root: el.homeStandingsTrack, threshold: [0.55, 0.75] }
-      );
-      pages.forEach((page) => io.observe(page));
-    }
+    const onScrollTick = () => {
+      syncHomeStandingsPagerDots(homeStandingsActivePageIndex());
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = setTimeout(onScrollSettled, 140);
+    };
+    el.homeStandingsTrack.addEventListener("scroll", onScrollTick, { passive: true });
+    el.homeStandingsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
-      syncHomeStandingsLayout();
+      const idx = homeStandingsActivePageIndex();
+      snapHomeStandingsPage(idx);
+      syncHomeStandingsLayout(idx, { animate: false });
     });
-    requestAnimationFrame(() => syncHomeStandingsLayout(0));
+    requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false }));
   }
 
   const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;

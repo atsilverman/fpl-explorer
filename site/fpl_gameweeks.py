@@ -68,6 +68,35 @@ def active_gameweek_id(gameweeks: dict | None) -> int | None:
     return None
 
 
+def display_gameweek_id(gameweeks: dict | None) -> int | None:
+    """Site-wide scoring/UI GW — FPL ``is_current`` only; preseason falls back to next."""
+    return active_gameweek_id(gameweeks)
+
+
+def post_deadline_before_next_current(
+    gameweeks: dict | None, now_ts: float | None = None
+) -> bool:
+    """True when the next GW deadline passed but FPL still marks the prior GW current."""
+    if not gameweeks:
+        return False
+    cur = gameweeks.get("current")
+    nxt = gameweeks.get("next")
+    if not cur or not nxt:
+        return False
+    try:
+        cur_id = int(cur["id"])
+        nxt_id = int(nxt["id"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if cur_id >= nxt_id:
+        return False
+    dl = parse_deadline_unix(nxt.get("deadlineTime"))
+    if dl is None:
+        return False
+    now = now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp()
+    return now >= dl
+
+
 def picks_gameweek_id(gameweeks: dict | None, now_ts: float | None = None) -> int | None:
     """GW whose squad picks we should fetch.
 

@@ -13974,6 +13974,9 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
   scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   /* Height is set to the active page so Captains/Chips don't force empty space. */
   transition: height 0.22s var(--ease-out);
 }
@@ -13984,7 +13987,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-standings-page {
   flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   align-self: flex-start;
   scroll-snap-align: start;
   scroll-snap-stop: always;
@@ -13994,6 +14000,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-standings-page .home-table-wrap {
   margin: 0;
+  overflow-x: hidden;
 }
 .home-standings-dots {
   display: flex;

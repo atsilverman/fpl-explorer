@@ -24,7 +24,11 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fpl_gameweeks import active_gameweek_id, extract_gameweeks, picks_gameweek_id
+from fpl_gameweeks import (
+    display_gameweek_id,
+    extract_gameweeks,
+    picks_gameweek_id,
+)
 from gw_element_stats import normalize_element_gw_record
 from live_scoring import (
     build_match_status_by_element,
@@ -717,19 +721,21 @@ def main() -> int:
         if bootstrap_err or not isinstance(bootstrap, dict):
             raise RuntimeError(bootstrap_err or "bootstrap-static failed")
         gws = extract_gameweeks(bootstrap, source="bootstrap")
-        live_gw = active_gameweek_id(gws)
-        picks_gw = args.gw or picks_gameweek_id(gws) or live_gw
-        if not picks_gw:
+        display_gw = args.gw or display_gameweek_id(gws)
+        picks_gw = picks_gameweek_id(gws) or display_gw
+        if not display_gw:
             raise RuntimeError("Could not resolve active gameweek")
-        gw = picks_gw
-        compare_gw = max(0, gw - 1)
+        # Scoring/UI follow FPL current; league polling may target next GW during blackout.
+        gw = display_gw
+        transfer_poll_gw = picks_gw if picks_gw > display_gw else None
+        compare_gw = display_gw if transfer_poll_gw else max(0, display_gw - 1)
 
-        live_raw, live_err = fpl_get_result(f"/event/{gw}/live/")
+        live_raw, live_err = fpl_get_result(f"/event/{display_gw}/live/")
         live = live_raw if isinstance(live_raw, dict) else {}
         if live_err:
             print(f"  live failed GW{gw}: {live_err}", file=sys.stderr)
 
-        fixtures_raw, fixtures_err = fpl_get_result(f"/fixtures/?event={gw}")
+        fixtures_raw, fixtures_err = fpl_get_result(f"/fixtures/?event={display_gw}")
         fixtures = fixtures_raw if isinstance(fixtures_raw, list) else []
         if fixtures_err:
             print(f"  fixtures failed GW{gw}: {fixtures_err}", file=sys.stderr)
@@ -762,8 +768,9 @@ def main() -> int:
         picks_by_entry: dict[int, dict | None] = {}
         prev_by_entry: dict[int, dict | None] = {}
         pick_errors: dict[int, str] = {}
+        transfer_picks_by_entry: dict[int, dict | None] = {}
 
-        focus_picks_payload, focus_pick_err = fetch_entry_event_picks(manager_id, gw)
+        focus_picks_payload, focus_pick_err = fetch_entry_event_picks(manager_id, display_gw)
         if focus_pick_err:
             pick_errors[manager_id] = focus_pick_err
         picks_by_entry[manager_id] = focus_picks_payload
@@ -777,21 +784,37 @@ def main() -> int:
         for eid in entry_ids:
             if eid == manager_id:
                 continue
-            payload, err = fetch_entry_event_picks(eid, gw)
+            payload, err = fetch_entry_event_picks(eid, display_gw)
             picks_by_entry[eid] = payload
             if err:
                 pick_errors[eid] = err
-            if compare_gw >= 1:
+            if compare_gw >= 1 and not transfer_poll_gw:
                 prev_payload, prev_err = fetch_entry_event_picks(eid, compare_gw)
                 prev_by_entry[eid] = prev_payload
                 if prev_err:
                     pick_errors.setdefault(eid, prev_err)
 
+        status_picks_gw = transfer_poll_gw or display_gw
+        status_compare_gw = compare_gw
+        if transfer_poll_gw:
+            for eid in entry_ids:
+                payload, err = fetch_entry_event_picks(eid, transfer_poll_gw)
+                transfer_picks_by_entry[eid] = payload
+                if err:
+                    pick_errors.setdefault(eid, err)
+                if eid == manager_id:
+                    continue
+                if compare_gw >= 1 and eid not in prev_by_entry:
+                    prev_payload, prev_err = fetch_entry_event_picks(eid, compare_gw)
+                    prev_by_entry[eid] = prev_payload
+                    if prev_err:
+                        pick_errors.setdefault(eid, prev_err)
+
         league_picks_status = build_league_picks_status(
             entry_ids,
-            gw,
-            compare_gw,
-            picks_by_entry,
+            status_picks_gw,
+            status_compare_gw,
+            transfer_picks_by_entry if transfer_poll_gw else picks_by_entry,
             prev_by_entry,
             pick_errors,
         )
@@ -865,7 +888,11 @@ def main() -> int:
 
         transfers_by_entry: dict[str, dict] = {}
         for eid in entry_ids:
-            curr_payload = picks_by_entry.get(eid)
+            curr_payload = (
+                transfer_picks_by_entry.get(eid)
+                if transfer_poll_gw
+                else picks_by_entry.get(eid)
+            )
             prev_payload = prev_by_entry.get(eid)
             if not picks_payload_ready(curr_payload):
                 continue
