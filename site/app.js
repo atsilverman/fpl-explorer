@@ -138,12 +138,20 @@
     return SCHEDULE_GW_MIN;
   }
 
+  /** Live display GW from Home cache when linked (may run ahead of static bundles). */
+  function livePlanningGw() {
+    const liveGw = Number(HOME && HOME.gw);
+    return Number.isFinite(liveGw) && liveGw > 0 ? liveGw : null;
+  }
+
   /** True after next GW deadline while FPL still marks the prior GW as current. */
   function postDeadlineBeforeNextCurrent() {
     const cur = GAMEWEEKS.current;
     const nxt = GAMEWEEKS.next;
     if (!cur || !nxt || cur.id == null || nxt.id == null) return false;
     if (Number(cur.id) >= Number(nxt.id)) return false;
+    const liveGw = livePlanningGw();
+    if (Number.isFinite(liveGw) && liveGw >= Number(nxt.id)) return false;
     const dl = Date.parse(nxt.deadlineTime);
     return Number.isFinite(dl) && Date.now() >= dl;
   }
@@ -154,13 +162,31 @@
     if (postDeadlineBeforeNextCurrent()) {
       return activeGameweek();
     }
+    const liveGw = livePlanningGw();
     const cur = Number(GAMEWEEKS.current && GAMEWEEKS.current.id);
     const nxt = Number(GAMEWEEKS.next && GAMEWEEKS.next.id);
+
+    // Static bundle behind live Home (common between ownership check-ins).
+    if (Number.isFinite(liveGw) && Number.isFinite(cur) && liveGw > cur) {
+      return Math.min(Math.max(liveGw + 1, SCHEDULE_GW_MIN), SCHEDULE_GW_MAX);
+    }
+    // Bundle current matches live but next id is stale (still equals current).
+    if (
+      Number.isFinite(liveGw)
+      && liveGw === cur
+      && Number.isFinite(nxt)
+      && nxt <= liveGw
+    ) {
+      return Math.min(Math.max(liveGw + 1, SCHEDULE_GW_MIN), SCHEDULE_GW_MAX);
+    }
+
     let n;
     if (Number.isFinite(cur)) {
       n = Number.isFinite(nxt) ? nxt : cur + 1;
     } else if (Number.isFinite(nxt)) {
       n = nxt;
+    } else if (Number.isFinite(liveGw)) {
+      n = liveGw + 1;
     } else {
       n = Number(activeGameweek());
     }
@@ -168,6 +194,29 @@
       return Math.min(n, SCHEDULE_GW_MAX);
     }
     return SCHEDULE_GW_MIN;
+  }
+
+  function syncPlanningHorizon({ rerender = false } = {}) {
+    const [lo, hi] = defaultScheduleGwWindow();
+    let changed = false;
+    if (state.scheduleGwMin < lo) {
+      state.scheduleGwMin = lo;
+      state.scheduleGwMax = hi;
+      changed = true;
+    }
+    const horizon = teamClampPlanGw(planningGameweek());
+    if (state.teamGwStart == null || state.teamGwStart < horizon) {
+      state.teamGwStart = horizon;
+      loadPlannerGwState(horizon);
+      saveTeamDraft();
+      changed = true;
+    }
+    if (changed && rerender) {
+      if (state.page === "team") renderTeam();
+      else if (state.page === "schedule") renderSchedule();
+      else if (state.page === "home") renderHome({ settleQuiet: true });
+    }
+    return changed;
   }
 
   function defaultScheduleGwWindow() {
@@ -2161,6 +2210,7 @@
     homeOwnerPin = null;
     homeViewEntryId = null;
     homeElementGwCache = null;
+    syncPlanningHorizon({ rerender: state.page === "home" || state.page === "team" || state.page === "schedule" });
     syncLiveNavChrome();
     return true;
   }
@@ -13390,6 +13440,7 @@
   });
 
   loadTeamDraft();
+  syncPlanningHorizon();
   syncTeamPlannerPrefsBtns();
   bindTeamPickerSelection();
 
@@ -16884,6 +16935,7 @@
       }
       if (page === "team") {
         applyTeamPageBounds();
+        syncPlanningHorizon();
         if (prev !== "team") state.teamGwStart = teamClampPlanGw(planningGameweek());
       }
       if (page === "schedule" && prev !== "schedule") {
