@@ -1,0 +1,327 @@
+{
+  "generatedAt": "2026-08-28T20:48:32Z",
+  "csvSource": [
+    "FPL Data - Player Key Stats (H).csv",
+    "FPL Data - Player Key Stats (A).csv"
+  ],
+  "cachedBootstrap": "bootstrap-static_2026-08-28.json",
+  "liveSource": "live FPL API",
+  "liveFetchError": null,
+  "dataJsGeneratedAt": "2026-08-28T13:48:31",
+  "matchMeta": {
+    "source": "bootstrap-static_2026-08-28.json",
+    "matched": 380,
+    "unmatched": 40,
+    "ambiguous": 0,
+    "totalPlayers": 420
+  },
+  "ambiguousIssues": [],
+  "summary": {
+    "csvPlayers": 420,
+    "matchedToBootstrap": 380,
+    "transfersSinceCsv": 33,
+    "staleInCachedBootstrap": 0,
+    "siteVsLiveMismatch": 0
+  },
+  "transfersSinceCsv": [
+    {
+      "name": "Anderson",
+      "code": 215379,
+      "csvTeam": "NFO",
+      "bootstrapTeam": "MCI",
+      "cachedBootstrapTeam": "MCI",
+      "liveTeam": "MCI",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Andrey Santos",
+      "code": 532605,
+      "csvTeam": "CHE",
+      "bootstrapTeam": "MUN",
+      "cachedBootstrapTeam": "MUN",
+      "liveTeam": "MUN",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Awoniyi",
+      "code": 210156,
+      "csvTeam": "NFO",
+      "bootstrapTeam": "COV",
+      "cachedBootstrapTeam": "COV",
+      "liveTeam": "COV",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Baleba",
+      "code": 535301,
+      "csvTeam": "BHA",
+      "bootstrapTeam": "MUN",
+      "cachedBootstrapTeam": "MUN",
+      "liveTeam": "MUN",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Bruno G.",
+      "code": 208706,
+      "csvTeam": "NEW",
+      "bootstrapTeam": "ARS",
+      "cachedBootstrapTeam": "ARS",
+      "liveTeam": "ARS",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Buonanotte",
+      "code": 536916,
+      "csvTeam": "LEE",
+      "bootstrapTeam": "BHA",
+      "cachedBootstrapTeam": "BHA",
+      "liveTeam": "BHA",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Darlow",
+      "code": 59735,
+      "csvTeam": "LEE",
+      "bootstrapTeam": "MUN",
+      "cachedBootstrapTeam": "MUN",
+      "liveTeam": "MUN",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Delap",
+      "code": 463034,
+      "csvTeam": "CHE",
+      "bootstrapTeam": "NFO",
+      "cachedBootstrapTeam": "NFO",
+      "liveTeam": "NFO",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Diop",
+      "code": 219924,
+      "csvTeam": "FUL",
+      "bootstrapTeam": "IPS",
+      "cachedBootstrapTeam": "IPS",
+      "liveTeam": "IPS",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Elliott",
+      "code": 444884,
+      "csvTeam": "AVL",
+      "bootstrapTeam": "LIV",
+      "cachedBootstrapTeam": "LIV",
+      "liveTeam": "LIV",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Garnacho",
+      "code": 493105,
+      "csvTeam": "CHE",
+      "bootstrapTeam": "AVL",
+      "cachedBootstrapTeam": "AVL",
+      "liveTeam": "AVL",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Grealish",
+      "code": 114283,
+      "csvTeam": "EVE",
+      "bootstrapTeam": "MCI",
+      "cachedBootstrapTeam": "MCI",
+      "liveTeam": "MCI",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Henderson",
+      "code": 56979,
+      "csvTeam": "BRE",
+      "bootstrapTeam": "CHE",
+      "cachedBootstrapTeam": "CHE",
+      "liveTeam": "CHE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Johnson",
+      "code": 242898,
+      "csvTeam": "CRY",
+      "bootstrapTeam": "EVE",
+      "cachedBootstrapTeam": "EVE",
+      "liveTeam": "EVE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Konsa",
+      "code": 199798,
+      "csvTeam": "AVL",
+      "bootstrapTeam": "ARS",
+      "cachedBootstrapTeam": "ARS",
+      "liveTeam": "ARS",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Lacroix",
+      "code": 437499,
+      "csvTeam": "CRY",
+      "bootstrapTeam": "CHE",
+      "cachedBootstrapTeam": "CHE",
+      "liveTeam": "CHE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Lukić",
+      "code": 212314,
+      "csvTeam": "FUL",
+      "bootstrapTeam": "IPS",
+      "cachedBootstrapTeam": "IPS",
+      "liveTeam": "IPS",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Marmoush",
+      "code": 438234,
+      "csvTeam": "MCI",
+      "bootstrapTeam": "TOT",
+      "cachedBootstrapTeam": "TOT",
+      "liveTeam": "TOT",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "McNeil",
+      "code": 433154,
+      "csvTeam": "EVE",
+      "bootstrapTeam": "CRY",
+      "cachedBootstrapTeam": "CRY",
+      "liveTeam": "CRY",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "N.Gonzalez",
+      "code": 465694,
+      "csvTeam": "MCI",
+      "bootstrapTeam": "NEW",
+      "cachedBootstrapTeam": "NEW",
+      "liveTeam": "NEW",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Nelson",
+      "code": 200641,
+      "csvTeam": "BRE",
+      "bootstrapTeam": "ARS",
+      "cachedBootstrapTeam": "ARS",
+      "liveTeam": "ARS",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Nørgaard",
+      "code": 128295,
+      "csvTeam": "ARS",
+      "bootstrapTeam": "EVE",
+      "cachedBootstrapTeam": "EVE",
+      "liveTeam": "EVE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Pinnock",
+      "code": 231065,
+      "csvTeam": "BRE",
+      "bootstrapTeam": "COV",
+      "cachedBootstrapTeam": "COV",
+      "liveTeam": "COV",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Robertson",
+      "code": 122798,
+      "csvTeam": "LIV",
+      "bootstrapTeam": "TOT",
+      "cachedBootstrapTeam": "TOT",
+      "liveTeam": "TOT",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Rogers",
+      "code": 244850,
+      "csvTeam": "AVL",
+      "bootstrapTeam": "CHE",
+      "cachedBootstrapTeam": "CHE",
+      "liveTeam": "CHE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Senesi",
+      "code": 221466,
+      "csvTeam": "BOU",
+      "bootstrapTeam": "TOT",
+      "cachedBootstrapTeam": "TOT",
+      "liveTeam": "TOT",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Struijk",
+      "code": 222694,
+      "csvTeam": "LEE",
+      "bootstrapTeam": "BHA",
+      "cachedBootstrapTeam": "BHA",
+      "liveTeam": "BHA",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Tielemans",
+      "code": 166989,
+      "csvTeam": "AVL",
+      "bootstrapTeam": "MUN",
+      "cachedBootstrapTeam": "MUN",
+      "liveTeam": "MUN",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Tonali",
+      "code": 432422,
+      "csvTeam": "NEW",
+      "bootstrapTeam": "TOT",
+      "cachedBootstrapTeam": "TOT",
+      "liveTeam": "TOT",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Trafford",
+      "code": 432720,
+      "csvTeam": "MCI",
+      "bootstrapTeam": "LEE",
+      "cachedBootstrapTeam": "LEE",
+      "liveTeam": "LEE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Van Hecke",
+      "code": 469142,
+      "csvTeam": "BHA",
+      "bootstrapTeam": "TOT",
+      "cachedBootstrapTeam": "TOT",
+      "liveTeam": "TOT",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Welbeck",
+      "code": 50175,
+      "csvTeam": "BHA",
+      "bootstrapTeam": "CHE",
+      "cachedBootstrapTeam": "CHE",
+      "liveTeam": "CHE",
+      "matchStatus": "transfer"
+    },
+    {
+      "name": "Wilson",
+      "code": 153682,
+      "csvTeam": "FUL",
+      "bootstrapTeam": "LEE",
+      "cachedBootstrapTeam": "LEE",
+      "liveTeam": "LEE",
+      "matchStatus": "transfer"
+    }
+  ],
+  "staleInCachedBootstrap": [],
+  "siteVsLiveMismatch": []
+}
