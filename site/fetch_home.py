@@ -282,10 +282,15 @@ def resolve_focus_summary_fields(
     cached_summary = cached_summary if isinstance(cached_summary, dict) else {}
 
     overall_rank = positive_rank(entry.get("summary_overall_rank"))
+    picks_rank = positive_rank(picks_history.get("overall_rank"))
+    # Mid-GW some FPL edges serve summary_overall_rank == picks entry_history
+    # (deadline snapshot). Ignore that stamp while fixtures are live.
+    if gw_in_play and overall_rank and picks_rank and overall_rank == picks_rank:
+        overall_rank = None
     if overall_rank is None:
         overall_rank = positive_rank(cached_summary.get("overallRank"))
     if overall_rank is None and not gw_in_play:
-        overall_rank = positive_rank(picks_history.get("overall_rank"))
+        overall_rank = picks_rank
 
     overall_points = int(entry.get("summary_overall_points") or 0)
     if overall_points <= 0:
@@ -1019,14 +1024,14 @@ def main() -> int:
         )
 
         if picks_payload_ready(focus_picks_payload):
+            mgr_overall_rank = positive_rank(entry.get("summary_overall_rank"))
+            picks_rank = positive_rank(focus_hist.get("overall_rank"))
+            if gw_in_play and mgr_overall_rank and picks_rank and mgr_overall_rank == picks_rank:
+                mgr_overall_rank = None
             mgr_overall_rank = (
-                positive_rank(entry.get("summary_overall_rank"))
+                mgr_overall_rank
                 or positive_rank((cached_summary or {}).get("overallRank"))
-                or (
-                    positive_rank(focus_hist.get("overall_rank"))
-                    if not gw_in_play
-                    else None
-                )
+                or (picks_rank if not gw_in_play else None)
                 or 0
             )
             mgr_overall_points = int(entry.get("summary_overall_points") or 0)
