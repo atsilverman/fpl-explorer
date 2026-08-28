@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import re
@@ -17,6 +18,14 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parent
 FPL_BASE = "https://fantasy.premierleague.com/api"
 UA = "fpl-explorer/1.0 (+local-proxy)"
+LIVE_PROXY_UA = "fpl-explorer/1.0 (+local-live-proxy)"
+LIVE_ORIGIN = (os.environ.get("FPL_LIVE_ORIGIN") or "http://159.203.184.115:8080").rstrip("/")
+# Set FPL_HOME_LOCAL_CACHE=1 to serve home_data.js/json instead of the live droplet.
+HOME_LOCAL_CACHE = os.environ.get("FPL_HOME_LOCAL_CACHE", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
 POS_BY_TYPE = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 BOOTSTRAP_TTL = 30 * 60
 _bootstrap = None
@@ -180,6 +189,68 @@ def build_squad_payload(manager_id: str):
     }
 
 
+def read_local_home_cache():
+    json_path = ROOT / "home_data.json"
+    if json_path.exists():
+        try:
+            return json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+    path = ROOT / "home_data.js"
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8").strip()
+    if "=" not in text:
+        return None
+    raw = text.split("=", 1)[1].strip().rstrip(";").strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+def proxy_live_home():
+    url = f"{LIVE_ORIGIN}/api/home"
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": LIVE_PROXY_UA, "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8")
+            data = json.loads(raw) if raw else None
+            if resp.status != 200 or not data:
+                return resp.status if resp.status >= 400 else 502, {
+                    "ok": False,
+                    "error": (data or {}).get("error") or f"Live server returned {resp.status}",
+                }
+            return 200, data
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            data = json.loads(raw) if raw else None
+        except json.JSONDecodeError:
+            data = None
+        err = (data or {}).get("error") if isinstance(data, dict) else None
+        status = exc.code if exc.code != 404 else 502
+        return status, {"ok": False, "error": err or f"Live server unreachable ({exc.code})"}
+    except urllib.error.URLError as exc:
+        return 502, {"ok": False, "error": f"Live server unreachable ({exc.reason})"}
+    except json.JSONDecodeError:
+        return 502, {"ok": False, "error": "Live server returned invalid JSON"}
+    except Exception as exc:  # noqa: BLE001
+        return 502, {"ok": False, "error": str(exc)}
+
+
+def home_api_response():
+    if HOME_LOCAL_CACHE:
+        home = read_local_home_cache()
+        if not home:
+            return 503, {"ok": False, "error": "Home cache not ready"}
+        return 200, {"ok": True, "home": home}
+    return proxy_live_home()
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -218,17 +289,11 @@ class Handler(SimpleHTTPRequestHandler):
                 data = {}
             return self._json(200, {"ok": True, "prefs": data})
         if parsed.path.rstrip("/") == "/api/home":
-            json_path = ROOT / "home_data.json"
-            if not json_path.exists():
-                home = self._parse_home_data_js()
-                if not home:
-                    return self._json(503, {"ok": False, "error": "Home cache not ready"})
-                return self._json(200, {"ok": True, "home": home})
             try:
-                home = json.loads(json_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                return self._json(503, {"ok": False, "error": "Home cache invalid"})
-            return self._json(200, {"ok": True, "home": home})
+                status, body = home_api_response()
+            except Exception as exc:  # noqa: BLE001
+                return self._json(502, {"ok": False, "error": str(exc)})
+            return self._json(status, body)
         return super().do_GET()
 
     def _read_json_body(self):
@@ -258,18 +323,7 @@ class Handler(SimpleHTTPRequestHandler):
         return out, None
 
     def _parse_home_data_js(self):
-        path = ROOT / "home_data.js"
-        if not path.exists():
-            return None
-        text = path.read_text(encoding="utf-8").strip()
-        # window.FPL_HOME = {...};
-        if "=" not in text:
-            return None
-        raw = text.split("=", 1)[1].strip().rstrip(";").strip()
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
+        return read_local_home_cache()
 
     def _run_fetch_home(self):
         script = ROOT / "fetch_home.py"
@@ -329,7 +383,11 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     host, port = "127.0.0.1", 8000
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"Serving {ROOT} at http://{host}:{port} (with /api/fpl/squad, /api/home-prefs, /api/refresh-home, /api/home)")
+    home_mode = "local cache" if HOME_LOCAL_CACHE else f"live proxy → {LIVE_ORIGIN}/api/home"
+    print(
+        f"Serving {ROOT} at http://{host}:{port} "
+        f"(/api/fpl/squad, /api/home-prefs, /api/refresh-home, /api/home [{home_mode}])"
+    )
     httpd.serve_forever()
 
 

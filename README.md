@@ -141,7 +141,7 @@ Full setup: [`deploy/digitalocean/README.md`](deploy/digitalocean/README.md). On
 sudo bash deploy/digitalocean/setup.sh
 ```
 
-Local dev with live polling: `python3 site/serve.py` (includes `/api/home`) + optional `python3 site/live_server.py` in another terminal.
+Local dev with live Home parity: `python3 site/serve.py` — `/api/home` proxies to the same DO droplet as Vercel (`FPL_LIVE_ORIGIN`, default `159.203.184.115:8080`). Set `FPL_HOME_LOCAL_CACHE=1` to use local `home_data.js` instead.
 
 ---
 

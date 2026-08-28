@@ -16328,7 +16328,7 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 9px 12px 8px;
+  padding: 10px 12px 9px;
   background: hsl(var(--muted) / 0.35);
   border-bottom: 1px solid var(--border);
   text-align: center;
@@ -16337,12 +16337,12 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   background: hsl(142 55% 38% / 0.08);
 }
 .live-bonus-matchup-center {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  column-gap: 8px;
   width: 100%;
-  max-width: 220px;
+  max-width: 260px;
   margin-inline: auto;
 }
 .live-bonus-team {
@@ -16350,7 +16350,7 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   flex: 1 1 0;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .live-bonus-center {
@@ -16359,13 +16359,12 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-width: 2.4em;
-  align-self: stretch;
+  min-width: 3.25rem;
+  padding-inline: 2px;
 }
 .live-bonus-badge {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
   flex: none;
   display: block;
@@ -16378,13 +16377,14 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   color: var(--text-muted);
   line-height: 1;
 }
-.live-bonus-vs {
-  flex: none;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-faint);
-  text-transform: lowercase;
-  line-height: 1;
+.live-bonus-status-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
 }
 .live-bonus-status {
   display: inline-flex;
@@ -16397,12 +16397,24 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   white-space: nowrap;
   line-height: 1.1;
 }
+.live-bonus-minute {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: hsl(142 55% 38%);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
 .live-bonus-status.is-live {
   color: hsl(142 55% 38%);
 }
 .live-bonus-status.is-upcoming {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+  font-size: 8.5px;
 }
 .live-bonus-status.is-finished {
   color: var(--text-faint);
@@ -16494,8 +16506,11 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     grid-template-columns: 1fr;
   }
   .live-bonus-matchup-center {
-    gap: 12px;
+    column-gap: 10px;
     max-width: none;
+  }
+  .live-bonus-center {
+    min-width: 2.85rem;
   }
   .live-bonus-card .live-bonus-row {
     grid-template-columns: 20px minmax(0, 1fr) minmax(96px, 1.25fr);

@@ -14949,25 +14949,88 @@
     return { isLive, upcoming, finished, kickoffMs };
   }
 
+  /** Max fixture minute for a live matchup (from bonus rows, elementGw, or squad fixtures). */
+  function liveMatchupFixtureMinutes(matchup, entries) {
+    if (!matchup) return null;
+    const { isLive } = liveMatchupKickoffState(matchup, entries);
+    if (!isLive) return null;
+
+    let max = 0;
+    let found = false;
+    const bump = (mins) => {
+      const m = Number(mins);
+      if (!Number.isFinite(m)) return;
+      found = true;
+      if (m > max) max = m;
+    };
+
+    for (const row of entries || []) {
+      if (!(row.live || liveEgIsActive(row.eg))) continue;
+      bump(row.minutes ?? (row.eg && row.eg.minutes));
+    }
+
+    if (!found) {
+      const gw = liveDefaultGw();
+      const egMap = liveElementMapForGw(gw);
+      const players = livePlayerByElement();
+      for (const [eidStr, eg] of Object.entries(egMap)) {
+        if (!liveEgIsActive(eg)) continue;
+        const player = players.get(Number(eidStr));
+        if (!player) continue;
+        const team = player.team || currentTeamCode(player);
+        if (team !== matchup.home && team !== matchup.away) continue;
+        bump(eg.minutes);
+      }
+    }
+
+    if (!found && HOME) {
+      const scanSquad = (squad) => {
+        for (const row of squad || []) {
+          const team = row.team || currentTeamCode(row);
+          if (team !== matchup.home && team !== matchup.away) continue;
+          for (const fx of homeSquadFixtures(row)) {
+            if (!fx.live) continue;
+            bump(fx.minutes != null ? fx.minutes : row.minutes);
+          }
+        }
+      };
+      scanSquad(HOME.squad);
+      const byEntry = HOME.squadsByEntry;
+      if (byEntry && typeof byEntry === "object") {
+        for (const squad of Object.values(byEntry)) scanSquad(squad);
+      }
+    }
+
+    return found ? max : 0;
+  }
+
   function liveBonusMatchupHeadHTML(matchup, entries) {
     if (!matchup) return "";
     const { isLive, upcoming, finished } = liveMatchupKickoffState(matchup, entries);
     const parts = fmtMarketsKickoffParts(matchup.kickoff);
     let statusHTML = "";
     if (isLive) {
-      statusHTML =
-        '<span class="live-bonus-status is-live"><span class="home-status-dot is-live" aria-hidden="true"></span> Live</span>';
+      const mins = liveMatchupFixtureMinutes(matchup, entries);
+      const minuteHTML =
+        mins != null
+          ? `<span class="live-bonus-minute">${escapeHtml(String(mins))}′</span>`
+          : "";
+      statusHTML = `<span class="live-bonus-status-stack">
+        <span class="live-bonus-status is-live"><span class="home-status-dot is-live" aria-hidden="true"></span> Live</span>
+        ${minuteHTML}
+      </span>`;
     } else if (upcoming) {
       const when = [parts.day, parts.date, parts.time].filter(Boolean).join(" · ");
       statusHTML = when
-        ? `<span class="live-bonus-status is-upcoming">${escapeHtml(when)}</span>`
+        ? `<span class="live-bonus-status-stack"><span class="live-bonus-status is-upcoming">${escapeHtml(when)}</span></span>`
         : "";
     } else if (finished) {
-      statusHTML = '<span class="live-bonus-status is-finished">Full time</span>';
+      statusHTML =
+        '<span class="live-bonus-status-stack"><span class="live-bonus-status is-finished">Full time</span></span>';
     } else if (matchup.kickoff) {
       const when = [parts.day, parts.date, parts.time].filter(Boolean).join(" · ");
       statusHTML = when
-        ? `<span class="live-bonus-status">${escapeHtml(when)}</span>`
+        ? `<span class="live-bonus-status-stack"><span class="live-bonus-status">${escapeHtml(when)}</span></span>`
         : "";
     }
     return `<header class="live-bonus-card-head">
@@ -14977,7 +15040,6 @@
           <span class="live-bonus-team-code">${escapeHtml(matchup.home)}</span>
         </div>
         <div class="live-bonus-center">
-          <span class="live-bonus-vs">v</span>
           ${statusHTML || ""}
         </div>
         <div class="live-bonus-team">
