@@ -709,18 +709,54 @@ def build_squad_rows(
     return rows
 
 
-def fetch_standings_page(league_id: int, page: int = 1) -> dict:
-    return fpl_get(f"/leagues-classic/{league_id}/standings/?page_standings={page}")
+def fetch_standings_page(league_id: int, page: int = 1) -> tuple[dict | None, str | None]:
+    data, err = fpl_get_result(f"/leagues-classic/{league_id}/standings/?page_standings={page}")
+    if err:
+        return None, err
+    return data if isinstance(data, dict) else None, None
 
 
-def fetch_all_standings(league_id: int) -> tuple[list, dict]:
+def cached_standings_as_results(cached: dict | None) -> list[dict]:
+    """Rebuild raw league rows from a prior home cache during API blackout."""
+    rows = (cached or {}).get("standings")
+    if not isinstance(rows, list):
+        return []
+    out: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            {
+                "entry": row.get("entry"),
+                "player_name": row.get("playerName"),
+                "entry_name": row.get("entryName"),
+                "event_total": row.get("eventTotalOfficial")
+                if row.get("eventTotalOfficial") is not None
+                else row.get("gwPointsLive"),
+                "total": row.get("total"),
+                "rank": row.get("rankOfficial")
+                if row.get("rankOfficial") is not None
+                else row.get("rankLive"),
+                "last_rank": row.get("rankPrev"),
+            }
+        )
+    return out
+
+
+def fetch_all_standings(league_id: int) -> tuple[list, dict, str | None]:
     """Paginate classic league standings until has_next is false."""
     page = 1
     all_results: list = []
     league_meta: dict = {}
+    last_err: str | None = None
     while True:
-        payload = fetch_standings_page(league_id, page)
-        assert isinstance(payload, dict)
+        payload, err = fetch_standings_page(league_id, page)
+        if err:
+            last_err = err
+            break
+        if not isinstance(payload, dict):
+            last_err = "invalid standings payload"
+            break
         if not league_meta:
             league_meta = payload.get("league") or {}
         standings = payload.get("standings") or {}
@@ -729,7 +765,7 @@ def fetch_all_standings(league_id: int) -> tuple[list, dict]:
         if not standings.get("has_next"):
             break
         page += 1
-    return all_results, league_meta
+    return all_results, league_meta, last_err
 
 
 def main() -> int:
@@ -798,7 +834,15 @@ def main() -> int:
         if history_err:
             print(f"  history failed: {history_err}", file=sys.stderr)
 
-        results, league_meta = fetch_all_standings(league_id)
+        cached = read_home_cache()
+        results, league_meta, standings_err = fetch_all_standings(league_id)
+        if standings_err:
+            print(f"  standings failed: {standings_err}", file=sys.stderr)
+        if not results and cached and cached.get("leagueId") == league_id:
+            results = cached_standings_as_results(cached)
+            if not league_meta.get("name"):
+                league_meta = {"name": cached.get("leagueName") or ""}
+
         entry_ids: list[int] = []
         seen_entries: set[int] = set()
         for row in results:
@@ -1019,12 +1063,14 @@ def main() -> int:
                     )
                     other_mults = effective_element_multipliers(other_picks, active)
                     mults_by_entry[eid] = other_mults
-                    overall_rank = 0
+                    overall_rank = positive_rank(
+                        ((mp or {}).get("entry_history") or {}).get("overall_rank")
+                    ) or 0
                     overall_points = int(row.get("total") or 0)
                     try:
                         other_entry = fpl_get(f"/entry/{eid}/")
                         assert isinstance(other_entry, dict)
-                        overall_rank = int(other_entry.get("summary_overall_rank") or 0)
+                        overall_rank = int(other_entry.get("summary_overall_rank") or 0) or overall_rank
                         overall_points = int(
                             other_entry.get("summary_overall_points") or overall_points
                         )
@@ -1155,6 +1201,8 @@ def main() -> int:
                 focus_pts = cached_summary.get("gwPoints", focus_pts)
 
         degraded_msgs: list[str] = []
+        if standings_err:
+            degraded_msgs.append(standings_err)
         if league_picks_status.get("blackout"):
             degraded_msgs.append("FPL picks API blackout — showing cached squad where available")
         if entry_err:
@@ -1195,7 +1243,6 @@ def main() -> int:
                     focus_league_rank = int(row.get("rank") or 0)
                     break
 
-        cached = read_home_cache()
         cached_summary = (
             cached.get("summary")
             if cached and cached.get("managerId") == manager_id and isinstance(cached.get("summary"), dict)
