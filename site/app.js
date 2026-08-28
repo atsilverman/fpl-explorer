@@ -2726,7 +2726,7 @@
       const overallRank =
         homePositiveRank(row.overallRank) ?? homePositiveRank(payloadSummary?.overallRank);
       const overallPoints =
-        Number(row.overallPoints ?? row.total) ||
+        Math.max(Number(row.total) || 0, Number(row.overallPoints) || 0) ||
         Number(payloadSummary?.overallPoints) ||
         null;
       return {

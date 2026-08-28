@@ -299,6 +299,8 @@ def resolve_focus_summary_fields(
     cached_summary: dict | None = None,
     *,
     gw_in_play: bool = False,
+    league_total: int | None = None,
+    live_gw_pts: int | None = None,
 ) -> dict[str, object]:
     """Overall rank/points/name — entry API, cache, then picks (deadline snapshot).
 
@@ -320,10 +322,24 @@ def resolve_focus_summary_fields(
         overall_rank = picks_rank
 
     overall_points = int(entry.get("summary_overall_points") or 0)
+    picks_total = int(picks_history.get("total_points") or 0)
     if overall_points <= 0:
-        overall_points = int(picks_history.get("total_points") or 0)
+        overall_points = picks_total
     if overall_points <= 0:
         overall_points = int(cached_summary.get("overallPoints") or 0)
+    try:
+        league_pts = int(league_total) if league_total is not None else 0
+    except (TypeError, ValueError):
+        league_pts = 0
+    if league_pts > overall_points:
+        overall_points = league_pts
+    elif gw_in_play and live_gw_pts is not None:
+        try:
+            live = int(live_gw_pts)
+            if live > 0 and picks_total > 0 and overall_points <= picks_total:
+                overall_points = picks_total + live
+        except (TypeError, ValueError):
+            pass
 
     event_points = int(entry.get("summary_event_points") or 0)
     if event_points <= 0:
@@ -1054,6 +1070,15 @@ def main() -> int:
             else None
         )
 
+        focus_league_total = 0
+        for row in results:
+            try:
+                if int(row.get("entry") or 0) == manager_id:
+                    focus_league_total = int(row.get("total") or 0)
+                    break
+            except (TypeError, ValueError):
+                continue
+
         if picks_payload_ready(focus_picks_payload):
             mgr_overall_rank = positive_rank(entry.get("summary_overall_rank"))
             picks_rank = positive_rank(focus_hist.get("overall_rank"))
@@ -1068,6 +1093,12 @@ def main() -> int:
             mgr_overall_points = int(entry.get("summary_overall_points") or 0)
             if mgr_overall_points <= 0:
                 mgr_overall_points = int(focus_hist.get("total_points") or 0)
+            if focus_league_total > mgr_overall_points:
+                mgr_overall_points = focus_league_total
+            elif gw_in_play and focus_pts > 0:
+                picks_total = int(focus_hist.get("total_points") or 0)
+                if picks_total > 0 and mgr_overall_points <= picks_total:
+                    mgr_overall_points = picks_total + focus_pts
             entry_data[manager_id] = {
                 "picks": focus_picks,
                 "active": focus_active,
@@ -1135,9 +1166,8 @@ def main() -> int:
                         other_entry = fpl_get(f"/entry/{eid}/")
                         assert isinstance(other_entry, dict)
                         overall_rank = int(other_entry.get("summary_overall_rank") or 0) or overall_rank
-                        overall_points = int(
-                            other_entry.get("summary_overall_points") or overall_points
-                        )
+                        entry_pts = int(other_entry.get("summary_overall_points") or 0)
+                        overall_points = max(overall_points, entry_pts)
                     except (
                         urllib.error.HTTPError,
                         urllib.error.URLError,
@@ -1216,8 +1246,10 @@ def main() -> int:
                     "eventTotalOfficial": int(row.get("event_total") or 0),
                     "total": int(row.get("total") or 0),
                     "overallRank": int(ed.get("overall_rank") or 0) or None,
-                    "overallPoints": int(ed.get("overall_points") or 0)
-                    or int(row.get("total") or 0),
+                    "overallPoints": max(
+                        int(ed.get("overall_points") or 0),
+                        int(row.get("total") or 0),
+                    ),
                     "rankOfficial": int(row.get("rank") or 0),
                     "rankPrev": positive_rank(row.get("last_rank")),
                     "inPlay": in_play,
@@ -1313,6 +1345,8 @@ def main() -> int:
             focus_hist,
             cached_summary,
             gw_in_play=gw_in_play,
+            league_total=focus_league_total or None,
+            live_gw_pts=focus_pts,
         )
 
         # team id → fixture id for this GW (DGW: last write wins; rare).
