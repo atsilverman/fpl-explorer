@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=807" />
+<link rel="stylesheet" href="styles.css?v=810" />
 <script>
 (() => {
   try {
@@ -434,6 +434,30 @@
     </div>
   </div>
 </div>
+<script>
+(() => {
+  try {
+    if (!window.matchMedia("(max-width: 720px)").matches) return;
+    const cluster = document.querySelector(".page-nav-center");
+    const label = document.getElementById("page-tray-label");
+    if (!cluster || !label) return;
+    const apply = () => {
+      const vv = window.visualViewport;
+      const screenMid = vv ? vv.offsetLeft + vv.width / 2 : window.innerWidth / 2;
+      const rect = label.getBoundingClientRect();
+      if (!rect.width) return;
+      const raw = cluster.style.getPropertyValue("--page-nav-label-offset").trim();
+      const current = raw ? parseFloat(raw) : 0;
+      const offset = Number.isFinite(current) ? current : 0;
+      const naturalMid = rect.left + rect.width / 2 - offset;
+      cluster.style.setProperty("--page-nav-label-offset", `${screenMid - naturalMid}px`);
+      cluster.classList.add("is-label-centered");
+    };
+    apply();
+    requestAnimationFrame(apply);
+  } catch (_) {}
+})();
+</script>
 
 <div class="topbar" id="subtoolbar">
   <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
@@ -1319,7 +1343,7 @@
 <script src="home_data.js?v=26"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=809"></script>
+<script src="app.js?v=812"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -3036,14 +3036,14 @@
     });
   }
 
-  function homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther } = {}) {
+  function homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther, showActiveChip = false } = {}) {
     const entry = Number(row.entry);
     const rankVal = homeStandingsRankValue(row);
     const rankPrev = row.rankPrev != null ? Number(row.rankPrev) : (row.lastRank != null ? Number(row.lastRank) : null);
     const deltaPlaces = homeRankDeltaPlaces(rankVal, rankPrev);
     const deltaHTML = homeRankDeltaHTML(deltaPlaces, { compact: true });
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
-      ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${statRollSpan(rankVal, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>${deltaHTML}</span>`
+      ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${homeStandingsCountHTML(rankVal, { className: "home-stat-roll" })}</span>${deltaHTML}</span>`
       : "—";
     const showConfiguredPin =
       !!viewingOther &&
@@ -3052,10 +3052,11 @@
     const pin = showConfiguredPin
       ? `<span class="owned-flag home-owned-flag"${tipAttr("Your manager")} aria-label="Your manager">${ownedPinSVG()}</span>`
       : "";
+    const chipBadge = showActiveChip ? homeActiveChipBadgeHTML(row) : "";
     return `<td class="home-col-rank">${rankHTML}</td>
       <td class="home-col-manager">
         <div class="home-standings-manager">
-          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${pin}</span>
+          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${chipBadge}${pin}</span>
           <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
         </div>
       </td>`;
@@ -3211,8 +3212,15 @@
     return maps;
   }
 
+  function homeStandingsCountHTML(value, { className = "home-stat-roll" } = {}) {
+    if (value == null || !Number.isFinite(Number(value))) return "—";
+    return `<span class="${className}">${escapeHtml(String(Number(value)))}</span>`;
+  }
+
   function homeStandingsPillHTML(value, intensity) {
-    const roll = statRollSpan(value, { from: 0, decimals: 0, className: "home-stat-roll" });
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    const roll = homeStandingsCountHTML(n, { className: "home-stat-roll" });
     // null = outside top-5 band. 0 = weakest of the five (still tinted).
     if (intensity == null || !Number.isFinite(Number(intensity))) {
       if (value === 0) {
@@ -3251,11 +3259,11 @@
     const hasPlay = Number.isFinite(inPlay) && Number.isFinite(toPlay);
     const liveHTML = hasPlay
       ? (inPlay > 0
-        ? `<span class="ownership-pill home-standings-live-pill is-active"${tipAttr(liveTitle)}>${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
-        : `<span class="ownership-pill home-standings-live-pill is-zero"${tipAttr(liveTitle)}>${statRollSpan(inPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`)
+        ? `<span class="ownership-pill home-standings-live-pill is-active"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`
+        : `<span class="ownership-pill home-standings-live-pill is-zero"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`)
       : "—";
     const leftHTML = hasPlay
-      ? `<span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(leftTitle)}">${statRollSpan(toPlay, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+      ? `<span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(leftTitle)}">${homeStandingsCountHTML(toPlay)}</span>`
       : "—";
     const gwIntensity = topMaps && topMaps.gw ? topMaps.gw.get(entry) : null;
     const totalIntensity = topMaps && topMaps.total ? topMaps.total.get(entry) : null;
@@ -3267,7 +3275,7 @@
       : "—";
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
+      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther, showActiveChip: true })}
       <td class="home-col-live">${liveHTML}</td>
       <td class="home-col-left">${leftHTML}</td>
       <td class="home-col-gw">${gwHTML}</td>
@@ -3327,11 +3335,9 @@
     el.homeStandingsBody.innerHTML = sorted.map((r) =>
       homeStandingsLiveRowHTML(r, opts)
     ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
-    // Sort re-renders skip page-enter motion — settle odometers so cells aren't blank.
-    finishHomeStatRolls(el.homeStandingsBody);
     syncHomeStandingsSortHeaders();
     syncHomeOwnerHighlights();
-    syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false });
+    syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false, allowShrink: false });
   }
 
   function bindHomeStandingsSort() {
@@ -3384,6 +3390,35 @@
   }
 
   const HOME_CHIP_ORDER = ["wildcard", "freehit", "bboost", "3xc"];
+  const HOME_CHIP_ABBR = {
+    wildcard: "WC",
+    freehit: "FH",
+    bboost: "BB",
+    "3xc": "TC",
+  };
+
+  function homeActiveChipName(row) {
+    const active = row.activeChip ? String(row.activeChip).trim() : "";
+    if (active && HOME_CHIP_ABBR[active]) return active;
+    const chips = row.chips && typeof row.chips === "object" ? row.chips : {};
+    for (const name of HOME_CHIP_ORDER) {
+      const chip = chips[name];
+      if (chip && chip.status === "active") return name;
+    }
+    return null;
+  }
+
+  function homeActiveChipBadgeHTML(row) {
+    const name = homeActiveChipName(row);
+    if (!name) return "";
+    const abbr = HOME_CHIP_ABBR[name] || name.toUpperCase();
+    const chips = row.chips && typeof row.chips === "object" ? row.chips : {};
+    const chip = chips[name];
+    const title = chip && chip.label
+      ? `${chip.label} active this gameweek`
+      : `${abbr} active this gameweek`;
+    return `<span class="home-standings-chip-badge"${tipAttr(title)} aria-label="${escapeHtml(title)}">${escapeHtml(abbr)}</span>`;
+  }
 
   function homeChipCellHTML(chip) {
     const status = chip && chip.status ? String(chip.status) : "available";
@@ -3548,20 +3583,22 @@
     ].filter(Boolean);
     if (tables.length < 2) return;
 
-    tables.forEach((table) => {
-      table.querySelectorAll("thead tr, tbody tr[data-entry]").forEach((tr) => {
-        tr.style.height = "";
-      });
-    });
-
     // Desktop equal-share rows come from CSS (height: 1px trick).
     if (homeSquadIsDesktopLayout()) return;
 
+    const measureTr = (tr) => {
+      const prev = tr.style.height;
+      tr.style.height = "auto";
+      const h = Math.ceil(tr.getBoundingClientRect().height);
+      tr.style.height = prev;
+      return h;
+    };
+
     const heads = tables.map((t) => t.querySelector("thead tr")).filter(Boolean);
     if (heads.length > 1) {
-      const maxHead = Math.max(...heads.map((tr) => tr.getBoundingClientRect().height));
+      const maxHead = Math.max(...heads.map(measureTr));
       if (maxHead > 0) {
-        const px = `${Math.ceil(maxHead)}px`;
+        const px = `${maxHead}px`;
         heads.forEach((tr) => {
           tr.style.height = px;
         });
@@ -3579,9 +3616,9 @@
     });
     byEntry.forEach((trs) => {
       if (trs.length < 2) return;
-      const maxH = Math.max(...trs.map((tr) => tr.getBoundingClientRect().height));
+      const maxH = Math.max(...trs.map(measureTr));
       if (!(maxH > 0)) return;
-      const px = `${Math.ceil(maxH)}px`;
+      const px = `${maxH}px`;
       trs.forEach((tr) => {
         tr.style.height = px;
       });
@@ -3644,7 +3681,7 @@
         syncHomeStandingsRowHeights();
       }
     });
-    requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false }));
+    requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false, allowShrink: false }));
   }
 
   const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;
@@ -5083,26 +5120,21 @@
     const token = ++homeEnterMotionToken;
     const rollMs = Math.max(400, Number(duration) || HOME_ENTER_ROLL_MS);
     prepareHomeStatRolls();
-    // Manager view-switch: standings values don't change — settle them
-    // immediately so only summary + squad re-roll / draw.
-    if (skipStandings && el.homeStandingsPanel) {
+    // League standings use settled counts — only summary + squad roll on enter.
+    if (el.homeStandingsPanel) {
       finishHomeStatRolls(el.homeStandingsPanel);
     }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (token !== homeEnterMotionToken) return;
         void pane.offsetWidth;
-        // Pin pager tracks to the active page before rolls start. Without an
-        // explicit height the flex track sizes to the tallest page (standings
-        // or squad), then a later sync shrinks it — the "condense after enter".
         syncHomeStandingsRowHeights();
         syncHomeSquadRowHeights();
-        syncHomeStandingsTrackHeight(0, { animate: false });
+        syncHomeStandingsTrackHeight(0, { animate: false, allowShrink: false });
         syncHomeSquadTrackHeight(0, { animate: false });
         const rollNodes = [...pane.querySelectorAll(".home-stat-roll[data-count-to]")].filter(
           (node) =>
             !(
-              skipStandings &&
               el.homeStandingsPanel &&
               el.homeStandingsPanel.contains(node)
             )
@@ -5340,6 +5372,9 @@
     syncHomeOwnerHighlights();
     syncHomeLiveChrome();
     syncHomeLookupUI();
+    const standingsPageIdx = homeStandingsActivePageIndex();
+    syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: false });
+    syncHomeSquadLayout(undefined, { animate: false });
     // During page enter, leave odometers empty for startHomeEnterMotion.
     // Quiet/live rebuilds settle in the same turn so iOS never paints empty
     // rolls then a second count-up.
@@ -5355,10 +5390,8 @@
           skipStandings: true,
         });
       }
-      // Always snap pager heights after DOM rebuild — height tweens after
-      // cascade looked like a second enter on iPhone (especially after scroll).
       syncHomeSquadLayout(undefined, { animate: false });
-      syncHomeStandingsLayout(undefined, { animate: false });
+      syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: false });
     });
   }
 
@@ -17058,34 +17091,54 @@
     }
   }
 
+  function pageNavLabelOffsetPx(cluster) {
+    if (!cluster) return 0;
+    const raw = cluster.style.getPropertyValue("--page-nav-label-offset").trim();
+    if (raw) {
+      const inline = parseFloat(raw);
+      if (Number.isFinite(inline)) return inline;
+    }
+    const computed = getComputedStyle(cluster).getPropertyValue("--page-nav-label-offset").trim();
+    const n = parseFloat(computed);
+    return Number.isFinite(n) ? n : 0;
+  }
+
   function syncPageNavLabelCenter() {
     const cluster = el.pageNavCenter;
     const label = el.pageTrayLabel;
     if (!cluster || !label) return;
     if (!preferMobileSheet()) {
       cluster.style.removeProperty("--page-nav-label-offset");
+      cluster.classList.remove("is-label-centered");
       return;
     }
-    // Measure from a zero offset, then shift so the page name (not the
-    // flanking icon/caret/info) sits on the screen midpoint.
-    cluster.style.setProperty("--page-nav-label-offset", "0px");
-    requestAnimationFrame(() => {
+    const apply = () => {
       if (!preferMobileSheet() || !el.pageNavCenter || !el.pageTrayLabel) return;
+      const c = el.pageNavCenter;
+      const lbl = el.pageTrayLabel;
       const vv = window.visualViewport;
       const screenMid = vv
         ? vv.offsetLeft + vv.width / 2
         : window.innerWidth / 2;
-      const labelRect = el.pageTrayLabel.getBoundingClientRect();
+      const labelRect = lbl.getBoundingClientRect();
       if (!labelRect.width) {
-        el.pageNavCenter.style.removeProperty("--page-nav-label-offset");
+        c.style.removeProperty("--page-nav-label-offset");
+        c.classList.remove("is-label-centered");
         return;
       }
+      // Keep the current offset while measuring so the tray does not flash
+      // left (offset 0) before the corrected transform is applied.
+      const currentOffset = pageNavLabelOffsetPx(c);
       const labelMid = labelRect.left + labelRect.width / 2;
-      el.pageNavCenter.style.setProperty(
+      const naturalMid = labelMid - currentOffset;
+      c.style.setProperty(
         "--page-nav-label-offset",
-        `${screenMid - labelMid}px`
+        `${screenMid - naturalMid}px`
       );
-    });
+      c.classList.add("is-label-centered");
+    };
+    apply();
+    requestAnimationFrame(apply);
   }
 
   function syncPageTrayTrigger() {
@@ -17964,18 +18017,22 @@
     syncPageTabWheel();
   }
 
-  // Brand mark always returns to Home with a full refresh so filters
-  // and ephemeral UI state reset alongside the page switch.
+  // Brand mark returns to Home. Use in-app navigation when switching pages
+  // so the mobile page tray does not flash; full reload only when already Home.
   const brandHome = document.querySelector("#brand-home");
   if (brandHome) {
     brandHome.addEventListener("click", (e) => {
       e.preventDefault();
-      try {
-        localStorage.setItem(PAGE_KEY, "home");
-      } catch {
-        // Private browsing — reload still lands on the default page.
+      if (state.page === "home") {
+        try {
+          localStorage.setItem(PAGE_KEY, "home");
+        } catch {
+          // Private browsing — reload still lands on the default page.
+        }
+        location.reload();
+        return;
       }
-      location.reload();
+      setPage("home");
     });
   }
 
