@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=847" />
+<link rel="stylesheet" href="styles.css?v=858" />
 <script>
 (() => {
   try {
@@ -19,6 +19,7 @@
     // Keep in sync with app.js PAGES / PLANNER_NAV_ENABLED — missing entries flash
     // the wrong shell before JS loads (e.g. omitting "live" painted Home on refresh).
     const PLANNER_NAV_ENABLED = false;
+    if (!PLANNER_NAV_ENABLED) document.documentElement.classList.remove("planner-nav-enabled");
     const PAGES = ["home", "live", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
     let page = "home";
     try {
@@ -540,7 +541,8 @@
         <div id="expected-cat-menu" class="dropdown-panel expected-cat-menu" role="menu" aria-label="xData categories"></div>
       </div>
       <div class="segmented segmented-block live-mode-seg" id="live-mode-seg" hidden role="group" aria-label="Live view">
-        <button type="button" data-live-mode="defcon" class="active">DefCon</button>
+        <button type="button" data-live-mode="feed" class="active">Feed</button>
+        <button type="button" data-live-mode="defcon">DefCon</button>
         <button type="button" data-live-mode="points">Points</button>
         <button type="button" data-live-mode="bonus">Bonus</button>
       </div>
@@ -610,6 +612,13 @@
         <button type="button" data-live-status="all" class="active">All</button>
         <button type="button" data-live-status="live">Live</button>
         <button type="button" data-live-status="owned">Owned</button>
+      </div>
+      <div id="live-feed-filters" hidden>
+        <h3 class="live-filter-subhead">League ownership</h3>
+        <div class="segmented segmented-block" id="live-feed-owned-seg" role="group" aria-label="League ownership">
+          <button type="button" data-live-feed-owned="league" class="active">League owned</button>
+          <button type="button" data-live-feed-owned="all">All players</button>
+        </div>
       </div>
     </div>
 
@@ -938,14 +947,20 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-activity"/></svg>Live<button class="page-info-btn" type="button" aria-label="How Live works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle" id="live-page-subtitle">DefCon tracker — progress toward the +2 defensive contribution threshold (DEF 10 CBIT · MID/FWD 12 CBIRT).</p>
+            <p class="page-subtitle" id="live-page-subtitle">Event feed — FPL-relevant actions from live fixtures in chronological order, with points and league impact for your manager.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="live-count-label"></span>
           </div>
         </div>
       </div>
-      <div class="table-wrap live-table-wrap" id="live-table-wrap">
+      <div class="live-feed-wrap table-wrap" id="live-feed-wrap">
+        <table class="live-feed-table ownership-table" id="live-feed-table">
+          <thead id="live-feed-head"></thead>
+          <tbody id="live-feed-body"></tbody>
+        </table>
+      </div>
+      <div class="table-wrap live-table-wrap" id="live-table-wrap" hidden>
         <table class="live-defcon-table ownership-table" id="live-table">
           <thead id="live-table-head"></thead>
           <tbody id="live-table-body"></tbody>
@@ -1374,7 +1389,7 @@
 <script src="home_data.js?v=28"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=849"></script>
+<script src="app.js?v=855"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

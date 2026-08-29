@@ -786,10 +786,11 @@
     ownershipTreeWindow: "d7", // d7 | d3 | d1
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
-    liveMode: "defcon", // defcon | points | bonus
+    liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
     liveStatus: "all", // all | live | owned
-    liveSortKey: "actions", // defcon: actions|name|progress; points: pts|goals|…; bonus: bps
+    liveFeedOwnedFilter: "league", // all | league — league = hide players nobody in league owns
+    liveSortKey: "ts", // feed: ts|impact|name; defcon: actions|…; points: pts|…; bonus: bps
     liveSortDir: "desc",
   };
   state.teamSearchPins = state.teamCompareCodes;
@@ -1025,6 +1026,12 @@
     liveTableWrap: $("#live-table-wrap"),
     liveBonusWrap: $("#live-bonus-wrap"),
     liveBonusGrid: $("#live-bonus-grid"),
+    liveFeedWrap: $("#live-feed-wrap"),
+    liveFeedTable: $("#live-feed-table"),
+    liveFeedHead: $("#live-feed-head"),
+    liveFeedBody: $("#live-feed-body"),
+    liveFeedFilters: $("#live-feed-filters"),
+    liveFeedOwnedSeg: $("#live-feed-owned-seg"),
     liveUpdatedFooter: $("#live-updated-footer"),
     liveFiltersGroup: $("#live-filters-group"),
     liveModeSeg: $("#live-mode-seg"),
@@ -1364,6 +1371,7 @@
     if (state.search.trim() && !(state.page === "team" && !state.teamPickerSlot)) return true;
     if (state.page === "live" && state.liveMatchups.size) return true;
     if (state.page === "live" && state.liveStatus !== "all") return true;
+    if (state.page === "live" && state.liveMode === "feed" && state.liveFeedOwnedFilter !== "league") return true;
     const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
     if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
     if (state.ownedMin !== coreDefaults.ownedMin) return true;
@@ -1394,6 +1402,7 @@
     state.teamFilter.clear();
     state.liveMatchups.clear();
     state.liveStatus = "all";
+    state.liveFeedOwnedFilter = "league";
     const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
     state.priceMin = coreDefaults.priceMin;
     state.priceMax = coreDefaults.priceMax;
@@ -1422,6 +1431,9 @@
     updateOwnedSlider();
     updateMinsSlider();
     syncFilterChipUI();
+    syncLiveStatusSeg();
+    syncLiveFeedOwnedSeg();
+    syncFiltersResetUI();
     renderColumnsPanel();
     renderTable();
     if (state.page === "ownership") renderOwnership();
@@ -2310,6 +2322,9 @@
     HOME.elementGw = payload.elementGw && typeof payload.elementGw === "object"
       ? payload.elementGw
       : {};
+    if (payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
+      liveFeedIngest(Number(payload.gw), liveElementMapForGw(Number(payload.gw)));
+    }
     HOME.leaguePicksStatus = payload.leaguePicksStatus && typeof payload.leaguePicksStatus === "object"
       ? payload.leaguePicksStatus
       : null;
@@ -6560,7 +6575,7 @@
   function syncMobileChromeFade() {
     const fade = el.mobileChromeFade;
     const show =
-      preferMobileSheet() &&
+      mobileDocksActive() &&
       ((!el.mobileFilterDock || !el.mobileFilterDock.hidden) ||
         (!el.mobileViewDock || !el.mobileViewDock.hidden));
     if (fade) {
@@ -6624,7 +6639,7 @@
   function mobileChromeScrollActive() {
     if (state.page === "ownership" && ownershipIsTreemap()) return false;
     return (
-      preferMobileSheet() &&
+      mobileDocksActive() &&
       (document.documentElement.classList.contains("has-mobile-bottom-dock") ||
         document.documentElement.classList.contains("has-mobile-filter-fab") ||
         document.documentElement.classList.contains("has-mobile-view-dock"))
@@ -6812,7 +6827,7 @@
     const dock = el.mobileViewDock;
     const tabs = mobileViewTabsEl();
     if (!dock || !tabs) return;
-    if (!preferMobileSheet() || !mobileViewTabsVisible()) {
+    if (!mobileDocksActive() || !mobileViewTabsVisible()) {
       restoreMobileViewHome(tabs);
       dock.hidden = true;
       dock.setAttribute("aria-hidden", "true");
@@ -6838,7 +6853,7 @@
       el.scheduleSlidersToggle,
     ].filter(Boolean);
     if (!dock) return;
-    if (!preferMobileSheet()) {
+    if (!mobileDocksActive()) {
       restoreAllMobileFilterButtons();
       dock.hidden = true;
       dock.setAttribute("aria-hidden", "true");
@@ -6864,6 +6879,69 @@
     dock.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("has-mobile-filter-fab");
     syncMobileChromeFade();
+  }
+
+  function mobileDocksActive() {
+    return NARROW_MQ.matches;
+  }
+
+  function syncSubtoolbarViewport(page = state.page) {
+    if (!el.subtoolbar) return;
+    const isMarkets = page === "markets";
+    const isHome = page === "home";
+    const isLive = page === "live";
+    const hideSubtoolbar =
+      page === "schedule" ||
+      isMarkets ||
+      isHome ||
+      (preferMobileSheet() && page === "rankings");
+    el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
+    el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
+    el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
+    el.subtoolbar.classList.toggle("is-opta-mobile", page === "opta" && preferMobileSheet());
+    const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
+    if (viewTabs) viewTabs.style.display = page === "team" || isLive ? "none" : "";
+  }
+
+  let viewportLayoutSyncTimer = 0;
+  function scheduleViewportLayoutSync({ immediate = false } = {}) {
+    const run = () => {
+      viewportLayoutSyncTimer = 0;
+      syncMobileLayoutClass();
+      syncMobileChrome();
+      syncSubtoolbarViewport();
+      syncColumnsPanelHost();
+      syncTeamSearchHost();
+      syncTeamCompareHost();
+      syncTeamPickerCancelHost();
+      syncPageNavLabelCenter();
+      syncPageTabsScrollHints();
+      syncAllSegThumbs({ animate: false });
+      refreshNameSimplifyOrigins();
+      syncMobileScrollportHeight();
+      syncMobileTopChromeInset();
+      scheduleOptaMobileNameColWidth();
+      scheduleTeamTableHeadHeightSync();
+      syncExpectedCatToolbar();
+      syncMarketsViewControls();
+      syncBarbellHeadHeight();
+      scheduleOwnershipTreemapRelayout();
+      if (state.page === "opta") {
+        syncCoreUnderName();
+        syncLivePointsCoreUnder();
+      }
+      if (state.page === "team") syncTeamPickerCoreUnder();
+      bindMobileChromeScrollHide();
+      if (preferMobileSheet()) setExpectedCatMenuOpen(false);
+    };
+    if (immediate) {
+      if (viewportLayoutSyncTimer) clearTimeout(viewportLayoutSyncTimer);
+      viewportLayoutSyncTimer = 0;
+      run();
+      return;
+    }
+    if (viewportLayoutSyncTimer) clearTimeout(viewportLayoutSyncTimer);
+    viewportLayoutSyncTimer = window.setTimeout(run, 80);
   }
 
   function syncMobileChrome() {
@@ -9146,6 +9224,14 @@
     if (state.page === "live") {
       const legend = [
         spitRow(
+          `<span class="live-feed-impact is-pos spit-home-swatch" aria-hidden="true">+3.5 vs avg</span>`,
+          "Feed impact — net pts gained or lost vs your average league opponent (captain = 2×)."
+        ),
+        spitRow(
+          `<span class="live-feed-event-label spit-home-swatch" aria-hidden="true">Goal</span>`,
+          "Feed mode — chronological GW events with points change and league impact."
+        ),
+        spitRow(
           `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span></span>`,
           "DefCon mode — progress toward threshold; solid blue fill when achieved."
         ),
@@ -9158,14 +9244,20 @@
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
       const reading = [
-        spitRow(spitRank("Modes"), "DefCon / Points / Bonus toggle beside search — current gameweek only."),
+        spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus toggle beside search — current gameweek only."),
+        spitRow(spitRank("Feed"), "Most recent first — goals, assists, cards, DefCon, bonus, and appearance points as live stats update."),
+        spitRow(spitRank("Ownership"), "Feed filter — hide players nobody in your league owns, or show all."),
+        spitRow(
+          spitRank("Impact"),
+          "Impact = pts change × (your multiplier − avg opponent multiplier). Only you own him → full edge; everyone owns → ~0. Captain doubles your share. Negative → rivals benefit more; positive → you pull ahead of average."
+        ),
         spitRow(spitRank("Threshold"), "DEF needs 10 CBIT. MID/FWD need 12 CBIRT. GK ineligible for DefCon."),
         spitRow(spitRank("Points"), "Sortable GW stats — Pts, G, A, CS, Sv, DC check, bonus, cards."),
         spitRow(spitRank("Bonus"), "One card per fixture; BPS bars; top three get projected 3/2/1 (tie-break rules not modeled)."),
         spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned status."),
       ];
       return `${spitHead("activity", "How Live works")}
-        ${spitIntro("Current-GW live stats — DefCon progress, gameweek points, and per-fixture bonus projections.")}
+        ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}`;
     }
@@ -15162,6 +15254,366 @@
     return `<span class="threshold-dot live-defcon-achieved live-dc-check-enter"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
   }
 
+  function liveAchievedDotHTML(actions, threshold, pos) {
+    if (!Number.isFinite(actions) || actions < threshold) return "";
+    const title = `DefCon achieved — ${actions} ≥ ${threshold} ${pos} actions (+2 pts)`;
+    return `<span class="threshold-dot live-defcon-achieved live-dc-check-enter"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+  }
+
+  let liveFeedEvents = [];
+  let liveFeedSnapshot = null;
+  let liveFeedGw = null;
+  let liveFeedSeq = 0;
+
+  function liveFeedResetIfGwChanged(gw) {
+    if (liveFeedGw === gw) return;
+    liveFeedGw = gw;
+    liveFeedEvents = [];
+    liveFeedSnapshot = null;
+    liveFeedSeq = 0;
+  }
+
+  function liveFeedSnapRecord(eg) {
+    if (!eg || typeof eg !== "object") return null;
+    return {
+      pts: Number(eg.pts) || 0,
+      minutes: Number(eg.minutes) || 0,
+      goals: Number(eg.goals) || 0,
+      assists: Number(eg.assists) || 0,
+      cleanSheets: Number(eg.cleanSheets) || 0,
+      saves: Number(eg.saves) || 0,
+      bonus: Number(eg.bonus) || 0,
+      yellowCards: Number(eg.yellowCards) || 0,
+      redCards: Number(eg.redCards) || 0,
+      ownGoals: Number(eg.ownGoals) || 0,
+      penaltiesMissed: Number(eg.penaltiesMissed) || 0,
+      penaltiesSaved: Number(eg.penaltiesSaved) || 0,
+      defConHit: !!eg.defConHit,
+    };
+  }
+
+  function liveFeedGoalPts(pos) {
+    if (pos === "GK" || pos === "DEF") return 6;
+    if (pos === "MID") return 5;
+    return 4;
+  }
+
+  function liveFeedCleanSheetPts(pos) {
+    if (pos === "GK" || pos === "DEF") return 4;
+    if (pos === "MID") return 1;
+    return 0;
+  }
+
+  function liveFeedEntryMultiplier(entryId, eid) {
+    const squads = HOME && HOME.squadsByEntry;
+    if (!squads) return 0;
+    const squad = squads[String(entryId)] || squads[entryId];
+    if (!Array.isArray(squad)) return 0;
+    const pick = squad.find((p) => Number(p.element) === Number(eid));
+    if (!pick) return 0;
+    return Math.max(0, Number(pick.multiplier) || 1);
+  }
+
+  function liveFeedImpactMeta(eid, ptsDelta) {
+    const delta = Number(ptsDelta);
+    if (!Number.isFinite(delta) || delta === 0) {
+      return { net: 0, note: "No points change." };
+    }
+    const myEntry = Number(savedManagerId);
+    if (!myEntry || !HOME || !Array.isArray(HOME.standings) || !HOME.standings.length) {
+      return { net: 0, note: "Set manager + league in Preferences for league impact." };
+    }
+    const opponents = HOME.standings.filter((s) => Number(s.entry) !== myEntry);
+    if (!opponents.length) {
+      return { net: 0, note: "No league opponents loaded." };
+    }
+    const myMult = liveFeedEntryMultiplier(myEntry, eid);
+    let oppMultSum = 0;
+    for (const opp of opponents) oppMultSum += liveFeedEntryMultiplier(opp.entry, eid);
+    const avgOppMult = oppMultSum / opponents.length;
+    const net = delta * (myMult - avgOppMult);
+    let note = "";
+    if (myMult <= 0 && avgOppMult <= 0) note = "No league managers own him.";
+    else if (myMult <= 0 && avgOppMult > 0) note = "You don't own him — rivals gain on average.";
+    else if (myMult > 0 && avgOppMult <= 0) {
+      note = myMult >= 2 ? "Only your team — captain doubles the edge." : "Only your team owns him.";
+    } else if (Math.abs(net) < 0.05) note = "League-wide ownership — no differential.";
+    else if (net > 0) note = myMult >= 2 ? "Your captain gives you the edge." : "You gain vs average opponent.";
+    else note = "Rivals benefit more on average.";
+    return { net, note, myMult, avgOppMult };
+  }
+
+  function liveFeedMakeEvent(raw) {
+    liveFeedSeq += 1;
+    const impact = liveFeedImpactMeta(raw.eid, raw.ptsDelta);
+    return {
+      id: `${raw.gw}-${raw.eid}-${raw.kind}-${liveFeedSeq}`,
+      ...raw,
+      impactNet: impact.net,
+      impactNote: impact.note,
+    };
+  }
+
+  function liveFeedDiffCounter(oldVal, newVal, fn) {
+    const o = Number(oldVal) || 0;
+    const n = Number(newVal) || 0;
+    const d = n - o;
+    if (d <= 0) return;
+    fn(d, n);
+  }
+
+  function liveFeedDiffMinutes(oldM, newM, push) {
+    const o = Number(oldM) || 0;
+    const n = Number(newM) || 0;
+    if (o <= 0 && n > 0) {
+      if (n >= 60) {
+        push("appearance", "Appearance", 1, "pts");
+        push("minutes60", "60+ minutes", 1, "pts");
+      } else {
+        push("appearance", "Appearance", 1, "pts");
+      }
+    } else if (o > 0 && o < 60 && n >= 60) {
+      push("minutes60", "60+ minutes", 1, "pts");
+    }
+  }
+
+  function liveFeedPushStatDiffs(oldRec, newRec, pos, push, { skipMinutes = false } = {}) {
+    if (!skipMinutes) liveFeedDiffMinutes(oldRec.minutes, newRec.minutes, push);
+    liveFeedDiffCounter(oldRec.goals, newRec.goals, (d, v) =>
+      push("goal", v === 1 ? "Goal" : `${d} goals`, liveFeedGoalPts(pos) * d, "goals")
+    );
+    liveFeedDiffCounter(oldRec.assists, newRec.assists, (d, v) =>
+      push("assist", v === 1 ? "Assist" : `${d} assists`, 3 * d, "assists")
+    );
+    liveFeedDiffCounter(oldRec.cleanSheets, newRec.cleanSheets, (d, v) => {
+      const p = liveFeedCleanSheetPts(pos);
+      if (!p) return;
+      push("cleanSheet", v === 1 ? "Clean sheet" : `${d} clean sheets`, p * d, "cleanSheets");
+    });
+    const oldSavePts = Math.floor((Number(oldRec.saves) || 0) / 3);
+    const newSavePts = Math.floor((Number(newRec.saves) || 0) / 3);
+    if (newSavePts > oldSavePts) {
+      push("saves", "Save points", newSavePts - oldSavePts, "saves");
+    }
+    liveFeedDiffCounter(oldRec.bonus, newRec.bonus, (d, v) =>
+      push("bonus", v === 1 ? "Bonus point" : `${d} bonus pts`, d, "bonus")
+    );
+    liveFeedDiffCounter(oldRec.yellowCards, newRec.yellowCards, (d) =>
+      push("yellowCard", d === 1 ? "Yellow card" : `${d} yellow cards`, -d, "yellowCards")
+    );
+    liveFeedDiffCounter(oldRec.redCards, newRec.redCards, (d) =>
+      push("redCard", d === 1 ? "Red card" : `${d} red cards`, -3 * d, "redCards")
+    );
+    liveFeedDiffCounter(oldRec.ownGoals, newRec.ownGoals, (d) =>
+      push("ownGoal", d === 1 ? "Own goal" : `${d} own goals`, -2 * d, "ownGoals")
+    );
+    liveFeedDiffCounter(oldRec.penaltiesMissed, newRec.penaltiesMissed, (d) =>
+      push("penMissed", d === 1 ? "Penalty missed" : `${d} pens missed`, -2 * d, "penaltiesMissed")
+    );
+    liveFeedDiffCounter(oldRec.penaltiesSaved, newRec.penaltiesSaved, (d) =>
+      push("penSaved", d === 1 ? "Penalty saved" : `${d} pens saved`, 5 * d, "penaltiesSaved")
+    );
+    if (!oldRec.defConHit && newRec.defConHit) {
+      push("defCon", "DefCon threshold", 2, "defConHit");
+    }
+  }
+
+  function liveFeedSeedEvents(rec, ctx) {
+    const events = [];
+    let t = Date.now() - 3600000;
+    const push = (kind, label, ptsDelta, colKey) => {
+      if (!ptsDelta) return;
+      events.push(liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, ts: t }));
+      t += 1;
+    };
+    liveFeedPushStatDiffs(
+      {
+        minutes: 0,
+        goals: 0,
+        assists: 0,
+        cleanSheets: 0,
+        saves: 0,
+        bonus: 0,
+        yellowCards: 0,
+        redCards: 0,
+        ownGoals: 0,
+        penaltiesMissed: 0,
+        penaltiesSaved: 0,
+        defConHit: false,
+      },
+      rec,
+      ctx.pos,
+      push,
+      { skipMinutes: true }
+    );
+    return events;
+  }
+
+  function liveFeedIngest(gw, egMap) {
+    if (!Number.isFinite(gw)) return;
+    liveFeedResetIfGwChanged(gw);
+    const byElement = livePlayerByElement();
+    const matchups = liveMatchupsForGw(gw);
+    const matchupByTeam = new Map();
+    for (const m of matchups) {
+      matchupByTeam.set(m.home, m.id);
+      matchupByTeam.set(m.away, m.id);
+    }
+
+    const nextSnap = {};
+    const newEvents = [];
+    const seeding = !liveFeedSnapshot;
+
+    for (const [eidStr, eg] of Object.entries(egMap || {})) {
+      const rec = liveFeedSnapRecord(eg);
+      if (!rec) continue;
+      nextSnap[eidStr] = rec;
+
+      const etype = Number(eg.elementType) || 0;
+      const pos = LIVE_POS_BY_TYPE[etype];
+      if (!pos) continue;
+
+      const eid = Number(eidStr);
+      const player = byElement.get(eid);
+      if (!player) continue;
+      const team = player.team || currentTeamCode(player);
+      const matchupId = matchupByTeam.get(team) || null;
+      const ctx = {
+        eid,
+        gw,
+        player,
+        pos,
+        team,
+        matchupId,
+        live: !!eg.live || eg.status === "live",
+      };
+
+      const old = liveFeedSnapshot && liveFeedSnapshot[eidStr];
+      if (!old) {
+        if (seeding && (rec.minutes > 0 || rec.pts !== 0)) {
+          newEvents.push(...liveFeedSeedEvents(rec, ctx));
+        }
+        continue;
+      }
+
+      const push = (kind, label, ptsDelta, colKey) => {
+        if (!ptsDelta) return;
+        newEvents.push(liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, ts: Date.now() }));
+      };
+      liveFeedPushStatDiffs(old, rec, pos, push);
+    }
+
+    if (newEvents.length) {
+      liveFeedEvents.push(...newEvents);
+      if (liveFeedEvents.length > 500) liveFeedEvents = liveFeedEvents.slice(-500);
+    }
+    liveFeedSnapshot = nextSnap;
+  }
+
+  function liveFeedIsLeagueOwned(eid) {
+    const owners = HOME && HOME.ownersByElement && HOME.ownersByElement[String(eid)];
+    return Array.isArray(owners) && owners.length > 0;
+  }
+
+  function liveFeedFilterEvents(events) {
+    let out = events;
+    if (state.liveFeedOwnedFilter === "league") {
+      out = out.filter((e) => liveFeedIsLeagueOwned(e.eid));
+    }
+    if (state.liveMatchups.size) {
+      out = out.filter((e) => e.matchupId && state.liveMatchups.has(e.matchupId));
+    }
+    if (state.teamFilter.size) {
+      out = out.filter((e) => state.teamFilter.has(e.team));
+    }
+    if (state.posFilter.size) {
+      out = out.filter((e) => state.posFilter.has(e.pos));
+    }
+    if (state.liveStatus === "live") {
+      out = out.filter((e) => e.live);
+    } else if (state.liveStatus === "owned") {
+      out = out.filter((e) => e.player && e.player.code != null && ownedCodes.has(e.player.code));
+    }
+    const q = state.search.trim().toLowerCase();
+    if (q) {
+      out = out.filter((e) => {
+        const name = String(e.player.name || "").toLowerCase();
+        const team = String(e.team || "").toLowerCase();
+        return name.includes(q) || team.includes(q);
+      });
+    }
+    return out;
+  }
+
+  function liveFeedSortEvents(events) {
+    const dir = state.liveSortDir === "asc" ? 1 : -1;
+    const key = state.liveSortKey;
+    return events.slice().sort((a, b) => {
+      let cmp = 0;
+      if (key === "name") {
+        cmp = String(a.player.name || "").localeCompare(String(b.player.name || ""));
+      } else if (key === "impact") {
+        cmp = (a.impactNet || 0) - (b.impactNet || 0);
+        if (cmp === 0) cmp = (a.ts || 0) - (b.ts || 0);
+      } else {
+        cmp = (a.ts || 0) - (b.ts || 0);
+      }
+      return cmp * dir;
+    });
+  }
+
+  function liveFeedPtsDeltaHTML(ptsDelta, colKey) {
+    const n = Number(ptsDelta);
+    if (!Number.isFinite(n) || n === 0) return "";
+    const sign = n > 0 ? "+" : "−";
+    const text = `${sign}${Math.abs(n)}`;
+    return livePointsPillHTML(colKey || (n > 0 ? "pts" : "yellowCards"), text);
+  }
+
+  function liveFeedImpactHTML(ev) {
+    const net = Number(ev.impactNet) || 0;
+    if (!Number.isFinite(ev.impactNet)) return "";
+    const netAbs = Math.abs(net);
+    const netSign = net >= 0 ? "+" : "−";
+    const val = `${netSign}${netAbs.toFixed(1).replace(/\.0$/, "")}`;
+    return `<span class="live-feed-impact-val">${escapeHtml(val)}</span><span class="live-feed-impact-suffix"> vs avg</span>`;
+  }
+
+  function liveFeedRowHTML(ev, enterI) {
+    const ptsHTML = liveFeedPtsDeltaHTML(ev.ptsDelta, ev.colKey);
+    const net = Number(ev.impactNet) || 0;
+    const impactCls = net > 0.05 ? "is-pos" : net < -0.05 ? "is-neg" : "is-neutral";
+    const impactHTML = liveFeedImpactHTML(ev);
+    return `<tr class="live-feed-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(ev.player.code || ""))}">
+      <td class="col-player">${livePointsIdentityHTML(ev.player, ev.pos)}</td>
+      <td class="col-feed-event"><span class="live-feed-event-label">${escapeHtml(ev.label)}</span></td>
+      <td class="col-feed-impact ${impactCls}">${impactHTML}</td>
+      <td class="col-feed-pts col-num">${ptsHTML}</td>
+    </tr>`;
+  }
+
+  function renderLiveFeed(gw) {
+    liveFeedIngest(gw, liveElementMapForGw(gw));
+    let events = liveFeedEvents.filter((e) => e.gw === gw);
+    events = liveFeedSortEvents(liveFeedFilterEvents(events));
+    if (!el.liveFeedBody || !el.liveFeedHead) return;
+    el.liveFeedHead.innerHTML = `<tr>
+      <th class="col-player">Player</th>
+      <th class="col-feed-event">Event</th>
+      <th class="col-feed-impact col-num">Impact</th>
+      <th class="col-feed-pts col-num">Pts</th>
+    </tr>`;
+    const colCount = 4;
+    if (!events.length) {
+      el.liveFeedBody.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">No events for the current filters.</td></tr>`;
+    } else {
+      el.liveFeedBody.innerHTML = events.map((ev, i) => liveFeedRowHTML(ev, i)).join("");
+    }
+    if (el.liveCountLabel) {
+      el.liveCountLabel.textContent = `${events.length} event${events.length === 1 ? "" : "s"} · GW${gw}`;
+    }
+  }
+
   function liveFilteredRows(rows) {
     let out = rows;
     if (state.liveMatchups.size) {
@@ -15394,6 +15846,7 @@
   }
 
   function liveDefaultSortForMode(mode) {
+    if (mode === "feed") return { key: "ts", dir: "desc" };
     if (mode === "points") return { key: "pts", dir: "desc" };
     if (mode === "bonus") return { key: "bps", dir: "desc" };
     return { key: "actions", dir: "desc" };
@@ -15728,6 +16181,19 @@
     syncSegThumb(el.liveStatusSeg);
   }
 
+  function syncLiveFeedOwnedSeg() {
+    if (!el.liveFeedOwnedSeg) return;
+    el.liveFeedOwnedSeg.querySelectorAll("[data-live-feed-owned]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.liveFeedOwned === state.liveFeedOwnedFilter);
+    });
+    syncSegThumb(el.liveFeedOwnedSeg);
+  }
+
+  function syncLiveFeedFilters() {
+    const show = state.page === "live" && state.liveMode === "feed";
+    if (el.liveFeedFilters) el.liveFeedFilters.hidden = !show;
+  }
+
   function syncLiveModeSeg() {
     if (!el.liveModeSeg) return;
     el.liveModeSeg.querySelectorAll("[data-live-mode]").forEach((btn) => {
@@ -15757,7 +16223,10 @@
 
   function liveUpdateSubtitle(mode) {
     if (!el.livePageSubtitle) return;
-    if (mode === "points") {
+    if (mode === "feed") {
+      el.livePageSubtitle.textContent =
+        "Event feed — FPL-relevant actions from live fixtures in chronological order, with points and league impact for your manager.";
+    } else if (mode === "points") {
       el.livePageSubtitle.textContent =
         "Gameweek stat table — points, goals, assists, saves, bonus, cards, and DefCon hits for the current GW.";
     } else if (mode === "bonus") {
@@ -15844,11 +16313,14 @@
     const gw = liveDefaultGw();
     syncLiveMatchupFilters();
     syncLiveStatusSeg();
+    syncLiveFeedOwnedSeg();
+    syncLiveFeedFilters();
     syncLiveModeSeg();
     syncLivePosFilterGk();
 
     const mode = state.liveMode;
-    if (el.liveTableWrap) el.liveTableWrap.hidden = mode === "bonus";
+    if (el.liveTableWrap) el.liveTableWrap.hidden = mode === "bonus" || mode === "feed";
+    if (el.liveFeedWrap) el.liveFeedWrap.hidden = mode !== "feed";
     if (el.liveBonusWrap) el.liveBonusWrap.hidden = mode !== "bonus";
     if (el.liveTable) {
       el.liveTable.classList.toggle("live-defcon-table", mode === "defcon");
@@ -15856,7 +16328,9 @@
     }
     liveUpdateSubtitle(mode);
 
-    if (mode === "bonus") {
+    if (mode === "feed") {
+      renderLiveFeed(gw);
+    } else if (mode === "bonus") {
       renderLiveBonus(gw);
     } else if (mode === "points") {
       if (!el.liveTableBody || !el.liveTableHead) return;
@@ -15914,7 +16388,7 @@
   }
 
   function livePollRefreshMotion() {
-    if (state.liveMode === "points") return;
+    if (state.liveMode === "points" || state.liveMode === "feed") return;
     startLiveEnterMotion(el.livePage);
   }
 
@@ -16133,7 +16607,7 @@
     pane.querySelectorAll(".live-bonus-card").forEach((card, i) => {
       card.style.setProperty("--enter-i", String(i));
     });
-    pane.querySelectorAll(".live-defcon-row, .live-points-row").forEach((row, i) => {
+    pane.querySelectorAll(".live-defcon-row, .live-points-row, .live-feed-row").forEach((row, i) => {
       row.style.setProperty("--enter-i", String(i));
     });
 
@@ -16155,7 +16629,7 @@
     pane.querySelectorAll(".live-bonus-card").forEach((card, i) => {
       card.style.setProperty("--enter-i", String(i));
     });
-    pane.querySelectorAll(".live-defcon-row, .live-points-row").forEach((row, i) => {
+    pane.querySelectorAll(".live-defcon-row, .live-points-row, .live-feed-row").forEach((row, i) => {
       row.style.setProperty("--enter-i", String(i));
     });
     playLiveMotion(pane, {
@@ -17311,7 +17785,29 @@
   }
 
   function syncPlannerNavVisibility() {
+    document.documentElement.classList.toggle("planner-nav-enabled", PLANNER_NAV_ENABLED);
     if (el.pageTeam) el.pageTeam.hidden = !PLANNER_NAV_ENABLED;
+    if (el.pageTabs) {
+      el.pageTabs.querySelectorAll('[data-page-clone="team"]').forEach((node) => {
+        node.hidden = !PLANNER_NAV_ENABLED;
+      });
+    }
+    if (pageTabWheelBuilt) {
+      teardownPageTabWheel();
+      syncPageTabWheel();
+    }
+  }
+
+  function pageTabOriginIsVisible(node) {
+    if (!node || node.classList.contains("page-tab-clone")) return false;
+    if (!PLANNER_NAV_ENABLED) {
+      const btn = node.matches(".page-tab-btn") ? node : node.querySelector(".page-tab-btn");
+      if (pageKeyFromTabBtn(btn) === "team") return false;
+    }
+    if (node.matches(".page-tab-btn") && node.hidden) return false;
+    const btn = node.querySelector(".page-tab-btn");
+    if (btn && btn.hidden) return false;
+    return true;
   }
 
   function storedPage() {
@@ -17797,15 +18293,7 @@
     const isHome = page === "home";
     const isLive = page === "live";
     // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
-    const hideSubtoolbar =
-      page === "schedule" ||
-      isMarkets ||
-      isHome ||
-      (preferMobileSheet() && page === "rankings");
-    el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
-    el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
-    el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
-    el.subtoolbar.classList.toggle("is-opta-mobile", page === "opta" && preferMobileSheet());
+    syncSubtoolbarViewport(page);
     el.sidebar.style.display =
       page === "schedule" || isMarkets || isHome || (page === "team" && !state.teamPickerSlot)
         ? "none"
@@ -17852,8 +18340,7 @@
     if (el.liveFiltersGroup) {
       el.liveFiltersGroup.style.display = isLive ? "" : "none";
     }
-    const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
-    if (viewTabs) viewTabs.style.display = page === "team" || isLive ? "none" : "";
+    syncSubtoolbarViewport(page);
     if (page === "team") {
       if (state.view !== "players") {
         state.view = "players";
@@ -17876,6 +18363,7 @@
       if (el.teamAffordableGroup) el.teamAffordableGroup.style.display = "none";
       el.positionFilterGroup.style.display = "";
       syncLivePosFilterGk();
+      syncLiveFeedFilters();
     } else {
       el.valueModeGroup.style.display = state.view === "players" ? "" : "none";
       el.minutesFilterGroup.style.display = state.view === "players" ? "" : "none";
@@ -18081,7 +18569,7 @@
       const btn = e.target.closest("[data-live-mode]");
       if (!btn || !el.liveModeSeg.contains(btn)) return;
       const next = btn.dataset.liveMode;
-      if (next !== "defcon" && next !== "points" && next !== "bonus") return;
+      if (next !== "feed" && next !== "defcon" && next !== "points" && next !== "bonus") return;
       if (next === state.liveMode) return;
       clearLiveViewFilters();
       resetLiveMotionState(el.livePage);
@@ -18110,6 +18598,19 @@
       if (next !== "all" && next !== "live" && next !== "owned") return;
       if (next === state.liveStatus) return;
       state.liveStatus = next;
+      renderLive({ animate: true });
+      syncFiltersResetUI();
+    });
+  }
+  if (el.liveFeedOwnedSeg) {
+    el.liveFeedOwnedSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-live-feed-owned]");
+      if (!btn || !el.liveFeedOwnedSeg.contains(btn)) return;
+      const next = btn.dataset.liveFeedOwned;
+      if (next !== "all" && next !== "league") return;
+      if (next === state.liveFeedOwnedFilter) return;
+      state.liveFeedOwnedFilter = next;
+      syncLiveFeedOwnedSeg();
       renderLive({ animate: true });
       syncFiltersResetUI();
     });
@@ -18174,7 +18675,12 @@
       renderOwnership();
     });
   }
-  if (el.pageTeam) el.pageTeam.addEventListener("click", () => setPage("team"));
+  if (el.pageTeam) {
+    el.pageTeam.addEventListener("click", () => {
+      if (!PLANNER_NAV_ENABLED) return;
+      setPage("team");
+    });
+  }
   el.pageExpected.addEventListener("click", () => setPage("expected"));
   if (el.expectedCatBtn) {
     el.expectedCatBtn.addEventListener("click", (e) => {
@@ -18213,15 +18719,10 @@
     setExpectedCatMenuOpen(false);
   });
   window.addEventListener("resize", () => {
-    syncPageTabsScrollHints();
+    scheduleViewportLayoutSync();
     if (pageTabWheelEnabled() && pageTabWheelBuilt) {
       scrollActivePageTabIntoView({ instant: true });
     }
-    syncExpectedCatToolbar();
-    syncMarketsViewControls();
-    syncBarbellHeadHeight();
-    scheduleOwnershipTreemapRelayout();
-    if (preferMobileSheet()) setExpectedCatMenuOpen(false);
   });
 
   let pageTabWheelBuilt = false;
@@ -18276,7 +18777,7 @@
   function pageTabOrigins() {
     if (!el.pageTabs) return [];
     return [...el.pageTabs.children].filter(
-      (n) => n.hasAttribute("data-page-tab-origin") && !n.classList.contains("page-tab-clone")
+      (n) => n.hasAttribute("data-page-tab-origin") && pageTabOriginIsVisible(n)
     );
   }
 
@@ -18376,7 +18877,7 @@
   function buildPageTabWheel() {
     const tabs = el.pageTabs;
     if (!tabs || pageTabWheelBuilt) return;
-    const originals = [...tabs.children];
+    const originals = [...tabs.children].filter(pageTabOriginIsVisible);
     if (!originals.length) return;
     originals.forEach((n) => n.setAttribute("data-page-tab-origin", "1"));
     const before = document.createDocumentFragment();
@@ -18548,7 +19049,7 @@
         const clone = e.target.closest("[data-page-clone]");
         if (!clone || !el.pageTabs.contains(clone)) return;
         const page = clone.getAttribute("data-page-clone");
-        if (!page) return;
+        if (!page || (!PLANNER_NAV_ENABLED && page === "team")) return;
         e.preventDefault();
         e.stopPropagation();
         pageTabFocusEl = clone;
@@ -19868,31 +20369,20 @@
   }
   bindMqChange(FINE_HOVER_MQ, () => {
     syncPointerMode();
-    syncColumnsPanelHost();
-    refreshNameSimplifyOrigins();
-    syncExpectedCatToolbar();
-    syncMarketsViewControls();
-    syncMobileChrome();
+    scheduleViewportLayoutSync({ immediate: true });
   });
   bindMqChange(NARROW_MQ, () => {
-    syncColumnsPanelHost();
-    refreshNameSimplifyOrigins();
     resetMobileChromeScrollHide();
-    syncExpectedCatToolbar();
-    syncMarketsViewControls();
-    syncMobileChrome();
-    syncTeamPickerCancelHost();
     setPageTrayOpen(false);
     syncPageTrayTrigger();
     syncPageTabWheel();
+    scheduleViewportLayoutSync({ immediate: true });
     if (state.page === "home") {
       syncHomeLookupUI();
       renderHome({ deferDuringEnter: true });
     }
     if (state.page === "team") renderTeam();
     if (state.page === "opta") {
-      syncCoreUnderName();
-      scheduleOptaMobileNameColWidth();
       requestAnimationFrame(() => {
         snapOptaToGameStats();
         requestAnimationFrame(() => {
@@ -19901,8 +20391,16 @@
         });
       });
     }
+    disarmConfirmButton();
+    syncTeamPlannerPrefsBtns();
+    syncHomeViewBanner();
+    syncHomeSearchBtn();
+    refreshCompareScrollMirrorMode();
+    bindAllNameColumnSimplifies();
   });
-  bindMqChange(COLUMNS_IN_FILTERS_MQ, syncColumnsPanelHost);
+  bindMqChange(COLUMNS_IN_FILTERS_MQ, () => {
+    scheduleViewportLayoutSync({ immediate: true });
+  });
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", scheduleTeamLandscapeSync);
     window.visualViewport.addEventListener("scroll", scheduleTeamLandscapeSync);
@@ -20108,22 +20606,13 @@
       }
     }
     window.addEventListener("resize", () => {
-      syncAllSegThumbs({ animate: false });
-      syncTeamSearchHost();
-      syncTeamCompareHost();
-      syncPageTabsScrollHints();
-      syncPageNavLabelCenter();
-      refreshNameSimplifyOrigins();
-      syncMobileScrollportHeight();
-      syncMobileTopChromeInset();
-      scheduleOptaMobileNameColWidth();
+      scheduleViewportLayoutSync();
     });
     if (window.visualViewport) {
       syncVisualViewportInsets();
       window.visualViewport.addEventListener("resize", () => {
         syncVisualViewportInsets();
-        syncMobileScrollportHeight();
-        scheduleOptaMobileNameColWidth();
+        scheduleViewportLayoutSync();
         scheduleMobileViewportReset();
       });
       window.visualViewport.addEventListener("scroll", () => {
@@ -20142,51 +20631,6 @@
       syncMobileTopChromeInset();
       scheduleMobileViewportReset({ force: true });
     });
-    if (typeof NARROW_MQ.addEventListener === "function") {
-      NARROW_MQ.addEventListener("change", () => {
-        syncMobileLayoutClass();
-        syncTeamSearchHost();
-        syncTeamCompareHost();
-        syncTeamPickerCancelHost();
-        syncPageNavLabelCenter();
-        syncCoreUnderName();
-        syncLivePointsCoreUnder();
-        syncTeamPickerCoreUnder();
-        bindAllNameColumnSimplifies();
-        refreshNameSimplifyOrigins();
-        refreshCompareScrollMirrorMode();
-        bindMobileChromeScrollHide();
-        syncMobileScrollportHeight();
-        scheduleOptaMobileNameColWidth();
-        scheduleTeamTableHeadHeightSync();
-        disarmConfirmButton();
-        syncTeamPlannerPrefsBtns();
-        syncHomeViewBanner();
-        syncHomeSearchBtn();
-      });
-    } else if (typeof NARROW_MQ.addListener === "function") {
-      NARROW_MQ.addListener(() => {
-        syncMobileLayoutClass();
-        syncTeamSearchHost();
-        syncTeamCompareHost();
-        syncTeamPickerCancelHost();
-        syncPageNavLabelCenter();
-        syncCoreUnderName();
-        syncLivePointsCoreUnder();
-        syncTeamPickerCoreUnder();
-        bindAllNameColumnSimplifies();
-        refreshNameSimplifyOrigins();
-        refreshCompareScrollMirrorMode();
-        bindMobileChromeScrollHide();
-        syncMobileScrollportHeight();
-        scheduleOptaMobileNameColWidth();
-        scheduleTeamTableHeadHeightSync();
-        disarmConfirmButton();
-        syncTeamPlannerPrefsBtns();
-        syncHomeViewBanner();
-        syncHomeSearchBtn();
-      });
-    }
     bindAllNameColumnSimplifies();
     bindNestedTableScroll();
     bindMobileChromeScrollHide();
