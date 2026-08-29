@@ -2430,8 +2430,10 @@
   let homeLivePrefetchStarted = false;
   const HOME_ENTER_ROLL_MS = 3400;
   const HOME_VIEW_SWITCH_ROLL_MS = 2600;
+  const HOME_RANK_BORDER_REVEAL_RATIO = 0.32;
   const HOME_SCROLL_TOP_MS = 920;
   let homeScrollAnimToken = 0;
+  let homeRankBorderRevealTimer = null;
 
   function homeIsEnterBusy() {
     return !!(
@@ -2689,7 +2691,7 @@
     return `<span class="home-rank-delta${compact ? " is-compact" : ""} ${cls}"${tipAttr(label)} aria-label="${escapeHtml(label)}">${iconHTML(icon)}<span class="home-rank-delta-n">${n}</span></span>`;
   }
 
-  function setHomeRankDelta(elDelta, places) {
+  function setHomeRankDelta(elDelta, places, { muted = false, animateRoll = false } = {}) {
     if (!elDelta) return;
     if (places == null || !Number.isFinite(places) || places === 0) {
       elDelta.hidden = true;
@@ -2702,10 +2704,10 @@
     const up = places > 0;
     const cls = up ? "is-up" : "is-down";
     const icon = up ? "caret-up" : "caret-down";
-    const n = formatHomeRankDelta(places);
-    const label = `${up ? "Up" : "Down"} ${n} places vs last gameweek`;
+    const n = homeRankDeltaValueHTML(places, { animateRoll });
+    const label = `${up ? "Up" : "Down"} ${formatHomeRankDelta(places)} places vs last gameweek`;
     elDelta.hidden = false;
-    elDelta.className = `home-rank-delta ${cls}`;
+    elDelta.className = `home-rank-delta ${cls}${muted ? " is-chrome-muted" : ""}`;
     setTip(elDelta, label);
     elDelta.setAttribute("aria-label", label);
     elDelta.innerHTML = `${iconHTML(icon)}<span class="home-rank-delta-n">${n}</span>`;
@@ -3230,18 +3232,113 @@
     });
   }
 
-  function syncHomeLiveChrome() {
-    if (!el.homeBento) return;
-    const live = homeConfiguredHasLiveMinutes();
-    el.homeBento.classList.toggle("has-live-minutes", live);
+  let homeSummaryRankChromePending = false;
 
+  function clearHomeRankBorderRevealTimer() {
+    if (homeRankBorderRevealTimer) {
+      clearTimeout(homeRankBorderRevealTimer);
+      homeRankBorderRevealTimer = null;
+    }
+  }
+
+  function clearHomeSummaryRankChrome() {
+    clearHomeRankBorderRevealTimer();
+    if (el.homeBento) el.homeBento.classList.remove("is-rank-chrome-staged");
+    setHomeRankDelta(el.homeOverallRankDelta, null);
+    setHomeRankDelta(el.homeLeagueRankDelta, null);
+    setHomeOverallPct(el.homeOverallPct, null, null);
     const overallPanel = el.homeOverallRank && el.homeOverallRank.closest(".home-stat-panel");
     const leaguePanel = el.homeLeagueRank && el.homeLeagueRank.closest(".home-stat-panel");
     [overallPanel, leaguePanel].forEach((panel) => {
       if (panel) panel.classList.remove("is-rank-border-up", "is-rank-border-down");
     });
+  }
 
-    if (live) return;
+  function homeSummaryRankDeltaPlaces(summary, key) {
+    if (key === "overall") {
+      return summary.overallRankPrev == null
+        ? null
+        : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev);
+    }
+    return summary.leagueRankPrev == null
+      ? null
+      : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev);
+  }
+
+  function applyHomeSummaryRankDeltas(summary, { viewingOther = false, muted = false, animateRoll = false } = {}) {
+    setHomeRankDelta(
+      el.homeOverallRankDelta,
+      homeSummaryRankDeltaPlaces(summary, "overall"),
+      { muted, animateRoll }
+    );
+    setHomeOverallPct(
+      el.homeOverallPct,
+      viewingOther ? null : summary.overallRank,
+      viewingOther ? null : summary.totalPlayers
+    );
+    setHomeRankDelta(
+      el.homeLeagueRankDelta,
+      homeSummaryRankDeltaPlaces(summary, "league"),
+      { muted, animateRoll }
+    );
+  }
+
+  function revealHomeSummaryRankBorders() {
+    clearHomeRankBorderRevealTimer();
+    if (el.homeBento) el.homeBento.classList.remove("is-rank-chrome-staged");
+    [el.homeOverallRankDelta, el.homeLeagueRankDelta].forEach((node) => {
+      if (node) node.classList.remove("is-chrome-muted");
+    });
+    syncHomeRankPanelBorders();
+  }
+
+  function stageHomeSummaryRankChrome(summary, { viewingOther = false } = {}) {
+    if (el.homeBento) el.homeBento.classList.add("is-rank-chrome-staged");
+    const overallPanel = el.homeOverallRank && el.homeOverallRank.closest(".home-stat-panel");
+    const leaguePanel = el.homeLeagueRank && el.homeLeagueRank.closest(".home-stat-panel");
+    [overallPanel, leaguePanel].forEach((panel) => {
+      if (panel) panel.classList.remove("is-rank-border-up", "is-rank-border-down");
+    });
+    applyHomeSummaryRankDeltas(summary, { viewingOther, muted: true, animateRoll: true });
+  }
+
+  function scheduleHomeSummaryRankBorderReveal(rollMs, token) {
+    clearHomeRankBorderRevealTimer();
+    const delay = Math.max(120, Math.round(rollMs * HOME_RANK_BORDER_REVEAL_RATIO));
+    homeRankBorderRevealTimer = setTimeout(() => {
+      homeRankBorderRevealTimer = null;
+      if (token !== homeEnterMotionToken) return;
+      revealHomeSummaryRankBorders();
+    }, delay);
+  }
+
+  function applyHomeSummaryRankChrome(summary, { viewingOther = false } = {}) {
+    clearHomeRankBorderRevealTimer();
+    if (el.homeBento) el.homeBento.classList.remove("is-rank-chrome-staged");
+    applyHomeSummaryRankDeltas(summary, { viewingOther, muted: false });
+    syncHomeRankPanelBorders();
+  }
+
+  function homeShouldDeferSummaryRankChrome({ animateView = false, settleQuiet = false } = {}) {
+    if (settleQuiet || prefersReducedMotion()) return false;
+    if (animateView || homeSummaryRankChromePending) return true;
+    return !!(el.homePage && el.homePage.classList.contains("is-enter-pending"));
+  }
+
+  function syncHomeLiveChrome() {
+    if (!el.homeBento) return;
+    const live = homeConfiguredHasLiveMinutes();
+    el.homeBento.classList.toggle("has-live-minutes", live);
+  }
+
+  function syncHomeRankPanelBorders() {
+    if (!el.homeBento) return;
+    const overallPanel = el.homeOverallRank && el.homeOverallRank.closest(".home-stat-panel");
+    const leaguePanel = el.homeLeagueRank && el.homeLeagueRank.closest(".home-stat-panel");
+    [overallPanel, leaguePanel].forEach((panel) => {
+      if (panel) panel.classList.remove("is-rank-border-up", "is-rank-border-down");
+    });
+    if (homeConfiguredHasLiveMinutes()) return;
 
     const summary = homeSummaryForView(homeActiveViewEntryId());
     const overallDelta =
@@ -5355,6 +5452,13 @@
     });
   }
 
+  function homeRankDeltaValueHTML(places, { animateRoll = false } = {}) {
+    const abs = Math.abs(Number(places));
+    if (!Number.isFinite(abs) || abs <= 0) return "—";
+    if (animateRoll) return homeRankStatRollHTML(abs, 0);
+    return formatHomeRankDelta(places);
+  }
+
   function renderHomeSummaryStats(summary) {
     if (el.homeGwPoints) {
       if (summary.gwPoints == null || !Number.isFinite(Number(summary.gwPoints))) {
@@ -5468,16 +5572,29 @@
   }
 
   function startHomeEnterMotion(pane, { duration = HOME_ENTER_ROLL_MS, skipStandings = false } = {}) {
+    const finishSummaryRankChrome = () => {
+      homeSummaryRankChromePending = false;
+      clearHomeRankBorderRevealTimer();
+      if (el.homeBento && el.homeBento.classList.contains("is-rank-chrome-staged")) {
+        revealHomeSummaryRankBorders();
+      }
+    };
     if (!pane || prefersReducedMotion()) {
       if (pane) {
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
+        const summary = homeSummaryForView(homeActiveViewEntryId());
+        applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
       }
       return;
     }
+    homeSummaryRankChromePending = true;
     const token = ++homeEnterMotionToken;
     const rollMs = Math.max(400, Number(duration) || HOME_ENTER_ROLL_MS);
     prepareHomeStatRolls();
+    const summary = homeSummaryForView(homeActiveViewEntryId());
+    stageHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
+    scheduleHomeSummaryRankBorderReveal(rollMs, token);
     // League standings use settled counts — only summary + squad roll on enter.
     if (el.homeStandingsPanel) {
       finishHomeStatRolls(el.homeStandingsPanel);
@@ -5509,8 +5626,13 @@
         animateHomeImpBars(pane);
         // Hard-settle rolls only — no layout sync (avoids mid-enter height jump).
         window.setTimeout(() => {
-          if (token !== homeEnterMotionToken) return;
+          if (token !== homeEnterMotionToken) {
+            homeSummaryRankChromePending = false;
+            clearHomeRankBorderRevealTimer();
+            return;
+          }
           finishHomeStatRolls(pane);
+          finishSummaryRankChrome();
         }, rollMs + 80);
       });
     });
@@ -5600,23 +5722,16 @@
       el.homeGwHeading.textContent = "GW points";
     }
     renderHomeSummaryStats(summary);
-    setHomeRankDelta(
-      el.homeOverallRankDelta,
-      summary.overallRankPrev == null
-        ? null
-        : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
-    );
-    setHomeOverallPct(
-      el.homeOverallPct,
-      viewingOther ? null : summary.overallRank,
-      viewingOther ? null : summary.totalPlayers
-    );
-    setHomeRankDelta(
-      el.homeLeagueRankDelta,
-      summary.leagueRankPrev == null
-        ? null
-        : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
-    );
+    const deferRankChrome = homeShouldDeferSummaryRankChrome({ animateView, settleQuiet });
+    if (deferRankChrome) {
+      if (homeSummaryRankChromePending) {
+        stageHomeSummaryRankChrome(summary, { viewingOther });
+      } else {
+        clearHomeSummaryRankChrome();
+      }
+    } else {
+      applyHomeSummaryRankChrome(summary, { viewingOther });
+    }
     if (el.homeGwMeta) {
       const chip = summary.activeChip ? String(summary.activeChip) : "";
       el.homeGwMeta.innerHTML = chip
@@ -17201,6 +17316,8 @@
       // Invalidate in-flight rolls only. Do NOT flush deferred renders here —
       // that settled/rebuilt mid-start and replayed enter after scroll on iOS.
       homeEnterMotionToken += 1;
+      homeSummaryRankChromePending = false;
+      clearHomeRankBorderRevealTimer();
     }
     if (pane.id === "ownership-page") {
       ownershipEnterMotionToken += 1;

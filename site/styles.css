@@ -13629,6 +13629,11 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     var(--shadow-sm);
 }
 /* No live starters — rank delta borders on summary rank cards only. */
+.home-stat-panel {
+  transition:
+    border-color 1.05s var(--ease-out),
+    box-shadow 1.05s var(--ease-out);
+}
 .home-dashboard:not(.has-live-minutes) .home-stat-panel.is-rank-border-up {
   border-color: hsl(var(--positive) / 0.55);
   box-shadow:
@@ -13787,6 +13792,34 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-rank-num {
   min-width: 0;
 }
+.home-rank-delta:not([hidden]) {
+  animation: home-rank-chrome-in 0.42s var(--ease-out) both;
+}
+.home-dashboard.is-rank-chrome-staged .home-rank-delta:not([hidden]) {
+  animation: home-rank-chrome-in 0.42s var(--ease-out) both;
+}
+@keyframes home-rank-chrome-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-rank-delta:not([hidden]) {
+    animation: none;
+  }
+  .home-stat-panel {
+    transition: none;
+  }
+  .home-rank-delta.is-up,
+  .home-rank-delta.is-down {
+    transition: none;
+  }
+}
 .home-rank-delta {
   display: inline-flex;
   align-items: center;
@@ -13794,6 +13827,14 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   flex-shrink: 0;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+.home-rank-delta.is-up,
+.home-rank-delta.is-down {
+  transition: color 1.05s var(--ease-out);
+}
+.home-rank-delta.is-chrome-muted.is-up,
+.home-rank-delta.is-chrome-muted.is-down {
+  color: var(--text-faint);
 }
 .home-rank-delta .icon {
   width: 14px;
@@ -13809,6 +13850,17 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-size: 12px;
   font-weight: 650;
   letter-spacing: -0.02em;
+}
+.home-rank-delta-n .stat-roll,
+.home-rank-delta-n .home-stat-roll {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.home-rank-delta-n .stat-roll-digit {
+  height: 1em;
+  line-height: 1;
+  overflow: hidden;
 }
 .home-rank-delta.is-up {
   color: hsl(var(--positive));
