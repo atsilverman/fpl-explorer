@@ -53,6 +53,9 @@
   --pos-fwd: 3 92% 71%;
   --semantic-red: 3 92% 71%;
   --amber-hsl: 38 92% 50%;
+  /* Yellow-card stat pills — always dark type on saturated yellow. */
+  --yc-pill-bg: 46 94% 44%;
+  --yc-pill-fg: 240 10% 8%;
 
   --radius: 0.5rem;
   --shadow-sm: 0 1px 2px 0 hsl(240 6% 10% / 0.05);
@@ -143,6 +146,8 @@
     --semantic-red: 3 92% 71%;
     --blue-hsl: 217 91% 60%;
     --amber-hsl: 43 74% 49%;
+    --yc-pill-bg: 48 96% 48%;
+    --yc-pill-fg: 240 10% 8%;
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
     --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.5), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.6), 0 4px 6px -4px hsl(0 0% 0% / 0.6);
@@ -197,6 +202,8 @@
   --semantic-red: 3 92% 71%;
   --blue-hsl: 217 91% 60%;
   --amber-hsl: 43 74% 49%;
+  --yc-pill-bg: 48 96% 48%;
+  --yc-pill-fg: 240 10% 8%;
   --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
   --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.5), 0 1px 2px -1px hsl(0 0% 0% / 0.5);
   --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.6), 0 4px 6px -4px hsl(0 0% 0% / 0.6);
@@ -7648,7 +7655,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 }
 .spit-symbol .home-imp.spit-home-swatch .home-imp-track {
   width: 36px;
-  height: 5px;
+  height: 7px;
 }
 .spit-symbol .home-imp.spit-home-swatch .home-imp-fill {
   transition: none;
@@ -12987,18 +12994,12 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   gap: 12px;
   margin: 8px 0 32px;
 }
-/* Viewing another manager — banner + cards share the blue rail accent. */
+/* Viewing another manager — blue rail on the banner only; rank cards use delta borders. */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
-  --home-view-border: hsl(var(--blue-hsl) / 0.32);
-}
-.home-dashboard.is-viewing-manager .home-summary-cards > .home-panel,
-.home-dashboard.is-viewing-manager .home-tables-grid > .home-panel {
-  border-color: var(--home-view-border);
-  border-left: 3px solid var(--home-view-accent);
 }
 .home-dashboard.is-viewing-manager .home-view-banner {
-  border-left-color: var(--home-view-accent);
+  border-left: 3px solid var(--home-view-accent);
 }
 .home-dashboard.is-viewing-manager .home-view-banner-clear {
   background: hsl(var(--muted) / 0.35);
@@ -13663,7 +13664,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-panel-heading {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 10px;
   margin: 0 0 10px;
   padding: 2px 0;
   font-size: 12px;
@@ -13672,16 +13674,80 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+.home-panel-heading-left {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.home-panel-heading-kicker {
+  flex: none;
+  font: inherit;
+  color: inherit;
+}
+.home-panel-heading-view {
+  display: inline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-faint);
+  line-height: inherit;
+}
+.home-panel-heading-view:not(:empty)::before {
+  content: "·";
+  margin: 0 8px;
+  color: var(--text-faint);
+  font-weight: 500;
+}
 .home-panel-heading-meta {
+  flex: none;
+  max-width: 46%;
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
   color: var(--text-faint);
+  text-align: right;
+  line-height: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .home-panel-heading-meta:not(:empty)::before {
-  content: "·";
-  margin-right: 8px;
-  color: var(--text-faint);
+  content: none;
+}
+@media (min-width: 901px) {
+  .home-table-panel > .home-panel-heading {
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .home-table-panel > .home-panel-heading-left {
+    display: contents;
+    flex: none;
+    overflow: visible;
+    white-space: normal;
+  }
+  .home-table-panel > .home-panel-heading-view {
+    display: none;
+  }
+  .home-table-panel > .home-panel-heading-meta {
+    max-width: none;
+    text-align: left;
+  }
+  .home-table-panel > .home-panel-heading-meta:not(:empty)::before {
+    content: "·";
+    margin-right: 8px;
+    color: var(--text-faint);
+  }
 }
 .home-stat-panel {
   display: flex;
@@ -13916,6 +13982,12 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   #home-standings-panel .home-standings-table tbody tr[data-entry] {
     height: 1px;
   }
+  #home-standings-panel .home-transfers-table tbody tr[data-entry] {
+    height: auto;
+  }
+  #home-standings-panel .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
+    vertical-align: top;
+  }
   #home-squad-panel .home-squad-table tbody tr.home-bench-divider {
     height: auto;
   }
@@ -14043,37 +14115,23 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.35em;
-  height: 1.35em;
-  min-width: 1.35em;
-  max-width: 1.35em;
-  padding: 0;
-  border-radius: 999px;
-  font-size: 10px;
+  min-width: 2.15em;
+  min-height: 1.65em;
+  padding: 4px 5px;
+  border-radius: 5px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   box-sizing: border-box;
-  aspect-ratio: 1;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon {
-  width: 1.25em;
-  height: 1.25em;
-  min-width: 1.25em;
-  max-width: 1.25em;
-  padding: 0;
-}
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-stat-roll,
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill .stat-roll-digit {
-  line-height: 1;
-}
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-defcon-check-slot {
-  flex: none;
-  width: auto;
-  height: auto;
+  min-width: 1.55em;
+  min-height: 1.55em;
+  padding: 3px 4px;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill .check-mark-icon {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon circle {
   fill: #fff;
@@ -14092,7 +14150,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-good.is-ga-ring {
   box-shadow:
     0 0 0 1px hsl(var(--background)),
-    0 0 0 2px hsl(var(--positive));
+    0 0 0 2.5px hsl(var(--positive));
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus {
   color: #fff;
@@ -14111,8 +14169,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: #fff;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-warn {
-  background: hsl(45 93% 47%);
-  color: hsl(30 80% 12%);
+  background: hsl(var(--yc-pill-bg));
+  color: hsl(var(--yc-pill-fg));
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bad {
   background: hsl(var(--destructive));
@@ -14212,6 +14270,52 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-standings-page .home-table-wrap {
   margin: 0;
   overflow-x: hidden;
+}
+.home-standings-page-transfers {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  align-self: stretch;
+}
+.home-transfers-page-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+.home-transfers-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+  margin: 0;
+  padding-bottom: 44px;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+.home-transfers-table-wrap .home-transfers-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: hsl(var(--card));
+  box-shadow: 0 1px 0 hsl(var(--border) / 0.55);
+}
+.home-transfers-table-scroll-controls {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  pointer-events: none;
+}
+.home-transfers-table-scroll-controls[hidden] {
+  display: none;
 }
 .home-standings-dots {
   display: flex;
@@ -14577,6 +14681,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-weight: 600;
 }
 .home-pts .stat-roll,
+.home-mp-line .stat-roll,
 .home-imp-pct .stat-roll,
 .home-play-live .stat-roll,
 .home-play-left .stat-roll,
@@ -14592,6 +14697,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   overflow: hidden;
 }
 .home-pts .stat-roll-digit,
+.home-mp-line .stat-roll-digit,
 .home-imp-pct .stat-roll-digit,
 .home-play-live .stat-roll-digit,
 .home-play-left .stat-roll-digit,
@@ -14655,14 +14761,14 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 2px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .home-kickoff {
-  color: var(--text-dim);
-  font-size: 11.5px;
-  font-weight: 500;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 400;
 }
 .home-status-dot {
   width: 7px;
@@ -14780,7 +14886,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   position: relative;
   flex: 1 1 auto;
   width: 52px;
-  height: 6px;
+  height: 8px;
   border-radius: 999px;
   /* Groove sits on the row colour. */
   background-color: color-mix(
@@ -14789,31 +14895,6 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     hsl(var(--foreground) / 0.16)
   );
   overflow: hidden;
-}
-.home-imp-track::after {
-  /* Vertical ticks sit above fill + groove so they read through blue/orange. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  border-radius: inherit;
-  background-image:
-    linear-gradient(
-      var(--home-row-bg, hsl(var(--card))),
-      var(--home-row-bg, hsl(var(--card)))
-    ),
-    linear-gradient(
-      var(--home-row-bg, hsl(var(--card))),
-      var(--home-row-bg, hsl(var(--card)))
-    ),
-    linear-gradient(
-      var(--home-row-bg, hsl(var(--card))),
-      var(--home-row-bg, hsl(var(--card)))
-    );
-  background-size: 1px 100%, 1px 100%, 1px 100%;
-  background-position: 25% 0, 50% 0, 75% 0;
-  background-repeat: no-repeat;
 }
 .home-imp-fill {
   position: relative;
@@ -14832,16 +14913,16 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   flex: 0 0 auto;
   min-width: 3.2em;
   text-align: right;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 .home-imp.is-pos .home-imp-pct {
-  color: hsl(var(--positive));
+  color: hsl(var(--positive) / 0.72);
 }
 .home-imp.is-neg .home-imp-pct {
-  color: hsl(0 72% 48%);
+  color: hsl(var(--negative) / 0.72);
 }
 @media (prefers-reduced-motion: reduce) {
   .home-imp-fill {
@@ -14930,6 +15011,9 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   white-space: normal;
   width: auto;
 }
+.home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
+  vertical-align: top;
+}
 .home-transfers-status {
   margin: 0 0 8px;
   padding: 6px 10px;
@@ -14950,6 +15034,53 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   align-items: flex-start;
   gap: 3px;
   min-width: 0;
+  max-width: 100%;
+}
+.home-transfers-cell.is-multi {
+  gap: 4px;
+}
+.home-transfers-cell.is-multi .home-transfer-move + .home-transfer-move {
+  padding-top: 1px;
+  border-top: 1px solid hsl(var(--border) / 0.55);
+}
+.home-transfers-table-scroll-btn {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid hsl(var(--border) / 0.65);
+  border-radius: 999px;
+  background: hsl(var(--card) / 0.94);
+  color: var(--text-dim);
+  box-shadow:
+    0 1px 2px hsl(var(--foreground) / 0.08),
+    0 4px 12px hsl(var(--foreground) / 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-transfers-table-scroll-btn[hidden] {
+  display: none;
+  pointer-events: none;
+}
+.home-transfers-table-scroll-btn:hover {
+  background: hsl(var(--card));
+  color: var(--text);
+  border-color: hsl(var(--border));
+}
+.home-transfers-table-scroll-btn:active {
+  transform: scale(0.94);
+}
+.home-transfers-scroll-icon {
+  width: 14px;
+  height: 14px;
 }
 .home-transfer-move {
   display: inline-flex;
@@ -15163,7 +15294,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     padding: 7px 4px;
   }
   .home-squad-live-table col.home-col-player {
-    width: 40%;
+    width: 44%;
   }
   .home-squad-live-table col.home-col-pts {
     width: 10%;
@@ -15175,10 +15306,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     width: 12%;
   }
   .home-squad-live-table col.home-col-imp {
-    width: 24%;
+    width: 20%;
   }
   .home-squad-live-table .home-col-player {
-    width: 40%;
+    width: 44%;
     min-width: 0;
   }
   .home-squad-live-table .home-col-pts {
@@ -15191,7 +15322,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     width: 12%;
   }
   .home-squad-live-table .home-col-imp {
-    width: 24%;
+    width: 20%;
   }
   .home-squad-pts-table col.home-col-player,
   .home-squad-pts-table .home-col-player {
@@ -15227,17 +15358,20 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-squad-table .home-imp {
     min-width: 0;
     width: 100%;
-    gap: 4px;
+    gap: 3px;
     justify-content: center;
   }
   .home-squad-table .home-imp-track {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
-    width: auto;
-    max-width: 40px;
+    width: 26px;
+    max-width: 26px;
+    height: 7px;
   }
   .home-squad-table .home-imp-pct {
-    min-width: 2.2em;
+    min-width: 1.9em;
+    font-size: 10px;
+    font-weight: 400;
     text-align: right;
   }
   .home-standings-live-table .home-col-rank {
@@ -15329,10 +15463,12 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     font-size: 28px;
   }
   .home-imp {
-    min-width: 72px;
+    min-width: 52px;
+    gap: 4px;
   }
   .home-imp-track {
-    width: 36px;
+    width: 26px;
+    height: 7px;
   }
   .home-standings-live-table .home-col-rank {
     width: 15%;
@@ -15421,18 +15557,18 @@ html[data-page="home"] #subtoolbar {
   justify-content: center;
   gap: 0;
   line-height: 1.05;
-  font-size: 9.5px;
-  font-weight: 500;
-  color: var(--text-dim);
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-faint);
   white-space: nowrap;
 }
 .home-kickoff-day,
 .home-kickoff-time {
   display: block;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 .home-kickoff-day {
-  font-weight: 600;
+  font-weight: 400;
   text-transform: uppercase;
 }
 .home-mp-line.home-kickoff {
@@ -15500,6 +15636,9 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tr.is-view-active > td:first-child {
   border-left-color: hsl(var(--blue-hsl));
 }
+.home-dashboard.is-viewing-manager .home-standings-table tr.is-view-active > td:first-child {
+  border-left-color: transparent;
+}
 /* Player-tap ownership: wash + name only — no standings left rail. */
 .home-dashboard.is-player-lookup .home-standings-table tr[data-entry] > td:first-child {
   border-left-color: transparent;
@@ -15540,6 +15679,10 @@ html[data-page="home"] #subtoolbar {
   --home-row-bg: hsl(var(--blue-hsl) / 0.10);
   background: var(--home-row-bg);
 }
+.home-dashboard.is-viewing-manager .home-standings-table tr.is-view-active td {
+  --home-row-bg: hsl(var(--card));
+  background: var(--home-row-bg);
+}
 @media (hover: hover) and (pointer: fine) {
   #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned:hover > td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.16);
@@ -15555,6 +15698,10 @@ html[data-page="home"] #subtoolbar {
   }
   #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-view-active:hover td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.10);
+    background: var(--home-row-bg);
+  }
+  .home-dashboard.is-viewing-manager #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-view-active:hover td {
+    --home-row-bg: hsl(var(--muted) / 0.35);
     background: var(--home-row-bg);
   }
 }
@@ -16285,8 +16432,8 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   color: #fff;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-warn {
-  background: hsl(48 96% 53%);
-  color: hsl(40 50% 18%);
+  background: hsl(var(--yc-pill-bg));
+  color: hsl(var(--yc-pill-fg));
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-bad {
   background: hsl(var(--negative));
@@ -16451,8 +16598,8 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   vertical-align: middle;
 }
 .live-card-dot.is-yc {
-  background: hsl(48 96% 53%);
-  box-shadow: inset 0 0 0 1px hsl(45 80% 35% / 0.35);
+  background: hsl(var(--yc-pill-bg));
+  box-shadow: inset 0 0 0 1px hsl(var(--yc-pill-fg) / 0.22);
 }
 .live-card-dot.is-rc {
   background: hsl(var(--destructive-hsl, 0 72% 51%));

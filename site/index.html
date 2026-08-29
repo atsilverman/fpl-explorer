@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=816" />
+<link rel="stylesheet" href="styles.css?v=836" />
 <script>
 (() => {
   try {
@@ -769,7 +769,10 @@
         <div class="home-tables-grid">
         <article class="home-panel home-table-panel" id="home-squad-panel">
           <h3 class="home-panel-heading">
-            Team
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker">Team</span>
+              <span class="home-panel-heading-view" id="home-squad-view-label">Starting XI</span>
+            </span>
             <span class="home-panel-heading-meta" id="home-squad-gw-label"></span>
           </h3>
           <div class="home-squad-pager">
@@ -821,16 +824,19 @@
               </div>
             </div>
             <div class="home-squad-dots" id="home-squad-dots" role="tablist" aria-label="Team views">
-              <button type="button" class="home-squad-dot is-active" role="tab" aria-selected="true" aria-label="Live scoring" data-page="0"></button>
-              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Points breakdown" data-page="1"></button>
-              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Upcoming fixtures" data-page="2"></button>
+              <button type="button" class="home-squad-dot is-active" role="tab" aria-selected="true" aria-label="Starting XI" data-page="0"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Points" data-page="1"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Schedule" data-page="2"></button>
             </div>
           </div>
         </article>
 
         <article class="home-panel home-table-panel" id="home-standings-panel">
           <h3 class="home-panel-heading">
-            League
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker">League</span>
+              <span class="home-panel-heading-view" id="home-standings-view-label">Table</span>
+            </span>
             <span class="home-panel-heading-meta" id="home-league-title"></span>
           </h3>
           <p id="home-standings-lookup-empty" class="home-standings-lookup-empty" hidden></p>
@@ -853,19 +859,29 @@
                   </table>
                 </div>
               </div>
-              <div class="home-standings-page">
-                <div class="home-table-wrap">
-                  <p id="home-transfers-status" class="home-transfers-status" hidden></p>
-                  <table class="home-data-table home-standings-table home-transfers-table">
-                    <thead>
-                      <tr>
-                        <th scope="col" class="home-col-rank">#</th>
-                        <th scope="col" class="home-col-manager">Manager</th>
-                        <th scope="col" class="home-col-transfers">Transfers</th>
-                      </tr>
-                    </thead>
-                    <tbody id="home-standings-transfers-body"></tbody>
-                  </table>
+              <div class="home-standings-page home-standings-page-transfers">
+                <div class="home-transfers-page-shell">
+                  <div class="home-table-wrap home-transfers-table-wrap" id="home-transfers-table-wrap">
+                    <p id="home-transfers-status" class="home-transfers-status" hidden></p>
+                    <table class="home-data-table home-standings-table home-transfers-table">
+                      <thead>
+                        <tr>
+                          <th scope="col" class="home-col-rank">#</th>
+                          <th scope="col" class="home-col-manager">Manager</th>
+                          <th scope="col" class="home-col-transfers">Transfers</th>
+                        </tr>
+                      </thead>
+                      <tbody id="home-standings-transfers-body"></tbody>
+                    </table>
+                  </div>
+                  <div class="home-transfers-table-scroll-controls">
+                    <button type="button" class="home-transfers-table-scroll-btn is-down" id="home-transfers-scroll-down" hidden aria-label="Scroll to bottom of transfers list">
+                      <svg class="icon home-transfers-scroll-icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                    </button>
+                    <button type="button" class="home-transfers-table-scroll-btn is-up" id="home-transfers-scroll-up" hidden aria-label="Scroll to top of transfers list">
+                      <svg class="icon home-transfers-scroll-icon" aria-hidden="true"><use href="#i-chevron-up"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="home-standings-page">
@@ -902,9 +918,9 @@
               </div>
             </div>
             <div class="home-standings-dots" id="home-standings-dots" role="tablist" aria-label="League views">
-              <button type="button" class="home-standings-dot is-active" role="tab" aria-selected="true" aria-label="League" data-page="0"></button>
+              <button type="button" class="home-standings-dot is-active" role="tab" aria-selected="true" aria-label="Table" data-page="0"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Transfers" data-page="1"></button>
-              <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Captains" data-page="2"></button>
+              <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Captaincy" data-page="2"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Chips" data-page="3"></button>
             </div>
           </div>
@@ -1355,7 +1371,7 @@
 <script src="home_data.js?v=26"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=816"></script>
+<script src="app.js?v=836"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -1063,7 +1063,9 @@
     homeLeagueRankNum: $("#home-league-rank-num"),
     homeLeagueRankDelta: $("#home-league-rank-delta"),
     homeSquadGwLabel: $("#home-squad-gw-label"),
+    homeSquadViewLabel: $("#home-squad-view-label"),
     homeLeagueTitle: $("#home-league-title"),
+    homeStandingsViewLabel: $("#home-standings-view-label"),
     homeSquadBody: $("#home-squad-body"),
     homeSquadFixturesBody: $("#home-squad-fixtures-body"),
     homeSquadFixturesHead: $("#home-squad-fixtures-head"),
@@ -1078,11 +1080,15 @@
     homeStandingsCaptainsBody: $("#home-standings-captains-body"),
     homeStandingsChipsBody: $("#home-standings-chips-body"),
     homeTransfersStatus: $("#home-transfers-status"),
+    homeTransfersTableWrap: $("#home-transfers-table-wrap"),
+    homeTransfersScrollDown: $("#home-transfers-scroll-down"),
+    homeTransfersScrollUp: $("#home-transfers-scroll-up"),
     homeStandingsTrack: $("#home-standings-track"),
     homeStandingsDots: $("#home-standings-dots"),
     homeSummaryCards: $("#home-summary-cards"),
     homeSquadPanel: $("#home-squad-panel"),
     homeStandingsPanel: $("#home-standings-panel"),
+    homeTablesGrid: $(".home-tables-grid"),
     homeStandingsLookupEmpty: $("#home-standings-lookup-empty"),
     homePlayerProfile: $("#home-player-profile"),
     homePlayerMatchup: $("#home-player-matchup"),
@@ -2692,6 +2698,9 @@
   let homeOwnerBindingsReady = false;
   let homeStandingsPagerReady = false;
   let homeSquadPagerReady = false;
+  let homeTransfersScrollBound = false;
+  const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Schedule"];
+  const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips"];
   let homeViewEntryId = null;
   // Live standings sort — default total pts desc; Live/Left/GW/Total/# are clickable.
   let homeStandingsSortKey = "total";
@@ -2767,7 +2776,12 @@
         overallRank,
         overallRankPrev: payloadSummary?.overallRankPrev ?? null,
         leagueRank: row.rankOfficial ?? row.rankLive,
-        leagueRankPrev: payloadSummary?.leagueRankPrev ?? null,
+        leagueRankPrev:
+          row.rankPrev != null
+            ? Number(row.rankPrev)
+            : row.lastRank != null
+              ? Number(row.lastRank)
+              : payloadSummary?.leagueRankPrev ?? null,
         totalPlayers: HOME.summary?.totalPlayers,
         eventPointsOfficial: row.eventTotalOfficial,
         teamName: row.entryName || "",
@@ -3170,14 +3184,13 @@
 
     if (live) return;
 
-    const viewingOther = homeIsViewingOtherManager();
     const summary = homeSummaryForView(homeActiveViewEntryId());
     const overallDelta =
-      viewingOther || summary.overallRankPrev == null
+      summary.overallRankPrev == null
         ? null
         : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev);
     const leagueDelta =
-      viewingOther || summary.leagueRankPrev == null
+      summary.leagueRankPrev == null
         ? null
         : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev);
 
@@ -3372,7 +3385,7 @@
     ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
     syncHomeStandingsSortHeaders();
     syncHomeOwnerHighlights();
-    syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false, allowShrink: false });
+    syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false, allowShrink: true });
   }
 
   function bindHomeStandingsSort() {
@@ -3510,7 +3523,98 @@
       : transfers.activeChip === "wildcard"
         ? `<span class="home-transfer-chip">WC</span>`
         : "";
-    return `<span class="home-transfers-cell">${moveHTML}${hit}${chip}</span>`;
+    const multi = moves.length > 1;
+    return `<span class="home-transfers-cell${multi ? " is-multi" : ""}">${moveHTML}${hit}${chip}</span>`;
+  }
+
+  function homeTransfersTableScrollEl() {
+    return el.homeTransfersTableWrap;
+  }
+
+  function homeTransfersTableOverflows(wrap) {
+    return wrap.scrollHeight > wrap.clientHeight + 1;
+  }
+
+  function syncHomeTransfersTableScrollBtns() {
+    const wrap = homeTransfersTableScrollEl();
+    const down = el.homeTransfersScrollDown;
+    const up = el.homeTransfersScrollUp;
+    const controls = wrap && wrap.parentElement
+      ? wrap.parentElement.querySelector(".home-transfers-table-scroll-controls")
+      : null;
+    if (!wrap || !down || !up) return;
+    const onTransfers = homeStandingsActivePageIndex() === 1;
+    if (!onTransfers) {
+      down.hidden = true;
+      up.hidden = true;
+      if (controls) controls.hidden = true;
+      return;
+    }
+    wrap.scrollTop = Math.max(0, Math.min(wrap.scrollTop, wrap.scrollHeight - wrap.clientHeight));
+    const overflow = homeTransfersTableOverflows(wrap);
+    if (!overflow) {
+      down.hidden = true;
+      up.hidden = true;
+      if (controls) controls.hidden = true;
+      return;
+    }
+    if (controls) controls.hidden = false;
+    const atTop = wrap.scrollTop <= 1;
+    const atBottom = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 1;
+    down.hidden = !atTop;
+    up.hidden = !atBottom;
+  }
+
+  function homeTransfersTableScrollAnimate(wrap, to) {
+    const start = wrap.scrollTop;
+    const target = Math.max(0, Math.min(to, wrap.scrollHeight - wrap.clientHeight));
+    const delta = target - start;
+    if (Math.abs(delta) < 1) {
+      syncHomeTransfersTableScrollBtns();
+      return Promise.resolve();
+    }
+    const duration = 360;
+    const t0 = performance.now();
+    return new Promise((resolve) => {
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        wrap.scrollTop = start + delta * eased;
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          wrap.scrollTop = target;
+          syncHomeTransfersTableScrollBtns();
+          resolve();
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  function resetHomeTransfersTableScroll() {
+    const wrap = homeTransfersTableScrollEl();
+    if (wrap) wrap.scrollTop = 0;
+    syncHomeTransfersTableScrollBtns();
+  }
+
+  function bindHomeTransfersTableScrollControls() {
+    if (homeTransfersScrollBound) return;
+    if (!el.homeTransfersScrollDown || !el.homeTransfersScrollUp) return;
+    homeTransfersScrollBound = true;
+    const onBtn = (toBottom) => (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = homeTransfersTableScrollEl();
+      if (!wrap) return;
+      if (toBottom) {
+        homeTransfersTableScrollAnimate(wrap, wrap.scrollHeight - wrap.clientHeight);
+      } else {
+        homeTransfersTableScrollAnimate(wrap, 0);
+      }
+    };
+    el.homeTransfersScrollDown.addEventListener("click", onBtn(true));
+    el.homeTransfersScrollUp.addEventListener("click", onBtn(false));
   }
 
   function homeTransfersStatusLabel() {
@@ -3548,6 +3652,10 @@
       dot.classList.toggle("is-active", on);
       dot.setAttribute("aria-selected", on ? "true" : "false");
     });
+    if (el.homeStandingsViewLabel) {
+      el.homeStandingsViewLabel.textContent =
+        HOME_STANDINGS_VIEW_LABELS[activeIndex] || HOME_STANDINGS_VIEW_LABELS[0];
+    }
   }
 
   function homeStandingsPageWidth() {
@@ -3589,9 +3697,9 @@
         : homeStandingsActivePageIndex();
     const page = pages[idx];
     if (!page) return;
-    // Use the active page's content height — the horizontal track would
-    // otherwise size to the tallest of Standings / Captains / Chips.
-    let h = Math.ceil(Math.max(page.scrollHeight, page.offsetHeight));
+    // Transfers uses the Table page height so multi-move cells scroll inside fixed rows.
+    const measurePage = idx === 1 && pages[0] ? pages[0] : page;
+    let h = Math.ceil(Math.max(measurePage.scrollHeight, measurePage.offsetHeight));
     if (!(h > 0)) return;
     const prev = parseFloat(el.homeStandingsTrack.style.height) || 0;
     if (!allowShrink && prev > 0) h = Math.max(h, prev);
@@ -3607,19 +3715,30 @@
     el.homeStandingsTrack.style.height = next;
   }
 
-  /** Equalize header + per-manager row heights across frozen managers +
-   *  Live / Captains / Chips so highlight washes don't jump when swiping. */
+  /** Equalize header + per-manager row heights across Table / Captains / Chips.
+   *  Transfers rows stay natural height; the table scrolls inside a fixed viewport. */
   function syncHomeStandingsRowHeights() {
-    const tables = [
+    const transfersTable =
+      el.homeStandingsTransfersBody && el.homeStandingsTransfersBody.closest("table");
+    const coreTables = [
       el.homeStandingsBody && el.homeStandingsBody.closest("table"),
-      el.homeStandingsTransfersBody && el.homeStandingsTransfersBody.closest("table"),
       el.homeStandingsCaptainsBody && el.homeStandingsCaptainsBody.closest("table"),
       el.homeStandingsChipsBody && el.homeStandingsChipsBody.closest("table"),
     ].filter(Boolean);
-    if (tables.length < 2) return;
+    const allTables = transfersTable ? [...coreTables, transfersTable] : coreTables;
+    if (allTables.length < 2 && !coreTables.length) return;
 
-    // Desktop equal-share rows come from CSS (height: 1px trick).
-    if (homeSquadIsDesktopLayout()) return;
+    const clearRowHeights = (table) => {
+      table.querySelectorAll("thead tr, tbody tr[data-entry]").forEach((tr) => {
+        tr.style.height = "";
+      });
+    };
+
+    // Desktop equal-share rows come from CSS (height: 1px trick); drop stale mobile heights.
+    if (homeSquadIsDesktopLayout()) {
+      allTables.forEach(clearRowHeights);
+      return;
+    }
 
     const measureTr = (tr) => {
       const prev = tr.style.height;
@@ -3629,7 +3748,7 @@
       return h;
     };
 
-    const heads = tables.map((t) => t.querySelector("thead tr")).filter(Boolean);
+    const heads = allTables.map((t) => t.querySelector("thead tr")).filter(Boolean);
     if (heads.length > 1) {
       const maxHead = Math.max(...heads.map(measureTr));
       if (maxHead > 0) {
@@ -3640,8 +3759,15 @@
       }
     }
 
+    allTables.forEach(clearRowHeights);
+    if (transfersTable) {
+      transfersTable.querySelectorAll("tbody tr[data-entry]").forEach((tr) => {
+        tr.style.height = "";
+      });
+    }
+
     const byEntry = new Map();
-    tables.forEach((table) => {
+    coreTables.forEach((table) => {
       table.querySelectorAll("tbody tr[data-entry]").forEach((tr) => {
         const key = String(tr.dataset.entry || "");
         if (!key) return;
@@ -3650,7 +3776,7 @@
       });
     });
     byEntry.forEach((trs) => {
-      if (trs.length < 2) return;
+      if (trs.length < 1) return;
       const maxH = Math.max(...trs.map(measureTr));
       if (!(maxH > 0)) return;
       const px = `${maxH}px`;
@@ -3660,15 +3786,26 @@
     });
   }
 
+  function syncHomeTablesGridHeight() {
+    if (!el.homeTablesGrid || !el.homeSquadPanel || !el.homeStandingsPanel) return;
+    el.homeSquadPanel.style.minHeight = "";
+    el.homeStandingsPanel.style.minHeight = "";
+  }
+
   function syncHomeStandingsLayout(activeIndex, opts) {
     syncHomeStandingsRowHeights();
     syncHomeStandingsTrackHeight(activeIndex, opts);
+    requestAnimationFrame(() => {
+      syncHomeTablesGridHeight();
+      syncHomeTransfersTableScrollBtns();
+    });
   }
 
   function setHomeStandingsPage(index, { smooth = true } = {}) {
     if (!el.homeStandingsTrack) return;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     if (!pages[index]) return;
+    if (index === 1) resetHomeTransfersTableScroll();
     el.homeStandingsTrack.scrollTo({
       left: homeStandingsPageScrollLeft(index),
       behavior: smooth ? "smooth" : "auto",
@@ -3716,7 +3853,7 @@
         syncHomeStandingsRowHeights();
       }
     });
-    requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false, allowShrink: false }));
+    requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false, allowShrink: true }));
   }
 
   const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;
@@ -3743,6 +3880,9 @@
       dot.classList.toggle("is-active", on);
       dot.setAttribute("aria-selected", on ? "true" : "false");
     });
+    if (el.homeSquadViewLabel) {
+      el.homeSquadViewLabel.textContent = HOME_SQUAD_VIEW_LABELS[activeIndex] || HOME_SQUAD_VIEW_LABELS[0];
+    }
   }
 
   function homeSquadActivePageIndex() {
@@ -3857,6 +3997,9 @@
   function syncHomeSquadLayout(activeIndex, opts) {
     syncHomeSquadRowHeights();
     syncHomeSquadTrackHeight(activeIndex, opts);
+    requestAnimationFrame(() => {
+      syncHomeTablesGridHeight();
+    });
   }
 
   function setHomeSquadPage(index, { smooth = true } = {}) {
@@ -3995,6 +4138,7 @@
     bindHomeStandingsPager();
     bindHomeSquadPager();
     bindHomeScrollHoverGuard();
+    bindHomeTransfersTableScrollControls();
 
     function bindHomeRowTap(container, rowSelector, onRow) {
       if (!container) return;
@@ -4190,17 +4334,19 @@
     </tr>`;
   }
 
+  const HOME_IMP_BAR_MAX = 200;
+
   function homeImpBarVisual(impRaw) {
     const imp = Number.isFinite(Number(impRaw)) ? Math.round(Number(impRaw)) : 0;
     const abs = Math.abs(imp);
-    // Track is absolute 0–100% of unique-XI importance; C/TC (200/300) cap the fill.
-    const barPct = Math.min(100, abs);
+    // Bar fill: 0 at 0, full at ±200 (100% unique XI, 200% captain, 300% TC on the label).
+    const barPct = Math.min(100, (abs / HOME_IMP_BAR_MAX) * 100);
     if (abs < 1) {
       return { imp: 0, barPct: 0, sign: "is-flat", fillStyle: "--imp-pct:0%" };
     }
     const sign = imp > 0 ? "is-pos" : "is-neg";
-    // Multi-step tone: faint differentials → saturated high IMP.
-    const mag = Math.min(1, abs / 100);
+    // Multi-step tone: faint differentials → saturated at captain-level IMP.
+    const mag = Math.min(1, abs / HOME_IMP_BAR_MAX);
     const tone = 0.2 + 0.8 * Math.pow(mag, 0.85);
     const dark = themePrefersDark();
     const isPos = imp > 0;
@@ -4242,7 +4388,16 @@
         const dot = f.live
           ? `<span class="home-status-dot is-live" aria-label="Live"></span>`
           : `<span class="home-status-dot is-done" aria-label="Played"></span>`;
-        return `<span class="home-mp-line">${escapeHtml(String(mins ?? "—"))}′${dot}</span>`;
+        const minsHTML =
+          mins != null && Number.isFinite(Number(mins))
+            ? statRollSpan(Number(mins), {
+                from: 0,
+                decimals: 0,
+                suffix: "′",
+                className: "home-stat-roll home-mp-roll",
+              })
+            : `${escapeHtml(String(mins ?? "—"))}′`;
+        return `<span class="home-mp-line">${minsHTML}${dot}</span>`;
       }
       return homeKickoffHTML(f.kickoff || row.kickoff);
     }).join("");
@@ -5383,13 +5538,12 @@
       el.homeDeadline.hidden = !label;
     }
     if (el.homeGwHeading) {
-      el.homeGwHeading.textContent =
-        HOME.gw != null ? `GW ${HOME.gw} points` : "GW points";
+      el.homeGwHeading.textContent = "GW points";
     }
     renderHomeSummaryStats(summary);
     setHomeRankDelta(
       el.homeOverallRankDelta,
-      viewingOther || summary.overallRankPrev == null
+      summary.overallRankPrev == null
         ? null
         : homeRankDeltaPlaces(summary.overallRank, summary.overallRankPrev)
     );
@@ -5400,7 +5554,7 @@
     );
     setHomeRankDelta(
       el.homeLeagueRankDelta,
-      viewingOther || summary.leagueRankPrev == null
+      summary.leagueRankPrev == null
         ? null
         : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev)
     );
@@ -5517,7 +5671,7 @@
     }
     if (el.homeStandingsTransfersBody) {
       const configuredEntry = homeConfiguredEntryId();
-      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+      let rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       const opts = { configuredEntry, viewEntry, viewingOther };
       const statusLabel = homeTransfersStatusLabel();
       if (el.homeTransfersStatus) {
@@ -5532,6 +5686,11 @@
       el.homeStandingsTransfersBody.innerHTML = rows.map((r) =>
         homeTransfersRowHTML(r, opts)
       ).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
+      bindHomeTransfersTableScrollControls();
+      requestAnimationFrame(() => {
+        resetHomeTransfersTableScroll();
+        syncHomeTransfersTableScrollBtns();
+      });
     }
     if (el.homeStandingsCaptainsBody) {
       renderHomeStandingsCaptainsBody();
@@ -5555,8 +5714,10 @@
     syncHomeOwnerHighlights();
     syncHomeLiveChrome();
     syncHomeLookupUI();
+    syncHomeSquadPagerDots(homeSquadActivePageIndex());
     const standingsPageIdx = homeStandingsActivePageIndex();
-    syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: false });
+    syncHomeStandingsPagerDots(standingsPageIdx);
+    syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: true });
     syncHomeSquadLayout(undefined, { animate: false });
     // During page enter, leave odometers empty for startHomeEnterMotion.
     // Quiet/live rebuilds settle in the same turn so iOS never paints empty
@@ -5574,7 +5735,7 @@
         });
       }
       syncHomeSquadLayout(undefined, { animate: false });
-      syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: false });
+      syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: true });
     });
   }
 
@@ -8688,7 +8849,7 @@
             : "Team card page 2 — GW stat pills (G, A, CS, DC, B, Sv) matching Live Points; Sv swaps to YC when no keeper saves."
         ),
         spitRow(
-          spitRank("Fixtures"),
+          spitRank("Schedule"),
           mobile
             ? "Third swipe — next 4 GWs with crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
             : "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
