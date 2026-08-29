@@ -292,6 +292,62 @@ def positive_rank(value: object) -> int | None:
     return rank if rank > 0 else None
 
 
+def overall_rank_from_history(history: dict | None, gw: int) -> int | None:
+    """Overall rank at end of previous GW from entry history."""
+    if gw <= 1 or not isinstance(history, dict):
+        return None
+    for hist in history.get("current") or []:
+        try:
+            if int(hist.get("event") or 0) == gw - 1:
+                return positive_rank(hist.get("overall_rank"))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def resolve_entry_overall_rank_prev(
+    *,
+    eid: int,
+    manager_id: int,
+    gw: int,
+    gw_in_play: bool,
+    focus_overall_rank_prev: int | None,
+    picks_history: dict | None,
+    history_payload: dict | None,
+    cached_row: dict | None,
+) -> int | None:
+    """Baseline overall rank for intra-GW delta arrows (configured + league views)."""
+    if gw <= 1:
+        return None
+    if eid == manager_id and focus_overall_rank_prev:
+        return focus_overall_rank_prev
+    picks_history = picks_history if isinstance(picks_history, dict) else {}
+    picks_prev = positive_rank(picks_history.get("overall_rank"))
+    hist_prev = overall_rank_from_history(history_payload, gw)
+    cached_prev = positive_rank((cached_row or {}).get("overallRankPrev"))
+    if gw_in_play and picks_prev:
+        return picks_prev
+    if hist_prev:
+        return hist_prev
+    if picks_prev:
+        return picks_prev
+    return cached_prev
+
+
+def cached_standings_by_entry(cached: dict | None, league_id: int) -> dict[int, dict]:
+    if not cached or cached.get("leagueId") != league_id:
+        return {}
+    out: dict[int, dict] = {}
+    for row in cached.get("standings") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            out[int(row["entry"])] = row
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
 def resolve_focus_summary_fields(
     manager_id: int,
     entry: dict,
@@ -794,6 +850,7 @@ def cached_standings_as_results(cached: dict | None) -> list[dict]:
                 if row.get("rankOfficial") is not None
                 else row.get("rankLive"),
                 "last_rank": row.get("rankPrev"),
+                "overall_rank_prev": row.get("overallRankPrev"),
             }
         )
     return out
@@ -1057,6 +1114,8 @@ def main() -> int:
 
         standing_rows: list[dict] = []
         entry_data: dict[int, dict] = {}
+        history_by_entry: dict[int, dict] = {manager_id: history_payload}
+        cached_standings = cached_standings_by_entry(cached, league_id)
         mults_by_entry: dict[int, dict[int, int]] = {}
         owners_by_element: dict[int, list[int]] = {}
         progress_by_entry: dict[int, tuple[int, int]] = {}
@@ -1197,6 +1256,7 @@ def main() -> int:
                     try:
                         hist = fpl_get(f"/entry/{eid}/history/")
                         assert isinstance(hist, dict)
+                        history_by_entry[eid] = hist
                         history_chips_by_entry[eid] = list(hist.get("chips") or [])
                     except (
                         urllib.error.HTTPError,
@@ -1237,6 +1297,18 @@ def main() -> int:
                 gw,
             )
             transfer_summary = transfers_by_entry.get(str(eid))
+            picks_payload = picks_by_entry.get(eid)
+            picks_history = focus_hist if eid == manager_id else ((picks_payload or {}).get("entry_history") or {})
+            row_overall_rank_prev = resolve_entry_overall_rank_prev(
+                eid=eid,
+                manager_id=manager_id,
+                gw=gw,
+                gw_in_play=gw_in_play,
+                focus_overall_rank_prev=overall_rank_prev,
+                picks_history=picks_history,
+                history_payload=history_by_entry.get(eid),
+                cached_row=cached_standings.get(eid),
+            )
             standing_rows.append(
                 {
                     "entry": eid,
@@ -1246,6 +1318,7 @@ def main() -> int:
                     "eventTotalOfficial": int(row.get("event_total") or 0),
                     "total": int(row.get("total") or 0),
                     "overallRank": int(ed.get("overall_rank") or 0) or None,
+                    "overallRankPrev": row_overall_rank_prev,
                     "overallPoints": max(
                         int(ed.get("overall_points") or 0),
                         int(row.get("total") or 0),

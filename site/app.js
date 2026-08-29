@@ -2774,7 +2774,9 @@
         gwPoints: row.gwPointsLive,
         overallPoints,
         overallRank,
-        overallRankPrev: payloadSummary?.overallRankPrev ?? null,
+        overallRankPrev:
+          homePositiveRank(row.overallRankPrev) ??
+          (payloadSummary ? homePositiveRank(payloadSummary.overallRankPrev) : null),
         leagueRank: row.rankOfficial ?? row.rankLive,
         leagueRankPrev:
           row.rankPrev != null

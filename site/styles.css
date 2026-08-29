@@ -14569,8 +14569,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-opp-line .badge-img,
 .home-crest-sm {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 .home-crest-fallback {
   display: inline-flex;
@@ -14738,7 +14738,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 /* Crest + home-icon as one unit: left-align crests across rows,
    keep the group centered under the OPP / fixture header. */
 .home-opp-line {
-  --home-opp-crest: 18px;
+  --home-opp-crest: 20px;
   --home-opp-ha: 11px;
   --home-opp-gap: 3px;
   display: inline-flex;
@@ -15542,12 +15542,12 @@ html[data-page="home"] #subtoolbar {
 }
 .home-opp-line .badge-img,
 .home-crest-sm {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 4px;
 }
 .home-opp-line {
-  --home-opp-crest: 16px;
+  --home-opp-crest: 18px;
   --home-opp-ha: 10px;
 }
 .home-kickoff {
