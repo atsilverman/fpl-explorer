@@ -2503,9 +2503,33 @@
   }
 
   function homeLivePayloadMatchesPrefs(home) {
-    if (!home || !savedManagerId) return false;
+    if (!home || !home.managerId) return false;
     if (String(home.leagueId) !== HOME_LEAGUE_ID) return false;
-    return TRACKED_MANAGER_IDS.map(String).includes(String(savedManagerId));
+    return TRACKED_MANAGER_IDS.map(String).includes(String(home.managerId));
+  }
+
+  function homeElementGwFingerprint(home) {
+    const eg = home && home.elementGw;
+    if (!eg || typeof eg !== "object") return "";
+    let count = 0;
+    let goals = 0;
+    let maxMins = 0;
+    let pts = 0;
+    for (const row of Object.values(eg)) {
+      if (!row || typeof row !== "object") continue;
+      count += 1;
+      goals += Number(row.goals) || 0;
+      maxMins = Math.max(maxMins, Number(row.minutes) || 0);
+      pts += Number(row.pts) || 0;
+    }
+    return `${count}:${goals}:${maxMins}:${pts}`;
+  }
+
+  function homeLivePollReady() {
+    if (!homeLiveApiUrl() || !savedLeagueId) return false;
+    if (savedManagerId) return true;
+    const baked = HOME && HOME.managerId;
+    return !!(baked && TRACKED_MANAGER_IDS.map(String).includes(String(baked)));
   }
 
   function homeSquadShowLoading(viewEntry) {
@@ -2530,7 +2554,7 @@
 
   async function pollHomeFromLiveServer() {
     const url = homeLiveApiUrl();
-    if (!url || !savedManagerId || !savedLeagueId) return;
+    if (!url || !homeLivePollReady()) return;
     if (homeLivePollInFlight) return;
     homeLivePollInFlight = true;
     homeLiveLastPollAt = Date.now();
@@ -2563,7 +2587,10 @@
         String(HOME.generatedAt) === String(data.home.generatedAt) &&
         String(HOME.managerId || "") === String(data.home.managerId || "") &&
         String(HOME.leagueId || "") === String(data.home.leagueId || "");
-      if (sameStamp) {
+      const sameElementGw =
+        sameStamp &&
+        homeElementGwFingerprint(HOME) === homeElementGwFingerprint(data.home);
+      if (sameElementGw) {
         syncLiveNavChrome();
         if (state.page === "home") syncHomeCountLabel();
         return;
@@ -2591,7 +2618,7 @@
   }
 
   function syncHomeLivePolling() {
-    if (!homeLiveApiUrl() || !savedManagerId || !savedLeagueId) {
+    if (!homeLivePollReady()) {
       stopHomeLivePolling();
       syncLiveNavChrome();
       return;
@@ -2605,7 +2632,7 @@
 
   function prefetchHomeLiveCache() {
     if (homeLivePrefetchStarted) return;
-    if (!homeLiveApiUrl() || !savedManagerId || !savedLeagueId) return;
+    if (!homeLivePollReady()) return;
     homeLivePrefetchStarted = true;
     syncHomeLivePolling();
   }
@@ -15353,12 +15380,6 @@
     return `<span class="threshold-dot live-defcon-achieved live-dc-check-enter"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
   }
 
-  function liveAchievedDotHTML(actions, threshold, pos) {
-    if (!Number.isFinite(actions) || actions < threshold) return "";
-    const title = `DefCon achieved — ${actions} ≥ ${threshold} ${pos} actions (+2 pts)`;
-    return `<span class="threshold-dot live-defcon-achieved live-dc-check-enter"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
-  }
-
   let liveFeedEvents = [];
   let liveFeedSnapshot = null;
   let liveFeedGw = null;
@@ -15599,10 +15620,17 @@
     const impact = liveFeedImpactMeta(raw.eid, raw.ptsDelta);
     return {
       id: `${raw.gw}-${raw.eid}-${raw.kind}-${liveFeedSeq}`,
+      seq: liveFeedSeq,
       ...raw,
       impactNet: impact.net,
       impactNote: impact.note,
     };
+  }
+
+  function liveFeedRecentSortKey(ev) {
+    const liveTier = ev && ev.live ? 1 : 0;
+    const seq = Number(ev && ev.seq) || 0;
+    return liveTier * 1e12 + seq;
   }
 
   function liveFeedDiffCounter(oldVal, newVal, fn) {
@@ -15764,6 +15792,7 @@
       liveFeedPushStatDiffs(old, rec, pos, push);
     }
 
+    const matchupBonusEligible = liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement);
     liveFeedPushBonusProjDiffs(
       liveFeedSnapshot,
       nextSnap,
@@ -15773,8 +15802,45 @@
       gw,
       newEvents,
       runPtsByEid,
-      { seeding, matchupBonusEligible: liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement) }
+      { seeding, matchupBonusEligible }
     );
+
+    if (seeding) {
+      const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
+      liveFeedApplyBonusEff(nextSnap, bonusMeta);
+      let seedTs = Date.now() - 3_600_000 + newEvents.length;
+      for (const [eidStr, rec] of Object.entries(nextSnap)) {
+        const eff = Number(rec.bonusEff) || 0;
+        if (eff <= 0) continue;
+        const eg = egMap[eidStr];
+        const etype = Number(eg && eg.elementType) || 0;
+        const pos = LIVE_POS_BY_TYPE[etype];
+        if (!pos) continue;
+        const eid = Number(eidStr);
+        const player = byElement.get(eid);
+        if (!player) continue;
+        const team = player.team || currentTeamCode(player);
+        const meta = bonusMeta.get(eidStr) || { rank: 0, apiBonus: 0 };
+        seedTs += 1;
+        newEvents.push(
+          liveFeedMakeEvent({
+            eid,
+            gw,
+            player,
+            pos,
+            team,
+            matchupId: matchupByTeam.get(team) || null,
+            live: liveEgIsInPlay(eg),
+            kind: "bonus",
+            label: liveFeedBonusProjLabel(0, eff, meta.rank, meta.apiBonus),
+            ptsDelta: eff,
+            colKey: "bonus",
+            totalPts: Number(rec.pts) || eff,
+            ts: seedTs,
+          })
+        );
+      }
+    }
 
     if (newEvents.length) {
       liveFeedEvents.push(...newEvents);
@@ -15827,9 +15893,9 @@
         cmp = String(a.player.name || "").localeCompare(String(b.player.name || ""));
       } else if (key === "impact") {
         cmp = (a.impactNet || 0) - (b.impactNet || 0);
-        if (cmp === 0) cmp = (a.ts || 0) - (b.ts || 0);
+        if (cmp === 0) cmp = liveFeedRecentSortKey(a) - liveFeedRecentSortKey(b);
       } else {
-        cmp = (a.ts || 0) - (b.ts || 0);
+        cmp = liveFeedRecentSortKey(a) - liveFeedRecentSortKey(b);
       }
       return cmp * dir;
     });
