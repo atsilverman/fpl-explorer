@@ -13967,6 +13967,47 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   gap: 12px;
   align-items: stretch;
 }
+@media (min-width: 1400px) {
+  .home-tables-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+html.home-squad-wide .home-squad-page:nth-child(2) {
+  display: none;
+}
+html.home-squad-wide .home-squad-dot[data-page="1"] {
+  display: none;
+}
+.home-squad-split {
+  display: block;
+  min-width: 0;
+  height: 100%;
+}
+html.home-squad-wide .home-squad-split {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 100%;
+}
+html.home-squad-wide .home-squad-live-wrap {
+  flex: 0 0 46%;
+  min-width: 0;
+  border-right: 1px solid hsl(var(--border) / 0.65);
+}
+html.home-squad-wide .home-squad-pts-mount {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html.home-squad-wide #home-squad-panel .home-squad-split .home-table-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
+  flex: 1 1 auto;
+  height: 100%;
+  width: 100%;
+}
 .home-tables-grid > .home-table-panel {
   height: 100%;
 }
@@ -14561,6 +14602,15 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   }
   .home-squad-live-table col.home-col-imp {
     width: 26%;
+  }
+  html.home-squad-wide .home-squad-fixtures-table col.home-col-player {
+    width: 26%;
+  }
+  html.home-squad-wide .home-squad-fixtures-table col.home-col-fx {
+    width: 9.25%;
+  }
+  html.home-squad-wide .home-squad-pts-table.is-wide-split col.home-col-stat {
+    width: 11%;
   }
   .home-squad-pts-table col.home-col-player {
     width: 30%;
@@ -16757,6 +16807,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   padding-top: 7px;
   padding-bottom: 7px;
 }
+#live-page .live-feed-wrap.table-wrap > table > thead tr:not(.section-row) th {
+  vertical-align: middle;
+}
 /* Match Points / DefCon — global .table-wrap thead th; feed columns are not sortable. */
 #live-page .live-feed-wrap.table-wrap > table > thead tr:not(.section-row) th {
   cursor: default;
@@ -16769,11 +16822,12 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   background-color: hsl(var(--muted));
 }
 #live-page .live-feed-table thead th.col-feed-event {
-  text-align: left;
+  text-align: center;
 }
 #live-page .live-feed-table thead th.col-feed-impact,
-#live-page .live-feed-table thead th.col-feed-pts {
-  text-align: right;
+#live-page .live-feed-table thead th.col-feed-pts,
+#live-page .live-feed-table thead th.col-feed-total {
+  text-align: center;
   font-size: 11px;
 }
 #live-page .live-feed-table tbody tr + tr td {
@@ -16783,17 +16837,17 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-feed-table tbody td.col-player {
   min-width: 0 !important;
   max-width: none !important;
-  text-align: left;
-  padding-left: 16px;
+  text-align: center;
+  padding-left: 12px;
   padding-right: 12px;
 }
 #live-page .live-feed-table thead th.col-feed-event,
 #live-page .live-feed-table tbody td.col-feed-event {
   min-width: 0;
   max-width: none;
-  text-align: left;
-  padding-left: 12px;
-  padding-right: 12px;
+  text-align: center;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 #live-page .live-feed-table tbody td.col-feed-event {
   font-family: var(--sans);
@@ -16802,9 +16856,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-feed-table tbody td.col-feed-impact {
   min-width: 0;
   max-width: none;
-  text-align: right;
-  padding-left: 12px;
-  padding-right: 12px;
+  text-align: center;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 #live-page .live-feed-table tbody td.col-feed-impact {
   font-family: var(--mono);
@@ -16827,20 +16881,54 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-feed-table tbody td.col-feed-pts,
 #live-page .live-feed-table tbody td.col-feed-pts.col-num,
 #live-page .live-feed-table thead th.col-feed-pts,
-#live-page .live-feed-table thead th.col-feed-pts.col-num {
+#live-page .live-feed-table thead th.col-feed-pts.col-num,
+#live-page .live-feed-table tbody td.col-feed-total,
+#live-page .live-feed-table tbody td.col-feed-total.col-num,
+#live-page .live-feed-table thead th.col-feed-total,
+#live-page .live-feed-table thead th.col-feed-total.col-num {
   min-width: 0;
   max-width: none;
-  text-align: right;
+  text-align: center;
   padding-left: 8px;
-  padding-right: 16px;
+  padding-right: 8px;
 }
-#live-page .live-feed-table tbody td.col-feed-pts .live-points-pill {
+#live-page .live-feed-table tbody td.col-feed-pts .live-points-pill,
+#live-page .live-feed-table tbody td.col-feed-total .live-points-pill {
   display: inline-flex;
   min-width: 2.35em;
   justify-content: center;
   padding: 3px 8px;
   font-size: 12px;
   font-weight: 700;
+}
+#live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-pts {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+#live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-total-warm {
+  background: hsl(var(--positive) / 0.2);
+  color: hsl(var(--positive));
+}
+#live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-good {
+  background: hsl(var(--positive));
+  color: #fff;
+}
+#live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-total-hot {
+  background: hsl(142 52% 36%);
+  color: #fff;
+}
+#live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-total-haul {
+  background: hsl(var(--amber-hsl));
+  color: #fff;
+}
+:root[data-theme="dark"] #live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-total-hot,
+:root:not([data-theme="light"]) #live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-total-hot {
+  background: hsl(142 48% 42%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-total-hot {
+    background: hsl(142 48% 42%);
+  }
 }
 .live-feed-event-label {
   display: block;
@@ -16849,8 +16937,10 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   letter-spacing: -0.01em;
   line-height: 1.25;
 }
-#live-page .live-feed-table .live-points-id {
+#live-page .live-feed-table .live-points-id,
+#live-page .live-feed-table .ownership-id {
   min-width: 0;
+  justify-content: center;
 }
 #live-page .live-feed-table .ownership-id-text {
   min-width: 0;
@@ -16873,19 +16963,23 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     left: 0;
     z-index: 2;
     box-shadow: 1px 0 0 var(--border);
-    width: 36%;
+    width: 30%;
   }
   #live-page .live-feed-table thead th.col-feed-event,
   #live-page .live-feed-table tbody td.col-feed-event {
-    width: 28%;
+    width: 24%;
   }
   #live-page .live-feed-table thead th.col-feed-impact,
   #live-page .live-feed-table tbody td.col-feed-impact {
-    width: 22%;
+    width: 18%;
   }
   #live-page .live-feed-table thead th.col-feed-pts,
   #live-page .live-feed-table tbody td.col-feed-pts {
-    width: 14%;
+    width: 12%;
+  }
+  #live-page .live-feed-table thead th.col-feed-total,
+  #live-page .live-feed-table tbody td.col-feed-total {
+    width: 16%;
   }
   #live-page .live-feed-table thead th.col-player {
     background-color: hsl(var(--muted));
@@ -16908,17 +17002,17 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   }
   #live-page .live-feed-table thead th.col-player,
   #live-page .live-feed-table tbody td.col-player {
-    width: 38% !important;
+    width: 32% !important;
     min-width: 0 !important;
     max-width: none !important;
     position: static;
     box-shadow: none;
-    padding-left: 10px;
+    padding-left: 8px;
     padding-right: 4px;
   }
   #live-page .live-feed-table thead th.col-feed-event,
   #live-page .live-feed-table tbody td.col-feed-event {
-    width: 28%;
+    width: 22%;
     padding-left: 2px;
     padding-right: 4px;
   }
@@ -16937,8 +17031,14 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   }
   #live-page .live-feed-table thead th.col-feed-pts,
   #live-page .live-feed-table tbody td.col-feed-pts {
-    width: 20%;
-    min-width: 3rem;
+    width: 14%;
+    min-width: 2.5rem;
+    padding-right: 4px;
+  }
+  #live-page .live-feed-table thead th.col-feed-total,
+  #live-page .live-feed-table tbody td.col-feed-total {
+    width: 18%;
+    min-width: 2.5rem;
     padding-right: 10px;
   }
   #live-page .live-feed-table .ownership-photo,

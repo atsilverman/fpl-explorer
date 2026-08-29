@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=859" />
+<link rel="stylesheet" href="styles.css?v=865" />
 <script>
 (() => {
   try {
@@ -790,30 +790,32 @@
           <div class="home-squad-pager">
             <div class="home-squad-track" id="home-squad-track">
               <div class="home-squad-page">
-                <div class="home-table-wrap">
-                  <table class="home-data-table home-squad-table home-squad-live-table">
-                    <colgroup>
-                      <col class="home-col-player" />
-                      <col class="home-col-pts" />
-                      <col class="home-col-mp" />
-                      <col class="home-col-opp" />
-                      <col class="home-col-imp" />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th scope="col" class="home-col-player">Player</th>
-                        <th scope="col" class="home-col-pts">PTS</th>
-                        <th scope="col" class="home-col-mp">MP</th>
-                        <th scope="col" class="home-col-opp">OPP</th>
-                        <th scope="col" class="home-col-imp">IMP</th>
-                      </tr>
-                    </thead>
-                    <tbody id="home-squad-body"></tbody>
-                  </table>
+                <div class="home-squad-split" id="home-squad-split">
+                  <div class="home-table-wrap home-squad-live-wrap">
+                    <table class="home-data-table home-squad-table home-squad-live-table">
+                      <colgroup>
+                        <col class="home-col-player" />
+                        <col class="home-col-pts" />
+                        <col class="home-col-mp" />
+                        <col class="home-col-opp" />
+                        <col class="home-col-imp" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th scope="col" class="home-col-player">Player</th>
+                          <th scope="col" class="home-col-pts">PTS</th>
+                          <th scope="col" class="home-col-mp">MP</th>
+                          <th scope="col" class="home-col-opp">OPP</th>
+                          <th scope="col" class="home-col-imp">IMP</th>
+                        </tr>
+                      </thead>
+                      <tbody id="home-squad-body"></tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-              <div class="home-squad-page">
-                <div class="home-table-wrap">
+              <div class="home-squad-page home-squad-page-pts" id="home-squad-page-pts">
+                <div class="home-table-wrap home-squad-pts-mount" id="home-squad-pts-mount">
                   <table class="home-data-table home-squad-table home-squad-pts-table live-points-table">
                     <colgroup id="home-squad-pts-cols"></colgroup>
                     <thead>
@@ -1389,7 +1391,7 @@
 <script src="home_data.js?v=28"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=855"></script>
+<script src="app.js?v=866"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

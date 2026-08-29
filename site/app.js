@@ -1074,6 +1074,9 @@
     homeLeagueTitle: $("#home-league-title"),
     homeStandingsViewLabel: $("#home-standings-view-label"),
     homeSquadBody: $("#home-squad-body"),
+    homeSquadSplit: $("#home-squad-split"),
+    homeSquadPtsMount: $("#home-squad-pts-mount"),
+    homeSquadPagePts: $("#home-squad-page-pts"),
     homeSquadFixturesBody: $("#home-squad-fixtures-body"),
     homeSquadFixturesHead: $("#home-squad-fixtures-head"),
     homeSquadFixturesCols: $("#home-squad-fixtures-cols"),
@@ -2774,6 +2777,7 @@
   let homeSquadPagerReady = false;
   let homeTransfersScrollBound = false;
   const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Schedule"];
+  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips"];
   let homeViewEntryId = null;
   // Live standings sort — default total pts desc; Live/Left/GW/Total/# are clickable.
@@ -3230,21 +3234,12 @@
     return official != null && Number.isFinite(official) ? official : null;
   }
 
-  /** True when the linked manager has a starter on the pitch with minutes in a live fixture. */
+  /** True when the linked manager has a starter in a fixture that is in play. */
   function homeConfiguredHasLiveMinutes() {
     const entry = homeConfiguredEntryId();
     if (entry == null) return false;
     const squad = homeSquadForEntry(entry);
-    return squad.some((row) => {
-      if (!row || !row.starter) return false;
-      const mins = Number(row.minutes) || 0;
-      if (mins <= 0) return false;
-      if (row.matchStatus === "live" || row.live) return true;
-      if (Array.isArray(row.fixtures)) {
-        return row.fixtures.some((fx) => fx && fx.live);
-      }
-      return false;
-    });
+    return squad.some((row) => row && row.starter && homeSquadRowIsInPlay(row));
   }
 
   let homeSummaryRankChromePending = false;
@@ -4060,10 +4055,13 @@
   }
 
   const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;
+  const HOME_SQUAD_FIXTURE_GWS_WIDE = 8;
   const HOME_SQUAD_FIXTURE_GWS_MOBILE = 4;
 
   function homeSquadFixtureGwCount() {
-    return NARROW_MQ.matches ? HOME_SQUAD_FIXTURE_GWS_MOBILE : HOME_SQUAD_FIXTURE_GWS_DESKTOP;
+    if (NARROW_MQ.matches) return HOME_SQUAD_FIXTURE_GWS_MOBILE;
+    if (homeSquadIsWideLayout()) return HOME_SQUAD_FIXTURE_GWS_WIDE;
+    return HOME_SQUAD_FIXTURE_GWS_DESKTOP;
   }
 
   function homeSquadFixtureGwList() {
@@ -4078,27 +4076,75 @@
 
   function syncHomeSquadPagerDots(activeIndex) {
     if (!el.homeSquadDots) return;
-    el.homeSquadDots.querySelectorAll(".home-squad-dot").forEach((dot, i) => {
-      const on = i === activeIndex;
+    const wide = homeSquadIsWideLayout();
+    const logical = homeSquadLogicalPageIndex(activeIndex);
+    const labels = wide ? HOME_SQUAD_VIEW_LABELS_WIDE : HOME_SQUAD_VIEW_LABELS;
+    el.homeSquadDots.querySelectorAll(".home-squad-dot").forEach((dot) => {
+      const page = Number(dot.dataset.page);
+      if (!Number.isFinite(page)) return;
+      const dotLogical = wide ? (page >= 2 ? 1 : 0) : page;
+      const on = dotLogical === logical;
       dot.classList.toggle("is-active", on);
       dot.setAttribute("aria-selected", on ? "true" : "false");
     });
     if (el.homeSquadViewLabel) {
-      el.homeSquadViewLabel.textContent = HOME_SQUAD_VIEW_LABELS[activeIndex] || HOME_SQUAD_VIEW_LABELS[0];
+      el.homeSquadViewLabel.textContent = labels[logical] || labels[0];
     }
+  }
+
+  function homeSquadVisiblePages() {
+    if (!el.homeSquadTrack) return [];
+    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    if (!homeSquadIsWideLayout()) return pages;
+    return pages.filter((_, i) => i !== 1);
+  }
+
+  function homeSquadLogicalPageIndex(physicalIndex) {
+    if (!homeSquadIsWideLayout()) return physicalIndex;
+    return physicalIndex >= 2 ? 1 : 0;
+  }
+
+  function homeSquadPhysicalPageIndex(logicalIndex) {
+    if (!homeSquadIsWideLayout()) return logicalIndex;
+    return logicalIndex >= 1 ? 2 : 0;
   }
 
   function homeSquadActivePageIndex() {
     if (!el.homeSquadTrack) return 0;
-    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    const pages = homeSquadVisiblePages();
     if (!pages.length) return 0;
     const w = el.homeSquadTrack.clientWidth || 1;
-    return Math.max(0, Math.min(pages.length - 1, Math.round(el.homeSquadTrack.scrollLeft / w)));
+    const scrollIdx = Math.max(0, Math.min(pages.length - 1, Math.round(el.homeSquadTrack.scrollLeft / w)));
+    const page = pages[scrollIdx];
+    if (!page) return 0;
+    const allPages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    return Math.max(0, allPages.indexOf(page));
   }
 
   function homeSquadIsDesktopLayout() {
     return typeof window.matchMedia === "function"
       && window.matchMedia("(min-width: 901px)").matches;
+  }
+
+  function homeSquadIsWideLayout() {
+    return HOME_SQUAD_WIDE_MQ.matches;
+  }
+
+  let homeSquadWideLayoutActive = null;
+
+  function syncHomeSquadWideLayout() {
+    const wide = homeSquadIsWideLayout();
+    document.documentElement.classList.toggle("home-squad-wide", wide);
+    syncHomeSquadPtsMount();
+    return wide;
+  }
+
+  function syncHomeSquadPtsMount() {
+    if (!el.homeSquadSplit || !el.homeSquadPtsMount || !el.homeSquadPagePts) return;
+    const target = homeSquadIsWideLayout() ? el.homeSquadSplit : el.homeSquadPagePts;
+    if (el.homeSquadPtsMount.parentElement !== target) {
+      target.appendChild(el.homeSquadPtsMount);
+    }
   }
 
   function syncHomeSquadTrackHeight(activeIndex, { animate = true, allowShrink = true } = {}) {
@@ -4208,14 +4254,15 @@
   function setHomeSquadPage(index, { smooth = true } = {}) {
     if (!el.homeSquadTrack) return;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
-    const page = pages[index];
+    const physical = homeSquadPhysicalPageIndex(index);
+    const page = pages[physical];
     if (!page) return;
     el.homeSquadTrack.scrollTo({
       left: page.offsetLeft,
       behavior: smooth ? "smooth" : "auto",
     });
-    syncHomeSquadPagerDots(index);
-    syncHomeSquadLayout(index);
+    syncHomeSquadPagerDots(physical);
+    syncHomeSquadLayout(physical);
   }
 
   function bindHomeSquadPager() {
@@ -4224,9 +4271,11 @@
     homeSquadPagerReady = true;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     const dots = [...el.homeSquadDots.querySelectorAll(".home-squad-dot")];
-    dots.forEach((dot, i) => {
+    dots.forEach((dot) => {
       dot.addEventListener("click", () => {
-        setHomeSquadPage(i);
+        const page = Number(dot.dataset.page);
+        if (!Number.isFinite(page)) return;
+        setHomeSquadPage(page);
       });
     });
     const onPageChange = (idx) => {
@@ -4259,6 +4308,16 @@
     }
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
+      const wide = syncHomeSquadWideLayout();
+      if (homeSquadWideLayoutActive != null && wide !== homeSquadWideLayoutActive) {
+        homeSquadWideLayoutActive = wide;
+        const idx = homeSquadActivePageIndex();
+        renderHome({ deferDuringEnter: true });
+        if (wide && idx === 1) setHomeSquadPage(0, { smooth: false });
+        else syncHomeSquadLayout(idx, { animate: false });
+        return;
+      }
+      homeSquadWideLayoutActive = wide;
       const nextCount = homeSquadFixtureGwList().length;
       const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
       const prevCount = fixturesTable
@@ -4270,6 +4329,7 @@
       }
       syncHomeSquadLayout();
     });
+    homeSquadWideLayoutActive = syncHomeSquadWideLayout();
     requestAnimationFrame(() => syncHomeSquadLayout(0));
   }
 
@@ -4579,9 +4639,10 @@
     const ptsHTML = homePtsPillHTML(pts, { rollClassName: "home-stat-roll home-pts-roll" });
 
     const mpHTML = fx.map((f) => {
-      if (f.live || f.finished) {
+      const inPlay = homeSquadFixtureIsInPlay(f);
+      if (inPlay || f.finished) {
         const mins = f.minutes != null ? f.minutes : row.minutes;
-        const dot = f.live
+        const dot = inPlay
           ? `<span class="home-status-dot is-live" aria-label="Live"></span>`
           : `<span class="home-status-dot is-done" aria-label="Played"></span>`;
         const minsHTML =
@@ -4777,6 +4838,7 @@
   }
 
   function homeSquadPtsRowHTML(entry, cols, opts = {}) {
+    const showPlayer = opts.showPlayer !== false;
     const cells = cols
       .map((col) => {
         const inner = homeSquadPtsCellHTML(entry, col);
@@ -4788,7 +4850,7 @@
       .join("");
     const benchCls = entry.row.onBench ? " home-row-bench" : "";
     return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(entry.row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(entry.row.name))}">
-      ${homeSquadPlayerCellHTML(entry.row, opts)}
+      ${showPlayer ? homeSquadPlayerCellHTML(entry.row, opts) : ""}
       ${cells}
     </tr>`;
   }
@@ -5701,6 +5763,7 @@
     }
     homeRenderQueued = false;
     if (!el.homePage) return;
+    syncHomeSquadWideLayout();
     // settleQuiet: post-enter / live rebuild — never restart enter motion.
     const noManager = !savedManagerId;
     const linked = !!(savedManagerId && savedLeagueId);
@@ -5799,7 +5862,12 @@
       });
       const ptsEntries = rows.map(homeSquadPtsEntry);
       const ptsCols = homeSquadPtsColumns(ptsEntries);
-      const ptsColCount = 1 + ptsCols.length;
+      const wideSquad = homeSquadIsWideLayout();
+      const ptsDisplayCols = wideSquad ? ptsCols.slice(1) : ptsCols;
+      const ptsShowPlayer = !wideSquad;
+      const ptsColCount = ptsShowPlayer ? 1 + ptsDisplayCols.length : ptsDisplayCols.length;
+      const ptsTable = el.homeSquadPtsBody && el.homeSquadPtsBody.closest("table");
+      if (ptsTable) ptsTable.classList.toggle("is-wide-split", wideSquad);
       if (el.homeSquadBody) {
         const parts = [];
         let benchLabeled = false;
@@ -5853,13 +5921,13 @@
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
       if (el.homeSquadPtsCols) {
         el.homeSquadPtsCols.innerHTML =
-          `<col class="home-col-player" />` +
-          ptsCols.map(() => `<col class="home-col-stat" />`).join("");
+          (ptsShowPlayer ? `<col class="home-col-player" />` : "") +
+          ptsDisplayCols.map(() => `<col class="home-col-stat" />`).join("");
       }
       if (el.homeSquadPtsHead) {
         el.homeSquadPtsHead.innerHTML =
-          `<th scope="col" class="home-col-player">Player</th>` +
-          ptsCols
+          (ptsShowPlayer ? `<th scope="col" class="home-col-player">Player</th>` : "") +
+          ptsDisplayCols
             .map(
               (col) =>
                 `<th scope="col" class="home-col-stat col-num${col.narrow ? " col-num-narrow" : ""}"${tipAttr(col.title || col.label)}>${escapeHtml(col.label)}</th>`
@@ -5876,13 +5944,19 @@
             );
             benchLabeled = true;
           }
-          parts.push(homeSquadPtsRowHTML(entry, ptsCols, pinOpts(entry.row)));
+          parts.push(
+            homeSquadPtsRowHTML(entry, ptsDisplayCols, {
+              ...pinOpts(entry.row),
+              showPlayer: ptsShowPlayer,
+            })
+          );
         }
         el.homeSquadPtsBody.innerHTML = parts.join("") ||
           (homeSquadShowLoading(viewEntry)
             ? homeSquadLoadingHTML(ptsColCount)
             : homeSquadEmptyHTML(ptsColCount));
       }
+      syncHomeSquadPtsMount();
     }
     if (el.homeStandingsBody) {
       bindHomeStandingsSort();
@@ -5932,6 +6006,7 @@
     syncHomeOwnerBanner();
     syncHomeOwnerHighlights();
     syncHomeLiveChrome();
+    syncLiveNavChrome();
     syncHomeLookupUI();
     syncHomeSquadPagerDots(homeSquadActivePageIndex());
     const standingsPageIdx = homeStandingsActivePageIndex();
@@ -6436,6 +6511,7 @@
   // coarse remaps tips / rankings cross-highlight to taps.
   const FINE_HOVER_MQ = window.matchMedia("(hover: hover) and (pointer: fine)");
   const NARROW_MQ = window.matchMedia("(max-width: 720px)");
+  const HOME_SQUAD_WIDE_MQ = window.matchMedia("(min-width: 1400px)");
 
   function teamLandscapeViewport() {
     const vv = window.visualViewport;
@@ -6933,6 +7009,7 @@
       if (state.page === "team") syncTeamPickerCoreUnder();
       bindMobileChromeScrollHide();
       if (preferMobileSheet()) setExpectedCatMenuOpen(false);
+      if (state.page === "home") syncHomeSquadWideLayout();
     };
     if (immediate) {
       if (viewportLayoutSyncTimer) clearTimeout(viewportLayoutSyncTimer);
@@ -9245,7 +9322,7 @@
       ];
       const reading = [
         spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus toggle beside search — current gameweek only."),
-        spitRow(spitRank("Feed"), "Most recent first — goals, assists, cards, DefCon, bonus, and appearance points as live stats update."),
+        spitRow(spitRank("Feed"), "Most recent first — goals, assists, cards, DefCon, bonus (BPS rank + FPL bonus), and appearance points as live stats update."),
         spitRow(spitRank("Ownership"), "Feed filter — hide players nobody in your league owns, or show all."),
         spitRow(
           spitRank("Impact"),
@@ -11191,7 +11268,6 @@
   function livePointsIdentityHTML(player, position) {
     return `<div class="ownership-id live-points-id">${ownershipStyleIdentityHTML(player, {
       omitPrice: true,
-      usePosBadge: true,
       position: position || player.position,
     })}</div>`;
   }
@@ -15098,27 +15174,42 @@
     return !!(eg && (eg.live || eg.status === "live"));
   }
 
+  /** In-play only — ignore stale live flags once status is finished. */
+  function liveEgIsInPlay(eg) {
+    if (!eg || typeof eg !== "object") return false;
+    const status = String(eg.status || "").toLowerCase();
+    if (status === "finished") return false;
+    return !!(eg.live || status === "live");
+  }
+
+  function homeSquadFixtureIsInPlay(fx) {
+    return !!(fx && fx.live && !fx.finished);
+  }
+
+  function homeSquadRowIsInPlay(row) {
+    if (!row) return false;
+    if (row.matchStatus === "finished") return false;
+    if (row.live) return true;
+    return (row.fixtures || []).some((fx) => homeSquadFixtureIsInPlay(fx));
+  }
+
   /** True when at least one fixture in the current GW is in play. */
   function liveGwHasActiveGames() {
     const gw = liveDefaultGw();
     const homeGw = Number(HOME && HOME.gw);
     if (Number.isFinite(homeGw) && homeGw === gw && HOME.elementGw && typeof HOME.elementGw === "object") {
       for (const eg of Object.values(HOME.elementGw)) {
-        if (liveEgIsActive(eg)) return true;
+        if (liveEgIsInPlay(eg)) return true;
       }
     }
     if (Number.isFinite(homeGw) && homeGw === gw && Array.isArray(HOME.squad)) {
       for (const row of HOME.squad) {
-        if (!row) continue;
-        if (row.live) return true;
-        for (const fx of row.fixtures || []) {
-          if (fx && fx.live) return true;
-        }
+        if (homeSquadRowIsInPlay(row)) return true;
       }
     }
     const baked = (DATA.defconByGw || {})[String(gw)] || (DATA.defconByGw || {})[gw] || {};
     for (const eg of Object.values(baked)) {
-      if (liveEgIsActive(eg)) return true;
+      if (liveEgIsInPlay(eg)) return true;
     }
     return false;
   }
@@ -15218,7 +15309,7 @@
         threshold,
         actions: actions == null ? 0 : actions,
         minutes: mins,
-        live: !!eg.live || eg.status === "live",
+        live: liveEgIsInPlay(eg),
         status: eg.status || "scheduled",
         progress: threshold ? Math.min(1, (actions == null ? 0 : actions) / threshold) : 0,
       });
@@ -15278,6 +15369,8 @@
     return {
       pts: Number(eg.pts) || 0,
       minutes: Number(eg.minutes) || 0,
+      bps: Number(eg.bps) || 0,
+      bonusEff: 0,
       goals: Number(eg.goals) || 0,
       assists: Number(eg.assists) || 0,
       cleanSheets: Number(eg.cleanSheets) || 0,
@@ -15290,6 +15383,132 @@
       penaltiesSaved: Number(eg.penaltiesSaved) || 0,
       defConHit: !!eg.defConHit,
     };
+  }
+
+  /** Effective bonus pts: FPL bonus when set, else BPS rank projection (3/2/1). */
+  function liveFeedEffectiveBonus(rank, apiBonus) {
+    const b = Number(apiBonus) || 0;
+    if (b > 0) return b;
+    const r = Number(rank) || 0;
+    if (r >= 1 && r <= 3) return 4 - r;
+    return 0;
+  }
+
+  function liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam) {
+    const byFixture = new Map();
+    for (const [eidStr, eg] of Object.entries(egMap || {})) {
+      if (!eg || typeof eg !== "object") continue;
+      const etype = Number(eg.elementType) || 0;
+      if (!LIVE_POS_BY_TYPE[etype]) continue;
+      const mins = Number(eg.minutes) || 0;
+      const bps = Number(eg.bps) || 0;
+      const live = !!eg.live || eg.status === "live";
+      if (mins <= 0 && bps <= 0 && !live) continue;
+      const player = byElement.get(Number(eidStr));
+      if (!player) continue;
+      const team = player.team || currentTeamCode(player);
+      const matchupId = matchupByTeam.get(team);
+      if (!matchupId) continue;
+      if (!byFixture.has(matchupId)) byFixture.set(matchupId, []);
+      byFixture.get(matchupId).push({
+        eidStr,
+        bps,
+        apiBonus: Number(eg.bonus) || 0,
+      });
+    }
+    const result = new Map();
+    for (const entries of byFixture.values()) {
+      entries.sort((a, b) => {
+        if (b.bps !== a.bps) return b.bps - a.bps;
+        return Number(a.eidStr) - Number(b.eidStr);
+      });
+      entries.forEach((entry, i) => {
+        const rank = i + 1;
+        result.set(entry.eidStr, {
+          rank,
+          bps: entry.bps,
+          apiBonus: entry.apiBonus,
+          effectiveBonus: liveFeedEffectiveBonus(rank, entry.apiBonus),
+        });
+      });
+    }
+    return result;
+  }
+
+  function liveFeedBonusProjLabel(oldEff, newEff, rank, apiBonus) {
+    const o = Number(oldEff) || 0;
+    const n = Number(newEff) || 0;
+    const d = n - o;
+    if (n === 0 && o > 0) return "Out of bonus";
+    if (o === 0 && n > 0) {
+      if (apiBonus > 0) return n === 1 ? "Bonus point" : `${n} bonus pts`;
+      if (n === 3) return "Leads bonus (+3)";
+      if (n === 2) return "2nd in bonus (+2)";
+      return "3rd in bonus (+1)";
+    }
+    if (d > 0) {
+      return apiBonus > 0
+        ? d === 1 ? "Bonus point" : `${d} bonus pts`
+        : d === 1 ? "Bonus proj +1" : `Bonus proj +${d}`;
+    }
+    if (apiBonus > 0) return Math.abs(d) === 1 ? "Bonus −1" : `Bonus −${Math.abs(d)}`;
+    return Math.abs(d) === 1 ? "Bonus proj −1" : `Bonus proj −${Math.abs(d)}`;
+  }
+
+  function liveFeedApplyBonusEff(nextSnap, bonusMeta) {
+    for (const [eidStr, rec] of Object.entries(nextSnap)) {
+      const meta = bonusMeta.get(eidStr);
+      rec.bonusEff = meta ? meta.effectiveBonus : 0;
+    }
+  }
+
+  function liveFeedPushBonusProjDiffs(oldSnap, nextSnap, egMap, byElement, matchupByTeam, gw, newEvents, runPtsByEid, { seeding }) {
+    if (seeding || !oldSnap) return;
+    const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam);
+    liveFeedApplyBonusEff(nextSnap, bonusMeta);
+    for (const eidStr of Object.keys(nextSnap)) {
+      const old = oldSnap[eidStr];
+      if (!old) continue;
+      const oldEff = Number(old.bonusEff) || 0;
+      const newEff = Number(nextSnap[eidStr].bonusEff) || 0;
+      if (newEff === oldEff) continue;
+
+      const eg = egMap[eidStr];
+      const eid = Number(eidStr);
+      const etype = Number(eg && eg.elementType) || 0;
+      const pos = LIVE_POS_BY_TYPE[etype];
+      if (!pos) continue;
+      const player = byElement.get(eid);
+      if (!player) continue;
+      const team = player.team || currentTeamCode(player);
+      const matchupId = matchupByTeam.get(team) || null;
+      const meta = bonusMeta.get(eidStr) || { rank: 0, apiBonus: 0 };
+      const delta = newEff - oldEff;
+      if (!delta) continue;
+      const snapPts = Number(nextSnap[eidStr].pts) || 0;
+      let runPts = runPtsByEid.get(eidStr);
+      if (runPts == null) runPts = Number(old.pts) || 0;
+      runPts += delta;
+      if (snapPts > 0) runPts = Math.max(runPts, snapPts);
+      runPtsByEid.set(eidStr, runPts);
+      newEvents.push(
+        liveFeedMakeEvent({
+          eid,
+          gw,
+          player,
+          pos,
+          team,
+          matchupId,
+          live: liveEgIsInPlay(eg),
+          kind: "bonus",
+          label: liveFeedBonusProjLabel(oldEff, newEff, meta.rank, meta.apiBonus),
+          ptsDelta: delta,
+          colKey: "bonus",
+          totalPts: runPts,
+          ts: Date.now(),
+        })
+      );
+    }
   }
 
   function liveFeedGoalPts(pos) {
@@ -15395,9 +15614,7 @@
     if (newSavePts > oldSavePts) {
       push("saves", "Save points", newSavePts - oldSavePts, "saves");
     }
-    liveFeedDiffCounter(oldRec.bonus, newRec.bonus, (d, v) =>
-      push("bonus", v === 1 ? "Bonus point" : `${d} bonus pts`, d, "bonus")
-    );
+    // Bonus — liveFeedPushBonusProjDiffs (BPS rank + FPL bonus field).
     liveFeedDiffCounter(oldRec.yellowCards, newRec.yellowCards, (d) =>
       push("yellowCard", d === 1 ? "Yellow card" : `${d} yellow cards`, -d, "yellowCards")
     );
@@ -15421,9 +15638,11 @@
   function liveFeedSeedEvents(rec, ctx) {
     const events = [];
     let t = Date.now() - 3600000;
+    let runPts = 0;
     const push = (kind, label, ptsDelta, colKey) => {
       if (!ptsDelta) return;
-      events.push(liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, ts: t }));
+      runPts += ptsDelta;
+      events.push(liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, totalPts: runPts, ts: t }));
       t += 1;
     };
     liveFeedPushStatDiffs(
@@ -15446,6 +15665,9 @@
       push,
       { skipMinutes: true }
     );
+    if (events.length && Number.isFinite(Number(rec.pts))) {
+      events[events.length - 1].totalPts = Number(rec.pts);
+    }
     return events;
   }
 
@@ -15462,6 +15684,7 @@
 
     const nextSnap = {};
     const newEvents = [];
+    const runPtsByEid = new Map();
     const seeding = !liveFeedSnapshot;
 
     for (const [eidStr, eg] of Object.entries(egMap || {})) {
@@ -15485,7 +15708,7 @@
         pos,
         team,
         matchupId,
-        live: !!eg.live || eg.status === "live",
+        live: liveEgIsInPlay(eg),
       };
 
       const old = liveFeedSnapshot && liveFeedSnapshot[eidStr];
@@ -15498,10 +15721,28 @@
 
       const push = (kind, label, ptsDelta, colKey) => {
         if (!ptsDelta) return;
-        newEvents.push(liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, ts: Date.now() }));
+        let runPts = runPtsByEid.get(eidStr);
+        if (runPts == null) runPts = Number(old.pts) || 0;
+        runPts += ptsDelta;
+        runPtsByEid.set(eidStr, runPts);
+        newEvents.push(
+          liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, totalPts: runPts, ts: Date.now() })
+        );
       };
       liveFeedPushStatDiffs(old, rec, pos, push);
     }
+
+    liveFeedPushBonusProjDiffs(
+      liveFeedSnapshot,
+      nextSnap,
+      egMap,
+      byElement,
+      matchupByTeam,
+      gw,
+      newEvents,
+      runPtsByEid,
+      { seeding }
+    );
 
     if (newEvents.length) {
       liveFeedEvents.push(...newEvents);
@@ -15579,8 +15820,34 @@
     return `<span class="live-feed-impact-val">${escapeHtml(val)}</span><span class="live-feed-impact-suffix"> vs avg</span>`;
   }
 
+  function liveFeedEventTotalPts(ev) {
+    const stored = Number(ev.totalPts);
+    if (Number.isFinite(stored)) return stored;
+    const snap = liveFeedSnapshot && liveFeedSnapshot[String(ev.eid)];
+    if (snap && Number.isFinite(Number(snap.pts))) return Number(snap.pts);
+    const eg = liveElementMapForGw(ev.gw)[String(ev.eid)];
+    if (eg && Number.isFinite(Number(eg.pts))) return Number(eg.pts);
+    return null;
+  }
+
+  function liveFeedTotalPtsTone(total) {
+    const n = Number(total);
+    if (!Number.isFinite(n) || n < 3) return "is-pts";
+    if (n >= 15) return "is-total-haul";
+    if (n >= 10) return "is-total-hot";
+    if (n >= 6) return "is-good";
+    return "is-total-warm";
+  }
+
+  function liveFeedTotalPtsHTML(ev) {
+    const total = liveFeedEventTotalPts(ev);
+    if (total == null || !Number.isFinite(total)) return "";
+    return livePointsPillHTML("pts", String(total), { tone: liveFeedTotalPtsTone(total) });
+  }
+
   function liveFeedRowHTML(ev, enterI) {
     const ptsHTML = liveFeedPtsDeltaHTML(ev.ptsDelta, ev.colKey);
+    const totalHTML = liveFeedTotalPtsHTML(ev);
     const net = Number(ev.impactNet) || 0;
     const impactCls = net > 0.05 ? "is-pos" : net < -0.05 ? "is-neg" : "is-neutral";
     const impactHTML = liveFeedImpactHTML(ev);
@@ -15589,6 +15856,7 @@
       <td class="col-feed-event"><span class="live-feed-event-label">${escapeHtml(ev.label)}</span></td>
       <td class="col-feed-impact ${impactCls}">${impactHTML}</td>
       <td class="col-feed-pts col-num">${ptsHTML}</td>
+      <td class="col-feed-total col-num">${totalHTML}</td>
     </tr>`;
   }
 
@@ -15602,8 +15870,9 @@
       <th class="col-feed-event">Event</th>
       <th class="col-feed-impact col-num">Impact</th>
       <th class="col-feed-pts col-num">Pts</th>
+      <th class="col-feed-total col-num">Total</th>
     </tr>`;
-    const colCount = 4;
+    const colCount = 5;
     if (!events.length) {
       el.liveFeedBody.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">No events for the current filters.</td></tr>`;
     } else {
@@ -15884,8 +16153,8 @@
     return "";
   }
 
-  function livePointsPillHTML(colKey, text, { bonusPts = null, statCount = null } = {}) {
-    const tone = livePointsPillTone(colKey);
+  function livePointsPillHTML(colKey, text, { bonusPts = null, statCount = null, tone: toneOverride = null } = {}) {
+    const tone = toneOverride ?? livePointsPillTone(colKey);
     let extra = "";
     if (colKey === "bonus" && bonusPts != null) {
       const n = Math.max(1, Math.min(3, Math.round(Number(bonusPts)) || 1));
@@ -15978,7 +16247,7 @@
 
   function liveMatchupKickoffState(matchup, entries) {
     const kickoffMs = matchup && matchup.kickoff ? Date.parse(matchup.kickoff) : NaN;
-    const isLive = (entries || []).some((r) => r.live || liveEgIsActive(r.eg));
+    const isLive = (entries || []).some((r) => r.live || liveEgIsInPlay(r.eg));
     const hasPlayed = (entries || []).some((r) => (Number(r.eg && r.eg.minutes) || 0) > 0);
     const upcoming =
       Number.isFinite(kickoffMs) && kickoffMs > Date.now() && !isLive && !hasPlayed;
@@ -16002,7 +16271,7 @@
     };
 
     for (const row of entries || []) {
-      if (!(row.live || liveEgIsActive(row.eg))) continue;
+      if (!(row.live || liveEgIsInPlay(row.eg))) continue;
       bump(row.minutes ?? (row.eg && row.eg.minutes));
     }
 
@@ -16011,7 +16280,7 @@
       const egMap = liveElementMapForGw(gw);
       const players = livePlayerByElement();
       for (const [eidStr, eg] of Object.entries(egMap)) {
-        if (!liveEgIsActive(eg)) continue;
+        if (!liveEgIsInPlay(eg)) continue;
         const player = players.get(Number(eidStr));
         if (!player) continue;
         const team = player.team || currentTeamCode(player);
@@ -20397,6 +20666,16 @@
     syncHomeSearchBtn();
     refreshCompareScrollMirrorMode();
     bindAllNameColumnSimplifies();
+  });
+  bindMqChange(HOME_SQUAD_WIDE_MQ, () => {
+    const wide = syncHomeSquadWideLayout();
+    homeSquadWideLayoutActive = wide;
+    scheduleViewportLayoutSync({ immediate: true });
+    if (state.page !== "home") return;
+    const idx = homeSquadActivePageIndex();
+    renderHome({ deferDuringEnter: true });
+    if (wide && idx === 1) setHomeSquadPage(0, { smooth: false });
+    else requestAnimationFrame(() => syncHomeSquadLayout(idx, { animate: false }));
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, () => {
     scheduleViewportLayoutSync({ immediate: true });
