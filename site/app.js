@@ -4561,14 +4561,7 @@
   function homeSquadRowHTML(row, opts = {}) {
     const fx = homeSquadFixtures(row);
     const pts = row.gwPoints != null ? Number(row.gwPoints) : null;
-    const ptsHi = pts != null && pts >= 8;
-    const ptsHTML = pts == null
-      ? "—"
-      : `<span class="home-pts${ptsHi ? " is-hot" : ""}${pts === 0 ? " is-zero" : ""}">${statRollSpan(pts, {
-          from: 0,
-          decimals: 0,
-          className: "home-stat-roll home-pts-roll",
-        })}</span>`;
+    const ptsHTML = homePtsPillHTML(pts, { rollClassName: "home-stat-roll home-pts-roll" });
 
     const mpHTML = fx.map((f) => {
       if (f.live || f.finished) {
@@ -4747,18 +4740,23 @@
     return cols;
   }
 
+  function homePtsPillHTML(value, { rollClassName = "home-stat-roll live-stat-roll" } = {}) {
+    if (value == null || !Number.isFinite(Number(value))) return "—";
+    const roll = statRollSpan(Number(value), {
+      from: 0,
+      decimals: 0,
+      className: rollClassName,
+      rollKind: "pts",
+    });
+    return livePointsPillHTML("pts", roll);
+  }
+
   function homeSquadPtsCellHTML(entry, col) {
     if (col.key === "pts") {
       const raw =
         entry.row.gwPoints != null ? Number(entry.row.gwPoints) : Number(entry.eg.pts);
       if (!Number.isFinite(raw)) return "";
-      const roll = statRollSpan(raw, {
-        from: 0,
-        decimals: 0,
-        className: "home-stat-roll live-stat-roll",
-        rollKind: "pts",
-      });
-      return livePointsPillHTML("pts", roll);
+      return homePtsPillHTML(raw);
     }
     return livePointsCellHTML(entry, col);
   }
@@ -4942,7 +4940,7 @@
       case "gwPts": {
         const pts = homeElementGwStats(elementId).pts;
         const n = pts != null ? Number(pts) : 0;
-        return { value: String(n), hot: n >= 8, isRank: false, topRank: false };
+        return { value: String(n), hot: false, isRank: false, topRank: false };
       }
       case "league":
         return {
@@ -8998,10 +8996,6 @@
         spitRow(
           `<span class="home-status-dot is-done spit-home-swatch" aria-hidden="true"></span>`,
           "Fixture finished (incl. FPL provisional FT)"
-        ),
-        spitRow(
-          `<span class="home-pts is-hot spit-home-swatch">8</span>`,
-          "Hot PTS — player has scored 8+ this GW"
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span><span class="home-imp-pct">70%</span></span>`,

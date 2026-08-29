@@ -14165,6 +14165,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+.home-squad-live-table tbody td.home-col-pts .live-points-pill,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill {
   display: inline-flex;
   align-items: center;
@@ -14193,9 +14194,21 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon path {
   stroke: hsl(142 55% 32%);
 }
+/* Home squad DC pills — static check (no Live enter fade). */
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-defcon-check-slot {
+  flex: none;
+  width: auto;
+  height: auto;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-dc-check-enter {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+.home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
-  background: hsl(var(--foreground) / 0.88);
-  color: hsl(var(--background));
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-good {
   background: hsl(var(--positive));
@@ -14230,15 +14243,18 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   background: hsl(var(--destructive));
   color: #fff;
 }
+:root[data-theme="dark"] .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
 :root[data-theme="dark"] .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts,
+:root:not([data-theme="light"]) .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
 :root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
-  background: hsl(var(--foreground) / 0.92);
-  color: hsl(var(--background));
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
   :root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
-    background: hsl(var(--foreground) / 0.92);
-    color: hsl(var(--background));
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
   }
 }
 .home-squad-fixtures-table .home-col-fx {
