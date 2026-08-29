@@ -665,11 +665,32 @@ html:not(.planner-nav-enabled) [data-page-clone="team"] {
 }
 
 /* Live tab + page title — green while a GW fixture is in play */
+@keyframes page-live-nav-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 0 hsl(142 55% 38% / 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px hsl(142 55% 42% / 0.5));
+  }
+}
+@keyframes page-live-nav-pulse-dark {
+  0%, 100% {
+    filter: drop-shadow(0 0 0 hsl(142 48% 52% / 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px hsl(142 48% 52% / 0.48));
+  }
+}
 html.has-gw-live #page-live,
 html.has-gw-live #page-live .icon,
 html.has-gw-live [data-page-clone="live"] .page-tab-btn,
 html.has-gw-live [data-page-clone="live"] .page-tab-btn .icon {
   color: hsl(142 55% 38%);
+}
+html.has-gw-live #page-live,
+html.has-gw-live [data-page-clone="live"] .page-tab-btn,
+html.has-gw-live[data-page="live"] #page-tray-btn {
+  animation: page-live-nav-pulse 2.2s ease-in-out infinite;
 }
 html.has-gw-live #page-live.active,
 html.has-gw-live #page-live.active .icon {
@@ -694,6 +715,11 @@ html.has-gw-live[data-theme="dark"] #live-page .page-header h2,
 html.has-gw-live[data-theme="dark"] #live-page .page-title-icon {
   color: hsl(142 48% 52%);
 }
+html.has-gw-live[data-theme="dark"] #page-live,
+html.has-gw-live[data-theme="dark"] [data-page-clone="live"] .page-tab-btn,
+html.has-gw-live[data-theme="dark"][data-page="live"] #page-tray-btn {
+  animation-name: page-live-nav-pulse-dark;
+}
 @media (prefers-color-scheme: dark) {
   html.has-gw-live:not([data-theme="light"]) #page-live,
   html.has-gw-live:not([data-theme="light"]) #page-live .icon,
@@ -702,6 +728,18 @@ html.has-gw-live[data-theme="dark"] #live-page .page-title-icon {
   html.has-gw-live:not([data-theme="light"]) #live-page .page-header h2,
   html.has-gw-live:not([data-theme="light"]) #live-page .page-title-icon {
     color: hsl(142 48% 52%);
+  }
+  html.has-gw-live:not([data-theme="light"]) #page-live,
+  html.has-gw-live:not([data-theme="light"]) [data-page-clone="live"] .page-tab-btn,
+  html.has-gw-live:not([data-theme="light"])[data-page="live"] #page-tray-btn {
+    animation-name: page-live-nav-pulse-dark;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.has-gw-live #page-live,
+  html.has-gw-live [data-page-clone="live"] .page-tab-btn,
+  html.has-gw-live[data-page="live"] #page-tray-btn {
+    animation: none;
   }
 }
 
@@ -7452,6 +7490,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   font-size: 11.5px;
   line-height: 1.4;
 }
+.spit-row > span:last-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
 
 .spit-symbol {
   display: inline-flex;
@@ -7462,6 +7504,16 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   font-family: var(--mono);
   font-weight: 700;
   gap: 2px;
+}
+.spit-symbol.spit-symbol-wide,
+.spit-symbol:has(.home-imp),
+.spit-symbol:has(.live-feed-impact),
+.spit-symbol:has(.live-feed-event-label),
+.spit-symbol:has(.live-bonus-status),
+.spit-symbol:has(.home-chip-cell),
+.spit-symbol:has(.ownership-pill) {
+  flex: 0 0 auto;
+  align-self: flex-start;
 }
 .spit-symbol .icon {
   font-size: 14px;
@@ -7703,6 +7755,27 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   align-items: center;
   gap: 4px;
 }
+.spit-symbol .live-feed-impact.spit-home-swatch {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  white-space: nowrap;
+  color: hsl(var(--positive));
+}
+.spit-symbol .live-feed-impact.spit-home-swatch .live-feed-impact-suffix {
+  font-size: 9px;
+}
+.spit-symbol .live-feed-event-label.spit-home-swatch {
+  font-size: 11px;
+  font-weight: 600;
+}
+.spit-symbol .live-bonus-status.spit-home-swatch {
+  font-size: 10px;
+  white-space: nowrap;
+}
 
 .spit-medals {
   display: inline-flex;
@@ -7903,6 +7976,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
    wider cards, but every team keeps equal visual weight and appears once. */
 #schedule-page,
 .home-player-matchup,
+#opta-page,
 .fixture-tooltip:has(.ftt-table-matchups) {
   --matchup-attack: var(--schedule-spectrum-fall);
 }
@@ -11908,6 +11982,12 @@ html[data-page="team"] .layout .main {
 }
 .team-spark circle {
   fill: currentColor;
+}
+#team-page,
+#team-picker-view,
+#team-compare-wrap,
+.home-squad-fixtures-table {
+  --matchup-attack: var(--schedule-spectrum-fall);
 }
 #team-page thead th.col-heat,
 #team-page tbody td.team-heat-cell,

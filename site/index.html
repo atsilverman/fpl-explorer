@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=868" />
+<link rel="stylesheet" href="styles.css?v=872" />
 <script>
 (() => {
   try {
@@ -1192,7 +1192,7 @@
             <div class="schedule-control-head">
               <strong>Highlight Ranks
                 <span class="schedule-control-info" tabindex="0"
-                  data-tip="Controls how many ranked values receive conditional highlighting — top and bottom places get soft-green / tough-red cell tint on each venue split (green fills are muted in dark mode)."
+                  data-tip="Top and bottom ranks get soft blue / tough pink cell tint on each venue split."
                   aria-label="How Highlight Ranks works">
                   <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
                 </span>
@@ -1214,7 +1214,7 @@
             <div class="schedule-control-head">
               <strong>Expected / Actual
                 <span class="schedule-control-info" tabindex="0"
-                  data-tip="Blends expected and actual category ranks for each team when Matchups scores attack and defence. Attack mixes xG with goals; defence mixes xGC with goals conceded and clean sheets. Edges, flags, card totals, and the scatter all use this blend."
+                  data-tip="Blends expected and actual ranks for attack (xG + goals) and defence (xGC + conceded + CS). Edges, flags, and scatter all use this mix."
                   aria-label="How Expected / Actual blend works">
                   <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
                 </span>
@@ -1290,7 +1290,7 @@
             <div class="schedule-control-head">
               <strong>Compare
                 <span class="schedule-control-info" tabindex="0"
-                  data-tip="Show how projected Goals and CS% moved versus an earlier odds pull. Works in both Goals/CS% and Scoreline views. Current hides changes. Last run compares to the previous refresh; Last 72 hr uses the snapshot nearest that lookback."
+                  data-tip="Goals/CS% movement vs an earlier odds pull. Current hides deltas; Last run or Last 72 hr compares to prior snapshots."
                   aria-label="How Compare works">
                   <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
                 </span>
@@ -1391,7 +1391,7 @@
 <script src="home_data.js?v=28"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=867"></script>
+<script src="app.js?v=870"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

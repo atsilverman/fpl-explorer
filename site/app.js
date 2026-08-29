@@ -429,7 +429,7 @@
     5: { kind: "hard", intensity: 1 },
   });
 
-  function fdrRampInlineStyle(fdr, { quiet = false } = {}) {
+  function fdrRampInlineStyle(fdr, { quiet = false, schedulePalette = false } = {}) {
     const n = Math.round(Number(fdr));
     const spec = FDR_RAMP[n];
     if (!spec) return { className: "", styleAttr: "", strongClass: "" };
@@ -445,7 +445,9 @@
       };
     }
     const intensity = quiet ? Math.min(1, spec.intensity * 0.4) : spec.intensity;
-    const paint = fdrHighlightInlineStyle(spec.kind, intensity);
+    const paint = schedulePalette
+      ? scheduleHighlightInlineStyle(spec.kind === "easy" ? "top" : "bottom", intensity)
+      : fdrHighlightInlineStyle(spec.kind, intensity);
     return {
       className: ` fdr-${n}`,
       styleAttr: paint.style ? ` style="${paint.style}"` : "",
@@ -4541,7 +4543,7 @@
     if (!diffs.length) return { className: "", style: "" };
     // DGW: use the hardest fixture so tough doubles still read clearly.
     const fdr = Math.max(...diffs);
-    const ramp = fdrRampInlineStyle(fdr, { quiet: true });
+    const ramp = fdrRampInlineStyle(fdr, { quiet: true, schedulePalette: true });
     return { className: ramp.className, style: ramp.styleAttr };
   }
 
@@ -8998,12 +9000,18 @@
       20
     );
     const tipTopN = Math.max(1, Math.round((population * FIXTURE_TT_ENHANCE_PCT) / 100));
-    return fixtureCardHTML(
-      teamCode,
-      fixtureHighlightMaps(tipTopN),
-      fixtureRankMaps(),
-      options
-    );
+    const highlightMaps = fixtureHighlightMaps(tipTopN);
+    const rankMaps = fixtureRankMaps();
+    const showMatchups =
+      options.showMatchups != null
+        ? options.showMatchups
+        : state.page === "opta" && state.view === "teams";
+    const merged = { ...options, showMatchups };
+    if (showMatchups && !merged.matchupProfile) {
+      const fixtures = merged.fixtures || planningFixturesForTeam(teamCode, FIXTURE_TT_COUNT);
+      merged.matchupProfile = teamMatchupProfile(teamCode, fixtures, rankMaps);
+    }
+    return fixtureCardHTML(teamCode, highlightMaps, rankMaps, merged);
   }
 
   function syncScheduleMatchupControls() {
@@ -9132,7 +9140,7 @@
           <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then count.</span></li>
           <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s home/away attack &amp; defence ranks.</span></li>
           <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home star</strong> — home for the team on the card.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; 1 = strongest. Soft blue / tough pink cell tint (quieter blue in dark mode).</span></li>
+          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; soft blue / tough pink tint.</span></li>
           <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
         </ol>
       </div>
@@ -9154,11 +9162,13 @@
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span><span class="home-imp-pct">70%</span></span>`,
-          "IMP ahead of league top third (100% unique XI, 200% C, 300% TC)"
+          "IMP ahead of league top third",
+          "spit-symbol-wide"
         ),
         spitRow(
           `<span class="home-imp is-neg spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-neg is-drawn" style="--imp-pct:55%;--imp-fill:hsl(var(--negative) / 0.7)"></span></span><span class="home-imp-pct">55%</span></span>`,
-          "IMP behind league top third"
+          "IMP behind league top third",
+          "spit-symbol-wide"
         ),
         spitRow(
           `<span class="home-play-live is-active spit-home-swatch">2</span>`,
@@ -9200,14 +9210,12 @@
         spitRow(
           spitRank("Pts"),
           mobile
-            ? "Second team swipe — GW stat pills (G, A, CS, DC, B, Sv) matching Live Points colors; Sv swaps to YC when no keeper saves."
-            : "Team card page 2 — GW stat pills (G, A, CS, DC, B, Sv) matching Live Points; Sv swaps to YC when no keeper saves."
+            ? "Second team swipe — GW stat pills (G, A, CS, DC, B, Sv); Sv → YC when no keeper saves."
+            : "GW stat pills beside Starting XI on wide screens, or team page 2 — same Live Points colors; Sv → YC when no keeper saves."
         ),
         spitRow(
           spitRank("Schedule"),
-          mobile
-            ? "Third swipe — next 4 GWs with crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
-            : "Swipe for the next 5 GWs — crest + home icon; cell wash is FPL difficulty (easy blue → hard orange)."
+          "Upcoming fixtures — crest + home icon; FPL difficulty wash (blue easy → pink hard)."
         ),
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
         ...(mobile
@@ -9229,12 +9237,12 @@
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
       const reading = [
-        spitRow(spitRank("Place"), "Among the current filters (and any pinned compares) — not the full unfiltered list. Default mins/price cuts stop low-minute Per 90 outliers from taking #1."),
+        spitRow(spitRank("Place"), "Rank within current filters and pins — not the full list. Default mins/price cuts limit Per 90 outliers."),
         spitRow(
           spitRank(mobile ? "Tap" : "Pin"),
           mobile
-            ? "Tap a row to pin (up to five). Pins stay on every card after you filter (e.g. a mid vs Forwards), sorted by value. Colour key above the cards; clears when switching Players / Teams."
-            : "Click to pin up to five. Pins stay on every card after you filter (e.g. a mid vs Forwards), sorted by value. Hover cross-highlights the same name across cards."
+            ? "Tap to pin up to five names. Pins persist across filters; colour key above the cards."
+            : "Pin up to five names. Pins persist across filters; hover cross-highlights the same name."
         ),
       ];
       return `${spitHead("podium", "How Rankings works")}
@@ -9301,37 +9309,41 @@
     if (state.page === "live") {
       const legend = [
         spitRow(
-          `<span class="live-feed-impact is-pos spit-home-swatch" aria-hidden="true">+3.5 vs avg</span>`,
-          "Feed impact — net pts gained or lost vs your average league opponent (captain = 2×)."
+          `<span class="live-feed-impact is-pos spit-home-swatch" aria-hidden="true"><span class="live-feed-impact-val">+3.5</span><span class="live-feed-impact-suffix"> vs avg</span></span>`,
+          "League impact — pts gained or lost vs avg opponent (captain 2×).",
+          "spit-symbol-wide"
         ),
         spitRow(
           `<span class="live-feed-event-label spit-home-swatch" aria-hidden="true">Goal</span>`,
-          "Feed mode — chronological GW events with points change and league impact."
+          "Feed event label.",
+          "spit-symbol-wide"
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span></span>`,
-          "DefCon mode — progress toward threshold; solid blue fill when achieved."
+          "DefCon progress — solid blue fill when threshold hit (+2 pts).",
+          "spit-symbol-wide"
         ),
         spitRow(
           `<span class="threshold-dot"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
-          "DefCon achieved this match (+2 pts)."
+          "DefCon earned this match."
         ),
         spitRow(`<span class="live-card-dot is-yc spit-home-swatch" aria-hidden="true"></span>`, "Yellow card (Points mode)."),
-        spitRow(`<span class="live-bonus-status is-live spit-home-swatch" aria-hidden="true"><span class="home-status-dot is-live"></span> Live</span>`, "Bonus fixture card — green border + Live label while that match is in play; live cards sort to the top."),
+        spitRow(
+          `<span class="live-bonus-status is-live spit-home-swatch" aria-hidden="true"><span class="home-status-dot is-live"></span> Live</span>`,
+          "Bonus card in play — green border; live cards sort first.",
+          "spit-symbol-wide"
+        ),
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
       const reading = [
-        spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus toggle beside search — current gameweek only."),
-        spitRow(spitRank("Feed"), "Most recent first — goals, assists, cards, DefCon, bonus (BPS rank + FPL bonus), and appearance points as live stats update."),
-        spitRow(spitRank("Ownership"), "Feed filter — hide players nobody in your league owns, or show all."),
-        spitRow(
-          spitRank("Impact"),
-          "Impact = pts change × (your multiplier − avg opponent multiplier). Only you own him → full edge; everyone owns → ~0. Captain doubles your share. Negative → rivals benefit more; positive → you pull ahead of average."
-        ),
-        spitRow(spitRank("Threshold"), "DEF needs 10 CBIT. MID/FWD need 12 CBIRT. GK ineligible for DefCon."),
-        spitRow(spitRank("Points"), "Sortable GW stats — Pts, G, A, CS, Sv, DC check, bonus, cards."),
-        spitRow(spitRank("Bonus"), "One card per fixture; BPS bars; top three get projected 3/2/1 (tie-break rules not modeled)."),
-        spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned status."),
+        spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus — current gameweek only."),
+        spitRow(spitRank("Feed"), "Newest first — goals, assists, cards, DefCon, bonus, and appearance pts."),
+        spitRow(spitRank("Total"), "Running GW pts for that player; pill color scales with haul size."),
+        spitRow(spitRank("Impact"), "Pts change × your ownership edge vs league avg. Unique picks swing most; shared picks ~0."),
+        spitRow(spitRank("Threshold"), "DEF 10 CBIT · MID/FWD 12 CBIRT · GK ineligible."),
+        spitRow(spitRank("Points"), "Sortable GW stats — Pts, G, A, CS, Sv, DC, bonus, cards."),
+        spitRow(spitRank("Bonus"), "Per fixture after 60′ — BPS bars; top three projected 3/2/1."),
+        spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned."),
       ];
       return `${spitHead("activity", "How Live works")}
         ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
@@ -9376,32 +9388,28 @@
         spitRow(
           spitRank("Row"),
           mobile
-            ? "Tap a planner player for captain, vice, bench, replace, or remove."
-            : "Right-click a planner player for captain, vice, bench, replace, or remove."
+            ? "Tap a player for captain, vice, bench, replace, or remove."
+            : "Right-click a player for captain, vice, bench, replace, or remove."
         ),
         spitRow(spitRank("Rules"), "15 players · £100.0m · max 3 per club · 2 GKP / 5 DEF / 5 MID / 3 FWD."),
         spitRow(spitRank("Live"), "Your live FPL squad and scoring are on Home — this page is for planning ahead."),
         spitRow(spitRank("XI"), "Formation follows starters (3–5 DEF, 2–5 MID, 1–3 FWD). Bench holds the rest."),
         spitRow(spitRank("Stats"), isNextSeason()
-          ? `Pts, xGI, xG, xA from ${teamStatsSeasonLabel()} FPL season totals. New signings / zero rows show –.`
-          : `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()} (matched by FPL code). New signings / zero rows show –.`),
-        spitRow(spitRank("Form"), "Sparkline of GW points (needs 2+ gameweeks for a line)."),
-        spitRow(spitRank("Set pieces"), "PK / FK / CK — FPL #1 (check mark). FK/CK also show #2."),
-        spitRow(spitRank("Heat"), "Six fixture columns from the selected gameweek (left of the line). Defaults to the next GW once the current one has started, so you can plan ahead."),
+          ? `Pts, xGI, xG, xA from ${teamStatsSeasonLabel()} FPL season totals. New signings show –.`
+          : `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()}. New signings show –.`),
+        spitRow(spitRank("Form"), "Sparkline of GW points (needs 2+ gameweeks)."),
+        spitRow(spitRank("GW"), "Picker sets the planning window; six fixture heat columns start from that GW (blue easy → pink hard)."),
         spitRow(
           spitRank("Select"),
           mobile
-            ? "Empty slot or Replace opens the player list and search. Back or Escape returns to the squad. Budget stats hide while picking."
-            : "Empty slot or Replace opens the player list and search. Filters (including Affordable) open then. Back or Escape returns to the squad."
+            ? "Empty slot or Replace opens search. Affordable filter hides players above Bank."
+            : "Empty slot or Replace opens search and filters (incl. Affordable)."
         ),
-        spitRow(spitRank("GW"), "Gameweek picker — plan lineups and transfers from your synced squad forward. Fixture heat columns start from the selected GW."),
-        spitRow(spitRank("Transfers"), "FT shows used/available this gameweek (e.g. 0/1). Unused FT roll over (+1 per GW, max 5). GW16 tops up to 5. Extra transfers cost −4 pts — shown as Hit."),
-        spitRow(spitRank("Affordable"), "In Filters while picking — hides anyone above remaining Bank. Replace credits the outgoing player's price."),
-        spitRow(spitRank("Squad"), "Resync copies your linked FPL squad. Clear removes planned picks for this GW onward."),
-        spitRow(spitRank("Pins"), mobile
-          ? "Compare mode — tap squad or picker rows to pin up to 5. Compare mode is off while pins exist."
-          : "Compare mode — click squad or picker rows to pin up to 5. Compare mode is off while pins exist."),
-        spitRow(spitRank("Compare"), "With no pins, Compare mode selects instead of add/replace. Hover a squad or result row to highlight stat winners."),
+        spitRow(spitRank("Transfers"), "FT used/available (e.g. 0/1). Unused roll over (+1/GW, max 5). Extra transfers cost −4."),
+        spitRow(spitRank("Squad"), "Resync copies your linked FPL squad. Clear removes planned picks from this GW onward."),
+        spitRow(spitRank("Compare"), mobile
+          ? "Pin up to 5 players to compare stats; Compare mode selects when no pins."
+          : "Pin up to 5 players to compare stats; Compare mode selects when no pins."),
         spitRow(spitRank("Prices"), "2026/27 FPL list. Link a Manager in Preferences to sync from FPL."),
       ];
       const intro =
@@ -9437,13 +9445,13 @@
       spitRow(spitRank("TSB%"), "FPL selected-by-% from the latest ownership check-in."),
       spitRow(
         spitRank("Tint"),
-        "Blue/orange Highlight Top/Bottom on raw values (default top/bottom 5% for Players). Bands vs all Players/Teams — filters don’t shrink them unless Relative is on. Stronger wash when a leader pulls clear of the band; soft blue is quieter in dark mode."
+        "Highlight Top/Bottom bands on raw values (default top/bottom 5%). Relative mode shrinks bands to filtered rows."
       ),
       spitRow(
         spitRank("Fixtures"),
         mobile
-          ? "Tap a data cell for upcoming fixtures and opponent ranks by venue."
-          : "Click a data cell (not the name column) for upcoming fixtures and opponent ranks by venue. Click again to dismiss."
+          ? "Tap a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Matchups pink/blue wash)."
+          : "Click a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Matchups pink/blue wash)."
       ),
       spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
     ];
@@ -13012,7 +13020,7 @@
       .map((fx) => Number(fx.difficulty))
       .filter((d) => Number.isFinite(d) && d >= 1 && d <= 5);
     const fdr = diffs.length ? Math.max(...diffs) : null;
-    const ramp = fdr != null ? fdrRampInlineStyle(fdr) : { className: "", styleAttr: "", strongClass: "" };
+    const ramp = fdr != null ? fdrRampInlineStyle(fdr, { schedulePalette: true }) : { className: "", styleAttr: "", strongClass: "" };
     return `<td class="team-heat-cell${ramp.className}${ramp.strongClass}${divide}${teamHeatAnchorClass(gw)}"${ramp.styleAttr}><span class="team-heat-label">${escapeHtml(label)}</span></td>`;
   }
 
@@ -19912,7 +19920,7 @@
   if (scheduleEdgeMinInfo) {
     scheduleEdgeMinInfo.setAttribute(
       "data-tip-html",
-      `Determines how many ranked values difference required to trigger matchup advantage ${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}.`
+      `Minimum rank gap to flag attack ${iconHTML("swords", "ftt-attack-icon")} or defence ${iconHTML("shield-half", "ftt-defence-icon")} edges on fixture cells.`
     );
   }
 
