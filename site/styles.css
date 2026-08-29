@@ -13659,6 +13659,22 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     0 0 0 1px hsl(var(--negative) / 0.18),
     var(--shadow-sm);
 }
+.home-standings-live-table td.home-col-live,
+.home-standings-live-table td.home-col-left,
+.home-standings-live-table td.home-col-gw,
+.home-standings-live-table td.home-col-total,
+.home-standings-live-table td.home-col-rank {
+  vertical-align: middle;
+}
+.home-standings-live-table td.home-col-live,
+.home-standings-live-table td.home-col-left,
+.home-standings-live-table td.home-col-gw,
+.home-standings-live-table td.home-col-total {
+  text-align: center;
+}
+.home-standings-live-table td.home-col-rank {
+  text-align: left;
+}
 .home-standings-live-pill {
   min-width: 2em;
   padding: 2px 7px;
@@ -14051,7 +14067,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     height: auto;
   }
   #home-standings-panel .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
-    vertical-align: top;
+    vertical-align: middle;
   }
   #home-squad-panel .home-squad-table tbody tr.home-bench-divider {
     height: auto;
@@ -14431,6 +14447,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   padding: 6px 8px;
   border-bottom: 1px solid hsl(var(--border));
   white-space: nowrap;
+  vertical-align: middle;
 }
 .home-data-table td {
   padding: 9px 8px;
@@ -14516,10 +14533,14 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 1px;
   min-width: 0;
   max-width: 100%;
-  min-height: calc(1.2em + 1px + 1.2em);
+}
+.home-standings-table tbody tr[data-entry] > td,
+.home-standings-table thead th {
+  vertical-align: middle;
 }
 /* Desktop: stop Player from eating the whole row — distribute into PTS/MP/OPP/IMP. */
 @media (min-width: 901px) {
@@ -14627,6 +14648,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-chips-table .home-col-manager {
     width: 36%;
   }
+}
+.home-squad-table tbody tr.home-squad-row > td,
+.home-squad-table thead th {
+  vertical-align: middle;
 }
 .home-player-cell {
   display: flex;
@@ -15093,7 +15118,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   width: auto;
 }
 .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
-  vertical-align: top;
+  vertical-align: middle;
 }
 .home-transfers-status {
   margin: 0 0 8px;
