@@ -310,7 +310,6 @@ def resolve_entry_overall_rank_prev(
     eid: int,
     manager_id: int,
     gw: int,
-    gw_in_play: bool,
     focus_overall_rank_prev: int | None,
     picks_history: dict | None,
     history_payload: dict | None,
@@ -321,17 +320,15 @@ def resolve_entry_overall_rank_prev(
         return None
     if eid == manager_id and focus_overall_rank_prev:
         return focus_overall_rank_prev
-    picks_history = picks_history if isinstance(picks_history, dict) else {}
-    picks_prev = positive_rank(picks_history.get("overall_rank"))
+    # End-of-previous-GW rank from history — picks entry_history overall_rank
+    # tracks near-current rank mid-GW and must not be used as the baseline.
     hist_prev = overall_rank_from_history(history_payload, gw)
-    cached_prev = positive_rank((cached_row or {}).get("overallRankPrev"))
-    if gw_in_play and picks_prev:
-        return picks_prev
     if hist_prev:
         return hist_prev
-    if picks_prev:
-        return picks_prev
-    return cached_prev
+    picks_history = picks_history if isinstance(picks_history, dict) else {}
+    picks_prev = positive_rank(picks_history.get("overall_rank"))
+    cached_prev = positive_rank((cached_row or {}).get("overallRankPrev"))
+    return picks_prev or cached_prev
 
 
 def cached_standings_by_entry(cached: dict | None, league_id: int) -> dict[int, dict]:
@@ -1303,7 +1300,6 @@ def main() -> int:
                 eid=eid,
                 manager_id=manager_id,
                 gw=gw,
-                gw_in_play=gw_in_play,
                 focus_overall_rank_prev=overall_rank_prev,
                 picks_history=picks_history,
                 history_payload=history_by_entry.get(eid),
