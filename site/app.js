@@ -2430,7 +2430,7 @@
   let homeLivePrefetchStarted = false;
   const HOME_ENTER_ROLL_MS = 3400;
   const HOME_VIEW_SWITCH_ROLL_MS = 2600;
-  const HOME_RANK_BORDER_REVEAL_RATIO = 0.32;
+  const HOME_RANK_BORDER_REVEAL_RATIO = 0.18;
   const HOME_SCROLL_TOP_MS = 920;
   let homeScrollAnimToken = 0;
   let homeRankBorderRevealTimer = null;
@@ -3652,6 +3652,35 @@
     </tr>`;
   }
 
+  function homeElementGwPts(elementId) {
+    const rec = (HOME.elementGw || {})[String(elementId)];
+    if (!rec || typeof rec !== "object") return 0;
+    const n = Number(rec.pts);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function homeTransferMovePtsDelta(move) {
+    if (move && move.ptsDelta != null && Number.isFinite(Number(move.ptsDelta))) {
+      return Number(move.ptsDelta);
+    }
+    const inPts = move?.in?.gwPoints != null && Number.isFinite(Number(move.in.gwPoints))
+      ? Number(move.in.gwPoints)
+      : homeElementGwPts(move?.in?.id);
+    const outPts = move?.out?.gwPoints != null && Number.isFinite(Number(move.out.gwPoints))
+      ? Number(move.out.gwPoints)
+      : homeElementGwPts(move?.out?.id);
+    return inPts - outPts;
+  }
+
+  function homeTransferPtsDeltaHTML(delta) {
+    const n = Number(delta);
+    if (!Number.isFinite(n)) return "";
+    if (n === 0) return `<span class="home-transfer-pts is-flat">±0</span>`;
+    const cls = n > 0 ? "is-up" : "is-down";
+    const text = n > 0 ? `+${n}` : `−${Math.abs(n)}`;
+    return `<span class="home-transfer-pts ${cls}">${text}</span>`;
+  }
+
   function homeTransferMoveHTML(move) {
     const out = move && move.out ? move.out : null;
     const inn = move && move.in ? move.in : null;
@@ -3665,7 +3694,10 @@
     if (inn && inn.name) {
       parts.push(`<span class="home-transfer-in">${escapeHtml(inn.name)}</span>`);
     }
-    return parts.length ? `<span class="home-transfer-move">${parts.join("")}</span>` : "";
+    const deltaHTML = homeTransferPtsDeltaHTML(homeTransferMovePtsDelta(move));
+    return parts.length
+      ? `<span class="home-transfer-move">${parts.join("")}${deltaHTML}</span>`
+      : "";
   }
 
   function homeTransfersCellHTML(transfers) {
@@ -17273,14 +17305,24 @@
 
 
   const PAGE_KEY = "fpl-explorer-page";
+  // Flip to true when Planner is ready to ship again (nav + prefs section).
+  const PLANNER_NAV_ENABLED = false;
   const PAGES = ["home", "live", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
+
+  function normalizeStoredPage(page) {
+    if (page === "notes") return "opta";
+    if (!PAGES.includes(page)) return "home";
+    if (!PLANNER_NAV_ENABLED && page === "team") return "home";
+    return page;
+  }
+
+  function syncPlannerNavVisibility() {
+    if (el.pageTeam) el.pageTeam.hidden = !PLANNER_NAV_ENABLED;
+  }
 
   function storedPage() {
     try {
-      const saved = localStorage.getItem(PAGE_KEY);
-      if (saved === "notes") return "opta";
-      const page = PAGES.includes(saved) ? saved : "home";
-      return page;
+      return normalizeStoredPage(localStorage.getItem(PAGE_KEY));
     } catch {
       return "home";
     }
@@ -17689,7 +17731,7 @@
   }
 
   function setPage(page) {
-    if (page === "notes") page = "opta";
+    page = normalizeStoredPage(page);
     const prev = state.page;
     state.page = page;
     if (prev !== page) {
@@ -20162,6 +20204,7 @@
       syncFplIdStatus();
     }
     prefetchHomeLiveCache();
+    syncPlannerNavVisibility();
     setPage(storedPage());
     syncLiveNavChrome();
     // setPage already rendered Live (and started enter motion); renderTable would stack it.

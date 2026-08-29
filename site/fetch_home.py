@@ -166,6 +166,7 @@ def compute_transfers(
     elements: dict[int, dict],
     entry_history: dict | None,
     active_chip: str | None,
+    stats: dict[int, dict] | None = None,
 ) -> dict:
     """Diff previous vs current squad picks into transfer moves."""
     prev_ids = [
@@ -186,17 +187,37 @@ def compute_transfers(
     def el_name(eid: int) -> str:
         return player_display_name(elements.get(eid) or {})
 
+    def el_gw_points(eid: int) -> int:
+        st = (stats or {}).get(eid) if isinstance(stats, dict) else None
+        if not isinstance(st, dict):
+            return 0
+        try:
+            return int(st.get("total_points") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     moves: list[dict] = []
     pair_count = max(len(outs), len(ins))
     for i in range(pair_count):
         move: dict = {}
         if i < len(outs):
             out_eid = outs[i]
-            move["out"] = {"id": out_eid, "name": el_name(out_eid)}
+            move["out"] = {
+                "id": out_eid,
+                "name": el_name(out_eid),
+                "gwPoints": el_gw_points(out_eid),
+            }
         if i < len(ins):
             in_eid = ins[i]
-            move["in"] = {"id": in_eid, "name": el_name(in_eid)}
+            move["in"] = {
+                "id": in_eid,
+                "name": el_name(in_eid),
+                "gwPoints": el_gw_points(in_eid),
+            }
         if move:
+            in_pts = int((move.get("in") or {}).get("gwPoints") or 0)
+            out_pts = int((move.get("out") or {}).get("gwPoints") or 0)
+            move["ptsDelta"] = in_pts - out_pts
             moves.append(move)
 
     eh = entry_history if isinstance(entry_history, dict) else {}
@@ -214,6 +235,7 @@ def compute_transfers(
         "cost": cost,
         "hit": cost > 0,
         "moves": moves,
+        "netPtsDelta": sum(int(m.get("ptsDelta") or 0) for m in moves),
         "activeChip": active_chip,
     }
 
@@ -1107,6 +1129,7 @@ def main() -> int:
                 elements,
                 (curr_payload or {}).get("entry_history") or {},
                 (curr_payload or {}).get("active_chip"),
+                stats,
             )
 
         standing_rows: list[dict] = []

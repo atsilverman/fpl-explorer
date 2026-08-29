@@ -13630,9 +13630,11 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 /* No live starters — rank delta borders on summary rank cards only. */
 .home-stat-panel {
+  --home-rank-saturate-duration: 3.4s;
+  --home-rank-saturate-ease: cubic-bezier(0.12, 0.88, 0.22, 1);
   transition:
-    border-color 1.05s var(--ease-out),
-    box-shadow 1.05s var(--ease-out);
+    border-color var(--home-rank-saturate-duration) var(--home-rank-saturate-ease),
+    box-shadow var(--home-rank-saturate-duration) var(--home-rank-saturate-ease);
 }
 .home-dashboard:not(.has-live-minutes) .home-stat-panel.is-rank-border-up {
   border-color: hsl(var(--positive) / 0.55);
@@ -13830,7 +13832,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-rank-delta.is-up,
 .home-rank-delta.is-down {
-  transition: color 1.05s var(--ease-out);
+  transition: color var(--home-rank-saturate-duration, 3.4s) var(--home-rank-saturate-ease, cubic-bezier(0.12, 0.88, 0.22, 1));
 }
 .home-rank-delta.is-chrome-muted.is-up,
 .home-rank-delta.is-chrome-muted.is-down {
@@ -15135,12 +15137,32 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   height: 14px;
 }
 .home-transfer-move {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+  width: 100%;
   font-size: 11px;
   line-height: 1.25;
+}
+.home-transfer-pts {
+  margin-left: auto;
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.home-transfer-pts.is-up {
+  color: hsl(var(--positive));
+}
+.home-transfer-pts.is-down {
+  color: hsl(var(--negative));
+}
+.home-transfer-pts.is-flat {
+  color: var(--text-faint);
+  font-weight: 600;
 }
 .home-transfer-out {
   color: hsl(var(--negative) / 0.85);
