@@ -2547,8 +2547,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     pointer-events: none;
     background: linear-gradient(
       to top,
-      hsl(var(--background) / 0.55) 0%,
-      hsl(var(--background) / 0.22) 42%,
+      hsl(var(--background) / 0.72) 0%,
+      hsl(var(--background) / 0.34) 46%,
       hsl(var(--background) / 0) 100%
     );
   }
@@ -2558,8 +2558,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   :root[data-theme="dark"] .mobile-chrome-fade:not([hidden]) {
     background: linear-gradient(
       to top,
-      hsl(var(--background) / 0.72) 0%,
-      hsl(var(--background) / 0.32) 48%,
+      hsl(var(--background) / 0.84) 0%,
+      hsl(var(--background) / 0.42) 48%,
       hsl(var(--background) / 0) 100%
     );
   }
@@ -2567,8 +2567,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     :root:not([data-theme="light"]) .mobile-chrome-fade:not([hidden]) {
       background: linear-gradient(
         to top,
-        hsl(var(--background) / 0.72) 0%,
-        hsl(var(--background) / 0.32) 48%,
+        hsl(var(--background) / 0.84) 0%,
+        hsl(var(--background) / 0.42) 48%,
         hsl(var(--background) / 0) 100%
       );
     }
@@ -2583,8 +2583,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --mobile-dock-size: 40px;
     --mobile-dock-btn-size: auto;
     --mobile-dock-radius: 12px;
-    --mobile-dock-border: hsl(var(--border-hsl) / 0.65);
-    --mobile-dock-shadow: 0 1px 3px hsl(240 6% 10% / 0.06);
+    --mobile-dock-fg: hsl(var(--foreground));
+    --mobile-dock-fg-muted: hsl(var(--foreground) / 0.72);
+    --mobile-dock-border: hsl(var(--foreground) / 0.26);
+    --mobile-dock-shadow:
+      0 2px 6px hsl(240 6% 10% / 0.1),
+      0 0 0 1px hsl(var(--foreground) / 0.05);
     transition:
       transform 0.42s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.42s ease;
@@ -2592,12 +2596,20 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   :root[data-theme="dark"] .mobile-view-dock,
   :root[data-theme="dark"] .mobile-filter-dock {
-    --mobile-dock-shadow: 0 1px 4px hsl(0 0% 0% / 0.28);
+    --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
+    --mobile-dock-border: hsl(var(--foreground) / 0.34);
+    --mobile-dock-shadow:
+      0 2px 8px hsl(0 0% 0% / 0.38),
+      0 0 0 1px hsl(var(--foreground) / 0.08);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .mobile-view-dock,
     :root:not([data-theme="light"]) .mobile-filter-dock {
-      --mobile-dock-shadow: 0 1px 4px hsl(0 0% 0% / 0.28);
+      --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
+      --mobile-dock-border: hsl(var(--foreground) / 0.34);
+      --mobile-dock-shadow:
+        0 2px 8px hsl(0 0% 0% / 0.38),
+        0 0 0 1px hsl(var(--foreground) / 0.08);
     }
   }
   .mobile-dock-label {
@@ -2607,11 +2619,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-filter-fab .mobile-dock-label {
     display: inline;
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
     white-space: nowrap;
-    color: inherit;
+    color: var(--mobile-dock-fg);
   }
   #sidebar-toggle.mobile-filter-fab .btn-label {
     display: none;
@@ -2658,14 +2670,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding: 0 12px;
     gap: 6px;
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
     border: none;
     border-radius: calc(var(--mobile-dock-radius) - 3px);
     background: transparent;
     box-shadow: none;
-    color: var(--text-dim);
+    color: var(--mobile-dock-fg-muted);
     touch-action: manipulation;
     transition:
       color 0.16s ease,
@@ -2680,12 +2692,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   .mobile-view-dock .tab-btn.active {
     background: transparent;
-    color: hsl(var(--blue-hsl));
+    color: var(--mobile-dock-fg);
     box-shadow: none;
   }
   .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
     background: transparent;
-    color: hsl(var(--blue-hsl));
+    color: var(--mobile-dock-fg);
     box-shadow: none;
   }
   :root[data-theme="dark"] .mobile-view-dock .tab-btn.active,
@@ -2726,9 +2738,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     background: hsl(var(--card));
     border: 1px solid var(--mobile-dock-border);
     box-shadow: var(--mobile-dock-shadow);
-    color: var(--text-dim);
+    color: var(--mobile-dock-fg);
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
     touch-action: manipulation;
@@ -2759,9 +2771,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding: 0 12px;
     gap: 6px;
     justify-content: center;
-    color: var(--text-dim);
+    color: var(--mobile-dock-fg);
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
     border-radius: var(--mobile-dock-radius);
@@ -2783,13 +2795,13 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-filter-fab[aria-expanded="true"],
   .mobile-filter-fab[aria-pressed="true"] {
     background: hsl(var(--blue-hsl) / 0.14);
-    border-color: hsl(var(--blue-hsl) / 0.28);
+    border-color: hsl(var(--foreground) / 0.38);
     color: hsl(var(--blue-hsl));
-    box-shadow: none;
+    box-shadow: var(--mobile-dock-shadow);
   }
   html[data-pointer="coarse"] .mobile-filter-fab:hover {
     background: hsl(var(--card));
-    color: var(--text-dim);
+    color: var(--mobile-dock-fg);
   }
   html[data-pointer="coarse"] .mobile-filter-fab.on:hover,
   html[data-pointer="coarse"] .mobile-filter-fab[aria-expanded="true"]:hover,
