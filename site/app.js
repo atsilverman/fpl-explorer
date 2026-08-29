@@ -15394,7 +15394,30 @@
     return 0;
   }
 
-  function liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam) {
+  /** Bonus projections/events only after the fixture clock reaches 60′ (or the match is finished). */
+  function liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement) {
+    const eligible = new Map();
+    for (const m of matchups || []) {
+      let maxMins = 0;
+      let anyFinished = false;
+      for (const [eidStr, eg] of Object.entries(egMap || {})) {
+        if (!eg || typeof eg !== "object") continue;
+        const player = byElement.get(Number(eidStr));
+        if (!player) continue;
+        const team = player.team || currentTeamCode(player);
+        if (team !== m.home && team !== m.away) continue;
+        const mins = Number(eg.minutes) || 0;
+        if (mins > maxMins) maxMins = mins;
+        const status = String(eg.status || "").toLowerCase();
+        if (status === "finished" || eg.finished) anyFinished = true;
+        if ((Number(eg.bonus) || 0) > 0) anyFinished = true;
+      }
+      eligible.set(m.id, anyFinished || maxMins >= 60);
+    }
+    return eligible;
+  }
+
+  function liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible) {
     const byFixture = new Map();
     for (const [eidStr, eg] of Object.entries(egMap || {})) {
       if (!eg || typeof eg !== "object") continue;
@@ -15409,6 +15432,7 @@
       const team = player.team || currentTeamCode(player);
       const matchupId = matchupByTeam.get(team);
       if (!matchupId) continue;
+      if (matchupBonusEligible && !matchupBonusEligible.get(matchupId)) continue;
       if (!byFixture.has(matchupId)) byFixture.set(matchupId, []);
       byFixture.get(matchupId).push({
         eidStr,
@@ -15462,9 +15486,9 @@
     }
   }
 
-  function liveFeedPushBonusProjDiffs(oldSnap, nextSnap, egMap, byElement, matchupByTeam, gw, newEvents, runPtsByEid, { seeding }) {
+  function liveFeedPushBonusProjDiffs(oldSnap, nextSnap, egMap, byElement, matchupByTeam, gw, newEvents, runPtsByEid, { seeding, matchupBonusEligible } = {}) {
     if (seeding || !oldSnap) return;
-    const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam);
+    const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
     liveFeedApplyBonusEff(nextSnap, bonusMeta);
     for (const eidStr of Object.keys(nextSnap)) {
       const old = oldSnap[eidStr];
@@ -15631,7 +15655,7 @@
       push("penSaved", d === 1 ? "Penalty saved" : `${d} pens saved`, 5 * d, "penaltiesSaved")
     );
     if (!oldRec.defConHit && newRec.defConHit) {
-      push("defCon", "DefCon threshold", 2, "defConHit");
+      push("defCon", "DefCon", 2, "defConHit");
     }
   }
 
@@ -15741,7 +15765,7 @@
       gw,
       newEvents,
       runPtsByEid,
-      { seeding }
+      { seeding, matchupBonusEligible: liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement) }
     );
 
     if (newEvents.length) {
