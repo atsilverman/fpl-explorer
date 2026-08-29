@@ -2217,8 +2217,46 @@
     }
   }
 
+  function mergeHomeOverallRankPrev(incomingRows, priorHome, incomingGw) {
+    const priorGw = Number(priorHome?.gw);
+    const nextGw = Number(incomingGw);
+    if (Number.isFinite(priorGw) && Number.isFinite(nextGw) && priorGw !== nextGw) {
+      return incomingRows;
+    }
+    const priorByEntry = new Map();
+    for (const row of priorHome?.standings || []) {
+      const eid = Number(row?.entry);
+      const prev = Number(row?.overallRankPrev);
+      if (Number.isFinite(eid) && eid > 0 && Number.isFinite(prev) && prev > 0) {
+        priorByEntry.set(eid, prev);
+      }
+    }
+    const priorSummaryPrev = Number(priorHome?.summary?.overallRankPrev);
+    const priorMgr = Number(priorHome?.managerId);
+    if (
+      Number.isFinite(priorMgr) && priorMgr > 0
+      && Number.isFinite(priorSummaryPrev) && priorSummaryPrev > 0
+    ) {
+      priorByEntry.set(priorMgr, priorSummaryPrev);
+    }
+    if (!priorByEntry.size || !Array.isArray(incomingRows)) return incomingRows;
+    return incomingRows.map((row) => {
+      if (!row || typeof row !== "object") return row;
+      const prev = Number(row.overallRankPrev);
+      if (Number.isFinite(prev) && prev > 0) return row;
+      const kept = priorByEntry.get(Number(row.entry));
+      return kept ? { ...row, overallRankPrev: kept } : row;
+    });
+  }
+
   function applyHomePayload(payload) {
     if (!payload || typeof payload !== "object") return false;
+    const priorHome = {
+      gw: HOME.gw ?? null,
+      standings: Array.isArray(HOME.standings) ? HOME.standings : [],
+      summary: HOME.summary && typeof HOME.summary === "object" ? HOME.summary : null,
+      managerId: HOME.managerId ?? null,
+    };
     if (payload.summary && HOME.summary && typeof payload.summary === "object") {
       const incoming = payload.summary;
       const prev = HOME.summary;
@@ -2234,6 +2272,21 @@
       ) {
         incoming.overallRank = curRank;
       }
+      if (
+        !(Number.isFinite(inPrev) && inPrev > 0) && Number.isFinite(curPrev) && curPrev > 0
+        && (!Number.isFinite(Number(priorHome.gw)) || Number(priorHome.gw) === Number(payload.gw))
+      ) {
+        incoming.overallRankPrev = curPrev;
+      }
+    } else if (payload.summary && typeof payload.summary === "object") {
+      const inPrev = Number(payload.summary.overallRankPrev);
+      const curPrev = Number(priorHome.summary?.overallRankPrev);
+      if (
+        !(Number.isFinite(inPrev) && inPrev > 0) && Number.isFinite(curPrev) && curPrev > 0
+        && (!Number.isFinite(Number(priorHome.gw)) || Number(priorHome.gw) === Number(payload.gw))
+      ) {
+        payload.summary = { ...payload.summary, overallRankPrev: curPrev };
+      }
     }
     HOME.generatedAt = payload.generatedAt ?? null;
     HOME.gw = payload.gw ?? null;
@@ -2245,7 +2298,11 @@
     HOME.squadsByEntry = payload.squadsByEntry && typeof payload.squadsByEntry === "object"
       ? payload.squadsByEntry
       : {};
-    HOME.standings = Array.isArray(payload.standings) ? payload.standings : [];
+    HOME.standings = mergeHomeOverallRankPrev(
+      Array.isArray(payload.standings) ? payload.standings : [],
+      priorHome,
+      payload.gw ?? null
+    );
     HOME.chipWindow = payload.chipWindow && typeof payload.chipWindow === "object"
       ? payload.chipWindow
       : null;
