@@ -3113,17 +3113,20 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 #home-page.is-entering .home-summary-cards > .home-panel,
 #home-page.is-entering .home-tables-grid > .home-panel {
   animation: page-enter-item 0.78s var(--ease-out) both;
-  animation-delay: calc(0.2s + (min(var(--enter-i, 0), 16) * 0.065s));
+  animation-delay: calc(0.08s + (min(var(--enter-i, 0), 4) * 0.045s));
 }
 #home-page.is-entering .home-view-banner {
   animation: page-enter-fade 0.65s var(--ease-out) both;
-  animation-delay: 0.2s;
+  animation-delay: 0.08s;
 }
 #home-page.is-entering .home-squad-table tbody tr > *,
-#home-page.is-entering .home-standings-table tbody tr > *,
+#home-page.is-entering .home-standings-table tbody tr > * {
+  animation: page-enter-fade 0.5s var(--ease-out) both;
+  animation-delay: calc(0.14s + (min(var(--enter-i, 0), 12) * 0.028s));
+}
 #home-page.is-entering .home-feed-table tbody tr > * {
-  animation: page-enter-fade 0.65s var(--ease-out) both;
-  animation-delay: calc(0.34s + (min(var(--enter-i, 0), 28) * 0.054s));
+  animation: page-enter-fade 0.5s var(--ease-out) both;
+  animation-delay: 0.16s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -7768,6 +7771,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .spit-symbol .home-play-live.spit-home-swatch,
 .spit-symbol .home-play-left.spit-home-swatch {
   font-size: 12px;
+}
+.spit-symbol .home-play-split.spit-home-swatch {
+  font-size: 12px;
+  gap: 4px;
 }
 .spit-symbol .home-role-tag.spit-home-swatch {
   margin-top: 1px;
@@ -13813,6 +13820,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-standings-live-table td.home-col-live,
 .home-standings-live-table td.home-col-left,
+.home-standings-live-table td.home-col-play,
 .home-standings-live-table td.home-col-gw,
 .home-standings-live-table td.home-col-total,
 .home-standings-live-table td.home-col-rank {
@@ -13820,6 +13828,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 }
 .home-standings-live-table td.home-col-live,
 .home-standings-live-table td.home-col-left,
+.home-standings-live-table td.home-col-play,
 .home-standings-live-table td.home-col-gw,
 .home-standings-live-table td.home-col-total {
   text-align: center;
@@ -14974,6 +14983,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-col-rank,
 .home-col-live,
 .home-col-left,
+.home-col-play,
 .home-col-gw,
 .home-col-total,
 .home-col-captain,
@@ -14990,6 +15000,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-data-table th.home-col-rank,
 .home-data-table th.home-col-live,
 .home-data-table th.home-col-left,
+.home-data-table th.home-col-play,
 .home-data-table th.home-col-gw,
 .home-data-table th.home-col-total,
 .home-data-table td.home-col-pts,
@@ -14999,6 +15010,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-data-table td.home-col-rank,
 .home-data-table td.home-col-live,
 .home-data-table td.home-col-left,
+.home-data-table td.home-col-play,
 .home-data-table td.home-col-gw,
 .home-data-table td.home-col-total {
   text-align: center;
@@ -15501,6 +15513,82 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.home-standings-live-table .home-col-play {
+  display: none;
+}
+html.home-squad-wide .home-standings-live-table .home-col-live,
+html.home-squad-wide .home-standings-live-table .home-col-left {
+  display: none;
+}
+html.home-squad-wide .home-standings-live-table .home-col-play {
+  display: table-cell;
+}
+html.home-squad-wide .home-standings-live-table .home-col-manager {
+  width: 28%;
+  max-width: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+html.home-squad-wide .home-standings-live-table .home-standings-manager,
+html.home-squad-wide .home-standings-live-table .home-standings-name,
+html.home-squad-wide .home-standings-live-table .home-standings-name-text,
+html.home-squad-wide .home-standings-live-table .home-standings-entry {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html.home-squad-wide .home-standings-live-table .home-col-play {
+  width: 24%;
+  min-width: 5.4em;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+html.home-squad-wide .home-standings-live-table th.home-col-play {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+html.home-squad-wide .home-standings-live-table .home-col-gw,
+html.home-squad-wide .home-standings-live-table .home-col-total {
+  width: 15%;
+}
+.home-play-head {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.home-play-head-live {
+  color: hsl(142 55% 38%);
+}
+.home-play-head-sep {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.home-play-head-left {
+  color: hsl(var(--primary));
+}
+.home-play-split {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.home-play-split .home-play-live,
+.home-play-split .home-play-left {
+  min-width: 0.75em;
+}
+.home-play-split-sep {
+  color: var(--text-faint);
+  font-weight: 500;
+  font-size: 10px;
+}
 @keyframes home-live-pulse {
   0% { box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45); }
   70% { box-shadow: 0 0 0 6px hsl(142 55% 38% / 0); }
@@ -15553,10 +15641,42 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   font-variant-numeric: tabular-nums;
 }
 .home-imp.is-pos .home-imp-pct {
-  color: hsl(var(--positive) / 0.72);
+  color: hsl(var(--positive));
 }
 .home-imp.is-neg .home-imp-pct {
-  color: hsl(var(--negative) / 0.72);
+  color: hsl(var(--negative));
+}
+/* Home IMP — always driven by --hl-sat (default 1) so enter can finish at full color. */
+#home-page {
+  --hl-sat: 1;
+}
+#home-page .home-imp-fill.is-pos {
+  background: color-mix(
+    in srgb,
+    hsl(var(--positive)) calc(var(--hl-sat, 1) * 100%),
+    hsl(var(--foreground) / 0.16)
+  );
+}
+#home-page .home-imp-fill.is-neg {
+  background: color-mix(
+    in srgb,
+    hsl(var(--negative)) calc(var(--hl-sat, 1) * 100%),
+    hsl(var(--foreground) / 0.16)
+  );
+}
+#home-page .home-imp.is-pos .home-imp-pct {
+  color: color-mix(
+    in srgb,
+    hsl(var(--positive)) calc(var(--hl-sat, 1) * 100%),
+    var(--text-faint)
+  );
+}
+#home-page .home-imp.is-neg .home-imp-pct {
+  color: color-mix(
+    in srgb,
+    hsl(var(--negative)) calc(var(--hl-sat, 1) * 100%),
+    var(--text-faint)
+  );
 }
 @media (prefers-reduced-motion: reduce) {
   .home-imp-fill {

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=892" />
+<link rel="stylesheet" href="styles.css?v=899" />
 <script>
 (() => {
   try {
@@ -865,6 +865,7 @@
                         <th scope="col" class="home-col-manager">Manager</th>
                         <th scope="col" class="home-col-live" title="Active picks in play (Bench Boost can exceed 11)">Live</th>
                         <th scope="col" class="home-col-left" title="Still to play this gameweek">Left</th>
+                        <th scope="col" class="home-col-play" title="Active picks in play / still to play this gameweek"><span class="home-play-head"><span class="home-play-head-live">Live</span><span class="home-play-head-sep" aria-hidden="true">/</span><span class="home-play-head-left">Left</span></span></th>
                         <th scope="col" class="home-col-gw">GW</th>
                         <th scope="col" class="home-col-total">Total</th>
                       </tr>
@@ -1425,7 +1426,7 @@
 <script src="home_data.js?v=29"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=895"></script>
+<script src="app.js?v=905"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

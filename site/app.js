@@ -2362,6 +2362,7 @@
     if (animateHomeEnter && state.page === "home" && el.homePage) {
       setHomeManagerModalOpen(false);
       el.homePage.classList.add("is-enter-pending");
+      primeOptaHighlightEnter(el.homePage);
       renderHome();
       playPageEnter(el.homePage);
       syncHomeLivePolling();
@@ -2474,6 +2475,16 @@
     pane.style.setProperty("--hl-sat", "0");
   }
 
+  function finishHighlightSatEnter(pane) {
+    if (!pane) return;
+    if (pane._hlEnterRaf) {
+      cancelAnimationFrame(pane._hlEnterRaf);
+      pane._hlEnterRaf = 0;
+    }
+    pane.style.setProperty("--hl-sat", "1");
+    pane.classList.remove("is-hl-entering");
+  }
+
   function homeIsEnterBusy() {
     return !!(
       el.homePage &&
@@ -2489,6 +2500,8 @@
       homeRenderQueued = false;
       // Quiet rebuild after enter — never restart page-enter / odometer motion.
       renderHome({ settleQuiet: true });
+    } else if (HOME && HOME.gw != null && homeSquadIsWideLayout() && el.homeFeedAllBody) {
+      renderHomeFeed(Number(HOME.gw), { includeAll: true });
     }
     if (homeLivePollAfterEnter) {
       homeLivePollAfterEnter = false;
@@ -3532,6 +3545,13 @@
     const leftHTML = hasPlay
       ? `<span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(leftTitle)}">${homeStandingsCountHTML(toPlay)}</span>`
       : "—";
+    const playHTML = hasPlay
+      ? `<span class="home-play-split"${tipAttr(`${liveTitle}. ${leftTitle}`)}>
+          <span class="home-play-live${inPlay > 0 ? " is-active" : " is-zero"}">${homeStandingsCountHTML(inPlay)}</span>
+          <span class="home-play-split-sep" aria-hidden="true">/</span>
+          <span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}">${homeStandingsCountHTML(toPlay)}</span>
+        </span>`
+      : "—";
     const gwIntensity = topMaps && topMaps.gw ? topMaps.gw.get(entry) : null;
     const totalIntensity = topMaps && topMaps.total ? topMaps.total.get(entry) : null;
     const gwHTML = gwPts != null && Number.isFinite(gwPts)
@@ -3545,6 +3565,7 @@
       ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther, showActiveChip: true })}
       <td class="home-col-live">${liveHTML}</td>
       <td class="home-col-left">${leftHTML}</td>
+      <td class="home-col-play">${playHTML}</td>
       <td class="home-col-gw">${gwHTML}</td>
       <td class="home-col-total">${totalHTML}</td>
     </tr>`;
@@ -3577,7 +3598,7 @@
     const opts = { configuredEntry, viewEntry, viewingOther, topMaps };
     el.homeStandingsBody.innerHTML = sorted.map((r) =>
       homeStandingsLiveRowHTML(r, opts)
-    ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
+    ).join("") || `<tr><td colspan="7">No standings.</td></tr>`;
     syncHomeOwnerHighlights();
     syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false, allowShrink: true });
   }
@@ -3994,11 +4015,9 @@
       standingsPageIdx != null && Number.isFinite(standingsPageIdx)
         ? standingsPageIdx
         : homeStandingsActivePageIndex();
-    syncHomeTablesGridHeight();
+    syncHomeSquadRowHeights();
     syncHomeStandingsRowHeights();
-    syncHomeSquadRowHeights();
-    if (el.homeSquadTrack) void el.homeSquadTrack.offsetHeight;
-    syncHomeSquadRowHeights();
+    syncHomeTablesGridHeight();
     syncHomeStandingsTrackHeight(idx, { animate: false, allowShrink: true });
     syncHomeSquadTrackHeight(undefined, { animate: false });
     if (homeSquadIsWideLayout()) {
@@ -4017,6 +4036,7 @@
         if (!p) return;
         p.style.height = "";
         p.style.minHeight = "";
+        p.style.removeProperty("align-self");
       });
       el.homeTablesGrid.style.removeProperty("--home-tables-panel-h");
     };
@@ -4026,26 +4046,22 @@
       return;
     }
 
-    let feedWasHidden = false;
-    if (feed && feed.style.display === "none") {
-      feedWasHidden = true;
-    } else if (feed) {
-      feed.style.display = "none";
-    }
-    el.homeSquadPanel.style.height = "";
-    el.homeSquadPanel.style.minHeight = "";
-    el.homeStandingsPanel.style.height = "";
-    el.homeStandingsPanel.style.minHeight = "";
+    // Measure squad + standings at intrinsic height without display:none on
+    // the feed (that reflowed the whole grid and delayed enter by hundreds of ms).
+    [el.homeSquadPanel, el.homeStandingsPanel].forEach((p) => {
+      p.style.height = "auto";
+      p.style.minHeight = "0";
+      p.style.alignSelf = "start";
+    });
     void el.homeTablesGrid.offsetHeight;
 
     const cap = Math.max(
       Math.ceil(el.homeStandingsPanel.getBoundingClientRect().height),
       Math.ceil(el.homeSquadPanel.getBoundingClientRect().height)
     );
-
-    if (feed && !feedWasHidden) {
-      feed.style.display = "";
-    }
+    [el.homeSquadPanel, el.homeStandingsPanel].forEach((p) => {
+      p.style.removeProperty("align-self");
+    });
 
     if (!(cap > 0)) {
       clearPanelHeights();
@@ -6055,6 +6071,7 @@
     };
     if (!pane || prefersReducedMotion()) {
       if (pane) {
+        finishHighlightSatEnter(pane);
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
         const summary = homeSummaryForView(homeActiveViewEntryId());
@@ -6065,41 +6082,28 @@
     homeSummaryRankChromePending = true;
     const token = ++homeEnterMotionToken;
     const rollMs = Math.max(400, Number(duration) || HOME_ENTER_ROLL_MS);
+    primeOptaHighlightEnter(pane);
     prepareHomeStatRolls();
     const summary = homeSummaryForView(homeActiveViewEntryId());
     stageHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     scheduleHomeSummaryRankBorderReveal(rollMs, token);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (token !== homeEnterMotionToken) return;
-        void pane.offsetWidth;
-        syncHomeStandingsRowHeights();
-        syncHomeSquadRowHeights();
-        syncHomeStandingsTrackHeight(0, { animate: false, allowShrink: false });
-        syncHomeSquadTrackHeight(0, { animate: false });
-        const rollNodes = [
-          ...pane.querySelectorAll(
-            ".home-stat-roll[data-count-to], .home-squad-pts-table .live-stat-roll[data-count-to]"
-          ),
-        ];
-        if (prefersReducedMotion()) {
-          rollNodes.forEach(finishStatRollNode);
-        } else {
-          rollNodes.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
-        }
-        animateHomeImpBars(pane);
-        // Hard-settle rolls only — no layout sync (avoids mid-enter height jump).
-        window.setTimeout(() => {
-          if (token !== homeEnterMotionToken) {
-            homeSummaryRankChromePending = false;
-            clearHomeRankBorderRevealTimer();
-            return;
-          }
-          finishHomeStatRolls(pane);
-          finishSummaryRankChrome();
-        }, rollMs + 80);
-      });
-    });
+    const rollNodes = [
+      ...pane.querySelectorAll(
+        ".home-stat-roll[data-count-to], .home-squad-pts-table .live-stat-roll[data-count-to]"
+      ),
+    ];
+    rollNodes.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
+    startOptaHighlightEnter(pane, { duration: rollMs });
+    animateHomeImpBars(pane);
+    window.setTimeout(() => {
+      if (token !== homeEnterMotionToken) {
+        homeSummaryRankChromePending = false;
+        clearHomeRankBorderRevealTimer();
+        return;
+      }
+      finishHomeStatRolls(pane);
+      finishSummaryRankChrome();
+    }, rollMs + 80);
   }
 
   function renderHomeUnlinked() {
@@ -6121,8 +6125,12 @@
     homeRenderQueued = false;
     clearHomeCrossHover();
     if (!el.homePage) return;
-    document.documentElement.classList.remove("home-squad-layout-ready");
     syncHomeSquadWideLayout();
+    if (homeSquadIsWideLayout()) {
+      document.documentElement.classList.add("home-squad-layout-ready");
+    } else {
+      document.documentElement.classList.remove("home-squad-layout-ready");
+    }
     // settleQuiet: post-enter / live rebuild — never restart enter motion.
     const noManager = !savedManagerId;
     const linked = !!(savedManagerId && savedLeagueId);
@@ -6371,7 +6379,9 @@
     syncHomeSquadPagerDots(homeSquadActivePageIndex());
     const standingsPageIdx = homeStandingsActivePageIndex();
     syncHomeStandingsPagerDots(standingsPageIdx);
-    if (HOME.gw != null) renderHomeFeed(Number(HOME.gw));
+    if (HOME.gw != null) {
+      renderHomeFeed(Number(HOME.gw), { includeAll: !homeIsEnterBusy() });
+    }
     settleHomeTablesLayout({ standingsPageIdx });
     // During page enter, leave odometers empty for startHomeEnterMotion.
     // Quiet/live rebuilds settle in the same turn so iOS never paints empty
@@ -6388,7 +6398,9 @@
           skipStandings: true,
         });
       }
-      settleHomeTablesLayout({ standingsPageIdx });
+      if (!enterBusyNow && !homeIsEnterBusy()) {
+        settleHomeTablesLayout({ standingsPageIdx });
+      }
     });
   }
 
@@ -7204,9 +7216,41 @@
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
     if (page === "team" && !state.teamPickerSlot) return null;
+    if (page === "live" && state.liveMode === "bonus") return null;
     if (el.sidebar && el.sidebar.style.display === "none") return null;
     if (el.sidebarToggle && el.sidebarToggle.style.display === "none") return null;
     return el.sidebarToggle || null;
+  }
+
+  function filtersSidebarHidden() {
+    const page = state.page;
+    return (
+      page === "schedule" ||
+      page === "markets" ||
+      page === "home" ||
+      (page === "team" && !state.teamPickerSlot) ||
+      (page === "live" && state.liveMode === "bonus")
+    );
+  }
+
+  function filtersToggleHidden() {
+    return (
+      (state.page === "team" && !state.teamPickerSlot) ||
+      (state.page === "live" && state.liveMode === "bonus")
+    );
+  }
+
+  function syncFiltersChrome() {
+    if (el.sidebar) el.sidebar.style.display = filtersSidebarHidden() ? "none" : "";
+    if (el.sidebarToggle) el.sidebarToggle.style.display = filtersToggleHidden() ? "none" : "";
+    if (
+      state.page === "live" &&
+      state.liveMode === "bonus" &&
+      mobileSheetOpen &&
+      mobileSheetKey === "filters"
+    ) {
+      closeMobileSheet();
+    }
   }
 
   function mobileViewTabsEl() {
@@ -9699,7 +9743,7 @@
       ];
       const reading = [
         spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus — current gameweek only."),
-        spitRow(spitRank("Feed"), "Newest first — goals, assists, cards, DefCon, bonus, and appearance pts."),
+        spitRow(spitRank("Feed"), "Newest first — goals, assists, cards, DefCon, appearance pts; bonus only after that match hits 60′."),
         spitRow(spitRank("Total"), "Running GW pts for that player; pill color scales with haul size."),
         spitRow(spitRank("Impact"), "Pts change × your ownership edge vs league avg. Unique picks swing most; shared picks ~0."),
         spitRow(spitRank("Threshold"), "DEF 10 CBIT · MID/FWD 12 CBIRT · GK ineligible."),
@@ -13337,11 +13381,7 @@
     if (el.teamPickerView) el.teamPickerView.hidden = !picking;
     syncTeamCompareHost();
     syncTeamPickerToolbarOrder();
-    const hideSidebar = state.page === "schedule" || state.page === "markets" || state.page === "home" || (state.page === "team" && !picking);
-    if (el.sidebar) el.sidebar.style.display = hideSidebar ? "none" : "";
-    if (el.sidebarToggle) {
-      el.sidebarToggle.style.display = state.page === "team" && !picking ? "none" : "";
-    }
+    syncFiltersChrome();
     if (el.subtoolbar && state.page === "team") {
       el.subtoolbar.style.display = "";
       el.subtoolbar.classList.remove("is-markets-mobile");
@@ -15778,25 +15818,45 @@
     return 0;
   }
 
-  /** Bonus projections/events only after the fixture clock reaches 60′ (or the match is finished). */
+  /** Players on both clubs in this fixture — used for kickoff/clock, not GW-total mins. */
+  function liveFeedMatchupEgEntries(matchup, egMap, byElement) {
+    const entries = [];
+    if (!matchup) return entries;
+    for (const [eidStr, eg] of Object.entries(egMap || {})) {
+      if (!eg || typeof eg !== "object") continue;
+      const player = byElement.get(Number(eidStr));
+      if (!player) continue;
+      const team = player.team || currentTeamCode(player);
+      if (team !== matchup.home && team !== matchup.away) continue;
+      entries.push({
+        live: liveEgIsInPlay(eg),
+        minutes: Number(eg.minutes) || 0,
+        eg,
+      });
+    }
+    return entries;
+  }
+
+  /**
+   * Feed bonus only after this match’s clock hits 60′ (or FT).
+   * In-play minutes only — ignore teammates who already finished a different GW fixture,
+   * and do not treat FPL `bonus > 0` as a gate (that can fire well before 60′).
+   */
   function liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement) {
     const eligible = new Map();
     for (const m of matchups || []) {
-      let maxMins = 0;
-      let anyFinished = false;
-      for (const [eidStr, eg] of Object.entries(egMap || {})) {
-        if (!eg || typeof eg !== "object") continue;
-        const player = byElement.get(Number(eidStr));
-        if (!player) continue;
-        const team = player.team || currentTeamCode(player);
-        if (team !== m.home && team !== m.away) continue;
-        const mins = Number(eg.minutes) || 0;
-        if (mins > maxMins) maxMins = mins;
-        const status = String(eg.status || "").toLowerCase();
-        if (status === "finished" || eg.finished) anyFinished = true;
-        if ((Number(eg.bonus) || 0) > 0) anyFinished = true;
+      const entries = liveFeedMatchupEgEntries(m, egMap, byElement);
+      const { isLive, finished } = liveMatchupKickoffState(m, entries);
+      if (finished) {
+        eligible.set(m.id, true);
+        continue;
       }
-      eligible.set(m.id, anyFinished || maxMins >= 60);
+      if (!isLive) {
+        eligible.set(m.id, false);
+        continue;
+      }
+      const clock = liveMatchupFixtureMinutes(m, entries);
+      eligible.set(m.id, (Number(clock) || 0) >= 60);
     }
     return eligible;
   }
@@ -15890,6 +15950,7 @@
       if (!player) continue;
       const team = player.team || currentTeamCode(player);
       const matchupId = matchupByTeam.get(team) || null;
+      if (matchupBonusEligible && (!matchupId || !matchupBonusEligible.get(matchupId))) continue;
       const meta = bonusMeta.get(eidStr) || { rank: 0, apiBonus: 0 };
       const delta = newEff - oldEff;
       if (!delta) continue;
@@ -16212,6 +16273,16 @@
 
   function liveFeedFilterEvents(events, { homeEmbed = false, homeLeagueOnly = false } = {}) {
     let out = events;
+    const gw = liveDefaultGw();
+    if (Number.isFinite(gw)) {
+      const byElement = livePlayerByElement();
+      const bonusEligible = liveFeedMatchupBonusEligibleMap(
+        liveMatchupsForGw(gw),
+        liveElementMapForGw(gw),
+        byElement
+      );
+      out = out.filter((e) => e.kind !== "bonus" || (e.matchupId && bonusEligible.get(e.matchupId)));
+    }
     if (homeLeagueOnly || (!homeEmbed && state.liveFeedOwnedFilter === "league")) {
       out = out.filter((e) => liveFeedIsLeagueOwned(e.eid));
     }
@@ -16288,7 +16359,7 @@
         signed: true,
         className: "home-stat-roll home-feed-impact-roll",
       });
-      return `<span class="live-feed-impact-val">${roll}</span><span class="live-feed-impact-suffix"> vs avg</span>`;
+      return `<span class="live-feed-impact-val">${roll}</span>`;
     }
     const netAbs = Math.abs(net);
     const netSign = net >= 0 ? "+" : "−";
@@ -16403,7 +16474,7 @@
     return events.length;
   }
 
-  function renderHomeFeed(gw) {
+  function renderHomeFeed(gw, { includeAll = true } = {}) {
     if (!homeSquadIsWideLayout() || !el.homeFeedBody || !el.homeFeedHead) return;
     renderLiveFeedTable(gw, {
       headEl: el.homeFeedHead,
@@ -16412,7 +16483,7 @@
       homeEmbed: true,
       homeLeagueOnly: true,
     });
-    if (el.homeFeedAllHead && el.homeFeedAllBody) {
+    if (includeAll && el.homeFeedAllHead && el.homeFeedAllBody) {
       renderLiveFeedTable(gw, {
         headEl: el.homeFeedAllHead,
         bodyEl: el.homeFeedAllBody,
@@ -17135,6 +17206,8 @@
     syncLiveFeedFilters();
     syncLiveModeSeg();
     syncLivePosFilterGk();
+    syncFiltersChrome();
+    syncMobileFilterDock();
 
     const mode = state.liveMode;
     if (el.liveTableWrap) el.liveTableWrap.hidden = mode === "bonus" || mode === "feed";
@@ -18651,9 +18724,9 @@
 
   function playPageEnter(pane) {
     if (!pane) return;
-    const isOpta = pane.id === "opta-page";
+    const keepHlSat = pane.id === "opta-page" || pane.id === "home-page";
     pane.classList.remove("is-entering", "is-enter-pending", "is-live-entering");
-    if (!isOpta) {
+    if (!keepHlSat) {
       pane.classList.remove("is-hl-entering");
       pane.style.removeProperty("--hl-sat");
     }
@@ -18686,6 +18759,7 @@
     const enterGen = pane._enterGen;
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
+        finishHighlightSatEnter(pane);
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
         flushHomeEnterDeferred();
@@ -18728,12 +18802,14 @@
       ".team-section-row",
       ".home-panel",
     ].join(", ");
-    pane.querySelectorAll(staggerSel).forEach((node, i) => {
-      node.style.setProperty("--enter-i", String(i));
-      node.querySelectorAll(".barbell-track, .home-imp-fill").forEach((track) => {
-        track.style.setProperty("--enter-i", String(i));
+    if (!homeEnter) {
+      pane.querySelectorAll(staggerSel).forEach((node, i) => {
+        node.style.setProperty("--enter-i", String(i));
+        node.querySelectorAll(".barbell-track, .home-imp-fill").forEach((track) => {
+          track.style.setProperty("--enter-i", String(i));
+        });
       });
-    });
+    }
     // Matchups: cards get their own 0-based index so the post-scatter
     // cascade doesn't inherit the scatter-point indices.
     if (slowEnter) {
@@ -18757,15 +18833,14 @@
       summaryPanels.forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
       });
-      const tablesI = String(summaryPanels.length);
       pane.querySelectorAll(".home-tables-grid > .home-panel").forEach((node) => {
-        node.style.setProperty("--enter-i", tablesI);
+        node.style.setProperty("--enter-i", "1");
       });
-      pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody, .home-feed-table tbody").forEach((tbody) => {
+      pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody").forEach((tbody) => {
         tbody.querySelectorAll(":scope > tr").forEach((row, i) => {
-          row.style.setProperty("--enter-i", String(i));
+          row.style.setProperty("--enter-i", String(Math.min(i, 12)));
           row.querySelectorAll(".home-imp-fill").forEach((track) => {
-            track.style.setProperty("--enter-i", String(i));
+            track.style.setProperty("--enter-i", String(Math.min(i, 12)));
           });
         });
       });
@@ -18818,6 +18893,7 @@
         pane._enterClear = setTimeout(() => {
           if (homeEnter) {
             homeEnterMotionToken += 1;
+            finishHighlightSatEnter(pane);
             finishHomeStatRolls(pane);
             // Snap IMP before dropping is-entering — changing enter CSS used to
             // restart the width transition (~1s after bars had already finished).
@@ -18836,7 +18912,7 @@
     });
   }
 
-  function startOptaHighlightEnter(pane) {
+  function startOptaHighlightEnter(pane, { duration = 2500 } = {}) {
     if (!pane) return;
     if (pane._hlEnterRaf) {
       cancelAnimationFrame(pane._hlEnterRaf);
@@ -18849,11 +18925,11 @@
     }
     pane.classList.add("is-hl-entering");
     pane.style.setProperty("--hl-sat", "0");
-    const duration = 2500;
+    const dur = Math.max(400, Number(duration) || 2500);
     const ease = (t) => t * t * (3 - 2 * t);
     const start = performance.now();
     const tick = (now) => {
-      const t = Math.min(1, (now - start) / duration);
+      const t = Math.min(1, (now - start) / dur);
       pane.style.setProperty("--hl-sat", String(ease(t)));
       if (t < 1) {
         pane._hlEnterRaf = requestAnimationFrame(tick);
@@ -19116,14 +19192,7 @@
     const isLive = page === "live";
     // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
     syncSubtoolbarViewport(page);
-    el.sidebar.style.display =
-      page === "schedule" || isMarkets || isHome || (page === "team" && !state.teamPickerSlot)
-        ? "none"
-        : "";
-    if (el.sidebarToggle) {
-      el.sidebarToggle.style.display =
-        page === "team" && !state.teamPickerSlot ? "none" : "";
-    }
+    syncFiltersChrome();
     if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome ? "none" : "";
     if (el.liveModeSeg) {
       el.liveModeSeg.hidden = !isLive;
@@ -19238,6 +19307,7 @@
       renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
       if (el.homePage) el.homePage.classList.add("is-enter-pending");
+      primeOptaHighlightEnter(el.homePage);
       renderHome();
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
@@ -21411,6 +21481,7 @@
       });
       if (el.homePage) {
         homeEnterMotionToken += 1;
+        finishHighlightSatEnter(el.homePage);
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });
       }
