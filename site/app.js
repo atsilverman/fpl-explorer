@@ -2229,7 +2229,15 @@
     };
   }
 
+  /** home_prefs.json + fetch_home rebuild — local serve.py only (not Vercel static). */
+  function homeLocalServerAvailable() {
+    if (location.protocol === "file:") return false;
+    const host = location.hostname;
+    return host === "localhost" || host === "127.0.0.1";
+  }
+
   function persistHomePrefs() {
+    if (!homeLocalServerAvailable()) return Promise.resolve(null);
     // Fire-and-forget; local serve.py writes site/home_prefs.json for fetch_home.py.
     try {
       return fetch("/api/home-prefs", {
@@ -2372,6 +2380,7 @@
       refreshManagerDependentUI();
     }
     if (homeTargetsRefreshTimer) clearTimeout(homeTargetsRefreshTimer);
+    if (!homeLocalServerAvailable()) return;
     const seq = ++homeTargetsRefreshSeq;
     homeTargetsRefreshTimer = setTimeout(() => {
       homeTargetsRefreshTimer = null;
@@ -2381,6 +2390,10 @@
 
   async function refreshHomeCacheFromServer({ toast = false, seq = 0 } = {}) {
     if (!savedManagerId || !savedLeagueId) {
+      refreshManagerDependentUI();
+      return false;
+    }
+    if (!homeLocalServerAvailable()) {
       refreshManagerDependentUI();
       return false;
     }
