@@ -14079,7 +14079,7 @@ html.home-squad-wide .home-squad-split {
   display: flex;
   align-items: stretch;
   min-width: 0;
-  height: 100%;
+  height: auto;
 }
 html.home-squad-wide .home-squad-live-wrap {
   flex: 0 0 46%;
@@ -14089,16 +14089,47 @@ html.home-squad-wide .home-squad-live-wrap {
 html.home-squad-wide .home-squad-pts-mount {
   flex: 1 1 auto;
   min-width: 0;
-}
-html.home-squad-wide #home-squad-panel .home-squad-split .home-table-wrap {
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
+html.home-squad-wide #home-squad-panel > .home-squad-pager {
+  flex: 0 1 auto;
+}
+html.home-squad-wide #home-squad-panel .home-squad-track {
+  flex: 0 1 auto;
+}
+html.home-squad-wide #home-squad-panel .home-squad-page {
+  height: auto;
+  align-self: auto;
+}
+html.home-squad-wide #home-squad-panel .home-squad-split .home-table-wrap {
+  height: auto;
+  display: block;
+  min-height: 0;
+}
 html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
-  flex: 1 1 auto;
-  height: 100%;
+  flex: none;
+  height: auto;
   width: 100%;
+}
+@media (min-width: 901px) {
+  /* Wide split: content-height rows — league card sets the grid height, not vertical stretch. */
+  html.home-squad-wide #home-squad-panel .home-squad-table tbody tr.home-squad-row {
+    height: auto;
+  }
+  html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table tbody tr.home-squad-row {
+    height: auto;
+  }
+  html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table tbody tr.home-bench-divider {
+    height: auto;
+  }
+  html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table tbody tr.home-squad-row > td {
+    height: 1px;
+    vertical-align: middle;
+  }
+  html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table tbody tr.home-bench-divider > th {
+    vertical-align: middle;
+  }
 }
 .home-tables-grid > .home-table-panel {
   height: 100%;

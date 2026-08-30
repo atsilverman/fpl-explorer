@@ -4211,11 +4211,13 @@
   }
 
   function syncHomeSquadRowHeights() {
-    const tables = [
-      el.homeSquadBody && el.homeSquadBody.closest("table"),
-      el.homeSquadPtsBody && el.homeSquadPtsBody.closest("table"),
-      el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table"),
-    ].filter(Boolean);
+    const wide = homeSquadIsWideLayout();
+    const liveTable = el.homeSquadBody && el.homeSquadBody.closest("table");
+    const ptsTable = el.homeSquadPtsBody && el.homeSquadPtsBody.closest("table");
+    const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
+    const tables = wide
+      ? [liveTable, ptsTable].filter(Boolean)
+      : [liveTable, ptsTable, fixturesTable].filter(Boolean);
     if (!tables.length) return;
 
     tables.forEach((table) => {
@@ -4224,8 +4226,12 @@
       });
     });
 
-    // Desktop equal-share rows come from CSS (height: 1px trick); leave inline clear.
-    if (homeSquadIsDesktopLayout()) return;
+    // Single-table desktop uses CSS equal-share rows; wide split uses uniform JS rows.
+    if (homeSquadIsDesktopLayout() && !wide) return;
+    if (wide && tables.length >= 2) {
+      syncHomeSquadWideRowHeights(tables);
+      return;
+    }
     if (tables.length < 2) return;
 
     const heads = tables.map((t) => t.querySelector("thead tr")).filter(Boolean);
@@ -4272,11 +4278,80 @@
     }
   }
 
+  function syncHomeSquadWideRowHeights(tables) {
+    const liveTable = tables[0];
+    const ptsTable = tables[1];
+    if (!liveTable || !ptsTable) return;
+
+    const heads = [liveTable, ptsTable].map((t) => t.querySelector("thead tr")).filter(Boolean);
+    if (heads.length) {
+      const maxHead = Math.max(...heads.map((tr) => tr.getBoundingClientRect().height));
+      if (maxHead > 0) {
+        const px = `${Math.ceil(maxHead)}px`;
+        heads.forEach((tr) => {
+          tr.style.height = px;
+        });
+      }
+    }
+
+    const liveRows = [...liveTable.querySelectorAll("tbody tr.home-squad-row, tbody tr.home-bench-divider")];
+    const ptsRows = [...ptsTable.querySelectorAll("tbody tr.home-squad-row, tbody tr.home-bench-divider")];
+    const groups = liveRows.map((live, i) => ({
+      live,
+      pts: ptsRows[i] || null,
+      isDivider: live.classList.contains("home-bench-divider"),
+    }));
+    if (!groups.length) return;
+
+    let dividerH = 28;
+    const playerGroups = [];
+    groups.forEach((g) => {
+      if (g.isDivider) {
+        const h = Math.max(
+          g.live.getBoundingClientRect().height,
+          g.pts ? g.pts.getBoundingClientRect().height : 0,
+          28
+        );
+        dividerH = Math.max(dividerH, h);
+      } else {
+        playerGroups.push(g);
+      }
+    });
+
+    const dividerPx = `${Math.ceil(dividerH)}px`;
+    groups.filter((g) => g.isDivider).forEach((g) => {
+      g.live.style.height = dividerPx;
+      if (g.pts) g.pts.style.height = dividerPx;
+    });
+
+    if (!playerGroups.length) return;
+
+    let uniformH = 0;
+    playerGroups.forEach(({ live, pts }) => {
+      const h = Math.max(
+        live.getBoundingClientRect().height,
+        pts ? pts.getBoundingClientRect().height : 0
+      );
+      if (h > uniformH) uniformH = h;
+    });
+    if (!(uniformH > 0)) return;
+
+    const rowPx = `${Math.ceil(uniformH)}px`;
+    playerGroups.forEach(({ live, pts }) => {
+      live.style.height = rowPx;
+      if (pts) pts.style.height = rowPx;
+    });
+  }
+
   function syncHomeSquadLayout(activeIndex, opts) {
     syncHomeSquadRowHeights();
+    if (homeSquadIsWideLayout()) {
+      requestAnimationFrame(() => syncHomeSquadRowHeights());
+    }
     syncHomeSquadTrackHeight(activeIndex, opts);
     requestAnimationFrame(() => {
       syncHomeTablesGridHeight();
+      if (homeSquadIsWideLayout()) syncHomeSquadRowHeights();
     });
   }
 
@@ -7038,7 +7113,12 @@
       if (state.page === "team") syncTeamPickerCoreUnder();
       bindMobileChromeScrollHide();
       if (preferMobileSheet()) setExpectedCatMenuOpen(false);
-      if (state.page === "home") syncHomeSquadWideLayout();
+      if (state.page === "home") {
+        syncHomeSquadWideLayout();
+        if (homeSquadIsWideLayout()) {
+          requestAnimationFrame(() => syncHomeSquadLayout(undefined, { animate: false }));
+        }
+      }
     };
     if (immediate) {
       if (viewportLayoutSyncTimer) clearTimeout(viewportLayoutSyncTimer);
