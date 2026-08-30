@@ -3034,7 +3034,7 @@
         Number(payloadSummary?.overallPoints) ||
         null;
       return {
-        gwPoints: row.gwPointsLive,
+        gwPoints: homeStandingsGwPoints(row),
         overallPoints,
         overallRank,
         overallRankPrev:
@@ -3396,25 +3396,20 @@
     return rank != null && Number.isFinite(rank) ? rank : null;
   }
 
-  /** True when this manager has no picks still playing this GW. */
-  function homeStandingsRowSettled(row) {
-    const inPlay = Number(row.inPlay);
-    const toPlay = Number(row.toPlay);
-    const noLive = !Number.isFinite(inPlay) || inPlay <= 0;
-    const noLeft = !Number.isFinite(toPlay) || toPlay <= 0;
-    return noLive && noLeft;
-  }
-
   /**
-   * GW points for display/sort. Prefer FPL event_total once the row is settled —
-   * our live engine can drift (autosubs / hits) and made GW1 look higher than Total.
+   * GW points for display/sort. While this manager has starters in play, use our live
+   * engine; once their XI is done (inPlay === 0), FPL event_total is authoritative
+   * even if other league fixtures remain this GW (toPlay may still be > 0).
    */
   function homeStandingsGwPoints(row) {
     const official = row.eventTotalOfficial != null ? Number(row.eventTotalOfficial) : null;
     const live = row.gwPointsLive != null ? Number(row.gwPointsLive) : null;
-    if (homeStandingsRowSettled(row) && official != null && Number.isFinite(official)) {
+    const inPlay = Number(row.inPlay);
+    const hasLiveMinutes = Number.isFinite(inPlay) && inPlay > 0;
+    if (!hasLiveMinutes && official != null && Number.isFinite(official)) {
       return official;
     }
+    if (hasLiveMinutes && live != null && Number.isFinite(live)) return live;
     if (live != null && Number.isFinite(live)) return live;
     return official != null && Number.isFinite(official) ? official : null;
   }

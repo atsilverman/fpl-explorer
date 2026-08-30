@@ -1401,15 +1401,14 @@ def main() -> int:
             degraded_msgs.append("Focus manager picks not ready")
         error_msg = "; ".join(degraded_msgs) if degraded_msgs else None
 
-        # Once nobody has picks still to play / in play, trust FPL event_total
-        # for GW points + live rank (our live engine can drift after the whistle).
-        settled = bool(standing_rows) and all(
-            int(r.get("inPlay") or 0) == 0 and int(r.get("toPlay") or 0) == 0
-            for r in standing_rows
-        )
-        if settled:
-            for row in standing_rows:
-                row["gwPointsLive"] = int(row.get("eventTotalOfficial") or 0)
+        # Per manager: once their XI is done (in_play == 0), trust FPL event_total.
+        # Waiting for league-wide toPlay == 0 left stale live GW pts when some fixtures
+        # remained later in the gameweek.
+        for row in standing_rows:
+            if int(row.get("inPlay") or 0) == 0:
+                official = row.get("eventTotalOfficial")
+                if official is not None:
+                    row["gwPointsLive"] = int(official)
 
         standing_rows.sort(
             key=lambda r: (
@@ -1481,7 +1480,11 @@ def main() -> int:
             "leagueId": league_id,
             "leagueName": league_meta.get("name") or f"League {league_id}",
             "summary": {
-                "gwPoints": focus_pts,
+                "gwPoints": (
+                    focus_entry_official
+                    if focus_in_play == 0 and focus_entry_official is not None
+                    else focus_pts
+                ),
                 "overallPoints": int(focus_summary["overallPoints"]),
                 "overallRank": int(focus_summary["overallRank"]),
                 "overallRankPrev": overall_rank_prev,
