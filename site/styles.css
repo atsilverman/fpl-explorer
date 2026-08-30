@@ -15538,6 +15538,15 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-standings-live-table .home-col-play {
   display: none;
 }
+/* Hide Live column / values when nobody has picks in a live fixture. */
+.home-standings-live-table:not(.has-live-picks) th.home-col-live,
+.home-standings-live-table:not(.has-live-picks) td.home-col-live,
+.home-standings-live-table:not(.has-live-picks) .home-play-head-live,
+.home-standings-live-table:not(.has-live-picks) .home-play-head-sep,
+.home-standings-live-table:not(.has-live-picks) .home-play-live,
+.home-standings-live-table:not(.has-live-picks) .home-play-split-sep {
+  display: none;
+}
 html.home-squad-wide .home-standings-live-table .home-col-live,
 html.home-squad-wide .home-standings-live-table .home-col-left {
   display: none;
@@ -16914,6 +16923,12 @@ html[data-page="live"] #team-filters .chip.team-chip {
 }
 #live-page.is-entering .live-bonus-track .rankings-bar.is-drawn {
   transition-delay: calc(0.12s + (var(--bar-i, 0) * 0.035s));
+}
+/* Home never uses enter-pending blanking — static cache stays visible (like Live). */
+#home-page.is-enter-pending > .page-header,
+#home-page.is-enter-pending > .home-dashboard,
+#home-page.is-enter-pending > .home-empty {
+  opacity: 1;
 }
 /* Live never uses enter-pending blanking — content stays visible. */
 #live-page.is-enter-pending > .page-header,
