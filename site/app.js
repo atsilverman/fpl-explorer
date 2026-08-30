@@ -2631,6 +2631,10 @@
         syncLiveNavChrome();
         if (state.page === "home") syncHomeCountLabel();
         else if (state.page === "live") {
+          if (data.home.elementGw && typeof data.home.elementGw === "object") {
+            HOME.elementGw = data.home.elementGw;
+            window.FPL_HOME = HOME;
+          }
           renderLive({ quiet: true });
           livePollRefreshMotion();
         }
@@ -16126,62 +16130,118 @@
     }
   }
 
-  function liveFeedSeedEvents(rec, ctx) {
+  const LIVE_FEED_EMPTY_REC = {
+    minutes: 0,
+    goals: 0,
+    assists: 0,
+    cleanSheets: 0,
+    saves: 0,
+    bonus: 0,
+    yellowCards: 0,
+    redCards: 0,
+    ownGoals: 0,
+    penaltiesMissed: 0,
+    penaltiesSaved: 0,
+    defConHit: false,
+  };
+
+  /** Estimated event minute within a fixture — used for deterministic feed ordering. */
+  const LIVE_FEED_KIND_MINUTE = {
+    appearance: 1,
+    minutes60: 60,
+    goal: 22,
+    assist: 24,
+    cleanSheet: 88,
+    saves: 40,
+    yellowCard: 32,
+    redCard: 48,
+    ownGoal: 26,
+    penMissed: 52,
+    penSaved: 52,
+    defCon: 62,
+    bonus: 91,
+  };
+
+  function liveFeedKickoffMs(matchup) {
+    if (!matchup || !matchup.kickoff) return 0;
+    const ms = Date.parse(matchup.kickoff);
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function liveFeedEventTs(matchup, kind, index, eid, eg) {
+    const kick = liveFeedKickoffMs(matchup);
+    let minute = (LIVE_FEED_KIND_MINUTE[kind] ?? 45) + index;
+    if (matchup && eg && liveEgIsInPlay(eg)) {
+      const playerMins = Number(eg.minutes) || 0;
+      if (
+        playerMins > 0
+        && ["goal", "assist", "ownGoal", "yellowCard", "redCard", "penMissed", "penSaved", "defCon"].includes(kind)
+      ) {
+        minute = Math.max(minute, playerMins);
+      }
+    }
+    const eidSkew = Number.isFinite(Number(eid)) ? (Number(eid) % 500) : 0;
+    return kick + minute * 60_000 + eidSkew;
+  }
+
+  function liveFeedBonusEventTs(matchup, entries, rank, eid) {
+    const kick = liveFeedKickoffMs(matchup);
+    const { isLive } = liveMatchupKickoffState(matchup, entries);
+    const rankSkew = Math.max(0, 4 - (Number(rank) || 0));
+    if (isLive) {
+      const mins = Math.max(60, Number(liveMatchupFixtureMinutes(matchup, entries)) || 60);
+      return kick + mins * 60_000 + rankSkew * 1000 + (Number(eid) % 500);
+    }
+    return kick + (91 + rankSkew) * 60_000 + (Number(eid) % 500);
+  }
+
+  function liveFeedBuildPlayerEvents(rec, ctx, matchup, eg) {
     const events = [];
-    let t = Date.now() - 3_600_000;
+    const kindCounts = new Map();
     let runPts = 0;
     const push = (kind, label, ptsDelta, colKey) => {
       if (!ptsDelta) return;
       runPts += ptsDelta;
-      events.push(liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, totalPts: runPts, ts: t }));
-      t += 1;
+      const idx = kindCounts.get(kind) || 0;
+      kindCounts.set(kind, idx + 1);
+      events.push(liveFeedMakeEvent({
+        ...ctx,
+        kind,
+        label,
+        ptsDelta,
+        colKey,
+        totalPts: runPts,
+        ts: liveFeedEventTs(matchup, kind, idx, ctx.eid, eg),
+      }));
     };
-    liveFeedPushStatDiffs(
-      {
-        minutes: 0,
-        goals: 0,
-        assists: 0,
-        cleanSheets: 0,
-        saves: 0,
-        bonus: 0,
-        yellowCards: 0,
-        redCards: 0,
-        ownGoals: 0,
-        penaltiesMissed: 0,
-        penaltiesSaved: 0,
-        defConHit: false,
-      },
-      rec,
-      ctx.pos,
-      push,
-      { skipMinutes: true }
-    );
+    liveFeedPushStatDiffs(LIVE_FEED_EMPTY_REC, rec, ctx.pos, push);
     if (events.length && Number.isFinite(Number(rec.pts))) {
       events[events.length - 1].totalPts = Number(rec.pts);
     }
     return events;
   }
 
-  function liveFeedIngest(gw, egMap) {
-    if (!Number.isFinite(gw)) return;
-    liveFeedResetIfGwChanged(gw);
+  /** Rebuild feed from current elementGw — same data → same order on every client. */
+  function liveFeedBuildEvents(gw, egMap) {
     const byElement = livePlayerByElement();
     const matchups = liveMatchupsForGw(gw);
     const matchupByTeam = new Map();
+    const matchupById = new Map();
     for (const m of matchups) {
       matchupByTeam.set(m.home, m.id);
       matchupByTeam.set(m.away, m.id);
+      matchupById.set(m.id, m);
     }
+    const matchupBonusEligible = liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement);
+    const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
+    const events = [];
 
-    const nextSnap = {};
-    const newEvents = [];
-    const runPtsByEid = new Map();
-    const seeding = !liveFeedSnapshot;
-
-    for (const [eidStr, eg] of Object.entries(egMap || {})) {
+    const eidKeys = Object.keys(egMap || {}).sort((a, b) => Number(a) - Number(b));
+    for (const eidStr of eidKeys) {
+      const eg = egMap[eidStr];
       const rec = liveFeedSnapRecord(eg);
       if (!rec) continue;
-      nextSnap[eidStr] = rec;
+      rec.bonusEff = (bonusMeta.get(eidStr) || {}).effectiveBonus || 0;
 
       const etype = Number(eg.elementType) || 0;
       const pos = LIVE_POS_BY_TYPE[etype];
@@ -16192,6 +16252,7 @@
       if (!player) continue;
       const team = player.team || currentTeamCode(player);
       const matchupId = matchupByTeam.get(team) || null;
+      const matchup = matchupId ? matchupById.get(matchupId) : null;
       const ctx = {
         eid,
         gw,
@@ -16202,83 +16263,36 @@
         live: liveEgIsInPlay(eg),
       };
 
-      const old = liveFeedSnapshot && liveFeedSnapshot[eidStr];
-      if (!old) {
-        if (seeding && (rec.minutes > 0 || rec.pts !== 0)) {
-          newEvents.push(...liveFeedSeedEvents(rec, ctx));
-        }
-        continue;
+      if (rec.minutes > 0 || rec.pts !== 0) {
+        events.push(...liveFeedBuildPlayerEvents(rec, ctx, matchup, eg));
       }
 
-      const push = (kind, label, ptsDelta, colKey) => {
-        if (!ptsDelta) return;
-        let runPts = runPtsByEid.get(eidStr);
-        if (runPts == null) runPts = Number(old.pts) || 0;
-        runPts += ptsDelta;
-        runPtsByEid.set(eidStr, runPts);
-        newEvents.push(
-          liveFeedMakeEvent({ ...ctx, kind, label, ptsDelta, colKey, totalPts: runPts, ts: Date.now() })
-        );
-      };
-      liveFeedPushStatDiffs(old, rec, pos, push);
-    }
-
-    const matchupBonusEligible = liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement);
-    liveFeedPushBonusProjDiffs(
-      liveFeedSnapshot,
-      nextSnap,
-      egMap,
-      byElement,
-      matchupByTeam,
-      gw,
-      newEvents,
-      runPtsByEid,
-      { seeding, matchupBonusEligible }
-    );
-    if (seeding) {
-      const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
-      liveFeedApplyBonusEff(nextSnap, bonusMeta);
-      const seedBaseTs = Date.now() - 3_600_000;
-      const seedBonusTs = seedBaseTs - 60_000;
-      for (const [eidStr, rec] of Object.entries(nextSnap)) {
-        const eff = Number(rec.bonusEff) || 0;
-        if (eff <= 0) continue;
-        const eg = egMap[eidStr];
-        const etype = Number(eg && eg.elementType) || 0;
-        const pos = LIVE_POS_BY_TYPE[etype];
-        if (!pos) continue;
-        const eid = Number(eidStr);
-        const player = byElement.get(eid);
-        if (!player) continue;
-        const team = player.team || currentTeamCode(player);
-        newEvents.push(
-          liveFeedMakeEvent({
-            eid,
-            gw,
-            player,
-            pos,
-            team,
-            matchupId: matchupByTeam.get(team) || null,
-            live: liveEgIsInPlay(eg),
-            kind: "bonus",
-            label: liveFeedBonusProjLabel(0, eff, (bonusMeta.get(eidStr) || {}).rank, (bonusMeta.get(eidStr) || {}).apiBonus),
-            ptsDelta: eff,
-            colKey: "bonus",
-            totalPts: Number(rec.pts) || eff,
-            ts: seedBonusTs,
-          })
-        );
+      if (rec.bonusEff > 0 && matchupId && matchupBonusEligible.get(matchupId)) {
+        const meta = bonusMeta.get(eidStr) || { rank: 0, apiBonus: 0 };
+        const mEntries = liveFeedMatchupEgEntries(matchup, egMap, byElement);
+        events.push(liveFeedMakeEvent({
+          ...ctx,
+          kind: "bonus",
+          label: liveFeedBonusProjLabel(0, rec.bonusEff, meta.rank, meta.apiBonus),
+          ptsDelta: rec.bonusEff,
+          colKey: "bonus",
+          totalPts: Number(rec.pts) || rec.bonusEff,
+          ts: liveFeedBonusEventTs(matchup, mEntries, meta.rank, eid),
+        }));
       }
     }
+    return events;
+  }
 
-    if (newEvents.length) {
-      liveFeedEvents.push(...newEvents);
-      if (liveFeedEvents.length > 500) liveFeedEvents = liveFeedEvents.slice(-500);
-    }
-    for (const ev of liveFeedEvents) {
-      if (Number(ev.gw) !== gw) continue;
-      const eg = egMap[String(ev.eid)];
-      if (eg && typeof eg === "object") ev.live = liveEgIsInPlay(eg);
+  function liveFeedIngest(gw, egMap) {
+    if (!Number.isFinite(gw)) return;
+    liveFeedResetIfGwChanged(gw);
+    liveFeedSeq = 0;
+    liveFeedEvents = liveFeedBuildEvents(gw, egMap);
+    const nextSnap = {};
+    for (const [eidStr, eg] of Object.entries(egMap || {})) {
+      const rec = liveFeedSnapRecord(eg);
+      if (rec) nextSnap[eidStr] = rec;
     }
     liveFeedSnapshot = nextSnap;
   }
