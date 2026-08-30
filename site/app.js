@@ -16031,15 +16031,18 @@
     return { net, note, myMult, avgOppMult };
   }
 
+  /** League impact at paint time — never freeze the seed-time HOME/manager snapshot. */
+  function liveFeedEventImpact(ev) {
+    if (!ev) return { net: 0, note: "" };
+    return liveFeedImpactMeta(ev.eid, ev.ptsDelta);
+  }
+
   function liveFeedMakeEvent(raw) {
     liveFeedSeq += 1;
-    const impact = liveFeedImpactMeta(raw.eid, raw.ptsDelta);
     return {
       id: `${raw.gw}-${raw.eid}-${raw.kind}-${liveFeedSeq}`,
       seq: liveFeedSeq,
       ...raw,
-      impactNet: impact.net,
-      impactNote: impact.note,
     };
   }
 
@@ -16320,7 +16323,7 @@
       if (key === "name") {
         cmp = String(a.player.name || "").localeCompare(String(b.player.name || ""));
       } else if (key === "impact") {
-        cmp = (a.impactNet || 0) - (b.impactNet || 0);
+        cmp = liveFeedEventImpact(a).net - liveFeedEventImpact(b).net;
         if (cmp === 0) cmp = liveFeedRecentSortKey(a) - liveFeedRecentSortKey(b);
       } else {
         cmp = liveFeedRecentSortKey(a) - liveFeedRecentSortKey(b);
@@ -16348,8 +16351,8 @@
   }
 
   function liveFeedImpactHTML(ev, { homeEmbed = false } = {}) {
-    const net = Number(ev.impactNet) || 0;
-    if (!Number.isFinite(ev.impactNet)) return "";
+    const net = liveFeedEventImpact(ev).net;
+    if (!Number.isFinite(net)) return "";
     if (homeEmbed) {
       const netAbs = Math.abs(net);
       const decimals = Number.isInteger(netAbs) ? 0 : 1;
@@ -16395,7 +16398,7 @@
   function liveFeedRowHTML(ev, enterI, { compact = false, homeEmbed = false } = {}) {
     const ptsHTML = liveFeedPtsDeltaHTML(ev.ptsDelta, ev.colKey, { homeEmbed: compact && homeEmbed });
     const totalHTML = liveFeedTotalPtsHTML(ev);
-    const net = Number(ev.impactNet) || 0;
+    const net = liveFeedEventImpact(ev).net;
     const impactCls = net > 0.05 ? "is-pos" : net < -0.05 ? "is-neg" : "is-neutral";
     const impactHTML = liveFeedImpactHTML(ev, { homeEmbed: compact && homeEmbed });
     const rowCls = compact ? "live-feed-row home-feed-row" : "live-feed-row";
