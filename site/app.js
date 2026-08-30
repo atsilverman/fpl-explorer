@@ -2449,7 +2449,7 @@
     }
   }
 
-  const LIVE_HOME_API = String(window.FPL_LIVE_API || "").replace(/\/$/, "");
+  const HOME_LIVE_FETCH_MS = 12_000;
   let homeLivePollTimer = null;
   let homeLiveLastPollAt = 0;
   let homeLiveLastPollOk = false;
@@ -2649,12 +2649,13 @@
   async function pollHomeFromLiveServerOnce() {
     const url = homeLiveApiUrl();
     if (!url || !homeLivePollReady()) return;
-    if (homeLivePollInFlight) return;
     homeLivePollInFlight = true;
     homeLiveLastPollAt = Date.now();
     const squadWasEmpty = !(Array.isArray(HOME.squad) && HOME.squad.length);
+    const ac = new AbortController();
+    const fetchTimer = setTimeout(() => ac.abort(), HOME_LIVE_FETCH_MS);
     try {
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, { cache: "no-store", signal: ac.signal });
       if (!res.ok) {
         homeLiveLastPollOk = false;
         syncHomeCountLabel();
@@ -2686,6 +2687,7 @@
         homeElementGwFingerprint(HOME) === homeElementGwFingerprint(data.home);
       const priorStandingsFp = homeStandingsFingerprint(HOME.standings);
       const priorSummaryFp = homeSummaryFingerprint(HOME.summary);
+      const firstStandingsSync = !homeLiveStandingsSynced;
       applyHomePayload(data.home, { skipFeedIngest: sameElementGw });
       const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
@@ -2700,7 +2702,11 @@
       }
       if (state.page === "home") {
         const deferEnter = homeIsEnterBusy() && !squadWasEmpty;
-        renderHome({ deferDuringEnter: deferEnter, settleQuiet: true });
+        renderHome({ deferDuringEnter: deferEnter, settleQuiet: firstStandingsSync || deferEnter });
+        if (firstStandingsSync && el.homePage) {
+          el.homePage.classList.remove("is-enter-pending", "is-entering");
+          finishHomeStatRolls(el.homePage);
+        }
       } else if (state.page === "live") {
         if (liveIsEnterBusy()) liveRenderQueued = true;
         else {
@@ -2715,6 +2721,7 @@
         if (squadWasEmpty) renderHome({ settleQuiet: true });
       }
     } finally {
+      clearTimeout(fetchTimer);
       homeLivePollInFlight = false;
       homeLivePollAttempted = true;
     }
@@ -18960,6 +18967,17 @@
     // Hide settled content immediately so display:none → visible never
     // flashes the finished layout before the enter animation starts.
     pane.classList.add("is-enter-pending");
+    clearTimeout(pane._enterPendingFallback);
+    pane._enterPendingFallback = setTimeout(() => {
+      if (!pane.classList.contains("is-enter-pending")) return;
+      pane.classList.remove("is-enter-pending", "is-entering");
+      if (pane.id === "home-page") {
+        finishHomeStatRolls(pane);
+        flushHomeEnterDeferred();
+      } else if (pane.id === "ownership-page") {
+        finishOwnershipStatRolls(pane);
+      }
+    }, 8000);
 
     // Wait two frames so the pending hide has painted, then start enter
     // (avoids browsers skipping the animation on the same frame as show).
@@ -18971,6 +18989,8 @@
           return;
         }
         void pane.offsetWidth;
+        clearTimeout(pane._enterPendingFallback);
+        pane._enterPendingFallback = null;
         pane.classList.remove("is-enter-pending");
         pane.classList.add("is-entering");
         if (marketsEnter) startStatCountUp(pane, ".markets-stat-value[data-count-to]");
@@ -19409,9 +19429,10 @@
       // Bars animate once via playPageEnter → animateRankingsBars.
       renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
-      if (el.homePage) el.homePage.classList.add("is-enter-pending");
+      const holdEnter = homeLivePollReady() && !homeLiveStandingsSynced;
+      if (!holdEnter && el.homePage) el.homePage.classList.add("is-enter-pending");
       primeOptaHighlightEnter(el.homePage);
-      renderHome();
+      renderHome({ settleQuiet: holdEnter });
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
       liveEnterAwaitingPlay = true;
@@ -19435,7 +19456,8 @@
     }
     syncTeamPickingClass();
     // Enter after content is in the DOM so the animation covers real layout.
-    playPageEnter(pagePaneFor(page));
+    const skipEnter = page === "home" && homeLivePollReady() && !homeLiveStandingsSynced;
+    if (!skipEnter) playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => {
       syncAllSegThumbs({ animate: false });
       requestAnimationFrame(() => {
@@ -21650,7 +21672,7 @@
     const page = storedPage();
     if (homeLivePollReady() && page === "home") {
       homeLivePrefetchStarted = true;
-      await pollHomeFromLiveServer();
+      pollHomeFromLiveServer();
       syncHomeLivePolling({ skipImmediate: true });
     } else {
       prefetchHomeLiveCache();
