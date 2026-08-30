@@ -2449,6 +2449,7 @@
     }
   }
 
+  const LIVE_HOME_API = String(window.FPL_LIVE_API || "").replace(/\/$/, "");
   const HOME_LIVE_FETCH_MS = 12_000;
   let homeLivePollTimer = null;
   let homeLiveLastPollAt = 0;
