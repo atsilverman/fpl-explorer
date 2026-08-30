@@ -2664,6 +2664,15 @@
     liveFeedIngest(Number(gw), egMap);
   }
 
+  function settleHomeAfterLivePoll() {
+    if (state.page !== "home" || !el.homePage) return;
+    syncHomeCountLabel();
+    renderHome({ settleQuiet: true });
+    el.homePage.classList.remove("is-enter-pending", "is-entering");
+    finishHomeStatRolls(el.homePage);
+    flushHomeEnterDeferred();
+  }
+
   function pollHomeFromLiveServer() {
     if (homeLivePollFlight) return homeLivePollFlight;
     homeLivePollFlight = pollHomeFromLiveServerOnce().finally(() => {
@@ -2686,19 +2695,20 @@
       if (!res.ok) {
         homeLiveLastPollOk = false;
         syncHomeCountLabel();
-        if (state.page === "home" && squadWasEmpty) renderHome({ settleQuiet: true });
+        settleHomeAfterLivePoll();
         return;
       }
       const data = await res.json();
       if (!(data && data.ok && data.home)) {
         homeLiveLastPollOk = false;
         syncHomeCountLabel();
-        if (state.page === "home" && squadWasEmpty) renderHome({ settleQuiet: true });
+        settleHomeAfterLivePoll();
         return;
       }
       if (!homeLivePayloadMatchesPrefs(data.home)) {
         homeLiveLastPollOk = false;
         syncHomeCountLabel();
+        settleHomeAfterLivePoll();
         return;
       }
       homeLiveLastPollOk = true;
@@ -2717,7 +2727,7 @@
       ) {
         homeLiveStandingsSynced = true;
         syncLiveNavChrome();
-        if (state.page === "home") syncHomeCountLabel();
+        settleHomeAfterLivePoll();
         return;
       }
       const sameElementGw =
@@ -2732,7 +2742,7 @@
       const elementGwChanged = priorEgFp !== incomingEgFp;
       if (!standingsChanged && !summaryChanged && !elementGwChanged) {
         syncLiveNavChrome();
-        if (state.page === "home") syncHomeCountLabel();
+        settleHomeAfterLivePoll();
         return;
       }
       if (state.page === "home") {
@@ -2751,10 +2761,7 @@
       } else syncLiveNavChrome();
     } catch {
       homeLiveLastPollOk = false;
-      if (state.page === "home") {
-        syncHomeCountLabel();
-        if (squadWasEmpty) renderHome({ settleQuiet: true });
-      }
+      if (state.page === "home") settleHomeAfterLivePoll();
     } finally {
       clearTimeout(fetchTimer);
       homeLivePollInFlight = false;
@@ -19467,11 +19474,11 @@
       // Bars animate once via playPageEnter → animateRankingsBars.
       renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
-      const holdEnter = homeLivePollReady() && !homeLiveStandingsSynced;
-      if (!holdEnter && el.homePage) el.homePage.classList.add("is-enter-pending");
+      const awaitingLive = homeLivePollReady() && !homeLiveStandingsSynced;
+      if (!awaitingLive && el.homePage) el.homePage.classList.add("is-enter-pending");
       primeOptaHighlightEnter(el.homePage);
       ensureLiveFeedFromHome();
-      renderHome({ settleQuiet: holdEnter });
+      renderHome({ settleQuiet: awaitingLive });
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
       liveEnterAwaitingPlay = true;
