@@ -14928,6 +14928,28 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-transfers-table-scroll-controls[hidden] {
   display: none;
 }
+@media (max-width: 900px) {
+  /* Transfers tab: allow vertical page scroll (pan-x alone blocked it on this pager). */
+  .home-standings-track {
+    touch-action: pan-x pan-y;
+  }
+  .home-standings-page-transfers,
+  .home-transfers-page-shell {
+    height: auto;
+    align-self: flex-start;
+  }
+  .home-transfers-page-shell {
+    flex: 0 1 auto;
+  }
+  .home-transfers-table-wrap {
+    overflow: visible;
+    flex: 0 1 auto;
+    padding-bottom: 0;
+  }
+  .home-transfers-table-scroll-controls {
+    display: none !important;
+  }
+}
 .home-standings-dots {
   display: flex;
   align-items: center;

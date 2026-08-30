@@ -3899,7 +3899,7 @@
       : null;
     if (!wrap || !down || !up) return;
     const onTransfers = homeStandingsActivePageIndex() === 1;
-    if (!onTransfers) {
+    if (!onTransfers || !homeSquadIsDesktopLayout()) {
       down.hidden = true;
       up.hidden = true;
       if (controls) controls.hidden = true;
@@ -4052,8 +4052,10 @@
         : homeStandingsActivePageIndex();
     const page = pages[idx];
     if (!page) return;
-    // Transfers uses the Table page height so multi-move cells scroll inside fixed rows.
-    const measurePage = idx === 1 && pages[0] ? pages[0] : page;
+    // Desktop: pin Transfers to the Table viewport and scroll inside. Mobile: natural
+    // height so the main page scrolls like the other standings tabs.
+    const measurePage =
+      idx === 1 && pages[0] && homeSquadIsDesktopLayout() ? pages[0] : page;
     let h = Math.ceil(Math.max(measurePage.scrollHeight, measurePage.offsetHeight));
     if (!(h > 0)) return;
     const prev = parseFloat(el.homeStandingsTrack.style.height) || 0;
