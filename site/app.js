@@ -2464,6 +2464,16 @@
   let homeScrollAnimToken = 0;
   let homeRankBorderRevealTimer = null;
 
+  function primeOptaHighlightEnter(pane) {
+    if (!pane || prefersReducedMotion()) return;
+    if (pane._hlEnterRaf) {
+      cancelAnimationFrame(pane._hlEnterRaf);
+      pane._hlEnterRaf = 0;
+    }
+    pane.classList.add("is-hl-entering");
+    pane.style.setProperty("--hl-sat", "0");
+  }
+
   function homeIsEnterBusy() {
     return !!(
       el.homePage &&
@@ -10688,16 +10698,35 @@
     return true;
   }
 
+  // Head-to-head compare winner value. Unlike main-table Enhance bands, zeros
+  // count — 0 goals vs 1 has a winner; 0 GC beats 3. Set-piece checks use
+  // display rank (lower = better); null = not a taker for that role.
+  function compareStatValue(row, col) {
+    if (col.type === "check") return setPieceDisplayRank(row, col.key);
+    if (!isStatAvailable(row, col)) return null;
+    const val = displayValue(row, col);
+    return Number.isFinite(Number(val)) ? Number(val) : 0;
+  }
+
+  function compareColLowerBetter(col) {
+    return col.type === "check" || LOWER_BETTER.has(col.key);
+  }
+
   function compareHighlightMap(selectedRows) {
     const maps = {};
     visibleColumns().forEach((col) => {
-      if (!isNumericCol(col) || ENHANCE_EXCLUDE.has(col.key)) return;
-      const lowerBetter = LOWER_BETTER.has(col.key);
+      const isCheck = col.type === "check";
+      if (!isCheck && (!isNumericCol(col) || ENHANCE_EXCLUDE.has(col.key))) return;
+      const lowerBetter = compareColLowerBetter(col);
       const withVals = selectedRows
-        .filter((r) => isStatAvailable(r, col))
-        .map((r) => ({ key: rowKey(r), val: displayValue(r, col) || 0 }))
-        .filter((x) => Math.abs(x.val) > 1e-9);
-      if (withVals.length < 2) return;
+        .map((r) => ({ key: rowKey(r), val: compareStatValue(r, col) }))
+        .filter((x) => x.val != null);
+      if (withVals.length < 2) {
+        if (isCheck && withVals.length === 1 && selectedRows.length >= 2) {
+          maps[col.key] = new Set([withVals[0].key]);
+        }
+        return;
+      }
       const best = lowerBetter
         ? Math.min(...withVals.map((x) => x.val))
         : Math.max(...withVals.map((x) => x.val));
@@ -10765,18 +10794,19 @@
           td.classList.add("has-update-change");
         }
         td.innerHTML = cellHTML(r, c);
-        if (isNumericCol(c)) {
-          if (!isStatApplicable(r, c)) {
+        if (isNumericCol(c) || c.type === "check") {
+          if (!isStatApplicable(r, c) && c.type !== "check") {
             td.classList.add("zero-val");
           } else if (sourceUnsupportedReason(r, c)) {
             td.classList.add("has-source-warning");
           } else {
-            const val = displayValue(r, c) || 0;
-            if (Math.abs(val) < 1e-9) {
-              td.classList.add("zero-val");
-            } else if (winnerMap[c.key] && winnerMap[c.key].has(key)) {
+            const isWinner = winnerMap[c.key] && winnerMap[c.key].has(key);
+            const val = compareStatValue(r, c);
+            if (isWinner) {
               td.classList.add("highlight-top");
               td.style.backgroundColor = positiveFill(0.24);
+            } else if (c.type !== "check" && val != null && Math.abs(val) < 1e-9) {
+              td.classList.add("zero-val");
             }
           }
         }
@@ -12333,7 +12363,7 @@
           const val = prior ? Number(prior[col.key]) : NaN;
           return { key: String(r.code), val };
         })
-        .filter((x) => Number.isFinite(x.val) && Math.abs(x.val) > 1e-9);
+        .filter((x) => Number.isFinite(x.val));
       if (withVals.length < 2) return;
       const best = Math.max(...withVals.map((x) => x.val));
       const winners = new Set(withVals.filter((x) => x.val === best).map((x) => x.key));
@@ -18621,7 +18651,12 @@
 
   function playPageEnter(pane) {
     if (!pane) return;
-    pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering", "is-live-entering");
+    const isOpta = pane.id === "opta-page";
+    pane.classList.remove("is-entering", "is-enter-pending", "is-live-entering");
+    if (!isOpta) {
+      pane.classList.remove("is-hl-entering");
+      pane.style.removeProperty("--hl-sat");
+    }
     clearTimeout(pane._enterClear);
     if (pane._countUpRaf) {
       cancelAnimationFrame(pane._countUpRaf);
@@ -18631,7 +18666,6 @@
       cancelAnimationFrame(pane._hlEnterRaf);
       pane._hlEnterRaf = 0;
     }
-    if (pane.id === "opta-page") pane.style.removeProperty("--hl-sat");
     if (pane.id === "home-page") {
       // Invalidate in-flight rolls only. Do NOT flush deferred renders here —
       // that settled/rebuilt mid-start and replayed enter after scroll on iOS.
@@ -19221,6 +19255,7 @@
     } else if (page === "markets") {
       renderMarkets();
     } else if (page === "opta") {
+      primeOptaHighlightEnter(el.optaPage);
       renderTable();
     } else if (page === "team") {
       renderTeam();
@@ -21442,8 +21477,8 @@
     syncPlannerNavVisibility();
     setPage(storedPage());
     syncLiveNavChrome();
-    // setPage already rendered Live (and started enter motion); renderTable would stack it.
-    if (state.page !== "live") renderTable();
+    // setPage already rendered Live/Statistics; a second renderTable stacks motion.
+    if (state.page !== "live" && state.page !== "opta") renderTable();
   }
 
   init();

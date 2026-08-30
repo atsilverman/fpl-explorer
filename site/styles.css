@@ -3849,6 +3849,29 @@ tbody td.is-enhanced::before {
   pointer-events: none;
   z-index: -1;
 }
+/* Statistics enter — photo rings + team abbr saturate with highlight cells (--hl-sat 0→1). */
+#opta-page.is-hl-entering .ownership-photo.has-team-ring {
+  border-color: color-mix(in srgb, var(--team-accent) calc(var(--hl-sat, 0) * 100%), transparent);
+}
+#opta-page.is-hl-entering .ownership-id-team[style*="--team-accent"] {
+  color: color-mix(in srgb, var(--team-accent) calc(var(--hl-sat, 0) * 100%), var(--text-dim));
+}
+:root[data-theme="dark"] #opta-page.is-hl-entering .ownership-id-team[style*="--team-accent"] {
+  color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--team-accent) 55%, white) calc(var(--hl-sat, 0) * 100%),
+    var(--text-dim)
+  );
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #opta-page.is-hl-entering .ownership-id-team[style*="--team-accent"] {
+    color: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--team-accent) 55%, white) calc(var(--hl-sat, 0) * 100%),
+      var(--text-dim)
+    );
+  }
+}
 #opta-page.is-hl-entering tbody td.is-enhanced.highlight-strong,
 #team-page.is-hl-entering tbody td.is-enhanced.highlight-strong {
   color: color-mix(in srgb, #fff calc(var(--hl-sat, 1) * 100%), var(--text));
