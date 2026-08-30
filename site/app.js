@@ -2547,14 +2547,19 @@
     let goals = 0;
     let maxMins = 0;
     let pts = 0;
+    let minsSum = 0;
+    let liveCount = 0;
     for (const row of Object.values(eg)) {
       if (!row || typeof row !== "object") continue;
       count += 1;
       goals += Number(row.goals) || 0;
-      maxMins = Math.max(maxMins, Number(row.minutes) || 0);
+      const mins = Number(row.minutes) || 0;
+      maxMins = Math.max(maxMins, mins);
+      minsSum += mins;
       pts += Number(row.pts) || 0;
+      if (row.live || String(row.status || "").toLowerCase() === "live") liveCount += 1;
     }
-    return `${count}:${goals}:${maxMins}:${pts}`;
+    return `${count}:${goals}:${maxMins}:${pts}:${minsSum}:${liveCount}`;
   }
 
   function homeLivePollReady() {
@@ -2625,6 +2630,10 @@
       if (sameElementGw) {
         syncLiveNavChrome();
         if (state.page === "home") syncHomeCountLabel();
+        else if (state.page === "live") {
+          renderLive({ quiet: true });
+          livePollRefreshMotion();
+        }
         return;
       }
       applyHomePayload(data.home);
@@ -16046,10 +16055,10 @@
     };
   }
 
-  function liveFeedRecentSortKey(ev) {
-    const liveTier = ev && ev.live ? 1 : 0;
+  function liveFeedEventSortKey(ev) {
+    const ts = Number(ev && ev.ts) || 0;
     const seq = Number(ev && ev.seq) || 0;
-    return liveTier * 1e12 + seq;
+    return ts * 1e6 + seq;
   }
 
   function liveFeedDiffCounter(oldVal, newVal, fn) {
@@ -16229,7 +16238,8 @@
     if (seeding) {
       const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
       liveFeedApplyBonusEff(nextSnap, bonusMeta);
-      let seedTs = Date.now() - 3_600_000 + newEvents.length;
+      const seedBaseTs = Date.now() - 3_600_000;
+      const seedBonusTs = seedBaseTs - 60_000;
       for (const [eidStr, rec] of Object.entries(nextSnap)) {
         const eff = Number(rec.bonusEff) || 0;
         if (eff <= 0) continue;
@@ -16241,7 +16251,6 @@
         const player = byElement.get(eid);
         if (!player) continue;
         const team = player.team || currentTeamCode(player);
-        seedTs += 1;
         newEvents.push(
           liveFeedMakeEvent({
             eid,
@@ -16256,7 +16265,7 @@
             ptsDelta: eff,
             colKey: "bonus",
             totalPts: Number(rec.pts) || eff,
-            ts: seedTs,
+            ts: seedBonusTs,
           })
         );
       }
@@ -16265,6 +16274,11 @@
     if (newEvents.length) {
       liveFeedEvents.push(...newEvents);
       if (liveFeedEvents.length > 500) liveFeedEvents = liveFeedEvents.slice(-500);
+    }
+    for (const ev of liveFeedEvents) {
+      if (Number(ev.gw) !== gw) continue;
+      const eg = egMap[String(ev.eid)];
+      if (eg && typeof eg === "object") ev.live = liveEgIsInPlay(eg);
     }
     liveFeedSnapshot = nextSnap;
   }
@@ -16324,9 +16338,9 @@
         cmp = String(a.player.name || "").localeCompare(String(b.player.name || ""));
       } else if (key === "impact") {
         cmp = liveFeedEventImpact(a).net - liveFeedEventImpact(b).net;
-        if (cmp === 0) cmp = liveFeedRecentSortKey(a) - liveFeedRecentSortKey(b);
+        if (cmp === 0) cmp = liveFeedEventSortKey(a) - liveFeedEventSortKey(b);
       } else {
-        cmp = liveFeedRecentSortKey(a) - liveFeedRecentSortKey(b);
+        cmp = liveFeedEventSortKey(a) - liveFeedEventSortKey(b);
       }
       return cmp * dir;
     });
