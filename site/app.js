@@ -2275,7 +2275,7 @@
     });
   }
 
-  function applyHomePayload(payload) {
+  function applyHomePayload(payload, { skipFeedIngest = false } = {}) {
     if (!payload || typeof payload !== "object") return false;
     const priorHome = {
       gw: HOME.gw ?? null,
@@ -2336,7 +2336,7 @@
     HOME.elementGw = payload.elementGw && typeof payload.elementGw === "object"
       ? payload.elementGw
       : {};
-    if (payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
+    if (!skipFeedIngest && payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
       liveFeedIngest(Number(payload.gw), liveElementMapForGw(Number(payload.gw)));
     }
     HOME.leaguePicksStatus = payload.leaguePicksStatus && typeof payload.leaguePicksStatus === "object"
@@ -2347,6 +2347,7 @@
       : {};
     HOME.error = payload.error ?? null;
     window.FPL_HOME = HOME;
+    homeLiveStandingsSynced = true;
     homeOwnerPin = null;
     homeViewEntryId = null;
     homeElementGwCache = null;
@@ -2454,6 +2455,9 @@
   let homeLiveLastPollOk = false;
   let homeLiveLastSuccessAt = 0;
   let homeLivePollInFlight = false;
+  let homeLivePollAttempted = false;
+  let homeLivePollFlight = null;
+  let homeLiveStandingsSynced = false;
   let homeRenderQueued = false;
   let homeEnterMotionToken = 0;
   let homeLivePollAfterEnter = false;
@@ -2514,6 +2518,9 @@
     homeLiveLastPollOk = false;
     homeLiveLastSuccessAt = 0;
     homeLivePollInFlight = false;
+    homeLivePollAttempted = false;
+    homeLivePollFlight = null;
+    homeLiveStandingsSynced = false;
   }
 
   function stopHomeLivePolling() {
@@ -2569,12 +2576,54 @@
     return !!(baked && TRACKED_MANAGER_IDS.map(String).includes(String(baked)));
   }
 
+  function homeStandingsFingerprint(rows) {
+    if (!Array.isArray(rows)) return "";
+    return rows
+      .map((r) => [
+        r.entry,
+        r.rankOfficial,
+        r.rankLive,
+        r.total,
+        r.gwPointsLive,
+        r.eventTotalOfficial,
+        r.inPlay,
+        r.toPlay,
+      ].join(":"))
+      .join("|");
+  }
+
+  function homeSummaryFingerprint(summary) {
+    if (!summary || typeof summary !== "object") return "";
+    return [
+      summary.gwPoints,
+      summary.overallPoints,
+      summary.overallRank,
+      summary.leagueRank,
+      summary.leagueRankPrev,
+    ].join(":");
+  }
+
+  function homeLivePayloadPending() {
+    if (!homeLivePollReady()) return false;
+    if (homeLiveStandingsSynced) return false;
+    if (homeLivePollAttempted && !homeLivePollInFlight) return false;
+    return true;
+  }
+
   function homeSquadShowLoading(viewEntry) {
     if (!savedManagerId || !savedLeagueId) return false;
+    if (homeLivePayloadPending()) return true;
     if ((homeSquadForEntry(viewEntry) || []).length) return false;
     if (homeLivePollInFlight) return true;
     if (!homeLiveLastSuccessAt) return true;
     return false;
+  }
+
+  function homeStandingsShowLoading() {
+    if (!homeLivePollReady()) return false;
+    if (homeLiveStandingsSynced) return false;
+    if (homeLivePollAttempted && !homeLivePollInFlight) return false;
+    return true;
   }
 
   function homeSquadLoadingHTML(colspan, rows = 5) {
@@ -2589,7 +2638,15 @@
     return `<tr><td colspan="${colspan}">No team picks in cache.</td></tr>`;
   }
 
-  async function pollHomeFromLiveServer() {
+  function pollHomeFromLiveServer() {
+    if (homeLivePollFlight) return homeLivePollFlight;
+    homeLivePollFlight = pollHomeFromLiveServerOnce().finally(() => {
+      homeLivePollFlight = null;
+    });
+    return homeLivePollFlight;
+  }
+
+  async function pollHomeFromLiveServerOnce() {
     const url = homeLiveApiUrl();
     if (!url || !homeLivePollReady()) return;
     if (homeLivePollInFlight) return;
@@ -2627,20 +2684,20 @@
       const sameElementGw =
         sameStamp &&
         homeElementGwFingerprint(HOME) === homeElementGwFingerprint(data.home);
-      if (sameElementGw) {
+      const priorStandingsFp = homeStandingsFingerprint(HOME.standings);
+      const priorSummaryFp = homeSummaryFingerprint(HOME.summary);
+      applyHomePayload(data.home, { skipFeedIngest: sameElementGw });
+      const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
+      const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
+      if (sameElementGw && !standingsChanged && !summaryChanged) {
         syncLiveNavChrome();
         if (state.page === "home") syncHomeCountLabel();
         else if (state.page === "live") {
-          if (data.home.elementGw && typeof data.home.elementGw === "object") {
-            HOME.elementGw = data.home.elementGw;
-            window.FPL_HOME = HOME;
-          }
           renderLive({ quiet: true });
           livePollRefreshMotion();
         }
         return;
       }
-      applyHomePayload(data.home);
       if (state.page === "home") {
         const deferEnter = homeIsEnterBusy() && !squadWasEmpty;
         renderHome({ deferDuringEnter: deferEnter, settleQuiet: true });
@@ -2659,17 +2716,18 @@
       }
     } finally {
       homeLivePollInFlight = false;
+      homeLivePollAttempted = true;
     }
   }
 
-  function syncHomeLivePolling() {
+  function syncHomeLivePolling({ skipImmediate = false } = {}) {
     if (!homeLivePollReady()) {
       stopHomeLivePolling();
       syncLiveNavChrome();
       return;
     }
     if (!homeLivePollTimer) {
-      pollHomeFromLiveServer();
+      if (!skipImmediate) pollHomeFromLiveServer();
       homeLivePollTimer = setInterval(pollHomeFromLiveServer, 60_000);
     }
     syncLiveNavChrome();
@@ -3247,7 +3305,7 @@
     const deltaPlaces = homeRankDeltaPlaces(rankVal, rankPrev);
     const deltaHTML = homeRankDeltaHTML(deltaPlaces, { compact: true });
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
-      ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${homeStandingsCountHTML(rankVal, { className: "home-stat-roll" })}</span>${deltaHTML}</span>`
+      ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${escapeHtml(formatHomeRank(rankVal))}</span>${deltaHTML}</span>`
       : "—";
     const showConfiguredPin =
       !!viewingOther &&
@@ -3586,6 +3644,10 @@
 
   function renderHomeStandingsCaptainsBody() {
     if (!el.homeStandingsCaptainsBody) return;
+    if (homeStandingsShowLoading()) {
+      el.homeStandingsCaptainsBody.innerHTML = homeSquadLoadingHTML(4, 8);
+      return;
+    }
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
@@ -3602,6 +3664,10 @@
 
   function renderHomeStandingsLiveBody() {
     if (!el.homeStandingsBody) return;
+    if (homeStandingsShowLoading()) {
+      el.homeStandingsBody.innerHTML = homeSquadLoadingHTML(7, 8);
+      return;
+    }
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
@@ -5963,6 +6029,12 @@
   }
 
   function renderHomeSummaryStats(summary) {
+    if (homeLivePayloadPending()) {
+      [el.homeGwPoints, el.homeOverallRankNum || el.homeOverallRank, el.homeTotalPoints, el.homeLeagueRankNum || el.homeLeagueRank].forEach((node) => {
+        if (node) node.textContent = "—";
+      });
+      return;
+    }
     if (el.homeGwPoints) {
       if (summary.gwPoints == null || !Number.isFinite(Number(summary.gwPoints))) {
         el.homeGwPoints.textContent = "—";
@@ -6357,9 +6429,9 @@
           el.homeTransfersStatus.textContent = "";
         }
       }
-      el.homeStandingsTransfersBody.innerHTML = rows.map((r) =>
-        homeTransfersRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
+      el.homeStandingsTransfersBody.innerHTML = homeStandingsShowLoading()
+        ? homeSquadLoadingHTML(3, 8)
+        : rows.map((r) => homeTransfersRowHTML(r, opts)).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
       bindHomeTransfersTableScrollControls();
       requestAnimationFrame(() => {
         resetHomeTransfersTableScroll();
@@ -6373,9 +6445,9 @@
       const configuredEntry = homeConfiguredEntryId();
       const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
       const opts = { configuredEntry, viewEntry, viewingOther };
-      el.homeStandingsChipsBody.innerHTML = rows.map((r) =>
-        homeChipsRowHTML(r, opts)
-      ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
+      el.homeStandingsChipsBody.innerHTML = homeStandingsShowLoading()
+        ? homeSquadLoadingHTML(6, 8)
+        : rows.map((r) => homeChipsRowHTML(r, opts)).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
       const chipsTable = el.homeStandingsChipsBody.closest("table");
       if (chipsTable) {
         const halfLabel = (HOME.chipWindow && HOME.chipWindow.label) || "First half";
@@ -6513,7 +6585,7 @@
       savedManagerId = saved;
       if (el.fplManagerSelect) el.fplManagerSelect.value = saved;
       rebuildLeagueSelect();
-      prefetchHomeLiveCache();
+      if (!deferHome) prefetchHomeLiveCache();
       try {
         await syncManagerFromApi(saved, { seedPlannerIfEmpty: true, quiet: true });
       } catch {
@@ -21575,11 +21647,17 @@
     } catch {
       syncFplIdStatus();
     }
-    prefetchHomeLiveCache();
+    const page = storedPage();
+    if (homeLivePollReady() && page === "home") {
+      homeLivePrefetchStarted = true;
+      await pollHomeFromLiveServer();
+      syncHomeLivePolling({ skipImmediate: true });
+    } else {
+      prefetchHomeLiveCache();
+    }
     syncPlannerNavVisibility();
-    setPage(storedPage());
+    setPage(page);
     syncLiveNavChrome();
-    // setPage already rendered Live/Statistics; a second renderTable stacks motion.
     if (state.page !== "live" && state.page !== "opta") renderTable();
   }
 
