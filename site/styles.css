@@ -3120,7 +3120,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation-delay: 0.2s;
 }
 #home-page.is-entering .home-squad-table tbody tr > *,
-#home-page.is-entering .home-standings-table tbody tr > * {
+#home-page.is-entering .home-standings-table tbody tr > *,
+#home-page.is-entering .home-feed-table tbody tr > * {
   animation: page-enter-fade 0.65s var(--ease-out) both;
   animation-delay: calc(0.34s + (min(var(--enter-i, 0), 28) * 0.054s));
 }
@@ -3168,7 +3169,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #home-page.is-entering .home-summary-cards > .home-panel,
   #home-page.is-entering .home-tables-grid > .home-panel,
   #home-page.is-entering .home-squad-table tbody tr > *,
-  #home-page.is-entering .home-standings-table tbody tr > * {
+  #home-page.is-entering .home-standings-table tbody tr > *,
+  #home-page.is-entering .home-feed-table tbody tr > * {
     animation: none;
   }
 }
@@ -13097,6 +13099,38 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   gap: 12px;
   margin: 8px 0 32px;
 }
+@media (min-width: 1400px) {
+  /* Share one 4-col track with summary cards so Team / League / Feed gutters line up. */
+  .home-dashboard:not(.is-player-lookup) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
+  }
+  .home-dashboard:not(.is-player-lookup) > .home-deadline,
+  .home-dashboard:not(.is-player-lookup) > .home-view-banner,
+  .home-dashboard:not(.is-player-lookup) > .home-owner-banner,
+  .home-dashboard:not(.is-player-lookup) > .home-player-profile,
+  .home-dashboard:not(.is-player-lookup) > .home-player-matchup {
+    grid-column: 1 / -1;
+  }
+  .home-dashboard:not(.is-player-lookup) .home-summary-cards,
+  .home-dashboard:not(.is-player-lookup) .home-tables-grid {
+    display: contents;
+  }
+  .home-dashboard:not(.is-player-lookup) #home-squad-panel {
+    grid-column: span 2;
+  }
+  .home-dashboard:not(.is-player-lookup) #home-standings-panel {
+    grid-column: span 2;
+  }
+  html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-standings-panel {
+    grid-column: span 1;
+  }
+  html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-feed-panel {
+    grid-column: span 1;
+  }
+}
 /* Viewing another manager — blue rail on the banner only; rank cards use delta borders. */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
@@ -13265,6 +13299,9 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   display: none;
 }
 .home-dashboard.is-player-lookup #home-squad-panel {
+  display: none !important;
+}
+.home-dashboard.is-player-lookup #home-feed-panel {
   display: none !important;
 }
 @media (max-width: 720px) {
@@ -13940,6 +13977,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-rank-delta.is-down {
     transition: none;
   }
+  .home-standings-pill.is-emphasize,
+  .home-standings-pill.is-strong {
+    transition: none;
+  }
 }
 .home-rank-delta {
   display: inline-flex;
@@ -14064,6 +14105,19 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   }
 }
+#home-feed-panel {
+  display: none;
+}
+html.home-squad-wide #home-feed-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+html.home-squad-wide .home-tables-grid > .home-table-panel {
+  max-height: var(--home-tables-panel-h, none);
+  overflow: hidden;
+}
 html.home-squad-wide .home-squad-page:nth-child(2) {
   display: none;
 }
@@ -14085,6 +14139,61 @@ html.home-squad-wide .home-squad-live-wrap {
   flex: 0 0 46%;
   min-width: 0;
   border-right: 1px solid hsl(var(--border) / 0.65);
+}
+html.home-squad-wide .home-squad-live-table col.home-col-player {
+  width: 34%;
+}
+html.home-squad-wide .home-squad-live-table col.home-col-pts {
+  width: 10%;
+}
+html.home-squad-wide .home-squad-live-table col.home-col-mp {
+  width: 13%;
+}
+html.home-squad-wide .home-squad-live-table col.home-col-opp {
+  width: 11%;
+}
+html.home-squad-wide .home-squad-live-table col.home-col-imp {
+  width: 32%;
+}
+html.home-squad-wide .home-squad-live-wrap .home-col-imp {
+  padding-left: 2px;
+  padding-right: 4px;
+}
+html.home-squad-wide .home-squad-live-wrap .home-imp {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  gap: 3px;
+  justify-content: flex-end;
+}
+html.home-squad-wide .home-squad-live-wrap .home-imp-track {
+  flex: 0 0 24px;
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
+  height: 7px;
+}
+html.home-squad-wide .home-squad-live-wrap .home-imp-pct {
+  flex: 0 0 auto;
+  min-width: 2.6em;
+  font-size: 10px;
+  line-height: 1;
+  overflow: hidden;
+}
+html.home-squad-wide .home-squad-live-wrap .home-imp-pct .stat-roll {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  line-height: 1;
+}
+html.home-squad-wide .home-squad-live-wrap .home-imp-pct .stat-roll-digit {
+  overflow: hidden;
+  height: 1em;
+  line-height: 1;
+}
+html.home-squad-wide .home-squad-pts-table .home-bench-divider-spacer th {
+  color: transparent;
+  user-select: none;
 }
 html.home-squad-wide .home-squad-pts-mount {
   flex: 1 1 auto;
@@ -14124,12 +14233,18 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
     height: auto;
   }
   html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table tbody tr.home-squad-row > td {
-    height: 1px;
+    height: auto;
     vertical-align: middle;
   }
   html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table tbody tr.home-bench-divider > th {
     vertical-align: middle;
   }
+}
+html.home-squad-wide:not(.home-squad-layout-ready) #home-squad-panel .home-squad-split {
+  visibility: hidden;
+}
+html.home-squad-wide.home-squad-layout-ready #home-squad-panel .home-squad-split {
+  visibility: visible;
 }
 .home-tables-grid > .home-table-panel {
   height: 100%;
@@ -14137,6 +14252,104 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
 #home-standings-panel {
   container-type: inline-size;
   container-name: home-standings;
+}
+#home-feed-panel .home-feed-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+#home-feed-panel .home-feed-table tbody tr + tr td {
+  border-top: none;
+}
+#home-feed-panel .home-feed-table thead th {
+  cursor: default;
+  background: transparent;
+}
+#home-feed-panel .home-feed-table thead th.home-col-feed-event,
+#home-feed-panel .home-feed-table thead th.home-col-feed-impact,
+#home-feed-panel .home-feed-table thead th.home-col-feed-pts,
+#home-feed-panel .home-feed-table tbody td.home-col-feed-event,
+#home-feed-panel .home-feed-table tbody td.home-col-feed-impact,
+#home-feed-panel .home-feed-table tbody td.home-col-feed-pts {
+  text-align: center;
+}
+#home-feed-panel .home-feed-table thead th.home-col-player,
+#home-feed-panel .home-feed-table tbody td.home-col-player {
+  width: 38%;
+  min-width: 0;
+}
+#home-feed-panel .home-feed-table thead th.home-col-feed-event,
+#home-feed-panel .home-feed-table tbody td.home-col-feed-event {
+  width: 28%;
+  min-width: 0;
+}
+#home-feed-panel .home-feed-table thead th.home-col-feed-impact,
+#home-feed-panel .home-feed-table tbody td.home-col-feed-impact {
+  width: 18%;
+  min-width: 0;
+}
+#home-feed-panel .home-feed-table thead th.home-col-feed-pts,
+#home-feed-panel .home-feed-table tbody td.home-col-feed-pts {
+  width: 16%;
+  min-width: 0;
+}
+#home-feed-panel .home-feed-table tbody td.home-col-feed-event {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text);
+}
+#home-feed-panel .home-feed-table .home-feed-event-label {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#home-feed-panel .home-feed-table tbody td.home-col-feed-impact {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+#home-feed-panel .home-feed-table tbody td.home-col-feed-impact.is-pos {
+  color: hsl(var(--positive) / 0.85);
+}
+#home-feed-panel .home-feed-table tbody td.home-col-feed-impact.is-neg {
+  color: hsl(var(--negative) / 0.85);
+}
+#home-feed-panel .home-feed-table .live-feed-impact-suffix {
+  font-weight: 400;
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+#home-feed-panel .home-feed-table tbody td.home-col-feed-pts .live-points-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.15em;
+  min-height: 1.65em;
+  padding: 4px 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-sizing: border-box;
+}
+#home-feed-panel .live-empty-row td {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 12px 8px;
+}
+html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
+    cursor: pointer;
+  }
 }
 @container home-standings (max-width: 900px) {
   .home-captains-table .home-col-vice {
@@ -14180,9 +14393,113 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
 }
 .home-table-panel > .home-table-wrap,
 .home-table-panel > .home-squad-pager,
-.home-table-panel > .home-standings-pager {
+.home-table-panel > .home-standings-pager,
+.home-table-panel > .home-feed-pager {
   flex: 1 1 auto;
   min-height: 0;
+}
+.home-feed-pager {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-feed-track {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-feed-track::-webkit-scrollbar {
+  display: none;
+}
+.home-feed-page {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-self: stretch;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.home-feed-page .home-table-wrap {
+  margin: 0;
+  overflow-x: hidden;
+}
+.home-feed-page > .home-feed-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.home-feed-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  padding: 10px 0 2px;
+}
+.home-feed-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.22s var(--ease-out),
+    background-color 0.22s ease,
+    opacity 0.22s ease;
+}
+.home-feed-dot.is-active {
+  background: hsl(var(--primary));
+  transform: scale(1.18);
+  opacity: 1;
+}
+.home-feed-dot:not(.is-active) {
+  opacity: 0.85;
+}
+.home-feed-dot:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.55);
+  outline-offset: 2px;
+}
+@media (min-width: 901px) {
+  #home-feed-panel > .home-feed-pager {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #home-feed-panel .home-feed-track {
+    min-height: 0;
+    flex: 1 1 auto;
+    height: auto !important;
+    align-items: stretch;
+  }
+  #home-feed-panel .home-feed-page {
+    height: 100%;
+    align-self: stretch;
+  }
+  #home-feed-panel .home-feed-dots {
+    margin-top: auto;
+  }
 }
 @media (min-width: 901px) {
   /* Fill card height: stretch pager pages + equal-share rows above the dots. */
@@ -14268,7 +14585,8 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
   min-width: 0;
 }
 #home-page.is-entering .home-squad-track,
-#home-page.is-entering .home-standings-track {
+#home-page.is-entering .home-standings-track,
+#home-page.is-entering .home-feed-track {
   transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -14981,10 +15299,16 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
 .home-play-live .stat-roll-digit,
 .home-play-left .stat-roll-digit,
 .home-standings-table .stat-roll-digit,
+.home-feed-table .stat-roll-digit,
 .home-squad-table .stat-roll-digit {
   height: 1em;
   line-height: 1;
   overflow: hidden;
+}
+.home-feed-table .live-feed-impact-val .home-stat-roll,
+.home-feed-table .live-feed-impact-val .stat-roll-digit {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
 }
 .home-pts.is-zero {
   color: var(--text-faint);
@@ -15107,8 +15431,16 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   line-height: 1.2;
-  background: var(--hl-fill);
-  color: var(--text);
+  background-color: var(--hl-fill);
+  color: var(--hl-text, var(--text));
+  transition:
+    background-color var(--home-rank-saturate-duration, 3.4s) var(--home-rank-saturate-ease, cubic-bezier(0.12, 0.88, 0.22, 1)),
+    color var(--home-rank-saturate-duration, 3.4s) var(--home-rank-saturate-ease, cubic-bezier(0.12, 0.88, 0.22, 1));
+}
+.home-dashboard.is-rank-chrome-staged .home-standings-live-table .home-standings-pill.is-emphasize,
+.home-dashboard.is-rank-chrome-staged .home-standings-live-table .home-standings-pill.is-strong {
+  background-color: transparent !important;
+  color: var(--text) !important;
 }
 .home-standings-pill.is-emphasize {
   font-weight: 700;
@@ -15231,15 +15563,15 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
   flex: none;
   display: inline-flex;
   align-items: center;
-  padding: 0 2px;
-  border-radius: 2px;
+  padding: 0 3px;
+  border-radius: 3px;
   font-size: 8px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  line-height: 1.15;
-  color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.12);
-  border: 1px solid hsl(var(--primary) / 0.18);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: var(--red);
+  background: hsl(var(--semantic-red) / 0.14);
+  border: 1px solid hsl(var(--semantic-red) / 0.42);
 }
 .home-standings-entry {
   display: block;
@@ -15894,6 +16226,12 @@ html[data-page="home"] #subtoolbar {
     --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
     background: var(--home-row-bg);
   }
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-squad-table tbody tr.home-squad-row.is-home-cross-hover > td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-standings-table tbody tr[data-entry].is-home-cross-hover > td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-feed-table tbody tr.home-feed-row.is-home-cross-hover > td {
+    --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
+    background: var(--home-row-bg);
+  }
 }
 
 /* Home ownership cross-highlight (squad ↔ standings).
@@ -15983,11 +16321,13 @@ html[data-page="home"] #subtoolbar {
   background: var(--home-row-bg);
 }
 @media (hover: hover) and (pointer: fine) {
-  #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned:hover > td {
+  #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned:hover > td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned.is-home-cross-hover > td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.16);
     background: var(--home-row-bg);
   }
-  #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-match:hover td {
+  #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-match:hover td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-match.is-home-cross-hover td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.12);
     background: var(--home-row-bg);
   }

@@ -1100,6 +1100,15 @@
     homeSummaryCards: $("#home-summary-cards"),
     homeSquadPanel: $("#home-squad-panel"),
     homeStandingsPanel: $("#home-standings-panel"),
+    homeFeedPanel: $("#home-feed-panel"),
+    homeFeedTrack: $("#home-feed-track"),
+    homeFeedDots: $("#home-feed-dots"),
+    homeFeedViewLabel: $("#home-feed-view-label"),
+    homeFeedHead: $("#home-feed-head"),
+    homeFeedBody: $("#home-feed-body"),
+    homeFeedAllHead: $("#home-feed-all-head"),
+    homeFeedAllBody: $("#home-feed-all-body"),
+    homeFeedCountLabel: $("#home-feed-count-label"),
     homeTablesGrid: $(".home-tables-grid"),
     homeStandingsLookupEmpty: $("#home-standings-lookup-empty"),
     homePlayerProfile: $("#home-player-profile"),
@@ -2802,17 +2811,18 @@
   // manager's team. Pin = { type: "element", id }.
   let homeOwnerPin = null;
   let homeOwnerBindingsReady = false;
+  let homeCrossHoverElement = null;
   let homeStandingsPagerReady = false;
   let homeSquadPagerReady = false;
+  let homeFeedPagerReady = false;
   let homeTransfersScrollBound = false;
   const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Schedule"];
   const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips"];
+  const HOME_FEED_VIEW_LABELS = ["League", "All"];
   let homeViewEntryId = null;
   // Live standings sort — default total pts desc; Live/Left/GW/Total/# are clickable.
-  let homeStandingsSortKey = "total";
-  let homeStandingsSortDir = "desc";
-  let homeStandingsSortBound = false;
+  // Home league table — fixed sort: total pts desc, rank asc tiebreak.
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
   let homeLookupStatMode = 0;
@@ -3410,17 +3420,15 @@
   }
 
   function sortedHomeStandingsRows(rows) {
-    const key = homeStandingsSortKey || "rank";
-    const dir = homeStandingsSortDir === "asc" ? 1 : -1;
     return rows.slice().sort((a, b) => {
-      const av = homeStandingsSortValue(a, key);
-      const bv = homeStandingsSortValue(b, key);
+      const av = homeStandingsSortValue(a, "total");
+      const bv = homeStandingsSortValue(b, "total");
       const aOk = av != null;
       const bOk = bv != null;
       if (!aOk && !bOk) return 0;
       if (!aOk) return 1;
       if (!bOk) return -1;
-      if (av !== bv) return av < bv ? -dir : dir;
+      if (av !== bv) return bv - av;
       const ar = homeStandingsSortValue(a, "rank");
       const br = homeStandingsSortValue(b, "rank");
       if (ar == null && br == null) return 0;
@@ -3455,9 +3463,15 @@
     return maps;
   }
 
-  function homeStandingsCountHTML(value, { className = "home-stat-roll" } = {}) {
+  function homeStandingsCountHTML(value, { className = "home-stat-roll", from = 0, decimals = 0, signed = false, suffix = "" } = {}) {
     if (value == null || !Number.isFinite(Number(value))) return "—";
-    return `<span class="${className}">${escapeHtml(String(Number(value)))}</span>`;
+    return statRollSpan(Number(value), {
+      from,
+      decimals,
+      signed,
+      suffix,
+      className,
+    });
   }
 
   function homeStandingsPillHTML(value, intensity) {
@@ -3481,7 +3495,7 @@
       return `<span class="home-standings-metric">${roll}</span>`;
     }
     const parts = [`--hl-fill:${paint.backgroundColor}`];
-    if (paint.color) parts.push(`color:${paint.color}`);
+    if (paint.color) parts.push(`--hl-text:${paint.color}`);
     const cls = [
       "home-standings-pill",
       paint.emphasize ? "is-emphasize" : "",
@@ -3526,30 +3540,6 @@
     </tr>`;
   }
 
-  function syncHomeStandingsSortHeaders() {
-    const table = el.homeStandingsBody && el.homeStandingsBody.closest("table");
-    if (!table) return;
-    table.querySelectorAll("thead th[data-home-sort]").forEach((th) => {
-      const key = th.getAttribute("data-home-sort");
-      const sorted = key === homeStandingsSortKey;
-      th.classList.toggle("sorted", sorted);
-      th.setAttribute("aria-sort", sorted
-        ? (homeStandingsSortDir === "asc" ? "ascending" : "descending")
-        : "none");
-      let arrow = th.querySelector(".arrow");
-      if (sorted) {
-        if (!arrow) {
-          arrow = document.createElement("span");
-          arrow.className = "arrow";
-          th.appendChild(arrow);
-        }
-        arrow.innerHTML = iconHTML(homeStandingsSortDir === "asc" ? "chevron-up" : "chevron-down");
-      } else if (arrow) {
-        arrow.remove();
-      }
-    });
-  }
-
   function renderHomeStandingsCaptainsBody() {
     if (!el.homeStandingsCaptainsBody) return;
     const configuredEntry = homeConfiguredEntryId();
@@ -3578,32 +3568,8 @@
     el.homeStandingsBody.innerHTML = sorted.map((r) =>
       homeStandingsLiveRowHTML(r, opts)
     ).join("") || `<tr><td colspan="6">No standings.</td></tr>`;
-    syncHomeStandingsSortHeaders();
     syncHomeOwnerHighlights();
     syncHomeStandingsLayout(homeStandingsActivePageIndex(), { animate: false, allowShrink: true });
-  }
-
-  function bindHomeStandingsSort() {
-    if (homeStandingsSortBound) return;
-    const table = el.homeStandingsBody && el.homeStandingsBody.closest("table");
-    if (!table) return;
-    homeStandingsSortBound = true;
-    table.querySelectorAll("thead th[data-home-sort]").forEach((th) => {
-      th.classList.add("is-sortable");
-      th.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const key = th.getAttribute("data-home-sort");
-        if (!key) return;
-        if (homeStandingsSortKey === key) {
-          homeStandingsSortDir = homeStandingsSortDir === "asc" ? "desc" : "asc";
-        } else {
-          homeStandingsSortKey = key;
-          homeStandingsSortDir = key === "rank" ? "asc" : "desc";
-        }
-        renderHomeStandingsLiveBody();
-      });
-    });
   }
 
   function homeCaptainsRowHTML(row, { configuredEntry, viewEntry, viewingOther, topCaptainPts }) {
@@ -4013,10 +3979,76 @@
     });
   }
 
+  function settleHomeTablesLayout({ standingsPageIdx } = {}) {
+    const idx =
+      standingsPageIdx != null && Number.isFinite(standingsPageIdx)
+        ? standingsPageIdx
+        : homeStandingsActivePageIndex();
+    syncHomeTablesGridHeight();
+    syncHomeStandingsRowHeights();
+    syncHomeSquadRowHeights();
+    if (el.homeSquadTrack) void el.homeSquadTrack.offsetHeight;
+    syncHomeSquadRowHeights();
+    syncHomeStandingsTrackHeight(idx, { animate: false, allowShrink: true });
+    syncHomeSquadTrackHeight(undefined, { animate: false });
+    if (homeSquadIsWideLayout()) {
+      document.documentElement.classList.add("home-squad-layout-ready");
+    }
+  }
+
   function syncHomeTablesGridHeight() {
     if (!el.homeTablesGrid || !el.homeSquadPanel || !el.homeStandingsPanel) return;
+    const feed = el.homeFeedPanel;
+    const panels = [el.homeSquadPanel, el.homeStandingsPanel];
+    if (feed) panels.push(feed);
+
+    const clearPanelHeights = () => {
+      panels.forEach((p) => {
+        if (!p) return;
+        p.style.height = "";
+        p.style.minHeight = "";
+      });
+      el.homeTablesGrid.style.removeProperty("--home-tables-panel-h");
+    };
+
+    if (!homeSquadIsWideLayout() || !homeSquadIsDesktopLayout()) {
+      clearPanelHeights();
+      return;
+    }
+
+    let feedWasHidden = false;
+    if (feed && feed.style.display === "none") {
+      feedWasHidden = true;
+    } else if (feed) {
+      feed.style.display = "none";
+    }
+    el.homeSquadPanel.style.height = "";
     el.homeSquadPanel.style.minHeight = "";
+    el.homeStandingsPanel.style.height = "";
     el.homeStandingsPanel.style.minHeight = "";
+    void el.homeTablesGrid.offsetHeight;
+
+    const cap = Math.max(
+      Math.ceil(el.homeStandingsPanel.getBoundingClientRect().height),
+      Math.ceil(el.homeSquadPanel.getBoundingClientRect().height)
+    );
+
+    if (feed && !feedWasHidden) {
+      feed.style.display = "";
+    }
+
+    if (!(cap > 0)) {
+      clearPanelHeights();
+      return;
+    }
+
+    const px = `${cap}px`;
+    el.homeTablesGrid.style.setProperty("--home-tables-panel-h", px);
+    panels.forEach((p) => {
+      if (!p) return;
+      p.style.height = px;
+      p.style.minHeight = px;
+    });
   }
 
   function syncHomeStandingsLayout(activeIndex, opts) {
@@ -4081,6 +4113,105 @@
       }
     });
     requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false, allowShrink: true }));
+  }
+
+  function homeFeedPageWidth() {
+    return el.homeFeedTrack ? el.homeFeedTrack.clientWidth || 1 : 1;
+  }
+
+  function homeFeedPageScrollLeft(index) {
+    return Math.max(0, index) * homeFeedPageWidth();
+  }
+
+  function homeFeedActivePageIndex() {
+    if (!el.homeFeedTrack) return 0;
+    const pages = [...el.homeFeedTrack.querySelectorAll(".home-feed-page")];
+    if (!pages.length) return 0;
+    const w = homeFeedPageWidth();
+    return Math.max(0, Math.min(pages.length - 1, Math.round(el.homeFeedTrack.scrollLeft / w)));
+  }
+
+  function snapHomeFeedPage(index) {
+    if (!el.homeFeedTrack) return;
+    const pages = [...el.homeFeedTrack.querySelectorAll(".home-feed-page")];
+    if (!pages[index]) return;
+    const target = homeFeedPageScrollLeft(index);
+    if (Math.abs(el.homeFeedTrack.scrollLeft - target) > 1) {
+      el.homeFeedTrack.scrollTo({ left: target, behavior: "auto" });
+    }
+  }
+
+  function homeFeedPageEventCount(pageIndex) {
+    const body = pageIndex === 0 ? el.homeFeedBody : el.homeFeedAllBody;
+    if (!body) return 0;
+    return body.querySelectorAll("tr.home-feed-row").length;
+  }
+
+  function syncHomeFeedCountLabel(activeIndex) {
+    if (!el.homeFeedCountLabel || !HOME || HOME.gw == null) return;
+    const idx =
+      activeIndex != null && Number.isFinite(activeIndex) ? activeIndex : homeFeedActivePageIndex();
+    const n = homeFeedPageEventCount(idx);
+    el.homeFeedCountLabel.textContent = `${n} · GW${HOME.gw}`;
+  }
+
+  function syncHomeFeedPagerDots(activeIndex) {
+    if (!el.homeFeedDots) return;
+    el.homeFeedDots.querySelectorAll(".home-feed-dot").forEach((dot, i) => {
+      const on = i === activeIndex;
+      dot.classList.toggle("is-active", on);
+      dot.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (el.homeFeedViewLabel) {
+      el.homeFeedViewLabel.textContent =
+        HOME_FEED_VIEW_LABELS[activeIndex] || HOME_FEED_VIEW_LABELS[0];
+    }
+    syncHomeFeedCountLabel(activeIndex);
+  }
+
+  function setHomeFeedPage(index, { smooth = true } = {}) {
+    if (!el.homeFeedTrack) return;
+    const pages = [...el.homeFeedTrack.querySelectorAll(".home-feed-page")];
+    if (!pages[index]) return;
+    el.homeFeedTrack.scrollTo({
+      left: homeFeedPageScrollLeft(index),
+      behavior: smooth ? "smooth" : "auto",
+    });
+    syncHomeFeedPagerDots(index);
+  }
+
+  function bindHomeFeedPager() {
+    if (homeFeedPagerReady) return;
+    if (!el.homeFeedTrack || !el.homeFeedDots) return;
+    homeFeedPagerReady = true;
+    const dots = [...el.homeFeedDots.querySelectorAll(".home-feed-dot")];
+    dots.forEach((dot, i) => {
+      dot.addEventListener("click", () => {
+        setHomeFeedPage(i);
+      });
+    });
+    let scrollSettleTimer = null;
+    const onScrollSettled = () => {
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = null;
+      const idx = homeFeedActivePageIndex();
+      snapHomeFeedPage(idx);
+      syncHomeFeedPagerDots(idx);
+    };
+    const onScrollTick = () => {
+      syncHomeFeedPagerDots(homeFeedActivePageIndex());
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = setTimeout(onScrollSettled, 140);
+    };
+    el.homeFeedTrack.addEventListener("scroll", onScrollTick, { passive: true });
+    el.homeFeedTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    window.addEventListener("resize", () => {
+      if (state.page !== "home") return;
+      const idx = homeFeedActivePageIndex();
+      snapHomeFeedPage(idx);
+      syncHomeFeedPagerDots(idx);
+    });
+    requestAnimationFrame(() => syncHomeFeedPagerDots(0));
   }
 
   const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;
@@ -4343,16 +4474,24 @@
     });
   }
 
-  function syncHomeSquadLayout(activeIndex, opts) {
+  function syncHomeSquadLayout(activeIndex, opts = {}) {
+    const { animate = true, allowShrink = true } = opts;
+    const wide = homeSquadIsWideLayout();
     syncHomeSquadRowHeights();
-    if (homeSquadIsWideLayout()) {
-      requestAnimationFrame(() => syncHomeSquadRowHeights());
+    if (wide) {
+      if (el.homeSquadTrack) void el.homeSquadTrack.offsetHeight;
+      syncHomeSquadRowHeights();
     }
-    syncHomeSquadTrackHeight(activeIndex, opts);
-    requestAnimationFrame(() => {
+    syncHomeSquadTrackHeight(activeIndex, { animate, allowShrink });
+    if (wide && !animate) {
       syncHomeTablesGridHeight();
-      if (homeSquadIsWideLayout()) syncHomeSquadRowHeights();
-    });
+      syncHomeSquadRowHeights();
+    } else {
+      requestAnimationFrame(() => {
+        syncHomeTablesGridHeight();
+        if (wide) syncHomeSquadRowHeights();
+      });
+    }
   }
 
   function setHomeSquadPage(index, { smooth = true } = {}) {
@@ -4418,6 +4557,7 @@
         const idx = homeSquadActivePageIndex();
         renderHome({ deferDuringEnter: true });
         if (wide && idx === 1) setHomeSquadPage(0, { smooth: false });
+        else if (state.page === "home") settleHomeTablesLayout();
         else syncHomeSquadLayout(idx, { animate: false });
         return;
       }
@@ -4431,10 +4571,14 @@
         renderHome({ deferDuringEnter: true });
         return;
       }
-      syncHomeSquadLayout();
+      if (state.page === "home") settleHomeTablesLayout();
+      else syncHomeSquadLayout();
     });
     homeSquadWideLayoutActive = syncHomeSquadWideLayout();
-    requestAnimationFrame(() => syncHomeSquadLayout(0));
+    requestAnimationFrame(() => {
+      if (state.page === "home") settleHomeTablesLayout();
+      else syncHomeSquadLayout(0);
+    });
   }
 
   function animateHomeScrollTo(node, { top = 0, left = 0, duration = HOME_SCROLL_TOP_MS } = {}) {
@@ -4480,22 +4624,114 @@
     });
   }
 
+  function homeCrossHoverEnabled() {
+    return (
+      state.page === "home"
+      && homeSquadIsWideLayout()
+      && homeSquadIsDesktopLayout()
+      && typeof window.matchMedia === "function"
+      && window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    );
+  }
+
+  function clearHomeCrossHover() {
+    if (homeCrossHoverElement == null) return;
+    homeCrossHoverElement = null;
+    document.querySelectorAll("#home-page .is-home-cross-hover").forEach((node) => {
+      node.classList.remove("is-home-cross-hover");
+    });
+  }
+
+  function setHomeCrossHover(elementId) {
+    if (!homeCrossHoverEnabled()) {
+      clearHomeCrossHover();
+      return;
+    }
+    const eid = Number(elementId);
+    if (!Number.isFinite(eid)) {
+      clearHomeCrossHover();
+      return;
+    }
+    if (homeCrossHoverElement === eid) return;
+    clearHomeCrossHover();
+    homeCrossHoverElement = eid;
+
+    forEachHomeSquadRow((tr) => {
+      if (Number(tr.dataset.element) === eid) tr.classList.add("is-home-cross-hover");
+    });
+
+    const owners = homeOwnersForElement(eid);
+    forEachHomeStandingsRow((tr) => {
+      const entry = Number(tr.dataset.entry);
+      if (owners.has(entry)) tr.classList.add("is-home-cross-hover");
+    });
+
+    if (el.homeFeedPanel) {
+      el.homeFeedPanel.querySelectorAll("tr.home-feed-row").forEach((tr) => {
+        if (Number(tr.dataset.element) === eid) tr.classList.add("is-home-cross-hover");
+      });
+    }
+  }
+
+  function bindHomeCrossHover() {
+    if (!el.homeSquadTrack || !el.homeTablesGrid) return;
+
+    const hoverRowSelector = "tr.home-squad-row, tr.home-feed-row";
+
+    function bindHomeCrossHoverSource(container) {
+      if (!container) return;
+      container.addEventListener("mouseover", (e) => {
+        if (!homeCrossHoverEnabled()) return;
+        const tr = e.target.closest(hoverRowSelector);
+        if (!tr || !container.contains(tr)) return;
+        setHomeCrossHover(tr.dataset.element);
+      });
+      container.addEventListener("mouseout", (e) => {
+        if (!homeCrossHoverEnabled()) return;
+        const tr = e.target.closest(hoverRowSelector);
+        if (!tr || !container.contains(tr)) return;
+        const related = e.relatedTarget;
+        const toRow = related && related.closest && related.closest(hoverRowSelector);
+        if (toRow && el.homeTablesGrid.contains(toRow)) {
+          setHomeCrossHover(toRow.dataset.element);
+          return;
+        }
+        clearHomeCrossHover();
+      });
+    }
+
+    bindHomeCrossHoverSource(el.homeSquadTrack);
+    bindHomeCrossHoverSource(el.homeFeedTrack);
+
+    el.homeTablesGrid.addEventListener("mouseleave", () => {
+      clearHomeCrossHover();
+    });
+  }
+
   function bindHomeScrollHoverGuard() {
     if (!el.homePage) return;
     const main = document.querySelector("main.main");
     let clearTimer = 0;
     const arm = () => {
       if (state.page !== "home") return;
+      clearHomeCrossHover();
       el.homePage.classList.add("is-scroll-interaction");
       clearTimeout(clearTimer);
       clearTimer = window.setTimeout(() => {
         el.homePage.classList.remove("is-scroll-interaction");
       }, 160);
     };
-    [main, el.homeSquadTrack, el.homeStandingsTrack].filter(Boolean).forEach((node) => {
-      node.addEventListener("scroll", arm, { passive: true });
-      node.addEventListener("touchmove", arm, { passive: true });
-    });
+    const scrollNodes = [
+      main,
+      el.homeSquadTrack,
+      el.homeStandingsTrack,
+      el.homeFeedTrack,
+      ...(el.homeFeedPanel ? [...el.homeFeedPanel.querySelectorAll(".home-feed-scroll")] : []),
+    ].filter(Boolean);
+    scrollNodes.forEach((node) => {
+        node.addEventListener("scroll", arm, { passive: true });
+        node.addEventListener("touchmove", arm, { passive: true });
+      });
   }
 
   function bindHomeOwnerHighlighting() {
@@ -4504,7 +4740,9 @@
     homeOwnerBindingsReady = true;
     bindHomeStandingsPager();
     bindHomeSquadPager();
+    bindHomeFeedPager();
     bindHomeScrollHoverGuard();
+    bindHomeCrossHover();
     bindHomeTransfersTableScrollControls();
 
     function bindHomeRowTap(container, rowSelector, onRow) {
@@ -4633,6 +4871,21 @@
           ${teamBadge}
           <div class="home-player-text">
             <div class="home-player-name"><span class="home-player-name-text">${escapeHtml(row.name || "—")}</span>${tags.join("")}${pin}</div>
+          </div>
+        </div>
+      </td>`;
+  }
+
+  function homeFeedPlayerCellHTML(player, pos) {
+    const team = player && player.team;
+    const teamBadge = badgeHTML(team, "home-crest") ||
+      teamCrestFallbackHTML(team, "home-crest-fallback");
+    const name = (player && player.name) || "—";
+    return `<td class="home-col-player">
+        <div class="home-player-cell">
+          ${teamBadge}
+          <div class="home-player-text">
+            <div class="home-player-name"><span class="home-player-name-text">${escapeHtml(name)}</span></div>
           </div>
         </div>
       </td>`;
@@ -5715,7 +5968,7 @@
   }
 
   function prepareHomeStatRolls() {
-    // Summary cards are rebuilt so rolls always start at 0; squad/standings
+    // Summary cards are rebuilt so rolls always start at 0; squad / league / feed
     // rolls are already mounted as empty .home-stat-roll nodes from renderHome.
     const summary = homeSummaryForView(homeActiveViewEntryId());
     const specs = [
@@ -5806,10 +6059,6 @@
     const summary = homeSummaryForView(homeActiveViewEntryId());
     stageHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     scheduleHomeSummaryRankBorderReveal(rollMs, token);
-    // League standings use settled counts — only summary + squad roll on enter.
-    if (el.homeStandingsPanel) {
-      finishHomeStatRolls(el.homeStandingsPanel);
-    }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (token !== homeEnterMotionToken) return;
@@ -5822,13 +6071,7 @@
           ...pane.querySelectorAll(
             ".home-stat-roll[data-count-to], .home-squad-pts-table .live-stat-roll[data-count-to]"
           ),
-        ].filter(
-          (node) =>
-            !(
-              el.homeStandingsPanel &&
-              el.homeStandingsPanel.contains(node)
-            )
-        );
+        ];
         if (prefersReducedMotion()) {
           rollNodes.forEach(finishStatRollNode);
         } else {
@@ -5866,7 +6109,9 @@
       return;
     }
     homeRenderQueued = false;
+    clearHomeCrossHover();
     if (!el.homePage) return;
+    document.documentElement.classList.remove("home-squad-layout-ready");
     syncHomeSquadWideLayout();
     // settleQuiet: post-enter / live rebuild — never restart enter motion.
     const noManager = !savedManagerId;
@@ -6044,7 +6289,9 @@
         for (const entry of ptsEntries) {
           if (entry.row.onBench && !benchLabeled) {
             parts.push(
-              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${ptsColCount}">Bench</th></tr>`
+              wideSquad
+                ? `<tr class="home-bench-divider home-bench-divider-spacer" aria-hidden="true"><th scope="rowgroup" colspan="${ptsColCount}"></th></tr>`
+                : `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${ptsColCount}">Bench</th></tr>`
             );
             benchLabeled = true;
           }
@@ -6063,7 +6310,6 @@
       syncHomeSquadPtsMount();
     }
     if (el.homeStandingsBody) {
-      bindHomeStandingsSort();
       renderHomeStandingsLiveBody();
     }
     if (el.homeStandingsTransfersBody) {
@@ -6115,8 +6361,8 @@
     syncHomeSquadPagerDots(homeSquadActivePageIndex());
     const standingsPageIdx = homeStandingsActivePageIndex();
     syncHomeStandingsPagerDots(standingsPageIdx);
-    syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: true });
-    syncHomeSquadLayout(undefined, { animate: false });
+    if (HOME.gw != null) renderHomeFeed(Number(HOME.gw));
+    settleHomeTablesLayout({ standingsPageIdx });
     // During page enter, leave odometers empty for startHomeEnterMotion.
     // Quiet/live rebuilds settle in the same turn so iOS never paints empty
     // rolls then a second count-up.
@@ -6132,8 +6378,7 @@
           skipStandings: true,
         });
       }
-      syncHomeSquadLayout(undefined, { animate: false });
-      syncHomeStandingsLayout(standingsPageIdx, { animate: false, allowShrink: true });
+      settleHomeTablesLayout({ standingsPageIdx });
     });
   }
 
@@ -7116,7 +7361,7 @@
       if (state.page === "home") {
         syncHomeSquadWideLayout();
         if (homeSquadIsWideLayout()) {
-          requestAnimationFrame(() => syncHomeSquadLayout(undefined, { animate: false }));
+          settleHomeTablesLayout();
         }
       }
     };
@@ -15718,7 +15963,10 @@
     const n = Number(newVal) || 0;
     const d = n - o;
     if (d <= 0) return;
-    fn(d, n);
+    // One feed row per stat unit — never batch "2 goals +8" from a single diff.
+    for (let i = 0; i < d; i += 1) {
+      fn(1, o + i + 1);
+    }
   }
 
   function liveFeedDiffMinutes(oldM, newM, push) {
@@ -15738,16 +15986,16 @@
 
   function liveFeedPushStatDiffs(oldRec, newRec, pos, push, { skipMinutes = false } = {}) {
     if (!skipMinutes) liveFeedDiffMinutes(oldRec.minutes, newRec.minutes, push);
-    liveFeedDiffCounter(oldRec.goals, newRec.goals, (d, v) =>
-      push("goal", v === 1 ? "Goal" : `${d} goals`, liveFeedGoalPts(pos) * d, "goals")
+    liveFeedDiffCounter(oldRec.goals, newRec.goals, () =>
+      push("goal", "Goal", liveFeedGoalPts(pos), "goals")
     );
-    liveFeedDiffCounter(oldRec.assists, newRec.assists, (d, v) =>
-      push("assist", v === 1 ? "Assist" : `${d} assists`, 3 * d, "assists")
+    liveFeedDiffCounter(oldRec.assists, newRec.assists, () =>
+      push("assist", "Assist", 3, "assists")
     );
-    liveFeedDiffCounter(oldRec.cleanSheets, newRec.cleanSheets, (d, v) => {
+    liveFeedDiffCounter(oldRec.cleanSheets, newRec.cleanSheets, () => {
       const p = liveFeedCleanSheetPts(pos);
       if (!p) return;
-      push("cleanSheet", v === 1 ? "Clean sheet" : `${d} clean sheets`, p * d, "cleanSheets");
+      push("cleanSheet", "Clean sheet", p, "cleanSheets");
     });
     const oldSavePts = Math.floor((Number(oldRec.saves) || 0) / 3);
     const newSavePts = Math.floor((Number(newRec.saves) || 0) / 3);
@@ -15755,20 +16003,20 @@
       push("saves", "Save points", newSavePts - oldSavePts, "saves");
     }
     // Bonus — liveFeedPushBonusProjDiffs (BPS rank + FPL bonus field).
-    liveFeedDiffCounter(oldRec.yellowCards, newRec.yellowCards, (d) =>
-      push("yellowCard", d === 1 ? "Yellow card" : `${d} yellow cards`, -d, "yellowCards")
+    liveFeedDiffCounter(oldRec.yellowCards, newRec.yellowCards, () =>
+      push("yellowCard", "Yellow card", -1, "yellowCards")
     );
-    liveFeedDiffCounter(oldRec.redCards, newRec.redCards, (d) =>
-      push("redCard", d === 1 ? "Red card" : `${d} red cards`, -3 * d, "redCards")
+    liveFeedDiffCounter(oldRec.redCards, newRec.redCards, () =>
+      push("redCard", "Red card", -3, "redCards")
     );
-    liveFeedDiffCounter(oldRec.ownGoals, newRec.ownGoals, (d) =>
-      push("ownGoal", d === 1 ? "Own goal" : `${d} own goals`, -2 * d, "ownGoals")
+    liveFeedDiffCounter(oldRec.ownGoals, newRec.ownGoals, () =>
+      push("ownGoal", "Own goal", -2, "ownGoals")
     );
-    liveFeedDiffCounter(oldRec.penaltiesMissed, newRec.penaltiesMissed, (d) =>
-      push("penMissed", d === 1 ? "Penalty missed" : `${d} pens missed`, -2 * d, "penaltiesMissed")
+    liveFeedDiffCounter(oldRec.penaltiesMissed, newRec.penaltiesMissed, () =>
+      push("penMissed", "Penalty missed", -2, "penaltiesMissed")
     );
-    liveFeedDiffCounter(oldRec.penaltiesSaved, newRec.penaltiesSaved, (d) =>
-      push("penSaved", d === 1 ? "Penalty saved" : `${d} pens saved`, 5 * d, "penaltiesSaved")
+    liveFeedDiffCounter(oldRec.penaltiesSaved, newRec.penaltiesSaved, () =>
+      push("penSaved", "Penalty saved", 5, "penaltiesSaved")
     );
     if (!oldRec.defConHit && newRec.defConHit) {
       push("defCon", "DefCon", 2, "defConHit");
@@ -15777,7 +16025,7 @@
 
   function liveFeedSeedEvents(rec, ctx) {
     const events = [];
-    let t = Date.now() - 3600000;
+    let t = Date.now() - 3_600_000;
     let runPts = 0;
     const push = (kind, label, ptsDelta, colKey) => {
       if (!ptsDelta) return;
@@ -15884,7 +16132,6 @@
       runPtsByEid,
       { seeding, matchupBonusEligible }
     );
-
     if (seeding) {
       const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
       liveFeedApplyBonusEff(nextSnap, bonusMeta);
@@ -15900,7 +16147,6 @@
         const player = byElement.get(eid);
         if (!player) continue;
         const team = player.team || currentTeamCode(player);
-        const meta = bonusMeta.get(eidStr) || { rank: 0, apiBonus: 0 };
         seedTs += 1;
         newEvents.push(
           liveFeedMakeEvent({
@@ -15912,7 +16158,7 @@
             matchupId: matchupByTeam.get(team) || null,
             live: liveEgIsInPlay(eg),
             kind: "bonus",
-            label: liveFeedBonusProjLabel(0, eff, meta.rank, meta.apiBonus),
+            label: liveFeedBonusProjLabel(0, eff, (bonusMeta.get(eidStr) || {}).rank, (bonusMeta.get(eidStr) || {}).apiBonus),
             ptsDelta: eff,
             colKey: "bonus",
             totalPts: Number(rec.pts) || eff,
@@ -15934,11 +16180,12 @@
     return Array.isArray(owners) && owners.length > 0;
   }
 
-  function liveFeedFilterEvents(events) {
+  function liveFeedFilterEvents(events, { homeEmbed = false, homeLeagueOnly = false } = {}) {
     let out = events;
-    if (state.liveFeedOwnedFilter === "league") {
+    if (homeLeagueOnly || (!homeEmbed && state.liveFeedOwnedFilter === "league")) {
       out = out.filter((e) => liveFeedIsLeagueOwned(e.eid));
     }
+    if (homeEmbed) return out;
     if (state.liveMatchups.size) {
       out = out.filter((e) => e.matchupId && state.liveMatchups.has(e.matchupId));
     }
@@ -15981,17 +16228,38 @@
     });
   }
 
-  function liveFeedPtsDeltaHTML(ptsDelta, colKey) {
+  function liveFeedPtsDeltaHTML(ptsDelta, colKey, { homeEmbed = false } = {}) {
     const n = Number(ptsDelta);
     if (!Number.isFinite(n) || n === 0) return "";
+    if (homeEmbed) {
+      const roll = statRollSpan(n, {
+        from: 0,
+        decimals: 0,
+        signed: true,
+        className: "home-stat-roll home-feed-pts-roll",
+        rollKind: "pts",
+      });
+      return livePointsPillHTML(colKey || (n > 0 ? "pts" : "yellowCards"), roll);
+    }
     const sign = n > 0 ? "+" : "−";
     const text = `${sign}${Math.abs(n)}`;
     return livePointsPillHTML(colKey || (n > 0 ? "pts" : "yellowCards"), text);
   }
 
-  function liveFeedImpactHTML(ev) {
+  function liveFeedImpactHTML(ev, { homeEmbed = false } = {}) {
     const net = Number(ev.impactNet) || 0;
     if (!Number.isFinite(ev.impactNet)) return "";
+    if (homeEmbed) {
+      const netAbs = Math.abs(net);
+      const decimals = Number.isInteger(netAbs) ? 0 : 1;
+      const roll = statRollSpan(net, {
+        from: 0,
+        decimals,
+        signed: true,
+        className: "home-stat-roll home-feed-impact-roll",
+      });
+      return `<span class="live-feed-impact-val">${roll}</span><span class="live-feed-impact-suffix"> vs avg</span>`;
+    }
     const netAbs = Math.abs(net);
     const netSign = net >= 0 ? "+" : "−";
     const val = `${netSign}${netAbs.toFixed(1).replace(/\.0$/, "")}`;
@@ -16023,13 +16291,30 @@
     return livePointsPillHTML("pts", String(total), { tone: liveFeedTotalPtsTone(total) });
   }
 
-  function liveFeedRowHTML(ev, enterI) {
-    const ptsHTML = liveFeedPtsDeltaHTML(ev.ptsDelta, ev.colKey);
+  function liveFeedRowHTML(ev, enterI, { compact = false, homeEmbed = false } = {}) {
+    const ptsHTML = liveFeedPtsDeltaHTML(ev.ptsDelta, ev.colKey, { homeEmbed: compact && homeEmbed });
     const totalHTML = liveFeedTotalPtsHTML(ev);
     const net = Number(ev.impactNet) || 0;
     const impactCls = net > 0.05 ? "is-pos" : net < -0.05 ? "is-neg" : "is-neutral";
-    const impactHTML = liveFeedImpactHTML(ev);
-    return `<tr class="live-feed-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(ev.player.code || ""))}">
+    const impactHTML = liveFeedImpactHTML(ev, { homeEmbed: compact && homeEmbed });
+    const rowCls = compact ? "live-feed-row home-feed-row" : "live-feed-row";
+    if (compact && homeEmbed) {
+      return `<tr class="${rowCls}" style="--enter-i:${enterI}" data-element="${escapeHtml(String(ev.eid ?? ""))}" data-player-code="${escapeHtml(String(ev.player.code || ""))}">
+      ${homeFeedPlayerCellHTML(ev.player, ev.pos)}
+      <td class="home-col-feed-event"><span class="home-feed-event-label">${escapeHtml(ev.label)}</span></td>
+      <td class="home-col-feed-impact col-num ${impactCls}">${impactHTML}</td>
+      <td class="home-col-feed-pts col-num">${ptsHTML}</td>
+    </tr>`;
+    }
+    if (compact) {
+      return `<tr class="${rowCls}" style="--enter-i:${enterI}" data-element="${escapeHtml(String(ev.eid ?? ""))}" data-player-code="${escapeHtml(String(ev.player.code || ""))}">
+      <td class="col-player">${livePointsIdentityHTML(ev.player, ev.pos)}</td>
+      <td class="col-feed-event"><span class="live-feed-event-label">${escapeHtml(ev.label)}</span></td>
+      <td class="col-feed-impact ${impactCls}">${impactHTML}</td>
+      <td class="col-feed-pts col-num">${ptsHTML}</td>
+    </tr>`;
+    }
+    return `<tr class="${rowCls}" style="--enter-i:${enterI}" data-element="${escapeHtml(String(ev.eid ?? ""))}" data-player-code="${escapeHtml(String(ev.player.code || ""))}">
       <td class="col-player">${livePointsIdentityHTML(ev.player, ev.pos)}</td>
       <td class="col-feed-event"><span class="live-feed-event-label">${escapeHtml(ev.label)}</span></td>
       <td class="col-feed-impact ${impactCls}">${impactHTML}</td>
@@ -16038,27 +16323,83 @@
     </tr>`;
   }
 
-  function renderLiveFeed(gw) {
+  function renderLiveFeedTable(
+    gw,
+    { headEl, bodyEl, countEl, compact = false, homeEmbed = false, homeLeagueOnly = false } = {}
+  ) {
+    if (!headEl || !bodyEl || !Number.isFinite(gw)) return 0;
     liveFeedIngest(gw, liveElementMapForGw(gw));
     let events = liveFeedEvents.filter((e) => e.gw === gw);
-    events = liveFeedSortEvents(liveFeedFilterEvents(events));
-    if (!el.liveFeedBody || !el.liveFeedHead) return;
-    el.liveFeedHead.innerHTML = `<tr>
-      <th class="col-player">Player</th>
-      <th class="col-feed-event">Event</th>
-      <th class="col-feed-impact col-num">Impact</th>
-      <th class="col-feed-pts col-num">Pts</th>
-      <th class="col-feed-total col-num">Total</th>
-    </tr>`;
-    const colCount = 5;
-    if (!events.length) {
-      el.liveFeedBody.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">No events for the current filters.</td></tr>`;
+    events = liveFeedSortEvents(liveFeedFilterEvents(events, { homeEmbed, homeLeagueOnly }));
+    if (compact) {
+      headEl.innerHTML = homeEmbed
+        ? `<tr>
+        <th scope="col" class="home-col-player">Player</th>
+        <th scope="col" class="home-col-feed-event">Event</th>
+        <th scope="col" class="home-col-feed-impact col-num">Imp</th>
+        <th scope="col" class="home-col-feed-pts col-num">Pts</th>
+      </tr>`
+        : `<tr>
+        <th class="col-player">Player</th>
+        <th class="col-feed-event">Event</th>
+        <th class="col-feed-impact col-num">Imp</th>
+        <th class="col-feed-pts col-num">Pts</th>
+      </tr>`;
     } else {
-      el.liveFeedBody.innerHTML = events.map((ev, i) => liveFeedRowHTML(ev, i)).join("");
+      headEl.innerHTML = `<tr>
+        <th class="col-player">Player</th>
+        <th class="col-feed-event">Event</th>
+        <th class="col-feed-impact col-num">Impact</th>
+        <th class="col-feed-pts col-num">Pts</th>
+        <th class="col-feed-total col-num">Total</th>
+      </tr>`;
     }
-    if (el.liveCountLabel) {
-      el.liveCountLabel.textContent = `${events.length} event${events.length === 1 ? "" : "s"} · GW${gw}`;
+    const colCount = compact ? 4 : 5;
+    const emptyMsg = homeEmbed
+      ? homeLeagueOnly
+        ? "No league-owned events this GW."
+        : "No events this GW."
+      : "No events for the current filters.";
+    if (!events.length) {
+      bodyEl.innerHTML = `<tr class="live-empty-row"><td colspan="${colCount}">${emptyMsg}</td></tr>`;
+    } else {
+      bodyEl.innerHTML = events.map((ev, i) => liveFeedRowHTML(ev, i, { compact, homeEmbed })).join("");
     }
+    if (countEl) {
+      countEl.textContent = homeEmbed
+        ? `${events.length} · GW${gw}`
+        : `${events.length} event${events.length === 1 ? "" : "s"} · GW${gw}`;
+    }
+    return events.length;
+  }
+
+  function renderHomeFeed(gw) {
+    if (!homeSquadIsWideLayout() || !el.homeFeedBody || !el.homeFeedHead) return;
+    renderLiveFeedTable(gw, {
+      headEl: el.homeFeedHead,
+      bodyEl: el.homeFeedBody,
+      compact: true,
+      homeEmbed: true,
+      homeLeagueOnly: true,
+    });
+    if (el.homeFeedAllHead && el.homeFeedAllBody) {
+      renderLiveFeedTable(gw, {
+        headEl: el.homeFeedAllHead,
+        bodyEl: el.homeFeedAllBody,
+        compact: true,
+        homeEmbed: true,
+        homeLeagueOnly: false,
+      });
+    }
+    syncHomeFeedCountLabel(homeFeedActivePageIndex());
+  }
+
+  function renderLiveFeed(gw) {
+    renderLiveFeedTable(gw, {
+      headEl: el.liveFeedHead,
+      bodyEl: el.liveFeedBody,
+      countEl: el.liveCountLabel,
+    });
   }
 
   function liveFilteredRows(rows) {
@@ -18386,7 +18727,7 @@
       pane.querySelectorAll(".home-tables-grid > .home-panel").forEach((node) => {
         node.style.setProperty("--enter-i", tablesI);
       });
-      pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody").forEach((tbody) => {
+      pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody, .home-feed-table tbody").forEach((tbody) => {
         tbody.querySelectorAll(":scope > tr").forEach((row, i) => {
           row.style.setProperty("--enter-i", String(i));
           row.querySelectorAll(".home-imp-fill").forEach((track) => {
@@ -20853,7 +21194,6 @@
     const idx = homeSquadActivePageIndex();
     renderHome({ deferDuringEnter: true });
     if (wide && idx === 1) setHomeSquadPage(0, { smooth: false });
-    else requestAnimationFrame(() => syncHomeSquadLayout(idx, { animate: false }));
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, () => {
     scheduleViewportLayoutSync({ immediate: true });

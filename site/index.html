@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=875" />
+<link rel="stylesheet" href="styles.css?v=890" />
 <script>
 (() => {
   try {
@@ -861,12 +861,12 @@
                   <table class="home-data-table home-standings-table home-standings-live-table">
                     <thead>
                       <tr>
-                        <th scope="col" class="home-col-rank is-sortable" data-home-sort="rank" aria-sort="none">#</th>
+                        <th scope="col" class="home-col-rank">#</th>
                         <th scope="col" class="home-col-manager">Manager</th>
-                        <th scope="col" class="home-col-live is-sortable" data-home-sort="live" title="Active picks in play (Bench Boost can exceed 11)" aria-sort="none">Live</th>
-                        <th scope="col" class="home-col-left is-sortable" data-home-sort="left" title="Still to play this gameweek" aria-sort="none">Left</th>
-                        <th scope="col" class="home-col-gw is-sortable" data-home-sort="gw" aria-sort="none">GW</th>
-                        <th scope="col" class="home-col-total is-sortable" data-home-sort="total" aria-sort="descending">Total</th>
+                        <th scope="col" class="home-col-live" title="Active picks in play (Bench Boost can exceed 11)">Live</th>
+                        <th scope="col" class="home-col-left" title="Still to play this gameweek">Left</th>
+                        <th scope="col" class="home-col-gw">GW</th>
+                        <th scope="col" class="home-col-total">Total</th>
                       </tr>
                     </thead>
                     <tbody id="home-standings-body"></tbody>
@@ -936,6 +936,40 @@
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Transfers" data-page="1"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Captaincy" data-page="2"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Chips" data-page="3"></button>
+            </div>
+          </div>
+        </article>
+
+        <article class="home-panel home-table-panel" id="home-feed-panel">
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker">Feed</span>
+              <span class="home-panel-heading-view" id="home-feed-view-label">League</span>
+            </span>
+            <span class="home-panel-heading-meta" id="home-feed-count-label"></span>
+          </h3>
+          <div class="home-feed-pager">
+            <div class="home-feed-track" id="home-feed-track">
+              <div class="home-feed-page">
+                <div class="home-feed-scroll home-table-wrap">
+                  <table class="home-data-table home-feed-table live-feed-table">
+                    <thead id="home-feed-head"></thead>
+                    <tbody id="home-feed-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="home-feed-page">
+                <div class="home-feed-scroll home-table-wrap">
+                  <table class="home-data-table home-feed-table live-feed-table">
+                    <thead id="home-feed-all-head"></thead>
+                    <tbody id="home-feed-all-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="home-feed-dots" id="home-feed-dots" role="tablist" aria-label="Feed views">
+              <button type="button" class="home-feed-dot is-active" role="tab" aria-selected="true" aria-label="League" data-page="0"></button>
+              <button type="button" class="home-feed-dot" role="tab" aria-selected="false" aria-label="All players" data-page="1"></button>
             </div>
           </div>
         </article>
@@ -1391,7 +1425,7 @@
 <script src="home_data.js?v=28"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=874"></script>
+<script src="app.js?v=890"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
