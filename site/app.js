@@ -2345,7 +2345,10 @@
       ? payload.elementGw
       : {};
     if (!skipFeedIngest && payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
-      liveFeedIngest(Number(payload.gw), liveElementMapForGw(Number(payload.gw)));
+      const onFeedPage = state.page === "live" || state.page === "home";
+      if (onFeedPage) {
+        liveFeedIngest(Number(payload.gw), liveElementMapForGw(Number(payload.gw)));
+      }
     }
     HOME.leaguePicksStatus = payload.leaguePicksStatus && typeof payload.leaguePicksStatus === "object"
       ? payload.leaguePicksStatus
@@ -2652,6 +2655,15 @@
     return `<tr><td colspan="${colspan}">No team picks in cache.</td></tr>`;
   }
 
+  function ensureLiveFeedFromHome() {
+    const gw = HOME && HOME.gw;
+    if (!Number.isFinite(Number(gw)) || !HOME.elementGw) return;
+    const egMap = liveElementMapForGw(Number(gw));
+    if (!egMap || !Object.keys(egMap).length) return;
+    if (liveFeedGw === Number(gw) && liveFeedEvents.length) return;
+    liveFeedIngest(Number(gw), egMap);
+  }
+
   function pollHomeFromLiveServer() {
     if (homeLivePollFlight) return homeLivePollFlight;
     homeLivePollFlight = pollHomeFromLiveServerOnce().finally(() => {
@@ -2663,6 +2675,7 @@
   async function pollHomeFromLiveServerOnce() {
     const url = homeLiveApiUrl();
     if (!url || !homeLivePollReady()) return;
+    if (document.hidden) return;
     homeLivePollInFlight = true;
     homeLiveLastPollAt = Date.now();
     const squadWasEmpty = !(Array.isArray(HOME.squad) && HOME.squad.length);
@@ -2690,28 +2703,36 @@
       }
       homeLiveLastPollOk = true;
       homeLiveLastSuccessAt = Date.now();
-      const sameStamp =
-        HOME.generatedAt &&
-        data.home.generatedAt &&
-        String(HOME.generatedAt) === String(data.home.generatedAt) &&
-        String(HOME.managerId || "") === String(data.home.managerId || "") &&
-        String(HOME.leagueId || "") === String(data.home.leagueId || "");
-      const sameElementGw =
-        sameStamp &&
-        homeElementGwFingerprint(HOME) === homeElementGwFingerprint(data.home);
       const priorStandingsFp = homeStandingsFingerprint(HOME.standings);
       const priorSummaryFp = homeSummaryFingerprint(HOME.summary);
+      const priorEgFp = homeElementGwFingerprint(HOME);
+      const incomingStandingsFp = homeStandingsFingerprint(data.home.standings);
+      const incomingSummaryFp = homeSummaryFingerprint(data.home.summary);
+      const incomingEgFp = homeElementGwFingerprint(data.home);
+      if (
+        priorStandingsFp === incomingStandingsFp
+        && priorSummaryFp === incomingSummaryFp
+        && priorEgFp === incomingEgFp
+        && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
+      ) {
+        homeLiveStandingsSynced = true;
+        syncLiveNavChrome();
+        if (state.page === "home") syncHomeCountLabel();
+        return;
+      }
+      const sameElementGw =
+        priorEgFp === incomingEgFp
+        && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
+        && String(HOME.managerId || "") === String(data.home.managerId || "")
+        && String(HOME.leagueId || "") === String(data.home.leagueId || "");
       const firstStandingsSync = !homeLiveStandingsSynced;
       applyHomePayload(data.home, { skipFeedIngest: sameElementGw });
       const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
-      if (sameElementGw && !standingsChanged && !summaryChanged) {
+      const elementGwChanged = priorEgFp !== incomingEgFp;
+      if (!standingsChanged && !summaryChanged && !elementGwChanged) {
         syncLiveNavChrome();
         if (state.page === "home") syncHomeCountLabel();
-        else if (state.page === "live") {
-          renderLive({ quiet: true });
-          livePollRefreshMotion();
-        }
         return;
       }
       if (state.page === "home") {
@@ -2748,8 +2769,11 @@
       return;
     }
     if (!homeLivePollTimer) {
-      if (!skipImmediate) pollHomeFromLiveServer();
-      homeLivePollTimer = setInterval(pollHomeFromLiveServer, 60_000);
+      if (!skipImmediate && !document.hidden) pollHomeFromLiveServer();
+      homeLivePollTimer = setInterval(() => {
+        if (document.hidden) return;
+        pollHomeFromLiveServer();
+      }, 60_000);
     }
     syncLiveNavChrome();
   }
@@ -19446,11 +19470,13 @@
       const holdEnter = homeLivePollReady() && !homeLiveStandingsSynced;
       if (!holdEnter && el.homePage) el.homePage.classList.add("is-enter-pending");
       primeOptaHighlightEnter(el.homePage);
+      ensureLiveFeedFromHome();
       renderHome({ settleQuiet: holdEnter });
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
       liveEnterAwaitingPlay = true;
       if (el.livePage) el.livePage.classList.add("is-live-entering");
+      ensureLiveFeedFromHome();
       renderLive();
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
@@ -21640,7 +21666,14 @@
       window.setTimeout(() => syncAllSegThumbs({ animate: false }), ms);
     });
     if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => syncAllSegThumbs({ animate: false }));
+      let segThumbRoRaf = 0;
+      const ro = new ResizeObserver(() => {
+        if (segThumbRoRaf) return;
+        segThumbRoRaf = requestAnimationFrame(() => {
+          segThumbRoRaf = 0;
+          syncAllSegThumbs({ animate: false });
+        });
+      });
       $$(".tabs, .segmented").forEach((elSeg) => ro.observe(elSeg));
       if (el.barbellHead) {
         const headRo = new ResizeObserver(() => syncBarbellHeadHeight());
@@ -21676,6 +21709,11 @@
     bindAllNameColumnSimplifies();
     bindNestedTableScroll();
     bindMobileChromeScrollHide();
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      if (!homeLivePollReady()) return;
+      pollHomeFromLiveServer();
+    });
     // Manager prefs first so the initial Home paint already has the linked ID;
     // defer Home UI so setPage can own the single synchronized enter.
     try {
