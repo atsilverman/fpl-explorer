@@ -10,21 +10,21 @@ Minute-by-minute FPL live updates for the Home dashboard (configured manager, le
 |-------|------|
 | [`site/fetch_home.py`](../site/fetch_home.py) | Pulls FPL live + fixtures + league picks, runs [`live_scoring.py`](../site/live_scoring.py) (auto-subs, chips, Defcon, minutes, live status) |
 | [`site/live_server.py`](../site/live_server.py) | Polls `fetch_home.py` on an interval and serves `GET /api/home` |
-| Static site (Vercel) | UI; polls `/api/home` (proxied to the droplet) every 60s |
+| Static site (Vercel) | UI; polls `/api/home` (proxied to the droplet) every 15s live / 60s idle |
 
-One DO droplet polls FPL every **60s while fixtures are live** (idle up to **1h**, waking ~2m before kickoff) and serves **all users** — far better than per-browser FPL calls or git deploy cycles.
+One DO droplet polls FPL every **15s while fixtures are live** (idle up to **1h**, waking ~2m before kickoff) and serves **all users** — far better than per-browser FPL calls or git deploy cycles.
 
 ## Architecture
 
 ```
-┌─────────────┐     60s live / ≤1h idle   ┌──────────────────┐
+┌─────────────┐     15s live / ≤1h idle  ┌──────────────────┐
 │  FPL API    │ ◄──────────────────────── │  DO Droplet      │
 │  live/picks │                           │  live_server.py  │
 └─────────────┘                           │  + fetch_home.py │
                                           └────────┬─────────┘
                                                    │ GET /api/home
 ┌─────────────┐     GET /api/home          ┌──────────────────┐
-│   Vercel    │ ◄── browser polls 60s ──── │  DO 159.203…     │
+│   Vercel    │ ◄── browser polls 15s ──── │  DO 159.203…     │
 │  (static)   │                            │  :8080           │
 └──────┬──────┘     serverless proxy ─────►└──────────────────┘
        │
@@ -160,7 +160,15 @@ sudo systemctl reload caddy
 
 [`site/api/home.js`](../../site/api/home.js) proxies to `http://159.203.184.115:8080`. Override with Vercel env `FPL_LIVE_ORIGIN` if the IP changes.
 
-Home polls same-origin `/api/home` every 60s on `*.vercel.app` — no `FPL_LIVE_API` in `index.html` needed.
+Home polls same-origin `/api/home` every 15s live (60s idle) on `*.vercel.app` — no `FPL_LIVE_API` in `index.html` needed.
+
+**After `git pull` on the droplet, always restart** so `live_server.py` and `LIVE_INTERVAL_LIVE` changes take effect:
+
+```bash
+sudo systemctl restart fpl-live && curl -sS http://127.0.0.1:8080/health
+```
+
+During live fixtures, `intervalSec` should be **15** (not 3600). Stale cache while a match is on usually means the service needs a restart.
 
 ## Endpoints
 

@@ -10,7 +10,7 @@ WorkingDirectory=/opt/fpl-explorer
 Environment=PYTHONUNBUFFERED=1
 Environment=LIVE_SERVER_HOST=0.0.0.0
 Environment=LIVE_SERVER_PORT=8080
-Environment=LIVE_INTERVAL_LIVE=60
+Environment=LIVE_INTERVAL_LIVE=15
 Environment=LIVE_INTERVAL_IDLE=3600
 # Optional overrides:
 # Environment=FPL_HOME_MANAGER_ID=296817

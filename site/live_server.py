@@ -11,7 +11,7 @@ Configure manager/league via site/home_prefs.json or env:
 
 Run:
   python3 site/live_server.py
-  python3 site/live_server.py --port 8080 --interval-live 60 --interval-idle 3600
+  python3 site/live_server.py --port 8080 --interval-live 15 --interval-idle 3600
 """
 from __future__ import annotations
 
@@ -63,6 +63,8 @@ class LiveState:
 
 
 STATE = LiveState()
+INTERVAL_LIVE_SEC = 15
+INTERVAL_IDLE_SEC = 3600
 
 
 def fpl_get(path: str) -> dict | list:
@@ -266,6 +268,26 @@ def run_fetch_home(manager_id: int, league_id: int) -> tuple[bool, str | None]:
     return True, None
 
 
+def maybe_trigger_refresh_if_stale() -> None:
+    """Kick off a background fetch when clients hit stale cache during live play."""
+    with STATE.lock:
+        if STATE.fetching:
+            return
+        last = STATE.last_fetch_sec
+        if last is not None and time.time() - last < INTERVAL_LIVE_SEC:
+            return
+    gw = resolve_active_gw()
+    fixtures = load_gw_fixtures(gw)
+    if not fixtures_have_live_action(fixtures):
+        return
+    threading.Thread(
+        target=refresh_once,
+        args=(INTERVAL_LIVE_SEC, INTERVAL_IDLE_SEC),
+        daemon=True,
+        name="home-refresh-stale",
+    ).start()
+
+
 def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOFF_LEAD_SEC) -> int:
     gws = load_bootstrap_gameweeks()
     now = time.time()
@@ -369,6 +391,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, body)
 
         if route == "/api/home":
+            maybe_trigger_refresh_if_stale()
             payload = read_home_payload()
             if not payload:
                 return self._json(503, {"ok": False, "error": "Home cache not ready"})
@@ -378,14 +401,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    global INTERVAL_LIVE_SEC, INTERVAL_IDLE_SEC
     parser = argparse.ArgumentParser(description="FPL Explorer live Home cache server")
     parser.add_argument("--host", default=os.environ.get("LIVE_SERVER_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("LIVE_SERVER_PORT", "8080")))
     parser.add_argument(
         "--interval-live",
         type=int,
-        default=int(os.environ.get("LIVE_INTERVAL_LIVE", "60")),
-        help="Refresh seconds while fixtures are live (default 60)",
+        default=int(os.environ.get("LIVE_INTERVAL_LIVE", "15")),
+        help="Refresh seconds while fixtures are live (default 15)",
     )
     parser.add_argument(
         "--interval-idle",
@@ -399,6 +423,8 @@ def main() -> int:
         help="Serve API only (no background polling)",
     )
     args = parser.parse_args()
+    INTERVAL_LIVE_SEC = max(10, args.interval_live)
+    INTERVAL_IDLE_SEC = max(60, args.interval_idle)
 
     manager_id, league_id = load_prefs()
     if not manager_id or not league_id:

@@ -141,9 +141,9 @@ Drop updated Hub CSVs in the project root and/or dated JSON under `snapshots/` b
 
 Static `home_data.js` on Vercel is a fallback. For minute-by-minute live scores, standings, and squads:
 
-1. **DigitalOcean droplet** ($6/mo, 1 GB) runs [`site/live_server.py`](site/live_server.py) — polls [`site/fetch_home.py`](site/fetch_home.py) every 60s during live fixtures (idle up to 1h, waking ~2m before kickoff).
+1. **DigitalOcean droplet** ($6/mo, 1 GB) runs [`site/live_server.py`](site/live_server.py) — polls [`site/fetch_home.py`](site/fetch_home.py) every **15s** during live fixtures (idle up to 1h, waking ~2m before kickoff).
 2. **Vercel** serves the UI; set `window.FPL_LIVE_API` in [`site/index.html`](site/index.html) to your droplet URL (HTTPS).
-3. Home polls `GET /api/home` every 60s when manager/league match Preferences.
+3. Home polls `GET /api/home` every **15s** during live fixtures (60s idle) when manager/league match Preferences.
 
 Full setup: [`deploy/digitalocean/README.md`](deploy/digitalocean/README.md). On a fresh Ubuntu droplet:
 

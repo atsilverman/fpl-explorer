@@ -2512,7 +2512,10 @@
 
   const LIVE_HOME_API = String(window.FPL_LIVE_API || "").replace(/\/$/, "");
   const HOME_LIVE_FETCH_MS = 12_000;
+  const HOME_LIVE_POLL_LIVE_MS = 15_000;
+  const HOME_LIVE_POLL_IDLE_MS = 60_000;
   let homeLivePollTimer = null;
+  let homeLivePollIntervalMs = HOME_LIVE_POLL_IDLE_MS;
   let homeLiveLastPollAt = 0;
   let homeLiveLastPollOk = false;
   let homeLiveLastSuccessAt = 0;
@@ -2618,6 +2621,39 @@
     if (!home || !home.managerId) return false;
     if (String(home.leagueId) !== HOME_LEAGUE_ID) return false;
     return TRACKED_MANAGER_IDS.map(String).includes(String(home.managerId));
+  }
+
+  function homeSquadFingerprint(squad) {
+    if (!Array.isArray(squad)) return "";
+    return squad
+      .map((r) => [
+        r.element,
+        r.gwPoints,
+        r.basePoints,
+        r.minutes,
+        r.matchStatus,
+        r.live ? 1 : 0,
+        r.imp,
+        ...(r.fixtures || []).map((f) =>
+          [f.minutes, f.live ? 1 : 0, f.finished ? 1 : 0].join(",")
+        ),
+      ].join(":"))
+      .join("|");
+  }
+
+  function homeLivePollInterval() {
+    return liveGwHasActiveGames() ? HOME_LIVE_POLL_LIVE_MS : HOME_LIVE_POLL_IDLE_MS;
+  }
+
+  function resyncHomeLivePollInterval() {
+    const next = homeLivePollInterval();
+    if (!homeLivePollTimer || next === homeLivePollIntervalMs) return;
+    homeLivePollIntervalMs = next;
+    clearInterval(homeLivePollTimer);
+    homeLivePollTimer = setInterval(() => {
+      if (document.hidden) return;
+      pollHomeFromLiveServer();
+    }, homeLivePollIntervalMs);
   }
 
   function homeElementGwFingerprint(home) {
@@ -2794,22 +2830,27 @@
       const priorStandingsFp = homeStandingsFingerprint(HOME.standings);
       const priorSummaryFp = homeSummaryFingerprint(HOME.summary);
       const priorEgFp = homeElementGwFingerprint(HOME);
+      const priorSquadFp = homeSquadFingerprint(HOME.squad);
       const incomingStandingsFp = homeStandingsFingerprint(data.home.standings);
       const incomingSummaryFp = homeSummaryFingerprint(data.home.summary);
       const incomingEgFp = homeElementGwFingerprint(data.home);
+      const incomingSquadFp = homeSquadFingerprint(data.home.squad);
       if (
         priorStandingsFp === incomingStandingsFp
         && priorSummaryFp === incomingSummaryFp
         && priorEgFp === incomingEgFp
+        && priorSquadFp === incomingSquadFp
         && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
       ) {
         homeLiveStandingsSynced = true;
         syncLiveNavChrome();
+        resyncHomeLivePollInterval();
         settleHomeAfterLivePoll({ rerender: false });
         return;
       }
       const sameElementGw =
         priorEgFp === incomingEgFp
+        && priorSquadFp === incomingSquadFp
         && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
         && String(HOME.managerId || "") === String(data.home.managerId || "")
         && String(HOME.leagueId || "") === String(data.home.leagueId || "");
@@ -2817,7 +2858,9 @@
       const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
       const elementGwChanged = priorEgFp !== incomingEgFp;
-      if (!standingsChanged && !summaryChanged && !elementGwChanged) {
+      const squadChanged = priorSquadFp !== homeSquadFingerprint(HOME.squad);
+      resyncHomeLivePollInterval();
+      if (!standingsChanged && !summaryChanged && !elementGwChanged && !squadChanged) {
         syncLiveNavChrome();
         settleHomeAfterLivePoll({ rerender: false });
         return;
@@ -2849,11 +2892,14 @@
       return;
     }
     if (!homeLivePollTimer) {
+      homeLivePollIntervalMs = homeLivePollInterval();
       if (!skipImmediate && !document.hidden) pollHomeFromLiveServer();
       homeLivePollTimer = setInterval(() => {
         if (document.hidden) return;
         pollHomeFromLiveServer();
-      }, 60_000);
+      }, homeLivePollIntervalMs);
+    } else {
+      resyncHomeLivePollInterval();
     }
     syncLiveNavChrome();
   }
