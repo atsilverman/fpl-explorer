@@ -6,7 +6,9 @@ Fetches bootstrap-static, writes snapshots/bootstrap-static_YYYY-MM-DD.json
 when that date is new (overwrites same-day), then rebuilds a slim history
 bundle from every non-archived bootstrap snapshot.
 
-The static site only reads ownership_data.js — it never calls the FPL API.
+Price-change check-ins live in site/fetch_prices.py (4h cadence).
+
+The static site only reads the JS bundles — it never calls the FPL API.
 
 Run:
     python3 site/fetch_ownership.py

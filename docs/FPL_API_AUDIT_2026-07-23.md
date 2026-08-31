@@ -162,6 +162,30 @@ The `mng_*` fields (goals scored, clean sheets, win/draw/loss, underdog bonus �
 - `now_cost` ranges from `40` (£4.0m) to `155` (£15.5m) this preseason — useful as a sanity bound for budget UI.
 - Squad sizes per club currently range **25–32** players (avg ~28), well above the ~15-per-club steady state you'd see mid-season — the summer transfer window is still open. One spot-checked player (`van Oevelen`) has `team_join_date: 2026-07-21`, two days before this snapshot, confirming the data updates with live transfer activity.
 
+### Price Change Predictor (2026/27, `elements[]`)
+
+New in 2026/27 bootstrap — powers FPL's `/en/price-changes` page. No separate API; read from `bootstrap-static` `elements[]`:
+
+| Field | Type / notes |
+|---|---|
+| `price_change_percent` | string/number — current % progress toward next £0.1m rise/fall |
+| `price_change_hourly_rate` | int — transfer velocity signal |
+| `price_change_projections` | array of `{offset, projected_percent, likelihood}` — `offset: 0` is tonight's predicted progress |
+| `price_change_calibrating` | bool — hide until calibrated (early GW) |
+| `price_change_locked_until` | ISO timestamp or null — price locked until GW1 deadline |
+
+**`likelihood` → status label** (empirical mapping used by this repo's Prices page — FPL does not document the integer scale):
+
+| `likelihood` | Label |
+|---|---|
+| 5, 4 | Very likely to rise |
+| 3, 2 | Likely to rise |
+| −2, −3 | Likely to drop |
+| −4, −5 | Very likely to drop |
+| −1, 0, 1 | Unlikely to change (excluded from our table) |
+
+Extracted by `site/fetch_prices.py` into `site/price_changes_data.js` on a **4-hour** cadence. Slim check-ins are stored under `snapshots/price-changes/` (~4 days retained) and power a **3-day progress sparkline** on the Prices page. Daily price changes apply at **00:00 Europe/London** during the season.
+
 ---
 
 ## 4. Critical Preseason Behavior (not covered by either existing doc)

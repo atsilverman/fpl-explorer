@@ -8,6 +8,7 @@
   const DATA = window.FPL_DATA;
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
   const OWNERSHIP = window.FPL_OWNERSHIP || { generatedAt: null, checkIns: [] };
+  const PRICES = window.FPL_PRICE_CHANGES || { generatedAt: null, players: [], nextChangeAt: null };
   const LEAGUES = window.FPL_LEAGUES || { generatedAt: null, managers: [], leagues: [] };
   const HOME = window.FPL_HOME || {
     generatedAt: null,
@@ -73,6 +74,25 @@
   function teamAccentDecl(teamCode) {
     const accent = TEAM_SCATTER_ACCENT[teamCode];
     return accent ? `--team-accent:${accent}` : "";
+  }
+
+  function teamAccentRelativeLuminance(hex) {
+    if (!hex || hex[0] !== "#" || hex.length < 7) return 1;
+    const n = parseInt(hex.slice(1, 7), 16);
+    const channels = [16, 8, 0].map((shift) => ((n >> shift) & 255) / 255);
+    const linear = channels.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  }
+
+  /** Inline attrs for club-code tags in player sublines (Ownership, Prices, …). */
+  function teamTagAttrs(teamCode) {
+    const accent = TEAM_SCATTER_ACCENT[teamCode];
+    if (!accent) return { style: "", className: "" };
+    const darkAccent = teamAccentRelativeLuminance(accent) < 0.15;
+    return {
+      style: ` style="--team-accent:${accent}"`,
+      className: darkAccent ? " is-dark-team-accent" : "",
+    };
   }
 
   /** Class + style attrs for a thin club-colour ring around photos / crests. */
@@ -506,6 +526,9 @@
   const ENHANCE_PCT_MAX = 40;
   const ENHANCE_PCT_PLAYERS = 5;
   const ENHANCE_PCT_TEAMS = 30;
+  const PRICES_PROGRESS_MIN = 90;
+  const PRICES_PROGRESS_MAX = 200;
+  const PRICES_PROGRESS_DEFAULT = 90;
   // Relative mode ranks within the filtered set — floor the band so a 5%
   // full-table slider still colors a useful share of a small cohort (e.g. BHA Mids).
   const ENHANCE_RELATIVE_FLOOR = 25;
@@ -723,7 +746,7 @@
   // State
   // ---------------------------------------------------------------------
   const state = {
-    page: "home", // home | live | opta | rankings | ownership | expected | schedule | markets | team
+    page: "home", // home | live | opta | rankings | ownership | prices | expected | schedule | markets | team
     season: "2026-27", // 2025-26 | 2026-27
     view: "players", // players | teams
     split: "combined", // combined | home | away
@@ -788,6 +811,10 @@
     ownershipTreeWindow: "d7", // d7 | d3 | d1
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
+    pricesMoverKind: "all", // all | risers | fallers
+    pricesSortKey: "predicted",
+    pricesSortDir: "desc",
+    pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
     liveStatus: "all", // all | live | owned
@@ -1002,6 +1029,7 @@
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
     pageOwnership: $("#page-ownership"),
+    pagePrices: $("#page-prices"),
     pageTeam: $("#page-team"),
     pageExpected: $("#page-expected"),
     pageTabs: $("#page-tabs"),
@@ -1140,6 +1168,15 @@
     ownershipTreemapPlot: $("#ownership-treemap-plot"),
     ownershipTreemapEmpty: $("#ownership-treemap-empty"),
     ownershipUpdatedFooter: $("#ownership-updated-footer"),
+    pricesPage: $("#prices-page"),
+    pricesCountdownValue: $("#prices-countdown-value"),
+    pricesCountdownSub: $("#prices-countdown-sub"),
+    pricesMoverSeg: $("#prices-mover-seg"),
+    pricesCountLabel: $("#prices-count-label"),
+    pricesTableWrap: $("#prices-table-wrap"),
+    pricesTableHead: $("#prices-table-head"),
+    pricesTableBody: $("#prices-table-body"),
+    pricesUpdatedFooter: $("#prices-updated-footer"),
     teamPage: $("#team-page"),
     teamUpdatedFooter: $("#team-updated-footer"),
     teamPageSubtitle: $("#team-page-subtitle"),
@@ -1267,6 +1304,10 @@
     priceMinLabel: $("#price-min-label"),
     priceMaxLabel: $("#price-max-label"),
     priceFill: $("#price-fill"),
+    pricesProgressMin: $("#prices-progress-min"),
+    pricesProgressMinLabel: $("#prices-progress-min-label"),
+    pricesProgressMinFill: $("#prices-progress-min-fill"),
+    pricesProgressFilterGroup: $("#prices-progress-filter-group"),
     ownedMin: $("#owned-min"),
     ownedMinLabel: $("#owned-min-label"),
     ownedMinFill: $("#owned-min-fill"),
@@ -1396,6 +1437,7 @@
     if (state.split !== "combined") return true;
     if (state.enhancePct !== defaultEnhancePct()) return true;
     if (state.page === "opta" && state.hiddenCols.size) return true;
+    if (state.page === "prices" && state.pricesProgressMinAbs !== PRICES_PROGRESS_DEFAULT) return true;
     return false;
   }
 
@@ -1444,6 +1486,8 @@
     updatePriceSlider();
     updateOwnedSlider();
     updateMinsSlider();
+    state.pricesProgressMinAbs = PRICES_PROGRESS_DEFAULT;
+    if (typeof updatePricesProgressSlider === "function") updatePricesProgressSlider();
     syncFilterChipUI();
     syncLiveStatusSeg();
     syncLiveFeedOwnedSeg();
@@ -1451,6 +1495,7 @@
     renderColumnsPanel();
     renderTable();
     if (state.page === "ownership") renderOwnership();
+    if (state.page === "prices") renderPrices();
     if (state.page === "live") renderLive({ animate: true });
   }
 
@@ -3531,7 +3576,6 @@
     [overallPanel, leaguePanel].forEach((panel) => {
       if (panel) panel.classList.remove("is-rank-border-up", "is-rank-border-down");
     });
-    if (homeConfiguredHasLiveMinutes()) return;
 
     const summary = homeSummaryForView(homeActiveViewEntryId());
     const overallDelta =
@@ -7321,6 +7365,9 @@
     } else if (state.page === "ownership" && el.ownershipTableWrap) {
       el.ownershipTableWrap.scrollTop = 0;
       el.ownershipTableWrap.scrollLeft = 0;
+    } else if (state.page === "prices" && el.pricesTableWrap) {
+      el.pricesTableWrap.scrollTop = 0;
+      el.pricesTableWrap.scrollLeft = 0;
     } else if (state.page === "expected") {
       const barbell = expectedScrollWrap();
       if (barbell) {
@@ -7465,7 +7512,8 @@
       page === "home" ||
       page === "team" ||
       page === "markets" ||
-      page === "schedule"
+      page === "schedule" ||
+      page === "prices"
     ) {
       return false;
     }
@@ -7580,7 +7628,10 @@
     el.subtoolbar.classList.toggle("is-expected-mobile", page === "expected" && preferMobileSheet());
     el.subtoolbar.classList.toggle("is-opta-mobile", page === "opta" && preferMobileSheet());
     const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
-    if (viewTabs) viewTabs.style.display = page === "team" || isLive ? "none" : "";
+    if (viewTabs) {
+      viewTabs.style.display =
+        page === "team" || page === "live" || page === "prices" ? "none" : "";
+    }
   }
 
   let viewportLayoutSyncTimer = 0;
@@ -7931,6 +7982,9 @@
     if (state.page === "ownership" && el.ownershipTableWrap && !el.ownershipTableWrap.hidden) {
       wraps.push(el.ownershipTableWrap);
     }
+    if (state.page === "prices" && el.pricesTableWrap && !el.pricesTableWrap.hidden) {
+      wraps.push(el.pricesTableWrap);
+    }
     if (state.page === "expected") {
       const scroll = expectedScrollWrap();
       if (scroll) wraps.push(scroll);
@@ -7958,6 +8012,7 @@
     if (!(NARROW_MQ.matches || !hasFineHover())) return false;
     return (
       state.page === "ownership" ||
+      state.page === "prices" ||
       state.page === "expected" ||
       state.page === "opta" ||
       state.page === "team" ||
@@ -7967,6 +8022,7 @@
 
   let optaMobileNameColW = null;
   let ownershipMobileNameColW = null;
+  let pricesMobileNameColW = null;
   let liveMobileNameColW = null;
   let mobileNameColRaf = 0;
 
@@ -8204,12 +8260,35 @@
     host.classList.remove("is-name-simplifying");
   }
 
+  function syncPricesMobileNameColWidth() {
+    const wrap = el.pricesTableWrap;
+    if (!NARROW_MQ.matches || state.page !== "prices" || !wrap || wrap.hidden) {
+      pricesMobileNameColW = null;
+      if (wrap) wrap.style.removeProperty("--name-col-w");
+      return;
+    }
+    const measured = measureNameColWidth(wrap, {
+      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+    });
+    const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
+    pricesMobileNameColW = Math.max(
+      OWNERSHIP_MOBILE_NAME_COL_MIN,
+      Math.min(measured, cap)
+    );
+    const prev = wrap.style.getPropertyValue("--name-col-w");
+    wrap.style.setProperty("--name-col-w", `${pricesMobileNameColW}px`);
+    if (prev !== `${pricesMobileNameColW}px`) {
+      invalidateNameSimplifyOrigin(wrap);
+    }
+  }
+
   function scheduleOptaMobileNameColWidth() {
     if (mobileNameColRaf) cancelAnimationFrame(mobileNameColRaf);
     mobileNameColRaf = requestAnimationFrame(() => {
       mobileNameColRaf = 0;
       syncOptaMobileNameColWidth();
       syncOwnershipMobileNameColWidth();
+      syncPricesMobileNameColWidth();
       syncLivePointsNameColWidth();
     });
   }
@@ -8217,7 +8296,7 @@
   function nameSimplifyProgress(scrollLeft, origin = 0, wrap = null) {
     // Ownership still maps the full remaining pan (short table). Statistics /
     // Planner finish compact well before the last column.
-    if (wrap && state.page === "ownership") {
+    if (wrap && (state.page === "ownership" || state.page === "prices")) {
       const maxScroll = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
       if (maxScroll <= 0) return 0;
       const linear = Math.min(1, Math.max(0, scrollLeft) / maxScroll);
@@ -8342,6 +8421,7 @@
     if (!nameSimplifyActive()) {
       nameSimplifyWraps().forEach(clearNameColumnSimplify);
       if (el.ownershipTableWrap) clearNameColumnSimplify(el.ownershipTableWrap);
+      if (el.pricesTableWrap) clearNameColumnSimplify(el.pricesTableWrap);
       const barbellScroll = expectedScrollWrap();
       if (barbellScroll) clearNameColumnSimplify(barbellScroll);
       return;
@@ -9167,6 +9247,12 @@
       syncTeamSearchHost();
       return;
     }
+    if (state.page === "prices") {
+      renderPrices();
+      syncFiltersResetUI();
+      syncTeamSearchHost();
+      return;
+    }
     if (state.page === "live") {
       renderLive({ quiet: true });
       syncFiltersResetUI();
@@ -9911,6 +9997,43 @@
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
         ${spitNote("This page reads the saved ownership cache — it does not call the FPL API live.")}`;
+    }
+
+    if (state.page === "prices") {
+      const mobile = NARROW_MQ.matches;
+      const legend = mobile
+        ? [
+            spitRow(`<span class="prices-status-pill is-very-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">VL</span></span>`, "Very likely to rise (green) + transfer trend arrow"),
+            spitRow(`<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`, "Likely to drop (red) + transfer trend arrow"),
+            spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
+            spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
+          ]
+        : [
+            spitRow(`<span class="prices-status-pill is-very-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Very likely to rise</span></span>`, "Strong rise signal + GW transfer trend"),
+            spitRow(`<span class="prices-status-pill is-likely-drop has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">Likely to drop</span></span>`, "Moderate fall signal + GW transfer trend"),
+            spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
+            spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
+          ];
+      const reading = [
+        spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
+        ...(mobile
+          ? [
+              spitRow(spitRank("Status"), "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop. Price is in the player row."),
+            ]
+          : [
+              spitRow(spitRank("Status"), "Likelihood label with ↗/↘ for more transfers in vs out this GW."),
+            ]),
+        spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
+        spitRow(spitRank("Progress filter"), "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."),
+        spitRow(spitRank("All / Risers / Fallers"), "Segment above the table."),
+        spitRow(spitRank("Countdown"), "Time until the next daily price update. Change time is shown in your local timezone."),
+        spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
+      ];
+      return `${spitHead("scale", "How Prices works")}
+        ${spitIntro("Official FPL price-change predictor from 4-hour bootstrap check-ins.")}
+        ${spitSection("Legend", legend)}
+        ${spitSection("Reading", reading)}
+        ${spitNote("Refreshed every 4 hours via fetch_prices.py. FPL updates predictor data ~every 15 minutes.")}`;
     }
 
     if (state.page === "live") {
@@ -10684,6 +10807,7 @@
         else if (pane.id === "expected-page") page = "expected";
         else if (pane.id === "schedule-page") page = "schedule";
         else if (pane.id === "ownership-page") page = "ownership";
+        else if (pane.id === "prices-page") page = "prices";
         else if (pane.id === "markets-page") page = "markets";
         else if (pane.id === "team-page") page = "team";
       }
@@ -11851,12 +11975,11 @@
       const displayTeam = teamCode || row.team;
       const displayPos = position || row.position;
       thumb = ownershipPhotoHTML(row, displayTeam);
-      const accent = TEAM_SCATTER_ACCENT[displayTeam] || "";
-      const teamStyle = accent ? ` style="--team-accent:${accent}"` : "";
+      const teamTag = teamTagAttrs(displayTeam);
       const price = omitPrice ? null : effectivePrice(row);
       const bits = [
         displayTeam
-          ? `<span class="ownership-id-team"${teamStyle}${teamTip || ""}>${escapeHtml(displayTeam)}</span>`
+          ? `<span class="ownership-id-team${teamTag.className}"${teamTag.style}${teamTip || ""}>${escapeHtml(displayTeam)}</span>`
           : "",
         price != null && Number.isFinite(Number(price))
           ? `<span class="ownership-id-price">£${Number(price).toFixed(1)}m</span>`
@@ -15070,6 +15193,8 @@
         return latestDataIso(HOME.generatedAt, DATA.generatedAt);
       case "ownership":
         return OWNERSHIP.generatedAt || null;
+      case "prices":
+        return PRICES.generatedAt || null;
       case "markets":
         return MARKETS.generatedAt || null;
       case "opta":
@@ -18151,10 +18276,9 @@
         </div>
       </div>`;
     }
-    const accent = TEAM_SCATTER_ACCENT[row.team] || "";
-    const teamStyle = accent ? ` style="--team-accent:${accent}"` : "";
+    const teamTag = teamTagAttrs(row.team);
     const bits = [
-      row.team ? `<span class="ownership-id-team"${teamStyle}>${escapeHtml(row.team)}</span>` : "",
+      row.team ? `<span class="ownership-id-team${teamTag.className}"${teamTag.style}>${escapeHtml(row.team)}</span>` : "",
       row.price != null && Number.isFinite(Number(row.price))
         ? `<span class="ownership-id-price">£${Number(row.price).toFixed(1)}m</span>`
         : "",
@@ -18715,6 +18839,349 @@
     });
   }
 
+  const PRICES_STATUS_ORDER = {
+    very_likely_rise: 0,
+    likely_rise: 1,
+    very_likely_drop: 2,
+    likely_drop: 3,
+  };
+
+  function pricesPassesProgressFilter(row) {
+    const p = Number(row.progress);
+    if (!Number.isFinite(p)) return false;
+    return Math.abs(p) >= state.pricesProgressMinAbs;
+  }
+
+  function pricesBaseFilteredRows(kind = pricesMoverKind()) {
+    return (PRICES.players || []).filter((row) => {
+      if (kind === "risers" && !pricesIsRiser(row)) return false;
+      if (kind === "fallers" && !pricesIsFaller(row)) return false;
+      if (!pricesPassesProgressFilter(row)) return false;
+      return true;
+    });
+  }
+
+  function clampPricesScrollAfterUpdate() {
+    const main = document.querySelector("main.main");
+    if (main) {
+      const maxTop = Math.max(0, main.scrollHeight - main.clientHeight);
+      if (main.scrollTop > maxTop) main.scrollTop = maxTop;
+    }
+    const wrap = el.pricesTableWrap;
+    if (!wrap) return;
+    const maxLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    if (wrap.scrollLeft > maxLeft) wrap.scrollLeft = maxLeft;
+    invalidateNameSimplifyOrigin(wrap);
+    if (nameSimplifyActive()) updateNameColumnSimplify(wrap);
+  }
+
+  function settlePricesLayoutAfterUpdate() {
+    requestAnimationFrame(() => {
+      clampPricesScrollAfterUpdate();
+      syncMobileScrollportHeight();
+      scheduleOptaMobileNameColWidth();
+      requestAnimationFrame(clampPricesScrollAfterUpdate);
+    });
+  }
+
+  let pricesCountdownTimer = null;
+  let pricesEnterMotionToken = 0;
+
+  function pricesMoverKind() {
+    const k = state.pricesMoverKind;
+    return k === "risers" || k === "fallers" ? k : "all";
+  }
+
+  function pricesIsRiser(row) {
+    return row.statusKey === "very_likely_rise" || row.statusKey === "likely_rise";
+  }
+
+  function pricesIsFaller(row) {
+    return row.statusKey === "very_likely_drop" || row.statusKey === "likely_drop";
+  }
+
+  function pricesVisibleRows() {
+    if (!isNextSeason()) return [];
+    const catalog = ownershipCatalogByCode();
+    return pricesBaseFilteredRows().filter((row) =>
+      ownershipPlayerPassesDisplayFilters(row, catalog)
+    );
+  }
+
+  function pricesSortValue(row, key) {
+    if (key === "name") return String(row.name || "").toLowerCase();
+    if (key === "status") return PRICES_STATUS_ORDER[row.statusKey] ?? 9;
+    if (key === "progress") return row.progress == null ? -Infinity : Number(row.progress);
+    if (key === "predicted") return row.predicted == null ? -Infinity : Number(row.predicted);
+    if (key === "d3") return row.d3 == null ? -Infinity : Number(row.d3);
+    if (key === "trend") return row.trend === "up" ? 1 : 0;
+    if (key === "price") return row.price == null ? -Infinity : Number(row.price);
+    return -Infinity;
+  }
+
+  function sortPricesRows(rows) {
+    const key = state.pricesSortKey || "predicted";
+    const dir = state.pricesSortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      if (key === "name") {
+        return dir * String(a.name || "").localeCompare(String(b.name || ""));
+      }
+      const va = pricesSortValue(a, key);
+      const vb = pricesSortValue(b, key);
+      if (va !== vb) return dir * (va - vb);
+      const ta = PRICES_STATUS_ORDER[a.statusKey] ?? 9;
+      const tb = PRICES_STATUS_ORDER[b.statusKey] ?? 9;
+      if (ta !== tb) return ta - tb;
+      return Math.abs(Number(b.predicted) || 0) - Math.abs(Number(a.predicted) || 0);
+    });
+  }
+
+  function pricesSortArrow(key) {
+    if (state.pricesSortKey !== key) return "";
+    return `<span class="arrow">${iconHTML(state.pricesSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
+  }
+
+  function pricesStatusMobileLabel(statusKey) {
+    if (statusKey === "very_likely_rise" || statusKey === "very_likely_drop") return "VL";
+    if (statusKey === "likely_rise" || statusKey === "likely_drop") return "L";
+    return "—";
+  }
+
+  function pricesStatusPillHTML(row) {
+    const cls = `prices-status-pill is-${String(row.statusKey || "").replace(/_/g, "-")}`;
+    const mobile = NARROW_MQ.matches;
+    const full = row.statusLabel || "—";
+    const label = mobile ? pricesStatusMobileLabel(row.statusKey) : full;
+    const shortCls = mobile ? " is-short" : "";
+    const up = row.trend === "up";
+    const trendLabel = up ? "More transfers in than out" : "More transfers out than in";
+    const trendIcon = iconHTML(up ? "trending-up" : "trending-down");
+    const tipText = mobile && full !== label ? `${full} · ${trendLabel}` : trendLabel;
+    const tip = ` title="${escapeHtml(tipText)}" aria-label="${escapeHtml(`${full} — ${trendLabel}`)}"`;
+    return `<span class="${cls}${shortCls} has-trend"${tip}><span class="prices-status-trend-icon" aria-hidden="true">${trendIcon}</span><span class="prices-status-label">${escapeHtml(label)}</span></span>`;
+  }
+
+  function pricesProgressPillHTML(value, { predicted = false } = {}) {
+    if (value == null || !Number.isFinite(Number(value))) return "—";
+    const n = Number(value);
+    const tone = n > 0 ? "is-rise" : n < 0 ? "is-drop" : "is-flat";
+    const cls = `prices-progress-pill ${tone}${predicted ? " is-predicted" : ""}`;
+    const signed = n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+    const roll = statRollSpan(n, {
+      from: 0,
+      decimals: 1,
+      signed: true,
+      suffix: "%",
+      className: "ownership-stat-roll",
+    });
+    return `<span class="${cls}">${roll}</span>`;
+  }
+
+  function fmtPricesProgressPct(value) {
+    if (value == null || !Number.isFinite(Number(value))) return "—";
+    const n = Number(value);
+    const signed = n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+    return `${signed}%`;
+  }
+
+  function pricesSparkHTML(row) {
+    const series = row.spark || [];
+    if (series.length < 2) {
+      return `<span class="ownership-spark-empty prices-spark-empty">—</span>`;
+    }
+    const w = 92;
+    const h = 28;
+    const padX = 2;
+    const padY = 4;
+    const lo = Math.min(...series);
+    const hi = Math.max(...series);
+    const rng = hi - lo || 1;
+    const n = series.length;
+    const pts = series.map((v, i) => {
+      const x = padX + (i / (n - 1)) * (w - padX * 2);
+      const y = h - padY - ((v - lo) / rng) * (h - padY * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const end = pts[pts.length - 1].split(",");
+    const tone = ownershipDeltaClass(row.d3);
+    const startLbl = fmtPricesProgressPct(row.sparkStart);
+    const endLbl = fmtPricesProgressPct(row.sparkEnd);
+    return `<span class="ownership-spark prices-spark ${tone}">
+      <span class="ownership-spark-lab">${escapeHtml(startLbl)}</span>
+      <svg class="ownership-spark-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">
+        <polyline points="${pts.join(" ")}" />
+        <circle cx="${end[0]}" cy="${end[1]}" r="1.8" />
+      </svg>
+      <span class="ownership-spark-lab">${escapeHtml(endLbl)}</span>
+    </span>`;
+  }
+
+  function pricesTableColSpan() {
+    return NARROW_MQ.matches ? 5 : 6;
+  }
+
+  function pricesHeadHTML() {
+    const mobile = NARROW_MQ.matches;
+    const th = (key, label, extra = "") =>
+      `<th class="${extra}${state.pricesSortKey === key ? " sorted" : ""}" data-prices-sort="${key}">${escapeHtml(label)}${pricesSortArrow(key)}</th>`;
+    return `<tr>
+      ${th("name", "Player", "col-player")}
+      ${th("status", "Status", "col-num prices-col-status")}
+      ${th("progress", "Progress", "col-num")}
+      ${th("predicted", "Predicted", "col-num")}
+      ${th("d3", "3d trend", "col-num prices-col-spark")}
+      ${mobile ? "" : th("price", "Current price", "col-num prices-col-price")}
+    </tr>`;
+  }
+
+  function pricesRowHTML(row, rank) {
+    const mobile = NARROW_MQ.matches;
+    const priceTxt =
+      row.price != null && Number.isFinite(Number(row.price))
+        ? `£${Number(row.price).toFixed(1)}m`
+        : "—";
+    return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
+      <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
+      <td class="col-num prices-col-status">${pricesStatusPillHTML(row)}</td>
+      <td class="col-num">${pricesProgressPillHTML(row.progress)}</td>
+      <td class="col-num">${pricesProgressPillHTML(row.predicted, { predicted: true })}</td>
+      <td class="col-num prices-col-spark">${pricesSparkHTML(row)}</td>
+      ${mobile ? "" : `<td class="col-num prices-col-price">${escapeHtml(priceTxt)}</td>`}
+    </tr>`;
+  }
+
+  function syncPricesMoverUI() {
+    if (!el.pricesMoverSeg) return;
+    const kind = pricesMoverKind();
+    el.pricesMoverSeg.querySelectorAll("button[data-prices-kind]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.pricesKind === kind);
+    });
+  }
+
+  function fmtPricesChangeAtLabel(iso) {
+    if (!iso) return "Changes at —";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "Changes at —";
+    try {
+      const time = d.toLocaleTimeString(undefined, {
+        ...localeTimeOptions(),
+        timeZoneName: "short",
+      });
+      return `Changes at ${time}`;
+    } catch {
+      return "Changes at —";
+    }
+  }
+
+  function syncPricesCountdown() {
+    if (state.page !== "prices") {
+      if (pricesCountdownTimer) {
+        clearInterval(pricesCountdownTimer);
+        pricesCountdownTimer = null;
+      }
+      return;
+    }
+    const tick = () => {
+      const iso = PRICES.nextChangeAt;
+      if (el.pricesCountdownSub) {
+        el.pricesCountdownSub.textContent = fmtPricesChangeAtLabel(iso);
+      }
+      if (!el.pricesCountdownValue) return;
+      if (!iso) {
+        el.pricesCountdownValue.textContent = "—";
+        return;
+      }
+      const ms = new Date(iso).getTime() - Date.now();
+      if (ms <= 0) {
+        el.pricesCountdownValue.textContent = "00 : 00 : 00";
+        return;
+      }
+      const total = Math.floor(ms / 1000);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      el.pricesCountdownValue.textContent =
+        `${String(h).padStart(2, "0")} : ${String(m).padStart(2, "0")} : ${String(s).padStart(2, "0")}`;
+    };
+    tick();
+    if (!pricesCountdownTimer) {
+      pricesCountdownTimer = setInterval(tick, 1000);
+    }
+  }
+
+  function startPricesEnterMotion(pane) {
+    startOwnershipEnterMotion(pane);
+  }
+
+  function renderPrices({ animateEnter = false, preserveScroll = false } = {}) {
+    if (!el.pricesTableBody || !el.pricesTableHead) return;
+    syncPricesMoverUI();
+    syncPricesCountdown();
+    const scrollSnap =
+      preserveScroll && el.pricesTableWrap
+        ? captureScrollWraps([el.pricesTableWrap])
+        : null;
+
+    if (!isNextSeason()) {
+      if (el.pricesCountLabel) el.pricesCountLabel.textContent = "2026/27 only";
+      el.pricesTableHead.innerHTML = pricesHeadHTML();
+      el.pricesTableBody.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">Price Change Predictor is available in 2026/27 season mode.</td></tr>`;
+      syncFiltersResetUI();
+      syncPageUpdatedFooter(el.pricesUpdatedFooter, pageDataUpdatedIso("prices"));
+      return;
+    }
+
+    const pool = PRICES.players || [];
+    const kind = pricesMoverKind();
+    const basePool = pricesBaseFilteredRows(kind);
+    const visible = sortPricesRows(pricesVisibleRows());
+    if (el.pricesCountLabel) {
+      if (!pool.length) {
+        el.pricesCountLabel.textContent = "No data";
+      } else {
+        const noun = kind === "fallers" ? "fallers" : kind === "risers" ? "risers" : "movers";
+        const shown = visible.length;
+        const total = basePool.length;
+        el.pricesCountLabel.textContent =
+          shown === total ? `${shown} ${noun}` : `${shown} of ${total} ${noun}`;
+      }
+    }
+    el.pricesTableHead.innerHTML = pricesHeadHTML();
+    if (!pool.length) {
+      el.pricesTableBody.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">No price data yet. Run <code>python3 site/fetch_ownership.py</code> to refresh bootstrap.</td></tr>`;
+    } else if (!visible.length) {
+      el.pricesTableBody.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">No price movers match the current filters.</td></tr>`;
+    } else {
+      el.pricesTableBody.innerHTML = visible.map((row, i) => pricesRowHTML(row, i + 1)).join("");
+      bindOwnershipPhotoFallback(el.pricesTableBody);
+    }
+    syncFiltersResetUI();
+    syncPageUpdatedFooter(el.pricesUpdatedFooter, pageDataUpdatedIso("prices"));
+    bindAllNameColumnSimplifies();
+    scheduleOptaMobileNameColWidth();
+    if (scrollSnap) {
+      restoreScrollWraps(scrollSnap);
+      requestAnimationFrame(() => syncMobileScrollportHeight());
+    } else {
+      settlePricesLayoutAfterUpdate();
+    }
+    const pageEntering =
+      el.pricesPage &&
+      (el.pricesPage.classList.contains("is-entering") ||
+        el.pricesPage.classList.contains("is-enter-pending"));
+    if (animateEnter && el.pricesPage) {
+      el.pricesPage.classList.add("is-enter-pending");
+      startPricesEnterMotion(el.pricesPage);
+    } else if (pageEntering) {
+      /* empty rolls for playPageEnter */
+    } else if (el.pricesPage) {
+      finishOwnershipStatRolls(el.pricesPage);
+    }
+  }
+
   function statRollFormat(value, decimals, signed) {
     if (!Number.isFinite(Number(value))) return "";
     let n = Number(value);
@@ -18923,7 +19390,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Planner is ready to ship again (nav + prefs section).
   const PLANNER_NAV_ENABLED = false;
-  const PAGES = ["home", "live", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
+  const PAGES = ["home", "live", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets", "team"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
@@ -18972,6 +19439,7 @@
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
     if (page === "ownership") return el.ownershipPage;
+    if (page === "prices") return el.pricesPage;
     if (page === "expected") return el.expectedPage;
     if (page === "schedule") return el.schedulePage;
     if (page === "markets") return el.marketsPage;
@@ -19006,6 +19474,9 @@
     if (pane.id === "ownership-page") {
       ownershipEnterMotionToken += 1;
     }
+    if (pane.id === "prices-page") {
+      pricesEnterMotionToken += 1;
+    }
     if (pane.id === "live-page") {
       // Live uses its own enter path — no pending blank, no <tr> stagger.
       playLiveEnter(pane);
@@ -19024,6 +19495,9 @@
       if (pane.id === "ownership-page") {
         finishOwnershipStatRolls(pane);
       }
+      if (pane.id === "prices-page") {
+        finishOwnershipStatRolls(pane);
+      }
       return;
     }
     // Never animate Statistics table rows. Opacity/transform on <tr> with
@@ -19040,6 +19514,7 @@
     const expectedEnter = pane.id === "expected-page";
     const marketsEnter = pane.id === "markets-page";
     const ownershipEnter = pane.id === "ownership-page";
+    const pricesEnter = pane.id === "prices-page";
     const homeEnter = pane.id === "home-page";
     const optaEnter = pane.id === "opta-page";
 
@@ -19121,6 +19596,9 @@
         if (pane.id === "ownership-page") {
           finishOwnershipStatRolls(pane);
         }
+        if (pane.id === "prices-page") {
+          finishOwnershipStatRolls(pane);
+        }
       }, 8000);
     }
 
@@ -19144,6 +19622,7 @@
         if (rankingsEnter) animateRankingsBars();
         if (homeEnter) startHomeEnterMotion(pane);
         if (ownershipEnter) startOwnershipEnterMotion(pane);
+        if (pricesEnter) startPricesEnterMotion(pane);
         // Matchups cards cascade with scatter (no wait for scatter to finish).
         const clearMs = expectedEnter
           ? 2400
@@ -19153,7 +19632,7 @@
               ? 1800
               : marketsEnter
                 ? 3200
-                : ownershipEnter
+                : ownershipEnter || pricesEnter
                   ? 1600
                   : homeEnter
                     ? 4600
@@ -19174,6 +19653,10 @@
           }
           if (ownershipEnter) {
             ownershipEnterMotionToken += 1;
+            finishOwnershipStatRolls(pane);
+          }
+          if (pricesEnter) {
+            pricesEnterMotionToken += 1;
             finishOwnershipStatRolls(pane);
           }
           pane.classList.remove("is-entering");
@@ -19439,6 +19922,7 @@
     if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
     if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
+    if (el.pagePrices) el.pagePrices.classList.toggle("active", page === "prices");
     el.pageExpected.classList.toggle("active", page === "expected");
     el.pageSchedule.classList.toggle("active", page === "schedule");
     if (el.pageMarkets) el.pageMarkets.classList.toggle("active", page === "markets");
@@ -19452,6 +19936,7 @@
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
+    if (el.pricesPage) el.pricesPage.style.display = page === "prices" ? "" : "none";
     el.expectedPage.style.display = page === "expected" ? "" : "none";
     el.schedulePage.style.display = page === "schedule" ? "" : "none";
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
@@ -19494,7 +19979,7 @@
     // Expected Data keeps its own Fixture Location control (adds Compare),
     // swapped into the same sidebar slot as the shared Total/Home/Away group.
     el.splitGroup.style.display =
-      page === "expected" || page === "team" || page === "ownership" || isLive ? "none" : "";
+      page === "expected" || page === "team" || page === "ownership" || page === "prices" || isLive ? "none" : "";
     if (el.expectedSplitGroup) {
       el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
     }
@@ -19547,6 +20032,23 @@
       el.tableOnlyToggles.style.display = "none";
       if (el.compareToggle) el.compareToggle.style.display = "none";
     }
+    if (page === "prices") {
+      if (state.view !== "players") {
+        state.view = "players";
+        document.documentElement.dataset.view = "players";
+        el.tabPlayers.classList.add("active");
+        el.tabTeams.classList.remove("active");
+      }
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
+      if (el.pricesProgressFilterGroup) el.pricesProgressFilterGroup.style.display = "";
+      el.tableOnlyToggles.style.display = "none";
+      if (el.compareToggle) el.compareToggle.style.display = "none";
+    } else if (el.pricesProgressFilterGroup) {
+      el.pricesProgressFilterGroup.style.display = "none";
+    }
     if (page !== "home") {
       setHomeManagerModalOpen(false);
       clearHomePlayerLookup({ rerender: false });
@@ -19586,6 +20088,9 @@
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
       renderOwnership();
+    } else if (page === "prices") {
+      if (el.pricesPage) el.pricesPage.classList.add("is-enter-pending");
+      renderPrices();
     } else if (page === "expected") {
       renderExpected();
     } else if (page === "schedule") {
@@ -19725,6 +20230,7 @@
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
+  if (el.pagePrices) el.pagePrices.addEventListener("click", () => setPage("prices"));
   if (el.liveModeSeg) {
     el.liveModeSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-live-mode]");
@@ -19836,6 +20342,33 @@
       renderOwnership();
     });
   }
+  if (el.pricesMoverSeg) {
+    el.pricesMoverSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-prices-kind]");
+      if (!btn || !el.pricesMoverSeg.contains(btn)) return;
+      const next = btn.dataset.pricesKind;
+      if (next !== "all" && next !== "risers" && next !== "fallers") return;
+      if (next === pricesMoverKind()) return;
+      state.pricesMoverKind = next;
+      syncPricesMoverUI();
+      if (state.page === "prices") renderPrices({ animateEnter: true });
+    });
+  }
+  if (el.pricesTableWrap) {
+    el.pricesTableWrap.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-prices-sort]");
+      if (!th || !el.pricesTableWrap.contains(th)) return;
+      const key = th.getAttribute("data-prices-sort");
+      if (!key) return;
+      if (state.pricesSortKey === key) {
+        state.pricesSortDir = state.pricesSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.pricesSortKey = key;
+        state.pricesSortDir = key === "name" ? "asc" : "desc";
+      }
+      renderPrices({ preserveScroll: true });
+    });
+  }
   if (el.pageTeam) {
     el.pageTeam.addEventListener("click", () => {
       if (!PLANNER_NAV_ENABLED) return;
@@ -19906,6 +20439,7 @@
     if (id === "page-opta") return "opta";
     if (id === "page-rankings") return "rankings";
     if (id === "page-ownership") return "ownership";
+    if (id === "page-prices") return "prices";
     if (id === "page-team") return "team";
     if (id === "page-expected") return "expected";
     if (id === "page-schedule") return "schedule";
@@ -19949,9 +20483,11 @@
     tabs.querySelectorAll(`[data-page-clone="${page}"]`).forEach((node) => hosts.push(node));
     const idByPage = {
       home: "page-home",
+      live: "page-live",
       opta: "page-opta",
       rankings: "page-rankings",
       ownership: "page-ownership",
+      prices: "page-prices",
       team: "page-team",
       expected: "page-expected",
       schedule: "page-schedule",
@@ -20294,6 +20830,12 @@
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
     }
+    if (state.page === "prices") {
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
+    }
     state.enhancePct = view === "players" ? ENHANCE_PCT_PLAYERS : ENHANCE_PCT_TEAMS;
     updateEnhancePctSlider();
     syncHighlightUI();
@@ -20389,6 +20931,7 @@
       !preferMobileSheet() &&
       (state.page === "opta" ||
         state.page === "ownership" ||
+        state.page === "prices" ||
         state.page === "expected")
     );
   }
@@ -20397,6 +20940,7 @@
     return (
       preferMobileSheet() &&
       (state.page === "ownership" ||
+        state.page === "prices" ||
         state.page === "expected" ||
         state.page === "opta" ||
         (state.page === "team" && !!state.teamPickerSlot))
@@ -20731,6 +21275,25 @@
     format: (value) => `${value.toFixed(1)}+`,
   });
 
+  const updatePricesProgressSlider = setupSingleSlider({
+    input: el.pricesProgressMin,
+    fillEl: el.pricesProgressMinFill,
+    labelEl: el.pricesProgressMinLabel,
+    boundsMin: PRICES_PROGRESS_MIN,
+    boundsMax: PRICES_PROGRESS_MAX,
+    step: 5,
+    get: () => state.pricesProgressMinAbs,
+    set: (value) => {
+      state.pricesProgressMinAbs = value;
+    },
+    format: (value) => `±${value}%`,
+    onInput: () => {
+      syncFiltersResetUI();
+      if (state.page === "prices") renderPrices({ preserveScroll: false });
+      else renderTable();
+    },
+  });
+
   updateEnhancePctSlider = setupSingleSlider({
     input: el.enhancePct,
     fillEl: el.enhancePctFill,
@@ -21014,6 +21577,7 @@
       syncFiltersResetUI();
       if (state.page === "team") renderTeam();
       else if (state.page === "ownership") renderOwnership();
+      else if (state.page === "prices") renderPrices();
       else renderTable();
     });
   }
@@ -21543,6 +22107,7 @@
       renderHome({ deferDuringEnter: true });
     }
     if (state.page === "team") renderTeam();
+    if (state.page === "prices") renderPrices();
     if (state.page === "opta") {
       requestAnimationFrame(() => {
         snapOptaToGameStats();

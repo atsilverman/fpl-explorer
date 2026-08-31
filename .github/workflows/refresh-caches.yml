@@ -94,7 +94,7 @@ jobs:
           if dirty("site/markets_data.js"):
               bumps.append("markets_data.js")
           # Same-day ownership overwrite still updates the JS bundle; snapshots too.
-          if dirty("site/ownership_data.js") or dirty("snapshots"):
+          if dirty("site/ownership_data.js") or dirty("snapshots/bootstrap-static_"):
               bumps.append("ownership_data.js")
 
           for name in bumps:

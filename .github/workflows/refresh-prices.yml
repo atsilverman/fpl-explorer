@@ -1,0 +1,72 @@
+# Price-change check-ins every 4 hours (UTC).
+# Writes snapshots/price-changes/*.json + site/price_changes_data.js
+name: Refresh prices
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh Prices
+        run: python3 site/fetch_prices.py
+
+      - name: Bump cache-bust query params
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          path = Path("site/index.html")
+          text = path.read_text(encoding="utf-8")
+
+          def dirty(rel: str) -> bool:
+              return subprocess.run(["git", "diff", "--quiet", "--", rel]).returncode != 0
+
+          bumps = []
+          if dirty("site/price_changes_data.js") or dirty("snapshots/price-changes"):
+              bumps.append("price_changes_data.js")
+
+          for name in bumps:
+              pat = re.compile(rf'(src="{re.escape(name)}\?v=)(\d+)(")')
+
+              def repl(m, _name=name):
+                  return f"{m.group(1)}{int(m.group(2)) + 1}{m.group(3)}"
+
+              text, n = pat.subn(repl, text)
+              print(f"{'Bumped' if n else 'No cache param for'} {name}")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/price_changes_data.js site/index.html snapshots/price-changes/ || true
+          if git diff --staged --quiet; then
+            echo "No cache changes to commit."
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          Refresh scheduled price-change check-ins.
+
+          EOF
+          )"
+          git push

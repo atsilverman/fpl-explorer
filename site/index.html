@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=902" />
+<link rel="stylesheet" href="styles.css?v=913" />
 <script>
 (() => {
   try {
@@ -20,7 +20,7 @@
     // the wrong shell before JS loads (e.g. omitting "live" painted Home on refresh).
     const PLANNER_NAV_ENABLED = false;
     if (!PLANNER_NAV_ENABLED) document.documentElement.classList.remove("planner-nav-enabled");
-    const PAGES = ["home", "live", "opta", "rankings", "ownership", "expected", "schedule", "markets", "team"];
+    const PAGES = ["home", "live", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets", "team"];
     let page = "home";
     try {
       const saved = localStorage.getItem(PAGE_KEY);
@@ -45,6 +45,7 @@
       'html[data-page="schedule"] #schedule-page,' +
       'html[data-page="markets"] #markets-page,' +
       'html[data-page="team"] #team-page{display:block}' +
+      'html[data-page="prices"] #prices-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
       'html[data-page="schedule"] #subtoolbar,' +
@@ -62,6 +63,9 @@
       'html.is-mobile-layout[data-page="live"] #stats-toolbar-start{display:none!important}' +
       'html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start #sidebar-toggle,' +
       'html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start>.tabs{display:none!important}' +
+      'html[data-page="prices"] #stats-toolbar-start>.tabs{display:none!important}' +
+      'html.is-mobile-layout[data-page="prices"] #stats-toolbar-start #sidebar-toggle,' +
+      'html.is-mobile-layout[data-page="prices"] #stats-toolbar-start>.tabs{display:none!important}' +
       'html.is-mobile-layout[data-page="expected"] #stats-toolbar-start #sidebar-toggle{display:none!important}' +
       'html[data-page="team"] #subtoolbar .tabs{display:none!important}' +
       'html.is-mobile-layout[data-page="rankings"] #subtoolbar{display:none!important}';
@@ -328,6 +332,10 @@
     <button id="page-ownership" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
       Ownership
+    </button>
+    <button id="page-prices" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+      Prices
     </button>
     <button id="page-team" class="page-tab-btn" type="button" hidden>
       <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
@@ -648,6 +656,16 @@
         <div class="slider-fill" id="price-fill"></div>
         <input type="range" id="price-min" step="0.1" />
         <input type="range" id="price-max" step="0.1" class="slider-top" />
+      </div>
+    </div>
+
+    <div class="filter-group" id="prices-progress-filter-group" style="display:none;">
+      <h3>Progress</h3>
+      <div class="slider-values"><span id="prices-progress-min-label"></span><span class="slider-hint">min |progress|</span></div>
+      <div class="dual-slider single-slider">
+        <div class="slider-track"></div>
+        <div class="slider-fill" id="prices-progress-min-fill"></div>
+        <input type="range" id="prices-progress-min" step="5" aria-label="Minimum progress percentage" />
       </div>
     </div>
 
@@ -1087,6 +1105,38 @@
       <p class="page-updated-text page-data-footer" id="ownership-updated-footer" hidden></p>
     </div>
 
+    <div id="prices-page" class="page-pane" style="display:none;">
+      <div class="page-header opta-header prices-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-scale"/></svg>Prices<button class="page-info-btn" type="button" aria-label="How Prices works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">Official FPL price-change predictor — players very likely or likely to rise or fall before the next daily price update. Refreshed every 4 hours from bootstrap-static.</p>
+          </div>
+        </div>
+      </div>
+      <div class="prices-countdown-bar" id="prices-countdown-bar">
+        <p class="prices-countdown-main">Next price changes in: <strong id="prices-countdown-value">—</strong></p>
+        <p class="prices-countdown-sub" id="prices-countdown-sub">Changes at —</p>
+      </div>
+      <div class="ownership-mover-bar prices-mover-bar">
+        <div class="segmented ownership-mover-seg" id="prices-mover-seg" role="group" aria-label="Price movers">
+          <button type="button" data-prices-kind="all" class="active">All</button>
+          <button type="button" data-prices-kind="risers">Risers</button>
+          <button type="button" data-prices-kind="fallers">Fallers</button>
+        </div>
+        <div class="ownership-mover-end">
+          <span class="count-label" id="prices-count-label"></span>
+        </div>
+      </div>
+      <div class="table-wrap" id="prices-table-wrap">
+        <table class="ownership-table prices-table">
+          <thead id="prices-table-head"></thead>
+          <tbody id="prices-table-body"></tbody>
+        </table>
+      </div>
+      <p class="page-updated-text page-data-footer" id="prices-updated-footer" hidden></p>
+    </div>
+
     <div id="rankings-page" class="page-pane" style="display:none;">
       <div class="page-header">
         <div>
@@ -1422,11 +1472,12 @@
 <script src="data.js?v=56"></script>
 <script src="markets_data.js?v=20"></script>
 <script src="ownership_data.js?v=16"></script>
+<script src="price_changes_data.js?v=2"></script>
 <script src="leagues_data.js?v=5"></script>
 <script src="home_data.js?v=31"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=926"></script>
+<script src="app.js?v=938"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

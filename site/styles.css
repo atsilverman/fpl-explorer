@@ -2370,11 +2370,13 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 6px;
   }
 
-  /* Ownership: always-expanded search fills the bar. */
-  html[data-page="ownership"] #subtoolbar #stats-toolbar-actions {
+  /* Ownership / Prices: always-expanded search fills the bar. */
+  html[data-page="ownership"] #subtoolbar #stats-toolbar-actions,
+  html[data-page="prices"] #subtoolbar #stats-toolbar-actions {
     width: 100%;
   }
-  html[data-page="ownership"] #subtoolbar #search-wrap.search-open {
+  html[data-page="ownership"] #subtoolbar #search-wrap.search-open,
+  html[data-page="prices"] #subtoolbar #search-wrap.search-open {
     flex: 1 1 auto;
     width: auto;
     max-width: none;
@@ -3103,6 +3105,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 
 /* Transform on <tr> breaks WebKit table layout (first row tucks under header). */
 #ownership-page.is-entering .table-wrap > table > tbody > tr {
+  animation: none !important;
+}
+#prices-page.is-entering .table-wrap > table > tbody > tr {
   animation: none !important;
 }
 
@@ -3967,6 +3972,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
    stay single-line and clip from the right (no wrap → no row-height jump).
    Rank fades/collapses beside the photo on Ownership. */
 #ownership-table-wrap.name-simplify-ready,
+#prices-table-wrap.name-simplify-ready,
 #opta-page .table-wrap.name-simplify-ready,
 #team-page .table-wrap.name-simplify-ready,
 #live-page .live-table-wrap.name-simplify-ready {
@@ -3976,6 +3982,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
 #ownership-table-wrap.name-simplify-ready tbody td.col-player,
+#prices-table-wrap.name-simplify-ready thead th.col-player,
+#prices-table-wrap.name-simplify-ready tbody td.col-player,
 #opta-page .table-wrap.name-simplify-ready thead th.col-player,
 #opta-page .table-wrap.name-simplify-ready thead th.col-name,
 #opta-page .table-wrap.name-simplify-ready tbody td.col-player,
@@ -4002,6 +4010,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 @media (max-width: 720px) {
   #ownership-table-wrap.name-simplify-ready thead th.col-player,
   #ownership-table-wrap.name-simplify-ready tbody td.col-player,
+  #prices-table-wrap.name-simplify-ready thead th.col-player,
+  #prices-table-wrap.name-simplify-ready tbody td.col-player,
   #opta-page .table-wrap.name-simplify-ready thead th.col-player,
   #opta-page .table-wrap.name-simplify-ready thead th.col-name,
   #opta-page .table-wrap.name-simplify-ready tbody td.col-player,
@@ -4018,6 +4028,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id,
+#prices-table-wrap.name-simplify-ready .ownership-id,
 #opta-page .table-wrap.name-simplify-ready .ownership-id,
 #team-page .table-wrap.name-simplify-ready .ownership-id,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id {
@@ -4032,13 +4043,15 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   overflow: visible;
 }
 #ownership-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
+#prices-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #opta-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #team-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #live-page .live-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id {
   max-height: calc(var(--own-photo, 36px) + 8px);
   overflow: hidden;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-rank {
+#ownership-table-wrap.name-simplify-ready .ownership-rank,
+#prices-table-wrap.name-simplify-ready .ownership-rank {
   flex: 0 1 auto;
   width: calc((1 - var(--name-collapse)) * 1.4em);
   min-width: 0;
@@ -4049,6 +4062,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-photo,
 #ownership-table-wrap.name-simplify-ready .ownership-crest,
+#prices-table-wrap.name-simplify-ready .ownership-photo,
+#prices-table-wrap.name-simplify-ready .ownership-crest,
 #opta-page .table-wrap.name-simplify-ready .ownership-photo,
 #opta-page .table-wrap.name-simplify-ready .ownership-crest,
 #team-page .table-wrap.name-simplify-ready .ownership-photo,
@@ -4060,6 +4075,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   height: var(--own-photo);
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text,
+#prices-table-wrap.name-simplify-ready .ownership-id-text,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-text {
@@ -4073,6 +4089,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   pointer-events: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
@@ -4085,6 +4102,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   max-width: 100%;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
+#prices-table-wrap.name-simplify-ready .ownership-id .player-name,
 #opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #team-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id .player-name {
@@ -4112,6 +4130,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
+#prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
@@ -4121,6 +4141,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   flex: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub,
+#prices-table-wrap.name-simplify-ready .ownership-id-sub,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub,
 #team-page .table-wrap.name-simplify-ready .ownership-id-sub,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-sub {
@@ -4135,6 +4156,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   white-space: nowrap;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub > *,
+#prices-table-wrap.name-simplify-ready .ownership-id-sub > *,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
 #team-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-sub > * {
@@ -4979,8 +5001,9 @@ tbody tr.row-selected td:first-child {
   color: var(--text-faint);
 }
 
-/* Ownership table */
-html[data-page="ownership"] .layout .main {
+/* Ownership / Prices tables */
+html[data-page="ownership"] .layout .main,
+html[data-page="prices"] .layout .main {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4994,6 +5017,183 @@ html[data-page="ownership"] .layout .main {
 }
 #ownership-page .ownership-header {
   flex: none;
+}
+#prices-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#prices-page .prices-header {
+  flex: none;
+}
+.prices-countdown-bar {
+  flex: none;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.35);
+}
+.prices-countdown-main {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.prices-countdown-main strong {
+  font-family: "Fira Code", ui-monospace, monospace;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.prices-countdown-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.prices-mover-bar {
+  margin-bottom: 10px;
+}
+#prices-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  --name-col-w: 240px;
+  --metric-col-w: 72px;
+}
+#prices-table-wrap > table {
+  width: max-content;
+  min-width: 100%;
+}
+.prices-table .prices-col-status {
+  min-width: 9.5rem;
+}
+.prices-table .prices-col-trend {
+  min-width: 5.5rem;
+}
+.prices-table .prices-col-spark {
+  min-width: 10.5rem;
+}
+.prices-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+}
+.prices-status-pill .prices-status-trend-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  line-height: 0;
+}
+.prices-status-pill .prices-status-trend-icon .icon {
+  width: 12px;
+  height: 12px;
+}
+.prices-status-pill .prices-status-label {
+  flex: none;
+}
+.prices-status-pill.is-very-likely-rise {
+  background: hsl(142 48% 32%);
+  color: #fff;
+}
+.prices-status-pill.is-likely-rise {
+  background: hsl(142 45% 42%);
+  color: #fff;
+}
+.prices-status-pill.is-likely-drop {
+  background: hsl(0 55% 52%);
+  color: #fff;
+}
+.prices-status-pill.is-very-likely-drop {
+  background: hsl(350 45% 36%);
+  color: #fff;
+}
+.prices-status-pill.is-short {
+  min-width: 2.5rem;
+  padding: 3px 6px;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+.prices-status-pill.is-short .prices-status-trend-icon .icon {
+  width: 11px;
+  height: 11px;
+}
+.prices-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.1em;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.prices-progress-pill.is-rise {
+  background: hsl(142 45% 38% / 0.16);
+  color: hsl(142 45% 28%);
+}
+.prices-progress-pill.is-drop {
+  background: hsl(0 55% 48% / 0.14);
+  color: hsl(0 55% 38%);
+}
+.prices-progress-pill.is-predicted.is-rise {
+  background: hsl(142 48% 32% / 0.22);
+  color: hsl(142 48% 24%);
+}
+.prices-progress-pill.is-predicted.is-drop {
+  background: hsl(350 45% 36% / 0.18);
+  color: hsl(350 45% 30%);
+}
+.prices-progress-pill .ownership-stat-roll,
+.prices-progress-pill .stat-roll-digit {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.prices-trend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.prices-trend .icon {
+  width: 14px;
+  height: 14px;
+}
+.prices-trend.is-up {
+  color: hsl(142 45% 32%);
+}
+.prices-trend.is-down {
+  color: hsl(0 55% 42%);
+}
+:root[data-theme="dark"] .prices-progress-pill.is-rise,
+:root:not([data-theme="light"]) .prices-progress-pill.is-rise {
+  color: hsl(142 55% 72%);
+}
+:root[data-theme="dark"] .prices-progress-pill.is-drop,
+:root:not([data-theme="light"]) .prices-progress-pill.is-drop {
+  color: hsl(0 70% 78%);
+}
+:root[data-theme="dark"] .prices-progress-pill.is-predicted.is-rise,
+:root:not([data-theme="light"]) .prices-progress-pill.is-predicted.is-rise {
+  color: hsl(142 60% 78%);
+}
+:root[data-theme="dark"] .prices-progress-pill.is-predicted.is-drop,
+:root:not([data-theme="light"]) .prices-progress-pill.is-predicted.is-drop {
+  color: hsl(0 75% 80%);
 }
 .ownership-mover-bar {
   display: flex;
@@ -5187,20 +5387,26 @@ html[data-page="ownership"] .layout .main {
   flex: 1 1 auto;
 }
 
-/* Ownership desktop: keep Filters / Players·Teams / Search on one row. */
-html[data-page="ownership"] #subtoolbar {
+/* Ownership / Prices desktop: keep Filters / Players·Teams / Search on one row. */
+html[data-page="ownership"] #subtoolbar,
+html[data-page="prices"] #subtoolbar {
   flex-wrap: nowrap;
 }
-html[data-page="ownership"] #subtoolbar .topbar-end-cluster {
+html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
+html[data-page="prices"] #subtoolbar .topbar-end-cluster {
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-end;
   gap: 8px;
 }
-html[data-page="ownership"] #subtoolbar #search-wrap {
+html[data-page="ownership"] #subtoolbar #search-wrap,
+html[data-page="prices"] #subtoolbar #search-wrap {
   flex: 0 1 280px;
   min-width: 140px;
   max-width: 320px;
+}
+html[data-page="prices"] #stats-toolbar-start > .tabs {
+  display: none !important;
 }
 #ownership-table-wrap > table {
   width: max-content;
@@ -5316,9 +5522,15 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
 :root[data-theme="dark"] .ownership-id-team {
   color: color-mix(in srgb, var(--team-accent, hsl(var(--foreground))) 55%, white);
 }
+:root[data-theme="dark"] .ownership-id-team.is-dark-team-accent {
+  color: color-mix(in srgb, var(--team-accent) 22%, hsl(var(--muted-foreground)));
+}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .ownership-id-team {
     color: color-mix(in srgb, var(--team-accent, hsl(var(--foreground))) 55%, white);
+  }
+  :root:not([data-theme="light"]) .ownership-id-team.is-dark-team-accent {
+    color: color-mix(in srgb, var(--team-accent) 22%, hsl(var(--muted-foreground)));
   }
 }
 .ownership-id-sep {
@@ -5399,6 +5611,54 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
   html[data-page="ownership"] #ownership-page .ownership-header {
     display: none;
   }
+  html[data-page="prices"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+    padding-bottom: var(--main-pad-x, 8px);
+  }
+  html[data-page="prices"] #prices-page {
+    display: block;
+    flex: none;
+    min-width: 0;
+    min-height: 0;
+    overflow: visible;
+  }
+  html[data-page="prices"] #prices-page .prices-header,
+  html[data-page="prices"] #prices-countdown-bar {
+    display: none;
+  }
+  html[data-page="prices"] #prices-updated-footer {
+    flex: none;
+  }
+  #prices-table-wrap {
+    flex: none;
+    min-height: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    --name-col-w: 176px;
+    --metric-col-w: 58px;
+  }
+  #prices-table-wrap > table > thead tr:not(.section-row) th.col-player {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background-color: hsl(var(--muted));
+  }
+  .prices-table .prices-col-status {
+    min-width: 3.25rem;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .prices-table .prices-col-spark {
+    min-width: 9.5rem;
+  }
   html[data-page="ownership"] #ownership-updated-footer {
     flex: none;
   }
@@ -5467,7 +5727,8 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
     z-index: 10;
     background-color: hsl(var(--muted));
   }
-  #ownership-table-wrap .ownership-table .col-num {
+  #ownership-table-wrap .ownership-table .col-num,
+  #prices-table-wrap .prices-table .col-num {
     padding-left: 7px;
     padding-right: 7px;
   }
@@ -5479,15 +5740,19 @@ html[data-page="ownership"] #subtoolbar #search-wrap {
     padding-left: 5px;
     padding-right: 5px;
   }
-  #ownership-table-wrap .ownership-id .player-name {
+  #ownership-table-wrap .ownership-id .player-name,
+  #prices-table-wrap .ownership-id .player-name {
     font-size: 11.5px;
   }
   #ownership-table-wrap .ownership-photo,
-  #ownership-table-wrap .ownership-crest {
+  #ownership-table-wrap .ownership-crest,
+  #prices-table-wrap .ownership-photo,
+  #prices-table-wrap .ownership-crest {
     width: 30px;
     height: 30px;
   }
-  #ownership-table-wrap .ownership-id-sub {
+  #ownership-table-wrap .ownership-id-sub,
+  #prices-table-wrap .ownership-id-sub {
     font-size: 9.5px;
   }
   html.has-mobile-bottom-dock[data-page="ownership"] #ownership-updated-footer:not([hidden]) {
@@ -13792,13 +14057,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   padding: 10px 12px;
   min-width: 0;
 }
-.home-dashboard.has-live-minutes .home-panel {
-  border-color: hsl(142 55% 38% / 0.55);
-  box-shadow:
-    0 0 0 1px hsl(142 55% 38% / 0.18),
-    var(--shadow-sm);
-}
-/* No live starters — rank delta borders on summary rank cards only. */
+/* Rank delta borders on summary rank cards (live or not). */
 .home-stat-panel {
   --home-rank-saturate-duration: 3.4s;
   --home-rank-saturate-ease: cubic-bezier(0.12, 0.88, 0.22, 1);
@@ -13806,13 +14065,13 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     border-color var(--home-rank-saturate-duration) var(--home-rank-saturate-ease),
     box-shadow var(--home-rank-saturate-duration) var(--home-rank-saturate-ease);
 }
-.home-dashboard:not(.has-live-minutes) .home-stat-panel.is-rank-border-up {
+.home-stat-panel.is-rank-border-up {
   border-color: hsl(var(--positive) / 0.55);
   box-shadow:
     0 0 0 1px hsl(var(--positive) / 0.18),
     var(--shadow-sm);
 }
-.home-dashboard:not(.has-live-minutes) .home-stat-panel.is-rank-border-down {
+.home-stat-panel.is-rank-border-down {
   border-color: hsl(var(--negative) / 0.55);
   box-shadow:
     0 0 0 1px hsl(var(--negative) / 0.18),
