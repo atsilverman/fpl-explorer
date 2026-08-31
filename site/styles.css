@@ -3124,6 +3124,23 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation: none !important;
 }
 
+/* Desktop Home: no enter rolls, IMP bars, rank chrome, or scroll transitions. */
+@media (min-width: 901px) {
+  #home-page .home-imp-fill,
+  #home-page .home-squad-track,
+  #home-page .home-standings-track,
+  #home-page .home-feed-track {
+    transition: none !important;
+  }
+  #home-page .home-rank-delta:not([hidden]),
+  #home-page .home-dashboard.is-rank-chrome-staged .home-rank-delta:not([hidden]) {
+    animation: none !important;
+  }
+  #home-page .stat-roll-strip {
+    transition: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-pane.is-enter-pending > .page-header,
   .page-pane.is-enter-pending > .table-wrap,

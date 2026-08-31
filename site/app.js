@@ -3583,7 +3583,7 @@
   }
 
   function homeShouldDeferSummaryRankChrome({ animateView = false, settleQuiet = false } = {}) {
-    if (settleQuiet || prefersReducedMotion()) return false;
+    if (homeSnapsEnterOnDesktop() || settleQuiet || prefersReducedMotion()) return false;
     if (animateView || homeSummaryRankChromePending || homePageEnterArmed) return true;
     return !!(el.homePage && el.homePage.classList.contains("is-enter-pending"));
   }
@@ -4546,6 +4546,11 @@
       && window.matchMedia("(min-width: 901px)").matches;
   }
 
+  /** Desktop Home: snap final values immediately — no enter rolls or IMP motion. */
+  function homeSnapsEnterOnDesktop() {
+    return homeSquadIsDesktopLayout();
+  }
+
   function homeSquadIsWideLayout() {
     return HOME_SQUAD_WIDE_MQ.matches;
   }
@@ -4846,7 +4851,7 @@
     const startTop = isWin ? window.scrollY : node.scrollTop;
     const startLeft = isWin ? window.scrollX : node.scrollLeft;
     const token = ++homeScrollAnimToken;
-    if (prefersReducedMotion() || duration <= 0) {
+    if (prefersReducedMotion() || duration <= 0 || (state.page === "home" && homeSnapsEnterOnDesktop())) {
       if (isWin) window.scrollTo(left, top);
       else {
         node.scrollTop = top;
@@ -6302,7 +6307,7 @@
         });
       });
     };
-    if (!animate || prefersReducedMotion()) {
+    if (!animate || prefersReducedMotion() || (state.page === "home" && homeSnapsEnterOnDesktop())) {
       snapDrawn();
       return;
     }
@@ -6336,7 +6341,7 @@
       const summary = homeSummaryForView(homeActiveViewEntryId());
       applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     };
-    if (!pane || prefersReducedMotion()) {
+    if (!pane || prefersReducedMotion() || homeSnapsEnterOnDesktop()) {
       finishAll();
       return;
     }
@@ -6450,9 +6455,14 @@
       el.homeGwHeading.textContent = "GW points";
     }
     renderHomeSummaryStats(summary, {
-      enterPending: leaveRollsPending || homePageEnterArmed || homeIsEnterBusy(),
+      enterPending:
+        !homeSnapsEnterOnDesktop()
+        && (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()),
     });
-    if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
+    if (
+      !homeSnapsEnterOnDesktop()
+      && (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy())
+    ) {
       mountHomeSummaryRollsAtStart(el.homePage);
     }
     const deferRankChrome = homeShouldDeferSummaryRankChrome({ animateView, settleQuiet });
@@ -6645,13 +6655,14 @@
       settleHomeTablesLayout({ standingsPageIdx });
     });
     const enterBusyNow = homeIsEnterBusy();
-    const snapRolls = !leaveRollsPending && !animateView && !enterBusyNow;
+    const desktopSnap = homeSnapsEnterOnDesktop();
+    const snapRolls = desktopSnap || (!leaveRollsPending && !animateView && !enterBusyNow);
     if (snapRolls) {
-      finishHomeStatRolls(el.homePage, { summary: !homePageEnterArmed });
+      finishHomeStatRolls(el.homePage, { summary: !homePageEnterArmed || desktopSnap });
       animateHomeImpBars(el.homePage, { animate: false });
     }
     requestAnimationFrame(() => {
-      if (animateView && !settleQuiet) {
+      if (animateView && !settleQuiet && !homeSnapsEnterOnDesktop()) {
         startHomeEnterMotion(el.homePage, { duration: HOME_VIEW_SWITCH_ROLL_MS });
       }
     });
@@ -19489,12 +19500,14 @@
     // Cancel a previous double-rAF start if setPage/playPageEnter raced.
     pane._enterGen = (pane._enterGen || 0) + 1;
     const enterGen = pane._enterGen;
-    if (prefersReducedMotion()) {
+    if (prefersReducedMotion() || (pane.id === "home-page" && homeSnapsEnterOnDesktop())) {
       if (pane.id === "home-page") {
         homePageEnterArmed = false;
         finishHighlightSatEnter(pane);
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
+        const summary = homeSummaryForView(homeActiveViewEntryId());
+        applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
         flushHomeEnterDeferred();
       }
       if (pane.id === "ownership-page") {
