@@ -18989,8 +18989,9 @@
     if (series.length < 2) {
       return `<span class="ownership-spark-empty prices-spark-empty">—</span>`;
     }
-    const w = 92;
-    const h = 28;
+    const mobile = NARROW_MQ.matches;
+    const w = mobile ? 56 : 92;
+    const h = mobile ? 24 : 28;
     const padX = 2;
     const padY = 4;
     const lo = Math.min(...series);
@@ -19027,9 +19028,9 @@
     return `<tr>
       ${th("name", "Player", "col-player")}
       ${th("status", "Status", "col-num prices-col-status")}
-      ${th("progress", "Progress", "col-num")}
-      ${th("predicted", "Predicted", "col-num")}
-      ${th("d3", "3d trend", "col-num prices-col-spark")}
+      ${th("progress", "Progress", "col-num prices-col-metric")}
+      ${th("predicted", mobile ? "Predict" : "Predicted", "col-num prices-col-metric")}
+      ${th("d3", mobile ? "3d" : "3d trend", "col-num prices-col-spark")}
       ${mobile ? "" : th("price", "Current price", "col-num prices-col-price")}
     </tr>`;
   }
@@ -19043,8 +19044,8 @@
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
       <td class="col-num prices-col-status">${pricesStatusPillHTML(row)}</td>
-      <td class="col-num">${pricesProgressPillHTML(row.progress)}</td>
-      <td class="col-num">${pricesProgressPillHTML(row.predicted, { predicted: true })}</td>
+      <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.progress)}</td>
+      <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.predicted, { predicted: true })}</td>
       <td class="col-num prices-col-spark">${pricesSparkHTML(row)}</td>
       ${mobile ? "" : `<td class="col-num prices-col-price">${escapeHtml(priceTxt)}</td>`}
     </tr>`;

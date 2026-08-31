@@ -5068,11 +5068,35 @@ html[data-page="prices"] .layout .main {
 .prices-table .prices-col-status {
   min-width: 9.5rem;
 }
+.prices-table .prices-col-metric {
+  min-width: 5.25rem;
+}
 .prices-table .prices-col-trend {
   min-width: 5.5rem;
 }
 .prices-table .prices-col-spark {
-  min-width: 10.5rem;
+  min-width: 11.75rem;
+}
+#prices-table-wrap .prices-table th.col-num.prices-col-status,
+#prices-table-wrap .prices-table td.col-num.prices-col-status,
+#prices-table-wrap .prices-table th.col-num.prices-col-metric,
+#prices-table-wrap .prices-table td.col-num.prices-col-metric,
+#prices-table-wrap .prices-table th.col-num.prices-col-spark,
+#prices-table-wrap .prices-table td.col-num.prices-col-spark,
+#prices-table-wrap .prices-table th.col-num.prices-col-price,
+#prices-table-wrap .prices-table td.col-num.prices-col-price {
+  width: auto;
+  max-width: none;
+}
+#prices-table-wrap .prices-table th.col-num.prices-col-metric,
+#prices-table-wrap .prices-table td.col-num.prices-col-metric {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+#prices-table-wrap .prices-table th.col-num.prices-col-spark,
+#prices-table-wrap .prices-table td.col-num.prices-col-spark {
+  padding-left: 10px;
+  padding-right: 14px;
 }
 .prices-status-pill {
   display: inline-flex;
@@ -5642,8 +5666,9 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;
-    --name-col-w: 176px;
+    --name-col-w: 168px;
     --metric-col-w: 58px;
+    padding-right: 4px;
   }
   #prices-table-wrap > table > thead tr:not(.section-row) th.col-player {
     position: sticky;
@@ -5651,13 +5676,52 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     z-index: 10;
     background-color: hsl(var(--muted));
   }
-  .prices-table .prices-col-status {
-    min-width: 3.25rem;
-    padding-left: 4px;
-    padding-right: 4px;
+  #prices-table-wrap > table > tbody td.col-player {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: hsl(var(--card));
   }
-  .prices-table .prices-col-spark {
-    min-width: 9.5rem;
+  #prices-table-wrap > table > tbody tr:hover > td.col-player {
+    background-color: hsl(var(--accent-hsl));
+  }
+  #prices-table-wrap .prices-table th.col-num.prices-col-status,
+  #prices-table-wrap .prices-table td.col-num.prices-col-status {
+    min-width: 3.5rem;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  #prices-table-wrap .prices-table th.col-num.prices-col-metric,
+  #prices-table-wrap .prices-table td.col-num.prices-col-metric {
+    min-width: 5.75rem;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  #prices-table-wrap .prices-table th.col-num.prices-col-spark,
+  #prices-table-wrap .prices-table td.col-num.prices-col-spark {
+    min-width: 12.75rem;
+    padding-left: 12px;
+    padding-right: 20px;
+  }
+  #prices-table-wrap .prices-table > thead tr:not(.section-row) th {
+    font-size: 9.5px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    white-space: nowrap;
+  }
+  #prices-table-wrap .prices-table .prices-progress-pill {
+    font-size: 11px;
+    min-width: 4.6em;
+    padding: 2px 6px;
+  }
+  #prices-table-wrap .prices-spark {
+    gap: 3px;
+  }
+  #prices-table-wrap .prices-spark .ownership-spark-lab {
+    font-size: 8.5px;
+  }
+  #prices-table-wrap .prices-spark .ownership-spark-svg {
+    flex: none;
   }
   html[data-page="ownership"] #ownership-updated-footer {
     flex: none;
