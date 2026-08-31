@@ -2685,16 +2685,6 @@
     return !!(baked && TRACKED_MANAGER_IDS.map(String).includes(String(baked)));
   }
 
-  /** Trust baked home_data.js for first paint — live poll updates quietly after. */
-  function primeHomeStandingsFromStaticCache() {
-    if (!homeLivePollReady() || homeLiveStandingsSynced) return;
-    if (!(HOME && HOME.summary && Array.isArray(HOME.standings) && HOME.standings.length)) return;
-    if (String(HOME.leagueId) !== HOME_LEAGUE_ID) return;
-    const mgr = savedManagerId || HOME.managerId;
-    if (!mgr || !TRACKED_MANAGER_IDS.map(String).includes(String(mgr))) return;
-    homeLiveStandingsSynced = true;
-  }
-
   function homeStandingsFingerprint(rows) {
     if (!Array.isArray(rows)) return "";
     return rows
@@ -2724,18 +2714,9 @@
 
   function homeLivePayloadPending() {
     if (!homeLivePollReady()) return false;
-    if (homeLiveStandingsSynced) return false;
+    // Prefer live /api/home over baked home_data.js — static bundle can lag hours behind DO.
+    if (homeLiveLastSuccessAt > 0) return false;
     if (homeLivePollAttempted && !homeLivePollInFlight) return false;
-    // Trust baked home_data.js for first paint when squad + standings exist.
-    if (
-      HOME
-      && Array.isArray(HOME.squad)
-      && HOME.squad.length
-      && Array.isArray(HOME.standings)
-      && HOME.standings.length
-    ) {
-      return false;
-    }
     return true;
   }
 
@@ -2750,9 +2731,7 @@
 
   function homeStandingsShowLoading() {
     if (!homeLivePollReady()) return false;
-    if (homeLiveStandingsSynced) return false;
-    if (homeLivePollAttempted && !homeLivePollInFlight) return false;
-    return true;
+    return homeLivePayloadPending();
   }
 
   function homeSquadLoadingHTML(colspan, rows = 5) {
@@ -20148,7 +20127,8 @@
       renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
       homePageEnterArmed = true;
-      homeLivePollAfterEnter = true;
+      homeLivePollAfterEnter = !homeSnapsEnterOnDesktop();
+      if (homeSnapsEnterOnDesktop()) syncHomeLivePolling({ skipImmediate: false });
       renderHome({ leaveRollsPending: true });
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
@@ -22461,12 +22441,16 @@
     } catch {
       syncFplIdStatus();
     }
-    primeHomeStandingsFromStaticCache();
     const page = storedPage();
     if (homeLivePollReady() && page === "home") {
       homeLivePrefetchStarted = true;
-      homeLivePollAfterEnter = true;
-      syncHomeLivePolling({ skipImmediate: true });
+      if (homeSnapsEnterOnDesktop()) {
+        homeLivePollAfterEnter = false;
+        syncHomeLivePolling({ skipImmediate: false });
+      } else {
+        homeLivePollAfterEnter = true;
+        syncHomeLivePolling({ skipImmediate: true });
+      }
     } else {
       prefetchHomeLiveCache();
     }
