@@ -14503,7 +14503,7 @@ html.home-squad-wide .home-squad-live-wrap {
   border-right: 1px solid hsl(var(--border) / 0.65);
 }
 html.home-squad-wide .home-squad-live-table col.home-col-player {
-  width: 34%;
+  width: 42%;
 }
 html.home-squad-wide .home-squad-live-table col.home-col-pts {
   width: 10%;
@@ -14515,18 +14515,19 @@ html.home-squad-wide .home-squad-live-table col.home-col-opp {
   width: 11%;
 }
 html.home-squad-wide .home-squad-live-table col.home-col-imp {
-  width: 32%;
+  width: 24%;
 }
 html.home-squad-wide .home-squad-live-wrap .home-col-imp {
   padding-left: 2px;
-  padding-right: 4px;
+  padding-right: 2px;
+  text-align: center;
 }
 html.home-squad-wide .home-squad-live-wrap .home-imp {
   min-width: 0;
   width: 100%;
   max-width: 100%;
   gap: 3px;
-  justify-content: flex-end;
+  justify-content: center;
 }
 html.home-squad-wide .home-squad-live-wrap .home-imp-track {
   flex: 0 0 24px;
@@ -15435,7 +15436,13 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     width: 9.25%;
   }
   html.home-squad-wide .home-squad-pts-table.is-wide-split col.home-col-stat {
-    width: 11%;
+    width: 1%;
+  }
+  html.home-squad-wide .home-squad-pts-table.is-wide-split th.home-col-stat,
+  html.home-squad-wide .home-squad-pts-table.is-wide-split td.home-col-stat {
+    padding-left: 2px;
+    padding-right: 2px;
+    text-align: center;
   }
   .home-squad-pts-table col.home-col-player {
     width: 30%;
