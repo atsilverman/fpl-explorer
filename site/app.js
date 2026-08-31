@@ -2418,10 +2418,11 @@
   function scheduleSiteRefreshForHomeTargets({ toast = false, animateHomeEnter = false } = {}) {
     if (animateHomeEnter && state.page === "home" && el.homePage) {
       setHomeManagerModalOpen(false);
+      homePageEnterArmed = true;
+      homeLivePollAfterEnter = true;
       primeOptaHighlightEnter(el.homePage);
       renderHome({ leaveRollsPending: true });
       playPageEnter(el.homePage);
-      syncHomeLivePolling();
     } else {
       // Owned pins / tables update immediately from the live squad sync.
       refreshManagerDependentUI();
@@ -2522,10 +2523,12 @@
   let homeRenderQueued = false;
   let homeEnterMotionToken = 0;
   let homeLivePollAfterEnter = false;
+  /** True from setPage(home) until playPageEnter arms is-entering — blocks poll rebuild flash. */
+  let homePageEnterArmed = false;
   let homeLivePrefetchStarted = false;
-  const HOME_ENTER_ROLL_MS = 3400;
-  const HOME_VIEW_SWITCH_ROLL_MS = 2600;
-  const HOME_SQUAD_PTS_ROLL_BATCH = 24;
+  const HOME_SUMMARY_ROLL_MS = 2800;
+  const HOME_VIEW_SWITCH_ROLL_MS = 2400;
+  const HOME_ENTER_CLEAR_MS = HOME_SUMMARY_ROLL_MS + 120;
   const HOME_RANK_BORDER_REVEAL_RATIO = 0.18;
   const HOME_SCROLL_TOP_MS = 920;
   let homeScrollAnimToken = 0;
@@ -2553,22 +2556,34 @@
 
   function homeIsEnterBusy() {
     return !!(
-      el.homePage &&
-      (el.homePage.classList.contains("is-entering") ||
-        el.homePage.classList.contains("is-enter-pending"))
+      homePageEnterArmed ||
+      (el.homePage &&
+        (el.homePage.classList.contains("is-entering") ||
+          el.homePage.classList.contains("is-enter-pending")))
     );
   }
 
+  function releaseDeferredHomeLivePoll() {
+    if (!homeLivePollAfterEnter) return;
+    homeLivePollAfterEnter = false;
+    if (!document.hidden && homeLivePollReady()) pollHomeFromLiveServer();
+    syncHomeLivePolling({ skipImmediate: true });
+  }
+
   function flushHomeEnterDeferred() {
-    if (el.homePage) finishHomeStatRolls(el.homePage);
     if (homeRenderQueued) {
       homeRenderQueued = false;
       renderHome({ settleQuiet: true });
+    } else {
+      if (el.homePage) finishHomeStatRolls(el.homePage);
+      if (state.page === "home" && homeSquadIsWideLayout()) {
+        requestAnimationFrame(() => {
+          if (state.page !== "home" || !homeSquadIsWideLayout()) return;
+          settleHomeTablesLayout({ standingsPageIdx: homeStandingsActivePageIndex() });
+        });
+      }
     }
-    if (homeLivePollAfterEnter) {
-      homeLivePollAfterEnter = false;
-      syncHomeLivePolling();
-    }
+    releaseDeferredHomeLivePoll();
   }
 
   function resetHomeLivePollState() {
@@ -2675,6 +2690,16 @@
     if (!homeLivePollReady()) return false;
     if (homeLiveStandingsSynced) return false;
     if (homeLivePollAttempted && !homeLivePollInFlight) return false;
+    // Trust baked home_data.js for first paint when squad + standings exist.
+    if (
+      HOME
+      && Array.isArray(HOME.squad)
+      && HOME.squad.length
+      && Array.isArray(HOME.standings)
+      && HOME.standings.length
+    ) {
+      return false;
+    }
     return true;
   }
 
@@ -2794,7 +2819,7 @@
       const elementGwChanged = priorEgFp !== incomingEgFp;
       if (!standingsChanged && !summaryChanged && !elementGwChanged) {
         syncLiveNavChrome();
-        settleHomeAfterLivePoll();
+        settleHomeAfterLivePoll({ rerender: false });
         return;
       }
       if (state.page === "home") {
@@ -3559,7 +3584,7 @@
 
   function homeShouldDeferSummaryRankChrome({ animateView = false, settleQuiet = false } = {}) {
     if (settleQuiet || prefersReducedMotion()) return false;
-    if (animateView || homeSummaryRankChromePending) return true;
+    if (animateView || homeSummaryRankChromePending || homePageEnterArmed) return true;
     return !!(el.homePage && el.homePage.classList.contains("is-enter-pending"));
   }
 
@@ -4202,14 +4227,19 @@
     });
   }
 
-  /** Align wide squad live + pts halves; cheap — run before showing the split. */
-  function settleHomeSquadSplitLayout() {
+  /** Align wide squad live + pts halves; show split immediately, measure after paint. */
+  function settleHomeSquadSplitLayout({ deferMeasure = false } = {}) {
     if (!homeSquadIsWideLayout()) {
       document.documentElement.classList.remove("home-squad-layout-ready");
       return;
     }
-    syncHomeSquadRowHeights();
     document.documentElement.classList.add("home-squad-layout-ready");
+    const measure = () => syncHomeSquadRowHeights();
+    if (deferMeasure) {
+      requestAnimationFrame(() => requestAnimationFrame(measure));
+    } else {
+      measure();
+    }
   }
 
   function settleHomeTablesLayout({ standingsPageIdx } = {}) {
@@ -6153,8 +6183,9 @@
     return formatHomeRankDelta(places);
   }
 
-  function renderHomeSummaryStats(summary) {
-    if (homeLivePayloadPending()) {
+  function renderHomeSummaryStats(summary, { enterPending = false } = {}) {
+    const showPendingDash = homeLivePayloadPending() && !enterPending;
+    if (showPendingDash) {
       [el.homeGwPoints, el.homeOverallRankNum || el.homeOverallRank, el.homeTotalPoints, el.homeLeagueRankNum || el.homeLeagueRank].forEach((node) => {
         if (node) node.textContent = "—";
       });
@@ -6196,11 +6227,29 @@
     }
   }
 
-  function finishHomeStatRolls(root) {
+  function finishHomeStatRolls(root, { summary = true } = {}) {
     if (!root) return;
-    root.querySelectorAll(
-      ".home-stat-roll[data-count-to], .home-squad-pts-table .live-stat-roll[data-count-to]"
-    ).forEach(finishStatRollNode);
+    const parts = [];
+    if (summary) parts.push(".home-stat-roll[data-count-to]");
+    parts.push(".home-squad-pts-table .live-stat-roll[data-count-to]");
+    root.querySelectorAll(parts.join(", ")).forEach(finishStatRollNode);
+  }
+
+  function mountHomeSummaryRollsAtStart(root) {
+    if (!root || prefersReducedMotion()) return;
+    root.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]").forEach((node) => {
+      const to = Number(node.dataset.countTo);
+      if (!Number.isFinite(to)) return;
+      const from =
+        node.dataset.countFrom != null && Number.isFinite(Number(node.dataset.countFrom))
+          ? Number(node.dataset.countFrom)
+          : 0;
+      renderStatRollNode(node, from, from, {
+        decimals: Number(node.dataset.countDecimals) || 0,
+        signed: node.dataset.countSigned === "1",
+        suffix: node.dataset.countSuffix || "",
+      });
+    });
   }
 
   function prepareHomeStatRolls() {
@@ -6271,90 +6320,47 @@
     });
   }
 
-  function homeHeroRollNodes(pane, { skipStandings = false } = {}) {
+  function homeHeroRollNodes(pane) {
     if (!pane) return [];
-    const nodes = [
-      ...pane.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]"),
-      ...pane.querySelectorAll(".home-feed-table .home-stat-roll[data-count-to]"),
-    ];
-    if (!skipStandings) {
-      nodes.push(...pane.querySelectorAll(".home-standings-table .home-stat-roll[data-count-to]"));
-    }
-    return nodes;
+    return [...pane.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]")];
   }
 
-  function homeSquadStatRollNodes(pane) {
-    if (!pane) return [];
-    return [
-      ...pane.querySelectorAll(".home-squad-live-wrap .home-stat-roll[data-count-to]"),
-      ...pane.querySelectorAll(".home-squad-pts-table .live-stat-roll[data-count-to]"),
-    ];
-  }
-
-  /** Batched short rolls for squad PTS / G/A / CS… — same pattern as Live points. */
-  function animateHomeSquadStatRollsBatched(nodes, token) {
-    if (!nodes.length) return { maxRoll: 0, tailMs: 0 };
-    let maxRoll = 380;
-    nodes.forEach((node) => {
-      maxRoll = Math.max(maxRoll, liveRollDurationForNode(node));
-    });
-    const tailMs = Math.ceil(nodes.length / HOME_SQUAD_PTS_ROLL_BATCH) * 17;
-    let i = 0;
-    const runBatch = () => {
-      if (token !== homeEnterMotionToken) return;
-      const end = Math.min(i + HOME_SQUAD_PTS_ROLL_BATCH, nodes.length);
-      for (; i < end; i += 1) {
-        const node = nodes[i];
-        animateStatRollNode(node, { duration: liveRollDurationForNode(node) });
-      }
-      if (i < nodes.length) requestAnimationFrame(runBatch);
-    };
-    runBatch();
-    return { maxRoll, tailMs };
-  }
-
-  function startHomeEnterMotion(pane, { duration = HOME_ENTER_ROLL_MS, skipStandings = false } = {}) {
-    const finishSummaryRankChrome = () => {
+  function startHomeEnterMotion(pane, { duration = HOME_SUMMARY_ROLL_MS } = {}) {
+    const finishAll = () => {
       homeSummaryRankChromePending = false;
       clearHomeRankBorderRevealTimer();
-      if (el.homeBento && el.homeBento.classList.contains("is-rank-chrome-staged")) {
-        revealHomeSummaryRankBorders();
-      }
+      if (!pane) return;
+      finishHighlightSatEnter(pane);
+      finishHomeStatRolls(pane);
+      animateHomeImpBars(pane, { animate: false });
+      const summary = homeSummaryForView(homeActiveViewEntryId());
+      applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     };
     if (!pane || prefersReducedMotion()) {
-      if (pane) {
-        finishHighlightSatEnter(pane);
-        finishHomeStatRolls(pane);
-        animateHomeImpBars(pane, { animate: false });
-        const summary = homeSummaryForView(homeActiveViewEntryId());
-        applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
-      }
+      finishAll();
       return;
     }
-    homeSummaryRankChromePending = true;
     const token = ++homeEnterMotionToken;
-    const rollMs = Math.max(400, Number(duration) || HOME_ENTER_ROLL_MS);
-    primeOptaHighlightEnter(pane);
-    prepareHomeStatRolls();
+    // Tables, feed, IMP, and rank chrome snap immediately — only summary cards roll briefly.
+    finishHomeStatRolls(pane, { summary: false });
+    animateHomeImpBars(pane, { animate: false });
+    finishHighlightSatEnter(pane);
+    homeSummaryRankChromePending = false;
     const summary = homeSummaryForView(homeActiveViewEntryId());
-    stageHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
-    scheduleHomeSummaryRankBorderReveal(rollMs, token);
-    const heroRolls = homeHeroRollNodes(pane, { skipStandings });
-    const squadStatRolls = homeSquadStatRollNodes(pane);
-    heroRolls.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
-    const squadBatch = animateHomeSquadStatRollsBatched(squadStatRolls, token);
-    startOptaHighlightEnter(pane, { duration: rollMs });
-    animateHomeImpBars(pane);
-    const motionEnd = Math.max(rollMs, squadBatch.maxRoll + squadBatch.tailMs) + 80;
+    applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
+
+    let summaryRolls = homeHeroRollNodes(pane);
+    if (!summaryRolls.length) {
+      prepareHomeStatRolls();
+      mountHomeSummaryRollsAtStart(pane);
+      summaryRolls = homeHeroRollNodes(pane);
+    }
+    const rollMs = Math.max(400, Number(duration) || HOME_SUMMARY_ROLL_MS);
+    summaryRolls.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
     window.setTimeout(() => {
-      if (token !== homeEnterMotionToken) {
-        homeSummaryRankChromePending = false;
-        clearHomeRankBorderRevealTimer();
-        return;
-      }
-      finishHomeStatRolls(pane);
-      finishSummaryRankChrome();
-    }, motionEnd);
+      if (token !== homeEnterMotionToken) return;
+      summaryRolls.forEach(finishStatRollNode);
+    }, rollMs + 48);
   }
 
   function renderHomeUnlinked() {
@@ -6370,6 +6376,7 @@
 
   function renderHome({ deferDuringEnter = false, animateView = false, settleQuiet = false, leaveRollsPending = false } = {}) {
     if (deferDuringEnter && homeIsEnterBusy()) {
+      syncHomeSquadWideLayout();
       homeRenderQueued = true;
       return;
     }
@@ -6442,7 +6449,12 @@
     if (el.homeGwHeading) {
       el.homeGwHeading.textContent = "GW points";
     }
-    renderHomeSummaryStats(summary);
+    renderHomeSummaryStats(summary, {
+      enterPending: leaveRollsPending || homePageEnterArmed || homeIsEnterBusy(),
+    });
+    if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
+      mountHomeSummaryRollsAtStart(el.homePage);
+    }
     const deferRankChrome = homeShouldDeferSummaryRankChrome({ animateView, settleQuiet });
     if (deferRankChrome) {
       if (homeSummaryRankChromePending) {
@@ -6625,26 +6637,22 @@
     syncHomeSquadPagerDots(homeSquadActivePageIndex());
     const standingsPageIdx = homeStandingsActivePageIndex();
     syncHomeStandingsPagerDots(standingsPageIdx);
-    settleHomeSquadSplitLayout();
-    if (HOME.gw != null) {
-      renderHomeFeed(Number(HOME.gw));
-    }
-    settleHomeTablesLayout({ standingsPageIdx });
+    settleHomeSquadSplitLayout({ deferMeasure: true });
+    const feedGw = HOME.gw != null ? Number(HOME.gw) : null;
+    if (feedGw != null && homeSquadIsWideLayout()) renderHomeFeed(feedGw);
+    requestAnimationFrame(() => {
+      if (state.page !== "home") return;
+      settleHomeTablesLayout({ standingsPageIdx });
+    });
     const enterBusyNow = homeIsEnterBusy();
     const snapRolls = !leaveRollsPending && !animateView && !enterBusyNow;
     if (snapRolls) {
-      finishHomeStatRolls(el.homePage);
+      finishHomeStatRolls(el.homePage, { summary: !homePageEnterArmed });
       animateHomeImpBars(el.homePage, { animate: false });
     }
     requestAnimationFrame(() => {
       if (animateView && !settleQuiet) {
-        startHomeEnterMotion(el.homePage, {
-          duration: HOME_VIEW_SWITCH_ROLL_MS,
-          skipStandings: true,
-        });
-      }
-      if (!enterBusyNow && !homeIsEnterBusy()) {
-        settleHomeTablesLayout({ standingsPageIdx });
+        startHomeEnterMotion(el.homePage, { duration: HOME_VIEW_SWITCH_ROLL_MS });
       }
     });
   }
@@ -7666,9 +7674,7 @@
       if (preferMobileSheet()) setExpectedCatMenuOpen(false);
       if (state.page === "home") {
         syncHomeSquadWideLayout();
-        if (homeSquadIsWideLayout()) {
-          settleHomeTablesLayout();
-        }
+        if (homeSquadIsWideLayout()) settleHomeTablesLayout();
       }
     };
     if (immediate) {
@@ -17678,10 +17684,7 @@
       if (state.liveMode === "points") startLivePointsEnterMotion(el.livePage);
       else startLiveEnterMotion(el.livePage);
     }
-    if (homeLivePollAfterEnter) {
-      homeLivePollAfterEnter = false;
-      syncHomeLivePolling();
-    }
+    if (homeLivePollAfterEnter) releaseDeferredHomeLivePoll();
   }
 
   function finishLiveStatRolls(root) {
@@ -19488,6 +19491,7 @@
     const enterGen = pane._enterGen;
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
+        homePageEnterArmed = false;
         finishHighlightSatEnter(pane);
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
@@ -19618,6 +19622,7 @@
           pane._enterPendingFallback = null;
           pane.classList.remove("is-enter-pending");
         }
+        if (homeEnter) homePageEnterArmed = false;
         pane.classList.add("is-entering");
         if (marketsEnter) startStatCountUp(pane, ".markets-stat-value[data-count-to]");
         if (rankingsEnter) animateRankingsBars();
@@ -19636,7 +19641,7 @@
                 : ownershipEnter || pricesEnter
                   ? 1600
                   : homeEnter
-                    ? 4600
+                    ? HOME_ENTER_CLEAR_MS
                     : optaEnter
                       ? 1600
                       : 1500;
@@ -19873,6 +19878,10 @@
   }
 
   function setPage(page) {
+    if (state.page === "home" && page !== "home") {
+      homePageEnterArmed = false;
+      releaseDeferredHomeLivePoll();
+    }
     page = normalizeStoredPage(page);
     const prev = state.page;
     state.page = page;
@@ -20079,6 +20088,8 @@
       // Bars animate once via playPageEnter → animateRankingsBars.
       renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
+      homePageEnterArmed = true;
+      homeLivePollAfterEnter = true;
       renderHome({ leaveRollsPending: true });
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
@@ -22314,10 +22325,12 @@
         pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering", "is-live-entering");
       });
       if (el.homePage) {
+        homePageEnterArmed = false;
         homeEnterMotionToken += 1;
         finishHighlightSatEnter(el.homePage);
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });
+        releaseDeferredHomeLivePoll();
       }
       if (el.ownershipPage) {
         ownershipEnterMotionToken += 1;
@@ -22393,7 +22406,7 @@
     const page = storedPage();
     if (homeLivePollReady() && page === "home") {
       homeLivePrefetchStarted = true;
-      pollHomeFromLiveServer();
+      homeLivePollAfterEnter = true;
       syncHomeLivePolling({ skipImmediate: true });
     } else {
       prefetchHomeLiveCache();

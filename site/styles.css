@@ -3111,27 +3111,17 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation: none !important;
 }
 
-#home-page.is-entering > .page-header {
-  animation: page-enter-header 0.85s var(--ease-out) both;
-}
+#home-page.is-entering > .page-header,
 #home-page.is-entering .home-deadline,
 #home-page.is-entering .home-summary-cards > .home-panel,
-#home-page.is-entering .home-tables-grid > .home-panel {
-  animation: page-enter-item 0.78s var(--ease-out) both;
-  animation-delay: calc(0.08s + (min(var(--enter-i, 0), 4) * 0.045s));
-}
+#home-page.is-entering .home-tables-grid > .home-panel,
 #home-page.is-entering .home-view-banner {
-  animation: page-enter-fade 0.65s var(--ease-out) both;
-  animation-delay: 0.08s;
+  animation: none !important;
 }
 #home-page.is-entering .home-squad-table tbody tr > *,
-#home-page.is-entering .home-standings-table tbody tr > * {
-  animation: page-enter-fade 0.5s var(--ease-out) both;
-  animation-delay: calc(0.14s + (min(var(--enter-i, 0), 12) * 0.028s));
-}
+#home-page.is-entering .home-standings-table tbody tr > *,
 #home-page.is-entering .home-feed-table tbody tr > * {
-  animation: page-enter-fade 0.5s var(--ease-out) both;
-  animation-delay: 0.16s;
+  animation: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -14595,10 +14585,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split .home-squad-table {
     vertical-align: middle;
   }
 }
-html.home-squad-wide:not(.home-squad-layout-ready) #home-squad-panel .home-squad-split {
-  visibility: hidden;
-}
-html.home-squad-wide.home-squad-layout-ready #home-squad-panel .home-squad-split {
+html.home-squad-wide #home-squad-panel .home-squad-split {
   visibility: visible;
 }
 .home-tables-grid > .home-table-panel {
