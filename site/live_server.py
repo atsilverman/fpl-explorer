@@ -34,7 +34,7 @@ from fpl_gameweeks import (
     deadline_poll_window_active,
     extract_gameweeks,
 )
-from live_scoring import fixture_is_finished, fixture_is_live
+from live_scoring import fixture_is_finished
 
 SITE = Path(__file__).resolve().parent
 REPO = SITE.parent
@@ -109,13 +109,22 @@ def load_gw_fixtures(gw: int | None) -> list[dict]:
         return []
 
 
+def fixture_in_play_for_poll(fx: dict | None) -> bool:
+    """True while /fixtures/ may still receive live stat updates.
+
+    Do not treat fixture minutes ≥ 90 as finished here — FPL often keeps
+    `finished` false through stoppage time and `finished_provisional` while
+    element minutes and bonus still tick up.
+    """
+    if not fx or not isinstance(fx, dict):
+        return False
+    if fx.get("finished"):
+        return False
+    return bool(fx.get("started") or fx.get("finished_provisional"))
+
+
 def fixtures_have_live_action(fixtures: list[dict]) -> bool:
-    for fx in fixtures:
-        if fixture_is_live(fx):
-            return True
-        if fx.get("started") and not fixture_is_finished(fx):
-            return True
-    return False
+    return any(fixture_in_play_for_poll(fx) for fx in fixtures)
 
 
 def parse_kickoff_unix(iso: str | None) -> float | None:
