@@ -819,9 +819,10 @@
     pricesViewMode: "prediction", // prediction | actual
     pricesSortKey: "predicted",
     pricesSortDir: "desc",
-    pricesActualSortKey: "changedAt",
+    pricesActualSortKey: "default", // default | changedAt | name | change | before | after
     pricesActualSortDir: "desc",
     pricesActualSortTouched: false,
+    pricesActualShowAll: false,
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
@@ -1180,6 +1181,7 @@
     pricesCountdownValue: $("#prices-countdown-value"),
     pricesCountdownSub: $("#prices-countdown-sub"),
     pricesViewSeg: $("#prices-view-seg"),
+    pricesActualScopeSeg: $("#prices-actual-scope-seg"),
     pricesCountdownBar: $("#prices-countdown-bar"),
     pricesCountLabel: $("#prices-count-label"),
     pricesPredictionWrap: $("#prices-prediction-wrap"),
@@ -7760,7 +7762,7 @@
   }
 
   // Expected (and Ownership treemap) own both axes natively.
-  // Stats / Ownership table / Planner: content-sized tables + .main page scroll.
+  // Stats / Ownership table / Planner / Prices: content-sized tables + .main page scroll.
   // iOS won't vertical-scroll .main through overflow-x wraps, so we chain
   // vertical touch to .main and apply a short fling for free-scroll feel.
   function bindNestedTableScroll() {
@@ -7784,6 +7786,7 @@
         (state.page === "opta" ||
           state.page === "team" ||
           state.page === "live" ||
+          state.page === "prices" ||
           (state.page === "ownership" && !ownershipIsTreemap()))
       );
     }
@@ -7821,7 +7824,11 @@
       flingRaf = requestAnimationFrame(step);
     }
 
-    document.querySelectorAll(".table-wrap, .barbell-scroll, .live-bonus-wrap").forEach((inner) => {
+    document
+      .querySelectorAll(
+        ".table-wrap, .barbell-scroll, .live-bonus-wrap, #prices-prediction-wrap, #prices-actual-wrap"
+      )
+      .forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
       inner.dataset.scrollChain = "1";
 
@@ -8350,23 +8357,9 @@
       wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       return;
     }
-    let best = OWNERSHIP_MOBILE_NAME_COL_MIN;
-    wraps.forEach((wrap) => {
-      if (wrap.hidden) return;
-      const measured = measureNameColWidth(wrap, {
-        minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
-      });
-      const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
-      best = Math.max(best, Math.min(measured, cap));
-    });
-    pricesMobileNameColW = best;
-    wraps.forEach((wrap) => {
-      const prev = wrap.style.getPropertyValue("--name-col-w");
-      wrap.style.setProperty("--name-col-w", `${pricesMobileNameColW}px`);
-      if (prev !== `${pricesMobileNameColW}px`) {
-        invalidateNameSimplifyOrigin(wrap);
-      }
-    });
+    // Mobile Prices: vertical page scroll only — table uses fixed layout, no pan width.
+    pricesMobileNameColW = null;
+    wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
   }
 
   function scheduleOptaMobileNameColWidth() {
@@ -18373,7 +18366,7 @@
     return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
   }
 
-  function ownershipIdCellHTML(row, rank) {
+  function ownershipIdCellHTML(row, rank, { hidePrice = false } = {}) {
     if (row.kind === "team") {
       const crest = badgeHTML(row.team, "ownership-crest") ||
         teamCrestFallbackHTML(row.team, "ownership-photo ownership-photo-fallback");
@@ -18388,7 +18381,7 @@
     const teamTag = teamTagAttrs(row.team);
     const bits = [
       row.team ? `<span class="ownership-id-team${teamTag.className}"${teamTag.style}>${escapeHtml(row.team)}</span>` : "",
-      row.price != null && Number.isFinite(Number(row.price))
+      !hidePrice && row.price != null && Number.isFinite(Number(row.price))
         ? `<span class="ownership-id-price">£${Number(row.price).toFixed(1)}m</span>`
         : "",
       row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
@@ -19020,12 +19013,56 @@
     return sortPricesRows(pricesVisibleRows().filter((row) => pricesIsFaller(row)));
   }
 
+  const PRICES_ACTUAL_TOP_N = 5;
+
+  function limitPricesActualDayRows(rows, catalog) {
+    const rises = rows.filter((row) => row.direction === "rise");
+    const falls = rows.filter((row) => row.direction !== "rise");
+    const byOwned = (list) =>
+      list.slice().sort((a, b) => {
+        const ownA = pricesActualOwnedPct(a, catalog);
+        const ownB = pricesActualOwnedPct(b, catalog);
+        if (ownA !== ownB) return ownB - ownA;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+    const keep = new Set([
+      ...byOwned(rises).slice(0, PRICES_ACTUAL_TOP_N),
+      ...byOwned(falls).slice(0, PRICES_ACTUAL_TOP_N),
+    ]);
+    return rows.filter((row) => keep.has(row));
+  }
+
+  function limitPricesActualRows(rows) {
+    if (state.pricesActualShowAll) return rows;
+    const catalog = ownershipCatalogByCode();
+    if (pricesActualUseDayGroups()) {
+      const buckets = new Map();
+      const order = [];
+      rows.forEach((row) => {
+        const day = pricesActualDayKey(row.changedAt);
+        if (!buckets.has(day)) {
+          buckets.set(day, []);
+          order.push(day);
+        }
+        buckets.get(day).push(row);
+      });
+      return order.flatMap((day) => limitPricesActualDayRows(buckets.get(day), catalog));
+    }
+    return limitPricesActualDayRows(rows, catalog);
+  }
+
   function pricesActualVisibleRows() {
     if (!isNextSeason()) return [];
     const catalog = ownershipCatalogByCode();
     return (PRICES.actualChanges || []).filter((row) =>
       ownershipPlayerPassesDisplayFilters(row, catalog)
     );
+  }
+
+  function pricesActualOwnedPct(row, catalog) {
+    const hit = catalog.get(Number(row.code));
+    const owned = hit && hit.owned != null ? Number(hit.owned) : null;
+    return Number.isFinite(owned) ? owned : -Infinity;
   }
 
   function pricesActualSortValue(row, key) {
@@ -19040,9 +19077,44 @@
     return -Infinity;
   }
 
+  function sortPricesActualWithinDay(rows, catalog) {
+    return rows.slice().sort((a, b) => {
+      const dirA = a.direction === "rise" ? 1 : 0;
+      const dirB = b.direction === "rise" ? 1 : 0;
+      if (dirA !== dirB) return dirB - dirA;
+      const ownA = pricesActualOwnedPct(a, catalog);
+      const ownB = pricesActualOwnedPct(b, catalog);
+      if (ownA !== ownB) return ownB - ownA;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+  }
+
   function sortPricesActualRows(rows) {
-    const key = state.pricesActualSortKey || "changedAt";
+    const key = state.pricesActualSortKey || "default";
     const dir = state.pricesActualSortDir === "asc" ? 1 : -1;
+    const catalog = ownershipCatalogByCode();
+    if (key === "default" || key === "changedAt") {
+      const buckets = new Map();
+      const order = [];
+      rows.forEach((row) => {
+        const day = pricesActualDayKey(row.changedAt);
+        if (!buckets.has(day)) {
+          buckets.set(day, []);
+          order.push(day);
+        }
+        buckets.get(day).push(row);
+      });
+      const dayDir = key === "changedAt" ? dir : -1;
+      order.sort((a, b) => {
+        const ta = Date.parse(buckets.get(a)[0]?.changedAt || "");
+        const tb = Date.parse(buckets.get(b)[0]?.changedAt || "");
+        if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) {
+          return dayDir * (ta - tb);
+        }
+        return a.localeCompare(b);
+      });
+      return order.flatMap((day) => sortPricesActualWithinDay(buckets.get(day), catalog));
+    }
     return rows.slice().sort((a, b) => {
       if (key === "name") {
         return dir * String(a.name || "").localeCompare(String(b.name || ""));
@@ -19177,7 +19249,11 @@
   }
 
   function pricesTableColSpan() {
-    return NARROW_MQ.matches ? 5 : 6;
+    return NARROW_MQ.matches ? 4 : 6;
+  }
+
+  function pricesActualTableColSpan() {
+    return NARROW_MQ.matches ? 4 : 5;
   }
 
   function pricesHeadHTML() {
@@ -19217,8 +19293,8 @@
       ${th("changedAt", "Date", "col-date prices-col-date")}
       ${th("name", "Player", "col-player")}
       ${th("change", "Change", "col-num prices-col-change")}
-      ${th("before", "Before", "col-num prices-col-actual-price")}
-      ${th("after", "After", "col-num prices-col-actual-price")}
+      ${th("before", "Before", "col-num prices-col-actual-price prices-col-before")}
+      ${th("after", "After", "col-num prices-col-actual-price prices-col-after")}
     </tr>`;
   }
 
@@ -19249,17 +19325,8 @@
     if (!iso) return "—";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "—";
-    const mobile = NARROW_MQ.matches;
     try {
-      if (mobile) {
-        return d.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          timeZone: "Europe/London",
-        });
-      }
       return d.toLocaleDateString(undefined, {
-        weekday: "short",
         month: "short",
         day: "numeric",
         timeZone: "Europe/London",
@@ -19270,20 +19337,24 @@
   }
 
   function pricesActualUseDayGroups() {
-    return (state.pricesActualSortKey || "changedAt") === "changedAt";
+    const key = state.pricesActualSortKey || "default";
+    return key === "default" || key === "changedAt";
+  }
+
+  function pricesActualPlayerCellHTML(row, rank) {
+    return ownershipIdCellHTML(row, rank, { hidePrice: true });
   }
 
   function pricesActualRowHTML(row, rank, { dateCell = "" } = {}) {
-    const playerRow = { ...row, price: row.after };
     const dateTd =
       dateCell ||
       `<td class="col-date prices-col-date">${escapeHtml(fmtPricesChangeDateShort(row.changedAt))}</td>`;
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       ${dateTd}
-      <td class="col-player">${ownershipIdCellHTML(playerRow, rank)}</td>
+      <td class="col-player">${pricesActualPlayerCellHTML(row, rank)}</td>
       <td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>
-      <td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.before))}</td>
-      <td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.after))}</td>
+      <td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>
+      <td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>
     </tr>`;
   }
 
@@ -19315,19 +19386,14 @@
         const trCls = dayStart ? ' class="prices-actual-day-start"' : "";
         html += `<tr${trCls} data-prices-code="${escapeHtml(String(row.code ?? ""))}">`;
         if (dateCell) html += dateCell;
-        const playerRow = { ...row, price: row.after };
-        html += `<td class="col-player">${ownershipIdCellHTML(playerRow, rank++)}</td>`;
+        html += `<td class="col-player">${pricesActualPlayerCellHTML(row, rank++)}</td>`;
         html += `<td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>`;
-        html += `<td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
-        html += `<td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
+        html += `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
+        html += `<td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
         html += `</tr>`;
       });
     });
     return html;
-  }
-
-  function pricesActualTableColSpan() {
-    return 5;
   }
 
   function syncPricesViewUI() {
@@ -19352,6 +19418,17 @@
     if (el.pricesProgressFilterGroup) {
       el.pricesProgressFilterGroup.style.display =
         state.page === "prices" && mode === "prediction" ? "" : "none";
+    }
+    if (el.pricesActualScopeSeg) {
+      const showScope =
+        state.page === "prices" && mode === "actual" && isNextSeason();
+      el.pricesActualScopeSeg.hidden = !showScope;
+      el.pricesActualScopeSeg.querySelectorAll("button[data-prices-actual-scope]").forEach((btn) => {
+        const scope = btn.dataset.pricesActualScope;
+        const active = scope === "all" ? state.pricesActualShowAll : !state.pricesActualShowAll;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
     }
   }
 
@@ -19498,17 +19575,27 @@
         : null;
 
     const pool = PRICES.actualChanges || [];
-    const visible = sortPricesActualRows(pricesActualVisibleRows());
+    const filtered = pricesActualVisibleRows();
+    const sorted = sortPricesActualRows(filtered);
+    const visible = limitPricesActualRows(sorted);
 
     if (el.pricesCountLabel) {
       if (!pool.length) {
         el.pricesCountLabel.textContent = "No changes yet";
+      } else if (!filtered.length) {
+        el.pricesCountLabel.textContent = "No changes match filters";
       } else {
-        const noun = visible.length === 1 ? "change" : "changes";
-        el.pricesCountLabel.textContent =
-          visible.length === pool.length
-            ? `${visible.length} ${noun}`
-            : `${visible.length} of ${pool.length} ${noun}`;
+        const noun = filtered.length === 1 ? "change" : "changes";
+        const scopeHint = state.pricesActualShowAll
+          ? ""
+          : pricesActualUseDayGroups()
+            ? " · top 5/day"
+            : " · top 5";
+        if (visible.length === filtered.length) {
+          el.pricesCountLabel.textContent = `${filtered.length} ${noun}${scopeHint}`;
+        } else {
+          el.pricesCountLabel.textContent = `${visible.length} of ${filtered.length} ${noun}${scopeHint}`;
+        }
       }
     }
 
@@ -20767,12 +20854,27 @@
       if (next !== "prediction" && next !== "actual") return;
       if (next === pricesViewMode()) return;
       if (next === "actual" && !state.pricesActualSortTouched) {
-        state.pricesActualSortKey = "changedAt";
+        state.pricesActualSortKey = "default";
         state.pricesActualSortDir = "desc";
       }
       state.pricesViewMode = next;
       syncPricesViewUI();
       if (state.page === "prices") renderPrices({ animateEnter: true });
+    });
+  }
+  if (el.pricesActualScopeSeg) {
+    el.pricesActualScopeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-prices-actual-scope]");
+      if (!btn || !el.pricesActualScopeSeg.contains(btn)) return;
+      const scope = btn.dataset.pricesActualScope;
+      if (scope !== "top" && scope !== "all") return;
+      const nextShowAll = scope === "all";
+      if (nextShowAll === state.pricesActualShowAll) return;
+      state.pricesActualShowAll = nextShowAll;
+      syncPricesViewUI();
+      if (state.page === "prices" && pricesViewMode() === "actual") {
+        renderPricesActual({ preserveScroll: true });
+      }
     });
   }
   pricesPredictionTableWraps().forEach((wrap) => {

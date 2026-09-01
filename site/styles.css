@@ -5297,19 +5297,45 @@ html[data-page="prices"] .layout .main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 1.85rem;
+  height: 1.55rem;
+  padding: 0 6px;
+  border-radius: 999px;
+  line-height: 0;
 }
 .prices-change-arrow .icon {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.5;
 }
 .prices-change-arrow.is-rise {
-  color: hsl(142 45% 32%);
+  background: hsl(142 40% 93%);
+  color: hsl(142 72% 26%);
 }
 .prices-change-arrow.is-fall {
-  color: hsl(0 55% 42%);
+  background: hsl(0 50% 94%);
+  color: hsl(0 72% 32%);
+}
+:root[data-theme="dark"] .prices-change-arrow.is-rise {
+  background: hsl(142 45% 38% / 0.16);
+  color: hsl(142 55% 72%);
+}
+:root[data-theme="dark"] .prices-change-arrow.is-fall {
+  background: hsl(0 55% 48% / 0.14);
+  color: hsl(0 70% 78%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prices-change-arrow.is-rise {
+    background: hsl(142 45% 38% / 0.16);
+    color: hsl(142 55% 72%);
+  }
+  :root:not([data-theme="light"]) .prices-change-arrow.is-fall {
+    background: hsl(0 55% 48% / 0.14);
+    color: hsl(0 70% 78%);
+  }
 }
 .prices-actual-table .prices-col-change {
-  min-width: 3.5rem;
+  min-width: 3.75rem;
 }
 .prices-actual-table .prices-col-actual-price {
   min-width: 5rem;
@@ -5317,13 +5343,19 @@ html[data-page="prices"] .layout .main {
   font-variant-numeric: tabular-nums;
 }
 .prices-actual-table .prices-col-date {
-  min-width: 5.5rem;
-  max-width: 7.5rem;
+  min-width: 3rem;
+  max-width: 4.25rem;
+  width: 4.25rem;
   white-space: nowrap;
   vertical-align: top;
   font-weight: 650;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 11px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.prices-actual-scope-seg button {
+  min-width: 3.2em;
 }
 .prices-actual-table tbody tr.prices-actual-day-start td {
   border-top: 1px solid var(--border);
@@ -5832,84 +5864,87 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     flex: none;
     min-height: 0;
     max-height: none;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    --name-col-w: 168px;
-    --metric-col-w: 58px;
-    padding-right: 4px;
+    touch-action: manipulation;
+    width: 100%;
+    max-width: 100%;
+    --name-col-w: 0px;
+    --metric-col-w: 0px;
+    padding-right: 0;
   }
+  #prices-page .prices-table-wrap > table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+  #prices-page .prices-table-wrap .prices-col-spark {
+    display: none;
+  }
+  #prices-page .prices-actual-table-wrap .prices-col-before {
+    display: none;
+  }
+  #prices-page .prices-table-wrap > table > thead tr:not(.section-row) th.col-player,
+  #prices-page .prices-table-wrap > table > tbody td.col-player,
   #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-date,
-  #prices-page .prices-actual-table-wrap > table > tbody td.col-date {
-    position: sticky;
-    left: 0;
-    z-index: 11;
-    background-color: hsl(var(--muted));
-  }
-  #prices-page .prices-actual-table-wrap > table > tbody td.col-date {
-    z-index: 3;
-    background-color: hsl(var(--card));
-  }
-  #prices-page .prices-actual-table-wrap > table > tbody tr:hover > td.col-date {
-    background-color: hsl(var(--accent-hsl));
-  }
-  #prices-page .prices-actual-table-wrap > table > tbody td.prices-actual-day {
-    background-color: hsl(var(--muted) / 0.55);
-  }
-  #prices-page .prices-actual-table-wrap > table > tbody tr:hover > td.prices-actual-day {
-    background-color: hsl(var(--muted) / 0.7);
-  }
-  #prices-page .prices-actual-table-wrap {
-    --prices-actual-date-col-w: 72px;
-  }
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-date,
   #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-player,
   #prices-page .prices-actual-table-wrap > table > tbody td.col-player {
-    position: sticky;
-    left: var(--prices-actual-date-col-w);
-    z-index: 10;
-    background-color: hsl(var(--muted));
+    position: static;
+    left: auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
   }
-  #prices-page .prices-actual-table-wrap > table > tbody td.col-player {
-    z-index: 2;
-    background-color: hsl(var(--card));
+  #prices-page .prices-table-wrap.name-simplify-ready thead th.col-player,
+  #prices-page .prices-table-wrap.name-simplify-ready tbody td.col-player {
+    width: auto;
+    min-width: 0;
+    max-width: none;
   }
-  #prices-page .prices-actual-table-wrap > table > tbody tr:hover > td.col-player {
-    background-color: hsl(var(--accent-hsl));
-  }
-  #prices-page .prices-table-wrap > table > thead tr:not(.section-row) th.col-player {
-    position: sticky;
-    left: 0;
-    z-index: 10;
-    background-color: hsl(var(--muted));
-  }
-  #prices-page .prices-table-wrap > table > tbody td.col-player {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    background-color: hsl(var(--card));
-  }
-  #prices-page .prices-table-wrap > table > tbody tr:hover > td.col-player {
-    background-color: hsl(var(--accent-hsl));
+  #prices-page .prices-actual-table-wrap {
+    --prices-actual-date-col-w: 0px;
   }
   #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-status,
   #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-status {
-    min-width: 3.5rem;
-    padding-left: 6px;
-    padding-right: 6px;
+    min-width: 0;
+    width: 14%;
+    padding-left: 4px;
+    padding-right: 4px;
   }
   #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-metric,
   #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-metric {
-    min-width: 5.75rem;
-    padding-left: 10px;
-    padding-right: 10px;
+    min-width: 0;
+    width: 18%;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  #prices-page .prices-actual-table-wrap .prices-table .col-date {
+    width: 12%;
+  }
+  #prices-page .prices-actual-table-wrap .prices-table .col-player {
+    width: 36%;
+  }
+  #prices-page .prices-actual-table-wrap .prices-table .prices-col-change {
+    width: 12%;
+  }
+  #prices-page .prices-actual-table-wrap .prices-table .prices-col-after {
+    width: 20%;
   }
   #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
   #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
-    min-width: 12.75rem;
-    padding-left: 12px;
-    padding-right: 20px;
+    display: none;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table .col-player {
+    width: 38%;
+  }
+  #prices-page .prices-table-wrap .ownership-id .player-name,
+  #prices-page .prices-table-wrap .ownership-id-text .player-name-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   #prices-page .prices-table-wrap .prices-table > thead tr:not(.section-row) th {
     font-size: 9.5px;

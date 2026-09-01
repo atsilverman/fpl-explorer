@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=924" />
+<link rel="stylesheet" href="styles.css?v=928" />
 <script>
 (() => {
   try {
@@ -1123,6 +1123,10 @@
           <button type="button" data-prices-view="prediction" class="active">Prediction</button>
           <button type="button" data-prices-view="actual">Actual</button>
         </div>
+        <div class="segmented ownership-mover-seg prices-actual-scope-seg" id="prices-actual-scope-seg" role="group" aria-label="Actual changes scope" hidden>
+          <button type="button" data-prices-actual-scope="top" class="active" title="Top 5 risers and fallers by ownership per day">Top 5</button>
+          <button type="button" data-prices-actual-scope="all" title="Every recorded price change">All</button>
+        </div>
         <div class="ownership-mover-end">
           <span class="count-label" id="prices-count-label"></span>
         </div>
@@ -1500,7 +1504,7 @@
 <script src="home_data.js?v=31"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=952"></script>
+<script src="app.js?v=957"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
