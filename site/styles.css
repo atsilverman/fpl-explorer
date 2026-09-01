@@ -3979,7 +3979,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
    stay single-line and clip from the right (no wrap → no row-height jump).
    Rank fades/collapses beside the photo on Ownership. */
 #ownership-table-wrap.name-simplify-ready,
-#prices-table-wrap.name-simplify-ready,
+#prices-page .prices-table-wrap.name-simplify-ready,
 #opta-page .table-wrap.name-simplify-ready,
 #team-page .table-wrap.name-simplify-ready,
 #live-page .live-table-wrap.name-simplify-ready {
@@ -3989,8 +3989,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
 #ownership-table-wrap.name-simplify-ready tbody td.col-player,
-#prices-table-wrap.name-simplify-ready thead th.col-player,
-#prices-table-wrap.name-simplify-ready tbody td.col-player,
+#prices-page .prices-table-wrap.name-simplify-ready thead th.col-player,
+#prices-page .prices-table-wrap.name-simplify-ready tbody td.col-player,
 #opta-page .table-wrap.name-simplify-ready thead th.col-player,
 #opta-page .table-wrap.name-simplify-ready thead th.col-name,
 #opta-page .table-wrap.name-simplify-ready tbody td.col-player,
@@ -4017,8 +4017,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 @media (max-width: 720px) {
   #ownership-table-wrap.name-simplify-ready thead th.col-player,
   #ownership-table-wrap.name-simplify-ready tbody td.col-player,
-  #prices-table-wrap.name-simplify-ready thead th.col-player,
-  #prices-table-wrap.name-simplify-ready tbody td.col-player,
+  #prices-page .prices-table-wrap.name-simplify-ready thead th.col-player,
+  #prices-page .prices-table-wrap.name-simplify-ready tbody td.col-player,
   #opta-page .table-wrap.name-simplify-ready thead th.col-player,
   #opta-page .table-wrap.name-simplify-ready thead th.col-name,
   #opta-page .table-wrap.name-simplify-ready tbody td.col-player,
@@ -4035,7 +4035,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id,
-#prices-table-wrap.name-simplify-ready .ownership-id,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id,
 #opta-page .table-wrap.name-simplify-ready .ownership-id,
 #team-page .table-wrap.name-simplify-ready .ownership-id,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id {
@@ -4050,7 +4050,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   overflow: visible;
 }
 #ownership-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
-#prices-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
+#prices-page .prices-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #opta-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #team-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #live-page .live-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id {
@@ -4058,7 +4058,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   overflow: hidden;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-rank,
-#prices-table-wrap.name-simplify-ready .ownership-rank {
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-rank {
   flex: 0 1 auto;
   width: calc((1 - var(--name-collapse)) * 1.4em);
   min-width: 0;
@@ -4069,8 +4069,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-photo,
 #ownership-table-wrap.name-simplify-ready .ownership-crest,
-#prices-table-wrap.name-simplify-ready .ownership-photo,
-#prices-table-wrap.name-simplify-ready .ownership-crest,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-photo,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-crest,
 #opta-page .table-wrap.name-simplify-ready .ownership-photo,
 #opta-page .table-wrap.name-simplify-ready .ownership-crest,
 #team-page .table-wrap.name-simplify-ready .ownership-photo,
@@ -4082,7 +4082,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   height: var(--own-photo);
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text,
-#prices-table-wrap.name-simplify-ready .ownership-id-text,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-text {
@@ -4096,7 +4096,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   pointer-events: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
-#prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line {
@@ -4109,7 +4109,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   max-width: 100%;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
-#prices-table-wrap.name-simplify-ready .ownership-id .player-name,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id .player-name,
 #opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #team-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id .player-name {
@@ -4137,8 +4137,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
-#prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
-#prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
@@ -4148,7 +4148,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   flex: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub,
-#prices-table-wrap.name-simplify-ready .ownership-id-sub,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-sub,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub,
 #team-page .table-wrap.name-simplify-ready .ownership-id-sub,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-sub {
@@ -4163,7 +4163,7 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   white-space: nowrap;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub > *,
-#prices-table-wrap.name-simplify-ready .ownership-id-sub > *,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-sub > *,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
 #team-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-sub > * {
@@ -5061,14 +5061,94 @@ html[data-page="prices"] .layout .main {
 .prices-mover-bar {
   margin-bottom: 10px;
 }
-#prices-table-wrap {
+#prices-prediction-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  container-type: inline-size;
+  container-name: prices-prediction;
+}
+#prices-page[data-prices-view="actual"] #prices-prediction-wrap,
+#prices-prediction-wrap[hidden] {
+  display: none !important;
+}
+#prices-page[data-prices-view="prediction"] #prices-actual-wrap,
+#prices-actual-wrap[hidden] {
+  display: none !important;
+}
+.prices-prediction-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+.prices-prediction-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+@container prices-prediction (min-width: 880px) {
+  .prices-prediction-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 20px;
+    align-items: start;
+  }
+  .prices-prediction-panel .prices-section-divider:first-child {
+    margin-top: 0;
+  }
+}
+#prices-actual-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#prices-actual-wrap .prices-actual-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+#prices-page .prices-section-divider {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 8px;
+}
+#prices-page .prices-section-divider:first-child {
+  margin-top: 0;
+}
+#prices-page .prices-section-divider span {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+#prices-page .prices-section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+#prices-page .prices-prediction-table-wrap {
+  flex: none;
+  min-height: 0;
+}
+#prices-page .prices-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   --name-col-w: 240px;
   --metric-col-w: 72px;
 }
-#prices-table-wrap > table {
+#prices-page .prices-table-wrap > table {
   width: max-content;
   min-width: 100%;
 }
@@ -5084,24 +5164,24 @@ html[data-page="prices"] .layout .main {
 .prices-table .prices-col-spark {
   min-width: 11.75rem;
 }
-#prices-table-wrap .prices-table th.col-num.prices-col-status,
-#prices-table-wrap .prices-table td.col-num.prices-col-status,
-#prices-table-wrap .prices-table th.col-num.prices-col-metric,
-#prices-table-wrap .prices-table td.col-num.prices-col-metric,
-#prices-table-wrap .prices-table th.col-num.prices-col-spark,
-#prices-table-wrap .prices-table td.col-num.prices-col-spark,
-#prices-table-wrap .prices-table th.col-num.prices-col-price,
-#prices-table-wrap .prices-table td.col-num.prices-col-price {
+#prices-page .prices-table-wrap .prices-table th.col-num.prices-col-status,
+#prices-page .prices-table-wrap .prices-table td.col-num.prices-col-status,
+#prices-page .prices-table-wrap .prices-table th.col-num.prices-col-metric,
+#prices-page .prices-table-wrap .prices-table td.col-num.prices-col-metric,
+#prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
+#prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark,
+#prices-page .prices-table-wrap .prices-table th.col-num.prices-col-price,
+#prices-page .prices-table-wrap .prices-table td.col-num.prices-col-price {
   width: auto;
   max-width: none;
 }
-#prices-table-wrap .prices-table th.col-num.prices-col-metric,
-#prices-table-wrap .prices-table td.col-num.prices-col-metric {
+#prices-page .prices-table-wrap .prices-table th.col-num.prices-col-metric,
+#prices-page .prices-table-wrap .prices-table td.col-num.prices-col-metric {
   padding-left: 8px;
   padding-right: 8px;
 }
-#prices-table-wrap .prices-table th.col-num.prices-col-spark,
-#prices-table-wrap .prices-table td.col-num.prices-col-spark {
+#prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
+#prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
   padding-left: 10px;
   padding-right: 14px;
 }
@@ -5171,25 +5251,28 @@ html[data-page="prices"] .layout .main {
   font-variant-numeric: tabular-nums;
 }
 .prices-progress-pill.is-rise {
-  background: hsl(142 45% 38% / 0.16);
-  color: hsl(142 45% 28%);
+  background: hsl(142 40% 93%);
+  color: hsl(142 72% 26%);
 }
 .prices-progress-pill.is-drop {
-  background: hsl(0 55% 48% / 0.14);
-  color: hsl(0 55% 38%);
+  background: hsl(0 50% 94%);
+  color: hsl(0 72% 32%);
 }
 .prices-progress-pill.is-predicted.is-rise {
-  background: hsl(142 48% 32% / 0.22);
-  color: hsl(142 48% 24%);
+  background: hsl(142 42% 88%);
+  color: hsl(142 78% 22%);
 }
 .prices-progress-pill.is-predicted.is-drop {
-  background: hsl(350 45% 36% / 0.18);
-  color: hsl(350 45% 30%);
+  background: hsl(350 45% 92%);
+  color: hsl(350 70% 28%);
 }
 .prices-progress-pill .ownership-stat-roll,
-.prices-progress-pill .stat-roll-digit {
+.prices-progress-pill .stat-roll-digit,
+.prices-progress-pill .stat-roll-static,
+.prices-progress-pill .stat-roll-suffix {
   font: inherit;
   font-variant-numeric: tabular-nums;
+  color: inherit;
 }
 .prices-trend {
   display: inline-flex;
@@ -5210,21 +5293,74 @@ html[data-page="prices"] .layout .main {
 .prices-trend.is-down {
   color: hsl(0 55% 42%);
 }
-:root[data-theme="dark"] .prices-progress-pill.is-rise,
-:root:not([data-theme="light"]) .prices-progress-pill.is-rise {
+.prices-change-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.prices-change-arrow .icon {
+  width: 16px;
+  height: 16px;
+}
+.prices-change-arrow.is-rise {
+  color: hsl(142 45% 32%);
+}
+.prices-change-arrow.is-fall {
+  color: hsl(0 55% 42%);
+}
+.prices-actual-table .prices-col-change {
+  min-width: 3.5rem;
+}
+.prices-actual-table .prices-col-actual-price {
+  min-width: 5rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.prices-actual-table .prices-col-date {
+  min-width: 9.5rem;
+  white-space: nowrap;
+}
+:root[data-theme="dark"] .prices-progress-pill.is-rise {
+  background: hsl(142 45% 38% / 0.16);
   color: hsl(142 55% 72%);
+  box-shadow: none;
 }
-:root[data-theme="dark"] .prices-progress-pill.is-drop,
-:root:not([data-theme="light"]) .prices-progress-pill.is-drop {
+:root[data-theme="dark"] .prices-progress-pill.is-drop {
+  background: hsl(0 55% 48% / 0.14);
   color: hsl(0 70% 78%);
+  box-shadow: none;
 }
-:root[data-theme="dark"] .prices-progress-pill.is-predicted.is-rise,
-:root:not([data-theme="light"]) .prices-progress-pill.is-predicted.is-rise {
+:root[data-theme="dark"] .prices-progress-pill.is-predicted.is-rise {
+  background: hsl(142 48% 32% / 0.22);
   color: hsl(142 60% 78%);
+  box-shadow: none;
 }
-:root[data-theme="dark"] .prices-progress-pill.is-predicted.is-drop,
-:root:not([data-theme="light"]) .prices-progress-pill.is-predicted.is-drop {
+:root[data-theme="dark"] .prices-progress-pill.is-predicted.is-drop {
+  background: hsl(350 45% 36% / 0.18);
   color: hsl(0 75% 80%);
+  box-shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prices-progress-pill.is-rise {
+    background: hsl(142 45% 38% / 0.16);
+    color: hsl(142 55% 72%);
+    box-shadow: none;
+  }
+  :root:not([data-theme="light"]) .prices-progress-pill.is-drop {
+    background: hsl(0 55% 48% / 0.14);
+    color: hsl(0 70% 78%);
+    box-shadow: none;
+  }
+  :root:not([data-theme="light"]) .prices-progress-pill.is-predicted.is-rise {
+    background: hsl(142 48% 32% / 0.22);
+    color: hsl(142 60% 78%);
+    box-shadow: none;
+  }
+  :root:not([data-theme="light"]) .prices-progress-pill.is-predicted.is-drop {
+    background: hsl(350 45% 36% / 0.18);
+    color: hsl(0 75% 80%);
+    box-shadow: none;
+  }
 }
 .ownership-mover-bar {
   display: flex;
@@ -5661,10 +5797,20 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   html[data-page="prices"] #prices-countdown-bar {
     display: none;
   }
+  html[data-page="prices"] #prices-page[data-prices-view="prediction"] #prices-prediction-wrap {
+    display: block;
+    flex: none;
+    overflow: visible;
+  }
+  html[data-page="prices"] #prices-page[data-prices-view="actual"] #prices-actual-wrap {
+    display: flex;
+    flex: none;
+    overflow: visible;
+  }
   html[data-page="prices"] #prices-updated-footer {
     flex: none;
   }
-  #prices-table-wrap {
+  #prices-page .prices-table-wrap {
     flex: none;
     min-height: 0;
     max-height: none;
@@ -5677,57 +5823,57 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     --metric-col-w: 58px;
     padding-right: 4px;
   }
-  #prices-table-wrap > table > thead tr:not(.section-row) th.col-player {
+  #prices-page .prices-table-wrap > table > thead tr:not(.section-row) th.col-player {
     position: sticky;
     left: 0;
     z-index: 10;
     background-color: hsl(var(--muted));
   }
-  #prices-table-wrap > table > tbody td.col-player {
+  #prices-page .prices-table-wrap > table > tbody td.col-player {
     position: sticky;
     left: 0;
     z-index: 2;
     background-color: hsl(var(--card));
   }
-  #prices-table-wrap > table > tbody tr:hover > td.col-player {
+  #prices-page .prices-table-wrap > table > tbody tr:hover > td.col-player {
     background-color: hsl(var(--accent-hsl));
   }
-  #prices-table-wrap .prices-table th.col-num.prices-col-status,
-  #prices-table-wrap .prices-table td.col-num.prices-col-status {
+  #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-status,
+  #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-status {
     min-width: 3.5rem;
     padding-left: 6px;
     padding-right: 6px;
   }
-  #prices-table-wrap .prices-table th.col-num.prices-col-metric,
-  #prices-table-wrap .prices-table td.col-num.prices-col-metric {
+  #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-metric,
+  #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-metric {
     min-width: 5.75rem;
     padding-left: 10px;
     padding-right: 10px;
   }
-  #prices-table-wrap .prices-table th.col-num.prices-col-spark,
-  #prices-table-wrap .prices-table td.col-num.prices-col-spark {
+  #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
+  #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
     min-width: 12.75rem;
     padding-left: 12px;
     padding-right: 20px;
   }
-  #prices-table-wrap .prices-table > thead tr:not(.section-row) th {
+  #prices-page .prices-table-wrap .prices-table > thead tr:not(.section-row) th {
     font-size: 9.5px;
     padding-top: 6px;
     padding-bottom: 6px;
     white-space: nowrap;
   }
-  #prices-table-wrap .prices-table .prices-progress-pill {
+  #prices-page .prices-table-wrap .prices-table .prices-progress-pill {
     font-size: 11px;
     min-width: 4.6em;
     padding: 2px 6px;
   }
-  #prices-table-wrap .prices-spark {
+  #prices-page .prices-table-wrap .prices-spark {
     gap: 3px;
   }
-  #prices-table-wrap .prices-spark .ownership-spark-lab {
+  #prices-page .prices-table-wrap .prices-spark .ownership-spark-lab {
     font-size: 8.5px;
   }
-  #prices-table-wrap .prices-spark .ownership-spark-svg {
+  #prices-page .prices-table-wrap .prices-spark .ownership-spark-svg {
     flex: none;
   }
   html[data-page="ownership"] #ownership-updated-footer {
@@ -5799,7 +5945,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     background-color: hsl(var(--muted));
   }
   #ownership-table-wrap .ownership-table .col-num,
-  #prices-table-wrap .prices-table .col-num {
+  #prices-page .prices-table-wrap .prices-table .col-num {
     padding-left: 7px;
     padding-right: 7px;
   }
@@ -5812,18 +5958,18 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     padding-right: 5px;
   }
   #ownership-table-wrap .ownership-id .player-name,
-  #prices-table-wrap .ownership-id .player-name {
+  #prices-page .prices-table-wrap .ownership-id .player-name {
     font-size: 11.5px;
   }
   #ownership-table-wrap .ownership-photo,
   #ownership-table-wrap .ownership-crest,
-  #prices-table-wrap .ownership-photo,
-  #prices-table-wrap .ownership-crest {
+  #prices-page .prices-table-wrap .ownership-photo,
+  #prices-page .prices-table-wrap .ownership-crest {
     width: 30px;
     height: 30px;
   }
   #ownership-table-wrap .ownership-id-sub,
-  #prices-table-wrap .ownership-id-sub {
+  #prices-page .prices-table-wrap .ownership-id-sub {
     font-size: 9.5px;
   }
   html.has-mobile-bottom-dock[data-page="ownership"] #ownership-updated-footer:not([hidden]) {

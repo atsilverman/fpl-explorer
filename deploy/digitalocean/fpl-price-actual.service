@@ -1,0 +1,13 @@
+[Unit]
+Description=FPL actual price change poll (UK midnight window)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fpl-explorer
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/fpl-explorer/.venv/bin/python3 /opt/fpl-explorer/site/fetch_price_actual.py
+
+[Install]
+WantedBy=multi-user.target

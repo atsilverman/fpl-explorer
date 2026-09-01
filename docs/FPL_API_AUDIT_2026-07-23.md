@@ -184,7 +184,7 @@ New in 2026/27 bootstrap — powers FPL's `/en/price-changes` page. No separate 
 | −4, −5 | Very likely to drop |
 | −1, 0, 1 | Unlikely to change (excluded from our table) |
 
-Extracted by `site/fetch_prices.py` into `site/price_changes_data.js` on a **4-hour** cadence. Slim check-ins are stored under `snapshots/price-changes/` (~4 days retained) and power a **3-day progress sparkline** on the Prices page. Daily price changes apply at **00:00 Europe/London** during the season.
+Extracted by `site/fetch_prices.py` into `site/price_changes_data.js` on a **4-hour** cadence. Slim check-ins are stored under `snapshots/price-changes/` (~4 days retained) and power a **3-day progress sparkline** on the Prices page (Prediction mode). **Actual** price changes are detected by diffing consecutive bootstrap snapshots (`fetch_ownership.py` daily, `fetch_prices.py` 4h) into `snapshots/price-actual/actual-changes.json` — forward-only from deploy; season backfill deferred. Daily price changes apply at **00:00 Europe/London** during the season.
 
 ---
 

@@ -11,7 +11,11 @@ SITE = Path(__file__).resolve().parent
 ROOT = SITE.parent
 SNAPSHOTS = ROOT / "snapshots"
 PRICE_CHANGES_DIR = SNAPSHOTS / "price-changes"
+PRICE_ACTUAL_DIR = SNAPSHOTS / "price-actual"
+ACTUAL_CHANGES_PATH = PRICE_ACTUAL_DIR / "actual-changes.json"
+ACTUAL_STATE_PATH = PRICE_ACTUAL_DIR / "state.json"
 PRICES_OUT_PATH = SITE / "price_changes_data.js"
+LONDON = ZoneInfo("Europe/London")
 FPL_BOOTSTRAP = "https://fantasy.premierleague.com/api/bootstrap-static/"
 UA = "fpl-explorer/1.0 (+price-checkin)"
 FPL_POS_MAP = {"GKP": "GK", "DEF": "DEF", "MID": "MID", "FWD": "FWD"}
@@ -22,6 +26,7 @@ PRICE_CHECKIN_RE = re.compile(
 BOOTSTRAP_DATE_RE = re.compile(r"bootstrap-static_(\d{4}-\d{2}-\d{2})\.json$")
 RETENTION_DAYS = 4
 SPARKLINE_DAYS = 3
+FPL_COST_STEP = 1  # now_cost units per £0.1m (55 → 56 = £5.5m → £5.6m)
 
 import sys
 
@@ -76,9 +81,35 @@ def price_status_from_likelihood(lk: int) -> tuple[str, str] | None:
     return None
 
 
+def uk_now() -> datetime:
+    return datetime.now(LONDON)
+
+
+def uk_today_stamp(when: datetime | None = None) -> str:
+    return (when or uk_now()).strftime("%Y-%m-%d")
+
+
+def uk_midnight_utc_iso(for_night: datetime | None = None) -> str:
+    """UTC ISO for 00:00 Europe/London on the UK calendar date of for_night."""
+    when = for_night or uk_now()
+    midnight = when.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def should_run_baseline_poll(when: datetime | None = None) -> bool:
+    """~23:57–23:59 UK — snapshot costs before midnight update."""
+    now = when or uk_now()
+    return now.hour == 23 and now.minute >= 57
+
+
+def should_run_change_poll(when: datetime | None = None) -> bool:
+    """~00:00–00:20 UK — detect overnight price changes (FPL updates at 00:00)."""
+    now = when or uk_now()
+    return now.hour == 0 and now.minute <= 20
+
+
 def next_price_change_at_iso() -> str:
-    london = ZoneInfo("Europe/London")
-    now = datetime.now(london)
+    now = uk_now()
     next_mid = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if now >= next_mid:
         next_mid += timedelta(days=1)
@@ -318,6 +349,268 @@ def enrich_players_with_history(
     return enriched
 
 
+def _player_meta_maps(snap: dict) -> tuple[dict[int, dict], dict[int, int]]:
+    """Return (code → {name, team, position}, code → now_cost tenths)."""
+    teams_by_id = {t["id"]: t.get("short_name") for t in snap.get("teams") or []}
+    postype_by_id = {
+        e["id"]: e.get("singular_name_short") for e in snap.get("element_types") or []
+    }
+    meta: dict[int, dict] = {}
+    costs: dict[int, int] = {}
+    for e in snap.get("elements") or []:
+        code = e.get("code")
+        if code is None:
+            continue
+        try:
+            code_i = int(code)
+            cost = int(e.get("now_cost") or 0)
+        except (TypeError, ValueError):
+            continue
+        pos_raw = postype_by_id.get(e.get("element_type"), "") or ""
+        pos = FPL_POS_MAP.get(pos_raw, pos_raw or None)
+        meta[code_i] = {
+            "name": e.get("web_name") or e.get("second_name") or str(code_i),
+            "team": teams_by_id.get(e.get("team")),
+            "position": pos,
+        }
+        costs[code_i] = cost
+    return meta, costs
+
+
+def costs_index_from_snap(snap: dict) -> dict[int, int]:
+    return _player_meta_maps(snap)[1]
+
+
+def costs_differ(prev_costs: dict[int, int], next_costs: dict[int, int]) -> bool:
+    for code, after in next_costs.items():
+        if prev_costs.get(code) != after:
+            return True
+    return False
+
+
+def diff_costs_for_actual_changes(
+    prev_costs: dict[int, int],
+    next_snap: dict,
+    changed_at: str,
+) -> list[dict]:
+    """Emit £0.1 events between a baseline cost index and a bootstrap snapshot."""
+    prev_meta = _player_meta_maps(next_snap)[0]  # names from latest
+    _, next_costs = _player_meta_maps(next_snap)
+    events: list[dict] = []
+    for code, after_tenths in next_costs.items():
+        before_tenths = prev_costs.get(code)
+        if before_tenths is None or before_tenths == after_tenths:
+            continue
+        delta = after_tenths - before_tenths
+        if abs(delta) != FPL_COST_STEP:
+            continue
+        info = prev_meta.get(code) or {}
+        events.append(
+            {
+                "code": code,
+                "name": info.get("name") or str(code),
+                "team": info.get("team"),
+                "position": info.get("position"),
+                "direction": "rise" if delta > 0 else "fall",
+                "before": round(before_tenths / 10.0, 1),
+                "after": round(after_tenths / 10.0, 1),
+                "changedAt": changed_at,
+            }
+        )
+    return events
+
+
+def diff_snapshots_for_actual_changes(
+    prev_snap: dict,
+    next_snap: dict,
+    changed_at: str,
+) -> list[dict]:
+    """Emit £0.1 price-change events between two bootstrap snapshots."""
+    prev_costs = costs_index_from_snap(prev_snap)
+    return diff_costs_for_actual_changes(prev_costs, next_snap, changed_at)
+
+
+def load_actual_state() -> dict:
+    if not ACTUAL_STATE_PATH.exists():
+        return {}
+    try:
+        row = json.loads(ACTUAL_STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return row if isinstance(row, dict) else {}
+
+
+def save_actual_state(state: dict) -> None:
+    PRICE_ACTUAL_DIR.mkdir(parents=True, exist_ok=True)
+    ACTUAL_STATE_PATH.write_text(
+        json.dumps(state, separators=(",", ":"), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def baseline_costs_from_state(state: dict) -> dict[int, int]:
+    raw = state.get("costsByCode") or {}
+    out: dict[int, int] = {}
+    for k, v in raw.items():
+        try:
+            out[int(k)] = int(v)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def update_actual_state_costs(
+    snap: dict,
+    *,
+    result: str,
+    change_night_uk: str | None = None,
+) -> None:
+    state = load_actual_state()
+    costs = costs_index_from_snap(snap)
+    state["costsByCode"] = {str(k): v for k, v in costs.items()}
+    state["baselineAt"] = generated_at()
+    state["lastPollAt"] = state["baselineAt"]
+    state["lastPollResult"] = result
+    if change_night_uk:
+        state["lastChangeNightUk"] = change_night_uk
+    save_actual_state(state)
+
+
+def diff_checkins_for_actual_changes(
+    prev_checkin: dict,
+    next_checkin: dict,
+    meta_snap: dict | None,
+    changed_at: str,
+) -> list[dict]:
+    """Emit £0.1 events between consecutive slim price check-ins."""
+    prev_prices = {
+        int(p["code"]): int(round(float(p["price"]) * 10))
+        for p in prev_checkin.get("players") or []
+        if p.get("code") is not None and p.get("price") is not None
+    }
+    next_prices = {
+        int(p["code"]): int(round(float(p["price"]) * 10))
+        for p in next_checkin.get("players") or []
+        if p.get("code") is not None and p.get("price") is not None
+    }
+    meta = _player_meta_maps(meta_snap)[0] if meta_snap else {}
+    events: list[dict] = []
+    for code, after_tenths in next_prices.items():
+        before_tenths = prev_prices.get(code)
+        if before_tenths is None or before_tenths == after_tenths:
+            continue
+        delta = after_tenths - before_tenths
+        if abs(delta) != FPL_COST_STEP:
+            continue
+        info = meta.get(code) or {}
+        events.append(
+            {
+                "code": code,
+                "name": info.get("name") or str(code),
+                "team": info.get("team"),
+                "position": info.get("position"),
+                "direction": "rise" if delta > 0 else "fall",
+                "before": round(before_tenths / 10.0, 1),
+                "after": round(after_tenths / 10.0, 1),
+                "changedAt": changed_at,
+            }
+        )
+    return events
+
+
+def _actual_event_key(event: dict) -> tuple:
+    return (
+        int(event.get("code") or 0),
+        float(event.get("before") or 0),
+        float(event.get("after") or 0),
+        str(event.get("changedAt") or ""),
+    )
+
+
+def load_actual_changes_log() -> list[dict]:
+    if not ACTUAL_CHANGES_PATH.exists():
+        return []
+    try:
+        data = json.loads(ACTUAL_CHANGES_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if isinstance(data, list):
+        return [e for e in data if isinstance(e, dict)]
+    if isinstance(data, dict) and isinstance(data.get("changes"), list):
+        return [e for e in data["changes"] if isinstance(e, dict)]
+    return []
+
+
+def save_actual_changes_log(events: list[dict]) -> None:
+    PRICE_ACTUAL_DIR.mkdir(parents=True, exist_ok=True)
+    ACTUAL_CHANGES_PATH.write_text(
+        json.dumps(events, separators=(",", ":"), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def append_actual_changes(new_events: list[dict]) -> int:
+    if not new_events:
+        return 0
+    existing = load_actual_changes_log()
+    seen = {_actual_event_key(e) for e in existing}
+    added = 0
+    for ev in new_events:
+        key = _actual_event_key(ev)
+        if key in seen:
+            continue
+        seen.add(key)
+        existing.append(ev)
+        added += 1
+    if added:
+        save_actual_changes_log(existing)
+    return added
+
+
+def actual_changes_newest_first() -> list[dict]:
+    rows = load_actual_changes_log()
+    rows.sort(key=lambda e: str(e.get("changedAt") or ""), reverse=True)
+    return rows
+
+
+def record_actual_changes_from_bootstrap(
+    latest_snap: dict,
+    changed_at: str,
+    *,
+    previous_snap: dict | None = None,
+) -> int:
+    if previous_snap is None:
+        paths = bootstrap_snapshot_paths()
+        if len(paths) < 2:
+            return 0
+        try:
+            previous_snap = json.loads(paths[-2].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return 0
+    events = diff_snapshots_for_actual_changes(previous_snap, latest_snap, changed_at)
+    return append_actual_changes(events)
+
+
+def record_actual_changes_from_checkin(
+    latest_checkin: dict,
+    changed_at: str,
+    *,
+    previous_checkin: dict | None = None,
+    meta_snap: dict | None = None,
+) -> int:
+    if previous_checkin is None:
+        paths = price_checkin_paths()
+        if len(paths) < 2:
+            return 0
+        previous_checkin = load_checkin(paths[-2])
+        if not previous_checkin:
+            return 0
+    events = diff_checkins_for_actual_changes(
+        previous_checkin, latest_checkin, meta_snap, changed_at
+    )
+    return append_actual_changes(events)
+
+
 def rebuild_price_changes_bundle(
     *,
     latest_snap: dict | None = None,
@@ -362,6 +655,7 @@ def rebuild_price_changes_bundle(
         "gameweeks": gameweeks_from_latest_bootstrap(),
         "checkIns": check_ins,
         "players": players,
+        "actualChanges": actual_changes_newest_first(),
     }
     write_price_changes_js(payload)
     return payload

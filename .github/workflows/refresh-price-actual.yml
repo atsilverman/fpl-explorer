@@ -1,0 +1,98 @@
+# Actual price changes at UK midnight (00:00 Europe/London).
+# Baseline ~23:58 UK; polls ~00:02–00:15 UK (BST via 23:xx UTC, GMT via 00:xx UTC).
+name: Refresh price actual
+
+on:
+  schedule:
+    - cron: "57 22,23 * * *" # baseline window (script gates to 23:57–23:59 UK)
+    - cron: "2,5,10,15 23 * * *" # poll BST (00:02–00:15 UK)
+    - cron: "2,5,10,15 0 * * *" # poll GMT (00:02–00:15 UK)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Baseline (pre-midnight)
+        run: python3 site/fetch_price_actual.py --baseline-only
+
+      - name: Poll for price changes
+        id: poll
+        run: |
+          set +e
+          python3 site/fetch_price_actual.py
+          code=$?
+          if [ "$code" -eq 2 ]; then
+            echo "retry=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Retry poll (API lag)
+        if: steps.poll.outputs.retry == 'true'
+        run: |
+          sleep 120
+          python3 site/fetch_price_actual.py || true
+          sleep 180
+          python3 site/fetch_price_actual.py --final-attempt || true
+
+      - name: Bump cache-bust query params
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          path = Path("site/index.html")
+          text = path.read_text(encoding="utf-8")
+
+          def dirty(rel: str) -> bool:
+              return subprocess.run(["git", "diff", "--quiet", "--", rel]).returncode != 0
+
+          bumps = []
+          if dirty("site/price_changes_data.js") or dirty("snapshots/price-actual"):
+              bumps.append("price_changes_data.js")
+
+          for name in bumps:
+              pat = re.compile(rf'(src="{re.escape(name)}\?v=)(\d+)(")')
+
+              def repl(m, _name=name):
+                  return f"{m.group(1)}{int(m.group(2)) + 1}{m.group(3)}"
+
+              text, n = pat.subn(repl, text)
+              print(f"{'Bumped' if n else 'No cache param for'} {name}")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            site/price_changes_data.js \
+            site/index.html \
+            snapshots/price-actual/ \
+            snapshots/bootstrap-static_*.json \
+            snapshots/price-changes/ || true
+          if git diff --staged --quiet; then
+            echo "No price-actual changes to commit."
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          Refresh UK-midnight actual price changes.
+
+          EOF
+          )"
+          git push

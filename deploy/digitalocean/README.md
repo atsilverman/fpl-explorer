@@ -196,6 +196,17 @@ CORS is `*` on the droplet. Production uses the Vercel proxy to avoid HTTPS→HT
 3. **Per-user managers** — Would need server-side prefs (POST `/api/home-prefs`) + auth, or on-demand fetch by entry id.
 4. **FPL rate limits** — No official cap; stay at 1/min live max. Do not expose an endpoint that triggers full league fetch per user.
 
+### Price actual changes (DO timers)
+
+On the live droplet (optional — GitHub Actions also runs this):
+
+```bash
+sudo cp deploy/digitalocean/fpl-price-actual-baseline.{service,timer} /etc/systemd/system/
+sudo cp deploy/digitalocean/fpl-price-actual.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fpl-price-actual-baseline.timer fpl-price-actual.timer
+```
+
 ## Updating
 
 ```bash

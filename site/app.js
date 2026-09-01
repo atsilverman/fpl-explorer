@@ -8,7 +8,12 @@
   const DATA = window.FPL_DATA;
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
   const OWNERSHIP = window.FPL_OWNERSHIP || { generatedAt: null, checkIns: [] };
-  const PRICES = window.FPL_PRICE_CHANGES || { generatedAt: null, players: [], nextChangeAt: null };
+  const PRICES = window.FPL_PRICE_CHANGES || {
+    generatedAt: null,
+    players: [],
+    nextChangeAt: null,
+    actualChanges: [],
+  };
   const LEAGUES = window.FPL_LEAGUES || { generatedAt: null, managers: [], leagues: [] };
   const HOME = window.FPL_HOME || {
     generatedAt: null,
@@ -811,9 +816,12 @@
     ownershipTreeWindow: "d7", // d7 | d3 | d1
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
-    pricesMoverKind: "all", // all | risers | fallers
+    pricesViewMode: "prediction", // prediction | actual
     pricesSortKey: "predicted",
     pricesSortDir: "desc",
+    pricesActualSortKey: "changedAt",
+    pricesActualSortDir: "desc",
+    pricesActualSortTouched: false,
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
@@ -1171,11 +1179,20 @@
     pricesPage: $("#prices-page"),
     pricesCountdownValue: $("#prices-countdown-value"),
     pricesCountdownSub: $("#prices-countdown-sub"),
-    pricesMoverSeg: $("#prices-mover-seg"),
+    pricesViewSeg: $("#prices-view-seg"),
+    pricesCountdownBar: $("#prices-countdown-bar"),
     pricesCountLabel: $("#prices-count-label"),
-    pricesTableWrap: $("#prices-table-wrap"),
-    pricesTableHead: $("#prices-table-head"),
-    pricesTableBody: $("#prices-table-body"),
+    pricesPredictionWrap: $("#prices-prediction-wrap"),
+    pricesRisersWrap: $("#prices-risers-wrap"),
+    pricesRisersHead: $("#prices-risers-head"),
+    pricesRisersBody: $("#prices-risers-body"),
+    pricesFallersWrap: $("#prices-fallers-wrap"),
+    pricesFallersHead: $("#prices-fallers-head"),
+    pricesFallersBody: $("#prices-fallers-body"),
+    pricesActualWrap: $("#prices-actual-wrap"),
+    pricesActualTableWrap: $("#prices-actual-table-wrap"),
+    pricesActualHead: $("#prices-actual-head"),
+    pricesActualBody: $("#prices-actual-body"),
     pricesUpdatedFooter: $("#prices-updated-footer"),
     teamPage: $("#team-page"),
     teamUpdatedFooter: $("#team-updated-footer"),
@@ -7409,9 +7426,16 @@
     } else if (state.page === "ownership" && el.ownershipTableWrap) {
       el.ownershipTableWrap.scrollTop = 0;
       el.ownershipTableWrap.scrollLeft = 0;
-    } else if (state.page === "prices" && el.pricesTableWrap) {
-      el.pricesTableWrap.scrollTop = 0;
-      el.pricesTableWrap.scrollLeft = 0;
+    } else if (state.page === "prices") {
+      const wraps = pricesActiveTableWraps();
+      wraps.forEach((wrap) => {
+        wrap.scrollTop = 0;
+        wrap.scrollLeft = 0;
+      });
+      if (el.pricesPredictionWrap && pricesViewMode() === "prediction") {
+        el.pricesPredictionWrap.scrollTop = 0;
+        el.pricesPredictionWrap.scrollLeft = 0;
+      }
     } else if (state.page === "expected") {
       const barbell = expectedScrollWrap();
       if (barbell) {
@@ -8024,8 +8048,10 @@
     if (state.page === "ownership" && el.ownershipTableWrap && !el.ownershipTableWrap.hidden) {
       wraps.push(el.ownershipTableWrap);
     }
-    if (state.page === "prices" && el.pricesTableWrap && !el.pricesTableWrap.hidden) {
-      wraps.push(el.pricesTableWrap);
+    if (state.page === "prices") {
+      pricesActiveTableWraps().forEach((wrap) => {
+        if (wrap && !wrap.hidden) wraps.push(wrap);
+      });
     }
     if (state.page === "expected") {
       const scroll = expectedScrollWrap();
@@ -8302,26 +8328,45 @@
     host.classList.remove("is-name-simplifying");
   }
 
+  function pricesViewMode() {
+    return state.pricesViewMode === "actual" ? "actual" : "prediction";
+  }
+
+  function pricesPredictionTableWraps() {
+    return [el.pricesRisersWrap, el.pricesFallersWrap].filter(Boolean);
+  }
+
+  function pricesActiveTableWraps() {
+    if (pricesViewMode() === "actual") {
+      return el.pricesActualTableWrap ? [el.pricesActualTableWrap] : [];
+    }
+    return pricesPredictionTableWraps();
+  }
+
   function syncPricesMobileNameColWidth() {
-    const wrap = el.pricesTableWrap;
-    if (!NARROW_MQ.matches || state.page !== "prices" || !wrap || wrap.hidden) {
+    const wraps = pricesActiveTableWraps();
+    if (!NARROW_MQ.matches || state.page !== "prices" || !wraps.length) {
       pricesMobileNameColW = null;
-      if (wrap) wrap.style.removeProperty("--name-col-w");
+      wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       return;
     }
-    const measured = measureNameColWidth(wrap, {
-      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+    let best = OWNERSHIP_MOBILE_NAME_COL_MIN;
+    wraps.forEach((wrap) => {
+      if (wrap.hidden) return;
+      const measured = measureNameColWidth(wrap, {
+        minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+      });
+      const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
+      best = Math.max(best, Math.min(measured, cap));
     });
-    const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
-    pricesMobileNameColW = Math.max(
-      OWNERSHIP_MOBILE_NAME_COL_MIN,
-      Math.min(measured, cap)
-    );
-    const prev = wrap.style.getPropertyValue("--name-col-w");
-    wrap.style.setProperty("--name-col-w", `${pricesMobileNameColW}px`);
-    if (prev !== `${pricesMobileNameColW}px`) {
-      invalidateNameSimplifyOrigin(wrap);
-    }
+    pricesMobileNameColW = best;
+    wraps.forEach((wrap) => {
+      const prev = wrap.style.getPropertyValue("--name-col-w");
+      wrap.style.setProperty("--name-col-w", `${pricesMobileNameColW}px`);
+      if (prev !== `${pricesMobileNameColW}px`) {
+        invalidateNameSimplifyOrigin(wrap);
+      }
+    });
   }
 
   function scheduleOptaMobileNameColWidth() {
@@ -8463,7 +8508,7 @@
     if (!nameSimplifyActive()) {
       nameSimplifyWraps().forEach(clearNameColumnSimplify);
       if (el.ownershipTableWrap) clearNameColumnSimplify(el.ownershipTableWrap);
-      if (el.pricesTableWrap) clearNameColumnSimplify(el.pricesTableWrap);
+      pricesActiveTableWraps().forEach((wrap) => clearNameColumnSimplify(wrap));
       const barbellScroll = expectedScrollWrap();
       if (barbellScroll) clearNameColumnSimplify(barbellScroll);
       return;
@@ -10043,7 +10088,19 @@
 
     if (state.page === "prices") {
       const mobile = NARROW_MQ.matches;
-      const legend = mobile
+      const isActual = pricesViewMode() === "actual";
+      const legend = isActual
+        ? [
+            spitRow(
+              `<span class="prices-change-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
+              "Price rose £0.1m"
+            ),
+            spitRow(
+              `<span class="prices-change-arrow is-fall spit-ui-swatch">${iconHTML("trending-down")}</span>`,
+              "Price fell £0.1m"
+            ),
+          ]
+        : mobile
         ? [
             spitRow(`<span class="prices-status-pill is-very-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">VL</span></span>`, "Very likely to rise (green) + transfer trend arrow"),
             spitRow(`<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`, "Likely to drop (red) + transfer trend arrow"),
@@ -10056,26 +10113,39 @@
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
           ];
-      const reading = [
-        spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
-        ...(mobile
-          ? [
-              spitRow(spitRank("Status"), "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop. Price is in the player row."),
-            ]
-          : [
-              spitRow(spitRank("Status"), "Likelihood label with ↗/↘ for more transfers in vs out this GW."),
-            ]),
-        spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
-        spitRow(spitRank("Progress filter"), "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."),
-        spitRow(spitRank("All / Risers / Fallers"), "Segment above the table."),
-        spitRow(spitRank("Countdown"), "Time until the next daily price update. Change time is shown in your local timezone."),
-        spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
-      ];
+      const reading = isActual
+        ? [
+            spitRow(spitRank("Prediction vs Actual"), "Prediction shows FPL’s price-change predictor. Actual logs £0.1m moves detected from bootstrap check-ins (forward-only — no season backfill yet)."),
+            spitRow(spitRank("Before / After"), "Price immediately before and after the detected change."),
+            spitRow(spitRank("Date"), "When the change was detected (check-in timestamp)."),
+            spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
+          ]
+        : [
+            spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
+            ...(mobile
+              ? [
+                  spitRow(spitRank("Status"), "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop. Price is in the player row."),
+                ]
+              : [
+                  spitRow(spitRank("Status"), "Likelihood label with ↗/↘ for more transfers in vs out this GW."),
+                ]),
+            spitRow(spitRank("Risers / Fallers"), "Two stacked tables — risers above, fallers below."),
+            spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
+            spitRow(spitRank("Progress filter"), "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."),
+            spitRow(spitRank("Countdown"), "Time until the next daily price update. Change time is shown in your local timezone."),
+            spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
+          ];
+      const intro = isActual
+        ? "Confirmed £0.1m price moves from bootstrap snapshot diffs."
+        : "Official FPL price-change predictor from 4-hour bootstrap check-ins.";
+      const note = isActual
+        ? "Actual log starts empty on deploy and fills as daily/4h fetches detect changes."
+        : "Refreshed every 4 hours via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
       return `${spitHead("scale", "How Prices works")}
-        ${spitIntro("Official FPL price-change predictor from 4-hour bootstrap check-ins.")}
+        ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
-        ${spitNote("Refreshed every 4 hours via fetch_prices.py. FPL updates predictor data ~every 15 minutes.")}`;
+        ${spitNote(note)}`;
     }
 
     if (state.page === "live") {
@@ -18891,13 +18961,8 @@
     return Math.abs(p) >= state.pricesProgressMinAbs;
   }
 
-  function pricesBaseFilteredRows(kind = pricesMoverKind()) {
-    return (PRICES.players || []).filter((row) => {
-      if (kind === "risers" && !pricesIsRiser(row)) return false;
-      if (kind === "fallers" && !pricesIsFaller(row)) return false;
-      if (!pricesPassesProgressFilter(row)) return false;
-      return true;
-    });
+  function pricesBaseFilteredRows() {
+    return (PRICES.players || []).filter((row) => pricesPassesProgressFilter(row));
   }
 
   function clampPricesScrollAfterUpdate() {
@@ -18906,12 +18971,17 @@
       const maxTop = Math.max(0, main.scrollHeight - main.clientHeight);
       if (main.scrollTop > maxTop) main.scrollTop = maxTop;
     }
-    const wrap = el.pricesTableWrap;
-    if (!wrap) return;
-    const maxLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
-    if (wrap.scrollLeft > maxLeft) wrap.scrollLeft = maxLeft;
-    invalidateNameSimplifyOrigin(wrap);
-    if (nameSimplifyActive()) updateNameColumnSimplify(wrap);
+    if (el.pricesPredictionWrap && pricesViewMode() === "prediction") {
+      const wrap = el.pricesPredictionWrap;
+      const maxTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+      if (wrap.scrollTop > maxTop) wrap.scrollTop = maxTop;
+    }
+    pricesActiveTableWraps().forEach((wrap) => {
+      const maxLeft = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+      if (wrap.scrollLeft > maxLeft) wrap.scrollLeft = maxLeft;
+      invalidateNameSimplifyOrigin(wrap);
+      if (nameSimplifyActive()) updateNameColumnSimplify(wrap);
+    });
   }
 
   function settlePricesLayoutAfterUpdate() {
@@ -18925,11 +18995,6 @@
 
   let pricesCountdownTimer = null;
   let pricesEnterMotionToken = 0;
-
-  function pricesMoverKind() {
-    const k = state.pricesMoverKind;
-    return k === "risers" || k === "fallers" ? k : "all";
-  }
 
   function pricesIsRiser(row) {
     return row.statusKey === "very_likely_rise" || row.statusKey === "likely_rise";
@@ -18945,6 +19010,48 @@
     return pricesBaseFilteredRows().filter((row) =>
       ownershipPlayerPassesDisplayFilters(row, catalog)
     );
+  }
+
+  function pricesVisibleRisers() {
+    return sortPricesRows(pricesVisibleRows().filter((row) => pricesIsRiser(row)));
+  }
+
+  function pricesVisibleFallers() {
+    return sortPricesRows(pricesVisibleRows().filter((row) => pricesIsFaller(row)));
+  }
+
+  function pricesActualVisibleRows() {
+    if (!isNextSeason()) return [];
+    const catalog = ownershipCatalogByCode();
+    return (PRICES.actualChanges || []).filter((row) =>
+      ownershipPlayerPassesDisplayFilters(row, catalog)
+    );
+  }
+
+  function pricesActualSortValue(row, key) {
+    if (key === "name") return String(row.name || "").toLowerCase();
+    if (key === "change") return row.direction === "rise" ? 1 : 0;
+    if (key === "before") return row.before == null ? -Infinity : Number(row.before);
+    if (key === "after") return row.after == null ? -Infinity : Number(row.after);
+    if (key === "changedAt") {
+      const ms = Date.parse(row.changedAt || "");
+      return Number.isFinite(ms) ? ms : -Infinity;
+    }
+    return -Infinity;
+  }
+
+  function sortPricesActualRows(rows) {
+    const key = state.pricesActualSortKey || "changedAt";
+    const dir = state.pricesActualSortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      if (key === "name") {
+        return dir * String(a.name || "").localeCompare(String(b.name || ""));
+      }
+      const va = pricesActualSortValue(a, key);
+      const vb = pricesActualSortValue(b, key);
+      if (va !== vb) return dir * (va - vb);
+      return String(b.changedAt || "").localeCompare(String(a.changedAt || ""));
+    });
   }
 
   function pricesSortValue(row, key) {
@@ -18975,9 +19082,13 @@
     });
   }
 
-  function pricesSortArrow(key) {
-    if (state.pricesSortKey !== key) return "";
-    return `<span class="arrow">${iconHTML(state.pricesSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
+  function pricesSortArrow(key, mode = "prediction") {
+    const activeKey =
+      mode === "actual" ? state.pricesActualSortKey : state.pricesSortKey;
+    const activeDir =
+      mode === "actual" ? state.pricesActualSortDir : state.pricesSortDir;
+    if (activeKey !== key) return "";
+    return `<span class="arrow">${iconHTML(activeDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
   }
 
   function pricesStatusMobileLabel(statusKey) {
@@ -19090,12 +19201,79 @@
     </tr>`;
   }
 
-  function syncPricesMoverUI() {
-    if (!el.pricesMoverSeg) return;
-    const kind = pricesMoverKind();
-    el.pricesMoverSeg.querySelectorAll("button[data-prices-kind]").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.pricesKind === kind);
-    });
+  function pricesActualHeadHTML() {
+    const th = (key, label, extra = "") =>
+      `<th class="${extra}${state.pricesActualSortKey === key ? " sorted" : ""}" data-prices-actual-sort="${key}">${escapeHtml(label)}${pricesSortArrow(key, "actual")}</th>`;
+    return `<tr>
+      ${th("name", "Player", "col-player")}
+      ${th("change", "Change", "col-num prices-col-change")}
+      ${th("before", "Before", "col-num prices-col-actual-price")}
+      ${th("after", "After", "col-num prices-col-actual-price")}
+      ${th("changedAt", "Date", "col-num prices-col-date")}
+    </tr>`;
+  }
+
+  function pricesChangeArrowHTML(direction) {
+    const up = direction === "rise";
+    const cls = `prices-change-arrow ${up ? "is-rise" : "is-fall"}`;
+    const label = up ? "Price rose" : "Price fell";
+    return `<span class="${cls}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${iconHTML(up ? "trending-up" : "trending-down")}</span>`;
+  }
+
+  function fmtPricesActualPrice(value) {
+    if (value == null || !Number.isFinite(Number(value))) return "—";
+    return `£${Number(value).toFixed(1)}m`;
+  }
+
+  function fmtPricesChangeDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    try {
+      return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    } catch {
+      return "—";
+    }
+  }
+
+  function pricesActualRowHTML(row, rank) {
+    const playerRow = { ...row, price: row.after };
+    return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
+      <td class="col-player">${ownershipIdCellHTML(playerRow, rank)}</td>
+      <td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>
+      <td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.before))}</td>
+      <td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.after))}</td>
+      <td class="col-num prices-col-date">${escapeHtml(fmtPricesChangeDate(row.changedAt))}</td>
+    </tr>`;
+  }
+
+  function pricesActualTableColSpan() {
+    return 5;
+  }
+
+  function syncPricesViewUI() {
+    const mode = pricesViewMode();
+    if (el.pricesViewSeg) {
+      el.pricesViewSeg.querySelectorAll("button[data-prices-view]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.pricesView === mode);
+      });
+    }
+    if (el.pricesPage) {
+      el.pricesPage.dataset.pricesView = mode;
+    }
+    if (el.pricesPredictionWrap) {
+      el.pricesPredictionWrap.hidden = mode !== "prediction";
+    }
+    if (el.pricesActualWrap) {
+      el.pricesActualWrap.hidden = mode !== "actual";
+    }
+    if (el.pricesCountdownBar) {
+      el.pricesCountdownBar.hidden = mode !== "prediction";
+    }
+    if (el.pricesProgressFilterGroup) {
+      el.pricesProgressFilterGroup.style.display =
+        state.page === "prices" && mode === "prediction" ? "" : "none";
+    }
   }
 
   function fmtPricesChangeAtLabel(iso) {
@@ -19114,7 +19292,7 @@
   }
 
   function syncPricesCountdown() {
-    if (state.page !== "prices") {
+    if (state.page !== "prices" || pricesViewMode() !== "prediction") {
       if (pricesCountdownTimer) {
         clearInterval(pricesCountdownTimer);
         pricesCountdownTimer = null;
@@ -19153,53 +19331,122 @@
     startOwnershipEnterMotion(pane);
   }
 
-  function renderPrices({ animateEnter = false, preserveScroll = false } = {}) {
-    if (!el.pricesTableBody || !el.pricesTableHead) return;
-    syncPricesMoverUI();
-    syncPricesCountdown();
-    const scrollSnap =
-      preserveScroll && el.pricesTableWrap
-        ? captureScrollWraps([el.pricesTableWrap])
-        : null;
-
-    if (!isNextSeason()) {
-      if (el.pricesCountLabel) el.pricesCountLabel.textContent = "2026/27 only";
-      el.pricesTableHead.innerHTML = pricesHeadHTML();
-      el.pricesTableBody.innerHTML =
-        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">Price Change Predictor is available in 2026/27 season mode.</td></tr>`;
-      syncFiltersResetUI();
-      syncPageUpdatedFooter(el.pricesUpdatedFooter, pageDataUpdatedIso("prices"));
+  function renderPricesPredictionTable(wrap, headEl, bodyEl, rows, emptyMsg) {
+    if (!headEl || !bodyEl) return;
+    headEl.innerHTML = pricesHeadHTML();
+    if (!rows.length) {
+      bodyEl.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">${emptyMsg}</td></tr>`;
       return;
     }
+    bodyEl.innerHTML = rows.map((row, i) => pricesRowHTML(row, i + 1)).join("");
+    bindOwnershipPhotoFallback(bodyEl);
+  }
+
+  function renderPricesPrediction({ preserveScroll = false } = {}) {
+    const scrollSnap =
+      preserveScroll && el.pricesPredictionWrap
+        ? captureScrollWraps([el.pricesPredictionWrap, ...pricesPredictionTableWraps()])
+        : null;
 
     const pool = PRICES.players || [];
-    const kind = pricesMoverKind();
-    const basePool = pricesBaseFilteredRows(kind);
-    const visible = sortPricesRows(pricesVisibleRows());
+    const basePool = pricesBaseFilteredRows();
+    const risers = pricesVisibleRisers();
+    const fallers = pricesVisibleFallers();
+    const totalShown = risers.length + fallers.length;
+    const totalBase = basePool.length;
+
     if (el.pricesCountLabel) {
       if (!pool.length) {
         el.pricesCountLabel.textContent = "No data";
       } else {
-        const noun = kind === "fallers" ? "fallers" : kind === "risers" ? "risers" : "movers";
-        const shown = visible.length;
-        const total = basePool.length;
         el.pricesCountLabel.textContent =
-          shown === total ? `${shown} ${noun}` : `${shown} of ${total} ${noun}`;
+          totalShown === totalBase
+            ? `${totalShown} movers`
+            : `${totalShown} of ${totalBase} movers`;
       }
     }
-    el.pricesTableHead.innerHTML = pricesHeadHTML();
+
+    const emptyPoolMsg =
+      "No price data yet. Run <code>python3 site/fetch_ownership.py</code> to refresh bootstrap.";
+    const emptyFilterMsg = "No price movers match the current filters.";
+
     if (!pool.length) {
-      el.pricesTableBody.innerHTML =
-        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">No price data yet. Run <code>python3 site/fetch_ownership.py</code> to refresh bootstrap.</td></tr>`;
-    } else if (!visible.length) {
-      el.pricesTableBody.innerHTML =
-        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">No price movers match the current filters.</td></tr>`;
+      renderPricesPredictionTable(
+        el.pricesRisersWrap,
+        el.pricesRisersHead,
+        el.pricesRisersBody,
+        [],
+        emptyPoolMsg
+      );
+      renderPricesPredictionTable(
+        el.pricesFallersWrap,
+        el.pricesFallersHead,
+        el.pricesFallersBody,
+        [],
+        emptyPoolMsg
+      );
     } else {
-      el.pricesTableBody.innerHTML = visible.map((row, i) => pricesRowHTML(row, i + 1)).join("");
-      bindOwnershipPhotoFallback(el.pricesTableBody);
+      renderPricesPredictionTable(
+        el.pricesRisersWrap,
+        el.pricesRisersHead,
+        el.pricesRisersBody,
+        risers,
+        emptyFilterMsg
+      );
+      renderPricesPredictionTable(
+        el.pricesFallersWrap,
+        el.pricesFallersHead,
+        el.pricesFallersBody,
+        fallers,
+        emptyFilterMsg
+      );
     }
-    syncFiltersResetUI();
-    syncPageUpdatedFooter(el.pricesUpdatedFooter, pageDataUpdatedIso("prices"));
+
+    if (scrollSnap) {
+      restoreScrollWraps(scrollSnap);
+      requestAnimationFrame(() => syncMobileScrollportHeight());
+    } else {
+      settlePricesLayoutAfterUpdate();
+    }
+  }
+
+  function renderPricesActual({ preserveScroll = false } = {}) {
+    if (!el.pricesActualHead || !el.pricesActualBody) return;
+    const scrollSnap =
+      preserveScroll && el.pricesActualTableWrap
+        ? captureScrollWraps([el.pricesActualTableWrap])
+        : null;
+
+    const pool = PRICES.actualChanges || [];
+    const visible = sortPricesActualRows(pricesActualVisibleRows());
+
+    if (el.pricesCountLabel) {
+      if (!pool.length) {
+        el.pricesCountLabel.textContent = "No changes yet";
+      } else {
+        const noun = visible.length === 1 ? "change" : "changes";
+        el.pricesCountLabel.textContent =
+          visible.length === pool.length
+            ? `${visible.length} ${noun}`
+            : `${visible.length} of ${pool.length} ${noun}`;
+      }
+    }
+
+    el.pricesActualHead.innerHTML = pricesActualHeadHTML();
+    if (!pool.length) {
+      el.pricesActualBody.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">No actual price changes recorded yet. Changes appear after the next bootstrap check-in detects a £0.1m move.</td></tr>`;
+    } else if (!visible.length) {
+      el.pricesActualBody.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">No price changes match the current filters.</td></tr>`;
+    } else {
+      el.pricesActualBody.innerHTML = visible
+        .map((row, i) => pricesActualRowHTML(row, i + 1))
+        .join("");
+      bindOwnershipPhotoFallback(el.pricesActualBody);
+    }
+
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
     if (scrollSnap) {
@@ -19208,6 +19455,45 @@
     } else {
       settlePricesLayoutAfterUpdate();
     }
+  }
+
+  function renderPrices({ animateEnter = false, preserveScroll = false } = {}) {
+    if (!el.pricesRisersBody || !el.pricesFallersBody) return;
+    syncPricesViewUI();
+    syncPricesCountdown();
+    syncPageUpdatedFooter(el.pricesUpdatedFooter, pageDataUpdatedIso("prices"));
+    syncFiltersResetUI();
+
+    if (!isNextSeason()) {
+      if (el.pricesCountLabel) el.pricesCountLabel.textContent = "2026/27 only";
+      const msg =
+        "Price Change Predictor is available in 2026/27 season mode.";
+      if (el.pricesRisersHead) el.pricesRisersHead.innerHTML = pricesHeadHTML();
+      if (el.pricesFallersHead) el.pricesFallersHead.innerHTML = pricesHeadHTML();
+      if (el.pricesRisersBody) {
+        el.pricesRisersBody.innerHTML =
+          `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">${msg}</td></tr>`;
+      }
+      if (el.pricesFallersBody) {
+        el.pricesFallersBody.innerHTML =
+          `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">${msg}</td></tr>`;
+      }
+      if (el.pricesActualHead) el.pricesActualHead.innerHTML = pricesActualHeadHTML();
+      if (el.pricesActualBody) {
+        el.pricesActualBody.innerHTML =
+          `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">${msg}</td></tr>`;
+      }
+      return;
+    }
+
+    if (pricesViewMode() === "actual") {
+      renderPricesActual({ preserveScroll });
+    } else {
+      renderPricesPrediction({ preserveScroll });
+      bindAllNameColumnSimplifies();
+      scheduleOptaMobileNameColWidth();
+    }
+
     const pageEntering =
       el.pricesPage &&
       (el.pricesPage.classList.contains("is-entering") ||
@@ -20091,7 +20377,10 @@
       el.minutesFilterGroup.style.display = "none";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
-      if (el.pricesProgressFilterGroup) el.pricesProgressFilterGroup.style.display = "";
+      if (el.pricesProgressFilterGroup) {
+        el.pricesProgressFilterGroup.style.display =
+          pricesViewMode() === "prediction" ? "" : "none";
+      }
       el.tableOnlyToggles.style.display = "none";
       if (el.compareToggle) el.compareToggle.style.display = "none";
     } else if (el.pricesProgressFilterGroup) {
@@ -20393,22 +20682,27 @@
       renderOwnership();
     });
   }
-  if (el.pricesMoverSeg) {
-    el.pricesMoverSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-prices-kind]");
-      if (!btn || !el.pricesMoverSeg.contains(btn)) return;
-      const next = btn.dataset.pricesKind;
-      if (next !== "all" && next !== "risers" && next !== "fallers") return;
-      if (next === pricesMoverKind()) return;
-      state.pricesMoverKind = next;
-      syncPricesMoverUI();
+  if (el.pricesViewSeg) {
+    el.pricesViewSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-prices-view]");
+      if (!btn || !el.pricesViewSeg.contains(btn)) return;
+      const next = btn.dataset.pricesView;
+      if (next !== "prediction" && next !== "actual") return;
+      if (next === pricesViewMode()) return;
+      if (next === "actual" && !state.pricesActualSortTouched) {
+        state.pricesActualSortKey = "changedAt";
+        state.pricesActualSortDir = "desc";
+      }
+      state.pricesViewMode = next;
+      syncPricesViewUI();
       if (state.page === "prices") renderPrices({ animateEnter: true });
     });
   }
-  if (el.pricesTableWrap) {
-    el.pricesTableWrap.addEventListener("click", (e) => {
+  pricesPredictionTableWraps().forEach((wrap) => {
+    if (!wrap) return;
+    wrap.addEventListener("click", (e) => {
       const th = e.target.closest("th[data-prices-sort]");
-      if (!th || !el.pricesTableWrap.contains(th)) return;
+      if (!th || !wrap.contains(th)) return;
       const key = th.getAttribute("data-prices-sort");
       if (!key) return;
       if (state.pricesSortKey === key) {
@@ -20416,6 +20710,23 @@
       } else {
         state.pricesSortKey = key;
         state.pricesSortDir = key === "name" ? "asc" : "desc";
+      }
+      renderPrices({ preserveScroll: true });
+    });
+  });
+  if (el.pricesActualTableWrap) {
+    el.pricesActualTableWrap.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-prices-actual-sort]");
+      if (!th || !el.pricesActualTableWrap.contains(th)) return;
+      const key = th.getAttribute("data-prices-actual-sort");
+      if (!key) return;
+      state.pricesActualSortTouched = true;
+      if (state.pricesActualSortKey === key) {
+        state.pricesActualSortDir =
+          state.pricesActualSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.pricesActualSortKey = key;
+        state.pricesActualSortDir = key === "name" ? "asc" : "desc";
       }
       renderPrices({ preserveScroll: true });
     });

@@ -35,6 +35,7 @@ DATE_RE = __import__("re").compile(r"bootstrap-static_(\d{4}-\d{2}-\d{2})\.json$
 
 sys.path.insert(0, str(SITE))
 from fpl_gameweeks import extract_gameweeks  # noqa: E402
+from price_changes_lib import rebuild_price_changes_bundle  # noqa: E402
 
 
 def utc_now() -> datetime:
@@ -174,6 +175,7 @@ def main() -> int:
             dest.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
             n = len(data.get("elements") or [])
             print(f"Wrote {dest.relative_to(ROOT)} ({n} players)")
+            rebuild_price_changes_bundle(latest_snap=data, latest_source=dest.name)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
             print(f"Live fetch failed ({exc}); rebuilding from existing snapshots.", file=sys.stderr)
 

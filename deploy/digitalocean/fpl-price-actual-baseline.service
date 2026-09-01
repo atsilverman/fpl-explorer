@@ -1,0 +1,8 @@
+[Unit]
+Description=FPL pre-midnight price baseline (23:57 UK)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fpl-explorer
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/fpl-explorer/.venv/bin/python3 /opt/fpl-explorer/site/fetch_price_actual.py --baseline-only

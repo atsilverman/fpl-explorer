@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=918" />
+<link rel="stylesheet" href="styles.css?v=923" />
 <script>
 (() => {
   try {
@@ -1105,7 +1105,7 @@
       <p class="page-updated-text page-data-footer" id="ownership-updated-footer" hidden></p>
     </div>
 
-    <div id="prices-page" class="page-pane" style="display:none;">
+    <div id="prices-page" class="page-pane" data-prices-view="prediction" style="display:none;">
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
@@ -1119,20 +1119,43 @@
         <p class="prices-countdown-sub" id="prices-countdown-sub">Changes at —</p>
       </div>
       <div class="ownership-mover-bar prices-mover-bar">
-        <div class="segmented ownership-mover-seg" id="prices-mover-seg" role="group" aria-label="Price movers">
-          <button type="button" data-prices-kind="all" class="active">All</button>
-          <button type="button" data-prices-kind="risers">Risers</button>
-          <button type="button" data-prices-kind="fallers">Fallers</button>
+        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
+          <button type="button" data-prices-view="prediction" class="active">Prediction</button>
+          <button type="button" data-prices-view="actual">Actual</button>
         </div>
         <div class="ownership-mover-end">
           <span class="count-label" id="prices-count-label"></span>
         </div>
       </div>
-      <div class="table-wrap" id="prices-table-wrap">
-        <table class="ownership-table prices-table">
-          <thead id="prices-table-head"></thead>
-          <tbody id="prices-table-body"></tbody>
-        </table>
+      <div id="prices-prediction-wrap" class="prices-prediction-wrap">
+        <div class="prices-prediction-panels">
+          <section class="prices-prediction-panel" aria-label="Risers">
+            <div class="prices-section-divider"><span>Risers</span></div>
+            <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-risers-wrap">
+              <table class="ownership-table prices-table">
+                <thead id="prices-risers-head"></thead>
+                <tbody id="prices-risers-body"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="prices-prediction-panel" aria-label="Fallers">
+            <div class="prices-section-divider"><span>Fallers</span></div>
+            <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-fallers-wrap">
+              <table class="ownership-table prices-table">
+                <thead id="prices-fallers-head"></thead>
+                <tbody id="prices-fallers-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div id="prices-actual-wrap" class="prices-actual-wrap" hidden>
+        <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-table-wrap">
+          <table class="ownership-table prices-table prices-actual-table">
+            <thead id="prices-actual-head"></thead>
+            <tbody id="prices-actual-body"></tbody>
+          </table>
+        </div>
       </div>
       <p class="page-updated-text page-data-footer" id="prices-updated-footer" hidden></p>
     </div>
@@ -1472,12 +1495,12 @@
 <script src="data.js?v=63"></script>
 <script src="markets_data.js?v=23"></script>
 <script src="ownership_data.js?v=17"></script>
-<script src="price_changes_data.js?v=7"></script>
+<script src="price_changes_data.js?v=8"></script>
 <script src="leagues_data.js?v=5"></script>
 <script src="home_data.js?v=31"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=948"></script>
+<script src="app.js?v=950"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

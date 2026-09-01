@@ -28,7 +28,8 @@ Then bump the matching cache-bust query params in `site/index.html` (`data.js?v=
 
 Scheduled production refreshes (separate from this chat rule):
 - `.github/workflows/refresh-caches.yml` — Markets ~1×/day + Ownership ~noon PT (`ODDS_API_KEY` secret).
-- `.github/workflows/refresh-prices.yml` — Price check-ins every 4h UTC (`price_changes_data.js` + `snapshots/price-changes/`).
+- `.github/workflows/refresh-prices.yml` — Price predictor check-ins every 4h UTC (`price_changes_data.js` + `snapshots/price-changes/`).
+- `.github/workflows/refresh-price-actual.yml` — Actual £0.1 changes ~00:00 UK (`fetch_price_actual.py` → `snapshots/price-actual/`).
 - `.github/workflows/rebuild-after-matchday.yml` — polls every 20 min; runs `build.py` once per settled GW matchday (UK calendar day, 45 min after last FT). Updates Statistics / Rankings / Matchups / 2026/27 stats — not Home live, not xData expected (CSV). **Starts GW2** — see `snapshots/matchday_rebuild_state.json`.
 
 Do **not**:
@@ -37,4 +38,4 @@ Do **not**:
 
 Live Home polling (DigitalOcean / `/api/home`) can stay ahead of the static bundles between refreshes; the next full refresh + `build.py` brings Statistics / Team / etc. back in line.
 
-Subset phrases: "refresh ownership" / "refresh markets" / "refresh leagues" / "refresh home" / "refresh prices" run only that pipeline (no `build.py` unless they ask for Statistics too).
+Subset phrases: "refresh ownership" / "refresh markets" / "refresh leagues" / "refresh home" / "refresh prices" run only that pipeline (no `build.py` unless they ask for Statistics too). "refresh price actual" runs `python3 site/fetch_price_actual.py --force` (manual; production uses the midnight workflow).

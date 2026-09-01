@@ -1,0 +1,17 @@
+[Unit]
+Description=FPL UK-midnight actual price change polls
+
+[Timer]
+# 23:02–23:15 UTC ≈ 00:02–00:15 BST; 00:02–00:15 UTC ≈ 00:02–00:15 GMT
+OnCalendar=*-*-* 23:02:00
+OnCalendar=*-*-* 23:05:00
+OnCalendar=*-*-* 23:10:00
+OnCalendar=*-*-* 23:15:00
+OnCalendar=*-*-* 00:02:00
+OnCalendar=*-*-* 00:05:00
+OnCalendar=*-*-* 00:10:00
+OnCalendar=*-*-* 00:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

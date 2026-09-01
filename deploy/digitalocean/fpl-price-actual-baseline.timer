@@ -1,0 +1,10 @@
+[Unit]
+Description=FPL pre-midnight price baseline (23:57 UK)
+
+[Timer]
+# 22:57 UTC ≈ 23:57 BST; 23:57 UTC ≈ 23:57 GMT — script gates to UK 23:57–23:59
+OnCalendar=*-*-* 22,23:57:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
