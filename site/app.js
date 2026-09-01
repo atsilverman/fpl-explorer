@@ -8137,6 +8137,9 @@
   const OWNERSHIP_MOBILE_NAME_COL_MIN = 168;
   const MOBILE_NAME_COL_MAX_FRAC = 0.58;
   const MOBILE_NAME_COL_SLACK = 10;
+  const PRICES_ACTUAL_MOBILE_PLAYER_MIN = 96;
+  const PRICES_ACTUAL_MOBILE_CHANGE_MIN = 44;
+  const PRICES_ACTUAL_MOBILE_AFTER_MIN = 58;
 
   function measureInlineContentWidth(el) {
     if (!el) return 0;
@@ -8301,6 +8304,7 @@
     }
     const measured = measureNameColWidth(wrap, {
       minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+      hugContent: true,
     });
     const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
     ownershipMobileNameColW = Math.max(
@@ -8392,7 +8396,11 @@
       wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       return;
     }
-    // Mobile Prices: vertical page scroll only — table uses fixed layout, no pan width.
+    if (pricesViewMode() === "actual") {
+      wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
+      pricesMobileNameColW = null;
+      return;
+    }
     pricesMobileNameColW = null;
     wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
   }
@@ -8405,6 +8413,9 @@
       syncOwnershipMobileNameColWidth();
       syncPricesMobileNameColWidth();
       syncLivePointsNameColWidth();
+      if (state.page === "prices" && pricesViewMode() === "actual") {
+        syncPricesActualColumnWidths();
+      }
     });
   }
 
@@ -19176,57 +19187,131 @@
     root.dataset.actualHideLeague = hideLeague ? "1" : "0";
   }
 
+  function measurePricesCellPadding(cell) {
+    if (!cell) return 0;
+    const cs = getComputedStyle(cell);
+    return (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+  }
+
+  function measurePricesActualMobilePlayerWidth(wrap) {
+    return measureNameColWidth(wrap, {
+      minW: PRICES_ACTUAL_MOBILE_PLAYER_MIN,
+      hugContent: true,
+      slack: 4,
+    });
+  }
+
   function syncPricesActualColumnWidths() {
     const wraps = pricesActualTableWraps();
     const active =
-      !NARROW_MQ.matches &&
-      state.page === "prices" &&
-      pricesViewMode() === "actual" &&
-      wraps.length;
+      state.page === "prices" && pricesViewMode() === "actual" && wraps.length;
+    const mobile = NARROW_MQ.matches;
+    const clearMobileLayoutVars = (wrap) => {
+      wrap.style.removeProperty("--prices-actual-date-col-w");
+      wrap.style.removeProperty("--prices-actual-tsb-col-w");
+      wrap.style.removeProperty("--prices-actual-player-col-w");
+      wrap.style.removeProperty("--prices-actual-metric-col-w");
+      wrap.style.removeProperty("--prices-actual-change-col-w");
+      wrap.style.removeProperty("--prices-actual-after-col-w");
+      wrap.style.removeProperty("--name-col-w");
+    };
     if (!active) {
-      wraps.forEach((wrap) => {
-        wrap.style.removeProperty("--prices-actual-date-col-w");
-        wrap.style.removeProperty("--prices-actual-tsb-col-w");
-      });
+      wraps.forEach(clearMobileLayoutVars);
       return;
     }
 
+    const visibleWraps = wraps.filter((wrap) => wrap && !wrap.hidden && wrap.offsetParent !== null);
+    if (!visibleWraps.length) return;
+
     const dateRef =
-      wraps[0].querySelector("th.prices-col-date") ||
-      wraps[0].querySelector("td.prices-col-date, td.prices-actual-day") ||
-      wraps[0];
+      visibleWraps[0].querySelector("th.prices-col-date") ||
+      visibleWraps[0].querySelector("td.prices-col-date, td.prices-actual-day") ||
+      visibleWraps[0];
     const tsbRef =
-      wraps[0].querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
+      visibleWraps[0].querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
+    const changeRef = visibleWraps[0].querySelector("th.prices-col-change");
+    const afterRef = visibleWraps[0].querySelector("th.prices-col-after");
 
     let maxDate = measurePricesTextWidth("Date", dateRef);
-    let maxTsb = measurePricesTextWidth("All(%)", tsbRef);
-    maxTsb = Math.max(maxTsb, measurePricesTextWidth("ML(%)", tsbRef));
+    let maxTsb = 0;
+    let maxPlayer = PRICES_ACTUAL_MOBILE_PLAYER_MIN;
+    let maxChange = measurePricesTextWidth("Chg", changeRef);
+    let maxAfter = measurePricesTextWidth("After", afterRef);
 
-    wraps.forEach((wrap) => {
+    visibleWraps.forEach((wrap) => {
+      maxPlayer = Math.max(maxPlayer, measurePricesActualMobilePlayerWidth(wrap));
       wrap
         .querySelectorAll("td.prices-col-date, td.prices-actual-day")
         .forEach((cell) => {
           maxDate = Math.max(maxDate, measurePricesTextWidth(cell.textContent, cell));
         });
-      wrap
-        .querySelectorAll(
-          "th.prices-col-owned, th.prices-col-league-owned, td.prices-col-owned, td.prices-col-league-owned"
-        )
-        .forEach((cell) => {
-          if (cell.offsetParent === null) return;
-          const pill = cell.querySelector(".ownership-pill");
-          if (pill) {
-            maxTsb = Math.max(maxTsb, pill.getBoundingClientRect().width);
-          } else {
-            maxTsb = Math.max(maxTsb, measurePricesTextWidth(cell.textContent, cell));
-          }
-        });
+      wrap.querySelectorAll("td.prices-col-change").forEach((cell) => {
+        const arrow = cell.querySelector(".prices-change-arrow");
+        const w = arrow
+          ? arrow.getBoundingClientRect().width
+          : measurePricesTextWidth(cell.textContent, cell);
+        maxChange = Math.max(maxChange, w);
+      });
+      wrap.querySelectorAll("td.prices-col-after").forEach((cell) => {
+        maxAfter = Math.max(maxAfter, measurePricesTextWidth(cell.textContent, cell));
+      });
+      if (!mobile) {
+        wrap
+          .querySelectorAll(
+            "th.prices-col-owned, th.prices-col-league-owned, td.prices-col-owned, td.prices-col-league-owned"
+          )
+          .forEach((cell) => {
+            if (cell.offsetParent === null) return;
+            const pill = cell.querySelector(".ownership-pill");
+            if (pill) {
+              maxTsb = Math.max(maxTsb, pill.getBoundingClientRect().width);
+            } else {
+              maxTsb = Math.max(maxTsb, measurePricesTextWidth(cell.textContent, cell));
+            }
+          });
+      }
     });
+
+    if (mobile) {
+      const tableW = Math.max(
+        ...visibleWraps.map((wrap) => wrap.clientWidth || 0),
+        280
+      );
+      const dateW = Math.ceil(maxDate + 18);
+      const changePad = Math.max(12, measurePricesCellPadding(changeRef));
+      const afterPad = Math.max(14, measurePricesCellPadding(afterRef));
+      let metricW = Math.max(
+        PRICES_ACTUAL_MOBILE_CHANGE_MIN,
+        PRICES_ACTUAL_MOBILE_AFTER_MIN,
+        Math.ceil(maxChange + changePad),
+        Math.ceil(maxAfter + afterPad)
+      );
+      let playerW = maxPlayer;
+      let slack = tableW - (dateW + playerW + metricW * 2);
+      if (slack > 0) {
+        metricW += Math.ceil(slack / 2);
+      } else if (slack < 0) {
+        playerW = Math.max(PRICES_ACTUAL_MOBILE_PLAYER_MIN, playerW + slack);
+        slack = tableW - (dateW + playerW + metricW * 2);
+        if (slack > 0) metricW += Math.ceil(slack / 2);
+      }
+
+      visibleWraps.forEach((wrap) => {
+        wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
+        wrap.style.setProperty("--prices-actual-player-col-w", `${playerW}px`);
+        wrap.style.setProperty("--prices-actual-metric-col-w", `${metricW}px`);
+        wrap.style.removeProperty("--prices-actual-change-col-w");
+        wrap.style.removeProperty("--prices-actual-after-col-w");
+        wrap.style.removeProperty("--prices-actual-tsb-col-w");
+      });
+      return;
+    }
 
     const dateW = Math.ceil(maxDate + 16);
     const tsbW = Math.ceil(Math.max(40, maxTsb + 12));
 
     wraps.forEach((wrap) => {
+      clearMobileLayoutVars(wrap);
       wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
       wrap.style.setProperty("--prices-actual-tsb-col-w", `${tsbW}px`);
     });
@@ -19635,7 +19720,7 @@
       return `<tr>
         ${th("Date", "col-date prices-col-date")}
         ${th("Player", "col-player")}
-        ${th("Change", "col-num prices-col-change")}
+        ${th("Chg", "col-num prices-col-change")}
         ${th("After", "col-num prices-col-actual-price prices-col-after")}
       </tr>`;
     }
@@ -19723,7 +19808,7 @@
   }
 
   function pricesActualDateLabel(iso) {
-    return fmtPricesChangeDateShort(iso, { compact: NARROW_MQ.matches });
+    return fmtPricesChangeDateShort(iso);
   }
 
   function pricesActualRowHTML(row, rank, { dateCell = "", catalog = null } = {}) {
@@ -20076,6 +20161,7 @@
 
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
+    if (NARROW_MQ.matches) syncPricesActualColumnWidths();
     if (scrollSnap) {
       restoreScrollWraps(scrollSnap);
       requestAnimationFrame(() => syncMobileScrollportHeight());

@@ -6030,8 +6030,6 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   #prices-page .prices-actual-table-wrap .prices-col-league-owned {
     display: none;
   }
-  #prices-page .prices-table-wrap > table > thead tr:not(.section-row) th.col-player,
-  #prices-page .prices-table-wrap > table > tbody td.col-player,
   #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player,
   #prices-page .prices-prediction-table-wrap > table > tbody td.col-player {
     position: static;
@@ -6040,71 +6038,102 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     min-width: 0;
     max-width: none;
   }
-  #prices-page .prices-table-wrap.name-simplify-ready thead th.col-player,
-  #prices-page .prices-table-wrap.name-simplify-ready tbody td.col-player {
+  #prices-page .prices-prediction-table-wrap.name-simplify-ready thead th.col-player,
+  #prices-page .prices-prediction-table-wrap.name-simplify-ready tbody td.col-player {
     width: auto;
     min-width: 0;
     max-width: none;
   }
   #prices-page .prices-actual-table-wrap {
     --prices-actual-date-col-w: 0px;
+    overflow-x: hidden;
   }
   #prices-page .prices-actual-table-wrap > table {
     table-layout: fixed;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-player,
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-player,
+  #prices-page .prices-actual-table-wrap.name-simplify-ready > table > thead th.col-player,
+  #prices-page .prices-actual-table-wrap.name-simplify-ready > table > tbody td.col-player {
+    position: static;
+    left: auto;
+    width: var(--prices-actual-player-col-w, auto);
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    padding-right: 4px;
   }
   #prices-page .prices-actual-table-wrap .prices-col-date,
   #prices-page .prices-actual-table-wrap td.prices-actual-day {
-    width: 2rem;
-    min-width: 2rem;
-    max-width: 2rem;
-    padding-left: 3px;
-    padding-right: 2px;
-    font-size: 9.5px;
+    width: var(--prices-actual-date-col-w, 3.25rem);
+    min-width: 0;
+    max-width: none;
+    padding-left: 6px;
+    padding-right: 8px;
+    font-size: 10px;
     line-height: 1.15;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     vertical-align: top;
   }
-  #prices-page .prices-actual-table-wrap .col-player {
-    width: auto;
+  #prices-page .prices-actual-table-wrap .ownership-id {
+    min-width: 0;
+    max-width: 100%;
+  }
+  #prices-page .prices-actual-table-wrap .prices-col-change,
+  #prices-page .prices-actual-table-wrap th.prices-col-change {
+    width: var(--prices-actual-metric-col-w, var(--prices-actual-change-col-w, 2.75rem));
     min-width: 0;
     max-width: none;
-  }
-  #prices-page .prices-actual-table-wrap .prices-col-change {
-    width: 1.85rem;
-    min-width: 1.85rem;
-    max-width: 1.85rem;
-    padding-left: 2px;
-    padding-right: 2px;
-  }
-  #prices-page .prices-actual-table-wrap .prices-col-after {
-    width: 3rem;
-    min-width: 3rem;
-    max-width: 3rem;
+    white-space: nowrap;
+    text-align: center;
     padding-left: 4px;
     padding-right: 4px;
   }
-  #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-status {
+  #prices-page .prices-actual-table-wrap .prices-col-after,
+  #prices-page .prices-actual-table-wrap .prices-col-actual-price.prices-col-after,
+  #prices-page .prices-actual-table-wrap th.prices-col-after {
+    width: var(--prices-actual-metric-col-w, var(--prices-actual-after-col-w, 3.5rem));
     min-width: 0;
-    width: 14%;
+    max-width: none;
+    white-space: nowrap;
+    text-align: center;
     padding-left: 4px;
     padding-right: 4px;
   }
-  #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-metric,
-  #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-metric {
+  #prices-page .prices-actual-table-wrap .prices-actual-table .prices-col-change,
+  #prices-page .prices-actual-table-wrap .prices-actual-table .prices-col-actual-price {
     min-width: 0;
-    width: 18%;
+  }
+  #prices-page .prices-actual-table-wrap .prices-table > thead tr:not(.section-row) th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #prices-page .prices-prediction-table-wrap {
+    --prices-mobile-player-pct: 38%;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-status,
+  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-status,
+  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-metric,
+  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-metric {
+    width: calc((100% - var(--prices-mobile-player-pct)) / 3);
+    min-width: 0;
+    text-align: center;
+    vertical-align: middle;
     padding-left: 4px;
     padding-right: 4px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table .col-player {
+    width: var(--prices-mobile-player-pct);
   }
   #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
   #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
     display: none;
   }
-  #prices-page .prices-prediction-table-wrap .prices-table .col-player {
-    width: 38%;
+  #prices-page .prices-actual-table-wrap .prices-col-change .prices-change-arrow {
+    margin-inline: auto;
   }
   #prices-page .prices-table-wrap .ownership-id .player-name,
   #prices-page .prices-table-wrap .ownership-id-text .player-name-line > .player-name {
@@ -6199,6 +6228,10 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     left: 0;
     z-index: 10;
     background-color: hsl(var(--muted));
+  }
+  #ownership-table-wrap.name-simplify-ready thead th.col-player,
+  #ownership-table-wrap.name-simplify-ready tbody td.col-player {
+    padding-right: 4px;
   }
   #ownership-table-wrap .ownership-table .col-num,
   #prices-page .prices-table-wrap .prices-table .col-num {
