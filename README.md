@@ -13,7 +13,7 @@ Static Fantasy Premier League research site — browse OPTA/FPL stats, fixture m
 | **Statistics** | Sortable player/team table (Total / Home / Away), including current FPL ownership. Value modes: season total, per 90, per £m. Column picker, compare up to 5 rows, click-to-open fixture tooltips, owned-player pins (manager ID in Preferences). Season switch: **2025/26** full stats vs **2026/27** zero-stat squad + prices. |
 | **Rankings** | Top-10 cards per metric. Hover to cross-highlight a name across cards; pin up to five colours. |
 | **Ownership** | Multi-line `selected_by%` over manual FPL check-ins. Players default to 5%+ owned, capped at the latest top 100 (grey lines, hover uses club colour). Risers/Fallers always show the top five player ownership movers; the sidebar threshold controls qualification and **Trending** colors only those listed movers. Teams average each club’s current top 20. |
-| **Prices** | Official FPL price-change predictor (2026/27): **Prediction** mode with stacked risers/fallers tables, progress sparklines, and countdown; **Actual** mode logs confirmed £0.1m moves from bootstrap diffs (forward-only, no season backfill). |
+| **Prices** | Official FPL price-change predictor (2026/27): **Prediction** mode with stacked risers/fallers tables, progress sparklines, and countdown; **Actual** mode logs confirmed £0.1m moves (backfilled from bootstrap snapshots + ongoing midnight check-ins). |
 | **Matchups** | Upcoming fixture difficulty cards plus an attack/defence scatter. Blend Expected vs Actual ranks; highlight edges for favourable attacking or defensive matchups. |
 | **Feed** | Player-mention cards from curated FPL creators on X (~last 48 hours), with quotes and season stats. Search + Volume / Recent sort. |
 | **Markets** | Upcoming EPL fixtures from bookmaker odds: projected goals, clean-sheet %, most likely scorelines. Grouped by local date; heat colouring for Goals / CS%. |
@@ -80,7 +80,7 @@ Social Feed + X API pulls are parked under [`archive/feed/`](archive/feed/README
 
 `python3 site/fetch_prices.py` — pulls `bootstrap-static` every run, writes slim mover snapshots to `snapshots/price-changes/price-changes_*.json` (prunes files older than ~4 days), then rebuilds `site/price_changes_data.js` with check-in history and 3-day progress sparklines.
 
-**Actual price changes** (confirmed £0.1 moves) are detected by `python3 site/fetch_price_actual.py`, scheduled around **00:00 UK** (baseline at 23:57 UK, polls 00:02–00:15 UK with retries). Events land in `snapshots/price-actual/actual-changes.json` with `changedAt` at UK midnight. See [`.github/workflows/refresh-price-actual.yml`](.github/workflows/refresh-price-actual.yml) and [`deploy/digitalocean/fpl-price-actual*.timer`](deploy/digitalocean/).
+**Actual price changes** (confirmed £0.1 moves) are detected by `python3 site/fetch_price_actual.py`, scheduled around **00:00 UK** (baseline at 23:57 UK, polls 00:02–00:15 UK with retries). Events land in `snapshots/price-actual/actual-changes.json` with `changedAt` at UK midnight. One-time season backfill: `python3 site/backfill_price_actual.py --replace` (diffs consecutive `bootstrap-static_YYYY-MM-DD.json` snapshots).
 
 `python3 site/fetch_prices.py --rebuild-only` skips the live fetch.
 

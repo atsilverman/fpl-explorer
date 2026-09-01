@@ -96,6 +96,19 @@ def uk_midnight_utc_iso(for_night: datetime | None = None) -> str:
     return midnight.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def uk_midnight_utc_iso_for_date(uk_date: str) -> str:
+    """UTC ISO for 00:00 Europe/London on a YYYY-MM-DD UK calendar date."""
+    midnight = datetime.strptime(uk_date, "%Y-%m-%d").replace(tzinfo=LONDON)
+    return midnight.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def bootstrap_snapshot_date(path: Path) -> str:
+    match = BOOTSTRAP_DATE_RE.search(path.name)
+    if not match:
+        raise ValueError(f"not a dated bootstrap snapshot: {path.name}")
+    return match.group(1)
+
+
 def should_run_baseline_poll(when: datetime | None = None) -> bool:
     """~23:57–23:59 UK — snapshot costs before midnight update."""
     now = when or uk_now()
@@ -549,6 +562,18 @@ def save_actual_changes_log(events: list[dict]) -> None:
     )
 
 
+def dedupe_actual_events(events: list[dict]) -> list[dict]:
+    seen: set[tuple] = set()
+    out: list[dict] = []
+    for ev in events:
+        key = _actual_event_key(ev)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(ev)
+    return out
+
+
 def append_actual_changes(new_events: list[dict]) -> int:
     if not new_events:
         return 0
@@ -565,6 +590,41 @@ def append_actual_changes(new_events: list[dict]) -> int:
     if added:
         save_actual_changes_log(existing)
     return added
+
+
+def backfill_actual_changes_from_snapshots(*, replace: bool = False) -> dict:
+    """Rebuild actual-changes.json from consecutive bootstrap-static snapshots.
+
+    Each pair (D-1, D) attributes single £0.1 steps to UK midnight on D.
+    Multi-day gaps only capture a change when the total delta is exactly £0.1.
+    """
+    paths = bootstrap_snapshot_paths()
+    if len(paths) < 2:
+        return {"pairs": 0, "events": 0, "saved": 0}
+
+    events: list[dict] = []
+    pairs = 0
+    for prev_path, next_path in zip(paths, paths[1:]):
+        try:
+            next_date = bootstrap_snapshot_date(next_path)
+            prev_snap = json.loads(prev_path.read_text(encoding="utf-8"))
+            next_snap = json.loads(next_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(f"skip {prev_path.name} → {next_path.name}: {exc}", file=sys.stderr)
+            continue
+        changed_at = uk_midnight_utc_iso_for_date(next_date)
+        batch = diff_snapshots_for_actual_changes(prev_snap, next_snap, changed_at)
+        if batch:
+            pairs += 1
+            events.extend(batch)
+
+    events = dedupe_actual_events(events)
+    if replace:
+        save_actual_changes_log(events)
+        saved = len(events)
+    else:
+        saved = append_actual_changes(events)
+    return {"pairs": pairs, "events": len(events), "saved": saved}
 
 
 def actual_changes_newest_first() -> list[dict]:

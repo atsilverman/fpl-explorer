@@ -10115,7 +10115,7 @@
           ];
       const reading = isActual
         ? [
-            spitRow(spitRank("Prediction vs Actual"), "Prediction shows FPL’s price-change predictor. Actual logs £0.1m moves detected from bootstrap check-ins (forward-only — no season backfill yet)."),
+            spitRow(spitRank("Prediction vs Actual"), "Prediction shows FPL’s price-change predictor. Actual lists confirmed £0.1m moves from bootstrap snapshot diffs (backfilled where daily snapshots exist)."),
             spitRow(spitRank("Before / After"), "Price immediately before and after the detected change."),
             spitRow(spitRank("Date"), "When the change was detected (check-in timestamp)."),
             spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
@@ -19205,11 +19205,11 @@
     const th = (key, label, extra = "") =>
       `<th class="${extra}${state.pricesActualSortKey === key ? " sorted" : ""}" data-prices-actual-sort="${key}">${escapeHtml(label)}${pricesSortArrow(key, "actual")}</th>`;
     return `<tr>
+      ${th("changedAt", "Date", "col-date prices-col-date")}
       ${th("name", "Player", "col-player")}
       ${th("change", "Change", "col-num prices-col-change")}
       ${th("before", "Before", "col-num prices-col-actual-price")}
       ${th("after", "After", "col-num prices-col-actual-price")}
-      ${th("changedAt", "Date", "col-num prices-col-date")}
     </tr>`;
   }
 
@@ -19225,26 +19225,96 @@
     return `£${Number(value).toFixed(1)}m`;
   }
 
-  function fmtPricesChangeDate(iso) {
+  function pricesActualDayKey(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    try {
+      return d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+    } catch {
+      return "";
+    }
+  }
+
+  function fmtPricesChangeDateShort(iso) {
     if (!iso) return "—";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "—";
+    const mobile = NARROW_MQ.matches;
     try {
-      return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+      if (mobile) {
+        return d.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          timeZone: "Europe/London",
+        });
+      }
+      return d.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        timeZone: "Europe/London",
+      });
     } catch {
       return "—";
     }
   }
 
-  function pricesActualRowHTML(row, rank) {
+  function pricesActualUseDayGroups() {
+    return (state.pricesActualSortKey || "changedAt") === "changedAt";
+  }
+
+  function pricesActualRowHTML(row, rank, { dateCell = "" } = {}) {
     const playerRow = { ...row, price: row.after };
+    const dateTd =
+      dateCell ||
+      `<td class="col-date prices-col-date">${escapeHtml(fmtPricesChangeDateShort(row.changedAt))}</td>`;
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
+      ${dateTd}
       <td class="col-player">${ownershipIdCellHTML(playerRow, rank)}</td>
       <td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>
       <td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.before))}</td>
       <td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.after))}</td>
-      <td class="col-num prices-col-date">${escapeHtml(fmtPricesChangeDate(row.changedAt))}</td>
     </tr>`;
+  }
+
+  function pricesActualBodyHTML(rows) {
+    if (!rows.length) return "";
+    if (!pricesActualUseDayGroups()) {
+      return rows.map((row, i) => pricesActualRowHTML(row, i + 1)).join("");
+    }
+
+    const groups = [];
+    let group = null;
+    rows.forEach((row) => {
+      const day = pricesActualDayKey(row.changedAt);
+      if (!group || group.day !== day) {
+        group = { day, changedAt: row.changedAt, rows: [] };
+        groups.push(group);
+      }
+      group.rows.push(row);
+    });
+
+    let rank = 1;
+    let html = "";
+    groups.forEach((g) => {
+      g.rows.forEach((row, idx) => {
+        const dayStart = idx === 0;
+        const dateCell = dayStart
+          ? `<td class="col-date prices-col-date prices-actual-day" rowspan="${g.rows.length}">${escapeHtml(fmtPricesChangeDateShort(g.changedAt))}</td>`
+          : "";
+        const trCls = dayStart ? ' class="prices-actual-day-start"' : "";
+        html += `<tr${trCls} data-prices-code="${escapeHtml(String(row.code ?? ""))}">`;
+        if (dateCell) html += dateCell;
+        const playerRow = { ...row, price: row.after };
+        html += `<td class="col-player">${ownershipIdCellHTML(playerRow, rank++)}</td>`;
+        html += `<td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>`;
+        html += `<td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
+        html += `<td class="col-num prices-col-actual-price">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
+        html += `</tr>`;
+      });
+    });
+    return html;
   }
 
   function pricesActualTableColSpan() {
@@ -19441,9 +19511,7 @@
       el.pricesActualBody.innerHTML =
         `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">No price changes match the current filters.</td></tr>`;
     } else {
-      el.pricesActualBody.innerHTML = visible
-        .map((row, i) => pricesActualRowHTML(row, i + 1))
-        .join("");
+      el.pricesActualBody.innerHTML = pricesActualBodyHTML(visible);
       bindOwnershipPhotoFallback(el.pricesActualBody);
     }
 

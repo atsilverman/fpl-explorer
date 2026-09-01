@@ -5317,8 +5317,26 @@ html[data-page="prices"] .layout .main {
   font-variant-numeric: tabular-nums;
 }
 .prices-actual-table .prices-col-date {
-  min-width: 9.5rem;
+  min-width: 5.5rem;
+  max-width: 7.5rem;
   white-space: nowrap;
+  vertical-align: top;
+  font-weight: 650;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.prices-actual-table tbody tr.prices-actual-day-start td {
+  border-top: 1px solid var(--border);
+}
+.prices-actual-table tbody tr:first-child td {
+  border-top: none;
+}
+.prices-actual-table td.prices-actual-day {
+  background: hsl(var(--muted) / 0.35);
+  border-right: 1px solid var(--border);
+}
+.prices-actual-table tbody tr:hover td.prices-actual-day {
+  background: hsl(var(--muted) / 0.45);
 }
 :root[data-theme="dark"] .prices-progress-pill.is-rise {
   background: hsl(142 45% 38% / 0.16);
@@ -5822,6 +5840,43 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     --name-col-w: 168px;
     --metric-col-w: 58px;
     padding-right: 4px;
+  }
+  #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-date,
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-date {
+    position: sticky;
+    left: 0;
+    z-index: 11;
+    background-color: hsl(var(--muted));
+  }
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-date {
+    z-index: 3;
+    background-color: hsl(var(--card));
+  }
+  #prices-page .prices-actual-table-wrap > table > tbody tr:hover > td.col-date {
+    background-color: hsl(var(--accent-hsl));
+  }
+  #prices-page .prices-actual-table-wrap > table > tbody td.prices-actual-day {
+    background-color: hsl(var(--muted) / 0.55);
+  }
+  #prices-page .prices-actual-table-wrap > table > tbody tr:hover > td.prices-actual-day {
+    background-color: hsl(var(--muted) / 0.7);
+  }
+  #prices-page .prices-actual-table-wrap {
+    --prices-actual-date-col-w: 72px;
+  }
+  #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-player,
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-player {
+    position: sticky;
+    left: var(--prices-actual-date-col-w);
+    z-index: 10;
+    background-color: hsl(var(--muted));
+  }
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-player {
+    z-index: 2;
+    background-color: hsl(var(--card));
+  }
+  #prices-page .prices-actual-table-wrap > table > tbody tr:hover > td.col-player {
+    background-color: hsl(var(--accent-hsl));
   }
   #prices-page .prices-table-wrap > table > thead tr:not(.section-row) th.col-player {
     position: sticky;
