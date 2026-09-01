@@ -19423,14 +19423,14 @@
 
   function sortPricesPredictionByProgress(rows) {
     return rows.slice().sort((a, b) => {
+      const ta = PRICES_STATUS_ORDER[a.statusKey] ?? 9;
+      const tb = PRICES_STATUS_ORDER[b.statusKey] ?? 9;
+      if (ta !== tb) return ta - tb;
       const pa = Math.abs(Number(a.progress));
       const pb = Math.abs(Number(b.progress));
       const aAbs = Number.isFinite(pa) ? pa : -Infinity;
       const bAbs = Number.isFinite(pb) ? pb : -Infinity;
       if (bAbs !== aAbs) return bAbs - aAbs;
-      const ta = PRICES_STATUS_ORDER[a.statusKey] ?? 9;
-      const tb = PRICES_STATUS_ORDER[b.statusKey] ?? 9;
-      if (ta !== tb) return ta - tb;
       return String(a.name || "").localeCompare(String(b.name || ""));
     });
   }
