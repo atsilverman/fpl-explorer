@@ -5133,7 +5133,7 @@ html[data-page="prices"] .layout .main {
     overflow: hidden;
   }
   #prices-page .prices-actual-table-wrap .ownership-id .player-name,
-  #prices-page .prices-actual-table-wrap .ownership-id-text .player-name-line {
+  #prices-page .prices-actual-table-wrap .ownership-id-text .player-name-line > .player-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -6065,19 +6065,24 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     padding-left: 4px;
     padding-right: 4px;
   }
-  #prices-page .prices-actual-table-wrap .prices-table .col-date {
-    width: 11%;
+  #prices-page .prices-actual-table-wrap .prices-table .col-date,
+  #prices-page .prices-actual-table-wrap .prices-table td.prices-actual-day {
+    width: 7%;
+    max-width: 2.35rem;
+    padding-left: 4px;
+    padding-right: 2px;
+    font-size: 10px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   #prices-page .prices-actual-table-wrap .prices-table .col-player {
-    width: 40%;
+    width: 52%;
   }
   #prices-page .prices-actual-table-wrap .prices-table .prices-col-change {
-    width: 11%;
+    width: 10%;
   }
   #prices-page .prices-actual-table-wrap .prices-table .prices-col-after {
-    width: 18%;
+    width: 16%;
   }
   #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
   #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
@@ -6087,7 +6092,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     width: 38%;
   }
   #prices-page .prices-table-wrap .ownership-id .player-name,
-  #prices-page .prices-table-wrap .ownership-id-text .player-name-line {
+  #prices-page .prices-table-wrap .ownership-id-text .player-name-line > .player-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

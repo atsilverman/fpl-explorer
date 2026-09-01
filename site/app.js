@@ -6876,7 +6876,10 @@
   }
 
   function isOwnedRow(row) {
-    return state.view === "players" && row && row.code != null && ownedCodes.has(row.code);
+    if (!row || row.code == null || row.kind === "team") return false;
+    if (!ownedCodes.has(row.code)) return false;
+    if (state.page === "ownership" || state.page === "prices") return true;
+    return state.view === "players";
   }
 
   function ownedFlagHTML(row) {
@@ -10097,6 +10100,7 @@
         spitRow(`<span class="ownership-delta is-up spit-ui-swatch">+1.2</span>`, "Ownership up over that window"),
         spitRow(`<span class="ownership-delta is-down spit-ui-swatch">−0.8</span>`, "Ownership down over that window"),
         spitRow(spitOwnershipLineSwatch("riser"), "14-day sparkline — start and end % labeled"),
+        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
       const reading = [
         spitRow(spitRank("Risers"), "Top 20 14-day TSB% increases, ranked before team/position filters."),
@@ -10126,6 +10130,7 @@
               `<span class="prices-change-arrow is-fall spit-ui-swatch">${iconHTML("trending-down")}</span>`,
               "Price fell £0.1m"
             ),
+            spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : mobile
         ? [
@@ -10133,12 +10138,14 @@
             spitRow(`<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`, "Likely to drop (red) + transfer trend arrow"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
+            spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : [
             spitRow(`<span class="prices-status-pill is-very-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Very likely to rise</span></span>`, "Strong rise signal + GW transfer trend"),
             spitRow(`<span class="prices-status-pill is-likely-drop has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">Likely to drop</span></span>`, "Moderate fall signal + GW transfer trend"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
+            spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ];
       const reading = isActual
         ? [
@@ -18420,11 +18427,12 @@
         : "",
       row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
     ].filter(Boolean);
+    const ownedPin = ownedFlagHTML(row);
     return `<div class="ownership-id">
       <span class="ownership-rank">${rank}</span>
       ${ownershipPhotoHTML(row)}
       <div class="ownership-id-text">
-        <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span></div>
+        <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span>${ownedPin}</div>
         ${bits.length ? `<div class="ownership-id-sub">${bits.join("<span class=\"ownership-id-sep\">|</span>")}</div>` : ""}
       </div>
     </div>`;
@@ -19799,9 +19807,6 @@
     if (el.pricesActualWrap) {
       el.pricesActualWrap.hidden = mode !== "actual";
     }
-    if (el.pricesCountdownBar) {
-      el.pricesCountdownBar.hidden = mode !== "prediction";
-    }
     if (el.pricesProgressFilterGroup) {
       el.pricesProgressFilterGroup.style.display =
         state.page === "prices" && mode === "prediction" ? "" : "none";
@@ -19845,7 +19850,7 @@
   }
 
   function syncPricesCountdown() {
-    if (state.page !== "prices" || pricesViewMode() !== "prediction") {
+    if (state.page !== "prices") {
       if (pricesCountdownTimer) {
         clearInterval(pricesCountdownTimer);
         pricesCountdownTimer = null;
