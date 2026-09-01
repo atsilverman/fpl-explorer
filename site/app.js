@@ -823,6 +823,7 @@
     pricesActualSortDir: "desc",
     pricesActualSortTouched: false,
     pricesActualShowAll: false,
+    pricesPredictionShowAll: false,
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
@@ -1182,9 +1183,11 @@
     pricesCountdownSub: $("#prices-countdown-sub"),
     pricesViewSeg: $("#prices-view-seg"),
     pricesActualScopeSeg: $("#prices-actual-scope-seg"),
+    pricesPredictionScopeSeg: $("#prices-prediction-scope-seg"),
     pricesCountdownBar: $("#prices-countdown-bar"),
     pricesCountLabel: $("#prices-count-label"),
     pricesPredictionWrap: $("#prices-prediction-wrap"),
+    pricesPredictionPanels: $("#prices-prediction-panels"),
     pricesRisersWrap: $("#prices-risers-wrap"),
     pricesRisersHead: $("#prices-risers-head"),
     pricesRisersBody: $("#prices-risers-body"),
@@ -1192,9 +1195,13 @@
     pricesFallersHead: $("#prices-fallers-head"),
     pricesFallersBody: $("#prices-fallers-body"),
     pricesActualWrap: $("#prices-actual-wrap"),
-    pricesActualTableWrap: $("#prices-actual-table-wrap"),
-    pricesActualHead: $("#prices-actual-head"),
-    pricesActualBody: $("#prices-actual-body"),
+    pricesActualPanels: $("#prices-actual-panels"),
+    pricesActualRisersWrap: $("#prices-actual-risers-wrap"),
+    pricesActualRisersHead: $("#prices-actual-risers-head"),
+    pricesActualRisersBody: $("#prices-actual-risers-body"),
+    pricesActualFallersWrap: $("#prices-actual-fallers-wrap"),
+    pricesActualFallersHead: $("#prices-actual-fallers-head"),
+    pricesActualFallersBody: $("#prices-actual-fallers-body"),
     pricesUpdatedFooter: $("#prices-updated-footer"),
     teamPage: $("#team-page"),
     teamUpdatedFooter: $("#team-updated-footer"),
@@ -7705,9 +7712,26 @@
   }
 
   let viewportLayoutSyncTimer = 0;
+  let pricesViewportNarrow = NARROW_MQ.matches;
+
+  function handlePricesViewportBreakpointChange() {
+    const isNarrow = NARROW_MQ.matches;
+    if (isNarrow === pricesViewportNarrow) return false;
+    pricesViewportNarrow = isNarrow;
+    pricesActualColumnsFailedAt = 0;
+    pricesPredictionColumnsFailedAt = 0;
+    if (state.page === "prices") {
+      requestAnimationFrame(() => {
+        renderPrices({ preserveScroll: true });
+      });
+    }
+    return true;
+  }
+
   function scheduleViewportLayoutSync({ immediate = false } = {}) {
     const run = () => {
       viewportLayoutSyncTimer = 0;
+      const breakpointFlip = handlePricesViewportBreakpointChange();
       syncMobileLayoutClass();
       syncMobileChrome();
       syncSubtoolbarViewport();
@@ -7727,6 +7751,12 @@
       syncMarketsViewControls();
       syncBarbellHeadHeight();
       scheduleOwnershipTreemapRelayout();
+      if (!breakpointFlip && state.page === "prices" && pricesViewMode() === "prediction") {
+        schedulePricesPredictionColumnsSync();
+      }
+      if (!breakpointFlip && state.page === "prices" && pricesViewMode() === "actual") {
+        schedulePricesActualColumnsSync();
+      }
       if (state.page === "opta") {
         syncCoreUnderName();
         syncLivePointsCoreUnder();
@@ -8343,9 +8373,13 @@
     return [el.pricesRisersWrap, el.pricesFallersWrap].filter(Boolean);
   }
 
+  function pricesActualTableWraps() {
+    return [el.pricesActualRisersWrap, el.pricesActualFallersWrap].filter(Boolean);
+  }
+
   function pricesActiveTableWraps() {
     if (pricesViewMode() === "actual") {
-      return el.pricesActualTableWrap ? [el.pricesActualTableWrap] : [];
+      return pricesActualTableWraps();
     }
     return pricesPredictionTableWraps();
   }
@@ -18982,8 +19016,299 @@
       clampPricesScrollAfterUpdate();
       syncMobileScrollportHeight();
       scheduleOptaMobileNameColWidth();
-      requestAnimationFrame(clampPricesScrollAfterUpdate);
+      syncPricesPredictionColumns();
+      syncPricesActualLayout();
+      syncSegThumb(el.pricesViewSeg);
+      syncSegThumb(el.pricesPredictionScopeSeg);
+      syncSegThumb(el.pricesActualScopeSeg);
+      requestAnimationFrame(() => {
+        clampPricesScrollAfterUpdate();
+        syncPricesPredictionColumns();
+        syncPricesActualLayout();
+        syncSegThumb(el.pricesViewSeg);
+        syncSegThumb(el.pricesPredictionScopeSeg);
+        syncSegThumb(el.pricesActualScopeSeg);
+      });
     });
+  }
+
+  const PRICES_PREDICTION_COLUMNS_MIN_W = 960;
+  const PRICES_SPARK_FIT_MIN_W = 168;
+  let pricesPredictionColumnsFailedAt = 0;
+  let pricesPredictionColumnsRaf = 0;
+  let pricesPredictionColumnsObserver = null;
+
+  function pricesSparkFits(spark) {
+    if (!spark) return true;
+    return spark.getBoundingClientRect().width >= PRICES_SPARK_FIT_MIN_W - 1;
+  }
+
+  function pricesPredictionTableTruncated(wrap) {
+    if (!wrap || wrap.offsetParent === null) return false;
+    const table = wrap.querySelector(":scope > table");
+    if (table && table.scrollWidth > wrap.clientWidth + 1) return true;
+    if (wrap.scrollWidth > wrap.clientWidth + 1) return true;
+    const sparks = wrap.querySelectorAll(
+      "td.prices-col-spark .prices-spark:not(.prices-spark-empty)"
+    );
+    for (const spark of sparks) {
+      if (!pricesSparkFits(spark)) return true;
+    }
+    return false;
+  }
+
+  function syncPricesPredictionColumns() {
+    const panels = el.pricesPredictionPanels;
+    if (!panels) return;
+    const active =
+      !NARROW_MQ.matches &&
+      state.page === "prices" &&
+      pricesViewMode() === "prediction" &&
+      !panels.hidden &&
+      panels.offsetParent !== null;
+    if (!active) {
+      panels.classList.remove("is-columns");
+      panels.dataset.columnsFit = "";
+      return;
+    }
+
+    const vw = window.innerWidth;
+    if (vw < PRICES_PREDICTION_COLUMNS_MIN_W) {
+      panels.classList.remove("is-columns");
+      panels.dataset.columnsFit = "0";
+      return;
+    }
+
+    const wraps = pricesPredictionTableWraps();
+    const canTryColumns =
+      panels.classList.contains("is-columns") || vw > pricesPredictionColumnsFailedAt + 40;
+
+    if (!canTryColumns) {
+      panels.classList.remove("is-columns");
+      panels.dataset.columnsFit = "0";
+      return;
+    }
+
+    panels.classList.add("is-columns");
+    void panels.offsetWidth;
+    const truncated = wraps.some((wrap) => pricesPredictionTableTruncated(wrap));
+    if (truncated) {
+      panels.classList.remove("is-columns");
+      panels.dataset.columnsFit = "0";
+      pricesPredictionColumnsFailedAt = vw;
+      return;
+    }
+
+    panels.dataset.columnsFit = "1";
+    pricesPredictionColumnsFailedAt = 0;
+  }
+
+  function schedulePricesPredictionColumnsSync() {
+    if (pricesPredictionColumnsRaf) cancelAnimationFrame(pricesPredictionColumnsRaf);
+    pricesPredictionColumnsRaf = requestAnimationFrame(() => {
+      pricesPredictionColumnsRaf = requestAnimationFrame(() => {
+        pricesPredictionColumnsRaf = 0;
+        syncPricesPredictionColumns();
+      });
+    });
+  }
+
+  function bindPricesPredictionColumnsObserver() {
+    if (pricesPredictionColumnsObserver || !el.pricesPredictionWrap) return;
+    pricesPredictionColumnsObserver = new ResizeObserver(() => {
+      if (state.page === "prices" && pricesViewMode() === "prediction") {
+        schedulePricesPredictionColumnsSync();
+      }
+    });
+    pricesPredictionColumnsObserver.observe(el.pricesPredictionWrap);
+  }
+
+  let _pricesTextMeasureCanvas = null;
+  function measurePricesTextWidth(text, refEl) {
+    if (!_pricesTextMeasureCanvas) {
+      _pricesTextMeasureCanvas = document.createElement("canvas");
+    }
+    const ctx = _pricesTextMeasureCanvas.getContext("2d");
+    const style = refEl ? getComputedStyle(refEl) : null;
+    const weight = style?.fontWeight || "400";
+    const size = style?.fontSize || "14px";
+    const family = style?.fontFamily || "sans-serif";
+    ctx.font = `${weight} ${size} ${family}`;
+    return ctx.measureText(String(text || "").trim()).width;
+  }
+
+  const PRICES_ACTUAL_COLUMNS_MIN_W = 960;
+  let pricesActualColumnsFailedAt = 0;
+
+  function pricesActualTableTruncated(wrap) {
+    if (!wrap || wrap.offsetParent === null) return false;
+    const table = wrap.querySelector(":scope > table");
+    if (table && table.scrollWidth > wrap.clientWidth + 1) return true;
+    if (wrap.scrollWidth > wrap.clientWidth + 1) return true;
+    const dateCells = wrap.querySelectorAll(
+      "td.prices-col-date, td.prices-actual-day, th.prices-col-date"
+    );
+    for (const cell of dateCells) {
+      if (cell.clientWidth > 0 && cell.scrollWidth > cell.clientWidth + 1) return true;
+    }
+    const metricCells = wrap.querySelectorAll(
+      "th.prices-col-change, th.prices-col-before, th.prices-col-after, th.prices-col-owned, th.prices-col-league-owned, td.prices-col-change, td.prices-col-before, td.prices-col-after, td.prices-col-owned, td.prices-col-league-owned"
+    );
+    for (const cell of metricCells) {
+      if (cell.offsetParent === null || cell.clientWidth === 0) continue;
+      if (cell.scrollWidth > cell.clientWidth + 1) return true;
+    }
+    return false;
+  }
+
+  function applyPricesActualLayout({ columns, hideBefore, hideLeague }) {
+    const panels = el.pricesActualPanels;
+    const root = el.pricesActualWrap;
+    if (!panels || !root) return;
+    panels.classList.toggle("is-columns", !!columns);
+    root.dataset.actualHideBefore = hideBefore ? "1" : "0";
+    root.dataset.actualHideLeague = hideLeague ? "1" : "0";
+  }
+
+  function syncPricesActualColumnWidths() {
+    const wraps = pricesActualTableWraps();
+    const active =
+      !NARROW_MQ.matches &&
+      state.page === "prices" &&
+      pricesViewMode() === "actual" &&
+      wraps.length;
+    if (!active) {
+      wraps.forEach((wrap) => {
+        wrap.style.removeProperty("--prices-actual-date-col-w");
+        wrap.style.removeProperty("--prices-actual-tsb-col-w");
+      });
+      return;
+    }
+
+    const dateRef =
+      wraps[0].querySelector("th.prices-col-date") ||
+      wraps[0].querySelector("td.prices-col-date, td.prices-actual-day") ||
+      wraps[0];
+    const tsbRef =
+      wraps[0].querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
+
+    let maxDate = measurePricesTextWidth("Date", dateRef);
+    let maxTsb = measurePricesTextWidth("All(%)", tsbRef);
+    maxTsb = Math.max(maxTsb, measurePricesTextWidth("ML(%)", tsbRef));
+
+    wraps.forEach((wrap) => {
+      wrap
+        .querySelectorAll("td.prices-col-date, td.prices-actual-day")
+        .forEach((cell) => {
+          maxDate = Math.max(maxDate, measurePricesTextWidth(cell.textContent, cell));
+        });
+      wrap
+        .querySelectorAll(
+          "th.prices-col-owned, th.prices-col-league-owned, td.prices-col-owned, td.prices-col-league-owned"
+        )
+        .forEach((cell) => {
+          if (cell.offsetParent === null) return;
+          const pill = cell.querySelector(".ownership-pill");
+          if (pill) {
+            maxTsb = Math.max(maxTsb, pill.getBoundingClientRect().width);
+          } else {
+            maxTsb = Math.max(maxTsb, measurePricesTextWidth(cell.textContent, cell));
+          }
+        });
+    });
+
+    const dateW = Math.ceil(maxDate + 16);
+    const tsbW = Math.ceil(Math.max(40, maxTsb + 12));
+
+    wraps.forEach((wrap) => {
+      wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
+      wrap.style.setProperty("--prices-actual-tsb-col-w", `${tsbW}px`);
+    });
+  }
+
+  function syncPricesActualLayout() {
+    const panels = el.pricesActualPanels;
+    const wraps = pricesActualTableWraps();
+    const root = el.pricesActualWrap;
+    const active =
+      !NARROW_MQ.matches &&
+      state.page === "prices" &&
+      pricesViewMode() === "actual" &&
+      panels &&
+      root &&
+      !root.hidden &&
+      panels.offsetParent !== null &&
+      wraps.length;
+
+    if (!active) {
+      if (panels) {
+        panels.classList.remove("is-columns");
+        panels.dataset.columnsFit = "";
+        panels.dataset.actualCompact = "";
+      }
+      if (root) {
+        root.dataset.actualHideBefore = "";
+        root.dataset.actualHideLeague = "";
+      }
+      syncPricesActualColumnWidths();
+      return;
+    }
+
+    const vw = window.innerWidth;
+    const configs = [
+      { columns: true, hideBefore: false, hideLeague: false },
+      { columns: true, hideBefore: true, hideLeague: false },
+      { columns: true, hideBefore: true, hideLeague: true },
+      { columns: false, hideBefore: false, hideLeague: false },
+      { columns: false, hideBefore: true, hideLeague: false },
+      { columns: false, hideBefore: true, hideLeague: true },
+    ];
+
+    const canTryColumns =
+      panels.classList.contains("is-columns") || vw > pricesActualColumnsFailedAt + 40;
+
+    let chosen = configs[configs.length - 1];
+    for (const cfg of configs) {
+      if (cfg.columns) {
+        if (vw < PRICES_ACTUAL_COLUMNS_MIN_W || !canTryColumns) continue;
+      }
+      applyPricesActualLayout(cfg);
+      syncPricesActualColumnWidths();
+      void panels.offsetWidth;
+      if (!wraps.some((wrap) => pricesActualTableTruncated(wrap))) {
+        chosen = cfg;
+        if (cfg.columns) pricesActualColumnsFailedAt = 0;
+        break;
+      }
+      if (cfg.columns) pricesActualColumnsFailedAt = vw;
+    }
+
+    applyPricesActualLayout(chosen);
+    syncPricesActualColumnWidths();
+    panels.dataset.columnsFit = chosen.columns ? "1" : "0";
+    panels.dataset.actualCompact = chosen.hideBefore || chosen.hideLeague ? "1" : "0";
+  }
+
+  let pricesActualColumnsRaf = 0;
+  function schedulePricesActualColumnsSync() {
+    if (pricesActualColumnsRaf) cancelAnimationFrame(pricesActualColumnsRaf);
+    pricesActualColumnsRaf = requestAnimationFrame(() => {
+      pricesActualColumnsRaf = requestAnimationFrame(() => {
+        pricesActualColumnsRaf = 0;
+        syncPricesActualLayout();
+      });
+    });
+  }
+
+  let pricesActualColumnsObserver = null;
+  function bindPricesActualColumnsObserver() {
+    if (pricesActualColumnsObserver || !el.pricesActualWrap) return;
+    pricesActualColumnsObserver = new ResizeObserver(() => {
+      if (state.page === "prices" && pricesViewMode() === "actual") {
+        schedulePricesActualColumnsSync();
+      }
+    });
+    pricesActualColumnsObserver.observe(el.pricesActualWrap);
   }
 
   let pricesCountdownTimer = null;
@@ -19013,7 +19338,24 @@
     return sortPricesRows(pricesVisibleRows().filter((row) => pricesIsFaller(row)));
   }
 
-  const PRICES_ACTUAL_TOP_N = 5;
+  const PRICES_SCOPE_TOP_N = 5;
+
+  function limitPricesScopeRows(rows, catalog) {
+    const byOwned = (list) =>
+      list.slice().sort((a, b) => {
+        const ownA = pricesActualOwnedPct(a, catalog);
+        const ownB = pricesActualOwnedPct(b, catalog);
+        if (ownA !== ownB) return ownB - ownA;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+    const keep = new Set(byOwned(rows).slice(0, PRICES_SCOPE_TOP_N));
+    return rows.filter((row) => keep.has(row));
+  }
+
+  function limitPricesPredictionMovers(rows) {
+    if (state.pricesPredictionShowAll) return rows;
+    return limitPricesScopeRows(rows, ownershipCatalogByCode());
+  }
 
   function limitPricesActualDayRows(rows, catalog) {
     const rises = rows.filter((row) => row.direction === "rise");
@@ -19026,8 +19368,8 @@
         return String(a.name || "").localeCompare(String(b.name || ""));
       });
     const keep = new Set([
-      ...byOwned(rises).slice(0, PRICES_ACTUAL_TOP_N),
-      ...byOwned(falls).slice(0, PRICES_ACTUAL_TOP_N),
+      ...byOwned(rises).slice(0, PRICES_SCOPE_TOP_N),
+      ...byOwned(falls).slice(0, PRICES_SCOPE_TOP_N),
     ]);
     return rows.filter((row) => keep.has(row));
   }
@@ -19065,11 +19407,35 @@
     return Number.isFinite(owned) ? owned : -Infinity;
   }
 
-  function pricesActualSortValue(row, key) {
+  function pricesActualOwnedPctDisplay(row, catalog) {
+    const hit = catalog.get(Number(row.code));
+    const owned =
+      hit && hit.owned != null ? Number(hit.owned) : currentOwnership(row.code);
+    return Number.isFinite(owned) ? owned : null;
+  }
+
+  function pricesActualLeagueTsbPct(row) {
+    const elementId = fplElementIdForRow(row);
+    if (elementId == null) return null;
+    const owners = homeOwnersForElement(elementId);
+    const total = Array.isArray(HOME.standings) ? HOME.standings.length : 0;
+    if (!total) return null;
+    return Math.round((owners.size / total) * 1000) / 10;
+  }
+
+  function pricesActualSortValue(row, key, catalog) {
     if (key === "name") return String(row.name || "").toLowerCase();
     if (key === "change") return row.direction === "rise" ? 1 : 0;
     if (key === "before") return row.before == null ? -Infinity : Number(row.before);
     if (key === "after") return row.after == null ? -Infinity : Number(row.after);
+    if (key === "owned") {
+      const owned = pricesActualOwnedPctDisplay(row, catalog);
+      return owned == null ? -Infinity : owned;
+    }
+    if (key === "leagueOwned") {
+      const league = pricesActualLeagueTsbPct(row);
+      return league == null ? -Infinity : league;
+    }
     if (key === "changedAt") {
       const ms = Date.parse(row.changedAt || "");
       return Number.isFinite(ms) ? ms : -Infinity;
@@ -19119,8 +19485,8 @@
       if (key === "name") {
         return dir * String(a.name || "").localeCompare(String(b.name || ""));
       }
-      const va = pricesActualSortValue(a, key);
-      const vb = pricesActualSortValue(b, key);
+      const va = pricesActualSortValue(a, key, catalog);
+      const vb = pricesActualSortValue(b, key, catalog);
       if (va !== vb) return dir * (va - vb);
       return String(b.changedAt || "").localeCompare(String(a.changedAt || ""));
     });
@@ -19197,15 +19563,7 @@
     const n = Number(value);
     const tone = n > 0 ? "is-rise" : n < 0 ? "is-drop" : "is-flat";
     const cls = `prices-progress-pill ${tone}${predicted ? " is-predicted" : ""}`;
-    const signed = n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
-    const roll = statRollSpan(n, {
-      from: 0,
-      decimals: 1,
-      signed: true,
-      suffix: "%",
-      className: "ownership-stat-roll",
-    });
-    return `<span class="${cls}">${roll}</span>`;
+    return `<span class="${cls}">${escapeHtml(fmtPricesProgressPct(n))}</span>`;
   }
 
   function fmtPricesProgressPct(value) {
@@ -19249,11 +19607,11 @@
   }
 
   function pricesTableColSpan() {
-    return NARROW_MQ.matches ? 4 : 6;
+    return 5;
   }
 
   function pricesActualTableColSpan() {
-    return NARROW_MQ.matches ? 4 : 5;
+    return NARROW_MQ.matches ? 4 : 7;
   }
 
   function pricesHeadHTML() {
@@ -19266,35 +19624,33 @@
       ${th("progress", "Progress", "col-num prices-col-metric")}
       ${th("predicted", mobile ? "Predict" : "Predicted", "col-num prices-col-metric")}
       ${th("d3", mobile ? "3d" : "3d trend", "col-num prices-col-spark")}
-      ${mobile ? "" : th("price", "Current price", "col-num prices-col-price")}
     </tr>`;
   }
 
   function pricesRowHTML(row, rank) {
-    const mobile = NARROW_MQ.matches;
-    const priceTxt =
-      row.price != null && Number.isFinite(Number(row.price))
-        ? `£${Number(row.price).toFixed(1)}m`
-        : "—";
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
       <td class="col-num prices-col-status">${pricesStatusPillHTML(row)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.progress)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.predicted, { predicted: true })}</td>
       <td class="col-num prices-col-spark">${pricesSparkHTML(row)}</td>
-      ${mobile ? "" : `<td class="col-num prices-col-price">${escapeHtml(priceTxt)}</td>`}
     </tr>`;
   }
 
   function pricesActualHeadHTML() {
-    const th = (key, label, extra = "") =>
-      `<th class="${extra}${state.pricesActualSortKey === key ? " sorted" : ""}" data-prices-actual-sort="${key}">${escapeHtml(label)}${pricesSortArrow(key, "actual")}</th>`;
+    const mobile = NARROW_MQ.matches;
+    const th = (key, label, extra = "", title = "") => {
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<th class="${extra}${state.pricesActualSortKey === key ? " sorted" : ""}" data-prices-actual-sort="${key}"${titleAttr}>${escapeHtml(label)}${pricesSortArrow(key, "actual")}</th>`;
+    };
     return `<tr>
       ${th("changedAt", "Date", "col-date prices-col-date")}
       ${th("name", "Player", "col-player")}
       ${th("change", "Change", "col-num prices-col-change")}
-      ${th("before", "Before", "col-num prices-col-actual-price prices-col-before")}
+      ${mobile ? "" : th("before", "Before", "col-num prices-col-actual-price prices-col-before")}
       ${th("after", "After", "col-num prices-col-actual-price prices-col-after")}
+      ${mobile ? "" : th("owned", "All(%)", "col-num prices-col-owned", "TSB% (All)")}
+      ${mobile ? "" : th("leagueOwned", "ML(%)", "col-num prices-col-league-owned", "TSB% (Mini-League)")}
     </tr>`;
   }
 
@@ -19345,23 +19701,37 @@
     return ownershipIdCellHTML(row, rank, { hidePrice: true });
   }
 
-  function pricesActualRowHTML(row, rank, { dateCell = "" } = {}) {
+  function pricesActualMetricCellsHTML(row, catalog) {
+    const mobile = NARROW_MQ.matches;
+    let html = `<td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>`;
+    if (!mobile) {
+      html += `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
+    }
+    html += `<td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
+    if (!mobile) {
+      html += `<td class="col-num prices-col-owned">${ownershipPillHTML(pricesActualOwnedPctDisplay(row, catalog), { live: true })}</td>`;
+      html += `<td class="col-num prices-col-league-owned">${ownershipPillHTML(pricesActualLeagueTsbPct(row), { live: true })}</td>`;
+    }
+    return html;
+  }
+
+  function pricesActualRowHTML(row, rank, { dateCell = "", catalog = null } = {}) {
+    const cat = catalog || ownershipCatalogByCode();
     const dateTd =
       dateCell ||
       `<td class="col-date prices-col-date">${escapeHtml(fmtPricesChangeDateShort(row.changedAt))}</td>`;
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       ${dateTd}
       <td class="col-player">${pricesActualPlayerCellHTML(row, rank)}</td>
-      <td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>
-      <td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>
-      <td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>
+      ${pricesActualMetricCellsHTML(row, cat)}
     </tr>`;
   }
 
   function pricesActualBodyHTML(rows) {
     if (!rows.length) return "";
+    const catalog = ownershipCatalogByCode();
     if (!pricesActualUseDayGroups()) {
-      return rows.map((row, i) => pricesActualRowHTML(row, i + 1)).join("");
+      return rows.map((row, i) => pricesActualRowHTML(row, i + 1, { catalog })).join("");
     }
 
     const groups = [];
@@ -19387,13 +19757,30 @@
         html += `<tr${trCls} data-prices-code="${escapeHtml(String(row.code ?? ""))}">`;
         if (dateCell) html += dateCell;
         html += `<td class="col-player">${pricesActualPlayerCellHTML(row, rank++)}</td>`;
-        html += `<td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>`;
-        html += `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
-        html += `<td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
+        html += pricesActualMetricCellsHTML(row, catalog);
         html += `</tr>`;
       });
     });
     return html;
+  }
+
+  function syncPricesScopeSeg(seg, { show, showAll, topTitle, allTitle }) {
+    if (!seg) return;
+    seg.hidden = !show;
+    const topBtn = seg.querySelector('button[data-prices-scope="top"]');
+    const allBtn = seg.querySelector('button[data-prices-scope="all"]');
+    if (topBtn) {
+      topBtn.title = topTitle;
+      const active = !showAll;
+      topBtn.classList.toggle("active", active);
+      topBtn.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    if (allBtn) {
+      allBtn.title = allTitle;
+      const active = showAll;
+      allBtn.classList.toggle("active", active);
+      allBtn.setAttribute("aria-pressed", active ? "true" : "false");
+    }
   }
 
   function syncPricesViewUI() {
@@ -19419,17 +19806,27 @@
       el.pricesProgressFilterGroup.style.display =
         state.page === "prices" && mode === "prediction" ? "" : "none";
     }
-    if (el.pricesActualScopeSeg) {
-      const showScope =
-        state.page === "prices" && mode === "actual" && isNextSeason();
-      el.pricesActualScopeSeg.hidden = !showScope;
-      el.pricesActualScopeSeg.querySelectorAll("button[data-prices-actual-scope]").forEach((btn) => {
-        const scope = btn.dataset.pricesActualScope;
-        const active = scope === "all" ? state.pricesActualShowAll : !state.pricesActualShowAll;
-        btn.classList.toggle("active", active);
-        btn.setAttribute("aria-pressed", active ? "true" : "false");
+    if (el.pricesPredictionScopeSeg) {
+      syncPricesScopeSeg(el.pricesPredictionScopeSeg, {
+        show: state.page === "prices" && mode === "prediction" && isNextSeason(),
+        showAll: state.pricesPredictionShowAll,
+        topTitle: "Top 5 risers and fallers by ownership",
+        allTitle: "Every price mover matching filters",
       });
     }
+    if (el.pricesActualScopeSeg) {
+      syncPricesScopeSeg(el.pricesActualScopeSeg, {
+        show: state.page === "prices" && mode === "actual" && isNextSeason(),
+        showAll: state.pricesActualShowAll,
+        topTitle: "Top 5 risers and fallers by ownership per day",
+        allTitle: "Every recorded price change",
+      });
+    }
+    requestAnimationFrame(() => {
+      syncSegThumb(el.pricesViewSeg);
+      syncSegThumb(el.pricesPredictionScopeSeg);
+      syncSegThumb(el.pricesActualScopeSeg);
+    });
   }
 
   function fmtPricesChangeAtLabel(iso) {
@@ -19507,19 +19904,22 @@
 
     const pool = PRICES.players || [];
     const basePool = pricesBaseFilteredRows();
-    const risers = pricesVisibleRisers();
-    const fallers = pricesVisibleFallers();
+    const baseRisers = pricesVisibleRisers();
+    const baseFallers = pricesVisibleFallers();
+    const risers = limitPricesPredictionMovers(baseRisers);
+    const fallers = limitPricesPredictionMovers(baseFallers);
     const totalShown = risers.length + fallers.length;
-    const totalBase = basePool.length;
+    const totalBase = baseRisers.length + baseFallers.length;
 
     if (el.pricesCountLabel) {
       if (!pool.length) {
         el.pricesCountLabel.textContent = "No data";
       } else {
+        const scopeHint = state.pricesPredictionShowAll ? "" : " · top 5";
         el.pricesCountLabel.textContent =
           totalShown === totalBase
-            ? `${totalShown} movers`
-            : `${totalShown} of ${totalBase} movers`;
+            ? `${totalShown} movers${scopeHint}`
+            : `${totalShown} of ${totalBase} movers${scopeHint}`;
       }
     }
 
@@ -19565,19 +19965,35 @@
     } else {
       settlePricesLayoutAfterUpdate();
     }
+    if (el.pricesPage) finishOwnershipStatRolls(el.pricesPage);
+  }
+
+  function renderPricesActualTable(wrap, headEl, bodyEl, rows, emptyMsg) {
+    if (!headEl || !bodyEl) return;
+    headEl.innerHTML = pricesActualHeadHTML();
+    if (!rows.length) {
+      bodyEl.innerHTML =
+        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">${emptyMsg}</td></tr>`;
+      return;
+    }
+    bodyEl.innerHTML = pricesActualBodyHTML(rows);
+    bindOwnershipPhotoFallback(bodyEl);
   }
 
   function renderPricesActual({ preserveScroll = false } = {}) {
-    if (!el.pricesActualHead || !el.pricesActualBody) return;
+    const actualWraps = pricesActualTableWraps();
+    if (!el.pricesActualRisersHead || !el.pricesActualRisersBody) return;
     const scrollSnap =
-      preserveScroll && el.pricesActualTableWrap
-        ? captureScrollWraps([el.pricesActualTableWrap])
+      preserveScroll && actualWraps.length
+        ? captureScrollWraps(actualWraps)
         : null;
 
     const pool = PRICES.actualChanges || [];
     const filtered = pricesActualVisibleRows();
     const sorted = sortPricesActualRows(filtered);
     const visible = limitPricesActualRows(sorted);
+    const risers = visible.filter((row) => row.direction === "rise");
+    const fallers = visible.filter((row) => row.direction !== "rise");
 
     if (el.pricesCountLabel) {
       if (!pool.length) {
@@ -19599,16 +20015,55 @@
       }
     }
 
-    el.pricesActualHead.innerHTML = pricesActualHeadHTML();
+    const emptyPoolMsg =
+      "No actual price changes recorded yet. Changes appear after the next bootstrap check-in detects a £0.1m move.";
+    const emptyFilterMsg = "No price changes match the current filters.";
+
     if (!pool.length) {
-      el.pricesActualBody.innerHTML =
-        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">No actual price changes recorded yet. Changes appear after the next bootstrap check-in detects a £0.1m move.</td></tr>`;
+      renderPricesActualTable(
+        el.pricesActualRisersWrap,
+        el.pricesActualRisersHead,
+        el.pricesActualRisersBody,
+        [],
+        emptyPoolMsg
+      );
+      renderPricesActualTable(
+        el.pricesActualFallersWrap,
+        el.pricesActualFallersHead,
+        el.pricesActualFallersBody,
+        [],
+        emptyPoolMsg
+      );
     } else if (!visible.length) {
-      el.pricesActualBody.innerHTML =
-        `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">No price changes match the current filters.</td></tr>`;
+      renderPricesActualTable(
+        el.pricesActualRisersWrap,
+        el.pricesActualRisersHead,
+        el.pricesActualRisersBody,
+        [],
+        emptyFilterMsg
+      );
+      renderPricesActualTable(
+        el.pricesActualFallersWrap,
+        el.pricesActualFallersHead,
+        el.pricesActualFallersBody,
+        [],
+        emptyFilterMsg
+      );
     } else {
-      el.pricesActualBody.innerHTML = pricesActualBodyHTML(visible);
-      bindOwnershipPhotoFallback(el.pricesActualBody);
+      renderPricesActualTable(
+        el.pricesActualRisersWrap,
+        el.pricesActualRisersHead,
+        el.pricesActualRisersBody,
+        risers,
+        "No risers in this view."
+      );
+      renderPricesActualTable(
+        el.pricesActualFallersWrap,
+        el.pricesActualFallersHead,
+        el.pricesActualFallersBody,
+        fallers,
+        "No fallers in this view."
+      );
     }
 
     bindAllNameColumnSimplifies();
@@ -19619,6 +20074,7 @@
     } else {
       settlePricesLayoutAfterUpdate();
     }
+    if (el.pricesPage) finishOwnershipStatRolls(el.pricesPage);
   }
 
   function renderPrices({ animateEnter = false, preserveScroll = false } = {}) {
@@ -19642,9 +20098,14 @@
         el.pricesFallersBody.innerHTML =
           `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesTableColSpan()}">${msg}</td></tr>`;
       }
-      if (el.pricesActualHead) el.pricesActualHead.innerHTML = pricesActualHeadHTML();
-      if (el.pricesActualBody) {
-        el.pricesActualBody.innerHTML =
+      if (el.pricesActualRisersHead) el.pricesActualRisersHead.innerHTML = pricesActualHeadHTML();
+      if (el.pricesActualFallersHead) el.pricesActualFallersHead.innerHTML = pricesActualHeadHTML();
+      if (el.pricesActualRisersBody) {
+        el.pricesActualRisersBody.innerHTML =
+          `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">${msg}</td></tr>`;
+      }
+      if (el.pricesActualFallersBody) {
+        el.pricesActualFallersBody.innerHTML =
           `<tr class="ownership-empty-row"><td class="col-player" colspan="${pricesActualTableColSpan()}">${msg}</td></tr>`;
       }
       return;
@@ -20862,21 +21323,38 @@
       if (state.page === "prices") renderPrices({ animateEnter: true });
     });
   }
-  if (el.pricesActualScopeSeg) {
-    el.pricesActualScopeSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-prices-actual-scope]");
-      if (!btn || !el.pricesActualScopeSeg.contains(btn)) return;
-      const scope = btn.dataset.pricesActualScope;
+  function bindPricesScopeSeg(seg, { getShowAll, setShowAll, rerender }) {
+    if (!seg) return;
+    seg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-prices-scope]");
+      if (!btn || !seg.contains(btn)) return;
+      const scope = btn.dataset.pricesScope;
       if (scope !== "top" && scope !== "all") return;
       const nextShowAll = scope === "all";
-      if (nextShowAll === state.pricesActualShowAll) return;
-      state.pricesActualShowAll = nextShowAll;
+      if (nextShowAll === getShowAll()) return;
+      setShowAll(nextShowAll);
       syncPricesViewUI();
-      if (state.page === "prices" && pricesViewMode() === "actual") {
-        renderPricesActual({ preserveScroll: true });
-      }
+      if (state.page === "prices") rerender({ preserveScroll: true });
     });
   }
+  bindPricesScopeSeg(el.pricesPredictionScopeSeg, {
+    getShowAll: () => state.pricesPredictionShowAll,
+    setShowAll: (v) => {
+      state.pricesPredictionShowAll = v;
+    },
+    rerender: (opts) => {
+      if (pricesViewMode() === "prediction") renderPricesPrediction(opts);
+    },
+  });
+  bindPricesScopeSeg(el.pricesActualScopeSeg, {
+    getShowAll: () => state.pricesActualShowAll,
+    setShowAll: (v) => {
+      state.pricesActualShowAll = v;
+    },
+    rerender: (opts) => {
+      if (pricesViewMode() === "actual") renderPricesActual(opts);
+    },
+  });
   pricesPredictionTableWraps().forEach((wrap) => {
     if (!wrap) return;
     wrap.addEventListener("click", (e) => {
@@ -20893,10 +21371,11 @@
       renderPrices({ preserveScroll: true });
     });
   });
-  if (el.pricesActualTableWrap) {
-    el.pricesActualTableWrap.addEventListener("click", (e) => {
+  pricesActualTableWraps().forEach((wrap) => {
+    if (!wrap) return;
+    wrap.addEventListener("click", (e) => {
       const th = e.target.closest("th[data-prices-actual-sort]");
-      if (!th || !el.pricesActualTableWrap.contains(th)) return;
+      if (!th || !wrap.contains(th)) return;
       const key = th.getAttribute("data-prices-actual-sort");
       if (!key) return;
       state.pricesActualSortTouched = true;
@@ -20909,7 +21388,7 @@
       }
       renderPrices({ preserveScroll: true });
     });
-  }
+  });
   if (el.pageTeam) {
     el.pageTeam.addEventListener("click", () => {
       if (!PLANNER_NAV_ENABLED) return;
@@ -22648,7 +23127,6 @@
       renderHome({ deferDuringEnter: true });
     }
     if (state.page === "team") renderTeam();
-    if (state.page === "prices") renderPrices();
     if (state.page === "opta") {
       requestAnimationFrame(() => {
         snapOptaToGameStats();
@@ -22919,6 +23397,8 @@
     });
     bindAllNameColumnSimplifies();
     bindNestedTableScroll();
+    bindPricesPredictionColumnsObserver();
+    bindPricesActualColumnsObserver();
     bindMobileChromeScrollHide();
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) return;
