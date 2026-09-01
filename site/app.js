@@ -817,7 +817,7 @@
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
     pricesViewMode: "prediction", // prediction | actual
-    pricesSortKey: "predicted",
+    pricesSortKey: "progress",
     pricesSortDir: "desc",
     pricesActualSortKey: "default", // default | changedAt | name | change | before | after
     pricesActualSortDir: "desc",
@@ -19338,12 +19338,30 @@
     );
   }
 
+  function sortPricesPredictionByProgress(rows) {
+    return rows.slice().sort((a, b) => {
+      const pa = Math.abs(Number(a.progress));
+      const pb = Math.abs(Number(b.progress));
+      const aAbs = Number.isFinite(pa) ? pa : -Infinity;
+      const bAbs = Number.isFinite(pb) ? pb : -Infinity;
+      if (bAbs !== aAbs) return bAbs - aAbs;
+      const ta = PRICES_STATUS_ORDER[a.statusKey] ?? 9;
+      const tb = PRICES_STATUS_ORDER[b.statusKey] ?? 9;
+      if (ta !== tb) return ta - tb;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+  }
+
   function pricesVisibleRisers() {
-    return sortPricesRows(pricesVisibleRows().filter((row) => pricesIsRiser(row)));
+    return sortPricesPredictionByProgress(
+      pricesVisibleRows().filter((row) => pricesIsRiser(row))
+    );
   }
 
   function pricesVisibleFallers() {
-    return sortPricesRows(pricesVisibleRows().filter((row) => pricesIsFaller(row)));
+    return sortPricesPredictionByProgress(
+      pricesVisibleRows().filter((row) => pricesIsFaller(row))
+    );
   }
 
   const PRICES_SCOPE_TOP_N = 5;
