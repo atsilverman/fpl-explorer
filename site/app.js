@@ -817,8 +817,6 @@
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
     pricesViewMode: "prediction", // prediction | actual
-    pricesSortKey: "progress",
-    pricesSortDir: "desc",
     pricesActualSortKey: "default", // default | changedAt | name | change | before | after
     pricesActualSortDir: "desc",
     pricesActualSortTouched: false,
@@ -10163,7 +10161,7 @@
               : [
                   spitRow(spitRank("Status"), "Likelihood label with ↗/↘ for more transfers in vs out this GW."),
                 ]),
-            spitRow(spitRank("Risers / Fallers"), "Two stacked tables — risers above, fallers below."),
+            spitRow(spitRank("Risers / Fallers"), "Two stacked tables — risers above, fallers below, each ranked by largest |progress|."),
             spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
             spitRow(spitRank("Progress filter"), "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."),
             spitRow(spitRank("Countdown"), "Time until the next daily price update. Change time is shown in your local timezone."),
@@ -19518,41 +19516,9 @@
     });
   }
 
-  function pricesSortValue(row, key) {
-    if (key === "name") return String(row.name || "").toLowerCase();
-    if (key === "status") return PRICES_STATUS_ORDER[row.statusKey] ?? 9;
-    if (key === "progress") return row.progress == null ? -Infinity : Number(row.progress);
-    if (key === "predicted") return row.predicted == null ? -Infinity : Number(row.predicted);
-    if (key === "d3") return row.d3 == null ? -Infinity : Number(row.d3);
-    if (key === "trend") return row.trend === "up" ? 1 : 0;
-    if (key === "price") return row.price == null ? -Infinity : Number(row.price);
-    return -Infinity;
-  }
-
-  function sortPricesRows(rows) {
-    const key = state.pricesSortKey || "predicted";
-    const dir = state.pricesSortDir === "asc" ? 1 : -1;
-    return rows.slice().sort((a, b) => {
-      if (key === "name") {
-        return dir * String(a.name || "").localeCompare(String(b.name || ""));
-      }
-      const va = pricesSortValue(a, key);
-      const vb = pricesSortValue(b, key);
-      if (va !== vb) return dir * (va - vb);
-      const ta = PRICES_STATUS_ORDER[a.statusKey] ?? 9;
-      const tb = PRICES_STATUS_ORDER[b.statusKey] ?? 9;
-      if (ta !== tb) return ta - tb;
-      return Math.abs(Number(b.predicted) || 0) - Math.abs(Number(a.predicted) || 0);
-    });
-  }
-
-  function pricesSortArrow(key, mode = "prediction") {
-    const activeKey =
-      mode === "actual" ? state.pricesActualSortKey : state.pricesSortKey;
-    const activeDir =
-      mode === "actual" ? state.pricesActualSortDir : state.pricesSortDir;
-    if (activeKey !== key) return "";
-    return `<span class="arrow">${iconHTML(activeDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
+  function pricesSortArrow(key) {
+    if (state.pricesActualSortKey !== key) return "";
+    return `<span class="arrow">${iconHTML(state.pricesActualSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
   }
 
   function pricesStatusMobileLabel(statusKey) {
@@ -19642,14 +19608,13 @@
 
   function pricesHeadHTML() {
     const mobile = NARROW_MQ.matches;
-    const th = (key, label, extra = "") =>
-      `<th class="${extra}${state.pricesSortKey === key ? " sorted" : ""}" data-prices-sort="${key}">${escapeHtml(label)}${pricesSortArrow(key)}</th>`;
+    const th = (label, extra = "") => `<th class="${extra}">${escapeHtml(label)}</th>`;
     return `<tr>
-      ${th("name", "Player", "col-player")}
-      ${th("status", "Status", "col-num prices-col-status")}
-      ${th("progress", "Progress", "col-num prices-col-metric")}
-      ${th("predicted", mobile ? "Predict" : "Predicted", "col-num prices-col-metric")}
-      ${th("d3", mobile ? "3d" : "3d trend", "col-num prices-col-spark")}
+      ${th("Player", "col-player")}
+      ${th("Status", "col-num prices-col-status")}
+      ${th("Progress", "col-num prices-col-metric")}
+      ${th(mobile ? "Predict" : "Predicted", "col-num prices-col-metric")}
+      ${th(mobile ? "3d" : "3d trend", "col-num prices-col-spark")}
     </tr>`;
   }
 
@@ -19665,9 +19630,18 @@
 
   function pricesActualHeadHTML() {
     const mobile = NARROW_MQ.matches;
+    if (mobile) {
+      const th = (label, extra = "") => `<th class="${extra}">${escapeHtml(label)}</th>`;
+      return `<tr>
+        ${th("Date", "col-date prices-col-date")}
+        ${th("Player", "col-player")}
+        ${th("Change", "col-num prices-col-change")}
+        ${th("After", "col-num prices-col-actual-price prices-col-after")}
+      </tr>`;
+    }
     const th = (key, label, extra = "", title = "") => {
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
-      return `<th class="${extra}${state.pricesActualSortKey === key ? " sorted" : ""}" data-prices-actual-sort="${key}"${titleAttr}>${escapeHtml(label)}${pricesSortArrow(key, "actual")}</th>`;
+      return `<th class="${extra}${state.pricesActualSortKey === key ? " sorted" : ""}" data-prices-actual-sort="${key}"${titleAttr}>${escapeHtml(label)}${pricesSortArrow(key)}</th>`;
     };
     return `<tr>
       ${th("changedAt", "Date", "col-date prices-col-date")}
@@ -19703,11 +19677,18 @@
     }
   }
 
-  function fmtPricesChangeDateShort(iso) {
+  function fmtPricesChangeDateShort(iso, { compact = false } = {}) {
     if (!iso) return "—";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "—";
     try {
+      if (compact) {
+        return d.toLocaleDateString(undefined, {
+          month: "numeric",
+          day: "numeric",
+          timeZone: "Europe/London",
+        });
+      }
       return d.toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
@@ -19741,11 +19722,15 @@
     return html;
   }
 
+  function pricesActualDateLabel(iso) {
+    return fmtPricesChangeDateShort(iso, { compact: NARROW_MQ.matches });
+  }
+
   function pricesActualRowHTML(row, rank, { dateCell = "", catalog = null } = {}) {
     const cat = catalog || ownershipCatalogByCode();
     const dateTd =
       dateCell ||
-      `<td class="col-date prices-col-date">${escapeHtml(fmtPricesChangeDateShort(row.changedAt))}</td>`;
+      `<td class="col-date prices-col-date">${escapeHtml(pricesActualDateLabel(row.changedAt))}</td>`;
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       ${dateTd}
       <td class="col-player">${pricesActualPlayerCellHTML(row, rank)}</td>
@@ -19777,7 +19762,7 @@
       g.rows.forEach((row, idx) => {
         const dayStart = idx === 0;
         const dateCell = dayStart
-          ? `<td class="col-date prices-col-date prices-actual-day" rowspan="${g.rows.length}">${escapeHtml(fmtPricesChangeDateShort(g.changedAt))}</td>`
+          ? `<td class="col-date prices-col-date prices-actual-day" rowspan="${g.rows.length}">${escapeHtml(pricesActualDateLabel(g.changedAt))}</td>`
           : "";
         const trCls = dayStart ? ' class="prices-actual-day-start"' : "";
         html += `<tr${trCls} data-prices-code="${escapeHtml(String(row.code ?? ""))}">`;
@@ -21378,25 +21363,10 @@
       if (pricesViewMode() === "actual") renderPricesActual(opts);
     },
   });
-  pricesPredictionTableWraps().forEach((wrap) => {
-    if (!wrap) return;
-    wrap.addEventListener("click", (e) => {
-      const th = e.target.closest("th[data-prices-sort]");
-      if (!th || !wrap.contains(th)) return;
-      const key = th.getAttribute("data-prices-sort");
-      if (!key) return;
-      if (state.pricesSortKey === key) {
-        state.pricesSortDir = state.pricesSortDir === "asc" ? "desc" : "asc";
-      } else {
-        state.pricesSortKey = key;
-        state.pricesSortDir = key === "name" ? "asc" : "desc";
-      }
-      renderPrices({ preserveScroll: true });
-    });
-  });
   pricesActualTableWraps().forEach((wrap) => {
     if (!wrap) return;
     wrap.addEventListener("click", (e) => {
+      if (NARROW_MQ.matches) return;
       const th = e.target.closest("th[data-prices-actual-sort]");
       if (!th || !wrap.contains(th)) return;
       const key = th.getAttribute("data-prices-actual-sort");
