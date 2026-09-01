@@ -19097,17 +19097,26 @@
     return "—";
   }
 
+  function pricesStatusDesktopLabel(statusKey, statusLabel) {
+    if (statusKey === "very_likely_rise" || statusKey === "very_likely_drop") return "Very likely";
+    if (statusKey === "likely_rise" || statusKey === "likely_drop") return "Likely";
+    return statusLabel || "—";
+  }
+
   function pricesStatusPillHTML(row) {
     const cls = `prices-status-pill is-${String(row.statusKey || "").replace(/_/g, "-")}`;
     const mobile = NARROW_MQ.matches;
     const full = row.statusLabel || "—";
-    const label = mobile ? pricesStatusMobileLabel(row.statusKey) : full;
+    const label = mobile
+      ? pricesStatusMobileLabel(row.statusKey)
+      : pricesStatusDesktopLabel(row.statusKey, full);
     const shortCls = mobile ? " is-short" : "";
     const up = row.trend === "up";
     const trendLabel = up ? "More transfers in than out" : "More transfers out than in";
     const trendIcon = iconHTML(up ? "trending-up" : "trending-down");
-    const tipText = mobile && full !== label ? `${full} · ${trendLabel}` : trendLabel;
-    const tip = ` title="${escapeHtml(tipText)}" aria-label="${escapeHtml(`${full} — ${trendLabel}`)}"`;
+    const tipText =
+      mobile && full !== label ? `${full} · ${trendLabel}` : `${label} · ${trendLabel}`;
+    const tip = ` title="${escapeHtml(tipText)}" aria-label="${escapeHtml(`${label} — ${trendLabel}`)}"`;
     return `<span class="${cls}${shortCls} has-trend"${tip}><span class="prices-status-trend-icon" aria-hidden="true">${trendIcon}</span><span class="prices-status-label">${escapeHtml(label)}</span></span>`;
   }
 

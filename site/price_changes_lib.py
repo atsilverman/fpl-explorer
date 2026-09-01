@@ -592,15 +592,73 @@ def append_actual_changes(new_events: list[dict]) -> int:
     return added
 
 
-def backfill_actual_changes_from_snapshots(*, replace: bool = False) -> dict:
+def infer_change_night_uk(
+    code: int,
+    before: float,
+    after: float,
+    snapshots: dict[str, dict],
+) -> str | None:
+    """Earliest snapshot transition date matching this £0.1 move."""
+    before_t = int(round(float(before) * 10))
+    after_t = int(round(float(after) * 10))
+    if abs(after_t - before_t) != FPL_COST_STEP:
+        return None
+    dates = sorted(snapshots)
+    for i in range(1, len(dates)):
+        prev_d, next_d = dates[i - 1], dates[i]
+        prev_c = _cost_on_date(snapshots, code, prev_d)
+        next_c = _cost_on_date(snapshots, code, next_d)
+        if prev_c == before_t and next_c == after_t:
+            return next_d
+    return None
+
+
+def _cost_on_date(snapshots: dict[str, dict], code: int, date: str) -> int | None:
+    snap = snapshots.get(date)
+    if not snap:
+        return None
+    for e in snap.get("elements") or []:
+        if int(e.get("code") or 0) == code:
+            try:
+                return int(e.get("now_cost") or 0)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def reattribute_events_to_earliest_snapshot(
+    events: list[dict], snapshots: dict[str, dict]
+) -> tuple[list[dict], int]:
+    changed = 0
+    out: list[dict] = []
+    for ev in events:
+        night = infer_change_night_uk(
+            int(ev.get("code") or 0),
+            float(ev.get("before") or 0),
+            float(ev.get("after") or 0),
+            snapshots,
+        )
+        if night:
+            new_at = uk_midnight_utc_iso_for_date(night)
+            if ev.get("changedAt") != new_at:
+                ev = {**ev, "changedAt": new_at}
+                changed += 1
+        out.append(ev)
+    return out, changed
+
+
+def backfill_actual_changes_from_snapshots(
+    *, replace: bool = False, use_focal: bool = True
+) -> dict:
     """Rebuild actual-changes.json from consecutive bootstrap-static snapshots.
 
     Each pair (D-1, D) attributes single £0.1 steps to UK midnight on D.
     Multi-day gaps only capture a change when the total delta is exactly £0.1.
+    When use_focal is True, FPL Focal X posts re-attribute dates across gaps.
     """
     paths = bootstrap_snapshot_paths()
     if len(paths) < 2:
-        return {"pairs": 0, "events": 0, "saved": 0}
+        return {"pairs": 0, "events": 0, "saved": 0, "snapshotAdjusted": 0, "focalAdjusted": 0}
 
     events: list[dict] = []
     pairs = 0
@@ -619,12 +677,54 @@ def backfill_actual_changes_from_snapshots(*, replace: bool = False) -> dict:
             events.extend(batch)
 
     events = dedupe_actual_events(events)
+    snapshots = _snapshots_by_date_from_paths(paths)
+    snapshot_adjusted = 0
+    if events and snapshots:
+        events, snapshot_adjusted = reattribute_events_to_earliest_snapshot(
+            events, snapshots
+        )
+        events = dedupe_actual_events(events)
+
+    focal_adjusted = 0
+    if use_focal and events:
+        try:
+            from price_actual_focal import (
+                load_focal_nights_cached_or_fetch,
+                reattribute_events_with_focal,
+            )
+
+            latest_snap = json.loads(paths[-1].read_text(encoding="utf-8"))
+            focal_nights = load_focal_nights_cached_or_fetch(latest_snap)
+            events, focal_adjusted = reattribute_events_with_focal(
+                events, focal_nights, snapshots
+            )
+            events = dedupe_actual_events(events)
+        except Exception as exc:
+            print(f"focal reattribution skipped: {exc}", file=sys.stderr)
+
     if replace:
         save_actual_changes_log(events)
         saved = len(events)
     else:
         saved = append_actual_changes(events)
-    return {"pairs": pairs, "events": len(events), "saved": saved}
+    return {
+        "pairs": pairs,
+        "events": len(events),
+        "saved": saved,
+        "snapshotAdjusted": snapshot_adjusted,
+        "focalAdjusted": focal_adjusted,
+    }
+
+
+def _snapshots_by_date_from_paths(paths: list[Path]) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for path in paths:
+        try:
+            day = bootstrap_snapshot_date(path)
+            out[day] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+    return out
 
 
 def actual_changes_newest_first() -> list[dict]:

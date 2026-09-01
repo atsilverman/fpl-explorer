@@ -20,12 +20,22 @@ def main() -> int:
         action="store_true",
         help="Skip rebuilding site/price_changes_data.js.",
     )
+    parser.add_argument(
+        "--no-focal",
+        action="store_true",
+        help="Skip FPL Focal tweet date reattribution.",
+    )
     args = parser.parse_args()
 
-    stats = backfill_actual_changes_from_snapshots(replace=args.replace)
+    stats = backfill_actual_changes_from_snapshots(
+        replace=args.replace,
+        use_focal=not args.no_focal,
+    )
     print(
         f"Backfill: {stats['pairs']} snapshot pair(s) with changes, "
-        f"{stats['events']} event(s), {stats['saved']} saved."
+        f"{stats['events']} event(s), {stats['saved']} saved, "
+        f"{stats.get('snapshotAdjusted', 0)} snapshot date fix(es), "
+        f"{stats.get('focalAdjusted', 0)} focal date fix(es)."
     )
     if not args.no_rebuild:
         rebuild_price_changes_bundle()
