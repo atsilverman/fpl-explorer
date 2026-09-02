@@ -23,7 +23,9 @@ jobs:
           python-version: "3.12"
 
       - name: Refresh Prices
-        run: python3 site/fetch_prices.py
+        run: |
+          python3 site/fetch_prices.py
+          python3 site/fetch_price_actual.py || true
 
       - name: Bump cache-bust query params
         run: |
@@ -39,7 +41,7 @@ jobs:
               return subprocess.run(["git", "diff", "--quiet", "--", rel]).returncode != 0
 
           bumps = []
-          if dirty("site/price_changes_data.js") or dirty("snapshots/price-changes"):
+          if dirty("site/price_changes_data.js") or dirty("snapshots/price-changes") or dirty("snapshots/price-actual"):
               bumps.append("price_changes_data.js")
 
           for name in bumps:
@@ -59,7 +61,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/price_changes_data.js site/index.html snapshots/price-changes/ || true
+          git add site/price_changes_data.js site/index.html snapshots/price-changes/ snapshots/price-actual/ snapshots/bootstrap-static_*.json || true
           if git diff --staged --quiet; then
             echo "No cache changes to commit."
             exit 0

@@ -165,10 +165,38 @@ def should_run_baseline_poll(when: datetime | None = None) -> bool:
     return now.hour == 23 and now.minute >= 57
 
 
-def should_run_change_poll(when: datetime | None = None) -> bool:
-    """~00:00–00:20 UK — detect overnight price changes (FPL updates at 00:00)."""
+def change_night_has_events(night: str) -> bool:
+    return any(
+        str(e.get("changeNightUk") or "") == night for e in load_actual_changes_log()
+    )
+
+
+def pending_change_night_uk(when: datetime | None = None) -> str | None:
+    """UK calendar date of a 00:00 batch not yet logged (None if up to date)."""
     now = when or uk_now()
-    return now.hour == 0 and now.minute <= 20
+    night = uk_today_stamp(now)
+    if now.hour == 0 and now.minute < 1:
+        return None
+    state = load_actual_state()
+    if state.get("lastChangeNightUk") == night:
+        return None
+    if change_night_has_events(night):
+        return None
+    return night
+
+
+def should_accept_quiet_night(when: datetime | None = None) -> bool:
+    """After 07:00 UK, close a pending night with no price moves."""
+    now = when or uk_now()
+    return now.hour >= 7 and pending_change_night_uk(now) is not None
+
+
+def should_run_change_poll(when: datetime | None = None) -> bool:
+    """Detect overnight price changes at 00:00 UK, with catch-up until noon."""
+    now = when or uk_now()
+    if now.hour == 0 and now.minute <= 45:
+        return True
+    return pending_change_night_uk(now) is not None and now.hour < 12
 
 
 def next_price_change_at_iso() -> str:
@@ -528,6 +556,7 @@ def update_actual_state_costs(
     *,
     result: str,
     change_night_uk: str | None = None,
+    mark_night_recorded: bool = True,
 ) -> None:
     state = load_actual_state()
     costs = costs_index_from_snap(snap)
@@ -535,9 +564,59 @@ def update_actual_state_costs(
     state["baselineAt"] = generated_at()
     state["lastPollAt"] = state["baselineAt"]
     state["lastPollResult"] = result
-    if change_night_uk:
+    if change_night_uk and mark_night_recorded:
         state["lastChangeNightUk"] = change_night_uk
     save_actual_state(state)
+
+
+def resolve_baseline_costs(data: dict) -> dict[int, int]:
+    """Pre-midnight costs for diffing: state baseline, else latest dated bootstrap."""
+    state = load_actual_state()
+    baseline = baseline_costs_from_state(state)
+    if baseline:
+        return baseline
+    paths = bootstrap_snapshot_paths()
+    paths = [p for p in paths if "archived" not in p.stem]
+    if paths:
+        try:
+            prev = json.loads(paths[-1].read_text(encoding="utf-8"))
+            if paths[-1].name != f"bootstrap-static_{uk_today_stamp()}.json":
+                return costs_index_from_snap(prev)
+        except (OSError, json.JSONDecodeError):
+            pass
+    return costs_index_from_snap(data)
+
+
+def poll_actual_changes_from_bootstrap(
+    data: dict,
+    *,
+    change_night: str | None = None,
+    quiet_if_no_diff: bool = False,
+) -> tuple[int, str | None, list[dict]]:
+    """Diff bootstrap vs baseline for a UK night. Returns (added, night, events)."""
+    night = change_night or pending_change_night_uk()
+    if not night:
+        return 0, None, []
+    changed_at = uk_midnight_utc_iso_for_date(night)
+    baseline = resolve_baseline_costs(data)
+    latest_costs = costs_index_from_snap(data)
+    if not costs_differ(baseline, latest_costs):
+        if quiet_if_no_diff:
+            update_actual_state_costs(
+                data,
+                result="no_changes",
+                change_night_uk=night,
+            )
+        return 0, night, []
+
+    events = diff_costs_for_actual_changes(baseline, data, changed_at)
+    events = [{**ev, "changeNightUk": night} for ev in events]
+    if not events:
+        return 0, night, []
+
+    added = append_actual_changes(events)
+    update_actual_state_costs(data, result="changes", change_night_uk=night)
+    return added, night, events
 
 
 def diff_checkins_for_actual_changes(

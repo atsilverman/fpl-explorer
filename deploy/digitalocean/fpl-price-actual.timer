@@ -7,10 +7,18 @@ OnCalendar=*-*-* 23:02:00
 OnCalendar=*-*-* 23:05:00
 OnCalendar=*-*-* 23:10:00
 OnCalendar=*-*-* 23:15:00
+OnCalendar=*-*-* 23:20:00
+OnCalendar=*-*-* 23:30:00
+OnCalendar=*-*-* 23:45:00
 OnCalendar=*-*-* 00:02:00
 OnCalendar=*-*-* 00:05:00
 OnCalendar=*-*-* 00:10:00
 OnCalendar=*-*-* 00:15:00
+OnCalendar=*-*-* 00:20:00
+OnCalendar=*-*-* 00:30:00
+OnCalendar=*-*-* 00:45:00
+OnCalendar=*-*-* 01:00:00
+OnCalendar=*-*-* 07:00:00
 Persistent=true
 
 [Install]

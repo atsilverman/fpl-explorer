@@ -6,7 +6,9 @@ FPL applies daily price changes at 00:00 Europe/London. Run this script in a
 tight window around that time:
 
   23:57–23:59 UK  — baseline-only (store pre-change costs)
-  00:00–00:20 UK  — poll, diff vs baseline, append actual-changes log
+  00:00–00:45 UK  — poll, diff vs baseline, append actual-changes log
+  01:00–12:00 UK  — catch-up if a night was missed
+  07:00+ UK       — --accept-quiet-night closes a truly quiet pending night
 
 GitHub Actions runs UTC crons that map to both BST and GMT; the script no-ops
 outside the UK windows unless --force.
@@ -38,21 +40,18 @@ from price_changes_lib import (
     ROOT,
     SNAPSHOTS,
     UA,
-    append_actual_changes,
-    baseline_costs_from_state,
     checkin_filename,
     checkin_stamp,
-    costs_differ,
-    costs_index_from_snap,
-    diff_costs_for_actual_changes,
     generated_at,
     load_actual_state,
+    pending_change_night_uk,
+    poll_actual_changes_from_bootstrap,
     rebuild_price_changes_bundle,
     save_actual_state,
     should_run_baseline_poll,
     should_run_change_poll,
+    should_accept_quiet_night,
     slim_price_checkin,
-    uk_midnight_utc_iso,
     uk_now,
     uk_today_stamp,
     update_actual_state_costs,
@@ -98,24 +97,51 @@ def write_slim_checkin(data: dict) -> tuple[Path, dict]:
     return dest, row
 
 
-def resolve_baseline_costs(data: dict) -> dict[int, int]:
-    state = load_actual_state()
-    baseline = baseline_costs_from_state(state)
-    if baseline:
-        return baseline
-    paths = sorted(SNAPSHOTS.glob("bootstrap-static_*.json"))
-    paths = [p for p in paths if "archived" not in p.stem]
-    if paths:
-        try:
-            prev = json.loads(paths[-1].read_text(encoding="utf-8"))
-            if paths[-1].name != f"bootstrap-static_{uk_today_stamp()}.json":
-                return costs_index_from_snap(prev)
-        except (OSError, json.JSONDecodeError):
-            pass
-    return costs_index_from_snap(data)
+def run_change_poll(data: dict, *, final_attempt: bool = False, quiet_if_no_diff: bool = False) -> int:
+    change_night = pending_change_night_uk()
+    if not change_night:
+        print("No pending UK price-change night")
+        return EXIT_OK
+
+    added, night, events = poll_actual_changes_from_bootstrap(
+        data, change_night=change_night, quiet_if_no_diff=quiet_if_no_diff
+    )
+    if not events:
+        if quiet_if_no_diff:
+            print(f"No price changes for UK night {night}")
+            return EXIT_OK
+        if final_attempt:
+            update_actual_state_costs(
+                data,
+                result="no_changes",
+                change_night_uk=change_night,
+                mark_night_recorded=False,
+            )
+            print(
+                f"No diff for UK night {change_night} on final attempt"
+                " — leaving night open for catch-up"
+            )
+            return EXIT_OK
+        print("No diff yet — API may still be stale")
+        return EXIT_RETRY
+
+    dest = write_bootstrap_snapshot(data)
+    checkin_path, _row = write_slim_checkin(data)
+    rebuild_price_changes_bundle(latest_snap=data, latest_source=dest.name)
+
+    print(
+        f"UK night {night}: recorded {added} new actual change(s)"
+        f" ({len(events)} detected this poll)"
+    )
+    print(f"Wrote {dest.relative_to(ROOT)}")
+    print(f"Wrote {checkin_path.relative_to(ROOT)}")
+    print(f"Wrote {PRICES_OUT_PATH.relative_to(ROOT)}")
+    return EXIT_OK
 
 
 def run_baseline_only(data: dict) -> int:
+    from price_changes_lib import costs_index_from_snap
+
     night = (uk_now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).strftime(
         "%Y-%m-%d"
     )
@@ -125,51 +151,6 @@ def run_baseline_only(data: dict) -> int:
     save_actual_state(state)
     n = len(costs_index_from_snap(data))
     print(f"Baseline saved ({n} players) for UK night {night}")
-    return EXIT_OK
-
-
-def run_change_poll(data: dict, *, final_attempt: bool = False) -> int:
-    now_uk = uk_now()
-    changed_at = uk_midnight_utc_iso(now_uk)
-    change_night = uk_today_stamp(now_uk)
-    baseline = resolve_baseline_costs(data)
-    latest_costs = costs_index_from_snap(data)
-
-    if not costs_differ(baseline, latest_costs):
-        if final_attempt:
-            update_actual_state_costs(
-                data, result="no_changes", change_night_uk=change_night
-            )
-            print(f"No price changes for UK night {change_night}")
-            return EXIT_OK
-        print("No diff yet — API may still be stale")
-        return EXIT_RETRY
-
-    events = diff_costs_for_actual_changes(baseline, data, changed_at)
-    events = [{**ev, "changeNightUk": change_night} for ev in events]
-    if not events:
-        if final_attempt:
-            update_actual_state_costs(
-                data, result="no_changes", change_night_uk=change_night
-            )
-            print(f"No £0.1 price changes for UK night {change_night}")
-            return EXIT_OK
-        print("Costs unchanged or non-£0.1 diff — retry later")
-        return EXIT_RETRY
-
-    added = append_actual_changes(events)
-    dest = write_bootstrap_snapshot(data)
-    checkin_path, _row = write_slim_checkin(data)
-    rebuild_price_changes_bundle(latest_snap=data, latest_source=dest.name)
-
-    update_actual_state_costs(data, result="changes", change_night_uk=change_night)
-    print(
-        f"UK night {change_night}: recorded {added} new actual change(s)"
-        f" ({len(events)} detected this poll)"
-    )
-    print(f"Wrote {dest.relative_to(ROOT)}")
-    print(f"Wrote {checkin_path.relative_to(ROOT)}")
-    print(f"Wrote {PRICES_OUT_PATH.relative_to(ROOT)}")
     return EXIT_OK
 
 
@@ -190,7 +171,12 @@ def main() -> int:
     parser.add_argument(
         "--final-attempt",
         action="store_true",
-        help="Last retry of the night — accept no-change if API still matches baseline.",
+        help="Last retry of the night — do not mark night complete if still no diff.",
+    )
+    parser.add_argument(
+        "--accept-quiet-night",
+        action="store_true",
+        help="Morning catch-up: mark night as no-change when API still matches baseline.",
     )
     args = parser.parse_args()
 
@@ -202,10 +188,19 @@ def main() -> int:
         mode = "baseline"
     elif args.force:
         mode = "poll"
+    elif args.accept_quiet_night:
+        if not should_accept_quiet_night(now_uk):
+            print("Outside quiet-night window (07:00+ UK with pending night); skip")
+            return EXIT_OK
+        mode = "poll"
     elif should_run_baseline_poll(now_uk):
         mode = "baseline"
     elif should_run_change_poll(now_uk):
-        mode = "poll"
+        if pending_change_night_uk(now_uk):
+            mode = "poll"
+        else:
+            print("Price-change poll not needed; night already recorded")
+            return EXIT_OK
     else:
         print("Outside UK price-change window; skip")
         return EXIT_OK
@@ -219,7 +214,11 @@ def main() -> int:
 
     if mode == "baseline":
         return run_baseline_only(data)
-    return run_change_poll(data, final_attempt=args.final_attempt)
+    return run_change_poll(
+        data,
+        final_attempt=args.final_attempt,
+        quiet_if_no_diff=args.accept_quiet_night,
+    )
 
 
 if __name__ == "__main__":

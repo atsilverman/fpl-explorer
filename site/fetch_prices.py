@@ -25,6 +25,8 @@ from price_changes_lib import (
     UA,
     checkin_filename,
     checkin_stamp,
+    pending_change_night_uk,
+    poll_actual_changes_from_bootstrap,
     prune_old_checkins,
     rebuild_price_changes_bundle,
     slim_price_checkin,
@@ -75,6 +77,14 @@ def main() -> int:
             print(f"Wrote {dest.relative_to(ROOT)} ({n} movers)")
             latest_snap = data
             latest_source = fname
+            night = pending_change_night_uk()
+            if night:
+                added, recorded_night, events = poll_actual_changes_from_bootstrap(data)
+                if events:
+                    print(
+                        f"Catch-up: recorded {added} actual change(s)"
+                        f" for UK night {recorded_night}"
+                    )
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
             print(f"Live fetch failed ({exc}); rebuilding from existing check-ins.", file=sys.stderr)
 
