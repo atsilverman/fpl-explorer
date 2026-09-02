@@ -20149,6 +20149,71 @@
     });
   }
 
+  const PRICES_LONDON_TZ = "Europe/London";
+
+  function pricesLondonParts(date) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: PRICES_LONDON_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+    const out = {};
+    for (const p of parts) {
+      if (p.type !== "literal") out[p.type] = Number(p.value);
+    }
+    return out;
+  }
+
+  function pricesLondonWallToUtc(year, month, day, hour, minute, second) {
+    let utc = Date.UTC(year, month - 1, day, hour, minute, second);
+    for (let i = 0; i < 4; i++) {
+      const got = pricesLondonParts(new Date(utc));
+      const desired = Date.UTC(year, month - 1, day, hour, minute, second);
+      const actual = Date.UTC(
+        got.year,
+        got.month - 1,
+        got.day,
+        got.hour,
+        got.minute,
+        got.second
+      );
+      utc += desired - actual;
+    }
+    return new Date(utc);
+  }
+
+  function pricesAddLondonDays(year, month, day, addDays) {
+    const anchor = pricesLondonWallToUtc(year, month, day, 12, 0, 0);
+    anchor.setUTCDate(anchor.getUTCDate() + addDays);
+    const p = pricesLondonParts(anchor);
+    return { year: p.year, month: p.month, day: p.day };
+  }
+
+  /** Next 00:00 Europe/London — mirrors price_changes_lib.next_price_change_at_iso(). */
+  function pricesNextChangeAtIso(from = new Date()) {
+    const p = pricesLondonParts(from);
+    let y = p.year;
+    let mo = p.month;
+    let d = p.day;
+    const todayMidnight = pricesLondonWallToUtc(y, mo, d, 0, 0, 0);
+    if (from.getTime() >= todayMidnight.getTime()) {
+      ({ year: y, month: mo, day: d } = pricesAddLondonDays(y, mo, d, 1));
+    }
+    return pricesLondonWallToUtc(y, mo, d, 0, 0, 0).toISOString().replace(".000Z", "Z");
+  }
+
+  function pricesEffectiveNextChangeAt() {
+    const baked = PRICES.nextChangeAt;
+    const bakedMs = baked ? new Date(baked).getTime() : NaN;
+    if (Number.isFinite(bakedMs) && bakedMs > Date.now()) return baked;
+    return pricesNextChangeAtIso();
+  }
+
   function fmtPricesChangeAtLabel(iso) {
     if (!iso) return "Changes at —";
     const d = new Date(iso);
@@ -20173,7 +20238,7 @@
       return;
     }
     const tick = () => {
-      const iso = PRICES.nextChangeAt;
+      const iso = pricesEffectiveNextChangeAt();
       if (el.pricesCountdownSub) {
         el.pricesCountdownSub.textContent = fmtPricesChangeAtLabel(iso);
       }
