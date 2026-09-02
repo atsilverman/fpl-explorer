@@ -5252,13 +5252,26 @@ html[data-page="prices"] .layout .main {
 #prices-page .prices-actual-panel:first-child .prices-section-divider {
   margin-top: 0;
 }
-#prices-page .prices-section-divider span {
+#prices-page .prices-section-divider .prices-section-title {
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   white-space: nowrap;
+}
+#prices-page .prices-section-divider .prices-section-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+#prices-page .prices-section-divider .prices-section-mark.prices-change-arrow {
+  min-width: 1.65rem;
+  height: 1.45rem;
+  padding: 0 5px;
+}
+#prices-page .prices-section-divider .prices-section-mark.prices-status-pill {
+  min-height: 1.45rem;
 }
 #prices-page .prices-section-divider::after {
   content: "";
@@ -6096,16 +6109,6 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     min-width: 0;
     max-width: 100%;
   }
-  #prices-page .prices-actual-table-wrap .prices-col-change,
-  #prices-page .prices-actual-table-wrap th.prices-col-change {
-    width: var(--prices-actual-metric-col-w, var(--prices-actual-change-col-w, 2.75rem));
-    min-width: 0;
-    max-width: none;
-    white-space: nowrap;
-    text-align: center;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
   #prices-page .prices-actual-table-wrap .prices-col-after,
   #prices-page .prices-actual-table-wrap .prices-col-actual-price.prices-col-after,
   #prices-page .prices-actual-table-wrap th.prices-col-after {
@@ -6117,7 +6120,6 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     padding-left: 4px;
     padding-right: 4px;
   }
-  #prices-page .prices-actual-table-wrap .prices-actual-table .prices-col-change,
   #prices-page .prices-actual-table-wrap .prices-actual-table .prices-col-actual-price {
     min-width: 0;
   }
@@ -6126,13 +6128,11 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     text-overflow: ellipsis;
   }
   #prices-page .prices-prediction-table-wrap {
-    --prices-mobile-player-pct: 38%;
+    --prices-mobile-player-pct: 52%;
   }
-  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-status,
-  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-status,
   #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-metric,
   #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-metric {
-    width: calc((100% - var(--prices-mobile-player-pct)) / 3);
+    width: calc((100% - var(--prices-mobile-player-pct)) / 2);
     min-width: 0;
     text-align: center;
     vertical-align: middle;
@@ -6141,12 +6141,20 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   }
   #prices-page .prices-prediction-table-wrap .prices-table .col-player {
     width: var(--prices-mobile-player-pct);
+    min-width: 0;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id-sub {
+    overflow: visible;
+    max-width: 100%;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id-sub > * {
+    flex: 0 0 auto;
   }
   #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
   #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
     display: none;
   }
-  #prices-page .prices-actual-table-wrap .prices-col-change .prices-change-arrow {
+  #prices-page .prices-actual-table-wrap .prices-col-after .prices-change-arrow {
     margin-inline: auto;
   }
   #prices-page .prices-table-wrap .ownership-id .player-name,

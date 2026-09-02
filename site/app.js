@@ -10419,25 +10419,19 @@
         ? [
             spitRow(
               `<span class="prices-change-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
-              "Price rose £0.1m"
-            ),
-            spitRow(
-              `<span class="prices-change-arrow is-fall spit-ui-swatch">${iconHTML("trending-down")}</span>`,
-              "Price fell £0.1m"
+              "Risers / Fallers section arrow — £0.1m move direction for the whole table"
             ),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : mobile
         ? [
-            spitRow(`<span class="prices-status-pill is-very-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">VL</span></span>`, "Very likely to rise (green) + transfer trend arrow"),
-            spitRow(`<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`, "Likely to drop (red) + transfer trend arrow"),
+            spitRow(`<span class="prices-section-mark prices-status-pill is-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Rise</span></span>`, "Risers / Fallers section badge — direction for the whole table"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : [
-            spitRow(`<span class="prices-status-pill is-very-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Very likely to rise</span></span>`, "Strong rise signal + GW transfer trend"),
-            spitRow(`<span class="prices-status-pill is-likely-drop has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">Likely to drop</span></span>`, "Moderate fall signal + GW transfer trend"),
+            spitRow(`<span class="prices-section-mark prices-status-pill is-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Rise</span></span>`, "Risers / Fallers section badge — direction for the whole table"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
@@ -10453,10 +10447,10 @@
             spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
             ...(mobile
               ? [
-                  spitRow(spitRank("Status"), "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop. Price is in the player row."),
+                  spitRow(spitRank("Risers / Fallers"), "Direction badge beside each section title — green rise, red fall."),
                 ]
               : [
-                  spitRow(spitRank("Status"), "Likelihood label with ↗/↘ for more transfers in vs out this GW."),
+                  spitRow(spitRank("Risers / Fallers"), "Direction badge beside each section title — green rise, red fall."),
                 ]),
             spitRow(spitRank("Risers / Fallers"), "Two stacked tables — risers above, fallers below, each ranked by largest |progress|."),
             spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
@@ -19549,7 +19543,7 @@
       if (cell.clientWidth > 0 && cell.scrollWidth > cell.clientWidth + 1) return true;
     }
     const metricCells = wrap.querySelectorAll(
-      "th.prices-col-change, th.prices-col-before, th.prices-col-after, th.prices-col-owned, th.prices-col-league-owned, td.prices-col-change, td.prices-col-before, td.prices-col-after, td.prices-col-owned, td.prices-col-league-owned"
+      "th.prices-col-before, th.prices-col-after, th.prices-col-owned, th.prices-col-league-owned, td.prices-col-before, td.prices-col-after, td.prices-col-owned, td.prices-col-league-owned"
     );
     for (const cell of metricCells) {
       if (cell.offsetParent === null || cell.clientWidth === 0) continue;
@@ -19609,13 +19603,11 @@
       visibleWraps[0];
     const tsbRef =
       visibleWraps[0].querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
-    const changeRef = visibleWraps[0].querySelector("th.prices-col-change");
     const afterRef = visibleWraps[0].querySelector("th.prices-col-after");
 
     let maxDate = measurePricesTextWidth("Date", dateRef);
     let maxTsb = 0;
     let maxPlayer = PRICES_ACTUAL_MOBILE_PLAYER_MIN;
-    let maxChange = measurePricesTextWidth("Chg", changeRef);
     let maxAfter = measurePricesTextWidth("After", afterRef);
 
     visibleWraps.forEach((wrap) => {
@@ -19625,13 +19617,6 @@
         .forEach((cell) => {
           maxDate = Math.max(maxDate, measurePricesTextWidth(cell.textContent, cell));
         });
-      wrap.querySelectorAll("td.prices-col-change").forEach((cell) => {
-        const arrow = cell.querySelector(".prices-change-arrow");
-        const w = arrow
-          ? arrow.getBoundingClientRect().width
-          : measurePricesTextWidth(cell.textContent, cell);
-        maxChange = Math.max(maxChange, w);
-      });
       wrap.querySelectorAll("td.prices-col-after").forEach((cell) => {
         maxAfter = Math.max(maxAfter, measurePricesTextWidth(cell.textContent, cell));
       });
@@ -19658,28 +19643,23 @@
         280
       );
       const dateW = Math.ceil(maxDate + 18);
-      const changePad = Math.max(12, measurePricesCellPadding(changeRef));
       const afterPad = Math.max(14, measurePricesCellPadding(afterRef));
-      let metricW = Math.max(
-        PRICES_ACTUAL_MOBILE_CHANGE_MIN,
+      let afterW = Math.max(
         PRICES_ACTUAL_MOBILE_AFTER_MIN,
-        Math.ceil(maxChange + changePad),
         Math.ceil(maxAfter + afterPad)
       );
       let playerW = maxPlayer;
-      let slack = tableW - (dateW + playerW + metricW * 2);
+      let slack = tableW - (dateW + playerW + afterW);
       if (slack > 0) {
-        metricW += Math.ceil(slack / 2);
+        playerW += slack;
       } else if (slack < 0) {
         playerW = Math.max(PRICES_ACTUAL_MOBILE_PLAYER_MIN, playerW + slack);
-        slack = tableW - (dateW + playerW + metricW * 2);
-        if (slack > 0) metricW += Math.ceil(slack / 2);
       }
 
       visibleWraps.forEach((wrap) => {
         wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
         wrap.style.setProperty("--prices-actual-player-col-w", `${playerW}px`);
-        wrap.style.setProperty("--prices-actual-metric-col-w", `${metricW}px`);
+        wrap.style.setProperty("--prices-actual-metric-col-w", `${afterW}px`);
         wrap.style.removeProperty("--prices-actual-change-col-w");
         wrap.style.removeProperty("--prices-actual-after-col-w");
         wrap.style.removeProperty("--prices-actual-tsb-col-w");
@@ -19949,7 +19929,8 @@
   }
 
   function sortPricesActualRows(rows) {
-    const key = state.pricesActualSortKey || "default";
+    let key = state.pricesActualSortKey || "default";
+    if (key === "change") key = "default";
     const dir = state.pricesActualSortDir === "asc" ? 1 : -1;
     const catalog = ownershipCatalogByCode();
     if (key === "default" || key === "changedAt") {
@@ -20068,11 +20049,11 @@
   }
 
   function pricesTableColSpan() {
-    return 5;
+    return 4;
   }
 
   function pricesActualTableColSpan() {
-    return NARROW_MQ.matches ? 4 : 7;
+    return NARROW_MQ.matches ? 3 : 6;
   }
 
   function pricesHeadHTML() {
@@ -20080,7 +20061,6 @@
     const th = (label, extra = "") => `<th class="${extra}">${escapeHtml(label)}</th>`;
     return `<tr>
       ${th("Player", "col-player")}
-      ${th("Status", "col-num prices-col-status")}
       ${th("Progress", "col-num prices-col-metric")}
       ${th(mobile ? "Predict" : "Predicted", "col-num prices-col-metric")}
       ${th(mobile ? "3d" : "3d trend", "col-num prices-col-spark")}
@@ -20090,7 +20070,6 @@
   function pricesRowHTML(row, rank) {
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
-      <td class="col-num prices-col-status">${pricesStatusPillHTML(row)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.progress)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.predicted, { predicted: true })}</td>
       <td class="col-num prices-col-spark">${pricesSparkHTML(row)}</td>
@@ -20104,7 +20083,6 @@
       return `<tr>
         ${th("Date", "col-date prices-col-date")}
         ${th("Player", "col-player")}
-        ${th("Chg", "col-num prices-col-change")}
         ${th("After", "col-num prices-col-actual-price prices-col-after")}
       </tr>`;
     }
@@ -20115,11 +20093,10 @@
     return `<tr>
       ${th("changedAt", "Date", "col-date prices-col-date")}
       ${th("name", "Player", "col-player")}
-      ${th("change", "Change", "col-num prices-col-change")}
-      ${mobile ? "" : th("before", "Before", "col-num prices-col-actual-price prices-col-before")}
+      ${th("before", "Before", "col-num prices-col-actual-price prices-col-before")}
       ${th("after", "After", "col-num prices-col-actual-price prices-col-after")}
-      ${mobile ? "" : th("owned", "All(%)", "col-num prices-col-owned", "TSB% (All)")}
-      ${mobile ? "" : th("leagueOwned", "ML(%)", "col-num prices-col-league-owned", "TSB% (Mini-League)")}
+      ${th("owned", "All(%)", "col-num prices-col-owned", "TSB% (All)")}
+      ${th("leagueOwned", "ML(%)", "col-num prices-col-league-owned", "TSB% (Mini-League)")}
     </tr>`;
   }
 
@@ -20128,6 +20105,25 @@
     const cls = `prices-change-arrow ${up ? "is-rise" : "is-fall"}`;
     const label = up ? "Price rose" : "Price fell";
     return `<span class="${cls}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${iconHTML(up ? "trending-up" : "trending-down")}</span>`;
+  }
+
+  function pricesSectionPredictionMarkHTML(direction) {
+    const up = direction === "rise";
+    const cls = `prices-section-mark prices-status-pill is-${up ? "likely-rise" : "likely-drop"} is-short has-trend`;
+    const label = up ? "Rise" : "Fall";
+    const tip = ` title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"`;
+    return `<span class="${cls}"${tip}><span class="prices-status-trend-icon" aria-hidden="true">${iconHTML(up ? "trending-up" : "trending-down")}</span><span class="prices-status-label">${escapeHtml(label)}</span></span>`;
+  }
+
+  function syncPricesSectionMarks(root, { mode = "prediction" } = {}) {
+    if (!root) return;
+    root.querySelectorAll(".prices-section-divider[data-prices-direction]").forEach((div) => {
+      const mark = div.querySelector(".prices-section-mark");
+      if (!mark) return;
+      const dir = div.dataset.pricesDirection === "fall" ? "fall" : "rise";
+      mark.innerHTML =
+        mode === "actual" ? pricesChangeArrowHTML(dir) : pricesSectionPredictionMarkHTML(dir);
+    });
   }
 
   function fmtPricesActualPrice(value) {
@@ -20197,7 +20193,7 @@
 
   function pricesActualMetricCellsHTML(row, catalog) {
     const mobile = NARROW_MQ.matches;
-    let html = `<td class="col-num prices-col-change">${pricesChangeArrowHTML(row.direction)}</td>`;
+    let html = "";
     if (!mobile) {
       html += `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
     }
@@ -20524,6 +20520,8 @@
       );
     }
 
+    syncPricesSectionMarks(el.pricesPredictionPanels, { mode: "prediction" });
+
     if (scrollSnap) {
       restoreScrollWraps(scrollSnap);
       requestAnimationFrame(() => syncMobileScrollportHeight());
@@ -20631,6 +20629,7 @@
       );
     }
 
+    syncPricesSectionMarks(el.pricesActualPanels, { mode: "actual" });
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
     if (NARROW_MQ.matches) syncPricesActualColumnWidths();

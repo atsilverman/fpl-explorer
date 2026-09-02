@@ -1150,7 +1150,7 @@
       <div id="prices-prediction-wrap" class="prices-prediction-wrap">
         <div class="prices-prediction-panels" id="prices-prediction-panels">
           <section class="prices-prediction-panel" aria-label="Risers">
-            <div class="prices-section-divider"><span>Risers</span></div>
+            <div class="prices-section-divider" data-prices-direction="rise"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Risers</span></div>
             <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-risers-wrap">
               <table class="ownership-table prices-table">
                 <thead id="prices-risers-head"></thead>
@@ -1159,7 +1159,7 @@
             </div>
           </section>
           <section class="prices-prediction-panel" aria-label="Fallers">
-            <div class="prices-section-divider"><span>Fallers</span></div>
+            <div class="prices-section-divider" data-prices-direction="fall"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Fallers</span></div>
             <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-fallers-wrap">
               <table class="ownership-table prices-table">
                 <thead id="prices-fallers-head"></thead>
@@ -1172,7 +1172,7 @@
       <div id="prices-actual-wrap" class="prices-actual-wrap" hidden>
         <div class="prices-actual-panels" id="prices-actual-panels">
           <section class="prices-actual-panel" aria-label="Risers">
-            <div class="prices-section-divider"><span>Risers</span></div>
+            <div class="prices-section-divider" data-prices-direction="rise"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Risers</span></div>
             <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-risers-wrap">
               <table class="ownership-table prices-table prices-actual-table">
                 <thead id="prices-actual-risers-head"></thead>
@@ -1181,7 +1181,7 @@
             </div>
           </section>
           <section class="prices-actual-panel" aria-label="Fallers">
-            <div class="prices-section-divider"><span>Fallers</span></div>
+            <div class="prices-section-divider" data-prices-direction="fall"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Fallers</span></div>
             <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-fallers-wrap">
               <table class="ownership-table prices-table prices-actual-table">
                 <thead id="prices-actual-fallers-head"></thead>
@@ -1534,7 +1534,7 @@
 <script src="home_data.js?v=32"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=993"></script>
+<script src="app.js?v=994"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
