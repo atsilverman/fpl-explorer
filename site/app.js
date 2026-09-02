@@ -2352,7 +2352,7 @@
     });
   }
 
-  function applyHomePayload(payload, { skipFeedIngest = false } = {}) {
+  function applyHomePayload(payload, { skipFeedIngest = false, fromSessionSnapshot = false, fromLivePoll = false } = {}) {
     if (!payload || typeof payload !== "object") return false;
     const priorHome = {
       gw: HOME.gw ?? null,
@@ -2427,12 +2427,16 @@
       : {};
     HOME.error = payload.error ?? null;
     window.FPL_HOME = HOME;
-    homeLiveStandingsSynced = true;
+    if (opts.fromSessionSnapshot) homeBootstrapSource = "session";
+    else if (opts.fromLivePoll) homeBootstrapSource = "live";
     homeOwnerPin = null;
     homeViewEntryId = null;
     homeElementGwCache = null;
     syncPlanningHorizon({ rerender: state.page === "home" || state.page === "team" || state.page === "schedule" });
     syncLiveNavChrome();
+    if (!fromSessionSnapshot && (fromLivePoll || homeLivePollReady())) {
+      persistHomeSessionSnapshot(HOME);
+    }
     return true;
   }
 
@@ -2443,7 +2447,7 @@
     if (animateHomeEnter && state.page === "home" && el.homePage) {
       setHomeManagerModalOpen(false);
       homePageEnterArmed = true;
-      homeLivePollAfterEnter = true;
+      homeLiveApplyAfterEnter = true;
       primeOptaHighlightEnter(el.homePage);
       renderHome({ leaveRollsPending: true });
       playPageEnter(el.homePage);
@@ -2517,7 +2521,8 @@
         refreshManagerDependentUI();
         return false;
       }
-      applyHomePayload(data.home);
+      applyHomePayload(data.home, { fromLivePoll: true });
+      homeLiveLastSuccessAt = Date.now();
       refreshManagerDependentUI();
       if (toast) {
         showToast({
@@ -2538,6 +2543,7 @@
   const HOME_LIVE_FETCH_MS = 12_000;
   const HOME_LIVE_POLL_LIVE_MS = 15_000;
   const HOME_LIVE_POLL_IDLE_MS = 60_000;
+  const HOME_SESSION_SNAPSHOT_KEY = "fpl_home_live_v1";
   let homeLivePollTimer = null;
   let homeLivePollIntervalMs = HOME_LIVE_POLL_IDLE_MS;
   let homeLiveLastPollAt = 0;
@@ -2546,10 +2552,12 @@
   let homeLivePollInFlight = false;
   let homeLivePollAttempted = false;
   let homeLivePollFlight = null;
-  let homeLiveStandingsSynced = false;
   let homeRenderQueued = false;
   let homeEnterMotionToken = 0;
-  let homeLivePollAfterEnter = false;
+  /** Defer poll-driven renderHome until enter animation clears (mobile). Poll still runs. */
+  let homeLiveApplyAfterEnter = false;
+  /** null | 'session' | 'live' — source of the current trusted volatile stats. */
+  let homeBootstrapSource = null;
   /** True from setPage(home) until playPageEnter arms is-entering — blocks poll rebuild flash. */
   let homePageEnterArmed = false;
   let homeLivePrefetchStarted = false;
@@ -2590,10 +2598,13 @@
     );
   }
 
-  function releaseDeferredHomeLivePoll() {
-    if (!homeLivePollAfterEnter) return;
-    homeLivePollAfterEnter = false;
-    if (!document.hidden && homeLivePollReady()) pollHomeFromLiveServer();
+  function flushHomeRenderAfterEnter() {
+    if (!homeLiveApplyAfterEnter) return;
+    homeLiveApplyAfterEnter = false;
+    if (homeRenderQueued) {
+      homeRenderQueued = false;
+      renderHome({ settleQuiet: true });
+    }
     syncHomeLivePolling({ skipImmediate: true });
   }
 
@@ -2610,7 +2621,7 @@
         });
       }
     }
-    releaseDeferredHomeLivePoll();
+    flushHomeRenderAfterEnter();
   }
 
   function resetHomeLivePollState() {
@@ -2620,7 +2631,7 @@
     homeLivePollInFlight = false;
     homeLivePollAttempted = false;
     homeLivePollFlight = null;
-    homeLiveStandingsSynced = false;
+    homeBootstrapSource = null;
   }
 
   function stopHomeLivePolling() {
@@ -2628,7 +2639,7 @@
       clearInterval(homeLivePollTimer);
       homeLivePollTimer = null;
     }
-    homeLivePollAfterEnter = false;
+    homeLiveApplyAfterEnter = false;
   }
 
   function homeLiveApiUrl() {
@@ -2737,36 +2748,128 @@
   }
 
   function homeLivePayloadPending() {
-    if (!homeLivePollReady()) return false;
-    // Prefer live /api/home over baked home_data.js — static bundle can lag hours behind DO.
-    if (homeLiveLastSuccessAt > 0) return false;
-    if (homeLivePollAttempted && !homeLivePollInFlight) return false;
-    return true;
+    return homeBootstrapPhase() === "pending" && homeLivePollInFlight;
   }
 
-  /** Baked HOME can retain stale live flags between refreshes — wait for live poll. */
+  /** 'static' = no live API; 'pending' = awaiting first trusted payload; 'session' | 'live' = trusted. */
+  function homeBootstrapPhase() {
+    if (!homeLivePollReady()) return "static";
+    if (homeLiveLastSuccessAt > 0) {
+      return homeBootstrapSource === "session" ? "session" : "live";
+    }
+    return "pending";
+  }
+
+  function homeCanShowVolatileStats() {
+    return homeBootstrapPhase() !== "pending";
+  }
+
+  /** Baked HOME can retain stale live flags between refreshes — wait for live poll or session snapshot. */
   function homeTrustLiveMatchState() {
-    if (!homeLivePollReady()) return true;
-    return homeLiveLastSuccessAt > 0;
+    return homeCanShowVolatileStats();
+  }
+
+  function homeSessionSnapshotKey(home) {
+    if (!home || home.managerId == null || home.leagueId == null || home.gw == null) return "";
+    return `${home.managerId}:${home.leagueId}:${home.gw}`;
+  }
+
+  function homeSessionSnapshotPrefsKey() {
+    const mid = savedManagerId || (HOME && HOME.managerId);
+    const lid = HOME_LEAGUE_ID;
+    const gw = HOME && HOME.gw;
+    if (!mid || !lid || gw == null) return "";
+    return `${mid}:${lid}:${gw}`;
+  }
+
+  function homeSessionSnapshotPayload(home) {
+    return {
+      generatedAt: home.generatedAt ?? null,
+      gw: home.gw ?? null,
+      managerId: home.managerId ?? null,
+      leagueId: home.leagueId ?? null,
+      leagueName: home.leagueName ?? null,
+      summary: home.summary ?? null,
+      squad: Array.isArray(home.squad) ? home.squad : [],
+      squadsByEntry: home.squadsByEntry && typeof home.squadsByEntry === "object" ? home.squadsByEntry : {},
+      standings: Array.isArray(home.standings) ? home.standings : [],
+      chipWindow: home.chipWindow && typeof home.chipWindow === "object" ? home.chipWindow : null,
+      ownersByElement: home.ownersByElement || {},
+      elementGw: home.elementGw && typeof home.elementGw === "object" ? home.elementGw : {},
+      leaguePicksStatus: home.leaguePicksStatus && typeof home.leaguePicksStatus === "object"
+        ? home.leaguePicksStatus
+        : null,
+      transfersByEntry: home.transfersByEntry && typeof home.transfersByEntry === "object"
+        ? home.transfersByEntry
+        : {},
+    };
+  }
+
+  function persistHomeSessionSnapshot(home) {
+    try {
+      if (!home || !homeLivePayloadMatchesPrefs(home)) return;
+      const key = homeSessionSnapshotKey(home);
+      if (!key) return;
+      sessionStorage.setItem(
+        HOME_SESSION_SNAPSHOT_KEY,
+        JSON.stringify({ key, savedAt: Date.now(), payload: homeSessionSnapshotPayload(home) })
+      );
+    } catch {
+      /* private browsing */
+    }
+  }
+
+  function hydrateHomeFromSessionSnapshot() {
+    try {
+      const prefsKey = homeSessionSnapshotPrefsKey();
+      if (!prefsKey) return false;
+      const raw = sessionStorage.getItem(HOME_SESSION_SNAPSHOT_KEY);
+      if (!raw) return false;
+      const snap = JSON.parse(raw);
+      if (!snap || snap.key !== prefsKey || !snap.payload) return false;
+      if (!homeLivePayloadMatchesPrefs(snap.payload)) return false;
+      applyHomePayload(snap.payload, { skipFeedIngest: true, fromSessionSnapshot: true });
+      homeLiveLastSuccessAt = Number(snap.savedAt) || Date.now();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function homeSquadRowGwPoints(row, eg) {
+    if (!homeCanShowVolatileStats()) return null;
+    if (row && row.gwPoints != null && Number.isFinite(Number(row.gwPoints))) {
+      return Number(row.gwPoints);
+    }
+    if (eg && eg.pts != null && Number.isFinite(Number(eg.pts))) {
+      return Number(eg.pts);
+    }
+    return null;
+  }
+
+  function homeDisplayGwPoints({ surface, row, squadRow, eg } = {}) {
+    if (surface === "squad") return homeSquadRowGwPoints(squadRow, eg);
+    if (surface === "standings" || surface === "summary") {
+      return row ? homeStandingsGwPoints(row) : null;
+    }
+    return null;
   }
 
   function homeSquadShowLoading(viewEntry) {
     if (!savedManagerId || !savedLeagueId) return false;
-    if (homeLivePayloadPending()) return true;
     if ((homeSquadForEntry(viewEntry) || []).length) return false;
+    if (!homeLivePollReady()) return false;
+    if (homeCanShowVolatileStats()) return false;
     if (homeLivePollInFlight) return true;
-    if (!homeLiveLastSuccessAt) return true;
-    return false;
+    return true;
   }
 
   function homeStandingsShowLoading() {
     if (!homeLivePollReady()) return false;
-    // Same as squad: paint baked standings immediately; refresh after live poll.
     if (Array.isArray(HOME.standings) && HOME.standings.length) return false;
-    if (homeLivePayloadPending()) return true;
+    if (homeCanShowVolatileStats()) return false;
     if (homeLivePollInFlight) return true;
-    if (!homeLiveLastSuccessAt) return true;
-    return false;
+    return true;
   }
 
   function homeSquadLoadingHTML(colspan, rows = 5) {
@@ -2841,6 +2944,7 @@
       }
       homeLiveLastPollOk = true;
       homeLiveLastSuccessAt = Date.now();
+      if (!homeBootstrapSource) homeBootstrapSource = "live";
       const priorStandingsFp = homeStandingsFingerprint(HOME.standings);
       const priorSummaryFp = homeSummaryFingerprint(HOME.summary);
       const priorEgFp = homeElementGwFingerprint(HOME);
@@ -2856,7 +2960,7 @@
         && priorSquadFp === incomingSquadFp
         && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
       ) {
-        homeLiveStandingsSynced = true;
+        persistHomeSessionSnapshot(HOME);
         syncLiveNavChrome();
         resyncHomeLivePollInterval();
         settleHomeAfterLivePoll({ rerender: false });
@@ -2868,7 +2972,7 @@
         && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
         && String(HOME.managerId || "") === String(data.home.managerId || "")
         && String(HOME.leagueId || "") === String(data.home.leagueId || "");
-      applyHomePayload(data.home, { skipFeedIngest: sameElementGw });
+      applyHomePayload(data.home, { skipFeedIngest: sameElementGw, fromLivePoll: true });
       const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
       const elementGwChanged = priorEgFp !== incomingEgFp;
@@ -2880,8 +2984,12 @@
         return;
       }
       if (state.page === "home") {
-        const deferEnter = homeIsEnterBusy() && !squadWasEmpty;
-        renderHome({ deferDuringEnter: deferEnter, settleQuiet: true });
+        const enterBusy = homeIsEnterBusy();
+        if (enterBusy && homeLiveApplyAfterEnter) {
+          homeRenderQueued = true;
+        } else {
+          renderHome({ deferDuringEnter: enterBusy && !squadWasEmpty, settleQuiet: true });
+        }
       } else if (state.page === "live") {
         if (liveIsEnterBusy()) liveRenderQueued = true;
         else {
@@ -3535,12 +3643,13 @@
    * even if other league fixtures remain this GW (toPlay may still be > 0).
    */
   function homeStandingsRowInPlayCount(row) {
-    if (!homeTrustLiveMatchState()) return 0;
+    if (!homeCanShowVolatileStats()) return 0;
     const n = Number(row && row.inPlay);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
   function homeStandingsRowToPlayCount(row) {
+    if (!homeCanShowVolatileStats()) return null;
     const n = Number(row && row.toPlay);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
@@ -3548,9 +3657,8 @@
   function homeStandingsGwPoints(row) {
     const official = row.eventTotalOfficial != null ? Number(row.eventTotalOfficial) : null;
     const live = row.gwPointsLive != null ? Number(row.gwPointsLive) : null;
-    if (!homeTrustLiveMatchState()) {
+    if (!homeCanShowVolatileStats()) {
       if (official != null && Number.isFinite(official)) return official;
-      if (live != null && Number.isFinite(live)) return live;
       return null;
     }
     const inPlay = homeStandingsRowInPlayCount(row);
@@ -3659,7 +3767,7 @@
   }
 
   function homeShouldDeferSummaryRankChrome({ animateView = false, settleQuiet = false } = {}) {
-    if (homeSnapsEnterOnDesktop() || settleQuiet || prefersReducedMotion()) return false;
+    if (settleQuiet || prefersReducedMotion()) return false;
     if (animateView || homeSummaryRankChromePending || homePageEnterArmed) return true;
     return !!(el.homePage && el.homePage.classList.contains("is-enter-pending"));
   }
@@ -3795,7 +3903,7 @@
 
   /** True when any league manager has active picks in a live fixture. */
   function homeLeagueHasLivePicks() {
-    if (!homeTrustLiveMatchState()) return false;
+    if (!homeCanShowVolatileStats()) return false;
     const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
     return rows.some((r) => homeStandingsRowInPlayCount(r) > 0);
   }
@@ -4620,8 +4728,8 @@
       && window.matchMedia("(min-width: 901px)").matches;
   }
 
-  /** Desktop Home: snap final values immediately — no enter rolls or IMP motion. */
-  function homeSnapsEnterOnDesktop() {
+  /** Desktop Home: instant scroll during enter (summary rolls still odometer). */
+  function homeSnapsScrollOnDesktop() {
     return homeSquadIsDesktopLayout();
   }
 
@@ -4925,7 +5033,7 @@
     const startTop = isWin ? window.scrollY : node.scrollTop;
     const startLeft = isWin ? window.scrollX : node.scrollLeft;
     const token = ++homeScrollAnimToken;
-    if (prefersReducedMotion() || duration <= 0 || (state.page === "home" && homeSnapsEnterOnDesktop())) {
+    if (prefersReducedMotion() || duration <= 0 || (state.page === "home" && homeSnapsScrollOnDesktop())) {
       if (isWin) window.scrollTo(left, top);
       else {
         node.scrollTop = top;
@@ -5331,7 +5439,7 @@
 
   function homeSquadRowHTML(row, opts = {}) {
     const fx = homeSquadFixtures(row);
-    const pts = row.gwPoints != null ? Number(row.gwPoints) : null;
+    const pts = homeSquadRowGwPoints(row);
     const ptsHTML = homePtsPillHTML(pts, { rollClassName: "home-stat-roll home-pts-roll" });
 
     const mpHTML = fx.map((f) => {
@@ -5525,9 +5633,8 @@
 
   function homeSquadPtsCellHTML(entry, col) {
     if (col.key === "pts") {
-      const raw =
-        entry.row.gwPoints != null ? Number(entry.row.gwPoints) : Number(entry.eg.pts);
-      if (!Number.isFinite(raw)) return "";
+      const raw = homeSquadRowGwPoints(entry.row, entry.eg);
+      if (!Number.isFinite(raw)) return "—";
       return homePtsPillHTML(raw);
     }
     return livePointsCellHTML(entry, col);
@@ -6263,18 +6370,16 @@
   }
 
   function renderHomeSummaryStats(summary, { enterPending = false } = {}) {
-    const showPendingDash = homeLivePayloadPending() && !enterPending;
-    if (showPendingDash) {
-      [el.homeGwPoints, el.homeOverallRankNum || el.homeOverallRank, el.homeTotalPoints, el.homeLeagueRankNum || el.homeLeagueRank].forEach((node) => {
-        if (node) node.textContent = "—";
-      });
-      return;
-    }
+    void enterPending;
+    const gwVal =
+      summary.gwPoints != null && Number.isFinite(Number(summary.gwPoints))
+        ? Number(summary.gwPoints)
+        : null;
     if (el.homeGwPoints) {
-      if (summary.gwPoints == null || !Number.isFinite(Number(summary.gwPoints))) {
+      if (gwVal == null) {
         el.homeGwPoints.textContent = "—";
       } else {
-        el.homeGwPoints.innerHTML = statRollSpan(Number(summary.gwPoints), {
+        el.homeGwPoints.innerHTML = statRollSpan(gwVal, {
           from: 0,
           decimals: 0,
           className: "home-stat-roll",
@@ -6312,7 +6417,7 @@
       root.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]").forEach(finishStatRollNode);
     }
     if (tables) {
-      root.querySelectorAll(".home-stat-roll[data-count-to]").forEach((node) => {
+      root.querySelectorAll(".home-stat-roll[data-count-to], .live-stat-roll[data-count-to]").forEach((node) => {
         if (node.closest(".home-summary-cards")) return;
         finishStatRollNode(node);
       });
@@ -6386,7 +6491,7 @@
         });
       });
     };
-    if (!animate || prefersReducedMotion() || (state.page === "home" && homeSnapsEnterOnDesktop())) {
+    if (!animate || prefersReducedMotion() || (state.page === "home" && homeSquadIsDesktopLayout())) {
       snapDrawn();
       return;
     }
@@ -6420,7 +6525,7 @@
       const summary = homeSummaryForView(homeActiveViewEntryId());
       applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     };
-    if (!pane || prefersReducedMotion() || homeSnapsEnterOnDesktop()) {
+    if (!pane || prefersReducedMotion()) {
       finishAll();
       return;
     }
@@ -6534,17 +6639,10 @@
       el.homeGwHeading.textContent = "GW points";
     }
     renderHomeSummaryStats(summary, {
-      enterPending:
-        !homeSnapsEnterOnDesktop()
-        && (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()),
+      enterPending: leaveRollsPending || homePageEnterArmed || homeIsEnterBusy(),
     });
-    if (
-      !homeSnapsEnterOnDesktop()
-      && (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy())
-    ) {
+    if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
       mountHomeSummaryRollsAtStart(el.homePage);
-      // Squad / standings rolls snap to final values during enter — only summary cards animate.
-      finishHomeStatRolls(el.homePage, { summary: false, tables: true });
     }
     const deferRankChrome = homeShouldDeferSummaryRankChrome({ animateView, settleQuiet });
     if (deferRankChrome) {
@@ -6718,6 +6816,9 @@
         chipsTable.setAttribute("data-chip-half", halfLabel);
       }
     }
+    if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
+      finishHomeStatRolls(el.homePage, { summary: false, tables: true });
+    }
     bindHomeOwnerHighlighting();
     syncHomeViewBanner();
     syncHomeOwnerBanner();
@@ -6736,14 +6837,13 @@
       settleHomeTablesLayout({ standingsPageIdx });
     });
     const enterBusyNow = homeIsEnterBusy();
-    const desktopSnap = homeSnapsEnterOnDesktop();
-    const snapRolls = desktopSnap || (!leaveRollsPending && !animateView && !enterBusyNow);
+    const snapRolls = !leaveRollsPending && !animateView && !enterBusyNow;
     if (snapRolls) {
-      finishHomeStatRolls(el.homePage, { summary: !homePageEnterArmed || desktopSnap });
+      finishHomeStatRolls(el.homePage, { summary: !homePageEnterArmed });
       animateHomeImpBars(el.homePage, { animate: false });
     }
     requestAnimationFrame(() => {
-      if (animateView && !settleQuiet && !homeSnapsEnterOnDesktop()) {
+      if (animateView && !settleQuiet) {
         startHomeEnterMotion(el.homePage, { duration: HOME_VIEW_SWITCH_ROLL_MS });
       }
     });
@@ -17960,7 +18060,7 @@
       if (state.liveMode === "points") startLivePointsEnterMotion(el.livePage);
       else startLiveEnterMotion(el.livePage);
     }
-    if (homeLivePollAfterEnter) releaseDeferredHomeLivePoll();
+    if (homeLiveApplyAfterEnter) flushHomeRenderAfterEnter();
   }
 
   function finishLiveStatRolls(root) {
@@ -20657,7 +20757,7 @@
     // Cancel a previous double-rAF start if setPage/playPageEnter raced.
     pane._enterGen = (pane._enterGen || 0) + 1;
     const enterGen = pane._enterGen;
-    if (prefersReducedMotion() || (pane.id === "home-page" && homeSnapsEnterOnDesktop())) {
+    if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
         homePageEnterArmed = false;
         finishHighlightSatEnter(pane);
@@ -21050,7 +21150,7 @@
   function setPage(page) {
     if (state.page === "home" && page !== "home") {
       homePageEnterArmed = false;
-      releaseDeferredHomeLivePoll();
+      flushHomeRenderAfterEnter();
     }
     page = normalizeStoredPage(page);
     const prev = state.page;
@@ -21262,8 +21362,8 @@
       renderRankings({ animateBars: false, skipBarDraw: true });
     } else if (page === "home") {
       homePageEnterArmed = true;
-      homeLivePollAfterEnter = !homeSnapsEnterOnDesktop();
-      if (homeSnapsEnterOnDesktop()) syncHomeLivePolling({ skipImmediate: false });
+      homeLiveApplyAfterEnter = true;
+      syncHomeLivePolling({ skipImmediate: false });
       renderHome({ leaveRollsPending: true });
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
@@ -23543,7 +23643,7 @@
         finishHighlightSatEnter(el.homePage);
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });
-        releaseDeferredHomeLivePoll();
+        flushHomeRenderAfterEnter();
       }
       if (el.ownershipPage) {
         ownershipEnterMotionToken += 1;
@@ -23620,13 +23720,9 @@
     const page = storedPage();
     if (homeLivePollReady() && page === "home") {
       homeLivePrefetchStarted = true;
-      if (homeSnapsEnterOnDesktop()) {
-        homeLivePollAfterEnter = false;
-        syncHomeLivePolling({ skipImmediate: false });
-      } else {
-        homeLivePollAfterEnter = true;
-        syncHomeLivePolling({ skipImmediate: true });
-      }
+      hydrateHomeFromSessionSnapshot();
+      homeLiveApplyAfterEnter = true;
+      syncHomeLivePolling({ skipImmediate: false });
     } else {
       prefetchHomeLiveCache();
     }
