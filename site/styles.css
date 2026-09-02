@@ -5081,13 +5081,15 @@ html[data-page="prices"] .layout .main {
   #prices-page .prices-prediction-table-wrap,
   #prices-page .prices-actual-table-wrap {
     flex: none;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: hidden;
     min-height: 0;
     max-height: none;
   }
   #prices-page[data-prices-view="prediction"] .prices-table-wrap {
     flex: none;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: hidden;
     min-height: 0;
     max-height: none;
   }
@@ -5271,13 +5273,27 @@ html[data-page="prices"] .layout .main {
 #prices-page .prices-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   --name-col-w: 240px;
   --metric-col-w: 72px;
 }
 #prices-page .prices-table-wrap > table {
   width: max-content;
   min-width: 100%;
+}
+/* Match outer card radius — header/body fills are square by default. */
+#prices-page .prices-table-wrap > table > thead > tr:first-child > th:first-child {
+  border-top-left-radius: calc(var(--radius) - 1px);
+}
+#prices-page .prices-table-wrap > table > thead > tr:first-child > th:last-child {
+  border-top-right-radius: calc(var(--radius) - 1px);
+}
+#prices-page .prices-table-wrap > table > tbody > tr:last-child > td:first-child {
+  border-bottom-left-radius: calc(var(--radius) - 1px);
+}
+#prices-page .prices-table-wrap > table > tbody > tr:last-child > td:last-child {
+  border-bottom-right-radius: calc(var(--radius) - 1px);
 }
 #prices-page .prices-actual-table-wrap > table {
   width: 100%;
@@ -5322,7 +5338,7 @@ html[data-page="prices"] .layout .main {
   justify-content: center;
   gap: 4px;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
@@ -5488,7 +5504,8 @@ html[data-page="prices"] .layout .main {
 #prices-actual-wrap .prices-actual-table-wrap {
   flex: none;
   min-height: 0;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .prices-actual-table tbody tr.prices-actual-day-start td {
   border-top: 1px solid var(--border);
@@ -15520,6 +15537,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 }
 .home-squad-live-table,
 .home-squad-fixtures-table,
+.home-squad-ownership-table,
 .home-squad-pts-table {
   table-layout: fixed;
   width: 100%;
@@ -15677,6 +15695,151 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
    Overrides the shared .home-data-table hairlines that disappear on heat fills. */
 .home-squad-fixtures-table tbody td.home-col-fx {
   border: 1px solid hsl(var(--card));
+}
+.home-squad-ownership-table .home-col-player {
+  width: 34%;
+  min-width: 0;
+}
+.home-squad-ownership-table .home-col-own-barbell {
+  width: auto;
+  min-width: 7.5rem;
+  padding-left: 6px;
+  padding-right: 6px;
+  vertical-align: middle;
+}
+.home-squad-ownership-table .home-col-price {
+  width: 26%;
+  min-width: 4.5rem;
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: center;
+  vertical-align: middle;
+}
+.home-squad-ownership-table:not(.has-price-col) .home-col-own-barbell {
+  width: 66%;
+}
+.home-squad-ownership-table thead th.home-col-own-barbell,
+.home-squad-ownership-table thead th.home-col-price {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+}
+.home-squad-ownership-table .prices-status-pill {
+  font-size: 10px;
+  padding: 2px 6px;
+  max-width: 100%;
+}
+.home-squad-ownership-table .prices-status-pill .prices-status-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-own-barbell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.home-own-barbell-empty {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.home-own-barbell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+.home-own-barbell-title {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.home-own-barbell-axis {
+  flex: none;
+  min-width: 1.6em;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  line-height: 1;
+}
+.home-own-barbell-head .home-own-barbell-axis:first-child {
+  text-align: left;
+}
+.home-own-barbell-head .home-own-barbell-axis:last-child {
+  text-align: right;
+}
+.home-own-barbell-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 3.5rem;
+  height: 9px;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.45);
+  overflow: visible;
+}
+.home-own-barbell-connector {
+  position: absolute;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  pointer-events: none;
+}
+.home-own-barbell.is-rise .home-own-barbell-connector {
+  background: hsl(142 45% 42% / 0.55);
+}
+.home-own-barbell.is-fall .home-own-barbell-connector {
+  background: hsl(0 55% 52% / 0.5);
+}
+.home-own-barbell-dot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  border: 1.5px solid hsl(var(--card));
+  background: hsl(var(--foreground) / 0.35);
+  pointer-events: none;
+}
+.home-own-barbell.is-rise .home-own-barbell-dot.is-end {
+  background: hsl(142 48% 38%);
+}
+.home-own-barbell.is-fall .home-own-barbell-dot.is-end {
+  background: hsl(0 55% 48%);
+}
+.home-own-barbell.is-rise .home-own-barbell-dot.is-start {
+  background: hsl(142 45% 42% / 0.45);
+}
+.home-own-barbell.is-fall .home-own-barbell-dot.is-start {
+  background: hsl(0 55% 52% / 0.4);
+}
+.home-own-barbell-val {
+  flex: none;
+  min-width: 2.1em;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  line-height: 1;
+}
+.home-own-barbell-val.is-start {
+  text-align: right;
+}
+.home-own-barbell-val.is-end {
+  text-align: left;
 }
 .home-standings-pager {
   display: flex;
@@ -16941,6 +17104,7 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   }
   .home-squad-live-table,
   .home-squad-fixtures-table,
+  .home-squad-ownership-table,
   .home-squad-pts-table {
     table-layout: fixed;
   }
@@ -17010,6 +17174,34 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   .home-squad-fixtures-table[data-fx-cols="4"] col.home-col-fx,
   .home-squad-fixtures-table[data-fx-cols="4"] .home-col-fx {
     width: 15.5%;
+  }
+  .home-squad-ownership-table col.home-col-player,
+  .home-squad-ownership-table .home-col-player {
+    width: 38%;
+    min-width: 0;
+  }
+  .home-squad-ownership-table col.home-col-own-barbell,
+  .home-squad-ownership-table .home-col-own-barbell {
+    width: auto;
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .home-squad-ownership-table:not(.has-price-col) col.home-col-own-barbell,
+  .home-squad-ownership-table:not(.has-price-col) .home-col-own-barbell {
+    width: 62%;
+  }
+  .home-squad-ownership-table.has-price-col col.home-col-price,
+  .home-squad-ownership-table.has-price-col .home-col-price {
+    width: 24%;
+    min-width: 0;
+  }
+  .home-own-barbell-val {
+    font-size: 8px;
+    min-width: 1.9em;
+  }
+  .home-own-barbell-axis {
+    font-size: 8px;
   }
   .home-squad-table .home-imp {
     min-width: 0;

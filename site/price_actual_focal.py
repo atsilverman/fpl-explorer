@@ -333,8 +333,8 @@ def reattribute_events_with_focal(
             out.append(ev)
             continue
         new_at = uk_midnight_utc_iso_for_date(night)
-        if ev.get("changedAt") != new_at:
-            ev = {**ev, "changedAt": new_at}
+        if ev.get("changedAt") != new_at or ev.get("changeNightUk") != night:
+            ev = {**ev, "changedAt": new_at, "changeNightUk": night}
             changed += 1
         out.append(ev)
     return out, changed

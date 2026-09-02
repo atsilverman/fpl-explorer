@@ -1118,6 +1118,9 @@
     homeSquadFixturesBody: $("#home-squad-fixtures-body"),
     homeSquadFixturesHead: $("#home-squad-fixtures-head"),
     homeSquadFixturesCols: $("#home-squad-fixtures-cols"),
+    homeSquadOwnershipBody: $("#home-squad-ownership-body"),
+    homeSquadOwnershipHead: $("#home-squad-ownership-head"),
+    homeSquadOwnershipCols: $("#home-squad-ownership-cols"),
     homeSquadPtsBody: $("#home-squad-pts-body"),
     homeSquadPtsHead: $("#home-squad-pts-head"),
     homeSquadPtsCols: $("#home-squad-pts-cols"),
@@ -2082,6 +2085,9 @@
     if (el.homeSquadFixturesBody) el.homeSquadFixturesBody.innerHTML = "";
     if (el.homeSquadFixturesHead) el.homeSquadFixturesHead.innerHTML = "";
     if (el.homeSquadFixturesCols) el.homeSquadFixturesCols.innerHTML = "";
+    if (el.homeSquadOwnershipBody) el.homeSquadOwnershipBody.innerHTML = "";
+    if (el.homeSquadOwnershipHead) el.homeSquadOwnershipHead.innerHTML = "";
+    if (el.homeSquadOwnershipCols) el.homeSquadOwnershipCols.innerHTML = "";
     if (el.homeSquadPtsBody) el.homeSquadPtsBody.innerHTML = "";
     if (el.homeSquadPtsHead) el.homeSquadPtsHead.innerHTML = "";
     if (el.homeSquadPtsCols) el.homeSquadPtsCols.innerHTML = "";
@@ -3201,10 +3207,11 @@
   let homeCrossHoverElement = null;
   let homeStandingsPagerReady = false;
   let homeSquadPagerReady = false;
+  let homeSquadPagerTarget = null;
   let homeFeedPagerReady = false;
   let homeTransfersScrollBound = false;
-  const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Schedule"];
-  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Schedule"];
+  const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Ownership", "Schedule"];
+  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips"];
   const HOME_FEED_VIEW_LABELS = ["League", "All"];
   let homeViewEntryId = null;
@@ -3454,6 +3461,9 @@
     if (el.homeSquadPtsBody) {
       el.homeSquadPtsBody.classList.remove("has-owner-filter");
     }
+    if (el.homeSquadOwnershipBody) {
+      el.homeSquadOwnershipBody.classList.remove("has-owner-filter");
+    }
     forEachHomeSquadRow((tr) => {
       const eid = Number(tr.dataset.element);
       const isPinned =
@@ -3585,7 +3595,7 @@
   }
 
   function forEachHomeSquadRow(fn) {
-    [el.homeSquadBody, el.homeSquadFixturesBody, el.homeSquadPtsBody].forEach((body) => {
+    [el.homeSquadBody, el.homeSquadFixturesBody, el.homeSquadPtsBody, el.homeSquadOwnershipBody].forEach((body) => {
       if (!body) return;
       body.querySelectorAll("tr.home-squad-row").forEach(fn);
     });
@@ -4684,7 +4694,7 @@
     el.homeSquadDots.querySelectorAll(".home-squad-dot").forEach((dot) => {
       const page = Number(dot.dataset.page);
       if (!Number.isFinite(page)) return;
-      const dotLogical = wide ? (page >= 2 ? 1 : 0) : page;
+      const dotLogical = wide ? (page === 1 ? -1 : page <= 0 ? 0 : page - 1) : page;
       const on = dotLogical === logical;
       dot.classList.toggle("is-active", on);
       dot.setAttribute("aria-selected", on ? "true" : "false");
@@ -4694,33 +4704,49 @@
     }
   }
 
-  function homeSquadVisiblePages() {
-    if (!el.homeSquadTrack) return [];
-    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
-    if (!homeSquadIsWideLayout()) return pages;
-    return pages.filter((_, i) => i !== 1);
-  }
-
   function homeSquadLogicalPageIndex(physicalIndex) {
     if (!homeSquadIsWideLayout()) return physicalIndex;
-    return physicalIndex >= 2 ? 1 : 0;
+    if (physicalIndex <= 0) return 0;
+    if (physicalIndex === 1) return -1;
+    return physicalIndex - 1;
   }
 
-  function homeSquadPhysicalPageIndex(logicalIndex) {
-    if (!homeSquadIsWideLayout()) return logicalIndex;
-    return logicalIndex >= 1 ? 2 : 0;
+  function homeSquadPageScrollLeft(physicalIndex) {
+    if (!el.homeSquadTrack) return 0;
+    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    let idx = physicalIndex;
+    if (homeSquadIsWideLayout() && idx === 1) idx = 0;
+    const page = pages[idx];
+    return page ? page.offsetLeft : 0;
+  }
+
+  function snapHomeSquadPage(physicalIndex) {
+    if (!el.homeSquadTrack) return;
+    const target = homeSquadPageScrollLeft(physicalIndex);
+    if (Math.abs(el.homeSquadTrack.scrollLeft - target) > 1) {
+      el.homeSquadTrack.scrollLeft = target;
+    }
   }
 
   function homeSquadActivePageIndex() {
     if (!el.homeSquadTrack) return 0;
-    const pages = homeSquadVisiblePages();
-    if (!pages.length) return 0;
-    const w = el.homeSquadTrack.clientWidth || 1;
-    const scrollIdx = Math.max(0, Math.min(pages.length - 1, Math.round(el.homeSquadTrack.scrollLeft / w)));
-    const page = pages[scrollIdx];
-    if (!page) return 0;
     const allPages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
-    return Math.max(0, allPages.indexOf(page));
+    const candidates = homeSquadIsWideLayout()
+      ? allPages.filter((_, i) => i !== 1)
+      : allPages;
+    if (!candidates.length) return 0;
+    const scrollLeft = el.homeSquadTrack.scrollLeft;
+    let best = candidates[0];
+    let bestDist = Math.abs(best.offsetLeft - scrollLeft);
+    for (let i = 1; i < candidates.length; i++) {
+      const page = candidates[i];
+      const dist = Math.abs(page.offsetLeft - scrollLeft);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = page;
+      }
+    }
+    return Math.max(0, allPages.indexOf(best));
   }
 
   function homeSquadIsDesktopLayout() {
@@ -4793,9 +4819,10 @@
     const liveTable = el.homeSquadBody && el.homeSquadBody.closest("table");
     const ptsTable = el.homeSquadPtsBody && el.homeSquadPtsBody.closest("table");
     const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
+    const ownershipTable = el.homeSquadOwnershipBody && el.homeSquadOwnershipBody.closest("table");
     const tables = wide
       ? [liveTable, ptsTable].filter(Boolean)
-      : [liveTable, ptsTable, fixturesTable].filter(Boolean);
+      : [liveTable, ptsTable, fixturesTable, ownershipTable].filter(Boolean);
     if (!tables.length) return;
 
     tables.forEach((table) => {
@@ -4941,25 +4968,26 @@
     }
   }
 
-  function setHomeSquadPage(index, { smooth = true } = {}) {
+  function setHomeSquadPage(physicalIndex, { smooth = true } = {}) {
     if (!el.homeSquadTrack) return;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
-    const physical = homeSquadPhysicalPageIndex(index);
-    const page = pages[physical];
-    if (!page) return;
+    let idx = physicalIndex;
+    if (homeSquadIsWideLayout() && idx === 1) idx = 0;
+    if (!pages[idx]) return;
+    homeSquadPagerTarget = idx;
     el.homeSquadTrack.scrollTo({
-      left: page.offsetLeft,
+      left: homeSquadPageScrollLeft(idx),
       behavior: smooth ? "smooth" : "auto",
     });
-    syncHomeSquadPagerDots(physical);
-    syncHomeSquadLayout(physical);
+    syncHomeSquadPagerDots(idx);
+    syncHomeSquadLayout(idx);
+    if (!smooth) homeSquadPagerTarget = null;
   }
 
   function bindHomeSquadPager() {
     if (homeSquadPagerReady) return;
     if (!el.homeSquadTrack || !el.homeSquadDots) return;
     homeSquadPagerReady = true;
-    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     const dots = [...el.homeSquadDots.querySelectorAll(".home-squad-dot")];
     dots.forEach((dot) => {
       dot.addEventListener("click", () => {
@@ -4968,34 +4996,25 @@
         setHomeSquadPage(page);
       });
     });
-    const onPageChange = (idx) => {
+    let scrollSettleTimer = null;
+    const onScrollSettled = () => {
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = null;
+      homeSquadPagerTarget = null;
+      const idx = homeSquadActivePageIndex();
+      snapHomeSquadPage(idx);
       syncHomeSquadPagerDots(idx);
       syncHomeSquadTrackHeight(idx, homeIsEnterBusy() ? { animate: false } : undefined);
     };
-    if (typeof IntersectionObserver !== "function") {
-      el.homeSquadTrack.addEventListener(
-        "scroll",
-        () => {
-          onPageChange(homeSquadActivePageIndex());
-        },
-        { passive: true }
-      );
-    } else {
-      const io = new IntersectionObserver(
-        (entries) => {
-          let best = null;
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            if (!best || entry.intersectionRatio > best.ratio) {
-              best = { idx: pages.indexOf(entry.target), ratio: entry.intersectionRatio };
-            }
-          });
-          if (best && best.idx >= 0) onPageChange(best.idx);
-        },
-        { root: el.homeSquadTrack, threshold: [0.55, 0.75] }
-      );
-      pages.forEach((page) => io.observe(page));
-    }
+    const onScrollTick = () => {
+      const idx =
+        homeSquadPagerTarget != null ? homeSquadPagerTarget : homeSquadActivePageIndex();
+      syncHomeSquadPagerDots(idx);
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = setTimeout(onScrollSettled, 140);
+    };
+    el.homeSquadTrack.addEventListener("scroll", onScrollTick, { passive: true });
+    el.homeSquadTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
       const wide = syncHomeSquadWideLayout();
@@ -5387,6 +5406,101 @@
     if (fromCatalog) return fromCatalog;
     const squad = homeSquadForEntry(homeActiveViewEntryId()) || [];
     return squad.find((r) => Number(r.element) === eid) || null;
+  }
+
+  function homeSquadOwnershipBarbellHTML(start, end, maxVal) {
+    if (
+      start == null ||
+      end == null ||
+      !Number.isFinite(Number(start)) ||
+      !Number.isFinite(Number(end)) ||
+      !(maxVal > 0)
+    ) {
+      return `<span class="home-own-barbell-empty">—</span>`;
+    }
+    const s = Number(start);
+    const e = Number(end);
+    const pctS = Math.max(0, Math.min(100, (s / maxVal) * 100));
+    const pctE = Math.max(0, Math.min(100, (e / maxVal) * 100));
+    const lo = Math.min(pctS, pctE);
+    const hi = Math.max(pctS, pctE);
+    const delta = e - s;
+    let tone = "is-flat";
+    if (delta > 0.05) tone = "is-rise";
+    else if (delta < -0.05) tone = "is-fall";
+    const tip = `TSB ${fmtOwnedPct(s)}% → ${fmtOwnedPct(e)}% (3d)`;
+    return `<div class="home-own-barbell ${tone}"${tipAttr(tip)} aria-label="${escapeHtml(tip)}">
+      <span class="home-own-barbell-val is-start" aria-hidden="true">${escapeHtml(fmtOwnedPct(s))}</span>
+      <div class="home-own-barbell-track">
+        <div class="home-own-barbell-connector" style="left:${lo}%;width:${Math.max(0, hi - lo)}%"></div>
+        <span class="home-own-barbell-dot is-start" style="left:${pctS}%"></span>
+        <span class="home-own-barbell-dot is-end" style="left:${pctE}%"></span>
+      </div>
+      <span class="home-own-barbell-val is-end" aria-hidden="true">${escapeHtml(fmtOwnedPct(e))}</span>
+    </div>`;
+  }
+
+  function homeSquadOwnershipBarbellHeadHTML(maxOwn) {
+    const maxLbl = fmtOwnedPct(maxOwn);
+    return `<div class="home-own-barbell-head">
+      <span class="home-own-barbell-axis">0</span>
+      <span class="home-own-barbell-title">3d TSB</span>
+      <span class="home-own-barbell-axis">${escapeHtml(maxLbl)}</span>
+    </div>`;
+  }
+
+  function homeSquadOwnershipScoreForRow(row, byCode) {
+    const code = Number(row.code);
+    if (!Number.isFinite(code)) return null;
+    const history = byCode.get(code);
+    if (!history) return null;
+    const score = ownershipScoreRow(history);
+    if (!score) return null;
+    const ownedStart = score.owned3 != null ? Number(score.owned3) : null;
+    const ownedEnd = score.live != null ? Number(score.live) : null;
+    if (ownedStart == null || ownedEnd == null) return null;
+    if (!Number.isFinite(ownedStart) || !Number.isFinite(ownedEnd)) return null;
+    return { ownedStart, ownedEnd };
+  }
+
+  function homeSquadOwnershipContext(squad) {
+    const checkIns = ownershipCheckIns();
+    const byCode = checkIns.length >= 2 ? ownershipPlayerHistoryMaps(checkIns) : new Map();
+    const pricesByCode = new Map();
+    for (const p of PRICES.players || []) {
+      if (p && p.code != null) pricesByCode.set(Number(p.code), p);
+    }
+    const scores = squad.map((row) => homeSquadOwnershipScoreForRow(row, byCode));
+    const vals = scores.flatMap((s) =>
+      s ? [s.ownedStart, s.ownedEnd].filter((v) => v != null && Number.isFinite(v)) : []
+    );
+    const maxOwn = Math.max(1, ...(vals.length ? vals : [1]));
+    const showPriceCol = squad.some((row) => {
+      const pr = pricesByCode.get(Number(row.code));
+      return pr && pricesIsVeryLikelyMover(pr);
+    });
+    return { byCode, pricesByCode, maxOwn, showPriceCol, scores };
+  }
+
+  function homeSquadOwnershipRowHTML(row, opts, ctx, score) {
+    const { maxOwn, showPriceCol, pricesByCode } = ctx;
+    const benchCls = row.onBench ? " home-row-bench" : "";
+    const priceRow = pricesByCode.get(Number(row.code));
+    const priceCell =
+      showPriceCol
+        ? `<td class="home-col-price">${
+            priceRow && pricesIsVeryLikelyMover(priceRow)
+              ? pricesStatusPillHTML(priceRow)
+              : "—"
+          }</td>`
+        : "";
+    const ownedStart = score ? score.ownedStart : null;
+    const ownedEnd = score ? score.ownedEnd : null;
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
+      ${homeSquadPlayerCellHTML(row, opts)}
+      <td class="home-col-own-barbell">${homeSquadOwnershipBarbellHTML(ownedStart, ownedEnd, maxOwn)}</td>
+      ${priceCell}
+    </tr>`;
   }
 
   function homeSquadFixturesRowHTML(row, gws, opts = {}) {
@@ -6666,7 +6780,7 @@
     if (el.homeLeagueTitle) {
       el.homeLeagueTitle.textContent = HOME.leagueName || "";
     }
-    if (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead || el.homeSquadPtsBody) {
+    if (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead || el.homeSquadPtsBody || el.homeSquadOwnershipBody) {
       const rows = homeSquadForEntry(viewEntry);
       const configuredOwned = viewingOther && homeConfiguredEntryId() != null
         ? homeElementsForEntry(homeConfiguredEntryId())
@@ -6733,6 +6847,45 @@
       }
       const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
+      if (el.homeSquadOwnershipCols || el.homeSquadOwnershipHead || el.homeSquadOwnershipBody) {
+        const ownCtx = homeSquadOwnershipContext(rows);
+        const ownColCount = ownCtx.showPriceCol ? 3 : 2;
+        if (el.homeSquadOwnershipCols) {
+          el.homeSquadOwnershipCols.innerHTML =
+            `<col class="home-col-player" />` +
+            `<col class="home-col-own-barbell" />` +
+            (ownCtx.showPriceCol ? `<col class="home-col-price" />` : "");
+        }
+        if (el.homeSquadOwnershipHead) {
+          el.homeSquadOwnershipHead.innerHTML =
+            `<th scope="col" class="home-col-player">Player</th>` +
+            `<th scope="col" class="home-col-own-barbell">${homeSquadOwnershipBarbellHeadHTML(ownCtx.maxOwn)}</th>` +
+            (ownCtx.showPriceCol ? `<th scope="col" class="home-col-price">Price</th>` : "");
+        }
+        const ownTable = el.homeSquadOwnershipBody && el.homeSquadOwnershipBody.closest("table");
+        if (ownTable) {
+          ownTable.classList.toggle("has-price-col", ownCtx.showPriceCol);
+        }
+        if (el.homeSquadOwnershipBody) {
+          const ownParts = [];
+          let ownBenchLabeled = false;
+          rows.forEach((r, i) => {
+            if (r.onBench && !ownBenchLabeled) {
+              ownParts.push(
+                `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${ownColCount}">Bench</th></tr>`
+              );
+              ownBenchLabeled = true;
+            }
+            ownParts.push(
+              homeSquadOwnershipRowHTML(r, pinOpts(r), ownCtx, ownCtx.scores[i])
+            );
+          });
+          el.homeSquadOwnershipBody.innerHTML = ownParts.join("") ||
+            (homeSquadShowLoading(viewEntry)
+              ? homeSquadLoadingHTML(ownColCount)
+              : homeSquadEmptyHTML(ownColCount));
+        }
+      }
       if (el.homeSquadPtsCols) {
         el.homeSquadPtsCols.innerHTML =
           (ptsShowPlayer ? `<col class="home-col-player" />` : "") +
@@ -19640,6 +19793,10 @@
     return row.statusKey === "very_likely_drop" || row.statusKey === "likely_drop";
   }
 
+  function pricesIsVeryLikelyMover(row) {
+    return row.statusKey === "very_likely_rise" || row.statusKey === "very_likely_drop";
+  }
+
   function pricesVisibleRows() {
     if (!isNextSeason()) return [];
     const catalog = ownershipCatalogByCode();
@@ -19717,7 +19874,7 @@
       const buckets = new Map();
       const order = [];
       rows.forEach((row) => {
-        const day = pricesActualDayKey(row.changedAt);
+        const day = pricesActualDayKey(row);
         if (!buckets.has(day)) {
           buckets.set(day, []);
           order.push(day);
@@ -19799,7 +19956,7 @@
       const buckets = new Map();
       const order = [];
       rows.forEach((row) => {
-        const day = pricesActualDayKey(row.changedAt);
+        const day = pricesActualDayKey(row);
         if (!buckets.has(day)) {
           buckets.set(day, []);
           order.push(day);
@@ -19978,7 +20135,11 @@
     return `£${Number(value).toFixed(1)}m`;
   }
 
-  function pricesActualDayKey(iso) {
+  function pricesActualDayKey(rowOrIso) {
+    if (rowOrIso && typeof rowOrIso === "object" && rowOrIso.changeNightUk) {
+      return rowOrIso.changeNightUk;
+    }
+    const iso = typeof rowOrIso === "string" ? rowOrIso : rowOrIso?.changedAt;
     if (!iso) return "";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "";
@@ -19986,6 +20147,20 @@
       return d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
     } catch {
       return "";
+    }
+  }
+
+  function fmtUkCalendarDateLabel(ukDate) {
+    if (!ukDate) return "—";
+    const parts = String(ukDate).split("-").map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return "—";
+    const [year, month, day] = parts;
+    const d = new Date(year, month - 1, day);
+    if (Number.isNaN(d.getTime())) return "—";
+    try {
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch {
+      return "—";
     }
   }
 
@@ -20034,15 +20209,20 @@
     return html;
   }
 
-  function pricesActualDateLabel(iso) {
-    return fmtPricesChangeDateShort(iso);
+  function pricesActualDateLabel(rowOrIso) {
+    if (rowOrIso && typeof rowOrIso === "object" && rowOrIso.changeNightUk) {
+      return fmtUkCalendarDateLabel(rowOrIso.changeNightUk);
+    }
+    return fmtPricesChangeDateShort(
+      typeof rowOrIso === "string" ? rowOrIso : rowOrIso?.changedAt
+    );
   }
 
   function pricesActualRowHTML(row, rank, { dateCell = "", catalog = null } = {}) {
     const cat = catalog || ownershipCatalogByCode();
     const dateTd =
       dateCell ||
-      `<td class="col-date prices-col-date">${escapeHtml(pricesActualDateLabel(row.changedAt))}</td>`;
+      `<td class="col-date prices-col-date">${escapeHtml(pricesActualDateLabel(row))}</td>`;
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       ${dateTd}
       <td class="col-player">${pricesActualPlayerCellHTML(row, rank)}</td>
@@ -20060,9 +20240,9 @@
     const groups = [];
     let group = null;
     rows.forEach((row) => {
-      const day = pricesActualDayKey(row.changedAt);
+      const day = pricesActualDayKey(row);
       if (!group || group.day !== day) {
-        group = { day, changedAt: row.changedAt, rows: [] };
+        group = { day, labelRow: row, rows: [] };
         groups.push(group);
       }
       group.rows.push(row);
@@ -20074,7 +20254,7 @@
       g.rows.forEach((row, idx) => {
         const dayStart = idx === 0;
         const dateCell = dayStart
-          ? `<td class="col-date prices-col-date prices-actual-day" rowspan="${g.rows.length}">${escapeHtml(pricesActualDateLabel(g.changedAt))}</td>`
+          ? `<td class="col-date prices-col-date prices-actual-day" rowspan="${g.rows.length}">${escapeHtml(pricesActualDateLabel(g.labelRow))}</td>`
           : "";
         const trCls = dayStart ? ' class="prices-actual-day-start"' : "";
         html += `<tr${trCls} data-prices-code="${escapeHtml(String(row.code ?? ""))}">`;

@@ -146,6 +146,7 @@ def run_change_poll(data: dict, *, final_attempt: bool = False) -> int:
         return EXIT_RETRY
 
     events = diff_costs_for_actual_changes(baseline, data, changed_at)
+    events = [{**ev, "changeNightUk": change_night} for ev in events]
     if not events:
         if final_attempt:
             update_actual_state_costs(

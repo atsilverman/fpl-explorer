@@ -89,6 +89,56 @@ def uk_today_stamp(when: datetime | None = None) -> str:
     return (when or uk_now()).strftime("%Y-%m-%d")
 
 
+def add_uk_calendar_days(uk_date: str, days: int = 1) -> str:
+    d = datetime.strptime(uk_date, "%Y-%m-%d") + timedelta(days=days)
+    return d.strftime("%Y-%m-%d")
+
+
+def uk_night_from_changed_at_iso(changed_at: str) -> str:
+    """UK calendar date for a midnight changedAt timestamp."""
+    dt = datetime.fromisoformat(changed_at.replace("Z", "+00:00"))
+    return dt.astimezone(LONDON).strftime("%Y-%m-%d")
+
+
+def uk_price_change_effective_date_for_snapshot_date(snapshot_date: str) -> str:
+    """UTC bootstrap filename date → UK label date for the midnight change.
+
+    Ownership snapshots use UTC calendar dates in filenames. FPL applies changes
+    at UK midnight, so new prices in snapshot D align with the UK label D+1
+    during BST (matches live poll labels).
+    """
+    return add_uk_calendar_days(snapshot_date, 1)
+
+
+def stamp_actual_change_night(events: list[dict], uk_night: str) -> list[dict]:
+    changed_at = uk_midnight_utc_iso_for_date(uk_night)
+    return [
+        {**ev, "changedAt": changed_at, "changeNightUk": uk_night}
+        for ev in events
+    ]
+
+
+# Live-captured Sep 2 UK night — already labeled correctly.
+_LEGACY_ACTUAL_CHANGE_CUTOFF = "2026-09-01T23:00:00Z"
+
+
+def migrate_legacy_actual_change_dates(events: list[dict]) -> tuple[list[dict], int]:
+    """Bump backfilled changedAt values that predate the first live UK poll."""
+    changed = 0
+    out: list[dict] = []
+    for ev in events:
+        row = dict(ev)
+        at = str(row.get("changedAt") or "")
+        if at and at < _LEGACY_ACTUAL_CHANGE_CUTOFF:
+            dt = datetime.fromisoformat(at.replace("Z", "+00:00"))
+            row["changedAt"] = (dt + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            changed += 1
+        if not row.get("changeNightUk") and row.get("changedAt"):
+            row["changeNightUk"] = uk_night_from_changed_at_iso(str(row["changedAt"]))
+        out.append(row)
+    return out, changed
+
+
 def uk_midnight_utc_iso(for_night: datetime | None = None) -> str:
     """UTC ISO for 00:00 Europe/London on the UK calendar date of for_night."""
     when = for_night or uk_now()
@@ -428,6 +478,7 @@ def diff_costs_for_actual_changes(
                 "before": round(before_tenths / 10.0, 1),
                 "after": round(after_tenths / 10.0, 1),
                 "changedAt": changed_at,
+                "changeNightUk": uk_night_from_changed_at_iso(changed_at),
             }
         )
     return events
@@ -526,6 +577,7 @@ def diff_checkins_for_actual_changes(
                 "before": round(before_tenths / 10.0, 1),
                 "after": round(after_tenths / 10.0, 1),
                 "changedAt": changed_at,
+                "changeNightUk": uk_night_from_changed_at_iso(changed_at),
             }
         )
     return events
@@ -639,9 +691,10 @@ def reattribute_events_to_earliest_snapshot(
             snapshots,
         )
         if night:
-            new_at = uk_midnight_utc_iso_for_date(night)
-            if ev.get("changedAt") != new_at:
-                ev = {**ev, "changedAt": new_at}
+            effective = uk_price_change_effective_date_for_snapshot_date(night)
+            new_at = uk_midnight_utc_iso_for_date(effective)
+            if ev.get("changedAt") != new_at or ev.get("changeNightUk") != effective:
+                ev = {**ev, "changedAt": new_at, "changeNightUk": effective}
                 changed += 1
         out.append(ev)
     return out, changed
@@ -670,7 +723,9 @@ def backfill_actual_changes_from_snapshots(
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             print(f"skip {prev_path.name} → {next_path.name}: {exc}", file=sys.stderr)
             continue
-        changed_at = uk_midnight_utc_iso_for_date(next_date)
+        changed_at = uk_midnight_utc_iso_for_date(
+            uk_price_change_effective_date_for_snapshot_date(next_date)
+        )
         batch = diff_snapshots_for_actual_changes(prev_snap, next_snap, changed_at)
         if batch:
             pairs += 1

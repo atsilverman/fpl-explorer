@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=948" />
+<link rel="stylesheet" href="styles.css?v=951" />
 <script>
 (() => {
   try {
@@ -843,6 +843,17 @@
                   </table>
                 </div>
               </div>
+              <div class="home-squad-page home-squad-page-ownership" id="home-squad-page-ownership">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-squad-table home-squad-ownership-table">
+                    <colgroup id="home-squad-ownership-cols"></colgroup>
+                    <thead>
+                      <tr id="home-squad-ownership-head"></tr>
+                    </thead>
+                    <tbody id="home-squad-ownership-body"></tbody>
+                  </table>
+                </div>
+              </div>
               <div class="home-squad-page">
                 <div class="home-table-wrap">
                   <table class="home-data-table home-squad-table home-squad-fixtures-table">
@@ -858,7 +869,8 @@
             <div class="home-squad-dots" id="home-squad-dots" role="tablist" aria-label="Team views">
               <button type="button" class="home-squad-dot is-active" role="tab" aria-selected="true" aria-label="Starting XI" data-page="0"></button>
               <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Points" data-page="1"></button>
-              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Schedule" data-page="2"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Ownership" data-page="2"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Schedule" data-page="3"></button>
             </div>
           </div>
         </article>
@@ -1517,12 +1529,12 @@
 <script src="data.js?v=67"></script>
 <script src="markets_data.js?v=24"></script>
 <script src="ownership_data.js?v=18"></script>
-<script src="price_changes_data.js?v=12"></script>
+<script src="price_changes_data.js?v=14"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=31"></script>
+<script src="home_data.js?v=32"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=988"></script>
+<script src="app.js?v=993"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
