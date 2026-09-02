@@ -6821,13 +6821,25 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   --barbell-name-w: 168px;
-  --barbell-name-w-compare: 152px;
+  --barbell-name-w-compare: 188px;
+  --barbell-loc-w-compare: 60px;
+  --barbell-track-min-compare: 280px;
   --barbell-min-w: 650px;
+  --barbell-min-w-compare: 900px;
   --barbell-track-min: 220px;
   --barbell-num-w: 68px;
   --barbell-gap: 12px;
   --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
-  --barbell-cols-compare: var(--barbell-name-w-compare) 48px minmax(200px, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+  --barbell-cols-compare: var(--barbell-name-w-compare) var(--barbell-loc-w-compare) minmax(var(--barbell-track-min-compare), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+  --barbell-cols-compare-row: var(--barbell-loc-w-compare) minmax(var(--barbell-track-min-compare), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+}
+.barbell-wrap.is-compare-mode {
+  min-width: 0;
+}
+.barbell-wrap.is-compare-mode .barbell-head,
+.barbell-wrap.is-compare-mode .barbell-scale,
+.barbell-wrap.is-compare-mode .barbell-group.is-compare {
+  min-width: var(--barbell-min-w-compare);
 }
 .barbell-scroll {
   overflow: auto;
@@ -6919,6 +6931,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
+}
+.barbell-head.is-compare .barbell-head-cell.bh-loc {
+  text-align: center;
+  justify-content: center;
 }
 .barbell-head-cell.bh-track:hover,
 .barbell-head-cell.bh-loc:hover { color: var(--text-faint); }
@@ -7025,29 +7041,29 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .barbell-group.is-compare {
   display: grid;
   grid-template-columns: var(--barbell-name-w-compare) minmax(0, 1fr);
-  gap: 0 4px;
+  gap: 0 calc(var(--barbell-gap) - 4px);
   align-items: stretch;
-  padding: 8px 14px;
-  min-width: var(--barbell-min-w);
+  padding: 10px 14px;
+  min-width: var(--barbell-min-w-compare);
   background: hsl(var(--card));
 }
 .barbell-group.is-compare:nth-child(even) { background: var(--bg-panel-2); }
 .barbell-group.is-compare .barbell-row {
   display: grid;
-  grid-template-columns: 48px minmax(200px, 1fr) 68px 68px 68px;
-  gap: 12px;
-  align-items: stretch;
-  padding: 5px 0;
+  grid-template-columns: var(--barbell-cols-compare-row);
+  gap: var(--barbell-gap);
+  align-items: center;
+  padding: 7px 0;
   min-width: 0;
   border-bottom: none;
 }
 /* Home/Away split — lighter than the between-player group divider. */
 .barbell-group.is-compare .barbell-row.loc-home {
   border-bottom: 1px solid hsl(var(--border-hsl) / 0.35);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 .barbell-group.is-compare .barbell-row.loc-away {
-  padding-top: 6px;
+  padding-top: 8px;
 }
 .barbell-group.is-compare .barbell-row:hover {
   background: transparent;
@@ -7150,6 +7166,41 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+}
+.barbell-group.is-compare .barbell-loc {
+  justify-content: center;
+  padding-right: 2px;
+}
+.barbell-wrap.is-compare-mode .barbell-group.is-compare .barbell-track {
+  min-width: 0;
+}
+.barbell-wrap.is-compare-mode .barbell-group-identity .rankings-identity {
+  align-items: flex-start;
+  overflow: visible;
+}
+.barbell-wrap.is-compare-mode .barbell-group-identity .rankings-identity-text {
+  overflow: visible;
+}
+.barbell-wrap.is-compare-mode .barbell-group-identity .ownership-id-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  line-height: 1.3;
+}
+.barbell-wrap.is-compare-mode .barbell-group-identity .ownership-id-sub > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+}
+.barbell-wrap.is-compare-mode .barbell-group-identity .ownership-id-sep {
+  flex: none;
 }
 .barbell-group.is-compare .loc-tag {
   min-width: 0;
@@ -7410,6 +7461,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     max-height: none;
     --barbell-name-w: 140px;
     --barbell-name-w-compare: 128px;
+    --barbell-loc-w-compare: 44px;
     --barbell-head-h: 32px;
     --crest-size: 26px;
     --badge-size: 26px;
@@ -7421,7 +7473,8 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     --barbell-num-w: 52px;
     --barbell-gap: 6px;
     --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
-    --barbell-cols-compare: var(--barbell-name-w-compare) 40px minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    --barbell-cols-compare: var(--barbell-name-w-compare) var(--barbell-loc-w-compare) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    --barbell-cols-compare-row: var(--barbell-loc-w-compare) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
   }
   .barbell-wrap.name-simplify-ready {
     --barbell-name-w-full: 140px;
@@ -7479,6 +7532,33 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     opacity: calc(1 - var(--name-collapse));
     max-width: calc((1 - var(--name-collapse)) * 48px);
   }
+  .barbell-wrap.is-compare-mode .barbell-group-identity .rankings-identity,
+  .barbell-wrap.is-compare-mode .barbell-group-identity .rankings-identity-text {
+    overflow: visible;
+  }
+  .barbell-wrap.is-compare-mode.name-simplify-ready .barbell-group-identity .ownership-id-sub,
+  .barbell-wrap.is-compare-mode .barbell-group-identity .ownership-id-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 3px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.25;
+  }
+  .barbell-wrap.is-compare-mode.name-simplify-ready .barbell-group-identity .ownership-id-sub > *,
+  .barbell-wrap.is-compare-mode .barbell-group-identity .ownership-id-sub > * {
+    flex: 0 0 auto;
+    min-width: 0;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .barbell-wrap.is-compare-mode .barbell-group-identity .ownership-id-sep {
+    flex: none;
+  }
   .barbell-scroll {
     overflow: auto;
     overflow-y: auto;
@@ -7513,6 +7593,11 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   }
   .barbell-group.is-compare {
     padding: 6px 10px;
+    gap: 0 2px;
+  }
+  .barbell-wrap.is-barbell-compare-measure .barbell-group-identity .ownership-id-sub {
+    flex-wrap: nowrap;
+    white-space: nowrap;
   }
   .barbell-label {
     margin: -7px 0 -7px -10px;

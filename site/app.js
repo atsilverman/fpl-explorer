@@ -2744,6 +2744,12 @@
     return true;
   }
 
+  /** Baked HOME can retain stale live flags between refreshes — wait for live poll. */
+  function homeTrustLiveMatchState() {
+    if (!homeLivePollReady()) return true;
+    return homeLiveLastSuccessAt > 0;
+  }
+
   function homeSquadShowLoading(viewEntry) {
     if (!savedManagerId || !savedLeagueId) return false;
     if (homeLivePayloadPending()) return true;
@@ -2755,7 +2761,12 @@
 
   function homeStandingsShowLoading() {
     if (!homeLivePollReady()) return false;
-    return homeLivePayloadPending();
+    // Same as squad: paint baked standings immediately; refresh after live poll.
+    if (Array.isArray(HOME.standings) && HOME.standings.length) return false;
+    if (homeLivePayloadPending()) return true;
+    if (homeLivePollInFlight) return true;
+    if (!homeLiveLastSuccessAt) return true;
+    return false;
   }
 
   function homeSquadLoadingHTML(colspan, rows = 5) {
@@ -6281,12 +6292,17 @@
     }
   }
 
-  function finishHomeStatRolls(root, { summary = true } = {}) {
+  function finishHomeStatRolls(root, { summary = true, tables = true } = {}) {
     if (!root) return;
-    const parts = [];
-    if (summary) parts.push(".home-stat-roll[data-count-to]");
-    parts.push(".home-squad-pts-table .live-stat-roll[data-count-to]");
-    root.querySelectorAll(parts.join(", ")).forEach(finishStatRollNode);
+    if (summary) {
+      root.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]").forEach(finishStatRollNode);
+    }
+    if (tables) {
+      root.querySelectorAll(".home-stat-roll[data-count-to]").forEach((node) => {
+        if (node.closest(".home-summary-cards")) return;
+        finishStatRollNode(node);
+      });
+    }
   }
 
   function mountHomeSummaryRollsAtStart(root) {
@@ -6396,7 +6412,7 @@
     }
     const token = ++homeEnterMotionToken;
     // Tables, feed, IMP, and rank chrome snap immediately — only summary cards roll briefly.
-    finishHomeStatRolls(pane, { summary: false });
+    finishHomeStatRolls(pane, { summary: false, tables: true });
     animateHomeImpBars(pane, { animate: false });
     finishHighlightSatEnter(pane);
     homeSummaryRankChromePending = false;
@@ -6513,6 +6529,8 @@
       && (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy())
     ) {
       mountHomeSummaryRollsAtStart(el.homePage);
+      // Squad / standings rolls snap to final values during enter — only summary cards animate.
+      finishHomeStatRolls(el.homePage, { summary: false, tables: true });
     }
     const deferRankChrome = homeShouldDeferSummaryRankChrome({ animateView, settleQuiet });
     if (deferRankChrome) {
@@ -7751,6 +7769,7 @@
       syncExpectedCatToolbar();
       syncMarketsViewControls();
       syncBarbellHeadHeight();
+      syncBarbellCompareNameWidth();
       scheduleOwnershipTreemapRelayout();
       if (!breakpointFlip && state.page === "prices" && pricesViewMode() === "prediction") {
         schedulePricesPredictionColumnsSync();
@@ -11525,6 +11544,84 @@
     sticky.style.setProperty("--barbell-head-h", `${el.barbellHead.offsetHeight}px`);
   }
 
+  const BARBELL_COMPARE_NAME_MIN_W = 176;
+  const BARBELL_COMPARE_NAME_MIN_W_MOBILE = 124;
+  const BARBELL_COMPARE_NAME_MAX_FRAC = 0.34;
+  const BARBELL_COMPARE_NAME_MAX_FRAC_MOBILE = 0.4;
+  const BARBELL_COMPARE_NAME_SLACK = 8;
+  const BARBELL_COMPARE_NAME_SLACK_MOBILE = 6;
+
+  function measureBarbellCompareIdentityWidth(cell) {
+    if (!cell) return 0;
+    const id = cell.querySelector(".rankings-identity");
+    const cs = getComputedStyle(cell);
+    const pad =
+      (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    if (!id) return Math.ceil(cell.scrollWidth);
+    const idCs = getComputedStyle(id);
+    const gap = parseFloat(idCs.columnGap || idCs.gap) || 0;
+    const thumb = id.querySelector(".ownership-photo, .ownership-crest");
+    const text = id.querySelector(".ownership-id-text");
+    let content = 0;
+    let parts = 0;
+    if (thumb) {
+      content += Math.ceil(thumb.getBoundingClientRect().width);
+      parts += 1;
+    }
+    if (text) {
+      const nameLine = text.querySelector(".player-name-line");
+      const sub = text.querySelector(".ownership-id-sub");
+      const nameW = nameLine
+        ? measureNameLineIntrinsicWidth(nameLine)
+        : measureInlineContentWidth(text.querySelector(".player-name"));
+      let subW = 0;
+      if (sub) {
+        const bits = Array.from(sub.children);
+        if (bits.length) {
+          const first = bits[0].getBoundingClientRect();
+          const last = bits[bits.length - 1].getBoundingClientRect();
+          subW = Math.max(0, Math.ceil(last.right - first.left));
+        }
+      }
+      content += Math.max(nameW, subW);
+      parts += 1;
+    }
+    if (parts > 1) content += gap * (parts - 1);
+    return content + Math.ceil(pad);
+  }
+
+  function syncBarbellCompareNameWidth() {
+    const wrap = el.barbellWrap;
+    if (!wrap || state.page !== "expected" || state.expectedSplit !== "compare") {
+      wrap?.style.removeProperty("--barbell-name-w-compare");
+      wrap?.style.removeProperty("--barbell-name-w-compare-full");
+      wrap?.classList.remove("is-barbell-compare-measure");
+      return;
+    }
+    const mobile = NARROW_MQ.matches;
+    const minW = mobile ? BARBELL_COMPARE_NAME_MIN_W_MOBILE : BARBELL_COMPARE_NAME_MIN_W;
+    const maxFrac = mobile ? BARBELL_COMPARE_NAME_MAX_FRAC_MOBILE : BARBELL_COMPARE_NAME_MAX_FRAC;
+    const slack = mobile ? BARBELL_COMPARE_NAME_SLACK_MOBILE : BARBELL_COMPARE_NAME_SLACK;
+    const identities = wrap.querySelectorAll(".barbell-group-identity");
+    if (!identities.length) return;
+    const prev = wrap.style.getPropertyValue("--barbell-name-w-compare");
+    wrap.classList.add("is-barbell-compare-measure");
+    wrap.style.setProperty("--barbell-name-w-compare", `${minW}px`);
+    void wrap.offsetWidth;
+    let maxW = minW;
+    identities.forEach((cell) => {
+      maxW = Math.max(maxW, measureBarbellCompareIdentityWidth(cell));
+    });
+    wrap.classList.remove("is-barbell-compare-measure");
+    const scroll = expectedScrollWrap();
+    const cap = scroll ? Math.round(scroll.clientWidth * maxFrac) : maxW;
+    const next = `${Math.max(minW, Math.min(maxW + slack, cap))}px`;
+    wrap.style.setProperty("--barbell-name-w-compare", next);
+    if (mobile) wrap.style.setProperty("--barbell-name-w-compare-full", next);
+    else wrap.style.removeProperty("--barbell-name-w-compare-full");
+    if (prev !== next) syncBarbellHeadHeight();
+  }
+
   function buildExpectedHead(cat) {
     el.barbellHead.innerHTML = "";
     const compareMode = state.expectedSplit === "compare";
@@ -11878,6 +11975,7 @@
     const cat = currentExpectedCat();
     updateExpectedSplitAvailability(cat);
     const compareMode = state.expectedSplit === "compare";
+    if (el.barbellWrap) el.barbellWrap.classList.toggle("is-compare-mode", compareMode);
     buildExpectedCatMenu();
     syncExpectedCatToolbar();
     hideExpectedTooltip();
@@ -11936,6 +12034,12 @@
       });
     }
     bindOwnershipPhotoFallback(el.barbellBody);
+    if (compareMode) {
+      requestAnimationFrame(() => {
+        syncBarbellCompareNameWidth();
+        syncBarbellHeadHeight();
+      });
+    }
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     if (opts.resetScroll) {
       requestAnimationFrame(() => {
@@ -16094,10 +16198,12 @@
   }
 
   function homeSquadFixtureIsInPlay(fx) {
+    if (!homeTrustLiveMatchState()) return false;
     return !!(fx && fx.live && !fx.finished);
   }
 
   function homeSquadRowIsInPlay(row) {
+    if (!homeTrustLiveMatchState()) return false;
     if (!row) return false;
     if (row.matchStatus === "finished") return false;
     if (row.live) return true;
@@ -16108,12 +16214,19 @@
   function liveGwHasActiveGames() {
     const gw = liveDefaultGw();
     const homeGw = Number(HOME && HOME.gw);
-    if (Number.isFinite(homeGw) && homeGw === gw && HOME.elementGw && typeof HOME.elementGw === "object") {
+    const trustHomeLive = homeTrustLiveMatchState();
+    if (
+      trustHomeLive
+      && Number.isFinite(homeGw)
+      && homeGw === gw
+      && HOME.elementGw
+      && typeof HOME.elementGw === "object"
+    ) {
       for (const eg of Object.values(HOME.elementGw)) {
         if (liveEgIsInPlay(eg)) return true;
       }
     }
-    if (Number.isFinite(homeGw) && homeGw === gw && Array.isArray(HOME.squad)) {
+    if (trustHomeLive && Number.isFinite(homeGw) && homeGw === gw && Array.isArray(HOME.squad)) {
       for (const row of HOME.squad) {
         if (homeSquadRowIsInPlay(row)) return true;
       }
