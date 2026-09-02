@@ -3511,8 +3511,8 @@
 
   function homeStandingsSortValue(row, key) {
     if (key === "live") {
-      const n = Number(row.inPlay);
-      return Number.isFinite(n) ? n : null;
+      const n = homeStandingsRowInPlayCount(row);
+      return n > 0 ? n : 0;
     }
     if (key === "left") {
       const n = Number(row.toPlay);
@@ -3534,11 +3534,27 @@
    * engine; once their XI is done (inPlay === 0), FPL event_total is authoritative
    * even if other league fixtures remain this GW (toPlay may still be > 0).
    */
+  function homeStandingsRowInPlayCount(row) {
+    if (!homeTrustLiveMatchState()) return 0;
+    const n = Number(row && row.inPlay);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function homeStandingsRowToPlayCount(row) {
+    const n = Number(row && row.toPlay);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
   function homeStandingsGwPoints(row) {
     const official = row.eventTotalOfficial != null ? Number(row.eventTotalOfficial) : null;
     const live = row.gwPointsLive != null ? Number(row.gwPointsLive) : null;
-    const inPlay = Number(row.inPlay);
-    const hasLiveMinutes = Number.isFinite(inPlay) && inPlay > 0;
+    if (!homeTrustLiveMatchState()) {
+      if (official != null && Number.isFinite(official)) return official;
+      if (live != null && Number.isFinite(live)) return live;
+      return null;
+    }
+    const inPlay = homeStandingsRowInPlayCount(row);
+    const hasLiveMinutes = inPlay > 0;
     if (!hasLiveMinutes && official != null && Number.isFinite(official)) {
       return official;
     }
@@ -3779,11 +3795,9 @@
 
   /** True when any league manager has active picks in a live fixture. */
   function homeLeagueHasLivePicks() {
+    if (!homeTrustLiveMatchState()) return false;
     const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
-    return rows.some((r) => {
-      const n = Number(r.inPlay);
-      return Number.isFinite(n) && n > 0;
-    });
+    return rows.some((r) => homeStandingsRowInPlayCount(r) > 0);
   }
 
   function syncHomeStandingsLiveColumn() {
@@ -3795,13 +3809,13 @@
   function homeStandingsLiveRowHTML(row, { configuredEntry, viewEntry, viewingOther, topMaps }) {
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
-    const inPlay = Number(row.inPlay);
-    const toPlay = Number(row.toPlay);
+    const inPlay = homeStandingsRowInPlayCount(row);
+    const toPlay = homeStandingsRowToPlayCount(row);
     const liveTitle = "Active picks in play (Bench Boost can exceed 11)";
     const leftTitle = "Still to play this gameweek";
     const gwPts = homeStandingsGwPoints(row);
     const totalPts = row.total != null ? Number(row.total) : null;
-    const hasPlay = Number.isFinite(inPlay) && Number.isFinite(toPlay);
+    const hasPlay = toPlay != null;
     const liveHTML = hasPlay
       ? (inPlay > 0
         ? `<span class="ownership-pill home-standings-live-pill is-active"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`
