@@ -5265,13 +5265,33 @@ html[data-page="prices"] .layout .main {
   display: inline-flex;
   align-items: center;
 }
-#prices-page .prices-section-divider .prices-section-mark.prices-change-arrow {
-  min-width: 1.65rem;
-  height: 1.45rem;
-  padding: 0 5px;
+#prices-page .prices-section-divider .prices-section-arrow {
+  line-height: 0;
 }
-#prices-page .prices-section-divider .prices-section-mark.prices-status-pill {
-  min-height: 1.45rem;
+#prices-page .prices-section-divider .prices-section-arrow .icon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.5;
+}
+#prices-page .prices-section-divider .prices-section-arrow.is-rise {
+  color: hsl(142 72% 26%);
+}
+#prices-page .prices-section-divider .prices-section-arrow.is-fall {
+  color: hsl(0 72% 32%);
+}
+:root[data-theme="dark"] #prices-page .prices-section-divider .prices-section-arrow.is-rise {
+  color: hsl(142 55% 72%);
+}
+:root[data-theme="dark"] #prices-page .prices-section-divider .prices-section-arrow.is-fall {
+  color: hsl(0 70% 78%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #prices-page .prices-section-divider .prices-section-arrow.is-rise {
+    color: hsl(142 55% 72%);
+  }
+  :root:not([data-theme="light"]) #prices-page .prices-section-divider .prices-section-arrow.is-fall {
+    color: hsl(0 70% 78%);
+  }
 }
 #prices-page .prices-section-divider::after {
   content: "";

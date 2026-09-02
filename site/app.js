@@ -10418,20 +10418,20 @@
       const legend = isActual
         ? [
             spitRow(
-              `<span class="prices-change-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
-              "Risers / Fallers section arrow — £0.1m move direction for the whole table"
+              `<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
+              "Colored arrow beside Risers / Fallers — direction for the whole table"
             ),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : mobile
         ? [
-            spitRow(`<span class="prices-section-mark prices-status-pill is-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Rise</span></span>`, "Risers / Fallers section badge — direction for the whole table"),
+            spitRow(`<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`, "Colored arrow beside Risers / Fallers — direction for the whole table"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : [
-            spitRow(`<span class="prices-section-mark prices-status-pill is-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Rise</span></span>`, "Risers / Fallers section badge — direction for the whole table"),
+            spitRow(`<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`, "Colored arrow beside Risers / Fallers — direction for the whole table"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
@@ -20107,22 +20107,20 @@
     return `<span class="${cls}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${iconHTML(up ? "trending-up" : "trending-down")}</span>`;
   }
 
-  function pricesSectionPredictionMarkHTML(direction) {
+  function pricesSectionArrowHTML(direction) {
     const up = direction === "rise";
-    const cls = `prices-section-mark prices-status-pill is-${up ? "likely-rise" : "likely-drop"} is-short has-trend`;
-    const label = up ? "Rise" : "Fall";
-    const tip = ` title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"`;
-    return `<span class="${cls}"${tip}><span class="prices-status-trend-icon" aria-hidden="true">${iconHTML(up ? "trending-up" : "trending-down")}</span><span class="prices-status-label">${escapeHtml(label)}</span></span>`;
+    const cls = `prices-section-mark prices-section-arrow ${up ? "is-rise" : "is-fall"}`;
+    const label = up ? "Risers" : "Fallers";
+    return `<span class="${cls}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${iconHTML(up ? "trending-up" : "trending-down")}</span>`;
   }
 
-  function syncPricesSectionMarks(root, { mode = "prediction" } = {}) {
+  function syncPricesSectionMarks(root) {
     if (!root) return;
     root.querySelectorAll(".prices-section-divider[data-prices-direction]").forEach((div) => {
       const mark = div.querySelector(".prices-section-mark");
       if (!mark) return;
       const dir = div.dataset.pricesDirection === "fall" ? "fall" : "rise";
-      mark.innerHTML =
-        mode === "actual" ? pricesChangeArrowHTML(dir) : pricesSectionPredictionMarkHTML(dir);
+      mark.innerHTML = pricesSectionArrowHTML(dir);
     });
   }
 
@@ -20520,7 +20518,7 @@
       );
     }
 
-    syncPricesSectionMarks(el.pricesPredictionPanels, { mode: "prediction" });
+    syncPricesSectionMarks(el.pricesPredictionPanels);
 
     if (scrollSnap) {
       restoreScrollWraps(scrollSnap);
@@ -20629,7 +20627,7 @@
       );
     }
 
-    syncPricesSectionMarks(el.pricesActualPanels, { mode: "actual" });
+    syncPricesSectionMarks(el.pricesActualPanels);
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
     if (NARROW_MQ.matches) syncPricesActualColumnWidths();
