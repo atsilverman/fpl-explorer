@@ -5413,59 +5413,17 @@
     return squad.find((r) => Number(r.element) === eid) || null;
   }
 
-  function homeSquadOwnershipBarbellHTML(start, end, maxVal) {
-    if (
-      start == null ||
-      end == null ||
-      !Number.isFinite(Number(start)) ||
-      !Number.isFinite(Number(end)) ||
-      !(maxVal > 0)
-    ) {
-      return `<span class="home-own-barbell-empty">—</span>`;
-    }
-    const s = Number(start);
-    const e = Number(end);
-    const pctS = Math.max(0, Math.min(100, (s / maxVal) * 100));
-    const pctE = Math.max(0, Math.min(100, (e / maxVal) * 100));
-    const lo = Math.min(pctS, pctE);
-    const hi = Math.max(pctS, pctE);
-    const delta = e - s;
-    let tone = "is-flat";
-    if (delta > 0.05) tone = "is-rise";
-    else if (delta < -0.05) tone = "is-fall";
-    const tip = `TSB ${fmtOwnedPct(s)}% → ${fmtOwnedPct(e)}% (3d)`;
-    return `<div class="home-own-barbell ${tone}"${tipAttr(tip)} aria-label="${escapeHtml(tip)}">
-      <span class="home-own-barbell-val is-start" aria-hidden="true">${escapeHtml(fmtOwnedPct(s))}</span>
-      <div class="home-own-barbell-track">
-        <div class="home-own-barbell-connector" style="left:${lo}%;width:${Math.max(0, hi - lo)}%"></div>
-        <span class="home-own-barbell-dot is-start" style="left:${pctS}%"></span>
-        <span class="home-own-barbell-dot is-end" style="left:${pctE}%"></span>
-      </div>
-      <span class="home-own-barbell-val is-end" aria-hidden="true">${escapeHtml(fmtOwnedPct(e))}</span>
-    </div>`;
-  }
-
-  function homeSquadOwnershipBarbellHeadHTML(maxOwn) {
-    const maxLbl = fmtOwnedPct(maxOwn);
-    return `<div class="home-own-barbell-head">
-      <span class="home-own-barbell-axis">0</span>
-      <span class="home-own-barbell-title">3d TSB</span>
-      <span class="home-own-barbell-axis">${escapeHtml(maxLbl)}</span>
-    </div>`;
-  }
-
   function homeSquadOwnershipScoreForRow(row, byCode) {
     const code = Number(row.code);
     if (!Number.isFinite(code)) return null;
     const history = byCode.get(code);
-    if (!history) return null;
-    const score = ownershipScoreRow(history);
-    if (!score) return null;
-    const ownedStart = score.owned3 != null ? Number(score.owned3) : null;
-    const ownedEnd = score.live != null ? Number(score.live) : null;
-    if (ownedStart == null || ownedEnd == null) return null;
-    if (!Number.isFinite(ownedStart) || !Number.isFinite(ownedEnd)) return null;
-    return { ownedStart, ownedEnd };
+    const score = history && history.length ? ownershipScoreRow(history) : null;
+    if (score) {
+      return { live: score.live, d1: score.d1, d3: score.d3 };
+    }
+    const live = currentOwnership(code);
+    if (live == null || !Number.isFinite(Number(live))) return null;
+    return { live: Number(live), d1: null, d3: null };
   }
 
   function homeSquadOwnershipContext(squad) {
@@ -5476,34 +5434,24 @@
       if (p && p.code != null) pricesByCode.set(Number(p.code), p);
     }
     const scores = squad.map((row) => homeSquadOwnershipScoreForRow(row, byCode));
-    const vals = scores.flatMap((s) =>
-      s ? [s.ownedStart, s.ownedEnd].filter((v) => v != null && Number.isFinite(v)) : []
-    );
-    const maxOwn = Math.max(1, ...(vals.length ? vals : [1]));
-    const showPriceCol = squad.some((row) => {
-      const pr = pricesByCode.get(Number(row.code));
-      return pr && pricesIsVeryLikelyMover(pr);
-    });
-    return { byCode, pricesByCode, maxOwn, showPriceCol, scores };
+    return { byCode, pricesByCode, scores };
   }
 
   function homeSquadOwnershipRowHTML(row, opts, ctx, score) {
-    const { maxOwn, showPriceCol, pricesByCode } = ctx;
+    const { pricesByCode } = ctx;
     const benchCls = row.onBench ? " home-row-bench" : "";
     const priceRow = pricesByCode.get(Number(row.code));
-    const priceCell =
-      showPriceCol
-        ? `<td class="home-col-price">${
-            priceRow && pricesIsVeryLikelyMover(priceRow)
-              ? pricesStatusPillHTML(priceRow)
-              : "—"
-          }</td>`
-        : "";
-    const ownedStart = score ? score.ownedStart : null;
-    const ownedEnd = score ? score.ownedEnd : null;
+    const priceCell = `<td class="home-col-price">${
+      priceRow && pricesIsVeryLikelyMover(priceRow) ? pricesStatusPillHTML(priceRow) : "—"
+    }</td>`;
+    const live = score ? score.live : null;
+    const d1 = score ? score.d1 : null;
+    const d3 = score ? score.d3 : null;
     return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
       ${homeSquadPlayerCellHTML(row, opts)}
-      <td class="home-col-own-barbell">${homeSquadOwnershipBarbellHTML(ownedStart, ownedEnd, maxOwn)}</td>
+      <td class="home-col-own-tsb col-num">${ownershipPillHTML(live, { live: true })}</td>
+      <td class="home-col-own-d1 col-num">${ownershipDeltaPillHTML(d1, { quiet: true })}</td>
+      <td class="home-col-own-d3 col-num">${ownershipDeltaPillHTML(d3)}</td>
       ${priceCell}
     </tr>`;
   }
@@ -6536,7 +6484,9 @@
       root.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]").forEach(finishStatRollNode);
     }
     if (tables) {
-      root.querySelectorAll(".home-stat-roll[data-count-to], .live-stat-roll[data-count-to]").forEach((node) => {
+      root.querySelectorAll(
+        ".home-stat-roll[data-count-to], .live-stat-roll[data-count-to], .ownership-stat-roll[data-count-to]"
+      ).forEach((node) => {
         if (node.closest(".home-summary-cards")) return;
         finishStatRollNode(node);
       });
@@ -6854,22 +6804,22 @@
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
       if (el.homeSquadOwnershipCols || el.homeSquadOwnershipHead || el.homeSquadOwnershipBody) {
         const ownCtx = homeSquadOwnershipContext(rows);
-        const ownColCount = ownCtx.showPriceCol ? 3 : 2;
+        const ownColCount = 5;
         if (el.homeSquadOwnershipCols) {
           el.homeSquadOwnershipCols.innerHTML =
             `<col class="home-col-player" />` +
-            `<col class="home-col-own-barbell" />` +
-            (ownCtx.showPriceCol ? `<col class="home-col-price" />` : "");
+            `<col class="home-col-own-tsb" />` +
+            `<col class="home-col-own-d1" />` +
+            `<col class="home-col-own-d3" />` +
+            `<col class="home-col-price" />`;
         }
         if (el.homeSquadOwnershipHead) {
           el.homeSquadOwnershipHead.innerHTML =
             `<th scope="col" class="home-col-player">Player</th>` +
-            `<th scope="col" class="home-col-own-barbell">${homeSquadOwnershipBarbellHeadHTML(ownCtx.maxOwn)}</th>` +
-            (ownCtx.showPriceCol ? `<th scope="col" class="home-col-price">Price</th>` : "");
-        }
-        const ownTable = el.homeSquadOwnershipBody && el.homeSquadOwnershipBody.closest("table");
-        if (ownTable) {
-          ownTable.classList.toggle("has-price-col", ownCtx.showPriceCol);
+            `<th scope="col" class="home-col-own-tsb col-num"${tipAttr("Live ownership (TSB)")}>TSB</th>` +
+            `<th scope="col" class="home-col-own-d1 col-num"${tipAttr("1-day ownership change")}>1d</th>` +
+            `<th scope="col" class="home-col-own-d3 col-num"${tipAttr("3-day ownership change")}>3d</th>` +
+            `<th scope="col" class="home-col-price"${tipAttr("Predicted price rise / fall")}>Price</th>`;
         }
         if (el.homeSquadOwnershipBody) {
           const ownParts = [];

@@ -15874,33 +15874,41 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   border: 1px solid hsl(var(--card));
 }
 .home-squad-ownership-table .home-col-player {
-  width: 34%;
+  width: 36%;
   min-width: 0;
 }
-.home-squad-ownership-table .home-col-own-barbell {
-  width: auto;
-  min-width: 7.5rem;
-  padding-left: 6px;
-  padding-right: 6px;
+.home-squad-ownership-table .home-col-own-tsb,
+.home-squad-ownership-table .home-col-own-d1,
+.home-squad-ownership-table .home-col-own-d3 {
+  width: 14%;
+  min-width: 0;
+  padding-left: 2px;
+  padding-right: 2px;
+  text-align: center;
   vertical-align: middle;
 }
 .home-squad-ownership-table .home-col-price {
-  width: 26%;
+  width: 22%;
   min-width: 4.5rem;
   padding-left: 4px;
   padding-right: 4px;
   text-align: center;
   vertical-align: middle;
 }
-.home-squad-ownership-table:not(.has-price-col) .home-col-own-barbell {
-  width: 66%;
-}
-.home-squad-ownership-table thead th.home-col-own-barbell,
+.home-squad-ownership-table thead th.home-col-own-tsb,
+.home-squad-ownership-table thead th.home-col-own-d1,
+.home-squad-ownership-table thead th.home-col-own-d3,
 .home-squad-ownership-table thead th.home-col-price {
   font-size: 10px;
   letter-spacing: 0.04em;
   text-align: center;
   white-space: nowrap;
+}
+.home-squad-ownership-table .ownership-pill,
+.home-squad-ownership-table .ownership-delta {
+  font-size: 11px;
+  min-width: 2.6em;
+  padding: 2px 5px;
 }
 .home-squad-ownership-table .prices-status-pill {
   font-size: 10px;
@@ -15910,113 +15918,6 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-squad-ownership-table .prices-status-pill .prices-status-label {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.home-own-barbell {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-.home-own-barbell-empty {
-  color: var(--text-faint);
-  font-size: 11px;
-}
-.home-own-barbell-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-width: 0;
-}
-.home-own-barbell-title {
-  flex: 1 1 auto;
-  text-align: center;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-.home-own-barbell-axis {
-  flex: none;
-  min-width: 1.6em;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-faint);
-  line-height: 1;
-}
-.home-own-barbell-head .home-own-barbell-axis:first-child {
-  text-align: left;
-}
-.home-own-barbell-head .home-own-barbell-axis:last-child {
-  text-align: right;
-}
-.home-own-barbell-track {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 3.5rem;
-  height: 9px;
-  border-radius: 999px;
-  background: hsl(var(--muted) / 0.45);
-  overflow: visible;
-}
-.home-own-barbell-connector {
-  position: absolute;
-  top: 50%;
-  height: 3px;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: hsl(var(--muted));
-  pointer-events: none;
-}
-.home-own-barbell.is-rise .home-own-barbell-connector {
-  background: hsl(142 45% 42% / 0.55);
-}
-.home-own-barbell.is-fall .home-own-barbell-connector {
-  background: hsl(0 55% 52% / 0.5);
-}
-.home-own-barbell-dot {
-  position: absolute;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  transform: translateY(-50%);
-  border-radius: 50%;
-  border: 1.5px solid hsl(var(--card));
-  background: hsl(var(--foreground) / 0.35);
-  pointer-events: none;
-}
-.home-own-barbell.is-rise .home-own-barbell-dot.is-end {
-  background: hsl(142 48% 38%);
-}
-.home-own-barbell.is-fall .home-own-barbell-dot.is-end {
-  background: hsl(0 55% 48%);
-}
-.home-own-barbell.is-rise .home-own-barbell-dot.is-start {
-  background: hsl(142 45% 42% / 0.45);
-}
-.home-own-barbell.is-fall .home-own-barbell-dot.is-start {
-  background: hsl(0 55% 52% / 0.4);
-}
-.home-own-barbell-val {
-  flex: none;
-  min-width: 2.1em;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-  line-height: 1;
-}
-.home-own-barbell-val.is-start {
-  text-align: right;
-}
-.home-own-barbell-val.is-end {
-  text-align: left;
 }
 .home-standings-pager {
   display: flex;
@@ -17354,31 +17255,30 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   }
   .home-squad-ownership-table col.home-col-player,
   .home-squad-ownership-table .home-col-player {
-    width: 38%;
+    width: 34%;
     min-width: 0;
   }
-  .home-squad-ownership-table col.home-col-own-barbell,
-  .home-squad-ownership-table .home-col-own-barbell {
-    width: auto;
+  .home-squad-ownership-table col.home-col-own-tsb,
+  .home-squad-ownership-table .home-col-own-tsb,
+  .home-squad-ownership-table col.home-col-own-d1,
+  .home-squad-ownership-table .home-col-own-d1,
+  .home-squad-ownership-table col.home-col-own-d3,
+  .home-squad-ownership-table .home-col-own-d3 {
+    width: 14%;
     min-width: 0;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 1px;
+    padding-right: 1px;
   }
-  .home-squad-ownership-table:not(.has-price-col) col.home-col-own-barbell,
-  .home-squad-ownership-table:not(.has-price-col) .home-col-own-barbell {
-    width: 62%;
-  }
-  .home-squad-ownership-table.has-price-col col.home-col-price,
-  .home-squad-ownership-table.has-price-col .home-col-price {
+  .home-squad-ownership-table col.home-col-price,
+  .home-squad-ownership-table .home-col-price {
     width: 24%;
     min-width: 0;
   }
-  .home-own-barbell-val {
-    font-size: 8px;
-    min-width: 1.9em;
-  }
-  .home-own-barbell-axis {
-    font-size: 8px;
+  .home-squad-ownership-table .ownership-pill,
+  .home-squad-ownership-table .ownership-delta {
+    font-size: 10px;
+    min-width: 2.35em;
+    padding: 2px 4px;
   }
   .home-squad-table .home-imp {
     min-width: 0;
