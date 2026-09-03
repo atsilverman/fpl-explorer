@@ -246,6 +246,11 @@ html, body {
     overflow: hidden;
     overscroll-behavior: none;
   }
+  html {
+    /* Match page content edge (.main) — toolbar/search must use the same inset. */
+    --mobile-gutter-x: 8px;
+    --main-pad-x: 8px;
+  }
   html.is-mobile-layout {
     width: 100%;
     height: 100%;
@@ -1678,13 +1683,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   font-size: 15px;
 }
 
-/* Desktop: Matchups/Markets header toggles show icon + label — don't keep the
-   32px icon-only square or the border clips through the text. */
+/* Desktop: Matchups filter toggle shows icon + label — don't keep the
+   32px icon-only square or the border clips through the text. Markets
+   keeps Card view / Compare in the toolbar, so its dock button stays mobile-only. */
 @media (min-width: 721px) {
   #schedule-sliders-toggle.icon-only-btn,
-  #markets-sliders-toggle.icon-only-btn,
-  .page-header #schedule-sliders-toggle.icon-only-btn,
-  .page-header #markets-sliders-toggle.icon-only-btn {
+  .page-header #schedule-sliders-toggle.icon-only-btn {
     width: max-content;
     min-width: 32px;
     max-width: none;
@@ -1694,14 +1698,16 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex: 0 0 auto;
     overflow: visible;
   }
-  #schedule-sliders-toggle .mobile-dock-label,
-  #markets-sliders-toggle .mobile-dock-label {
+  #schedule-sliders-toggle .mobile-dock-label {
     display: inline;
     font-size: 12.5px;
     font-weight: 550;
     letter-spacing: 0.01em;
     line-height: 1;
     white-space: nowrap;
+  }
+  html:not(.is-mobile-layout) #markets-page #markets-sliders-toggle {
+    display: none !important;
   }
 }
 
@@ -2110,10 +2116,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .main {
     flex: 1 1 auto;
     min-height: 0;
-    --main-pad-x: 8px;
+    --main-pad-x: var(--mobile-gutter-x, 8px);
     --main-pad-top: 8px;
     --table-sticky-max: calc(100dvh - 8.5rem);
-    padding: var(--main-pad-top) var(--main-pad-x) 28px;
+    padding: var(--main-pad-top) var(--mobile-gutter-x, 8px) 28px;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -2138,7 +2144,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     left: 0;
     right: 0;
     z-index: 31;
-    padding: 8px 10px;
+    padding: 8px var(--mobile-gutter-x, 8px);
     gap: 6px;
     flex-wrap: nowrap;
     align-items: center;
@@ -2179,7 +2185,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-shrink: 0;
     padding:
       calc(var(--page-nav-pad-y) + env(safe-area-inset-top, 0px))
-      10px
+      var(--mobile-gutter-x, 8px)
       var(--page-nav-pad-y);
     gap: 8px;
     flex-wrap: nowrap;
@@ -2370,12 +2376,32 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 6px;
   }
 
-  /* Ownership / Prices: always-expanded search fills the bar. */
+  /* Ownership / Prices: always-expanded search fills the bar, flush with content. */
+  html[data-page="ownership"] #stats-toolbar-start,
+  html[data-page="prices"] #stats-toolbar-start {
+    display: none !important;
+  }
   html[data-page="ownership"] #subtoolbar #stats-toolbar-actions,
   html[data-page="prices"] #subtoolbar #stats-toolbar-actions {
+    display: flex;
+    flex: 1 1 auto;
     width: 100%;
+    margin-left: 0;
+    min-width: 0;
   }
+  html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
+  html[data-page="prices"] #subtoolbar .topbar-end-cluster {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: flex-start;
+    gap: 0;
+  }
+  html[data-page="ownership"] #subtoolbar #search-wrap,
   html[data-page="ownership"] #subtoolbar #search-wrap.search-open,
+  html[data-page="prices"] #subtoolbar #search-wrap,
   html[data-page="prices"] #subtoolbar #search-wrap.search-open {
     flex: 1 1 auto;
     width: auto;
@@ -5055,6 +5081,18 @@ html[data-page="prices"] .layout .main {
   font-size: 12px;
   color: var(--text-dim);
 }
+.prices-next-update-footer {
+  display: none;
+  flex: none;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.35);
+}
+.prices-next-update-footer[hidden] {
+  display: none !important;
+}
 .prices-mover-bar {
   margin-bottom: 10px;
 }
@@ -5175,6 +5213,9 @@ html[data-page="prices"] .layout .main {
 }
 .prices-scope-seg button {
   min-width: 3.4em;
+}
+.prices-mover-kind-seg button {
+  min-width: 4.6em;
 }
 #prices-prediction-wrap {
   flex: 1 1 auto;
@@ -5646,10 +5687,55 @@ html[data-page="prices"] .layout .main {
   --name-col-w: 240px;
   --metric-col-w: 56px;
 }
+/* Desktop table: .main is the vertical scroller (Prices / Rankings). Nested
+   wrap max-height + overflow:hidden on .main cropped the last rows and footer
+   even when the table itself was scrolled to the end. Treemap still fills. */
+@media (min-width: 721px) {
+  html[data-page="ownership"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-width: 0;
+  }
+  html[data-page="ownership"]:has(#ownership-page.is-treemap) .layout .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overflow-x: hidden;
+    min-width: 0;
+  }
+  html[data-page="ownership"] #ownership-page {
+    display: block;
+    flex: none;
+    min-height: 0;
+    overflow: visible;
+  }
+  html[data-page="ownership"] #ownership-page.is-treemap {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  html[data-page="ownership"] #ownership-table-wrap {
+    flex: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 0;
+    max-height: none;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
+  }
+  html[data-page="ownership"] #ownership-updated-footer {
+    flex: none;
+  }
+}
 #ownership-table-wrap[hidden],
 .ownership-treemap[hidden],
 .ownership-mover-seg[hidden],
-.ownership-window-seg[hidden] {
+.ownership-window-seg[hidden],
+.prices-mover-kind-seg[hidden] {
   display: none !important;
 }
 .ownership-treemap {
@@ -5788,22 +5874,24 @@ html[data-page="prices"] .layout .main {
 }
 
 /* Ownership / Prices desktop: keep Filters / Players·Teams / Search on one row. */
-html[data-page="ownership"] #subtoolbar,
-html[data-page="prices"] #subtoolbar {
-  flex-wrap: nowrap;
-}
-html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
-html[data-page="prices"] #subtoolbar .topbar-end-cluster {
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: flex-end;
-  gap: 8px;
-}
-html[data-page="ownership"] #subtoolbar #search-wrap,
-html[data-page="prices"] #subtoolbar #search-wrap {
-  flex: 0 1 280px;
-  min-width: 140px;
-  max-width: 320px;
+@media (min-width: 721px) {
+  html[data-page="ownership"] #subtoolbar,
+  html[data-page="prices"] #subtoolbar {
+    flex-wrap: nowrap;
+  }
+  html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
+  html[data-page="prices"] #subtoolbar .topbar-end-cluster {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  html[data-page="ownership"] #subtoolbar #search-wrap,
+  html[data-page="prices"] #subtoolbar #search-wrap {
+    flex: 0 1 280px;
+    min-width: 140px;
+    max-width: 320px;
+  }
 }
 html[data-page="prices"] #stats-toolbar-start > .tabs {
   display: none !important;
@@ -6030,6 +6118,23 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   html[data-page="prices"] #prices-countdown-bar {
     display: none;
   }
+  html[data-page="prices"] #prices-next-update-footer:not([hidden]) {
+    display: block;
+  }
+  .prices-mover-bar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  #prices-page[data-prices-mover="risers"] .prices-prediction-panel[aria-label="Fallers"],
+  #prices-page[data-prices-mover="risers"] .prices-actual-panel[aria-label="Fallers"],
+  #prices-page[data-prices-mover="fallers"] .prices-prediction-panel[aria-label="Risers"],
+  #prices-page[data-prices-mover="fallers"] .prices-actual-panel[aria-label="Risers"] {
+    display: none !important;
+  }
+  #prices-page[data-prices-mover="fallers"] .prices-prediction-panel[aria-label="Fallers"] .prices-section-divider,
+  #prices-page[data-prices-mover="fallers"] .prices-actual-panel[aria-label="Fallers"] .prices-section-divider {
+    margin-top: 0;
+  }
   html[data-page="prices"] #prices-page[data-prices-view="prediction"] #prices-prediction-wrap {
     display: block;
     flex: none;
@@ -6044,7 +6149,8 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     flex: none;
     overflow: visible;
   }
-  html[data-page="prices"] #prices-updated-footer {
+  html[data-page="prices"] #prices-updated-footer,
+  html[data-page="prices"] #prices-next-update-footer {
     flex: none;
   }
   #prices-page .prices-table-wrap {
@@ -10797,28 +10903,56 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   line-height: 1.45;
 }
 
-.markets-header-actions {
-  display: flex;
+#markets-toolbar {
+  display: none;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 10px;
-  flex-shrink: 0;
-  padding-top: 2px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
 }
-.markets-header-actions .markets-control-view {
+html[data-page="markets"] #markets-toolbar {
+  display: flex;
+}
+html:not([data-page="markets"]) #markets-toolbar {
+  display: none !important;
+}
+html[data-page="markets"] #subtoolbar #stats-toolbar-actions {
+  width: 100%;
+}
+html[data-page="markets"] #subtoolbar .topbar-end-cluster {
+  flex: 1 1 auto;
+  width: 100%;
+  justify-content: stretch;
+  min-width: 0;
+}
+#markets-toolbar .markets-control {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
   padding: 0;
   border: none;
+}
+#markets-toolbar .schedule-control-head {
+  display: flex;
+  margin: 0;
   flex: none;
 }
-.markets-header-actions .markets-control-view .schedule-control-head {
-  display: none;
+#markets-toolbar .schedule-control-head strong {
+  font-size: 12px;
+  font-weight: 650;
 }
-.markets-header-actions .markets-view-seg {
+#markets-toolbar .markets-view-seg,
+#markets-toolbar .markets-compare-seg {
   width: auto;
   min-width: 228px;
   flex: none;
 }
-.markets-header-actions .markets-sliders-toggle,
+
 .markets-header-top > .markets-sliders-toggle {
   flex: 0 0 auto;
   flex-shrink: 0;
@@ -10826,9 +10960,6 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
 @media (max-width: 720px), (hover: none), (pointer: coarse) {
   .expected-cat-menu {
     display: none !important;
-  }
-  .markets-header-actions .markets-control-view {
-    display: none;
   }
 }
 
@@ -11810,10 +11941,28 @@ html[data-pointer="coarse"] .schedule-scatter-point:hover {
   gap: 14px 0;
   padding: 2px 0 4px !important;
 }
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+}
 .mobile-sheet-body > .schedule-controls.mobile-sheet-hosted .schedule-control,
 .mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-control {
   padding-inline: 0;
   border-left: none;
+}
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-toolbar .markets-control {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-view-seg,
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-compare-seg {
+  width: 100%;
+  min-width: 0;
 }
 .mobile-sheet-body > .feed-filters-sidebar.mobile-sheet-hosted {
   display: block !important;
@@ -18131,8 +18280,21 @@ html[data-page="live"] #topbar-end-cluster {
 }
 /* Pages that hide the whole subtoolbar until JS — avoid empty/wrong chrome flash */
 html[data-page="home"] #subtoolbar,
-html[data-page="schedule"] #subtoolbar,
-html[data-page="markets"] #subtoolbar {
+html[data-page="schedule"] #subtoolbar {
+  display: none !important;
+}
+html.is-mobile-layout[data-page="markets"] #subtoolbar {
+  display: none !important;
+}
+html[data-page="markets"] #stats-toolbar-start,
+html[data-page="markets"] #search-wrap,
+html[data-page="markets"] #compare-toggle,
+html[data-page="markets"] #columns-btn,
+html[data-page="markets"] #enhance-relative-btn,
+html[data-page="markets"] #expected-cat-toolbar,
+html[data-page="markets"] #live-mode-seg,
+html[data-page="markets"] #team-toolbar-controls,
+html[data-page="markets"] #table-only-toggles {
   display: none !important;
 }
 html[data-page="team"] #subtoolbar .tabs {

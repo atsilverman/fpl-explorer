@@ -1053,6 +1053,77 @@ def build_fixtures_by_team():
     return by_team, team_names, meta
 
 
+def build_live_fixtures_by_gw(bootstrap: dict | None = None) -> dict:
+    """Finished + in-play fixtures for Gameweek (Bonus/Feed) while a GW is still current.
+
+    ``fixturesByTeam`` only keeps upcoming fixtures, so after FT the Bonus view
+    would have no matchup cards until FPL flips ``is_current``. This map keeps
+    previous/current (and any GW with an event-live snapshot) so BPS rankings
+    stay visible until the next GW takes over.
+    """
+    fx_path = latest_fixtures_snapshot()
+    if fx_path is None:
+        return {}
+    if bootstrap is None:
+        bs_path = latest_bootstrap_snapshot()
+        if bs_path is None:
+            return {}
+        bootstrap = json.loads(bs_path.read_text(encoding="utf-8"))
+
+    teams_by_id = {
+        int(t["id"]): t["short_name"]
+        for t in (bootstrap.get("teams") or [])
+        if t.get("id") is not None and t.get("short_name")
+    }
+
+    gw_ids: set[int] = set()
+    for ev in bootstrap.get("events") or []:
+        try:
+            eid = int(ev["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if ev.get("is_current") or ev.get("is_previous"):
+            gw_ids.add(eid)
+    for cache_path in SNAPSHOTS_DIR.glob("event-live_*.json"):
+        try:
+            gw_ids.add(int(cache_path.stem.split("_")[-1]))
+        except ValueError:
+            continue
+
+    if not gw_ids:
+        return {}
+
+    try:
+        fixtures = json.loads(fx_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    out: dict[str, list] = {}
+    for f in fixtures:
+        try:
+            gw = int(f["event"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if gw not in gw_ids:
+            continue
+        home = teams_by_id.get(int(f["team_h"])) if f.get("team_h") is not None else None
+        away = teams_by_id.get(int(f["team_a"])) if f.get("team_a") is not None else None
+        if not home or not away:
+            continue
+        out.setdefault(str(gw), []).append(
+            {
+                "home": home,
+                "away": away,
+                "kickoff": f.get("kickoff_time"),
+                "finished": bool(f.get("finished") or f.get("finished_provisional")),
+            }
+        )
+
+    for gw, rows in out.items():
+        rows.sort(key=lambda r: (r.get("kickoff") or "", r["home"], r["away"]))
+    return out
+
+
 def load_price_overrides():
     """Manual pid -> FPL player `code` map for cases the auto-matcher can't
     (or gets wrong). See site/price_overrides.json — safe to hand-edit."""
@@ -1431,6 +1502,7 @@ def main():
         build_next_season_squad()
     )
     defcon_by_gw = build_defcon_by_gw()
+    live_fixtures_by_gw = build_live_fixtures_by_gw()
     fpl_identity = build_fpl_identity(next_season_players, next_season_meta.get("source"))
     validate_fpl_identity(fpl_identity, next_season_players, price_meta)
     # PL table ranks from finished fixture scorelines (ESPN 403 fallback removed).
@@ -1469,6 +1541,8 @@ def main():
         "nextSeasonTeamNames": next_season_team_names,
         "nextSeasonMeta": next_season_meta,
         "defconByGw": defcon_by_gw,
+        # Finished/current GW matchups for Gameweek Bonus (fixturesByTeam is upcoming-only).
+        "liveFixturesByGw": live_fixtures_by_gw,
         "fplIdentity": fpl_identity,
     }
 
@@ -1518,6 +1592,14 @@ def main():
     if defcon_by_gw:
         print(
             f"DefCon by GW: {', '.join(f'GW{g}={len(m)}' for g, m in sorted(defcon_by_gw.items(), key=lambda x: int(x[0])))}"
+        )
+    if live_fixtures_by_gw:
+        print(
+            "Live fixtures by GW: "
+            + ", ".join(
+                f"GW{g}={len(rows)}"
+                for g, rows in sorted(live_fixtures_by_gw.items(), key=lambda x: int(x[0]))
+            )
         )
     if price_meta["source"]:
         print(

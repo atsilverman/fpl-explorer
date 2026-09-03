@@ -793,7 +793,7 @@
     // Markets Goals/CS heat fills — 0 = stricter (less color), 100 = looser (more).
     marketsHeatGoals: MARKETS_HEAT_DEFAULT,
     marketsHeatCs: MARKETS_HEAT_DEFAULT,
-    marketsCompare: "current", // current | last | 72h
+    marketsCompare: "current", // current | 24h | 72h
     marketsCardView: "stats", // stats (G+CS%) | scoreline
     teamSquad: [],
     teamCaptainCode: null,
@@ -822,6 +822,7 @@
     pricesActualSortTouched: false,
     pricesActualShowAll: false,
     pricesPredictionShowAll: false,
+    pricesMoverKind: "risers", // risers | fallers (mobile table toggle)
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
@@ -1182,7 +1183,11 @@
     pricesPage: $("#prices-page"),
     pricesCountdownValue: $("#prices-countdown-value"),
     pricesCountdownSub: $("#prices-countdown-sub"),
+    pricesNextUpdateFooter: $("#prices-next-update-footer"),
+    pricesNextUpdateValue: $("#prices-next-update-value"),
+    pricesNextUpdateSub: $("#prices-next-update-sub"),
     pricesViewSeg: $("#prices-view-seg"),
+    pricesMoverKindSeg: $("#prices-mover-kind-seg"),
     pricesActualScopeSeg: $("#prices-actual-scope-seg"),
     pricesPredictionScopeSeg: $("#prices-prediction-scope-seg"),
     pricesCountdownBar: $("#prices-countdown-bar"),
@@ -1248,6 +1253,7 @@
     marketsGrid: $("#markets-grid"),
     marketsAttribution: $("#markets-attribution"),
     marketsControls: $("#markets-controls"),
+    marketsToolbar: $("#markets-toolbar"),
     marketsSlidersToggle: $("#markets-sliders-toggle"),
     marketsHeatGoals: $("#markets-heat-goals"),
     marketsHeatGoalsFill: $("#markets-heat-goals-fill"),
@@ -1258,7 +1264,6 @@
     marketsCompareSeg: $("#markets-compare-seg"),
     marketsViewSeg: $("#markets-view-seg"),
     marketsViewControl: $("#markets-view-control"),
-    marketsHeaderActions: $("#markets-header-actions"),
     marketsHeaderTop: $("#markets-page .markets-header-top"),
     scheduleScatter: $("#schedule-scatter"),
     scheduleScatterTooltip: $("#schedule-scatter-tooltip"),
@@ -7983,7 +7988,7 @@
     const isLive = page === "live";
     const hideSubtoolbar =
       page === "schedule" ||
-      isMarkets ||
+      (isMarkets && preferMobileSheet()) ||
       isHome ||
       (preferMobileSheet() && page === "rankings");
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
@@ -8995,10 +9000,14 @@
     if (el.scheduleSlidersToggle && closingKey === "schedule-filters") {
       el.scheduleSlidersToggle.classList.remove("on");
       el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
+      setTip(el.scheduleSlidersToggle, "Show matchup filters");
+      el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup filters");
     }
     if (el.marketsSlidersToggle && closingKey === "markets-filters") {
       el.marketsSlidersToggle.classList.remove("on");
       el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
+      setTip(el.marketsSlidersToggle, "Show filters");
+      el.marketsSlidersToggle.setAttribute("aria-label", "Show filters");
     }
     if (el.expectedCatBtn && closingKey === "expected-cats") {
       el.expectedCatBtn.setAttribute("aria-expanded", "false");
@@ -10219,7 +10228,7 @@
         `${iconHTML("swords", "ftt-attack-icon")} ${iconHTML("shield-half", "ftt-defence-icon")}`,
         "Attack / defence edge when Advantage ≥ Flag threshold."
       ),
-      spitRow(iconHTML("sliders-horizontal"), "Gameweek range, Highlight Ranks, Expected/Actual blend, and Flag threshold."),
+        spitRow(iconHTML("funnel"), "Gameweek range, Highlight Ranks, Expected/Actual blend, and Flag threshold."),
     ];
     if (!mobile) {
       iconRows.push(spitRow(iconHTML("info"), "On a card — that club’s own home/away attack &amp; defence ranks."));
@@ -10464,7 +10473,7 @@
       const note = isActual
         ? "Actual log starts empty on deploy and fills as daily/4h fetches detect changes."
         : "Refreshed every 4 hours via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
-      return `${spitHead("scale", "How Prices works")}
+      return `${spitHead("pound-sterling", "How Prices works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
@@ -10510,7 +10519,7 @@
         spitRow(spitRank("Bonus"), "Per fixture after 60′ — BPS bars; top three projected 3/2/1."),
         spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned."),
       ];
-      return `${spitHead("activity", "How Live works")}
+      return `${spitHead("circle-play", "How Gameweek works")}
         ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}`;
@@ -10524,13 +10533,13 @@
         spitRow(spitMarketsDeltaSwatch("down"), "Compare mode — moved down vs earlier pull"),
       ];
       const reading = [
-        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — in Compare sheet" : "Goals and CS% or Scoreline — in the header"),
-        spitRow(iconHTML("scale"), "Compare window — Current / Last run / Last 72 hr (both card views)"),
+        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — in the Filters sheet" : "Goals and CS% or Scoreline — in the toolbar above the title"),
+        spitRow(iconHTML("scale"), "Compare window — Current / Last 24 hr / Last 72 hr (both card views)"),
         spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
         spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
         spitRow(spitRank("Scoreline"), "Exact-score matrix (% in cells). Goals view lists top likely scores."),
         spitRow(spitRank("Color"), "Blue/orange bands on Goals and CS%; deeper past the threshold. Soft blue is quieter in dark mode."),
-        spitRow(spitRank("Compare"), "Last run or Last 72 hr — movement vs prior odds pull."),
+        spitRow(spitRank("Compare"), "Last 24 hr or Last 72 hr — movement vs prior odds pull."),
       ];
       return `${spitHead("candlestick", "How Markets works")}
         ${spitIntro("Upcoming PL fixtures: projected goals, clean-sheet %, and likely scorelines from bookmaker odds.")}
@@ -11222,7 +11231,7 @@
   function syncPageInfoButton() {
     const labels = {
       home: "How Home works",
-      live: "How Live works",
+      live: "How Gameweek works",
       opta: "How Statistics works",
       rankings: "How Rankings works",
       expected: "How Expected Data works",
@@ -15896,10 +15905,10 @@
       if (snap && snap.generatedAt) {
         const vs = fmtMarketsUpdated(snap.generatedAt);
         if (vs) parts.push(`vs ${vs}`);
-        else parts.push(state.marketsCompare === "last" ? "vs last run" : "vs last 72h");
+        else parts.push(state.marketsCompare === "24h" ? "vs last 24h" : "vs last 72h");
       } else {
         parts.push(
-          state.marketsCompare === "last" ? "No prior run yet" : "No ~72h snapshot yet"
+          state.marketsCompare === "24h" ? "No ~24h snapshot yet" : "No ~72h snapshot yet"
         );
       }
     }
@@ -16070,27 +16079,14 @@
   }
 
   function marketsCompareHours() {
+    if (state.marketsCompare === "24h") return 24;
     if (state.marketsCompare === "72h") return 72;
     return 0;
   }
 
   function pickMarketsHistorySnapshot(hoursAgo) {
     const hist = Array.isArray(MARKETS.history) ? MARKETS.history : [];
-    if (!hist.length) return null;
-    if (!hoursAgo) {
-      // Last run = most recent retained snapshot.
-      let best = null;
-      let bestT = -Infinity;
-      for (const snap of hist) {
-        const t = Date.parse(snap && snap.generatedAt);
-        if (!Number.isFinite(t)) continue;
-        if (t >= bestT) {
-          bestT = t;
-          best = snap;
-        }
-      }
-      return best;
-    }
+    if (!hist.length || !hoursAgo) return null;
     const target = Date.now() - hoursAgo * 3600 * 1000;
     let best = null;
     let bestScore = Infinity;
@@ -16110,7 +16106,7 @@
 
   function marketsBaselineMap() {
     if (state.marketsCompare === "current") return null;
-    const hours = marketsCompareHours(); // 0 => last run
+    const hours = marketsCompareHours();
     const snap = pickMarketsHistorySnapshot(hours);
     if (!snap || !Array.isArray(snap.fixtures)) return null;
     const byId = new Map();
@@ -16232,36 +16228,29 @@
     const marketsMobile = preferMobileSheet() && state.page === "markets";
     const marketsDesktop = !preferMobileSheet() && state.page === "markets";
     syncMarketsViewSeg();
-    const viewControl = el.marketsViewControl;
-    if (viewControl && el.marketsHeaderActions && el.marketsControls) {
-      if (preferMobileSheet()) {
-        if (viewControl.parentElement !== el.marketsControls) {
-          el.marketsControls.insertBefore(viewControl, el.marketsControls.firstChild);
-        }
-      } else if (viewControl.parentElement !== el.marketsHeaderActions) {
-        el.marketsHeaderActions.insertBefore(
-          viewControl,
-          el.marketsSlidersToggle || el.marketsHeaderActions.firstChild
-        );
+    const toolbar = el.marketsToolbar;
+    const sheetHost = el.marketsControls;
+    const toolbarHome =
+      el.subtoolbar && el.subtoolbar.querySelector(".topbar-end-cluster");
+    if (toolbar && sheetHost && toolbarHome) {
+      if (marketsMobile) {
+        if (toolbar.parentElement !== sheetHost) sheetHost.appendChild(toolbar);
+      } else if (toolbar.parentElement !== toolbarHome) {
+        toolbarHome.insertBefore(toolbar, toolbarHome.firstChild);
       }
     }
-    // Filters toggle lives in header-top (Matchups-style); mobile FAB dock moves it.
-    const marketsToggleHome = el.marketsHeaderTop || el.marketsHeaderActions;
-    if (el.marketsSlidersToggle && marketsToggleHome) {
-      if (marketsMobile) {
-        if (
-          el.marketsSlidersToggle.parentElement !== marketsToggleHome &&
-          el.marketsSlidersToggle.parentElement !== el.mobileFilterDock
-        ) {
-          marketsToggleHome.appendChild(el.marketsSlidersToggle);
-        }
-        el.marketsSlidersToggle.hidden = false;
-      } else {
-        if (el.marketsSlidersToggle.parentElement !== marketsToggleHome) {
-          marketsToggleHome.appendChild(el.marketsSlidersToggle);
-        }
-        el.marketsSlidersToggle.hidden = !marketsDesktop;
+    if (sheetHost && marketsDesktop) {
+      sheetHost.hidden = true;
+      sheetHost.classList.add("is-collapsed");
+    }
+    if (el.marketsSlidersToggle && el.marketsHeaderTop) {
+      if (
+        el.marketsSlidersToggle.parentElement !== el.marketsHeaderTop &&
+        el.marketsSlidersToggle.parentElement !== el.mobileFilterDock
+      ) {
+        el.marketsHeaderTop.appendChild(el.marketsSlidersToggle);
       }
+      el.marketsSlidersToggle.hidden = !marketsMobile;
     }
     syncMobileChrome();
   }
@@ -16535,18 +16524,69 @@
   function liveMatchupsForGw(gw) {
     const seen = new Set();
     const out = [];
+    const pushMatchup = (home, away, kickoff) => {
+      if (!home || !away) return;
+      const key = `${home}|${away}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ id: key, home, away, kickoff: kickoff || null });
+    };
+
+    // Upcoming schedule (fixturesByTeam drops finished GWs after FT).
     for (const [team, list] of Object.entries(FIXTURES_BY_TEAM)) {
       for (const fx of list || []) {
         if (Number(fx.gw) !== gw) continue;
         const home = fx.ha === "H" ? team : fx.opp;
         const away = fx.ha === "H" ? fx.opp : team;
-        if (!home || !away) continue;
-        const key = `${home}|${away}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({ id: key, home, away, kickoff: fx.kickoff || null });
+        pushMatchup(home, away, fx.kickoff);
       }
     }
+
+    // Finished / in-play GWs still marked current — keep Bonus cards until next GW.
+    if (!out.length) {
+      const baked =
+        (DATA.liveFixturesByGw || {})[String(gw)] || (DATA.liveFixturesByGw || {})[gw] || [];
+      for (const fx of baked) {
+        if (!fx) continue;
+        pushMatchup(fx.home, fx.away, fx.kickoff);
+      }
+    }
+
+    // Last resort: pair clubs from elementGw fixtureIds (works before rebuild).
+    if (!out.length) {
+      const egMap = liveElementMapForGw(gw);
+      const byElement = livePlayerByElement();
+      const byFx = new Map();
+      for (const [eidStr, eg] of Object.entries(egMap)) {
+        if (!eg || eg.fixtureId == null) continue;
+        const player = byElement.get(Number(eidStr));
+        if (!player) continue;
+        const team = player.team || currentTeamCode(player);
+        if (!team) continue;
+        const fid = String(eg.fixtureId);
+        if (!byFx.has(fid)) byFx.set(fid, new Set());
+        byFx.get(fid).add(team);
+      }
+      const kickoffByTeam = new Map();
+      if (HOME && Array.isArray(HOME.squad)) {
+        for (const row of HOME.squad) {
+          const team = row.team || currentTeamCode(row);
+          for (const fx of homeSquadFixtures(row)) {
+            if (fx && fx.kickoff && team && !kickoffByTeam.has(team)) {
+              kickoffByTeam.set(team, fx.kickoff);
+            }
+          }
+        }
+      }
+      for (const teams of byFx.values()) {
+        const codes = Array.from(teams).sort();
+        if (codes.length < 2) continue;
+        const home = codes[0];
+        const away = codes[1];
+        pushMatchup(home, away, kickoffByTeam.get(home) || kickoffByTeam.get(away) || null);
+      }
+    }
+
     out.sort((a, b) => {
       const ka = a.kickoff || "";
       const kb = b.kickoff || "";
@@ -20261,6 +20301,28 @@
     return html;
   }
 
+  function pricesMoverKind() {
+    return state.pricesMoverKind === "fallers" ? "fallers" : "risers";
+  }
+
+  function syncPricesMoverKindUI({ animate = false } = {}) {
+    if (!el.pricesPage) return;
+    const mobile = NARROW_MQ.matches && state.page === "prices";
+    if (el.pricesMoverKindSeg) {
+      el.pricesMoverKindSeg.hidden = !mobile;
+      const kind = pricesMoverKind();
+      el.pricesMoverKindSeg.querySelectorAll("[data-prices-mover-kind]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.pricesMoverKind === kind);
+      });
+      syncSegThumb(el.pricesMoverKindSeg, { animate });
+    }
+    if (mobile) {
+      el.pricesPage.dataset.pricesMover = pricesMoverKind();
+    } else {
+      delete el.pricesPage.dataset.pricesMover;
+    }
+  }
+
   function syncPricesScopeSeg(seg, { show, showAll, topTitle, allTitle }) {
     if (!seg) return;
     seg.hidden = !show;
@@ -20316,8 +20378,10 @@
         allTitle: "Every recorded price change",
       });
     }
+    syncPricesMoverKindUI();
     requestAnimationFrame(() => {
       syncSegThumb(el.pricesViewSeg);
+      syncSegThumb(el.pricesMoverKindSeg);
       syncSegThumb(el.pricesPredictionScopeSeg);
       syncSegThumb(el.pricesActualScopeSeg);
     });
@@ -20403,35 +20467,40 @@
     }
   }
 
+  function fmtPricesCountdownClock(iso) {
+    if (!iso) return "—";
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return "00 : 00 : 00";
+    const total = Math.floor(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return `${String(h).padStart(2, "0")} : ${String(m).padStart(2, "0")} : ${String(s).padStart(2, "0")}`;
+  }
+
   function syncPricesCountdown() {
     if (state.page !== "prices") {
       if (pricesCountdownTimer) {
         clearInterval(pricesCountdownTimer);
         pricesCountdownTimer = null;
       }
+      if (el.pricesNextUpdateFooter) el.pricesNextUpdateFooter.hidden = true;
       return;
+    }
+    if (el.pricesNextUpdateFooter) {
+      el.pricesNextUpdateFooter.hidden = !NARROW_MQ.matches;
     }
     const tick = () => {
       const iso = pricesEffectiveNextChangeAt();
-      if (el.pricesCountdownSub) {
-        el.pricesCountdownSub.textContent = fmtPricesChangeAtLabel(iso);
+      const clock = fmtPricesCountdownClock(iso);
+      const atLabel = fmtPricesChangeAtLabel(iso);
+      if (el.pricesCountdownSub) el.pricesCountdownSub.textContent = atLabel;
+      if (el.pricesCountdownValue) el.pricesCountdownValue.textContent = clock;
+      if (el.pricesNextUpdateSub) el.pricesNextUpdateSub.textContent = atLabel;
+      if (el.pricesNextUpdateValue) el.pricesNextUpdateValue.textContent = clock;
+      if (el.pricesNextUpdateFooter) {
+        el.pricesNextUpdateFooter.hidden = state.page !== "prices" || !NARROW_MQ.matches;
       }
-      if (!el.pricesCountdownValue) return;
-      if (!iso) {
-        el.pricesCountdownValue.textContent = "—";
-        return;
-      }
-      const ms = new Date(iso).getTime() - Date.now();
-      if (ms <= 0) {
-        el.pricesCountdownValue.textContent = "00 : 00 : 00";
-        return;
-      }
-      const total = Math.floor(ms / 1000);
-      const h = Math.floor(total / 3600);
-      const m = Math.floor((total % 3600) / 60);
-      const s = total % 60;
-      el.pricesCountdownValue.textContent =
-        `${String(h).padStart(2, "0")} : ${String(m).padStart(2, "0")} : ${String(s).padStart(2, "0")}`;
     };
     tick();
     if (!pricesCountdownTimer) {
@@ -20641,6 +20710,7 @@
   }
 
   function renderPrices({ animateEnter = false, preserveScroll = false } = {}) {
+    syncPricesMoverKindUI();
     if (!el.pricesRisersBody || !el.pricesFallersBody) return;
     syncPricesViewUI();
     syncPricesCountdown();
@@ -21467,7 +21537,7 @@
     const isMarkets = page === "markets";
     const isHome = page === "home";
     const isLive = page === "live";
-    // Schedule and Markets hide the subtoolbar; Markets view picker lives in filters.
+    // Schedule hides the subtoolbar. Markets desktop uses it for card view + compare.
     syncSubtoolbarViewport(page);
     syncFiltersChrome();
     if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome ? "none" : "";
@@ -21884,6 +21954,23 @@
       state.pricesViewMode = next;
       syncPricesViewUI();
       if (state.page === "prices") renderPrices({ animateEnter: true });
+    });
+  }
+  if (el.pricesMoverKindSeg) {
+    el.pricesMoverKindSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-prices-mover-kind]");
+      if (!btn || !el.pricesMoverKindSeg.contains(btn)) return;
+      const next = btn.dataset.pricesMoverKind;
+      if (next !== "risers" && next !== "fallers") return;
+      if (next === pricesMoverKind()) return;
+      state.pricesMoverKind = next;
+      syncPricesMoverKindUI({ animate: true });
+      if (state.page === "prices") {
+        requestAnimationFrame(() => {
+          syncPricesActualColumnWidths();
+          syncMobileScrollportHeight();
+        });
+      }
     });
   }
   function bindPricesScopeSeg(seg, { getShowAll, setShowAll, rerender }) {
@@ -22972,7 +23059,7 @@
       const btn = e.target.closest("button[data-markets-compare]");
       if (!btn || !el.marketsCompareSeg.contains(btn)) return;
       const mode = btn.dataset.marketsCompare;
-      if (mode !== "current" && mode !== "last" && mode !== "72h") return;
+      if (mode !== "current" && mode !== "24h" && mode !== "72h") return;
       if (mode === state.marketsCompare) return;
       state.marketsCompare = mode;
       syncMarketsCompareSeg();
@@ -22995,68 +23082,46 @@
 
   function setMarketsSlidersOpen(open) {
     if (!el.marketsControls || !el.marketsSlidersToggle) return;
-    if (!hasFineHover()) {
-      if (open) {
-        openMobileSheetHost({
-          title: "Filters",
-          key: "markets-filters",
-          hostEl: el.marketsControls,
-          prepare(host) {
-            host.hidden = false;
-            host.classList.remove("is-collapsed");
-          },
-          cleanup(host) {
-            host.hidden = true;
-            host.classList.add("is-collapsed");
-          },
-        });
-        el.marketsSlidersToggle.classList.add("on");
-        el.marketsSlidersToggle.setAttribute("aria-expanded", "true");
-        setTip(el.marketsSlidersToggle, "Hide filters");
-        el.marketsSlidersToggle.setAttribute("aria-label", "Hide filters");
-        requestAnimationFrame(() => {
-          syncMarketsCompareSeg();
-          syncMarketsViewSeg();
-        });
-      } else if (mobileSheetKey === "markets-filters") {
-        closeMobileSheet();
-      } else {
-        el.marketsControls.hidden = true;
-        el.marketsControls.classList.add("is-collapsed");
-        el.marketsSlidersToggle.classList.remove("on");
-        el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
-        setTip(el.marketsSlidersToggle, "Show filters");
-        el.marketsSlidersToggle.setAttribute("aria-label", "Show filters");
-      }
-      return;
-    }
-    el.marketsControls.hidden = !open;
-    el.marketsControls.classList.toggle("is-collapsed", !open);
-    el.marketsSlidersToggle.classList.toggle("on", open);
-    el.marketsSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    setTip(
-      el.marketsSlidersToggle,
-      open ? "Hide filters" : "Show filters"
-    );
-    el.marketsSlidersToggle.setAttribute(
-      "aria-label",
-      open ? "Hide filters" : "Show filters"
-    );
+    if (!preferMobileSheet()) return;
     if (open) {
+      openMobileSheetHost({
+        title: "Filters",
+        key: "markets-filters",
+        hostEl: el.marketsControls,
+        prepare(host) {
+          host.hidden = false;
+          host.classList.remove("is-collapsed");
+        },
+        cleanup(host) {
+          host.hidden = true;
+          host.classList.add("is-collapsed");
+        },
+      });
+      el.marketsSlidersToggle.classList.add("on");
+      el.marketsSlidersToggle.setAttribute("aria-expanded", "true");
+      setTip(el.marketsSlidersToggle, "Hide filters");
+      el.marketsSlidersToggle.setAttribute("aria-label", "Hide filters");
       requestAnimationFrame(() => {
         syncMarketsCompareSeg();
         syncMarketsViewSeg();
       });
+      return;
     }
+    if (mobileSheetKey === "markets-filters") {
+      closeMobileSheet();
+      return;
+    }
+    el.marketsControls.hidden = true;
+    el.marketsControls.classList.add("is-collapsed");
+    el.marketsSlidersToggle.classList.remove("on");
+    el.marketsSlidersToggle.setAttribute("aria-expanded", "false");
+    setTip(el.marketsSlidersToggle, "Show filters");
+    el.marketsSlidersToggle.setAttribute("aria-label", "Show filters");
   }
 
   if (el.marketsSlidersToggle) {
     el.marketsSlidersToggle.addEventListener("click", () => {
-      if (!hasFineHover()) {
-        setMarketsSlidersOpen(!(mobileSheetOpen && mobileSheetKey === "markets-filters"));
-        return;
-      }
-      setMarketsSlidersOpen(el.marketsControls.hidden);
+      setMarketsSlidersOpen(!(mobileSheetOpen && mobileSheetKey === "markets-filters"));
     });
   }
 
@@ -23079,8 +23144,8 @@
         });
         el.scheduleSlidersToggle.classList.add("on");
         el.scheduleSlidersToggle.setAttribute("aria-expanded", "true");
-        setTip(el.scheduleSlidersToggle, "Hide matchup sliders");
-        el.scheduleSlidersToggle.setAttribute("aria-label", "Hide matchup sliders");
+        setTip(el.scheduleSlidersToggle, "Hide matchup filters");
+        el.scheduleSlidersToggle.setAttribute("aria-label", "Hide matchup filters");
         requestAnimationFrame(() => {
           updateScheduleGwSlider();
           updateScheduleEnhancePctSlider();
@@ -23094,8 +23159,8 @@
         el.scheduleControls.classList.add("is-collapsed");
         el.scheduleSlidersToggle.classList.remove("on");
         el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
-        setTip(el.scheduleSlidersToggle, "Show matchup sliders");
-        el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup sliders");
+        setTip(el.scheduleSlidersToggle, "Show matchup filters");
+        el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup filters");
       }
       return;
     }
@@ -23105,9 +23170,9 @@
     el.scheduleSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
     setTip(
       el.scheduleSlidersToggle,
-      open ? "Hide matchup sliders" : "Show matchup sliders"
+      open ? "Hide matchup filters" : "Show matchup filters"
     );
-    el.scheduleSlidersToggle.setAttribute("aria-label", open ? "Hide matchup sliders" : "Show matchup sliders");
+    el.scheduleSlidersToggle.setAttribute("aria-label", open ? "Hide matchup filters" : "Show matchup filters");
     if (open) {
       // Fills were measured while collapsed — refresh now that layout is visible.
       requestAnimationFrame(() => {

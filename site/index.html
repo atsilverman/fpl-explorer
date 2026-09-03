@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=951" />
+<link rel="stylesheet" href="styles.css?v=958" />
 <script>
 (() => {
   try {
@@ -48,8 +48,18 @@
       'html[data-page="prices"] #prices-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
-      'html[data-page="schedule"] #subtoolbar,' +
-      'html[data-page="markets"] #subtoolbar{display:none!important}' +
+      'html[data-page="schedule"] #subtoolbar{display:none!important}' +
+      'html.is-mobile-layout[data-page="markets"] #subtoolbar{display:none!important}' +
+      'html[data-page="markets"] #stats-toolbar-start,' +
+      'html[data-page="markets"] #search-wrap,' +
+      'html[data-page="markets"] #compare-toggle,' +
+      'html[data-page="markets"] #columns-btn,' +
+      'html[data-page="markets"] #enhance-relative-btn,' +
+      'html[data-page="markets"] #expected-cat-toolbar,' +
+      'html[data-page="markets"] #live-mode-seg,' +
+      'html[data-page="markets"] #team-toolbar-controls,' +
+      'html[data-page="markets"] #table-only-toggles{display:none!important}' +
+      'html[data-page="markets"] #markets-toolbar{display:flex}' +
       'html[data-page="live"] #subtoolbar .tabs,' +
       'html[data-page="live"] #search-wrap,' +
       'html[data-page="live"] #compare-toggle,' +
@@ -83,6 +93,10 @@
 <svg class="icon-sprite" aria-hidden="true" focusable="false">
   <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>
+  </symbol>
+  <symbol id="i-circle-play" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10"/>
+    <polygon points="10 8 16 12 10 16 10 8"/>
   </symbol>
   <symbol id="i-table" viewBox="0 0 24 24">
     <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
@@ -139,6 +153,12 @@
     <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
     <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
     <path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>
+  </symbol>
+  <symbol id="i-pound-sterling" viewBox="0 0 24 24">
+    <path d="M18 7c0-5.333-8-5.333-8 0"/>
+    <path d="M10 7v14"/>
+    <path d="M6 21h12"/>
+    <path d="M6 13h10"/>
   </symbol>
   <symbol id="i-check" viewBox="0 0 24 24">
     <path d="M20 6 9 17l-5-5"/>
@@ -318,8 +338,8 @@
       Home
     </button>
     <button id="page-live" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>
-      Live
+      <svg class="icon" aria-hidden="true"><use href="#i-circle-play"/></svg>
+      Gameweek
     </button>
     <button id="page-opta" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-table"/></svg>
@@ -334,7 +354,7 @@
       Ownership
     </button>
     <button id="page-prices" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+      <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling"/></svg>
       Prices
     </button>
     <button id="page-team" class="page-tab-btn" type="button" hidden>
@@ -526,6 +546,33 @@
         </div>
         <div class="team-gw-nav" id="team-gw-nav"></div>
       </div>
+      <div class="markets-toolbar" id="markets-toolbar">
+        <div class="markets-control markets-control-view" id="markets-view-control">
+          <div class="schedule-control-head">
+            <strong>Card view</strong>
+          </div>
+          <div class="segmented markets-view-seg" id="markets-view-seg" role="group" aria-label="Matchup card view">
+            <button type="button" data-markets-view="stats" class="active">Goals and CS%</button>
+            <button type="button" data-markets-view="scoreline">Scoreline</button>
+          </div>
+        </div>
+        <div class="markets-control markets-control-compare" id="markets-compare-control">
+          <div class="schedule-control-head">
+            <strong>Compare
+              <span class="schedule-control-info" tabindex="0"
+                data-tip="Goals/CS% movement vs an earlier odds pull. Current hides deltas; Last 24 hr or Last 72 hr compares to prior snapshots."
+                aria-label="How Compare works">
+                <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+              </span>
+            </strong>
+          </div>
+          <div class="segmented markets-compare-seg" id="markets-compare-seg" role="group" aria-label="Odds compare window">
+            <button type="button" data-markets-compare="current" class="active">Current</button>
+            <button type="button" data-markets-compare="24h">Last 24 hr</button>
+            <button type="button" data-markets-compare="72h">Last 72 hr</button>
+          </div>
+        </div>
+      </div>
       <button id="compare-toggle" class="ghost-btn icon-label-btn" type="button" title="Click up to 5 rows to compare side by side" aria-label="Compare">
         <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
         <span class="btn-label">Compare</span>
@@ -548,7 +595,7 @@
         </button>
         <div id="expected-cat-menu" class="dropdown-panel expected-cat-menu" role="menu" aria-label="xData categories"></div>
       </div>
-      <div class="segmented segmented-block live-mode-seg" id="live-mode-seg" hidden role="group" aria-label="Live view">
+      <div class="segmented segmented-block live-mode-seg" id="live-mode-seg" hidden role="group" aria-label="Gameweek view">
         <button type="button" data-live-mode="feed" class="active">Feed</button>
         <button type="button" data-live-mode="defcon">DefCon</button>
         <button type="button" data-live-mode="points">Points</button>
@@ -1013,7 +1060,7 @@
       <div class="page-header live-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-activity"/></svg>Live<button class="page-info-btn" type="button" aria-label="How Live works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-circle-play"/></svg>Gameweek<button class="page-info-btn" type="button" aria-label="How Gameweek works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle" id="live-page-subtitle">Event feed — FPL-relevant actions from live fixtures in chronological order, with points and league impact for your manager.</p>
           </div>
           <div class="page-header-meta">
@@ -1121,7 +1168,7 @@
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-scale"/></svg>Prices<button class="page-info-btn" type="button" aria-label="How Prices works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling"/></svg>Prices<button class="page-info-btn" type="button" aria-label="How Prices works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Official FPL price-change predictor — players very likely or likely to rise or fall before the next daily price update. Refreshed every 4 hours from bootstrap-static.</p>
           </div>
         </div>
@@ -1134,6 +1181,10 @@
         <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
           <button type="button" data-prices-view="prediction" class="active">Prediction</button>
           <button type="button" data-prices-view="actual">Actual</button>
+        </div>
+        <div class="segmented ownership-mover-seg prices-mover-kind-seg" id="prices-mover-kind-seg" role="group" aria-label="Risers or fallers" hidden>
+          <button type="button" data-prices-mover-kind="risers" class="active">Risers</button>
+          <button type="button" data-prices-mover-kind="fallers">Fallers</button>
         </div>
         <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-prediction-scope-seg" role="group" aria-label="Prediction movers scope" hidden>
           <button type="button" data-prices-scope="top" title="Top 5 risers and fallers by ownership">Top 5</button>
@@ -1190,6 +1241,10 @@
             </div>
           </section>
         </div>
+      </div>
+      <div class="prices-next-update-footer" id="prices-next-update-footer" hidden>
+        <p class="prices-countdown-main">Next price changes in: <strong id="prices-next-update-value">—</strong></p>
+        <p class="prices-countdown-sub" id="prices-next-update-sub">Changes at —</p>
       </div>
       <p class="page-updated-text page-data-footer" id="prices-updated-footer" hidden></p>
     </div>
@@ -1306,9 +1361,9 @@
             <p class="page-subtitle">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
           </div>
           <button id="schedule-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
-            title="Show matchup sliders" aria-label="Show matchup sliders" aria-expanded="false" aria-controls="schedule-controls">
-            <svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>
-            <span class="mobile-dock-label">Sliders</span>
+            title="Show matchup filters" aria-label="Show matchup filters" aria-expanded="false" aria-controls="schedule-controls">
+            <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
+            <span class="mobile-dock-label">Filters</span>
           </button>
         </div>
 
@@ -1409,42 +1464,15 @@
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets<button class="page-info-btn" type="button" aria-label="How Markets works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
           </div>
-          <div class="markets-header-actions" id="markets-header-actions">
-            <div class="markets-control markets-control-view" id="markets-view-control">
-              <div class="schedule-control-head">
-                <strong>Card view</strong>
-              </div>
-              <div class="segmented markets-view-seg" id="markets-view-seg" role="group" aria-label="Matchup card view">
-                <button type="button" data-markets-view="stats" class="active">Goals and CS%</button>
-                <button type="button" data-markets-view="scoreline">Scoreline</button>
-              </div>
-            </div>
-          </div>
           <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
+            hidden
             title="Show filters" aria-label="Show filters" aria-expanded="false" aria-controls="markets-controls">
             <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
             <span class="mobile-dock-label">Filters</span>
           </button>
         </div>
 
-        <div class="markets-controls is-collapsed" id="markets-controls" hidden>
-          <div class="markets-control markets-control-compare">
-            <div class="schedule-control-head">
-              <strong>Compare
-                <span class="schedule-control-info" tabindex="0"
-                  data-tip="Goals/CS% movement vs an earlier odds pull. Current hides deltas; Last run or Last 72 hr compares to prior snapshots."
-                  aria-label="How Compare works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
-            </div>
-            <div class="segmented markets-compare-seg" id="markets-compare-seg" role="group" aria-label="Odds compare window">
-              <button type="button" data-markets-compare="current" class="active">Current</button>
-              <button type="button" data-markets-compare="last">Last run</button>
-              <button type="button" data-markets-compare="72h">Last 72 hr</button>
-            </div>
-          </div>
-        </div>
+        <div class="markets-controls is-collapsed" id="markets-controls" hidden></div>
       </div>
       <div class="markets-grid" id="markets-grid"></div>
       <p class="markets-attribution" id="markets-attribution" hidden></p>
@@ -1526,15 +1554,15 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=77"></script>
+<script src="data.js?v=78"></script>
 <script src="markets_data.js?v=27"></script>
 <script src="ownership_data.js?v=19"></script>
 <script src="price_changes_data.js?v=22"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=32"></script>
+<script src="home_data.js?v=33"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=995"></script>
+<script src="app.js?v=1003"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
