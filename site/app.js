@@ -1110,10 +1110,16 @@
     homeGwPoints: $("#home-gw-points"),
     homeGwHeading: $("#home-gw-heading"),
     homeGwMeta: $("#home-gw-meta"),
+    homeSummary: $("#home-summary"),
+    homeSummaryHero: $("#home-summary-hero"),
+    homeHeroOverallRank: $("#home-hero-overall-rank"),
+    homeHeroOverallRankDelta: $("#home-hero-overall-rank-delta"),
     homeOverallRank: $("#home-overall-rank"),
     homeOverallRankNum: $("#home-overall-rank-num"),
     homeOverallRankDelta: $("#home-overall-rank-delta"),
     homeOverallPct: $("#home-overall-pct"),
+    homeGwRank: $("#home-gw-rank"),
+    homeGwRankNum: $("#home-gw-rank-num"),
     homeTotalPoints: $("#home-total-points"),
     homeLeagueRank: $("#home-league-rank"),
     homeLeagueRankNum: $("#home-league-rank-num"),
@@ -1335,6 +1341,7 @@
     pageInfoTooltip: $("#page-info-tooltip"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
+    homeSummarySeg: $("#home-summary-seg"),
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplManagerSelect: $("#fpl-manager-select"),
@@ -2090,10 +2097,15 @@
     if (el.homeGwMeta) el.homeGwMeta.innerHTML = "";
     const overallRankEl = el.homeOverallRankNum || el.homeOverallRank;
     if (overallRankEl) overallRankEl.textContent = "—";
+    if (el.homeHeroOverallRank) el.homeHeroOverallRank.textContent = "";
+    const gwRankEl = el.homeGwRankNum || el.homeGwRank;
+    if (gwRankEl) gwRankEl.textContent = "—";
+    if (gwRankEl) delete gwRankEl.dataset.lastGwRank;
     if (el.homeTotalPoints) el.homeTotalPoints.textContent = "—";
     const leagueRankEl = el.homeLeagueRankNum || el.homeLeagueRank;
     if (leagueRankEl) leagueRankEl.textContent = "—";
     setHomeRankDelta(el.homeOverallRankDelta, null);
+    setHomeRankDelta(el.homeHeroOverallRankDelta, null);
     setHomeRankDelta(el.homeLeagueRankDelta, null);
     setHomeOverallPct(el.homeOverallPct, null, null);
     if (el.homeSquadGwLabel) el.homeSquadGwLabel.textContent = "";
@@ -2375,6 +2387,55 @@
     });
   }
 
+  /** Keep last-known GW ranks when live/static payloads omit them (same GW only). */
+  function mergeHomeGwRank(incomingRows, priorHome, incomingGw) {
+    const priorGw = Number(priorHome?.gw);
+    const nextGw = Number(incomingGw);
+    if (Number.isFinite(priorGw) && Number.isFinite(nextGw) && priorGw !== nextGw) {
+      return incomingRows;
+    }
+    const priorByEntry = new Map();
+    for (const row of priorHome?.standings || []) {
+      const eid = Number(row?.entry);
+      const rank = Number(row?.gwRank);
+      if (Number.isFinite(eid) && eid > 0 && Number.isFinite(rank) && rank > 0) {
+        priorByEntry.set(eid, rank);
+      }
+    }
+    const priorSummaryGw = Number(priorHome?.summary?.gwRank);
+    const priorMgr = Number(priorHome?.managerId);
+    if (
+      Number.isFinite(priorMgr) && priorMgr > 0
+      && Number.isFinite(priorSummaryGw) && priorSummaryGw > 0
+    ) {
+      priorByEntry.set(priorMgr, priorSummaryGw);
+    }
+    if (!priorByEntry.size || !Array.isArray(incomingRows)) return incomingRows;
+    return incomingRows.map((row) => {
+      if (!row || typeof row !== "object") return row;
+      const cur = Number(row.gwRank);
+      if (Number.isFinite(cur) && cur > 0) return row;
+      const kept = priorByEntry.get(Number(row.entry));
+      return kept ? { ...row, gwRank: kept } : row;
+    });
+  }
+
+  function preserveHomeSummaryGwRank(incomingSummary, priorSummary, priorGw, incomingGw) {
+    if (!incomingSummary || typeof incomingSummary !== "object") return incomingSummary;
+    const inRank = Number(incomingSummary.gwRank);
+    if (Number.isFinite(inRank) && inRank > 0) return incomingSummary;
+    const kept = Number(priorSummary?.gwRank);
+    if (!(Number.isFinite(kept) && kept > 0)) return incomingSummary;
+    if (
+      Number.isFinite(Number(priorGw))
+      && Number.isFinite(Number(incomingGw))
+      && Number(priorGw) !== Number(incomingGw)
+    ) {
+      return incomingSummary;
+    }
+    return { ...incomingSummary, gwRank: kept };
+  }
+
   function homeTransfersAreCanonical(byEntry, schemaVersion) {
     const ver = Number(schemaVersion);
     // Explicit v2 payloads from fetch_home are authoritative (including empty maps).
@@ -2448,6 +2509,12 @@
       ) {
         incoming.overallRankPrev = curPrev;
       }
+      payload.summary = preserveHomeSummaryGwRank(
+        incoming,
+        prev,
+        priorHome.gw,
+        payload.gw
+      );
     } else if (payload.summary && typeof payload.summary === "object") {
       const inPrev = Number(payload.summary.overallRankPrev);
       const curPrev = Number(priorHome.summary?.overallRankPrev);
@@ -2457,19 +2524,37 @@
       ) {
         payload.summary = { ...payload.summary, overallRankPrev: curPrev };
       }
+      payload.summary = preserveHomeSummaryGwRank(
+        payload.summary,
+        priorHome.summary,
+        priorHome.gw,
+        payload.gw
+      );
     }
     HOME.generatedAt = payload.generatedAt ?? null;
+    const gwChanged =
+      Number.isFinite(Number(priorHome.gw))
+      && Number.isFinite(Number(payload.gw))
+      && Number(priorHome.gw) !== Number(payload.gw);
     HOME.gw = payload.gw ?? null;
     HOME.managerId = payload.managerId ?? null;
     HOME.leagueId = payload.leagueId ?? null;
     HOME.leagueName = payload.leagueName ?? null;
     HOME.summary = payload.summary ?? null;
+    if (gwChanged) {
+      const gwRankEl = el.homeGwRankNum || el.homeGwRank;
+      if (gwRankEl) delete gwRankEl.dataset.lastGwRank;
+    }
     HOME.squad = Array.isArray(payload.squad) ? payload.squad : [];
     HOME.squadsByEntry = payload.squadsByEntry && typeof payload.squadsByEntry === "object"
       ? payload.squadsByEntry
       : {};
-    HOME.standings = mergeHomeOverallRankPrev(
-      Array.isArray(payload.standings) ? payload.standings : [],
+    HOME.standings = mergeHomeGwRank(
+      mergeHomeOverallRankPrev(
+        Array.isArray(payload.standings) ? payload.standings : [],
+        priorHome,
+        payload.gw ?? null
+      ),
       priorHome,
       payload.gw ?? null
     );
@@ -2848,6 +2933,7 @@
       summary.gwPoints,
       summary.overallPoints,
       summary.overallRank,
+      summary.gwRank,
       summary.leagueRank,
       summary.leagueRankPrev,
     ].join(":");
@@ -3309,6 +3395,14 @@
     return v.toLocaleString();
   }
 
+  /** Full rank with grouping commas (3,350,393) — Hero overall / GW rank. */
+  function formatHomeRankGrouped(n) {
+    if (n == null || n === "" || Number(n) <= 0) return "—";
+    const v = Number(n);
+    if (!Number.isFinite(v) || v <= 0) return "—";
+    return v.toLocaleString();
+  }
+
   function homeRankDeltaPlaces(current, previous) {
     const cur = Number(current);
     const prev = Number(previous);
@@ -3323,6 +3417,13 @@
     return abs.toLocaleString();
   }
 
+  /** Hero Δ — always grouped commas (no K/M). */
+  function formatHomeRankDeltaGrouped(places) {
+    const abs = Math.abs(Number(places) || 0);
+    if (!Number.isFinite(abs) || abs <= 0) return "—";
+    return abs.toLocaleString();
+  }
+
   function homeRankDeltaHTML(places, { compact = false } = {}) {
     if (places == null || !Number.isFinite(places) || places === 0) return "";
     const up = places > 0;
@@ -3333,11 +3434,13 @@
     return `<span class="home-rank-delta${compact ? " is-compact" : ""} ${cls}"${tipAttr(label)} aria-label="${escapeHtml(label)}">${iconHTML(icon)}<span class="home-rank-delta-n">${n}</span></span>`;
   }
 
-  function setHomeRankDelta(elDelta, places, { muted = false, animateRoll = false } = {}) {
+  function setHomeRankDelta(elDelta, places, { muted = false, animateRoll = false, fullDigits = false } = {}) {
     if (!elDelta) return;
     if (places == null || !Number.isFinite(places) || places === 0) {
       elDelta.hidden = true;
-      elDelta.className = "home-rank-delta";
+      elDelta.className = elDelta.classList.contains("home-summary-hero-delta")
+        ? "home-summary-hero-delta home-rank-delta"
+        : "home-rank-delta";
       elDelta.innerHTML = "";
       elDelta.removeAttribute("title");
       elDelta.removeAttribute("aria-label");
@@ -3346,10 +3449,17 @@
     const up = places > 0;
     const cls = up ? "is-up" : "is-down";
     const icon = up ? "caret-up" : "caret-down";
-    const n = homeRankDeltaValueHTML(places, { animateRoll });
-    const label = `${up ? "Up" : "Down"} ${formatHomeRankDelta(places)} places vs last gameweek`;
+    const n = fullDigits && !animateRoll
+      ? formatHomeRankDeltaGrouped(places)
+      : homeRankDeltaValueHTML(places, { animateRoll, fullDigits });
+    const labelN = fullDigits ? formatHomeRankDeltaGrouped(places) : formatHomeRankDelta(places);
+    const label = `${up ? "Up" : "Down"} ${labelN} places vs last gameweek`;
     elDelta.hidden = false;
-    elDelta.className = `home-rank-delta ${cls}${muted ? " is-chrome-muted" : ""}`;
+    const base = elDelta.classList.contains("home-summary-hero-delta")
+      || elDelta.id === "home-hero-overall-rank-delta"
+      ? "home-summary-hero-delta home-rank-delta"
+      : "home-rank-delta";
+    elDelta.className = `${base} ${cls}${muted ? " is-chrome-muted" : ""}`;
     setTip(elDelta, label);
     elDelta.setAttribute("aria-label", label);
     elDelta.innerHTML = `${iconHTML(icon)}<span class="home-rank-delta-n">${n}</span>`;
@@ -3480,6 +3590,10 @@
         overallRankPrev:
           homePositiveRank(row.overallRankPrev) ??
           (payloadSummary ? homePositiveRank(payloadSummary.overallRankPrev) : null),
+        gwRank:
+          homePositiveRank(row.gwRank) ??
+          (payloadSummary ? homePositiveRank(payloadSummary.gwRank) : null) ??
+          (id === configured ? homePositiveRank(HOME.summary?.gwRank) : null),
         leagueRank: row.rankOfficial ?? row.rankLive,
         leagueRankPrev:
           row.rankPrev != null
@@ -3924,15 +4038,21 @@
   }
 
   function applyHomeSummaryRankDeltas(summary, { viewingOther = false, muted = false, animateRoll = false } = {}) {
+    const hero = homeSummaryLayout() === "hero";
     setHomeRankDelta(
       el.homeOverallRankDelta,
-      homeSummaryRankDeltaPlaces(summary, "overall"),
+      hero ? null : homeSummaryRankDeltaPlaces(summary, "overall"),
       { muted, animateRoll }
+    );
+    setHomeRankDelta(
+      el.homeHeroOverallRankDelta,
+      hero ? homeSummaryRankDeltaPlaces(summary, "overall") : null,
+      { muted, animateRoll, fullDigits: true }
     );
     setHomeOverallPct(
       el.homeOverallPct,
-      viewingOther ? null : summary.overallRank,
-      viewingOther ? null : summary.totalPlayers
+      viewingOther || hero ? null : summary.overallRank,
+      viewingOther || hero ? null : summary.totalPlayers
     );
     setHomeRankDelta(
       el.homeLeagueRankDelta,
@@ -3944,7 +4064,7 @@
   function revealHomeSummaryRankBorders() {
     clearHomeRankBorderRevealTimer();
     if (el.homeBento) el.homeBento.classList.remove("is-rank-chrome-staged");
-    [el.homeOverallRankDelta, el.homeLeagueRankDelta].forEach((node) => {
+    [el.homeOverallRankDelta, el.homeLeagueRankDelta, el.homeHeroOverallRankDelta].forEach((node) => {
       if (node) node.classList.remove("is-chrome-muted");
     });
     syncHomeRankPanelBorders();
@@ -4007,12 +4127,28 @@
         ? null
         : homeRankDeltaPlaces(summary.leagueRank, summary.leagueRankPrev);
 
-    if (overallPanel && Number.isFinite(overallDelta) && overallDelta !== 0) {
+    // Classic only: overall card owns the colored border. Hero puts overall in the band.
+    if (
+      homeSummaryLayout() !== "hero" &&
+      overallPanel &&
+      Number.isFinite(overallDelta) &&
+      overallDelta !== 0
+    ) {
       overallPanel.classList.add(overallDelta > 0 ? "is-rank-border-up" : "is-rank-border-down");
     }
     if (leaguePanel && Number.isFinite(leagueDelta) && leagueDelta !== 0) {
       leaguePanel.classList.add(leagueDelta > 0 ? "is-rank-border-up" : "is-rank-border-down");
     }
+    syncHomeSummaryHeroTone(overallDelta);
+  }
+
+  /** Hero band follows overall rank Δ: blue up / orange down / zinc flat. */
+  function syncHomeSummaryHeroTone(overallDelta) {
+    const hero = el.homeSummaryHero;
+    if (!hero) return;
+    hero.classList.remove("is-rank-up", "is-rank-down");
+    if (!(Number.isFinite(overallDelta) && overallDelta !== 0)) return;
+    hero.classList.add(overallDelta > 0 ? "is-rank-up" : "is-rank-down");
   }
 
   function homeStandingsRankValue(row) {
@@ -4720,6 +4856,7 @@
     el.homeStandingsTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeStandingsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
     bindHomeStandingsNestedSwipe();
+    bindHomeTransfersMainScrollChain();
     let lastCompactCaptains = homeLeagueCompactCaptains();
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
@@ -4889,6 +5026,159 @@
         { passive: false }
       );
     }
+  }
+
+  /**
+   * Transfers nests a vertical scroller inside a height-pinned league page.
+   * Detect top/bottom of that list and chain leftover vertical gestures to
+   * .main so the rest of Home can scroll (overscroll-behavior: contain blocks
+   * the browser's default chain).
+   */
+  function bindHomeTransfersMainScrollChain() {
+    const nested = el.homeTransfersTableWrap;
+    const main = document.querySelector("main.main");
+    if (!nested || !main || nested.dataset.mainScrollChain === "1") return;
+    nested.dataset.mainScrollChain = "1";
+
+    const EPS = 1.5;
+
+    function mainMax() {
+      return Math.max(0, main.scrollHeight - main.clientHeight);
+    }
+    function nestedMax() {
+      return Math.max(0, nested.scrollHeight - nested.clientHeight);
+    }
+    function atTop() {
+      return nested.scrollTop <= EPS;
+    }
+    function atBottom() {
+      return nested.scrollTop >= nestedMax() - EPS;
+    }
+    /** deltaY > 0 → scroll content down (increase scrollTop). */
+    function scrollOwner(deltaY) {
+      if (!(Math.abs(deltaY) > 0)) return "none";
+      if (deltaY > 0) {
+        if (!atBottom()) return "nested";
+        if (main.scrollTop < mainMax() - EPS) return "main";
+        return "none";
+      }
+      if (!atTop()) return "nested";
+      if (main.scrollTop > EPS) return "main";
+      return "none";
+    }
+
+    let flingRaf = 0;
+    function stopFling() {
+      if (flingRaf) {
+        cancelAnimationFrame(flingRaf);
+        flingRaf = 0;
+      }
+    }
+    function startFling(velocityPxPerMs) {
+      stopFling();
+      let v = velocityPxPerMs;
+      if (Math.abs(v) < 0.15) return;
+      v = Math.max(-2.8, Math.min(2.8, v));
+      const friction = 0.0035;
+      let last = performance.now();
+      const step = (now) => {
+        const dt = Math.min(34, now - last);
+        last = now;
+        const max = mainMax();
+        const next = Math.min(max, Math.max(0, main.scrollTop + v * dt));
+        main.scrollTop = next;
+        const sign = v < 0 ? -1 : 1;
+        v -= sign * friction * dt;
+        if (sign * v <= 0.02 || next <= 0 || next >= max - 0.5) {
+          flingRaf = 0;
+          return;
+        }
+        flingRaf = requestAnimationFrame(step);
+      };
+      flingRaf = requestAnimationFrame(step);
+    }
+
+    nested.addEventListener(
+      "wheel",
+      (e) => {
+        // Horizontal trackpad paging is handled in bindHomeStandingsNestedSwipe.
+        if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        if (scrollOwner(e.deltaY) !== "main") return;
+        main.scrollTop += e.deltaY;
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchLastY = 0;
+    let touchLastT = 0;
+    let touchAxis = null;
+    let touchVelY = 0;
+    let chaining = false;
+
+    nested.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+        stopFling();
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchLastY = touchStartY;
+        touchLastT = performance.now();
+        touchAxis = null;
+        touchVelY = 0;
+        chaining = false;
+      },
+      { passive: true }
+    );
+
+    nested.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        const dx = x - touchStartX;
+        const dy = y - touchStartY;
+        if (touchAxis == null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+          touchAxis = Math.abs(dy) > Math.abs(dx) * 1.15 ? "y" : "x";
+        }
+        if (touchAxis !== "y") return;
+        const now = performance.now();
+        const dt = Math.max(1, now - touchLastT);
+        const delta = touchLastY - y; // finger up → content down
+        touchVelY = delta / dt;
+        touchLastY = y;
+        touchLastT = now;
+        const owner = scrollOwner(delta);
+        if (owner === "main") {
+          chaining = true;
+          main.scrollTop += delta;
+          e.preventDefault();
+        } else if (owner === "none" && chaining) {
+          // Exhausted nested + main in this direction — kill rubber-band.
+          e.preventDefault();
+        } else {
+          chaining = false;
+        }
+      },
+      { passive: false }
+    );
+
+    const endTouch = () => {
+      if (!NARROW_MQ.matches || touchAxis !== "y" || !chaining) {
+        touchAxis = null;
+        chaining = false;
+        return;
+      }
+      startFling(touchVelY);
+      touchAxis = null;
+      chaining = false;
+    };
+    nested.addEventListener("touchend", endTouch, { passive: true });
+    nested.addEventListener("touchcancel", endTouch, { passive: true });
   }
 
   function homeFeedPageWidth() {
@@ -6744,8 +7034,12 @@
     return { value: n, decimals: 0, suffix: "" };
   }
 
-  function homeRankStatRollHTML(to, from) {
+  function homeRankStatRollHTML(to, from, { fullDigits = false } = {}) {
     if (to == null || !Number.isFinite(Number(to)) || Number(to) <= 0) return "—";
+    // Hero full ranks: paint grouped commas (no K/M odometer — commas read clearly).
+    if (fullDigits) {
+      return `<span class="home-stat-roll is-grouped">${escapeHtml(formatHomeRankGrouped(to))}</span>`;
+    }
     const spec = homeRankRollSpec(Number(to));
     // Always roll from 0 on enter (same unit). Avoid from===to which skips the odometer.
     let fromVal = 0;
@@ -6761,15 +7055,21 @@
     });
   }
 
-  function homeRankDeltaValueHTML(places, { animateRoll = false } = {}) {
+  function homeRankDeltaValueHTML(places, { animateRoll = false, fullDigits = false } = {}) {
     const abs = Math.abs(Number(places));
     if (!Number.isFinite(abs) || abs <= 0) return "—";
+    if (fullDigits) {
+      return animateRoll
+        ? `<span class="home-stat-roll is-grouped">${escapeHtml(formatHomeRankDeltaGrouped(places))}</span>`
+        : formatHomeRankDeltaGrouped(places);
+    }
     if (animateRoll) return homeRankStatRollHTML(abs, 0);
     return formatHomeRankDelta(places);
   }
 
   function renderHomeSummaryStats(summary, { enterPending = false } = {}) {
     void enterPending;
+    const hero = homeSummaryLayout() === "hero";
     const gwVal = homeGwAwaitingKickoff()
       ? 0
       : summary.gwPoints != null && Number.isFinite(Number(summary.gwPoints))
@@ -6794,6 +7094,28 @@
         overallRankEl.innerHTML = homeRankStatRollHTML(Number(summary.overallRank), 0);
       }
     }
+    if (el.homeHeroOverallRank) {
+      if (!hero || summary.overallRank == null || !Number.isFinite(Number(summary.overallRank)) || Number(summary.overallRank) <= 0) {
+        el.homeHeroOverallRank.textContent = hero ? "—" : "";
+      } else {
+        el.homeHeroOverallRank.innerHTML = homeRankStatRollHTML(Number(summary.overallRank), 0, { fullDigits: true });
+      }
+    }
+    const gwRankEl = el.homeGwRankNum || el.homeGwRank;
+    if (gwRankEl) {
+      const next = homePositiveRank(summary.gwRank);
+      const kept = homePositiveRank(gwRankEl.dataset.lastGwRank);
+      if (next != null) {
+        // Avoid re-paint flicker when live polls restate the same rank.
+        if (kept !== next) {
+          gwRankEl.innerHTML = homeRankStatRollHTML(next, 0, { fullDigits: hero });
+          gwRankEl.dataset.lastGwRank = String(next);
+        }
+      } else if (kept == null) {
+        gwRankEl.textContent = "—";
+      }
+      // else: keep last good GW rank painted (live payload omitted it)
+    }
     if (el.homeTotalPoints) {
       if (summary.overallPoints == null || !Number.isFinite(Number(summary.overallPoints))) {
         el.homeTotalPoints.textContent = "—";
@@ -6814,13 +7136,13 @@
   function finishHomeStatRolls(root, { summary = true, tables = true } = {}) {
     if (!root) return;
     if (summary) {
-      root.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]").forEach(finishStatRollNode);
+      root.querySelectorAll(".home-summary .home-stat-roll[data-count-to]").forEach(finishStatRollNode);
     }
     if (tables) {
       root.querySelectorAll(
         ".home-stat-roll[data-count-to], .live-stat-roll[data-count-to], .ownership-stat-roll[data-count-to]"
       ).forEach((node) => {
-        if (node.closest(".home-summary-cards")) return;
+        if (node.closest(".home-summary")) return;
         finishStatRollNode(node);
       });
     }
@@ -6828,7 +7150,7 @@
 
   function mountHomeSummaryRollsAtStart(root) {
     if (!root || prefersReducedMotion()) return;
-    root.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]").forEach((node) => {
+    root.querySelectorAll(".home-summary .home-stat-roll[data-count-to]").forEach((node) => {
       const to = Number(node.dataset.countTo);
       if (!Number.isFinite(to)) return;
       const from =
@@ -6913,7 +7235,7 @@
 
   function homeHeroRollNodes(pane) {
     if (!pane) return [];
-    return [...pane.querySelectorAll(".home-summary-cards .home-stat-roll[data-count-to]")];
+    return [...pane.querySelectorAll(".home-summary .home-stat-roll[data-count-to]")];
   }
 
   function startHomeEnterMotion(pane, { duration = HOME_SUMMARY_ROLL_MS } = {}) {
@@ -7032,6 +7354,7 @@
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
     const summary = homeSummaryForView(viewEntry);
+    syncHomeSummaryLayout();
     if (el.homeDeadline) {
       const label = homeNextDeadlineLabel();
       el.homeDeadline.textContent = label;
@@ -7057,7 +7380,8 @@
       applyHomeSummaryRankChrome(summary, { viewingOther });
     }
     if (el.homeGwMeta) {
-      const chip = summary.activeChip ? String(summary.activeChip) : "";
+      const chipKey = summary.activeChip ? String(summary.activeChip).trim() : "";
+      const chip = chipKey ? (HOME_CHIP_ABBR[chipKey] || chipKey.toUpperCase()) : "";
       el.homeGwMeta.innerHTML = chip
         ? `<span class="home-chip">${escapeHtml(chip)}</span>`
         : "";
@@ -10615,6 +10939,10 @@
       ];
       const reading = [
         spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
+        spitRow(
+          spitRank("Summary"),
+          "Preferences → Home summary: Classic (four equal cards) or Hero (Overall Rank band + Gameweek rank card)."
+        ),
         spitRow(
           spitRank("Own"),
           mobile
@@ -21881,7 +22209,10 @@
     // Home: summary cards cascade; squad + standings cards share one index so
     // both tables load together; rows use per-tbody ordinals in lockstep.
     if (homeEnter) {
-      const summaryPanels = [...pane.querySelectorAll(".home-summary-cards > .home-panel")];
+      const summaryPanels = [
+        ...pane.querySelectorAll(".home-summary-hero:not([hidden])"),
+        ...pane.querySelectorAll(".home-summary-cards > .home-panel:not([hidden])"),
+      ];
       summaryPanels.forEach((node, i) => {
         node.style.setProperty("--enter-i", String(i));
       });
@@ -24353,6 +24684,61 @@
   }
 
   applyTheme(currentThemeMode());
+
+  const HOME_SUMMARY_KEY = "fpl-explorer-home-summary";
+  const HOME_SUMMARY_ORDER = ["classic", "hero"];
+
+  function homeSummaryLayout() {
+    try {
+      const stored = localStorage.getItem(HOME_SUMMARY_KEY);
+      return HOME_SUMMARY_ORDER.includes(stored) ? stored : "classic";
+    } catch {
+      return "classic";
+    }
+  }
+
+  function syncHomeSummarySeg(mode) {
+    if (!el.homeSummarySeg) return;
+    Array.from(el.homeSummarySeg.querySelectorAll("button[data-home-summary]")).forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.homeSummary === mode);
+    });
+    if (typeof syncSegThumb === "function") syncSegThumb(el.homeSummarySeg, { animate: false });
+  }
+
+  function syncHomeSummaryLayout(mode = homeSummaryLayout()) {
+    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : "classic";
+    if (el.homeSummary) el.homeSummary.dataset.homeSummary = next;
+    if (el.homeSummaryHero) el.homeSummaryHero.hidden = next !== "hero";
+    const overallCard = el.homeSummary && el.homeSummary.querySelector('[data-home-summary-card="overall"]');
+    const gwRankCard = el.homeSummary && el.homeSummary.querySelector('[data-home-summary-card="gw-rank"]');
+    if (overallCard) overallCard.hidden = next === "hero";
+    if (gwRankCard) gwRankCard.hidden = next !== "hero";
+    syncHomeSummarySeg(next);
+  }
+
+  function applyHomeSummaryLayout(mode) {
+    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : "classic";
+    try {
+      localStorage.setItem(HOME_SUMMARY_KEY, next);
+    } catch {
+      /* private browsing */
+    }
+    syncHomeSummaryLayout(next);
+    if (state.page === "home") {
+      renderHome({ settleQuiet: true });
+    }
+  }
+
+  if (el.homeSummarySeg) {
+    el.homeSummarySeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-home-summary]");
+      if (!btn || !el.homeSummarySeg.contains(btn)) return;
+      applyHomeSummaryLayout(btn.dataset.homeSummary || "classic");
+      btn.blur();
+    });
+  }
+
+  syncHomeSummaryLayout(homeSummaryLayout());
 
   // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
   try {

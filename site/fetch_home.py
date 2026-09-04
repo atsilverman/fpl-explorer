@@ -406,6 +406,38 @@ def overall_rank_from_history(history: dict | None, gw: int) -> int | None:
     return None
 
 
+def gw_rank_from_history(history: dict | None, gw: int) -> int | None:
+    """Gameweek rank for ``gw`` from entry history ``current[].rank``."""
+    if gw < 1 or not isinstance(history, dict):
+        return None
+    for hist in history.get("current") or []:
+        try:
+            if int(hist.get("event") or 0) == gw:
+                return positive_rank(hist.get("rank"))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def resolve_gw_rank(
+    *,
+    gw: int,
+    history_payload: dict | None,
+    picks_history: dict | None,
+    entry: dict | None = None,
+) -> int | None:
+    """Prefer history/picks ``rank``; mid-GW fall back to entry ``summary_event_rank``."""
+    hist_rank = gw_rank_from_history(history_payload, gw)
+    if hist_rank:
+        return hist_rank
+    picks_history = picks_history if isinstance(picks_history, dict) else {}
+    picks_rank = positive_rank(picks_history.get("rank"))
+    if picks_rank:
+        return picks_rank
+    entry = entry if isinstance(entry, dict) else {}
+    return positive_rank(entry.get("summary_event_rank"))
+
+
 def resolve_entry_overall_rank_prev(
     *,
     eid: int,
@@ -1280,6 +1312,12 @@ def main() -> int:
                 "mults": focus_mults,
                 "overall_rank": mgr_overall_rank,
                 "overall_points": mgr_overall_points,
+                "gw_rank": resolve_gw_rank(
+                    gw=gw,
+                    history_payload=history_payload,
+                    picks_history=focus_hist,
+                    entry=entry,
+                ),
             }
             mults_by_entry[manager_id] = focus_mults
             progress_by_entry[manager_id] = (focus_in_play, focus_to_play)
@@ -1335,6 +1373,7 @@ def main() -> int:
                         ((mp or {}).get("entry_history") or {}).get("overall_rank")
                     ) or 0
                     overall_points = int(row.get("total") or 0)
+                    other_entry = None
                     try:
                         other_entry = fpl_get(f"/entry/{eid}/")
                         assert isinstance(other_entry, dict)
@@ -1359,6 +1398,12 @@ def main() -> int:
                         "mults": other_mults,
                         "overall_rank": overall_rank,
                         "overall_points": overall_points,
+                        "gw_rank": resolve_gw_rank(
+                            gw=gw,
+                            history_payload=history_by_entry.get(eid),
+                            picks_history=(mp or {}).get("entry_history") or {},
+                            entry=other_entry if isinstance(other_entry, dict) else None,
+                        ),
                     }
                 else:
                     live_gw_pts = 0 if gw_awaiting_kickoff else int(row.get("event_total") or 0)
@@ -1422,6 +1467,15 @@ def main() -> int:
                 history_payload=history_by_entry.get(eid),
                 cached_row=cached_standings.get(eid),
             )
+            row_gw_rank = (
+                positive_rank(ed.get("gw_rank"))
+                or resolve_gw_rank(
+                    gw=gw,
+                    history_payload=history_by_entry.get(eid),
+                    picks_history=picks_history,
+                    entry=entry if eid == manager_id else None,
+                )
+            )
             standing_rows.append(
                 {
                     "entry": eid,
@@ -1432,6 +1486,7 @@ def main() -> int:
                     "total": int(row.get("total") or 0),
                     "overallRank": int(ed.get("overall_rank") or 0) or None,
                     "overallRankPrev": row_overall_rank_prev,
+                    "gwRank": row_gw_rank,
                     "overallPoints": max(
                         int(ed.get("overall_points") or 0),
                         int(row.get("total") or 0),
@@ -1600,6 +1655,12 @@ def main() -> int:
                 "overallPoints": int(focus_summary["overallPoints"]),
                 "overallRank": int(focus_summary["overallRank"]),
                 "overallRankPrev": overall_rank_prev,
+                "gwRank": resolve_gw_rank(
+                    gw=gw,
+                    history_payload=history_payload,
+                    picks_history=focus_hist,
+                    entry=entry,
+                ),
                 "leagueRank": focus_league_rank,
                 "leagueRankPrev": league_rank_prev,
                 "totalPlayers": total_players or None,

@@ -3139,6 +3139,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 
 #home-page.is-entering > .page-header,
 #home-page.is-entering .home-deadline,
+#home-page.is-entering .home-summary-hero,
 #home-page.is-entering .home-summary-cards > .home-panel,
 #home-page.is-entering .home-tables-grid > .home-panel,
 #home-page.is-entering .home-view-banner {
@@ -3204,6 +3205,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #expected-page.is-entering .barbell-track,
   #home-page.is-entering .home-deadline,
   #home-page.is-entering .home-view-banner,
+  #home-page.is-entering .home-summary-hero,
   #home-page.is-entering .home-summary-cards > .home-panel,
   #home-page.is-entering .home-tables-grid > .home-panel,
   #home-page.is-entering .home-squad-table tbody tr > *,
@@ -14324,9 +14326,20 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-dashboard:not(.is-player-lookup) > .home-player-matchup {
     grid-column: 1 / -1;
   }
-  .home-dashboard:not(.is-player-lookup) .home-summary-cards,
+  /* Classic: summary cards share the 4-col track with Team / League / Feed. */
+  .home-dashboard:not(.is-player-lookup) .home-summary[data-home-summary="classic"],
+  .home-dashboard:not(.is-player-lookup) .home-summary[data-home-summary="classic"] .home-summary-cards,
   .home-dashboard:not(.is-player-lookup) .home-tables-grid {
     display: contents;
+  }
+  .home-dashboard:not(.is-player-lookup) .home-summary[data-home-summary="hero"] {
+    grid-column: 1 / -1;
+    display: block;
+  }
+  .home-dashboard:not(.is-player-lookup) .home-summary[data-home-summary="hero"] .home-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
   }
   .home-dashboard:not(.is-player-lookup) #home-squad-panel {
     grid-column: span 2;
@@ -14357,6 +14370,160 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   background: hsl(var(--muted) / 0.55);
   border-color: hsl(var(--border-hsl) / 0.9);
   color: var(--text);
+}
+.home-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.home-summary-hero[hidden] {
+  display: none !important;
+}
+.home-summary[data-home-summary="classic"] .home-summary-hero {
+  display: none !important;
+}
+.home-summary[data-home-summary="classic"] [data-home-summary-card="gw-rank"] {
+  display: none !important;
+}
+.home-summary[data-home-summary="hero"] [data-home-summary-card="overall"] {
+  display: none !important;
+}
+.home-summary[data-home-summary="hero"] [data-home-summary-card="gw-rank"] {
+  display: block;
+}
+.home-summary-hero {
+  /* Neutral zinc by default; direction classes tint to rise/fall. */
+  --home-hero-bg: 240 6% 28%;
+  --home-hero-bg-deep: 240 8% 18%;
+  --home-hero-fg: 0 0% 100%;
+  --home-hero-muted: 240 8% 78%;
+  --home-hero-delta-up: 210 90% 78%;
+  --home-hero-delta-down: 24 90% 72%;
+  position: relative;
+  z-index: 0;
+  margin: 0 calc(-1 * var(--main-pad-x, 20px));
+  padding: 22px var(--main-pad-x, 20px) 52px;
+  color: hsl(var(--home-hero-fg));
+  background:
+    linear-gradient(
+      180deg,
+      hsl(var(--home-hero-bg-deep)) 0%,
+      hsl(var(--home-hero-bg)) 72%
+    );
+  border-radius: 0;
+  transition:
+    background-color 0.45s var(--ease-out, ease),
+    filter 0.45s var(--ease-out, ease);
+}
+.home-summary-hero.is-rank-up {
+  /* Match rank-up arrow / --positive (blue). */
+  --home-hero-bg: 217 55% 34%;
+  --home-hero-bg-deep: 217 58% 24%;
+  --home-hero-muted: 214 40% 82%;
+  --home-hero-delta-up: 210 95% 84%;
+}
+.home-summary-hero.is-rank-down {
+  /* Match rank-down arrow / --negative (orange). */
+  --home-hero-bg: 24 62% 38%;
+  --home-hero-bg-deep: 24 68% 28%;
+  --home-hero-muted: 28 40% 86%;
+  --home-hero-delta-down: 32 95% 82%;
+}
+html[data-theme="dark"] .home-summary-hero {
+  --home-hero-bg: 240 5% 18%;
+  --home-hero-bg-deep: 240 6% 12%;
+  --home-hero-muted: 240 6% 68%;
+}
+html[data-theme="dark"] .home-summary-hero.is-rank-up {
+  --home-hero-bg: 217 48% 26%;
+  --home-hero-bg-deep: 217 52% 16%;
+  --home-hero-muted: 214 28% 72%;
+}
+html[data-theme="dark"] .home-summary-hero.is-rank-down {
+  --home-hero-bg: 24 52% 28%;
+  --home-hero-bg-deep: 24 58% 18%;
+  --home-hero-muted: 28 30% 74%;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero {
+    --home-hero-bg: 240 5% 18%;
+    --home-hero-bg-deep: 240 6% 12%;
+    --home-hero-muted: 240 6% 68%;
+  }
+  html:not([data-theme="light"]) .home-summary-hero.is-rank-up {
+    --home-hero-bg: 217 48% 26%;
+    --home-hero-bg-deep: 217 52% 16%;
+    --home-hero-muted: 214 28% 72%;
+  }
+  html:not([data-theme="light"]) .home-summary-hero.is-rank-down {
+    --home-hero-bg: 24 52% 28%;
+    --home-hero-bg-deep: 24 58% 18%;
+    --home-hero-muted: 28 30% 74%;
+  }
+}
+.home-summary-hero-label {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: hsl(var(--home-hero-muted));
+}
+.home-summary-hero-value {
+  margin: 0;
+  font-size: clamp(2.4rem, 8vw, 3.4rem);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: hsl(var(--home-hero-fg));
+}
+.home-summary-hero-value .home-stat-roll,
+.home-summary-hero-value .stat-roll-digit {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.home-summary-hero-delta {
+  margin: 10px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: hsl(var(--home-hero-muted));
+}
+.home-summary-hero-delta:not([hidden]) {
+  display: inline-flex;
+}
+.home-summary-hero-delta.is-up {
+  color: hsl(var(--home-hero-delta-up));
+}
+.home-summary-hero-delta.is-down {
+  color: hsl(var(--home-hero-delta-down));
+}
+.home-summary-hero-delta .icon {
+  width: 14px;
+  height: 14px;
+}
+.home-summary[data-home-summary="hero"] .home-summary-cards {
+  position: relative;
+  z-index: 1;
+  margin-top: -36px;
+}
+.home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel {
+  box-shadow:
+    0 8px 24px hsl(240 10% 10% / 0.16),
+    var(--shadow-sm);
+}
+.home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-up ~ .home-summary-cards > .home-stat-panel {
+  box-shadow:
+    0 8px 24px hsl(217 40% 16% / 0.16),
+    var(--shadow-sm);
+}
+.home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-down ~ .home-summary-cards > .home-stat-panel {
+  box-shadow:
+    0 8px 24px hsl(24 40% 16% / 0.16),
+    var(--shadow-sm);
 }
 .home-summary-cards {
   display: grid;
@@ -14505,6 +14672,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-player-matchup[hidden] {
   display: none !important;
 }
+.home-dashboard.is-player-lookup .home-summary,
 .home-dashboard.is-player-lookup .home-summary-cards {
   display: none;
 }
@@ -14535,6 +14703,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   }
   .home-dashboard.is-player-lookup > .home-deadline,
   .home-dashboard.is-player-lookup > .home-view-banner,
+  .home-dashboard.is-player-lookup > .home-summary,
   .home-dashboard.is-player-lookup > .home-summary-cards,
   .home-dashboard.is-player-lookup > .home-player-profile {
     grid-column: 1 / -1;
