@@ -14,6 +14,7 @@
     nextChangeAt: null,
     actualChanges: [],
   };
+  if (!window.FPL_PRICE_CHANGES) window.FPL_PRICE_CHANGES = PRICES;
   const LEAGUES = window.FPL_LEAGUES || { generatedAt: null, managers: [], leagues: [] };
   const HOME = window.FPL_HOME || {
     generatedAt: null,
@@ -830,7 +831,7 @@
     pricesActualSortDir: "desc",
     pricesActualSortTouched: false,
     pricesActualShowAll: false,
-    pricesPredictionShowAll: false,
+    pricesPredictionScope: "all", // all | owned
     pricesMoverKind: "risers", // risers | fallers (mobile swipe pager page)
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
@@ -5310,6 +5311,9 @@
     });
     syncHomeSquadPagerDots(idx);
     syncHomeSquadLayout(idx);
+    if (homeSquadLogicalPageIndex(idx) === (homeSquadIsWideLayout() ? 1 : 2)) {
+      scheduleHomeOwnershipPricesSync();
+    }
     if (!smooth) homeSquadPagerTarget = null;
   }
 
@@ -5764,8 +5768,9 @@
     const { pricesByCode } = ctx;
     const benchCls = row.onBench ? " home-row-bench" : "";
     const priceRow = pricesByCode.get(Number(row.code));
+    // Any predictor mover (VL / L) — same pool as the Prices page.
     const priceCell = `<td class="home-col-price">${
-      priceRow && pricesIsVeryLikelyMover(priceRow) ? pricesStatusPillHTML(priceRow) : "—"
+      priceRow ? pricesStatusPillHTML(priceRow) : "—"
     }</td>`;
     const live = score ? score.live : null;
     const d1 = score ? score.d1 : null;
@@ -7131,6 +7136,7 @@
       const fixturesTable = el.homeSquadFixturesBody && el.homeSquadFixturesBody.closest("table");
       if (fixturesTable) fixturesTable.setAttribute("data-fx-cols", String(gws.length));
       if (el.homeSquadOwnershipCols || el.homeSquadOwnershipHead || el.homeSquadOwnershipBody) {
+        scheduleHomeOwnershipPricesSync();
         const ownCtx = homeSquadOwnershipContext(rows);
         const ownColCount = 5;
         if (el.homeSquadOwnershipCols) {
@@ -10752,6 +10758,10 @@
           ]
         : [
             spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
+            spitRow(
+              spitRank("All / Owned"),
+              "All shows every mover matching filters. Owned limits to your FPL squad (Preferences → Manager)."
+            ),
             spitRow(
               spitRank("Status"),
               mobile
@@ -19789,6 +19799,64 @@
     return (PRICES.players || []).filter((row) => pricesPassesProgressFilter(row));
   }
 
+  let pricesBundleRefreshPromise = null;
+  let pricesBundleRefreshedAt = 0;
+  const PRICES_BUNDLE_REFRESH_MS = 45 * 1000;
+
+  function applyPricesBundlePayload(payload) {
+    if (!payload || typeof payload !== "object") return false;
+    const prevAt = PRICES.generatedAt;
+    const prevPlayers = Array.isArray(PRICES.players) ? PRICES.players.length : 0;
+    Object.assign(PRICES, payload);
+    if (!Array.isArray(PRICES.players)) PRICES.players = [];
+    if (!Array.isArray(PRICES.actualChanges)) PRICES.actualChanges = [];
+    window.FPL_PRICE_CHANGES = PRICES;
+    return (
+      PRICES.generatedAt !== prevAt ||
+      (Array.isArray(PRICES.players) ? PRICES.players.length : 0) !== prevPlayers
+    );
+  }
+
+  /** Pull the latest committed price_changes_data.js so Home Ownership stays current. */
+  async function refreshPricesBundle({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && now - pricesBundleRefreshedAt < PRICES_BUNDLE_REFRESH_MS) {
+      return false;
+    }
+    if (pricesBundleRefreshPromise) return pricesBundleRefreshPromise;
+    pricesBundleRefreshPromise = (async () => {
+      try {
+        const script = document.querySelector('script[src*="price_changes_data.js"]');
+        const src = script && script.getAttribute("src");
+        const url = src
+          ? src.replace(/(\?.*)?$/, `?t=${now}`)
+          : `price_changes_data.js?t=${now}`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return false;
+        const text = await res.text();
+        const m = text.match(/window\.FPL_PRICE_CHANGES\s*=\s*(\{[\s\S]*\})\s*;?\s*$/);
+        if (!m) return false;
+        const payload = JSON.parse(m[1]);
+        pricesBundleRefreshedAt = Date.now();
+        return applyPricesBundlePayload(payload);
+      } catch (_) {
+        return false;
+      } finally {
+        pricesBundleRefreshPromise = null;
+      }
+    })();
+    return pricesBundleRefreshPromise;
+  }
+
+  function scheduleHomeOwnershipPricesSync() {
+    if (state.page !== "home") return;
+    refreshPricesBundle().then((changed) => {
+      if (!changed || state.page !== "home") return;
+      // Re-paint Home so Ownership Price pills match the freshest predictor bundle.
+      renderHome({ deferDuringEnter: true, settleQuiet: true });
+    });
+  }
+
   function clampPricesScrollAfterUpdate() {
     const main = document.querySelector("main.main");
     if (main) {
@@ -20234,8 +20302,11 @@
   }
 
   function limitPricesPredictionMovers(rows) {
-    if (state.pricesPredictionShowAll) return rows;
-    return limitPricesScopeRows(rows, ownershipCatalogByCode());
+    if (state.pricesPredictionScope !== "owned") return rows;
+    return rows.filter((row) => {
+      const code = Number(row && row.code);
+      return Number.isFinite(code) && (ownedCodes.has(code) || ownedCodes.has(row.code));
+    });
   }
 
   function limitPricesActualDayRows(rows, catalog) {
@@ -20974,23 +21045,16 @@
     track.addEventListener("touchcancel", cancel, { passive: true });
   }
 
-  function syncPricesScopeSeg(seg, { show, showAll, topTitle, allTitle }) {
+  function syncPricesScopeSeg(seg, { show, activeScope, titles = {} }) {
     if (!seg) return;
     seg.hidden = !show;
-    const topBtn = seg.querySelector('button[data-prices-scope="top"]');
-    const allBtn = seg.querySelector('button[data-prices-scope="all"]');
-    if (topBtn) {
-      topBtn.title = topTitle;
-      const active = !showAll;
-      topBtn.classList.toggle("active", active);
-      topBtn.setAttribute("aria-pressed", active ? "true" : "false");
-    }
-    if (allBtn) {
-      allBtn.title = allTitle;
-      const active = showAll;
-      allBtn.classList.toggle("active", active);
-      allBtn.setAttribute("aria-pressed", active ? "true" : "false");
-    }
+    seg.querySelectorAll("button[data-prices-scope]").forEach((btn) => {
+      const key = btn.dataset.pricesScope;
+      if (titles[key]) btn.title = titles[key];
+      const active = key === activeScope;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
   }
 
   function syncPricesViewUI() {
@@ -21014,19 +21078,24 @@
         state.page === "prices" && mode === "prediction" ? "" : "none";
     }
     if (el.pricesPredictionScopeSeg) {
+      const predScope = state.pricesPredictionScope === "owned" ? "owned" : "all";
       syncPricesScopeSeg(el.pricesPredictionScopeSeg, {
         show: state.page === "prices" && mode === "prediction" && isNextSeason(),
-        showAll: state.pricesPredictionShowAll,
-        topTitle: "Top 5 risers and fallers by ownership",
-        allTitle: "Every price mover matching filters",
+        activeScope: predScope,
+        titles: {
+          all: "Every price mover matching filters",
+          owned: "Only players in your FPL squad (Preferences → Manager)",
+        },
       });
     }
     if (el.pricesActualScopeSeg) {
       syncPricesScopeSeg(el.pricesActualScopeSeg, {
         show: state.page === "prices" && mode === "actual" && isNextSeason(),
-        showAll: state.pricesActualShowAll,
-        topTitle: "Top 5 risers and fallers by ownership per day",
-        allTitle: "Every recorded price change",
+        activeScope: state.pricesActualShowAll ? "all" : "top",
+        titles: {
+          top: "Top 5 risers and fallers by ownership per day",
+          all: "Every recorded price change",
+        },
       });
     }
     syncPricesMoverKindUI();
@@ -21193,7 +21262,8 @@
       if (!pool.length) {
         el.pricesCountLabel.textContent = "No data";
       } else {
-        const scopeHint = state.pricesPredictionShowAll ? "" : " · top 5";
+        const scopeHint =
+          state.pricesPredictionScope === "owned" ? " · owned" : "";
         el.pricesCountLabel.textContent =
           totalShown === totalBase
             ? `${totalShown} movers${scopeHint}`
@@ -21203,7 +21273,10 @@
 
     const emptyPoolMsg =
       "No price data yet. Run <code>python3 site/fetch_ownership.py</code> to refresh bootstrap.";
-    const emptyFilterMsg = "No price movers match the current filters.";
+    const emptyFilterMsg =
+      state.pricesPredictionScope === "owned"
+        ? "No owned players match the current price filters."
+        : "No price movers match the current filters.";
 
     if (!pool.length) {
       renderPricesPredictionTable(
@@ -21238,10 +21311,16 @@
     }
 
     syncPricesSectionMarks(el.pricesPredictionPanels);
+    // Always remeasure the Risers/Fallers pager — All expands rows and must
+    // not keep a Top-5 track height (overflow:hidden would clip the rest).
+    syncPricesMoverPagerUI();
 
     if (scrollSnap) {
       restoreScrollWraps(scrollSnap);
-      requestAnimationFrame(() => syncMobileScrollportHeight());
+      requestAnimationFrame(() => {
+        syncPricesMoverPagerUI();
+        syncMobileScrollportHeight();
+      });
     } else {
       settlePricesLayoutAfterUpdate();
     }
@@ -21350,9 +21429,13 @@
     bindAllNameColumnSimplifies();
     scheduleOptaMobileNameColWidth();
     if (NARROW_MQ.matches) syncPricesActualColumnWidths();
+    syncPricesMoverPagerUI();
     if (scrollSnap) {
       restoreScrollWraps(scrollSnap);
-      requestAnimationFrame(() => syncMobileScrollportHeight());
+      requestAnimationFrame(() => {
+        syncPricesMoverPagerUI();
+        syncMobileScrollportHeight();
+      });
     } else {
       settlePricesLayoutAfterUpdate();
     }
@@ -22611,36 +22694,38 @@
     el.pricesMoverKindSeg.hidden = true;
   }
   bindPricesMoverPager();
-  function bindPricesScopeSeg(seg, { getShowAll, setShowAll, rerender }) {
+  function bindPricesScopeSeg(seg, { scopes, getScope, setScope, rerender }) {
     if (!seg) return;
+    const allowed = new Set(scopes);
     seg.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-prices-scope]");
       if (!btn || !seg.contains(btn)) return;
       const scope = btn.dataset.pricesScope;
-      if (scope !== "top" && scope !== "all") return;
-      const nextShowAll = scope === "all";
-      if (nextShowAll === getShowAll()) return;
-      setShowAll(nextShowAll);
+      if (!allowed.has(scope)) return;
+      if (scope === getScope()) return;
+      setScope(scope);
       syncPricesViewUI();
-      if (state.page === "prices") rerender({ preserveScroll: true });
+      if (state.page === "prices") rerender({ preserveScroll: false });
     });
   }
   bindPricesScopeSeg(el.pricesPredictionScopeSeg, {
-    getShowAll: () => state.pricesPredictionShowAll,
-    setShowAll: (v) => {
-      state.pricesPredictionShowAll = v;
+    scopes: ["all", "owned"],
+    getScope: () => (state.pricesPredictionScope === "owned" ? "owned" : "all"),
+    setScope: (v) => {
+      state.pricesPredictionScope = v === "owned" ? "owned" : "all";
     },
-    rerender: (opts) => {
-      if (pricesViewMode() === "prediction") renderPricesPrediction(opts);
+    rerender: () => {
+      if (pricesViewMode() === "prediction") renderPricesPrediction({ preserveScroll: false });
     },
   });
   bindPricesScopeSeg(el.pricesActualScopeSeg, {
-    getShowAll: () => state.pricesActualShowAll,
-    setShowAll: (v) => {
-      state.pricesActualShowAll = v;
+    scopes: ["top", "all"],
+    getScope: () => (state.pricesActualShowAll ? "all" : "top"),
+    setScope: (v) => {
+      state.pricesActualShowAll = v === "all";
     },
-    rerender: (opts) => {
-      if (pricesViewMode() === "actual") renderPricesActual(opts);
+    rerender: () => {
+      if (pricesViewMode() === "actual") renderPricesActual({ preserveScroll: false });
     },
   });
   pricesActualTableWraps().forEach((wrap) => {

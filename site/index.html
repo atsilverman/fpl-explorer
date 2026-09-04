@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=973" />
+<link rel="stylesheet" href="styles.css?v=975" />
 <script>
 (() => {
   try {
@@ -1179,8 +1179,8 @@
           <button type="button" data-prices-mover-kind="fallers">Fallers</button>
         </div>
         <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-prediction-scope-seg" role="group" aria-label="Prediction movers scope" hidden>
-          <button type="button" data-prices-scope="top" title="Top 5 risers and fallers by ownership">Top 5</button>
-          <button type="button" data-prices-scope="all" title="Every price mover matching filters">All</button>
+          <button type="button" data-prices-scope="all" class="active" title="Every price mover matching filters">All</button>
+          <button type="button" data-prices-scope="owned" title="Only players in your FPL squad">Owned</button>
         </div>
         <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-actual-scope-seg" role="group" aria-label="Actual changes scope" hidden>
           <button type="button" data-prices-scope="top" title="Top 5 risers and fallers by ownership per day">Top 5</button>
@@ -1566,7 +1566,7 @@
 <script src="home_data.js?v=38"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1024"></script>
+<script src="app.js?v=1026"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -5262,7 +5262,7 @@ html[data-page="prices"] .layout .main {
   font-weight: 650;
 }
 .prices-scope-seg button {
-  min-width: 3.4em;
+  min-width: 3.6em;
 }
 .prices-mover-kind-seg button {
   min-width: 4.6em;
@@ -5796,7 +5796,8 @@ html[data-page="prices"] .layout .main {
 .ownership-treemap[hidden],
 .ownership-mover-seg[hidden],
 .ownership-window-seg[hidden],
-.prices-mover-kind-seg[hidden] {
+.prices-mover-kind-seg[hidden],
+.prices-scope-seg[hidden] {
   display: none !important;
 }
 .ownership-treemap {
