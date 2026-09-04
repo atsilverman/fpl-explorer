@@ -4732,9 +4732,10 @@
   }
 
   /**
-   * Transfers nests a vertical scroller inside the horizontal pager. Native
-   * overflow captures the gesture so left/right swipe dies on that page.
-   * Lock axis after a short slop: horizontal → page the track; vertical → list.
+   * Transfers nests a vertical scroller inside the horizontal league pager.
+   * Live drag-scrubbing scrollLeft fights iOS scroll-snap and "glitches" without
+   * changing page. Mobile-friendly approach: axis-lock, then discrete page fling
+   * (next/prev) on release — vertical stays native list scroll.
    */
   function bindHomeStandingsNestedSwipe() {
     const track = el.homeStandingsTrack;
@@ -4742,109 +4743,143 @@
     if (!track || track.dataset.nestedSwipeBound === "1") return;
     track.dataset.nestedSwipeBound = "1";
 
-    const AXIS_SLOP_PX = 10;
-    let pointerId = null;
-    let axis = null; // "x" | "y" | null
-    let startX = 0;
-    let startY = 0;
-    let startScrollLeft = 0;
-    let swiped = false;
+    const SLOP_PX = 14;
+    const FLING_PX = 52;
+    const X_DOMINANCE = 1.2;
+    let gesture = null; // { x, y, axis, startIdx, armed }
 
-    const endGesture = (e) => {
-      if (pointerId == null || (e && e.pointerId !== pointerId)) return;
-      if (axis === "x") {
-        track.style.removeProperty("scroll-behavior");
-        track.style.removeProperty("scroll-snap-type");
-        const idx = homeStandingsActivePageIndex();
-        setHomeStandingsPage(idx, { smooth: true });
-        try {
-          track.releasePointerCapture(pointerId);
-        } catch {
-          /* already released */
+    const pageCount = () => track.querySelectorAll(".home-standings-page").length;
+
+    const blockTrailingClick = () => {
+      const blockClick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        track.removeEventListener("click", blockClick, true);
+      };
+      track.addEventListener("click", blockClick, true);
+      window.setTimeout(() => track.removeEventListener("click", blockClick, true), 0);
+    };
+
+    const begin = (x, y) => {
+      gesture = {
+        x,
+        y,
+        axis: null,
+        startIdx: homeStandingsActivePageIndex(),
+        armed: false,
+      };
+    };
+
+    const move = (x, y, ev) => {
+      if (!gesture) return;
+      const dx = x - gesture.x;
+      const dy = y - gesture.y;
+      if (gesture.axis == null) {
+        if (Math.hypot(dx, dy) < SLOP_PX) return;
+        // Require clear horizontal intent so vertical list scroll stays easy.
+        gesture.axis = Math.abs(dx) > Math.abs(dy) * X_DOMINANCE ? "x" : "y";
+        if (gesture.axis === "y") {
+          gesture = null;
+          return;
         }
+        gesture.armed = true;
       }
-      pointerId = null;
-      axis = null;
-      if (swiped) {
-        // Swallow the click that follows a drag so manager rows don't toggle.
-        const blockClick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          track.removeEventListener("click", blockClick, true);
-        };
-        track.addEventListener("click", blockClick, true);
-        window.setTimeout(() => track.removeEventListener("click", blockClick, true), 0);
-        swiped = false;
+      if (gesture.axis === "x" && ev && ev.cancelable) {
+        ev.preventDefault();
       }
     };
 
+    const end = (x) => {
+      if (!gesture) return;
+      const dx = x - gesture.x;
+      const startIdx = gesture.startIdx;
+      const armed = gesture.armed && gesture.axis === "x";
+      gesture = null;
+      if (!armed) return;
+      let next = startIdx;
+      if (dx <= -FLING_PX) next = Math.min(pageCount() - 1, startIdx + 1);
+      else if (dx >= FLING_PX) next = Math.max(0, startIdx - 1);
+      if (next === startIdx) return;
+      blockTrailingClick();
+      setHomeStandingsPage(next, { smooth: true });
+    };
+
+    const cancel = () => {
+      gesture = null;
+    };
+
+    // Touch (iOS Safari / Android) — more reliable than pointer capture here.
     track.addEventListener(
-      "pointerdown",
+      "touchstart",
       (e) => {
-        if (pointerId != null) return;
-        if (e.pointerType === "mouse" && e.button !== 0) return;
+        if (e.touches.length !== 1) return;
         if (e.target.closest("button, a, input, textarea, label")) return;
-        pointerId = e.pointerId;
-        axis = null;
-        swiped = false;
-        startX = e.clientX;
-        startY = e.clientY;
-        startScrollLeft = track.scrollLeft;
+        begin(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
     );
-
     track.addEventListener(
-      "pointermove",
+      "touchmove",
       (e) => {
-        if (pointerId == null || e.pointerId !== pointerId) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        if (axis == null) {
-          if (Math.hypot(dx, dy) < AXIS_SLOP_PX) return;
-          axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
-          if (axis === "y") {
-            // Native vertical scroll (Transfers list or page) — stop tracking.
-            pointerId = null;
-            axis = null;
-            return;
-          }
-          swiped = true;
-          track.style.scrollBehavior = "auto";
-          track.style.scrollSnapType = "none";
-          try {
-            track.setPointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-        }
-        if (axis !== "x") return;
-        e.preventDefault();
-        track.scrollLeft = startScrollLeft - dx;
+        if (!gesture || e.touches.length !== 1) return;
+        move(e.touches[0].clientX, e.touches[0].clientY, e);
       },
       { passive: false }
     );
+    track.addEventListener(
+      "touchend",
+      (e) => {
+        const t = e.changedTouches && e.changedTouches[0];
+        end(t ? t.clientX : (gesture ? gesture.x : 0));
+      },
+      { passive: true }
+    );
+    track.addEventListener("touchcancel", cancel, { passive: true });
 
-    track.addEventListener("pointerup", endGesture);
-    track.addEventListener("pointercancel", endGesture);
-    track.addEventListener("lostpointercapture", endGesture);
+    // Mouse / test-browser drag: same discrete fling (no live scrub).
+    track.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      if (e.target.closest("button, a, input, textarea, label")) return;
+      begin(e.clientX, e.clientY);
+      gesture.pointerId = e.pointerId;
+    });
+    track.addEventListener(
+      "pointermove",
+      (e) => {
+        if (!gesture || gesture.pointerId !== e.pointerId) return;
+        move(e.clientX, e.clientY, e);
+      },
+      { passive: false }
+    );
+    track.addEventListener("pointerup", (e) => {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+      end(e.clientX);
+    });
+    track.addEventListener("pointercancel", (e) => {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+      cancel();
+    });
 
-    // Trackpad / shift-wheel: forward horizontal deltas from the nested list to the pager.
+    // Trackpad horizontal over the nested list → page fling.
     if (nested) {
+      let wheelAcc = 0;
+      let wheelTimer = 0;
       nested.addEventListener(
         "wheel",
         (e) => {
           const absX = Math.abs(e.deltaX);
           const absY = Math.abs(e.deltaY);
-          if (absX <= absY || absX < 0.5) return;
+          if (absX <= absY || absX < 1) return;
           e.preventDefault();
-          track.style.scrollBehavior = "auto";
-          track.scrollLeft += e.deltaX;
-          clearTimeout(nested._homeTransfersWheelSnap);
-          nested._homeTransfersWheelSnap = window.setTimeout(() => {
-            track.style.removeProperty("scroll-behavior");
-            setHomeStandingsPage(homeStandingsActivePageIndex(), { smooth: true });
-          }, 120);
+          wheelAcc += e.deltaX;
+          clearTimeout(wheelTimer);
+          wheelTimer = window.setTimeout(() => {
+            const acc = wheelAcc;
+            wheelAcc = 0;
+            const idx = homeStandingsActivePageIndex();
+            if (acc > FLING_PX) setHomeStandingsPage(Math.min(pageCount() - 1, idx + 1));
+            else if (acc < -FLING_PX) setHomeStandingsPage(Math.max(0, idx - 1));
+          }, 80);
         },
         { passive: false }
       );
