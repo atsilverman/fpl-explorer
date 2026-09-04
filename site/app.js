@@ -1142,8 +1142,6 @@
     homeStandingsChipsBody: $("#home-standings-chips-body"),
     homeTransfersStatus: $("#home-transfers-status"),
     homeTransfersTableWrap: $("#home-transfers-table-wrap"),
-    homeTransfersScrollDown: $("#home-transfers-scroll-down"),
-    homeTransfersScrollUp: $("#home-transfers-scroll-up"),
     homeStandingsTrack: $("#home-standings-track"),
     homeStandingsDots: $("#home-standings-dots"),
     homeSummaryCards: $("#home-summary-cards"),
@@ -3399,7 +3397,6 @@
   let homeSquadPagerReady = false;
   let homeSquadPagerTarget = null;
   let homeFeedPagerReady = false;
-  let homeTransfersScrollBound = false;
   const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Ownership", "Schedule"];
   const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips"];
@@ -4382,90 +4379,9 @@
     return el.homeTransfersTableWrap;
   }
 
-  function homeTransfersTableOverflows(wrap) {
-    return wrap.scrollHeight > wrap.clientHeight + 1;
-  }
-
-  function syncHomeTransfersTableScrollBtns() {
-    const wrap = homeTransfersTableScrollEl();
-    const down = el.homeTransfersScrollDown;
-    const up = el.homeTransfersScrollUp;
-    const controls = wrap && wrap.parentElement
-      ? wrap.parentElement.querySelector(".home-transfers-table-scroll-controls")
-      : null;
-    if (!wrap || !down || !up) return;
-    const onTransfers = homeStandingsActivePageIndex() === 1;
-    if (!onTransfers || !homeSquadIsDesktopLayout()) {
-      down.hidden = true;
-      up.hidden = true;
-      if (controls) controls.hidden = true;
-      return;
-    }
-    wrap.scrollTop = Math.max(0, Math.min(wrap.scrollTop, wrap.scrollHeight - wrap.clientHeight));
-    const overflow = homeTransfersTableOverflows(wrap);
-    if (!overflow) {
-      down.hidden = true;
-      up.hidden = true;
-      if (controls) controls.hidden = true;
-      return;
-    }
-    if (controls) controls.hidden = false;
-    const atTop = wrap.scrollTop <= 1;
-    const atBottom = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 1;
-    down.hidden = !atTop;
-    up.hidden = !atBottom;
-  }
-
-  function homeTransfersTableScrollAnimate(wrap, to) {
-    const start = wrap.scrollTop;
-    const target = Math.max(0, Math.min(to, wrap.scrollHeight - wrap.clientHeight));
-    const delta = target - start;
-    if (Math.abs(delta) < 1) {
-      syncHomeTransfersTableScrollBtns();
-      return Promise.resolve();
-    }
-    const duration = 360;
-    const t0 = performance.now();
-    return new Promise((resolve) => {
-      const step = (now) => {
-        const t = Math.min(1, (now - t0) / duration);
-        const eased = 1 - Math.pow(1 - t, 3);
-        wrap.scrollTop = start + delta * eased;
-        if (t < 1) {
-          requestAnimationFrame(step);
-        } else {
-          wrap.scrollTop = target;
-          syncHomeTransfersTableScrollBtns();
-          resolve();
-        }
-      };
-      requestAnimationFrame(step);
-    });
-  }
-
   function resetHomeTransfersTableScroll() {
     const wrap = homeTransfersTableScrollEl();
     if (wrap) wrap.scrollTop = 0;
-    syncHomeTransfersTableScrollBtns();
-  }
-
-  function bindHomeTransfersTableScrollControls() {
-    if (homeTransfersScrollBound) return;
-    if (!el.homeTransfersScrollDown || !el.homeTransfersScrollUp) return;
-    homeTransfersScrollBound = true;
-    const onBtn = (toBottom) => (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const wrap = homeTransfersTableScrollEl();
-      if (!wrap) return;
-      if (toBottom) {
-        homeTransfersTableScrollAnimate(wrap, wrap.scrollHeight - wrap.clientHeight);
-      } else {
-        homeTransfersTableScrollAnimate(wrap, 0);
-      }
-    };
-    el.homeTransfersScrollDown.addEventListener("click", onBtn(true));
-    el.homeTransfersScrollUp.addEventListener("click", onBtn(false));
   }
 
   function homeTransfersStatusLabel() {
@@ -4542,6 +4458,8 @@
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     if (!pages.length) {
       el.homeStandingsTrack.style.height = "";
+      el.homeStandingsTrack.style.maxHeight = "";
+      if (el.homeTransfersTableWrap) el.homeTransfersTableWrap.style.maxHeight = "";
       return;
     }
     const idx =
@@ -4550,15 +4468,41 @@
         : homeStandingsActivePageIndex();
     const page = pages[idx];
     if (!page) return;
-    // Desktop: pin Transfers to the Table viewport and scroll inside. Mobile: natural
-    // height so the main page scrolls like the other standings tabs.
-    const measurePage =
-      idx === 1 && pages[0] && homeSquadIsDesktopLayout() ? pages[0] : page;
+    // Pin Transfers to the Table viewport and scroll inside (desktop + mobile).
+    // Prefer Table page height; fall back to Captains/Chips if Table is empty.
+    let measurePage = idx === 1 ? pages[0] : page;
+    if (idx === 1) {
+      const tableH = pages[0]
+        ? Math.ceil(Math.max(pages[0].scrollHeight, pages[0].offsetHeight))
+        : 0;
+      if (!(tableH > 0)) {
+        for (let i = 0; i < pages.length; i += 1) {
+          if (i === 1) continue;
+          const alt = Math.ceil(Math.max(pages[i].scrollHeight, pages[i].offsetHeight));
+          if (alt > 0) {
+            measurePage = pages[i];
+            break;
+          }
+        }
+      }
+    }
     let h = Math.ceil(Math.max(measurePage.scrollHeight, measurePage.offsetHeight));
     if (!(h > 0)) return;
     const prev = parseFloat(el.homeStandingsTrack.style.height) || 0;
     if (!allowShrink && prev > 0) h = Math.max(h, prev);
     const next = `${h}px`;
+    // Always clamp min/max so flex content-size can't reopen the card on scroll.
+    el.homeStandingsTrack.style.minHeight = "0";
+    el.homeStandingsTrack.style.maxHeight = idx === 1 ? next : "";
+    if (el.homeTransfersTableWrap) {
+      el.homeTransfersTableWrap.style.maxHeight = idx === 1 ? next : "";
+    }
+    if (pages[1]) {
+      pages[1].style.height = idx === 1 ? next : "";
+      pages[1].style.maxHeight = idx === 1 ? next : "";
+      pages[1].style.minHeight = "0";
+      pages[1].style.overflow = "hidden";
+    }
     if (el.homeStandingsTrack.style.height === next) return;
     if (!animate) {
       el.homeStandingsTrack.style.transition = "none";
@@ -4728,7 +4672,6 @@
     syncHomeStandingsTrackHeight(activeIndex, opts);
     requestAnimationFrame(() => {
       syncHomeTablesGridHeight();
-      syncHomeTransfersTableScrollBtns();
     });
   }
 
@@ -4771,6 +4714,7 @@
     };
     el.homeStandingsTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeStandingsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    bindHomeStandingsNestedSwipe();
     let lastCompactCaptains = homeLeagueCompactCaptains();
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
@@ -4785,6 +4729,126 @@
       }
     });
     requestAnimationFrame(() => syncHomeStandingsLayout(0, { animate: false, allowShrink: true }));
+  }
+
+  /**
+   * Transfers nests a vertical scroller inside the horizontal pager. Native
+   * overflow captures the gesture so left/right swipe dies on that page.
+   * Lock axis after a short slop: horizontal → page the track; vertical → list.
+   */
+  function bindHomeStandingsNestedSwipe() {
+    const track = el.homeStandingsTrack;
+    const nested = el.homeTransfersTableWrap;
+    if (!track || track.dataset.nestedSwipeBound === "1") return;
+    track.dataset.nestedSwipeBound = "1";
+
+    const AXIS_SLOP_PX = 10;
+    let pointerId = null;
+    let axis = null; // "x" | "y" | null
+    let startX = 0;
+    let startY = 0;
+    let startScrollLeft = 0;
+    let swiped = false;
+
+    const endGesture = (e) => {
+      if (pointerId == null || (e && e.pointerId !== pointerId)) return;
+      if (axis === "x") {
+        track.style.removeProperty("scroll-behavior");
+        track.style.removeProperty("scroll-snap-type");
+        const idx = homeStandingsActivePageIndex();
+        setHomeStandingsPage(idx, { smooth: true });
+        try {
+          track.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
+      }
+      pointerId = null;
+      axis = null;
+      if (swiped) {
+        // Swallow the click that follows a drag so manager rows don't toggle.
+        const blockClick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          track.removeEventListener("click", blockClick, true);
+        };
+        track.addEventListener("click", blockClick, true);
+        window.setTimeout(() => track.removeEventListener("click", blockClick, true), 0);
+        swiped = false;
+      }
+    };
+
+    track.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (pointerId != null) return;
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        if (e.target.closest("button, a, input, textarea, label")) return;
+        pointerId = e.pointerId;
+        axis = null;
+        swiped = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        startScrollLeft = track.scrollLeft;
+      },
+      { passive: true }
+    );
+
+    track.addEventListener(
+      "pointermove",
+      (e) => {
+        if (pointerId == null || e.pointerId !== pointerId) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (axis == null) {
+          if (Math.hypot(dx, dy) < AXIS_SLOP_PX) return;
+          axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+          if (axis === "y") {
+            // Native vertical scroll (Transfers list or page) — stop tracking.
+            pointerId = null;
+            axis = null;
+            return;
+          }
+          swiped = true;
+          track.style.scrollBehavior = "auto";
+          track.style.scrollSnapType = "none";
+          try {
+            track.setPointerCapture(e.pointerId);
+          } catch {
+            /* ignore */
+          }
+        }
+        if (axis !== "x") return;
+        e.preventDefault();
+        track.scrollLeft = startScrollLeft - dx;
+      },
+      { passive: false }
+    );
+
+    track.addEventListener("pointerup", endGesture);
+    track.addEventListener("pointercancel", endGesture);
+    track.addEventListener("lostpointercapture", endGesture);
+
+    // Trackpad / shift-wheel: forward horizontal deltas from the nested list to the pager.
+    if (nested) {
+      nested.addEventListener(
+        "wheel",
+        (e) => {
+          const absX = Math.abs(e.deltaX);
+          const absY = Math.abs(e.deltaY);
+          if (absX <= absY || absX < 0.5) return;
+          e.preventDefault();
+          track.style.scrollBehavior = "auto";
+          track.scrollLeft += e.deltaX;
+          clearTimeout(nested._homeTransfersWheelSnap);
+          nested._homeTransfersWheelSnap = window.setTimeout(() => {
+            track.style.removeProperty("scroll-behavior");
+            setHomeStandingsPage(homeStandingsActivePageIndex(), { smooth: true });
+          }, 120);
+        },
+        { passive: false }
+      );
+    }
   }
 
   function homeFeedPageWidth() {
@@ -5435,7 +5499,6 @@
     bindHomeFeedPager();
     bindHomeScrollHoverGuard();
     bindHomeCrossHover();
-    bindHomeTransfersTableScrollControls();
 
     function bindHomeRowTap(container, rowSelector, onRow) {
       if (!container) return;
@@ -7121,10 +7184,8 @@
       el.homeStandingsTransfersBody.innerHTML = homeStandingsShowLoading()
         ? homeSquadLoadingHTML(3, 8)
         : rows.map((r) => homeTransfersRowHTML(r, opts)).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
-      bindHomeTransfersTableScrollControls();
       requestAnimationFrame(() => {
         resetHomeTransfersTableScroll();
-        syncHomeTransfersTableScrollBtns();
       });
     }
     if (el.homeStandingsCaptainsBody) {

@@ -15644,6 +15644,15 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   #home-standings-panel .home-transfers-table tbody tr[data-entry] {
     height: auto;
   }
+  #home-standings-panel .home-transfers-table {
+    flex: 0 0 auto;
+    height: auto;
+  }
+  #home-standings-panel .home-transfers-table-wrap {
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 0;
+  }
   #home-standings-panel .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
     vertical-align: middle;
   }
@@ -15964,10 +15973,15 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  /* pan-y lets page scroll; pan-x pages the league card. Nested Transfers
+     scroller uses pan-y only so horizontal swipes stay with this track. */
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-width: 0;
+  /* Critical: without this, tall Transfers content expands the track past the
+     JS-pinned height (flex item min-height:auto = content size). */
+  min-height: 0;
   width: 100%;
   /* Height is set to the active page so Captains/Chips don't force empty space. */
   transition: none;
@@ -15998,8 +16012,10 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   display: flex;
   flex-direction: column;
   height: 100%;
+  max-height: 100%;
   min-height: 0;
   align-self: stretch;
+  overflow: hidden;
 }
 .home-transfers-page-shell {
   position: relative;
@@ -16008,16 +16024,22 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 .home-transfers-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  max-height: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Vertical list scroll only — horizontal pager swipe belongs to .home-standings-track. */
+  touch-action: pan-y;
   margin: 0;
-  padding-bottom: 44px;
   box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 .home-transfers-table-wrap .home-transfers-table thead th {
   position: sticky;
@@ -16026,40 +16048,25 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   background: hsl(var(--card));
   box-shadow: 0 1px 0 hsl(var(--border) / 0.55);
 }
-.home-transfers-table-scroll-controls {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  pointer-events: none;
-}
-.home-transfers-table-scroll-controls[hidden] {
-  display: none;
-}
 @media (max-width: 900px) {
-  /* Transfers tab: allow vertical page scroll (pan-x alone blocked it on this pager). */
+  /* Horizontal pager swipe + vertical scroll inside Transfers. */
   .home-standings-track {
     touch-action: pan-x pan-y;
   }
   .home-standings-page-transfers,
   .home-transfers-page-shell {
-    height: auto;
-    align-self: flex-start;
+    height: 100%;
+    min-height: 0;
+    align-self: stretch;
   }
   .home-transfers-page-shell {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
   }
   .home-transfers-table-wrap {
-    overflow: visible;
-    flex: 0 1 auto;
-    padding-bottom: 0;
-  }
-  .home-transfers-table-scroll-controls {
-    display: none !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 }
 .home-standings-dots {
@@ -16945,45 +16952,6 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
 .home-transfers-cell.is-multi .home-transfer-move + .home-transfer-move {
   padding-top: 1px;
   border-top: 1px solid hsl(var(--border) / 0.55);
-}
-.home-transfers-table-scroll-btn {
-  position: absolute;
-  inset: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  margin: 0;
-  padding: 0;
-  border: 1px solid hsl(var(--border) / 0.65);
-  border-radius: 999px;
-  background: hsl(var(--card) / 0.94);
-  color: var(--text-dim);
-  box-shadow:
-    0 1px 2px hsl(var(--foreground) / 0.08),
-    0 4px 12px hsl(var(--foreground) / 0.12);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  cursor: pointer;
-  pointer-events: auto;
-  -webkit-tap-highlight-color: transparent;
-}
-.home-transfers-table-scroll-btn[hidden] {
-  display: none;
-  pointer-events: none;
-}
-.home-transfers-table-scroll-btn:hover {
-  background: hsl(var(--card));
-  color: var(--text);
-  border-color: hsl(var(--border));
-}
-.home-transfers-table-scroll-btn:active {
-  transform: scale(0.94);
-}
-.home-transfers-scroll-icon {
-  width: 14px;
-  height: 14px;
 }
 .home-transfer-move {
   display: flex;
