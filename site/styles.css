@@ -17002,9 +17002,31 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
 .home-transfer-hit {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 1px 5px 1px 4px;
+  border-radius: 4px;
   font-size: 9.5px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
   color: hsl(var(--negative));
+  background: hsl(var(--negative) / 0.1);
+  border: 1px solid hsl(var(--negative) / 0.22);
+  font-variant-numeric: tabular-nums;
+  width: fit-content;
+  max-width: 100%;
+  cursor: help;
+}
+.home-transfer-hit-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--negative) / 0.78);
+}
+.home-transfer-hit-cost {
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 .home-transfer-chip {

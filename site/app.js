@@ -28,9 +28,11 @@
     ownersByElement: {},
     elementGw: {},
     leaguePicksStatus: null,
+    transfersSchemaVersion: 0,
     transfersByEntry: {},
     error: null,
   };
+  if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
   window.FPL_HOME = HOME;
   // Prefer ownership bundle (refreshed with bootstrap) over build-time data.js.
   const GAMEWEEKS =
@@ -2368,6 +2370,46 @@
     });
   }
 
+  function homeTransfersAreCanonical(byEntry, schemaVersion) {
+    const ver = Number(schemaVersion);
+    // Explicit v2 payloads from fetch_home are authoritative (including empty maps).
+    if (Number.isFinite(ver) && ver >= 2) return true;
+    if (!byEntry || typeof byEntry !== "object") return false;
+    const groups = Object.values(byEntry);
+    if (!groups.length) return false;
+    let paired = 0;
+    for (const t of groups) {
+      if (!t || typeof t !== "object") continue;
+      for (const m of t.moves || []) {
+        if (!m || typeof m !== "object") continue;
+        const outType = m.out && m.out.elementType != null ? Number(m.out.elementType) : NaN;
+        const inType = m.in && m.in.elementType != null ? Number(m.in.elementType) : NaN;
+        // Legacy payloads omit elementType — treat as non-canonical.
+        if (!Number.isFinite(outType) || !Number.isFinite(inType) || outType <= 0 || inType <= 0) {
+          return false;
+        }
+        if (outType !== inType) return false;
+        paired += 1;
+      }
+    }
+    return paired > 0;
+  }
+
+  function homeSyncStandingsTransfers(standings, byEntry) {
+    const map = byEntry && typeof byEntry === "object" ? byEntry : {};
+    return (Array.isArray(standings) ? standings : []).map((row) => {
+      if (!row || row.entry == null) return row;
+      const t = map[String(row.entry)];
+      if (!t) {
+        if (row.transfers == null) return row;
+        const next = { ...row };
+        delete next.transfers;
+        return next;
+      }
+      return { ...row, transfers: t };
+    });
+  }
+
   function applyHomePayload(payload, { skipFeedIngest = false, fromSessionSnapshot = false, fromLivePoll = false } = {}) {
     if (!payload || typeof payload !== "object") return false;
     const priorHome = {
@@ -2375,6 +2417,10 @@
       standings: Array.isArray(HOME.standings) ? HOME.standings : [],
       summary: HOME.summary && typeof HOME.summary === "object" ? HOME.summary : null,
       managerId: HOME.managerId ?? null,
+      transfersByEntry: HOME.transfersByEntry && typeof HOME.transfersByEntry === "object"
+        ? HOME.transfersByEntry
+        : {},
+      transfersSchemaVersion: Number(HOME.transfersSchemaVersion) || 0,
     };
     if (payload.summary && HOME.summary && typeof payload.summary === "object") {
       const incoming = payload.summary;
@@ -2438,9 +2484,25 @@
     HOME.leaguePicksStatus = payload.leaguePicksStatus && typeof payload.leaguePicksStatus === "object"
       ? payload.leaguePicksStatus
       : null;
-    HOME.transfersByEntry = payload.transfersByEntry && typeof payload.transfersByEntry === "object"
+    const incomingTransfers = payload.transfersByEntry && typeof payload.transfersByEntry === "object"
       ? payload.transfersByEntry
       : {};
+    const incomingSchema = Number(payload.transfersSchemaVersion);
+    const incomingCanonical = homeTransfersAreCanonical(
+      incomingTransfers,
+      Number.isFinite(incomingSchema) ? incomingSchema : 0
+    );
+    const priorCanonical = homeTransfersAreCanonical(
+      priorHome.transfersByEntry,
+      priorHome.transfersSchemaVersion
+    );
+    // Never let legacy live/session pairing overwrite canonical transfers (static or v2 live).
+    const keepPriorTransfers = priorCanonical && !incomingCanonical;
+    HOME.transfersByEntry = keepPriorTransfers ? priorHome.transfersByEntry : incomingTransfers;
+    HOME.transfersSchemaVersion = keepPriorTransfers
+      ? Math.max(2, priorHome.transfersSchemaVersion || 0)
+      : (incomingCanonical ? Math.max(2, Number.isFinite(incomingSchema) ? incomingSchema : 2) : 0);
+    HOME.standings = homeSyncStandingsTransfers(HOME.standings, HOME.transfersByEntry);
     HOME.error = payload.error ?? null;
     window.FPL_HOME = HOME;
     if (opts.fromSessionSnapshot) homeBootstrapSource = "session";
@@ -2834,6 +2896,7 @@
       leaguePicksStatus: home.leaguePicksStatus && typeof home.leaguePicksStatus === "object"
         ? home.leaguePicksStatus
         : null,
+      transfersSchemaVersion: Number(home.transfersSchemaVersion) || 0,
       transfersByEntry: home.transfersByEntry && typeof home.transfersByEntry === "object"
         ? home.transfersByEntry
         : {},
@@ -2863,7 +2926,29 @@
       const snap = JSON.parse(raw);
       if (!snap || snap.key !== prefsKey || !snap.payload) return false;
       if (!homeLivePayloadMatchesPrefs(snap.payload)) return false;
-      applyHomePayload(snap.payload, { skipFeedIngest: true, fromSessionSnapshot: true });
+      // Keep baked static transfers until a canonical live payload arrives — session
+      // copies are the main source of wrong-then-right flashes on the transfers card.
+      const bakedTransfers = HOME.transfersByEntry && typeof HOME.transfersByEntry === "object"
+        ? HOME.transfersByEntry
+        : {};
+      const bakedSchema = Number(HOME.transfersSchemaVersion) || 0;
+      const payload = { ...snap.payload };
+      delete payload.transfersByEntry;
+      delete payload.transfersSchemaVersion;
+      if (Array.isArray(payload.standings)) {
+        payload.standings = payload.standings.map((row) => {
+          if (!row || row.transfers == null) return row;
+          const next = { ...row };
+          delete next.transfers;
+          return next;
+        });
+      }
+      applyHomePayload(payload, { skipFeedIngest: true, fromSessionSnapshot: true });
+      if (homeTransfersAreCanonical(bakedTransfers, bakedSchema)) {
+        HOME.transfersByEntry = bakedTransfers;
+        HOME.transfersSchemaVersion = Math.max(2, bakedSchema || 0);
+        HOME.standings = homeSyncStandingsTransfers(HOME.standings, HOME.transfersByEntry);
+      }
       homeLiveLastSuccessAt = Number(snap.savedAt) || Date.now();
       return true;
     } catch {
@@ -4188,7 +4273,15 @@
     if (!moves.length) return "—";
     const moveHTML = moves.map((m) => homeTransferMoveHTML(m)).filter(Boolean).join("");
     if (!moveHTML) return "—";
-    const hit = transfers.hit ? `<span class="home-transfer-hit">−${Number(transfers.cost) || 4}</span>` : "";
+    const cost = Number(transfers.cost) || 0;
+    const hitCount = cost > 0 ? Math.max(1, Math.round(cost / 4)) : 0;
+    const hit = transfers.hit && cost > 0
+      ? `<span class="home-transfer-hit"${tipAttr(
+          hitCount === 1
+            ? `Transfer hit −${cost}: one transfer beyond free transfers`
+            : `Transfer hits −${cost}: ${hitCount} transfers beyond free transfers`
+        )}><span class="home-transfer-hit-label">Hit</span><span class="home-transfer-hit-cost">−${cost}</span></span>`
+      : "";
     const chip = transfers.activeChip === "freehit"
       ? `<span class="home-transfer-chip">FH</span>`
       : transfers.activeChip === "wildcard"

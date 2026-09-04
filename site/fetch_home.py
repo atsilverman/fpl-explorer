@@ -1000,6 +1000,7 @@ def main() -> int:
             "ownersByElement": {},
             "elementGw": {},
             "leaguePicksStatus": None,
+            "transfersSchemaVersion": 2,
             "transfersByEntry": {},
             "error": "No manager/league configured. Set Preferences or pass --manager/--league.",
         }
@@ -1587,6 +1588,8 @@ def main() -> int:
             },
             "elementGw": element_gw,
             "leaguePicksStatus": league_picks_status,
+            # v2 = official/same-position pairing with elementType on moves.
+            "transfersSchemaVersion": 2,
             "transfersByEntry": transfers_by_entry,
             "error": error_msg,
         }
