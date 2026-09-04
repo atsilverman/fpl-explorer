@@ -5967,6 +5967,23 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   color: var(--text-dim);
   background: #fff;
 }
+.ownership-photo-fallback.is-photo-icon,
+.home-lookup-photo-fallback.is-photo-icon {
+  font-size: 0;
+  color: var(--text-faint);
+  background: hsl(var(--muted) / 0.55);
+}
+.ownership-photo-fallback .player-photo-fallback-icon,
+.home-lookup-photo-fallback .player-photo-fallback-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+  opacity: 0.72;
+}
+.home-lookup-photo-fallback .player-photo-fallback-icon {
+  width: 24px;
+  height: 24px;
+}
 :root[data-theme="dark"] .ownership-photo,
 :root[data-theme="dark"] .ownership-photo.has-team-ring,
 :root[data-theme="dark"] .ownership-photo-fallback {
@@ -14551,6 +14568,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-dim);
+  background: hsl(var(--muted) / 0.45);
 }
 .home-lookup-badge {
   position: absolute;

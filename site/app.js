@@ -6265,7 +6265,7 @@
     }
     const photoBlock = photo
       ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-initials="${escapeHtml(initials)}" />`
-      : `<span class="home-lookup-photo home-lookup-photo-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+      : `<span class="home-lookup-photo home-lookup-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
     const photoRing = teamRingAttrs(row.team);
@@ -6604,15 +6604,7 @@
       el.homePlayerProfile.hidden = false;
       el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer);
       bindHomeLookupCard();
-      el.homePlayerProfile.querySelectorAll("img.home-lookup-photo").forEach((img) => {
-        img.addEventListener("error", () => {
-          const fallback = document.createElement("span");
-          fallback.className = "home-lookup-photo home-lookup-photo-fallback";
-          fallback.setAttribute("aria-hidden", "true");
-          fallback.textContent = img.getAttribute("data-initials") || "?";
-          img.replaceWith(fallback);
-        }, { once: true });
-      });
+      bindOwnershipPhotoFallback(el.homePlayerProfile);
     }
 
     // Lookup replaces Team with the club matchup; Standings shows ownership.
@@ -18362,6 +18354,7 @@
     syncLiveNavChrome();
     syncLivePointsCoreUnder();
     if (mode === "points") primeLivePointsTableLayout();
+    bindOwnershipPhotoFallback(el.livePage);
 
     if (quiet) {
       if (state.liveMode === "points") snapLivePointsVisible(el.livePage);
@@ -18980,20 +18973,58 @@
       .toUpperCase() || "?";
   }
 
+  function ownershipPhotoFallbackElement(img) {
+    const fallback = document.createElement("span");
+    const classes = String(img.className || "")
+      .split(/\s+/)
+      .filter((c) => c && c !== "ownership-photo" && c !== "home-lookup-photo");
+    const isLookup = img.classList.contains("home-lookup-photo");
+    fallback.className = [
+      isLookup ? "home-lookup-photo home-lookup-photo-fallback" : "ownership-photo ownership-photo-fallback",
+      "is-photo-icon",
+      ...classes,
+    ].filter(Boolean).join(" ");
+    fallback.setAttribute("aria-hidden", "true");
+    const accent = img.style.getPropertyValue("--team-accent");
+    if (accent) fallback.style.setProperty("--team-accent", accent);
+    fallback.innerHTML = iconHTML("user", "player-photo-fallback-icon");
+    return fallback;
+  }
+
+  function replaceBrokenPlayerPhoto(img) {
+    if (!(img instanceof HTMLImageElement)) return;
+    if (img.dataset.photoFallback === "1") return;
+    if (
+      !img.classList.contains("ownership-photo")
+      && !img.classList.contains("home-lookup-photo")
+    ) {
+      return;
+    }
+    img.dataset.photoFallback = "1";
+    img.replaceWith(ownershipPhotoFallbackElement(img));
+  }
+
   function bindOwnershipPhotoFallback(root) {
     if (!root) return;
-    root.querySelectorAll("img.ownership-photo").forEach((img) => {
-      img.addEventListener("error", () => {
-        const fallback = document.createElement("span");
-        fallback.className = `${img.className} ownership-photo-fallback`;
-        fallback.setAttribute("aria-hidden", "true");
-        fallback.textContent = img.getAttribute("data-initials") || "?";
-        const accent = img.style.getPropertyValue("--team-accent");
-        if (accent) fallback.style.setProperty("--team-accent", accent);
-        img.replaceWith(fallback);
-      }, { once: true });
+    root.querySelectorAll("img.ownership-photo, img.home-lookup-photo").forEach((img) => {
+      if (img.dataset.photoFallbackBound === "1") return;
+      img.dataset.photoFallbackBound = "1";
+      if (img.complete && img.naturalWidth === 0) {
+        replaceBrokenPlayerPhoto(img);
+        return;
+      }
+      img.addEventListener("error", () => replaceBrokenPlayerPhoto(img), { once: true });
     });
   }
+
+  // Capture-phase: img error does not bubble — covers Live and any missed bind.
+  document.addEventListener(
+    "error",
+    (e) => {
+      replaceBrokenPlayerPhoto(e.target);
+    },
+    true
+  );
 
   function ownershipPhotoHTML(row, teamCode, { eager = false } = {}) {
     const initials = ownershipInitials(row.name);
@@ -19001,7 +19032,7 @@
     const team = teamCode || currentTeamCode(row) || row.team;
     const ring = teamRingAttrs(team);
     if (!photo) {
-      return `<span class="ownership-photo ownership-photo-fallback${ring.className}" aria-hidden="true"${ring.attr}>${escapeHtml(initials)}</span>`;
+      return `<span class="ownership-photo ownership-photo-fallback is-photo-icon${ring.className}" aria-hidden="true"${ring.attr}>${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     }
     const loading = eager ? "eager" : "lazy";
     return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
