@@ -4137,6 +4137,12 @@
   function homeTransferMoveHTML(move) {
     const out = move && move.out ? move.out : null;
     const inn = move && move.in ? move.in : null;
+    // Belt-and-suspenders: never render cross-position pairs if types are known.
+    const outType = out && out.elementType != null ? Number(out.elementType) : NaN;
+    const inType = inn && inn.elementType != null ? Number(inn.elementType) : NaN;
+    if (Number.isFinite(outType) && Number.isFinite(inType) && outType > 0 && inType > 0 && outType !== inType) {
+      return "";
+    }
     const parts = [];
     if (out && out.name) {
       parts.push(`<span class="home-transfer-out">${escapeHtml(out.name)}</span>`);
@@ -4158,6 +4164,7 @@
     const moves = Array.isArray(transfers.moves) ? transfers.moves : [];
     if (!moves.length) return "—";
     const moveHTML = moves.map((m) => homeTransferMoveHTML(m)).filter(Boolean).join("");
+    if (!moveHTML) return "—";
     const hit = transfers.hit ? `<span class="home-transfer-hit">−${Number(transfers.cost) || 4}</span>` : "";
     const chip = transfers.activeChip === "freehit"
       ? `<span class="home-transfer-chip">FH</span>`

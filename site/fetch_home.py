@@ -154,6 +154,16 @@ def fetch_entry_event_picks(entry_id: int, gw: int) -> tuple[dict | None, str | 
     return data, None
 
 
+def fetch_entry_transfers(entry_id: int) -> tuple[list[dict], str | None]:
+    """Fetch an entry's transfer history. Returns ([], err) on failure."""
+    data, err = fpl_get_result(f"/entry/{entry_id}/transfers/")
+    if err:
+        return [], err
+    if not isinstance(data, list):
+        return [], "invalid transfers payload"
+    return [row for row in data if isinstance(row, dict)], None
+
+
 def picks_payload_ready(payload: dict | None) -> bool:
     if not payload or not isinstance(payload, dict):
         return False
@@ -167,27 +177,18 @@ def compute_transfers(
     entry_history: dict | None,
     active_chip: str | None,
     stats: dict[int, dict] | None = None,
+    *,
+    event_id: int | None = None,
+    official_transfers: list[dict] | None = None,
 ) -> dict:
-    """Diff previous vs current squad picks into transfer moves.
+    """Build transfer moves for the league card.
 
-    Pair like-for-like by ``element_type`` (GK/DEF/MID/FWD) first so a DEF→DEF
-    and MID→MID swap is not crossed by picks-list order; leftover true position
-    changes are zipped afterward.
+    Prefer FPL ``/entry/{id}/transfers/`` pairs for the event (recorded like-for-like).
+    Wildcard / Free Hit use a same-position squad diff so we do not dump dozens of
+    intermediate WC clicks. Squad-diff fallback never pairs across ``element_type``.
     """
-    prev_ids = [
-        int(p["element"])
-        for p in (prev_picks or [])
-        if isinstance(p, dict) and p.get("element") is not None
-    ]
-    curr_ids = [
-        int(p["element"])
-        for p in (curr_picks or [])
-        if isinstance(p, dict) and p.get("element") is not None
-    ]
-    prev_set = set(prev_ids)
-    curr_set = set(curr_ids)
-    outs = [eid for eid in prev_ids if eid not in curr_set]
-    ins = [eid for eid in curr_ids if eid not in prev_set]
+    eh = entry_history if isinstance(entry_history, dict) else {}
+    chip = (active_chip or "").strip().lower() or None
 
     def el_name(eid: int) -> str:
         return player_display_name(elements.get(eid) or {})
@@ -207,67 +208,104 @@ def compute_transfers(
         except (TypeError, ValueError):
             return 0
 
-    def make_move(out_eid: int | None, in_eid: int | None) -> dict | None:
-        move: dict = {}
-        if out_eid is not None:
-            move["out"] = {
+    def make_move(out_eid: int, in_eid: int) -> dict | None:
+        out_type = el_type(out_eid)
+        in_type = el_type(in_eid)
+        # Hard rule: never invent cross-position pairs.
+        if out_type and in_type and out_type != in_type:
+            return None
+        move = {
+            "out": {
                 "id": out_eid,
                 "name": el_name(out_eid),
                 "gwPoints": el_gw_points(out_eid),
-                "elementType": el_type(out_eid) or None,
-            }
-        if in_eid is not None:
-            move["in"] = {
+                "elementType": out_type or None,
+            },
+            "in": {
                 "id": in_eid,
                 "name": el_name(in_eid),
                 "gwPoints": el_gw_points(in_eid),
-                "elementType": el_type(in_eid) or None,
-            }
-        if not move:
-            return None
-        in_pts = int((move.get("in") or {}).get("gwPoints") or 0)
-        out_pts = int((move.get("out") or {}).get("gwPoints") or 0)
-        move["ptsDelta"] = in_pts - out_pts
+                "elementType": in_type or None,
+            },
+        }
+        move["ptsDelta"] = int(move["in"]["gwPoints"] or 0) - int(move["out"]["gwPoints"] or 0)
         return move
 
-    outs_by: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: [], 4: []}
-    ins_by: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: [], 4: []}
-    for eid in outs:
-        outs_by[el_type(eid)].append(eid)
-    for eid in ins:
-        ins_by[el_type(eid)].append(eid)
-
-    moves: list[dict] = []
-    used_out: set[int] = set()
-    used_in: set[int] = set()
-    for et in (1, 2, 3, 4, 0):
-        for out_eid, in_eid in zip(outs_by[et], ins_by[et]):
+    def moves_from_official(rows: list[dict], gw: int) -> list[dict]:
+        out: list[dict] = []
+        for row in rows:
+            try:
+                if int(row.get("event") or 0) != gw:
+                    continue
+                out_eid = int(row["element_out"])
+                in_eid = int(row["element_in"])
+            except (KeyError, TypeError, ValueError):
+                continue
             move = make_move(out_eid, in_eid)
             if move:
-                moves.append(move)
-            used_out.add(out_eid)
-            used_in.add(in_eid)
+                out.append(move)
+        return out
 
-    rem_outs = [eid for eid in outs if eid not in used_out]
-    rem_ins = [eid for eid in ins if eid not in used_in]
-    pair_count = max(len(rem_outs), len(rem_ins))
-    for i in range(pair_count):
-        move = make_move(
-            rem_outs[i] if i < len(rem_outs) else None,
-            rem_ins[i] if i < len(rem_ins) else None,
-        )
-        if move:
-            moves.append(move)
+    def moves_from_squad_diff(prev: list, curr: list) -> list[dict]:
+        prev_ids = [
+            int(p["element"])
+            for p in (prev or [])
+            if isinstance(p, dict) and p.get("element") is not None
+        ]
+        curr_ids = [
+            int(p["element"])
+            for p in (curr or [])
+            if isinstance(p, dict) and p.get("element") is not None
+        ]
+        prev_set = set(prev_ids)
+        curr_set = set(curr_ids)
+        outs = [eid for eid in prev_ids if eid not in curr_set]
+        ins = [eid for eid in curr_ids if eid not in prev_set]
 
-    eh = entry_history if isinstance(entry_history, dict) else {}
+        outs_by: dict[int, list[int]] = {1: [], 2: [], 3: [], 4: []}
+        ins_by: dict[int, list[int]] = {1: [], 2: [], 3: [], 4: []}
+        for eid in outs:
+            et = el_type(eid)
+            if et in outs_by:
+                outs_by[et].append(eid)
+        for eid in ins:
+            et = el_type(eid)
+            if et in ins_by:
+                ins_by[et].append(eid)
+
+        moves: list[dict] = []
+        for et in (1, 2, 3, 4):
+            for out_eid, in_eid in zip(outs_by[et], ins_by[et]):
+                move = make_move(out_eid, in_eid)
+                if move:
+                    moves.append(move)
+        # Drop unmatched outs/ins — never cross-pair positions.
+        return moves
+
     try:
-        count = int(eh.get("event_transfers") if eh.get("event_transfers") is not None else len(moves))
+        count = int(eh.get("event_transfers") if eh.get("event_transfers") is not None else 0)
     except (TypeError, ValueError):
-        count = len(moves)
+        count = 0
     try:
         cost = int(eh.get("event_transfers_cost") or 0)
     except (TypeError, ValueError):
         cost = 0
+
+    moves: list[dict] = []
+    use_chip_rebuild = chip in {"wildcard", "freehit"}
+    if (
+        not use_chip_rebuild
+        and event_id is not None
+        and isinstance(official_transfers, list)
+        and official_transfers
+    ):
+        moves = moves_from_official(official_transfers, int(event_id))
+        if not count:
+            count = len(moves)
+    if not moves:
+        moves = moves_from_squad_diff(prev_picks, curr_picks)
+        if not count and not use_chip_rebuild:
+            count = len(moves)
 
     return {
         "count": count,
@@ -277,6 +315,7 @@ def compute_transfers(
         "netPtsDelta": sum(int(m.get("ptsDelta") or 0) for m in moves),
         "activeChip": active_chip,
     }
+
 
 
 def build_league_picks_status(
@@ -1162,6 +1201,7 @@ def main() -> int:
                 continue
             curr_picks = (curr_payload or {}).get("picks") or []
             prev_picks = (prev_payload or {}).get("picks") or [] if prev_payload else []
+            official_rows, _xfer_err = fetch_entry_transfers(eid)
             transfers_by_entry[str(eid)] = compute_transfers(
                 prev_picks,
                 curr_picks,
@@ -1169,6 +1209,8 @@ def main() -> int:
                 (curr_payload or {}).get("entry_history") or {},
                 (curr_payload or {}).get("active_chip"),
                 stats,
+                event_id=status_picks_gw,
+                official_transfers=official_rows,
             )
 
         standing_rows: list[dict] = []
