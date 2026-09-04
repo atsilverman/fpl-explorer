@@ -30,9 +30,11 @@
     leaguePicksStatus: null,
     transfersSchemaVersion: 0,
     transfersByEntry: {},
+    gwAwaitingKickoff: null,
     error: null,
   };
   if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
+  if (HOME.gwAwaitingKickoff == null) HOME.gwAwaitingKickoff = null;
   window.FPL_HOME = HOME;
   // Prefer ownership bundle (refreshed with bootstrap) over build-time data.js.
   const GAMEWEEKS =
@@ -2484,6 +2486,9 @@
     HOME.leaguePicksStatus = payload.leaguePicksStatus && typeof payload.leaguePicksStatus === "object"
       ? payload.leaguePicksStatus
       : null;
+    HOME.gwAwaitingKickoff = Object.prototype.hasOwnProperty.call(payload, "gwAwaitingKickoff")
+      ? payload.gwAwaitingKickoff === true
+      : null;
     const incomingTransfers = payload.transfersByEntry && typeof payload.transfersByEntry === "object"
       ? payload.transfersByEntry
       : {};
@@ -2504,9 +2509,10 @@
       : (incomingCanonical ? Math.max(2, Number.isFinite(incomingSchema) ? incomingSchema : 2) : 0);
     HOME.standings = homeSyncStandingsTransfers(HOME.standings, HOME.transfersByEntry);
     HOME.error = payload.error ?? null;
+    homeSanitizePreKickoffScores();
     window.FPL_HOME = HOME;
-    if (opts.fromSessionSnapshot) homeBootstrapSource = "session";
-    else if (opts.fromLivePoll) homeBootstrapSource = "live";
+    if (fromSessionSnapshot) homeBootstrapSource = "session";
+    else if (fromLivePoll) homeBootstrapSource = "live";
     homeOwnerPin = null;
     homeViewEntryId = null;
     homeElementGwCache = null;
@@ -2621,7 +2627,7 @@
   const HOME_LIVE_FETCH_MS = 12_000;
   const HOME_LIVE_POLL_LIVE_MS = 15_000;
   const HOME_LIVE_POLL_IDLE_MS = 60_000;
-  const HOME_SESSION_SNAPSHOT_KEY = "fpl_home_live_v2";
+  const HOME_SESSION_SNAPSHOT_KEY = "fpl_home_live_v3";
   let homeLivePollTimer = null;
   let homeLivePollIntervalMs = HOME_LIVE_POLL_IDLE_MS;
   let homeLiveLastPollAt = 0;
@@ -2861,6 +2867,65 @@
     return homeBootstrapPhase() !== "pending";
   }
 
+  /** True between FPL flipping is_current and the first GW fixture kickoff. */
+  function homeGwAwaitingKickoff() {
+    if (HOME && HOME.gwAwaitingKickoff === true) return true;
+    if (HOME && HOME.gwAwaitingKickoff === false) return false;
+    let anyFx = false;
+    let anyStarted = false;
+    const scanRows = (rows) => {
+      for (const row of rows || []) {
+        for (const fx of row.fixtures || []) {
+          anyFx = true;
+          if (fx && (fx.live || fx.finished)) anyStarted = true;
+        }
+      }
+    };
+    scanRows(HOME && HOME.squad);
+    const byEntry = (HOME && HOME.squadsByEntry) || {};
+    Object.keys(byEntry).forEach((k) => scanRows(byEntry[k]));
+    if (anyStarted) return false;
+    if (!anyFx) return false;
+    const standings = (HOME && HOME.standings) || [];
+    if (!standings.length) return true;
+    let anyToPlay = false;
+    for (const row of standings) {
+      if ((Number(row && row.inPlay) || 0) > 0) return false;
+      if ((Number(row && row.toPlay) || 0) > 0) anyToPlay = true;
+    }
+    return anyToPlay;
+  }
+
+  /** Drop leftover prior-GW totals while the new current GW has not kicked off. */
+  function homeSanitizePreKickoffScores() {
+    if (!homeGwAwaitingKickoff()) return;
+    if (HOME.summary && typeof HOME.summary === "object") {
+      HOME.summary = {
+        ...HOME.summary,
+        gwPoints: 0,
+        eventPointsOfficial: 0,
+      };
+    }
+    HOME.standings = (Array.isArray(HOME.standings) ? HOME.standings : []).map((row) => {
+      if (!row || typeof row !== "object") return row;
+      return { ...row, gwPointsLive: 0, eventTotalOfficial: 0 };
+    });
+    const zeroSquadPts = (rows) =>
+      (Array.isArray(rows) ? rows : []).map((row) => {
+        if (!row || typeof row !== "object") return row;
+        return { ...row, gwPoints: 0 };
+      });
+    HOME.squad = zeroSquadPts(HOME.squad);
+    const nextByEntry = {};
+    const byEntry = HOME.squadsByEntry && typeof HOME.squadsByEntry === "object"
+      ? HOME.squadsByEntry
+      : {};
+    Object.keys(byEntry).forEach((key) => {
+      nextByEntry[key] = zeroSquadPts(byEntry[key]);
+    });
+    HOME.squadsByEntry = nextByEntry;
+  }
+
   /** Baked HOME can retain stale live flags between refreshes — wait for live poll or session snapshot. */
   function homeTrustLiveMatchState() {
     return homeCanShowVolatileStats();
@@ -2900,6 +2965,12 @@
       transfersByEntry: home.transfersByEntry && typeof home.transfersByEntry === "object"
         ? home.transfersByEntry
         : {},
+      gwAwaitingKickoff:
+        home.gwAwaitingKickoff === true
+          ? true
+          : home.gwAwaitingKickoff === false
+            ? false
+            : null,
     };
   }
 
@@ -2958,6 +3029,7 @@
 
   function homeSquadRowGwPoints(row, eg) {
     if (!homeCanShowVolatileStats()) return null;
+    if (homeGwAwaitingKickoff()) return 0;
     if (row && row.gwPoints != null && Number.isFinite(Number(row.gwPoints))) {
       return Number(row.gwPoints);
     }
@@ -3673,7 +3745,11 @@
       const { captain, vice } = homeCaptainsForEntry(Number(r.entry));
       const { player } = homeEffectiveCaptainPick(captain, vice);
       if (!player) continue;
-      const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
+      const pts = homeGwAwaitingKickoff()
+        ? 0
+        : player.gwPoints != null
+          ? Number(player.gwPoints)
+          : null;
       if (!Number.isFinite(pts)) continue;
       if (max == null || pts > max) max = pts;
     }
@@ -3684,7 +3760,11 @@
     if (!player) return "—";
     const teamBadge = badgeHTML(player.team, "home-crest home-crest-captain") ||
       teamCrestFallbackHTML(player.team, "home-crest-fallback home-crest-captain");
-    const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
+    const pts = homeGwAwaitingKickoff()
+      ? 0
+      : player.gwPoints != null
+        ? Number(player.gwPoints)
+        : null;
     const ptsHTML = Number.isFinite(pts)
       ? `<span class="home-captain-pts">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
       : "";
@@ -3783,6 +3863,7 @@
   }
 
   function homeStandingsGwPoints(row) {
+    if (homeGwAwaitingKickoff()) return 0;
     const official = row.eventTotalOfficial != null ? Number(row.eventTotalOfficial) : null;
     const live = row.gwPointsLive != null ? Number(row.gwPointsLive) : null;
     if (!homeCanShowVolatileStats()) {
@@ -4134,7 +4215,11 @@
     const { captain, vice } = homeCaptainsForEntry(entry);
     const effective = homeEffectiveCaptainPick(captain, vice);
     const shown = effective.player;
-    const shownPts = shown && shown.gwPoints != null ? Number(shown.gwPoints) : null;
+    const shownPts = homeGwAwaitingKickoff()
+      ? 0
+      : shown && shown.gwPoints != null
+        ? Number(shown.gwPoints)
+        : null;
     const isTopCaptain =
       Number.isFinite(topCaptainPts)
       && topCaptainPts > 0
@@ -4214,6 +4299,7 @@
   }
 
   function homeElementGwPts(elementId) {
+    if (homeGwAwaitingKickoff()) return 0;
     const rec = (HOME.elementGw || {})[String(elementId)];
     if (!rec || typeof rec !== "object") return 0;
     const n = Number(rec.pts);
@@ -4221,6 +4307,7 @@
   }
 
   function homeTransferMovePtsDelta(move) {
+    if (homeGwAwaitingKickoff()) return 0;
     if (move && move.ptsDelta != null && Number.isFinite(Number(move.ptsDelta))) {
       return Number(move.ptsDelta);
     }
@@ -4236,7 +4323,7 @@
   function homeTransferPtsDeltaHTML(delta) {
     const n = Number(delta);
     if (!Number.isFinite(n)) return "";
-    if (n === 0) return `<span class="home-transfer-pts is-flat">±0</span>`;
+    if (n === 0) return `<span class="home-transfer-pts is-flat">0</span>`;
     const cls = n > 0 ? "is-up" : "is-down";
     const text = n > 0 ? `+${n}` : `−${Math.abs(n)}`;
     return `<span class="home-transfer-pts ${cls}">${text}</span>`;
@@ -6577,8 +6664,9 @@
 
   function renderHomeSummaryStats(summary, { enterPending = false } = {}) {
     void enterPending;
-    const gwVal =
-      summary.gwPoints != null && Number.isFinite(Number(summary.gwPoints))
+    const gwVal = homeGwAwaitingKickoff()
+      ? 0
+      : summary.gwPoints != null && Number.isFinite(Number(summary.gwPoints))
         ? Number(summary.gwPoints)
         : null;
     if (el.homeGwPoints) {

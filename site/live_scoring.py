@@ -160,6 +160,25 @@ def fixture_is_live(fx: dict | None) -> bool:
     return bool(fx.get("started")) and not fixture_is_finished(fx)
 
 
+def fixture_has_started(fx: dict | None) -> bool:
+    """True once a fixture has kicked off (live or finished)."""
+    if not fx:
+        return False
+    return bool(fx.get("started")) or fixture_is_finished(fx)
+
+
+def gw_fixtures_awaiting_kickoff(fixtures: list | None) -> bool:
+    """True when this GW has fixtures and none have started yet.
+
+    FPL often keeps classic-league ``event_total`` / ``summary_event_points``
+    at the previous GW total until the first kickoff — Home must show 0 pts
+    in that window instead of the stale totals.
+    """
+    if not fixtures:
+        return False
+    return not any(fixture_has_started(fx) for fx in fixtures)
+
+
 def build_match_status_by_element(
     elements: list[dict],
     fixtures: list[dict],

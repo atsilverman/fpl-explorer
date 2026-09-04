@@ -14698,6 +14698,14 @@ html.is-team-landscape #team-page .team-add-slot .icon {
 .home-player-matchup .schedule-card {
   width: 100%;
 }
+/* Home player lookup embeds a schedule matchup card — no hover lift (Schedule keeps it). */
+.home-player-matchup .schedule-card:hover {
+  position: static;
+  z-index: auto;
+  transform: none;
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
 .home-search-sheet {
   display: flex;
   flex-direction: column;
@@ -16985,7 +16993,8 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
 }
 .home-transfer-pts.is-flat {
   color: var(--text-faint);
-  font-weight: 600;
+  font-weight: 500;
+  opacity: 0.72;
 }
 .home-transfer-out {
   color: hsl(var(--negative) / 0.85);

@@ -39,6 +39,7 @@ from live_scoring import (
     fixture_is_finished,
     fixture_is_live,
     fixtures_for_element,
+    gw_fixtures_awaiting_kickoff,
     importance_pct,
     live_stats_map,
     team_by_id,
@@ -775,6 +776,7 @@ def resolve_manager_gw_points(
     *,
     any_fixture_live: bool,
     entry_official: int | None = None,
+    awaiting_kickoff: bool = False,
 ) -> tuple[int, list[dict], list[dict]]:
     """Live GW points with safeguards against post-FT autosub drift.
 
@@ -782,6 +784,9 @@ def resolve_manager_gw_points(
     (final fixture flag only). Once nothing is live, trust FPL's stamped GW
     total when available — picks entry_history.points often stays 0 mid-GW
     until FPL processes the gameweek; entry summary_event_points can lead.
+
+    Pre-kickoff (new current GW, no fixtures started): never trust leftover
+    official totals from the previous gameweek — return computed live (0).
     """
     live_pts, active, subs = calculate_manager_points_from_live(
         picks,
@@ -797,6 +802,9 @@ def resolve_manager_gw_points(
     except (TypeError, ValueError):
         cost = 0
     live_pts = max(0, int(live_pts) - cost)
+
+    if awaiting_kickoff:
+        return 0, active, subs
 
     if not any_fixture_live:
         for src in (eh.get("points"), entry_official):
@@ -1002,6 +1010,7 @@ def main() -> int:
             "leaguePicksStatus": None,
             "transfersSchemaVersion": 2,
             "transfersByEntry": {},
+            "gwAwaitingKickoff": False,
             "error": "No manager/league configured. Set Preferences or pass --manager/--league.",
         }
         write_home_outputs(empty)
@@ -1164,6 +1173,7 @@ def main() -> int:
             list(elements.values()), fixtures, final_only=True
         )
         any_fixture_live = any(fixture_is_live(fx) for fx in fixtures)
+        gw_awaiting_kickoff = gw_fixtures_awaiting_kickoff(fixtures)
 
         focus_picks_payload = picks_by_entry.get(manager_id)
         focus_picks = (focus_picks_payload or {}).get("picks") or []
@@ -1183,6 +1193,7 @@ def main() -> int:
             focus_hist,
             any_fixture_live=any_fixture_live,
             entry_official=focus_entry_official,
+            awaiting_kickoff=gw_awaiting_kickoff,
         )
         active_ids = {int(p["element"]) for p in focus_active}
         focus_mults = effective_element_multipliers(focus_picks, focus_active)
@@ -1316,6 +1327,7 @@ def main() -> int:
                         (mp or {}).get("entry_history") or {},
                         any_fixture_live=any_fixture_live,
                         entry_official=league_entry_official,
+                        awaiting_kickoff=gw_awaiting_kickoff,
                     )
                     other_mults = effective_element_multipliers(other_picks, active)
                     mults_by_entry[eid] = other_mults
@@ -1349,7 +1361,7 @@ def main() -> int:
                         "overall_points": overall_points,
                     }
                 else:
-                    live_gw_pts = int(row.get("event_total") or 0)
+                    live_gw_pts = 0 if gw_awaiting_kickoff else int(row.get("event_total") or 0)
                     active = []
                     subs = []
                     mults_by_entry.setdefault(eid, {})
@@ -1466,9 +1478,17 @@ def main() -> int:
                 for key, rows in cached["squadsByEntry"].items():
                     if key not in squads_by_entry:
                         squads_by_entry[key] = rows
-            if cached.get("summary") and isinstance(cached["summary"], dict):
+            # Only reuse cached GW points within the same gameweek and after kickoff.
+            if (
+                not gw_awaiting_kickoff
+                and cached.get("gw") == gw
+                and cached.get("summary")
+                and isinstance(cached["summary"], dict)
+            ):
                 cached_summary = cached["summary"]
                 focus_pts = cached_summary.get("gwPoints", focus_pts)
+            elif cached.get("summary") and isinstance(cached["summary"], dict):
+                cached_summary = cached["summary"]
 
         degraded_msgs: list[str] = []
         if standings_err:
@@ -1485,9 +1505,13 @@ def main() -> int:
 
         # Per manager: once their XI is done (in_play == 0), trust FPL event_total.
         # Waiting for league-wide toPlay == 0 left stale live GW pts when some fixtures
-        # remained later in the gameweek.
+        # remained later in the gameweek. Pre-kickoff: FPL event_total is often still
+        # last GW — force 0 until the first match starts.
         for row in standing_rows:
-            if int(row.get("inPlay") or 0) == 0:
+            if gw_awaiting_kickoff:
+                row["gwPointsLive"] = 0
+                row["eventTotalOfficial"] = 0
+            elif int(row.get("inPlay") or 0) == 0:
                 official = row.get("eventTotalOfficial")
                 if official is not None:
                     row["gwPointsLive"] = int(official)
@@ -1562,10 +1586,16 @@ def main() -> int:
             "leagueId": league_id,
             "leagueName": league_meta.get("name") or f"League {league_id}",
             "summary": {
+                # Before first kickoff FPL still stamps last GW's summary_event_points —
+                # never surface those as this GW's score.
                 "gwPoints": (
-                    focus_entry_official
-                    if focus_in_play == 0 and focus_entry_official is not None
-                    else focus_pts
+                    0
+                    if gw_awaiting_kickoff
+                    else (
+                        focus_entry_official
+                        if focus_in_play == 0 and focus_entry_official is not None
+                        else focus_pts
+                    )
                 ),
                 "overallPoints": int(focus_summary["overallPoints"]),
                 "overallRank": int(focus_summary["overallRank"]),
@@ -1573,7 +1603,9 @@ def main() -> int:
                 "leagueRank": focus_league_rank,
                 "leagueRankPrev": league_rank_prev,
                 "totalPlayers": total_players or None,
-                "eventPointsOfficial": int(focus_summary["eventPointsOfficial"]),
+                "eventPointsOfficial": (
+                    0 if gw_awaiting_kickoff else int(focus_summary["eventPointsOfficial"])
+                ),
                 "teamName": focus_summary["teamName"],
                 "managerName": focus_summary["managerName"],
                 "activeChip": focus_chip,
@@ -1582,6 +1614,7 @@ def main() -> int:
             "squadsByEntry": squads_by_entry,
             "standings": standing_rows,
             "chipWindow": chip_window_meta(chip_half, chip_windows, gw),
+            "gwAwaitingKickoff": gw_awaiting_kickoff,
             "ownersByElement": {
                 str(el_id): entry_ids
                 for el_id, entry_ids in sorted(owners_by_element.items())
