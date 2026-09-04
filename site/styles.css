@@ -15826,6 +15826,13 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
 }
+/* 0 pts with 0 minutes — yet to play / DNP (not a played blank). */
+.home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts-idle,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts-idle {
+  background: transparent;
+  color: var(--text-faint);
+  font-weight: 500;
+}
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-good {
   background: hsl(var(--positive));
   color: #fff;

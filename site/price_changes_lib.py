@@ -295,6 +295,64 @@ def slim_price_checkin(snap: dict, checked_at: str, source: str) -> dict:
     }
 
 
+def players_from_slim_checkin(ci: dict, snap: dict | None) -> list[dict]:
+    """Hydrate full predictor rows from a slim check-in + optional bootstrap meta."""
+    meta: dict[int, dict] = {}
+    if snap:
+        meta, _costs = _player_meta_maps(snap)
+    status_label = {
+        "very_likely_rise": "Very likely to rise",
+        "likely_rise": "Likely to rise",
+        "likely_drop": "Likely to drop",
+        "very_likely_drop": "Very likely to drop",
+    }
+    out: list[dict] = []
+    for p in ci.get("players") or []:
+        code = p.get("code")
+        if code is None:
+            continue
+        try:
+            code_i = int(code)
+        except (TypeError, ValueError):
+            continue
+        m = meta.get(code_i) or {}
+        sk = p.get("statusKey") or ""
+        try:
+            lk = int(p.get("likelihood") or 0)
+        except (TypeError, ValueError):
+            lk = 0
+        out.append(
+            {
+                "code": code_i,
+                "name": m.get("name") or str(code_i),
+                "team": m.get("team"),
+                "position": m.get("position"),
+                "price": p.get("price") if p.get("price") is not None else 0,
+                "progress": round(float_field(p.get("progress")), 1),
+                "predicted": round(float_field(p.get("predicted")), 1),
+                "likelihood": lk,
+                "statusKey": sk,
+                "statusLabel": status_label.get(sk, sk or "—"),
+                "trend": p.get("trend") or "up",
+                "injuryStatus": "a",
+            }
+        )
+    status_order = {
+        "very_likely_rise": 0,
+        "likely_rise": 1,
+        "very_likely_drop": 2,
+        "likely_drop": 3,
+    }
+    out.sort(
+        key=lambda row: (
+            status_order.get(row["statusKey"], 9),
+            -abs(row["predicted"]),
+            row["name"],
+        )
+    )
+    return out
+
+
 def write_price_changes_js(payload: dict) -> None:
     body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
     PRICES_OUT_PATH.write_text(f"window.FPL_PRICE_CHANGES = {body};\n", encoding="utf-8")
@@ -920,6 +978,7 @@ def rebuild_price_changes_bundle(
 
     latest_players: list[dict] = []
     source = latest_source or (check_ins[-1]["source"] if check_ins else None)
+    meta_snap = latest_snap
 
     if latest_snap is not None:
         latest_players = price_changes_from_snapshot(latest_snap, source or "")
@@ -929,17 +988,29 @@ def rebuild_price_changes_bundle(
         if paths:
             try:
                 snap = json.loads(paths[-1].read_text(encoding="utf-8"))
+                meta_snap = snap
                 latest_players = price_changes_from_snapshot(snap, paths[-1].name)
                 source = paths[-1].name
             except (OSError, json.JSONDecodeError):
                 latest_players = []
-        if not latest_players:
-            # Fallback: slim-only (no names) — should not happen in normal ops.
-            codes = {int(p["code"]) for p in check_ins[-1].get("players") or []}
-            latest_players = [
-                {"code": c, "name": str(c), "progress": 0, "predicted": 0}
-                for c in sorted(codes)
-            ]
+
+    # FPL sometimes returns a post-deadline window with no includable movers
+    # (likelihood ±1/0 only). Never wipe a good Prices page — fall back to the
+    # newest non-empty check-in hydrated with bootstrap names/teams.
+    if not latest_players:
+        if meta_snap is None:
+            paths = bootstrap_snapshot_paths()
+            if paths:
+                try:
+                    meta_snap = json.loads(paths[-1].read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    meta_snap = None
+        for ci in reversed(check_ins):
+            if not (ci.get("players") or []):
+                continue
+            latest_players = players_from_slim_checkin(ci, meta_snap)
+            source = ci.get("source") or source
+            break
 
     players = enrich_players_with_history(latest_players, check_ins)
     payload = {

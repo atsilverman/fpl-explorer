@@ -72,11 +72,22 @@ def main() -> int:
             PRICE_CHANGES_DIR.mkdir(parents=True, exist_ok=True)
             checked_at = iso_from_stamp(stamp)
             row = slim_price_checkin(data, checked_at, fname)
-            dest.write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
             n = len(row.get("players") or [])
-            print(f"Wrote {dest.relative_to(ROOT)} ({n} movers)")
-            latest_snap = data
-            latest_source = fname
+            if n == 0:
+                # Post-deadline FPL windows can briefly report no ±2…±5 movers.
+                # Skip writing an empty check-in so we don't blank Prices.
+                print(
+                    "Live bootstrap has 0 includable price movers; "
+                    "skipping empty check-in write.",
+                    file=sys.stderr,
+                )
+                latest_snap = data
+                latest_source = None
+            else:
+                dest.write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
+                print(f"Wrote {dest.relative_to(ROOT)} ({n} movers)")
+                latest_snap = data
+                latest_source = fname
             night = pending_change_night_uk()
             if night:
                 added, recorded_night, events = poll_actual_changes_from_bootstrap(data)

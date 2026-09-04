@@ -5826,7 +5826,10 @@
   function homeSquadRowHTML(row, opts = {}) {
     const fx = homeSquadFixtures(row);
     const pts = homeSquadRowGwPoints(row);
-    const ptsHTML = homePtsPillHTML(pts, { rollClassName: "home-stat-roll home-pts-roll" });
+    const ptsHTML = homePtsPillHTML(pts, {
+      rollClassName: "home-stat-roll home-pts-roll",
+      minutes: row.minutes,
+    });
 
     const mpHTML = fx.map((f) => {
       const inPlay = homeSquadFixtureIsInPlay(f);
@@ -6011,22 +6014,26 @@
     return cols;
   }
 
-  function homePtsPillHTML(value, { rollClassName = "home-stat-roll live-stat-roll" } = {}) {
+  function homePtsPillHTML(value, { rollClassName = "home-stat-roll live-stat-roll", minutes = null } = {}) {
     if (value == null || !Number.isFinite(Number(value))) return "—";
-    const roll = statRollSpan(Number(value), {
+    const n = Number(value);
+    const roll = statRollSpan(n, {
       from: 0,
       decimals: 0,
       className: rollClassName,
       rollKind: "pts",
     });
-    return livePointsPillHTML("pts", roll);
+    // Yet to play / DNP: faint 0. Played blank (YC, GC, etc.): keep strong is-pts contrast.
+    const mins = Number(minutes);
+    const idleZero = n === 0 && Number.isFinite(mins) && mins <= 0;
+    return livePointsPillHTML("pts", roll, idleZero ? { tone: "is-pts-idle" } : {});
   }
 
   function homeSquadPtsCellHTML(entry, col) {
     if (col.key === "pts") {
       const raw = homeSquadRowGwPoints(entry.row, entry.eg);
       if (!Number.isFinite(raw)) return "—";
-      return homePtsPillHTML(raw);
+      return homePtsPillHTML(raw, { minutes: entry.row && entry.row.minutes });
     }
     return livePointsCellHTML(entry, col);
   }
