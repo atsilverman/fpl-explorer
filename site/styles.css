@@ -4158,6 +4158,11 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #opta-page .table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id-text .player-name-line > .player-name {
   flex: 0 1 auto;
 }
+/* Prices prediction at rest — same hug; clip only once horizontal pan starts. */
+#prices-page .prices-table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id .player-name,
+#prices-page .prices-table-wrap.name-simplify-ready:not(.is-name-simplifying) .ownership-id-text .player-name-line > .player-name {
+  flex: 0 1 auto;
+}
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
@@ -4988,13 +4993,13 @@ tbody tr.row-selected td:first-child {
 }
 .data-delta.is-up,
 .ownership-delta.is-up {
-  background: hsl(var(--positive));
-  color: #fff;
+  background: hsl(var(--positive) / var(--own-delta-a, 1));
+  color: var(--own-delta-fg, #fff);
 }
 .data-delta.is-down,
 .ownership-delta.is-down {
-  background: hsl(var(--negative));
-  color: #fff;
+  background: hsl(var(--negative) / var(--own-delta-a, 1));
+  color: var(--own-delta-fg, #fff);
 }
 .data-delta.is-flat,
 .data-delta.is-quiet,
@@ -5095,6 +5100,51 @@ html[data-page="prices"] .layout .main {
 }
 .prices-mover-bar {
   margin-bottom: 10px;
+}
+.prices-mover-pager {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.prices-mover-dots {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  padding: 10px 0 2px;
+}
+.prices-mover-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.22s var(--ease-out),
+    background-color 0.22s ease,
+    opacity 0.22s ease;
+}
+.prices-mover-dot.is-active {
+  background: hsl(var(--primary));
+  transform: scale(1.18);
+  opacity: 1;
+}
+.prices-mover-dot:not(.is-active) {
+  opacity: 0.85;
+}
+.prices-mover-dot:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.55);
+  outline-offset: 2px;
+}
+.prices-mover-dot[hidden] {
+  display: none !important;
+}
+.prices-mover-kind-seg {
+  display: none !important;
 }
 @media (min-width: 721px) {
   html[data-page="prices"] .layout .main {
@@ -5293,6 +5343,12 @@ html[data-page="prices"] .layout .main {
 #prices-page .prices-actual-panel:first-child .prices-section-divider {
   margin-top: 0;
 }
+@media (min-width: 721px) {
+  #prices-page .prices-prediction-panel:not(:first-child) .prices-section-divider,
+  #prices-page .prices-actual-panel:not(:first-child) .prices-section-divider {
+    margin-top: 22px;
+  }
+}
 #prices-page .prices-section-divider .prices-section-title {
   color: var(--text-dim);
   font-size: 12px;
@@ -5375,6 +5431,11 @@ html[data-page="prices"] .layout .main {
 }
 .prices-table .prices-col-status {
   min-width: 9.5rem;
+}
+@media (max-width: 720px) {
+  .prices-table .prices-col-status {
+    min-width: 0;
+  }
 }
 .prices-table .prices-col-metric {
   min-width: 5.25rem;
@@ -6142,14 +6203,46 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     flex-wrap: wrap;
     row-gap: 8px;
   }
-  #prices-page[data-prices-mover="risers"] .prices-prediction-panel[aria-label="Fallers"],
-  #prices-page[data-prices-mover="risers"] .prices-actual-panel[aria-label="Fallers"],
-  #prices-page[data-prices-mover="fallers"] .prices-prediction-panel[aria-label="Risers"],
-  #prices-page[data-prices-mover="fallers"] .prices-actual-panel[aria-label="Risers"] {
-    display: none !important;
+  .prices-mover-pager {
+    min-width: 0;
   }
-  #prices-page[data-prices-mover="fallers"] .prices-prediction-panel[aria-label="Fallers"] .prices-section-divider,
-  #prices-page[data-prices-mover="fallers"] .prices-actual-panel[aria-label="Fallers"] .prices-section-divider {
+  .prices-mover-track {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    scrollbar-width: none;
+    gap: 0;
+  }
+  .prices-mover-track::-webkit-scrollbar {
+    display: none;
+  }
+  .prices-prediction-panels.is-columns,
+  .prices-actual-panels.is-columns {
+    display: flex;
+    grid-template-columns: none;
+  }
+  .prices-mover-page {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    overflow: hidden;
+  }
+  .prices-mover-dots:not([hidden]) {
+    display: flex;
+  }
+  .prices-prediction-panel .prices-section-divider,
+  .prices-actual-panel .prices-section-divider {
     margin-top: 0;
   }
   html[data-page="prices"] #prices-page[data-prices-view="prediction"] #prices-prediction-wrap {
@@ -6158,7 +6251,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     overflow: visible;
   }
   #prices-page .prices-prediction-panel:not(:first-child) .prices-section-divider {
-    margin-top: 22px;
+    margin-top: 0;
     margin-bottom: 10px;
   }
   html[data-page="prices"] #prices-page[data-prices-view="actual"] #prices-actual-wrap {
@@ -6174,21 +6267,94 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     flex: none;
     min-height: 0;
     max-height: none;
+    width: 100%;
+    max-width: 100%;
+    padding-right: 0;
+  }
+  /* Prediction: Ownership-style horizontal pan + scroll-linked name simplify. */
+  #prices-page .prices-prediction-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    --name-col-w: 176px;
+    --metric-col-w: 58px;
+  }
+  #prices-page .prices-prediction-table-wrap > table {
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    table-layout: auto;
+  }
+  #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player,
+  #prices-page .prices-prediction-table-wrap > table > tbody td.col-player {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background-color: hsl(var(--card));
+    box-shadow: 1px 0 0 var(--border);
+  }
+  #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player {
+    z-index: 10;
+    background-color: hsl(var(--muted));
+  }
+  #prices-page .prices-prediction-table-wrap.name-simplify-ready thead th.col-player,
+  #prices-page .prices-prediction-table-wrap.name-simplify-ready tbody td.col-player {
+    width: var(--name-col-w-morph);
+    min-width: var(--name-col-w-morph);
+    max-width: var(--name-col-w-morph);
+    padding-right: 4px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-status,
+  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-status {
+    width: auto;
+    min-width: 3.5rem;
+    max-width: none;
+    text-align: center;
+    vertical-align: middle;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-metric,
+  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-metric {
+    width: auto;
+    min-width: 5rem;
+    max-width: none;
+    text-align: center;
+    vertical-align: middle;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id-sub {
+    overflow: hidden;
+    max-width: none;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id-sub > * {
+    flex: 0 0 auto;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id .player-name,
+  #prices-page .prices-prediction-table-wrap .ownership-id-text .player-name-line > .player-name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+  /* Actual keeps a fit-to-viewport fixed layout (no Status / spark columns). */
+  #prices-page .prices-actual-table-wrap {
     overflow-x: hidden;
     overflow-y: hidden;
     overscroll-behavior-x: none;
     -webkit-overflow-scrolling: touch;
     touch-action: manipulation;
-    width: 100%;
-    max-width: 100%;
     --name-col-w: 0px;
     --metric-col-w: 0px;
-    padding-right: 0;
+    --prices-actual-date-col-w: 0px;
   }
-  #prices-page .prices-table-wrap > table {
+  #prices-page .prices-actual-table-wrap > table {
+    table-layout: fixed;
     width: 100%;
     max-width: 100%;
-    table-layout: fixed;
+    min-width: 0;
   }
   #prices-page .prices-table-wrap .prices-col-spark {
     display: none;
@@ -6199,30 +6365,6 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   #prices-page .prices-actual-table-wrap .prices-col-owned,
   #prices-page .prices-actual-table-wrap .prices-col-league-owned {
     display: none;
-  }
-  #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player,
-  #prices-page .prices-prediction-table-wrap > table > tbody td.col-player {
-    position: static;
-    left: auto;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-  }
-  #prices-page .prices-prediction-table-wrap.name-simplify-ready thead th.col-player,
-  #prices-page .prices-prediction-table-wrap.name-simplify-ready tbody td.col-player {
-    width: auto;
-    min-width: 0;
-    max-width: none;
-  }
-  #prices-page .prices-actual-table-wrap {
-    --prices-actual-date-col-w: 0px;
-    overflow-x: hidden;
-  }
-  #prices-page .prices-actual-table-wrap > table {
-    table-layout: fixed;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
   }
   #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-player,
   #prices-page .prices-actual-table-wrap > table > tbody td.col-player,
@@ -6270,38 +6412,11 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  #prices-page .prices-prediction-table-wrap {
-    --prices-mobile-player-pct: 52%;
-  }
-  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-metric,
-  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-metric {
-    width: calc((100% - var(--prices-mobile-player-pct)) / 2);
-    min-width: 0;
-    text-align: center;
-    vertical-align: middle;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-  #prices-page .prices-prediction-table-wrap .prices-table .col-player {
-    width: var(--prices-mobile-player-pct);
-    min-width: 0;
-  }
-  #prices-page .prices-prediction-table-wrap .ownership-id-sub {
-    overflow: visible;
-    max-width: 100%;
-  }
-  #prices-page .prices-prediction-table-wrap .ownership-id-sub > * {
-    flex: 0 0 auto;
-  }
-  #prices-page .prices-table-wrap .prices-table th.col-num.prices-col-spark,
-  #prices-page .prices-table-wrap .prices-table td.col-num.prices-col-spark {
-    display: none;
-  }
   #prices-page .prices-actual-table-wrap .prices-col-after .prices-change-arrow {
     margin-inline: auto;
   }
-  #prices-page .prices-table-wrap .ownership-id .player-name,
-  #prices-page .prices-table-wrap .ownership-id-text .player-name-line > .player-name {
+  #prices-page .prices-actual-table-wrap .ownership-id .player-name,
+  #prices-page .prices-actual-table-wrap .ownership-id-text .player-name-line > .player-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -15599,7 +15714,8 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   }
 }
 @media (min-width: 901px) {
-  /* Fill card height: stretch pager pages + equal-share rows above the dots. */
+  /* Content-height rows at all desktop widths — avoid the mid-band equal-share
+     stretch that made Team / League rows taller than at ≥1400px (home-squad-wide). */
   #home-squad-panel > .home-squad-pager,
   #home-standings-panel > .home-standings-pager {
     flex: 1 1 auto;
@@ -15625,13 +15741,13 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   }
   #home-squad-panel .home-squad-table,
   #home-standings-panel .home-standings-table {
-    flex: 1 1 auto;
-    height: 100%;
+    flex: 0 0 auto;
+    height: auto;
     width: 100%;
   }
   #home-squad-panel .home-squad-table thead,
   #home-standings-panel .home-standings-table thead {
-    height: 0;
+    height: auto;
   }
   #home-squad-panel .home-squad-table thead tr,
   #home-standings-panel .home-standings-table thead tr {
@@ -15639,7 +15755,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   }
   #home-squad-panel .home-squad-table tbody tr.home-squad-row,
   #home-standings-panel .home-standings-table tbody tr[data-entry] {
-    height: 1px;
+    height: auto;
   }
   #home-standings-panel .home-transfers-table tbody tr[data-entry] {
     height: auto;
@@ -15665,7 +15781,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   }
   #home-squad-panel .home-squad-dots,
   #home-standings-panel .home-standings-dots {
-    margin-top: 0;
+    margin-top: auto;
   }
 }
 .home-squad-pager {

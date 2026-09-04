@@ -831,7 +831,7 @@
     pricesActualSortTouched: false,
     pricesActualShowAll: false,
     pricesPredictionShowAll: false,
-    pricesMoverKind: "risers", // risers | fallers (mobile table toggle)
+    pricesMoverKind: "risers", // risers | fallers (mobile swipe pager page)
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
@@ -1200,7 +1200,9 @@
     pricesCountdownBar: $("#prices-countdown-bar"),
     pricesCountLabel: $("#prices-count-label"),
     pricesPredictionWrap: $("#prices-prediction-wrap"),
-    pricesPredictionPanels: $("#prices-prediction-panels"),
+    pricesPredictionPanels: $("#prices-prediction-track"),
+    pricesPredictionTrack: $("#prices-prediction-track"),
+    pricesPredictionDots: $("#prices-prediction-dots"),
     pricesRisersWrap: $("#prices-risers-wrap"),
     pricesRisersHead: $("#prices-risers-head"),
     pricesRisersBody: $("#prices-risers-body"),
@@ -1208,7 +1210,9 @@
     pricesFallersHead: $("#prices-fallers-head"),
     pricesFallersBody: $("#prices-fallers-body"),
     pricesActualWrap: $("#prices-actual-wrap"),
-    pricesActualPanels: $("#prices-actual-panels"),
+    pricesActualPanels: $("#prices-actual-track"),
+    pricesActualTrack: $("#prices-actual-track"),
+    pricesActualDots: $("#prices-actual-dots"),
     pricesActualRisersWrap: $("#prices-actual-risers-wrap"),
     pricesActualRisersHead: $("#prices-actual-risers-head"),
     pricesActualRisersBody: $("#prices-actual-risers-body"),
@@ -4533,7 +4537,7 @@
       });
     };
 
-    // Desktop equal-share rows come from CSS (height: 1px trick); drop stale mobile heights.
+    // Desktop rows are content-height (no equal-share stretch); drop stale mobile heights.
     if (homeSquadIsDesktopLayout()) {
       allTables.forEach(clearRowHeights);
       return;
@@ -5156,7 +5160,7 @@
       });
     });
 
-    // Single-table desktop uses CSS equal-share rows; wide split uses uniform JS rows.
+    // Desktop uses content-height rows; wide split still aligns live/pts halves in JS.
     if (homeSquadIsDesktopLayout() && !wide) return;
     if (wide && tables.length >= 2) {
       syncHomeSquadWideRowHeights(tables);
@@ -8420,7 +8424,7 @@
 
     document
       .querySelectorAll(
-        ".table-wrap, .barbell-scroll, .live-bonus-wrap, #prices-prediction-wrap, #prices-actual-wrap"
+        ".table-wrap, .barbell-scroll, .live-bonus-wrap, #prices-prediction-wrap, #prices-actual-wrap, .prices-mover-track"
       )
       .forEach((inner) => {
       if (inner.dataset.scrollChain === "1") return;
@@ -8959,13 +8963,31 @@
       wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       return;
     }
+    // Actual uses its own fixed mobile column sizing.
     if (pricesViewMode() === "actual") {
-      wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       pricesMobileNameColW = null;
+      wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       return;
     }
-    pricesMobileNameColW = null;
-    wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
+    const mainWrap =
+      wraps.find((wrap) => wrap.offsetParent !== null && wrap.clientWidth > 0) || wraps[0];
+    const measured = measureNameColWidth(mainWrap, {
+      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+      hugContent: true,
+    });
+    const cap = Math.round(mainWrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
+    pricesMobileNameColW = Math.max(
+      OWNERSHIP_MOBILE_NAME_COL_MIN,
+      Math.min(measured, cap)
+    );
+    wraps.forEach((wrap) => {
+      const prev = wrap.style.getPropertyValue("--name-col-w");
+      wrap.dataset.view = "players";
+      wrap.style.setProperty("--name-col-w", `${pricesMobileNameColW}px`);
+      if (prev !== `${pricesMobileNameColW}px`) {
+        invalidateNameSimplifyOrigin(wrap);
+      }
+    });
   }
 
   function scheduleOptaMobileNameColWidth() {
@@ -10681,10 +10703,10 @@
       const reading = [
         spitRow(spitRank("Risers"), "Top 20 14-day TSB% increases, ranked before team/position filters."),
         spitRow(spitRank("Fallers"), "Top 20 14-day TSB% decreases. Toggle in the bar above the table."),
-        spitRow(spitRank("Treemap"), "Top movers by 7d / 3d / 24h Δ as tiles (largest changes only). Toggle beside the count."),
+        spitRow(spitRank("Treemap"), "Top movers by 7d / 3d / 1d Δ as tiles (largest changes only). Toggle beside the count."),
         spitRow(spitRank("Players"), "Photo, name, team, price, and position. Sort any numeric column."),
         spitRow(spitRank("Teams"), "Average TSB% of each club’s 20 most-owned players at that check-in."),
-        spitRow(spitRank("Windows"), "7d / 3d / 24h use the nearest snapshot on or before that many days before the latest check-in."),
+        spitRow(spitRank("Windows"), "7d / 3d / 1d use the nearest snapshot on or before that many days before the latest check-in."),
       ];
       return `${spitHead("trending-up", "How Ownership works")}
         ${spitIntro("FPL selected-by% (TSB%) movers from the saved ownership cache.")}
@@ -10707,12 +10729,16 @@
         : mobile
         ? [
             spitRow(`<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`, "Colored arrow beside Risers / Fallers — direction for the whole table"),
+            spitRow(`<span class="prices-status-pill is-very-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">VL</span></span>`, "Very likely to rise (green) + transfer trend arrow"),
+            spitRow(`<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`, "Likely to drop (red) + transfer trend arrow"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ]
         : [
             spitRow(`<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`, "Colored arrow beside Risers / Fallers — direction for the whole table"),
+            spitRow(`<span class="prices-status-pill is-very-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Very likely</span></span>`, "Strong rise signal + GW transfer trend"),
+            spitRow(`<span class="prices-status-pill is-likely-drop has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">Likely</span></span>`, "Moderate fall signal + GW transfer trend"),
             spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
@@ -10726,14 +10752,18 @@
           ]
         : [
             spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
-            ...(mobile
-              ? [
-                  spitRow(spitRank("Risers / Fallers"), "Direction badge beside each section title — green rise, red fall."),
-                ]
-              : [
-                  spitRow(spitRank("Risers / Fallers"), "Direction badge beside each section title — green rise, red fall."),
-                ]),
-            spitRow(spitRank("Risers / Fallers"), "Two stacked tables — risers above, fallers below, each ranked by largest |progress|."),
+            spitRow(
+              spitRank("Status"),
+              mobile
+                ? "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop."
+                : "Likelihood label with ↗/↘ for more transfers in vs out this GW."
+            ),
+            spitRow(
+              spitRank("Risers / Fallers"),
+              mobile
+                ? "Swipe or use the dots under the table — Risers and Fallers are separate pages."
+                : "Two stacked tables — risers above, fallers below, each ranked by status tier then |progress|."
+            ),
             spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
             spitRow(spitRank("Progress filter"), "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."),
             spitRow(spitRank("Countdown"), "Time until the next daily price update. Change time is shown in your local timezone."),
@@ -19066,6 +19096,31 @@
     return delta > 0 ? "is-up" : "is-down";
   }
 
+  /** 0…1 strength for Δ pills — near-zero fades so large movers dominate. */
+  function ownershipDeltaIntensity(delta) {
+    const mag = Math.abs(Number(delta));
+    if (!Number.isFinite(mag) || mag < 0.05) return 0;
+    // ~5pp Δ reads as full strength; ease so mid values aren't oversold.
+    return Math.min(1, Math.pow(mag / 5, 0.82));
+  }
+
+  function ownershipDeltaPaint(delta) {
+    const cls = ownershipDeltaClass(delta);
+    if (cls === "is-flat" || cls === "is-quiet") {
+      return { cls, style: "" };
+    }
+    const t = ownershipDeltaIntensity(delta);
+    const a = (0.16 + t * 0.84).toFixed(3);
+    // Pale washes keep hue as type color; solid pills use white type.
+    const fg = t < 0.38
+      ? (cls === "is-up" ? "hsl(217 72% 36%)" : "hsl(24 78% 34%)")
+      : "#fff";
+    return {
+      cls,
+      style: ` style="--own-delta-a:${a};--own-delta-fg:${fg}"`,
+    };
+  }
+
   function ownershipInitials(name) {
     return String(name || "?")
       .split(/[\s.]+/)
@@ -19184,12 +19239,12 @@
   }
 
   function ownershipDeltaPillHTML(delta, { quiet = false } = {}) {
-    const cls = ownershipDeltaClass(delta);
-    const quietCls = quiet && cls === "is-flat" ? " is-quiet" : "";
+    const paint = ownershipDeltaPaint(delta);
+    const quietCls = quiet && paint.cls === "is-flat" ? " is-quiet" : "";
     if (delta == null || Number.isNaN(Number(delta))) {
-      return `<span class="ownership-delta ${cls}${quietCls}">—</span>`;
+      return `<span class="ownership-delta ${paint.cls}${quietCls}">—</span>`;
     }
-    return `<span class="ownership-delta ${cls}${quietCls}">${statRollSpan(Number(delta), {
+    return `<span class="ownership-delta ${paint.cls}${quietCls}"${paint.style}>${statRollSpan(Number(delta), {
       from: 0,
       decimals: 1,
       signed: true,
@@ -19244,7 +19299,7 @@
       ${th("live", "Live", "col-num")}
       ${th("d7", "7d Δ", "col-num")}
       ${th("d3", "3d Δ", "col-num")}
-      ${th("d1", "24h", "col-num")}
+      ${th("d1", "1d Δ", "col-num")}
       ${th("d14", "14d trend", "col-num ownership-col-spark")}
     </tr>`;
   }
@@ -19296,7 +19351,7 @@
 
   function ownershipTreeWindowLabel(key = ownershipTreeWindow()) {
     if (key === "d3") return "3d";
-    if (key === "d1") return "24h";
+    if (key === "d1") return "1d";
     return "7d";
   }
 
@@ -19420,8 +19475,8 @@
     if (tone === "is-flat" || delta == null) {
       return { bg: "hsl(var(--muted))", fg: "var(--text-dim)", tone };
     }
-    const mag = Math.min(1, Math.abs(Number(delta)) / 8);
-    const a = (0.28 + mag * 0.55).toFixed(3);
+    const t = ownershipDeltaIntensity(delta);
+    const a = (0.22 + t * 0.78).toFixed(3);
     if (tone === "is-up") {
       return { bg: `hsl(var(--positive) / ${a})`, fg: "#fff", tone };
     }
@@ -19756,6 +19811,7 @@
   function settlePricesLayoutAfterUpdate() {
     requestAnimationFrame(() => {
       clampPricesScrollAfterUpdate();
+      syncPricesMoverPagerUI();
       syncMobileScrollportHeight();
       scheduleOptaMobileNameColWidth();
       syncPricesPredictionColumns();
@@ -19765,6 +19821,7 @@
       syncSegThumb(el.pricesActualScopeSeg);
       requestAnimationFrame(() => {
         clampPricesScrollAfterUpdate();
+        syncPricesMoverPagerUI();
         syncPricesPredictionColumns();
         syncPricesActualLayout();
         syncSegThumb(el.pricesViewSeg);
@@ -20400,7 +20457,7 @@
   }
 
   function pricesTableColSpan() {
-    return 4;
+    return 5;
   }
 
   function pricesActualTableColSpan() {
@@ -20412,6 +20469,7 @@
     const th = (label, extra = "") => `<th class="${extra}">${escapeHtml(label)}</th>`;
     return `<tr>
       ${th("Player", "col-player")}
+      ${th("Status", "col-num prices-col-status")}
       ${th("Progress", "col-num prices-col-metric")}
       ${th(mobile ? "Predict" : "Predicted", "col-num prices-col-metric")}
       ${th(mobile ? "3d" : "3d trend", "col-num prices-col-spark")}
@@ -20421,6 +20479,7 @@
   function pricesRowHTML(row, rank) {
     return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
       <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
+      <td class="col-num prices-col-status">${pricesStatusPillHTML(row)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.progress)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.predicted, { predicted: true })}</td>
       <td class="col-num prices-col-spark">${pricesSparkHTML(row)}</td>
@@ -20616,22 +20675,303 @@
     return state.pricesMoverKind === "fallers" ? "fallers" : "risers";
   }
 
-  function syncPricesMoverKindUI({ animate = false } = {}) {
-    if (!el.pricesPage) return;
+  function pricesMoverPageIndex(kind = pricesMoverKind()) {
+    return kind === "fallers" ? 1 : 0;
+  }
+
+  function pricesActiveMoverTrack() {
+    return pricesViewMode() === "actual" ? el.pricesActualTrack : el.pricesPredictionTrack;
+  }
+
+  function pricesActiveMoverDots() {
+    return pricesViewMode() === "actual" ? el.pricesActualDots : el.pricesPredictionDots;
+  }
+
+  function pricesMoverTrackPages(track) {
+    if (!track) return [];
+    return [...track.querySelectorAll(":scope > .prices-mover-page")];
+  }
+
+  function pricesMoverActivePageIndex(track) {
+    if (!track) return 0;
+    const pages = pricesMoverTrackPages(track);
+    if (!pages.length) return 0;
+    const left = track.scrollLeft;
+    let best = 0;
+    let bestDist = Infinity;
+    pages.forEach((page, i) => {
+      const dist = Math.abs(page.offsetLeft - left);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  function pricesMoverPageScrollLeft(track, index) {
+    const page = pricesMoverTrackPages(track)[index];
+    return page ? page.offsetLeft : 0;
+  }
+
+  function syncPricesMoverDots(track, dots, index) {
+    if (!dots) return;
+    const pages = pricesMoverTrackPages(track);
+    dots.querySelectorAll(".prices-mover-dot").forEach((dot) => {
+      const page = Number(dot.dataset.page);
+      const active = page === index;
+      dot.classList.toggle("is-active", active);
+      dot.setAttribute("aria-selected", active ? "true" : "false");
+      // Hide unused dots if page count shrinks.
+      dot.hidden = !(page < pages.length);
+    });
+  }
+
+  function syncPricesMoverTrackHeight(track, index) {
+    if (!track || !NARROW_MQ.matches) {
+      if (track) track.style.height = "";
+      return;
+    }
+    const pages = pricesMoverTrackPages(track);
+    const page = pages[index];
+    if (!page) {
+      track.style.height = "";
+      return;
+    }
+    const h = Math.ceil(Math.max(page.scrollHeight, page.offsetHeight));
+    if (!(h > 0)) return;
+    track.style.height = `${h}px`;
+  }
+
+  function setPricesMoverPage(index, { smooth = true, syncKind = true } = {}) {
+    const track = pricesActiveMoverTrack();
+    const dots = pricesActiveMoverDots();
+    if (!track) return;
+    const pages = pricesMoverTrackPages(track);
+    const idx = Math.max(0, Math.min(pages.length - 1, index));
+    if (syncKind) {
+      state.pricesMoverKind = idx === 1 ? "fallers" : "risers";
+    }
+    track.scrollTo({
+      left: pricesMoverPageScrollLeft(track, idx),
+      behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto",
+    });
+    syncPricesMoverDots(track, dots, idx);
+    syncPricesMoverTrackHeight(track, idx);
+  }
+
+  function snapPricesMoverPage(track, index) {
+    if (!track) return;
+    track.scrollTo({
+      left: pricesMoverPageScrollLeft(track, index),
+      behavior: "auto",
+    });
+  }
+
+  function syncPricesMoverPagerUI() {
     const mobile = NARROW_MQ.matches && state.page === "prices";
-    if (el.pricesMoverKindSeg) {
-      el.pricesMoverKindSeg.hidden = !mobile;
-      const kind = pricesMoverKind();
-      el.pricesMoverKindSeg.querySelectorAll("[data-prices-mover-kind]").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.pricesMoverKind === kind);
+    if (el.pricesMoverKindSeg) el.pricesMoverKindSeg.hidden = true;
+    if (el.pricesPage) delete el.pricesPage.dataset.pricesMover;
+
+    [el.pricesPredictionDots, el.pricesActualDots].forEach((dots) => {
+      if (dots) dots.hidden = !mobile;
+    });
+
+    if (!mobile) {
+      [el.pricesPredictionTrack, el.pricesActualTrack].forEach((track) => {
+        if (!track) return;
+        track.style.height = "";
+        track.scrollLeft = 0;
       });
-      syncSegThumb(el.pricesMoverKindSeg, { animate });
+      return;
     }
-    if (mobile) {
-      el.pricesPage.dataset.pricesMover = pricesMoverKind();
-    } else {
-      delete el.pricesPage.dataset.pricesMover;
-    }
+
+    const idx = pricesMoverPageIndex();
+    const mode = pricesViewMode();
+    const track = mode === "actual" ? el.pricesActualTrack : el.pricesPredictionTrack;
+    const dots = mode === "actual" ? el.pricesActualDots : el.pricesPredictionDots;
+    if (!track) return;
+    snapPricesMoverPage(track, idx);
+    syncPricesMoverDots(track, dots, idx);
+    syncPricesMoverTrackHeight(track, idx);
+  }
+
+  function syncPricesMoverKindUI({ animate = false } = {}) {
+    // Kept for call sites — Risers/Fallers are a swipe pager on mobile now.
+    void animate;
+    syncPricesMoverPagerUI();
+  }
+
+  let pricesMoverPagerReady = false;
+
+  function bindPricesMoverPager() {
+    if (pricesMoverPagerReady) return;
+    pricesMoverPagerReady = true;
+
+    const bindTrack = (track, dots) => {
+      if (!track || !dots) return;
+      dots.querySelectorAll(".prices-mover-dot").forEach((dot) => {
+        dot.addEventListener("click", () => {
+          if (!NARROW_MQ.matches || state.page !== "prices") return;
+          const page = Number(dot.dataset.page);
+          if (!Number.isFinite(page)) return;
+          // Ensure this track's view is active before paging.
+          if (track === el.pricesActualTrack && pricesViewMode() !== "actual") return;
+          if (track === el.pricesPredictionTrack && pricesViewMode() !== "prediction") return;
+          setPricesMoverPage(page);
+        });
+      });
+
+      let scrollSettleTimer = null;
+      const onScrollSettled = () => {
+        clearTimeout(scrollSettleTimer);
+        scrollSettleTimer = null;
+        if (!NARROW_MQ.matches || state.page !== "prices") return;
+        if (track.hidden || track.closest("[hidden]")) return;
+        const idx = pricesMoverActivePageIndex(track);
+        snapPricesMoverPage(track, idx);
+        state.pricesMoverKind = idx === 1 ? "fallers" : "risers";
+        syncPricesMoverDots(track, dots, idx);
+        syncPricesMoverTrackHeight(track, idx);
+      };
+      const onScrollTick = () => {
+        if (!NARROW_MQ.matches) return;
+        const idx = pricesMoverActivePageIndex(track);
+        syncPricesMoverDots(track, dots, idx);
+        clearTimeout(scrollSettleTimer);
+        scrollSettleTimer = setTimeout(onScrollSettled, 140);
+      };
+      track.addEventListener("scroll", onScrollTick, { passive: true });
+      track.addEventListener("scrollend", onScrollSettled, { passive: true });
+      bindPricesMoverNestedSwipe(track);
+    };
+
+    bindTrack(el.pricesPredictionTrack, el.pricesPredictionDots);
+    bindTrack(el.pricesActualTrack, el.pricesActualDots);
+
+    bindMqChange(NARROW_MQ, () => {
+      if (state.page !== "prices") return;
+      syncPricesMoverPagerUI();
+      requestAnimationFrame(() => {
+        syncPricesActualColumnWidths();
+        syncMobileScrollportHeight();
+      });
+    });
+  }
+
+  /**
+   * Nested Prices tables can pan horizontally (name simplify). Use discrete page
+   * flings like Home League Transfers so live scrub doesn't fight scroll-snap.
+   * If the table can still scroll in the swipe direction, leave the gesture alone.
+   */
+  function bindPricesMoverNestedSwipe(track) {
+    if (!track || track.dataset.pricesSwipeBound === "1") return;
+    track.dataset.pricesSwipeBound = "1";
+
+    const SLOP_PX = 14;
+    const FLING_PX = 52;
+    const X_DOMINANCE = 1.2;
+    let gesture = null;
+
+    const pageCount = () => pricesMoverTrackPages(track).length;
+
+    const tableCanScroll = (wrap, dx) => {
+      if (!wrap) return false;
+      const max = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+      if (max <= 1) return false;
+      if (dx < 0) return wrap.scrollLeft < max - 1; // swipe left → more table content
+      if (dx > 0) return wrap.scrollLeft > 1; // swipe right → earlier columns
+      return false;
+    };
+
+    const blockTrailingClick = () => {
+      const blockClick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        track.removeEventListener("click", blockClick, true);
+      };
+      track.addEventListener("click", blockClick, true);
+      window.setTimeout(() => track.removeEventListener("click", blockClick, true), 0);
+    };
+
+    const begin = (x, y, target) => {
+      gesture = {
+        x,
+        y,
+        axis: null,
+        startIdx: pricesMoverActivePageIndex(track),
+        armed: false,
+        wrap: target && target.closest ? target.closest(".prices-table-wrap") : null,
+      };
+    };
+
+    const move = (x, y, ev) => {
+      if (!gesture) return;
+      const dx = x - gesture.x;
+      const dy = y - gesture.y;
+      if (gesture.axis == null) {
+        if (Math.hypot(dx, dy) < SLOP_PX) return;
+        gesture.axis = Math.abs(dx) > Math.abs(dy) * X_DOMINANCE ? "x" : "y";
+        if (gesture.axis === "y") {
+          gesture = null;
+          return;
+        }
+        if (tableCanScroll(gesture.wrap, dx)) {
+          gesture = null;
+          return;
+        }
+        gesture.armed = true;
+      }
+      if (gesture.axis === "x" && ev && ev.cancelable) {
+        ev.preventDefault();
+      }
+    };
+
+    const end = (x) => {
+      if (!gesture) return;
+      const dx = x - gesture.x;
+      const startIdx = gesture.startIdx;
+      const armed = gesture.armed && gesture.axis === "x";
+      gesture = null;
+      if (!armed || !NARROW_MQ.matches) return;
+      let next = startIdx;
+      if (dx <= -FLING_PX) next = Math.min(pageCount() - 1, startIdx + 1);
+      else if (dx >= FLING_PX) next = Math.max(0, startIdx - 1);
+      if (next === startIdx) return;
+      blockTrailingClick();
+      setPricesMoverPage(next, { smooth: true });
+    };
+
+    const cancel = () => {
+      gesture = null;
+    };
+
+    track.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
+        if (e.target.closest("button, a, input, textarea, label")) return;
+        begin(e.touches[0].clientX, e.touches[0].clientY, e.target);
+      },
+      { passive: true }
+    );
+    track.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!gesture || e.touches.length !== 1) return;
+        move(e.touches[0].clientX, e.touches[0].clientY, e);
+      },
+      { passive: false }
+    );
+    track.addEventListener(
+      "touchend",
+      (e) => {
+        const t = e.changedTouches && e.changedTouches[0];
+        end(t ? t.clientX : gesture ? gesture.x : 0);
+      },
+      { passive: true }
+    );
+    track.addEventListener("touchcancel", cancel, { passive: true });
   }
 
   function syncPricesScopeSeg(seg, { show, showAll, topTitle, allTitle }) {
@@ -20692,7 +21032,6 @@
     syncPricesMoverKindUI();
     requestAnimationFrame(() => {
       syncSegThumb(el.pricesViewSeg);
-      syncSegThumb(el.pricesMoverKindSeg);
       syncSegThumb(el.pricesPredictionScopeSeg);
       syncSegThumb(el.pricesActualScopeSeg);
     });
@@ -22268,22 +22607,10 @@
     });
   }
   if (el.pricesMoverKindSeg) {
-    el.pricesMoverKindSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-prices-mover-kind]");
-      if (!btn || !el.pricesMoverKindSeg.contains(btn)) return;
-      const next = btn.dataset.pricesMoverKind;
-      if (next !== "risers" && next !== "fallers") return;
-      if (next === pricesMoverKind()) return;
-      state.pricesMoverKind = next;
-      syncPricesMoverKindUI({ animate: true });
-      if (state.page === "prices") {
-        requestAnimationFrame(() => {
-          syncPricesActualColumnWidths();
-          syncMobileScrollportHeight();
-        });
-      }
-    });
+    // Legacy toggle kept in DOM for cache safety; pager owns Risers/Fallers on mobile.
+    el.pricesMoverKindSeg.hidden = true;
   }
+  bindPricesMoverPager();
   function bindPricesScopeSeg(seg, { getShowAll, setShowAll, rerender }) {
     if (!seg) return;
     seg.addEventListener("click", (e) => {

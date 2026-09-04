@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=968" />
+<link rel="stylesheet" href="styles.css?v=973" />
 <script>
 (() => {
   try {
@@ -1121,7 +1121,7 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-trending-up"/></svg>Ownership<button class="page-info-btn" type="button" aria-label="How Ownership works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle">Biggest 14-day TSB% movers — 20 risers or fallers, with 7d / 3d / 24h change and a 14-day sparkline.</p>
+            <p class="page-subtitle">Biggest 14-day TSB% movers — 20 risers or fallers, with 7d / 3d / 1d change and a 14-day sparkline.</p>
           </div>
         </div>
       </div>
@@ -1133,7 +1133,7 @@
         <div class="segmented ownership-window-seg" id="ownership-window-seg" role="group" aria-label="Treemap change window" hidden>
           <button type="button" data-ownership-window="d7" class="active">7d</button>
           <button type="button" data-ownership-window="d3">3d</button>
-          <button type="button" data-ownership-window="d1">24h</button>
+          <button type="button" data-ownership-window="d1">1d</button>
         </div>
         <div class="ownership-mover-end">
           <span class="count-label" id="ownership-count-label"></span>
@@ -1191,47 +1191,59 @@
         </div>
       </div>
       <div id="prices-prediction-wrap" class="prices-prediction-wrap">
-        <div class="prices-prediction-panels" id="prices-prediction-panels">
-          <section class="prices-prediction-panel" aria-label="Risers">
-            <div class="prices-section-divider" data-prices-direction="rise"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Risers</span></div>
-            <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-risers-wrap">
-              <table class="ownership-table prices-table">
-                <thead id="prices-risers-head"></thead>
-                <tbody id="prices-risers-body"></tbody>
-              </table>
-            </div>
-          </section>
-          <section class="prices-prediction-panel" aria-label="Fallers">
-            <div class="prices-section-divider" data-prices-direction="fall"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Fallers</span></div>
-            <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-fallers-wrap">
-              <table class="ownership-table prices-table">
-                <thead id="prices-fallers-head"></thead>
-                <tbody id="prices-fallers-body"></tbody>
-              </table>
-            </div>
-          </section>
+        <div class="prices-mover-pager">
+          <div class="prices-prediction-panels prices-mover-track" id="prices-prediction-track">
+            <section class="prices-prediction-panel prices-mover-page" aria-label="Risers" data-prices-page="risers">
+              <div class="prices-section-divider" data-prices-direction="rise"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Risers</span></div>
+              <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-risers-wrap">
+                <table class="ownership-table prices-table">
+                  <thead id="prices-risers-head"></thead>
+                  <tbody id="prices-risers-body"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="prices-prediction-panel prices-mover-page" aria-label="Fallers" data-prices-page="fallers">
+              <div class="prices-section-divider" data-prices-direction="fall"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Fallers</span></div>
+              <div class="table-wrap prices-prediction-table-wrap prices-table-wrap" id="prices-fallers-wrap">
+                <table class="ownership-table prices-table">
+                  <thead id="prices-fallers-head"></thead>
+                  <tbody id="prices-fallers-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+          <div class="prices-mover-dots" id="prices-prediction-dots" role="tablist" aria-label="Risers or fallers" hidden>
+            <button type="button" class="prices-mover-dot is-active" role="tab" aria-selected="true" aria-label="Risers" data-page="0"></button>
+            <button type="button" class="prices-mover-dot" role="tab" aria-selected="false" aria-label="Fallers" data-page="1"></button>
+          </div>
         </div>
       </div>
       <div id="prices-actual-wrap" class="prices-actual-wrap" hidden>
-        <div class="prices-actual-panels" id="prices-actual-panels">
-          <section class="prices-actual-panel" aria-label="Risers">
-            <div class="prices-section-divider" data-prices-direction="rise"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Risers</span></div>
-            <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-risers-wrap">
-              <table class="ownership-table prices-table prices-actual-table">
-                <thead id="prices-actual-risers-head"></thead>
-                <tbody id="prices-actual-risers-body"></tbody>
-              </table>
-            </div>
-          </section>
-          <section class="prices-actual-panel" aria-label="Fallers">
-            <div class="prices-section-divider" data-prices-direction="fall"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Fallers</span></div>
-            <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-fallers-wrap">
-              <table class="ownership-table prices-table prices-actual-table">
-                <thead id="prices-actual-fallers-head"></thead>
-                <tbody id="prices-actual-fallers-body"></tbody>
-              </table>
-            </div>
-          </section>
+        <div class="prices-mover-pager">
+          <div class="prices-actual-panels prices-mover-track" id="prices-actual-track">
+            <section class="prices-actual-panel prices-mover-page" aria-label="Risers" data-prices-page="risers">
+              <div class="prices-section-divider" data-prices-direction="rise"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Risers</span></div>
+              <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-risers-wrap">
+                <table class="ownership-table prices-table prices-actual-table">
+                  <thead id="prices-actual-risers-head"></thead>
+                  <tbody id="prices-actual-risers-body"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="prices-actual-panel prices-mover-page" aria-label="Fallers" data-prices-page="fallers">
+              <div class="prices-section-divider" data-prices-direction="fall"><span class="prices-section-mark" aria-hidden="true"></span><span class="prices-section-title">Fallers</span></div>
+              <div class="table-wrap prices-actual-table-wrap prices-table-wrap" id="prices-actual-fallers-wrap">
+                <table class="ownership-table prices-table prices-actual-table">
+                  <thead id="prices-actual-fallers-head"></thead>
+                  <tbody id="prices-actual-fallers-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+          <div class="prices-mover-dots" id="prices-actual-dots" role="tablist" aria-label="Risers or fallers" hidden>
+            <button type="button" class="prices-mover-dot is-active" role="tab" aria-selected="true" aria-label="Risers" data-page="0"></button>
+            <button type="button" class="prices-mover-dot" role="tab" aria-selected="false" aria-label="Fallers" data-page="1"></button>
+          </div>
         </div>
       </div>
       <div class="prices-next-update-footer" id="prices-next-update-footer" hidden>
@@ -1554,7 +1566,7 @@
 <script src="home_data.js?v=38"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1018"></script>
+<script src="app.js?v=1023"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
