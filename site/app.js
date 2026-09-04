@@ -2559,7 +2559,7 @@
   const HOME_LIVE_FETCH_MS = 12_000;
   const HOME_LIVE_POLL_LIVE_MS = 15_000;
   const HOME_LIVE_POLL_IDLE_MS = 60_000;
-  const HOME_SESSION_SNAPSHOT_KEY = "fpl_home_live_v1";
+  const HOME_SESSION_SNAPSHOT_KEY = "fpl_home_live_v2";
   let homeLivePollTimer = null;
   let homeLivePollIntervalMs = HOME_LIVE_POLL_IDLE_MS;
   let homeLiveLastPollAt = 0;
@@ -2749,6 +2749,25 @@
         r.inPlay,
         r.toPlay,
       ].join(":"))
+      .join("|");
+  }
+
+  function homeTransfersFingerprint(byEntry) {
+    if (!byEntry || typeof byEntry !== "object") return "";
+    return Object.keys(byEntry)
+      .sort()
+      .map((key) => {
+        const t = byEntry[key] || {};
+        const moves = Array.isArray(t.moves) ? t.moves : [];
+        const moveFp = moves
+          .map((m) => {
+            const outId = m && m.out && m.out.id != null ? m.out.id : "";
+            const inId = m && m.in && m.in.id != null ? m.in.id : "";
+            return `${outId}>${inId}`;
+          })
+          .join(",");
+        return `${key}:${t.count ?? ""}:${t.cost ?? ""}:${t.activeChip || ""}:${moveFp}`;
+      })
       .join("|");
   }
 
@@ -2965,15 +2984,18 @@
       const priorSummaryFp = homeSummaryFingerprint(HOME.summary);
       const priorEgFp = homeElementGwFingerprint(HOME);
       const priorSquadFp = homeSquadFingerprint(HOME.squad);
+      const priorTransfersFp = homeTransfersFingerprint(HOME.transfersByEntry);
       const incomingStandingsFp = homeStandingsFingerprint(data.home.standings);
       const incomingSummaryFp = homeSummaryFingerprint(data.home.summary);
       const incomingEgFp = homeElementGwFingerprint(data.home);
       const incomingSquadFp = homeSquadFingerprint(data.home.squad);
+      const incomingTransfersFp = homeTransfersFingerprint(data.home.transfersByEntry);
       if (
         priorStandingsFp === incomingStandingsFp
         && priorSummaryFp === incomingSummaryFp
         && priorEgFp === incomingEgFp
         && priorSquadFp === incomingSquadFp
+        && priorTransfersFp === incomingTransfersFp
         && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
       ) {
         persistHomeSessionSnapshot(HOME);
@@ -2993,8 +3015,9 @@
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
       const elementGwChanged = priorEgFp !== incomingEgFp;
       const squadChanged = priorSquadFp !== homeSquadFingerprint(HOME.squad);
+      const transfersChanged = priorTransfersFp !== homeTransfersFingerprint(HOME.transfersByEntry);
       resyncHomeLivePollInterval();
-      if (!standingsChanged && !summaryChanged && !elementGwChanged && !squadChanged) {
+      if (!standingsChanged && !summaryChanged && !elementGwChanged && !squadChanged && !transfersChanged) {
         syncLiveNavChrome();
         settleHomeAfterLivePoll({ rerender: false });
         return;
@@ -4283,8 +4306,10 @@
   function homeTransfersRowHTML(row, { configuredEntry, viewEntry, viewingOther }) {
     const entry = Number(row.entry);
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
-    const transfers = row.transfers
-      || (HOME.transfersByEntry && HOME.transfersByEntry[String(row.entry)])
+    // Prefer transfersByEntry (canonical) over standings-embedded copies — session
+    // snapshots can carry stale pairings on row.transfers after a pairing fix.
+    const transfers = (HOME.transfersByEntry && HOME.transfersByEntry[String(row.entry)])
+      || row.transfers
       || null;
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
