@@ -84,7 +84,7 @@ Social Feed + X API pulls are parked under [`archive/feed/`](archive/feed/README
 
 `python3 site/fetch_prices.py --rebuild-only` skips the live fetch.
 
-**Cadence:** every **4 hours** via [`.github/workflows/refresh-prices.yml`](.github/workflows/refresh-prices.yml) (separate from ownership). Daily FPL price changes apply at 00:00 Europe/London.
+**Cadence:** every **hour** via [`.github/workflows/refresh-prices.yml`](.github/workflows/refresh-prices.yml) (separate from ownership). Daily FPL price changes apply at 00:00 Europe/London.
 
 ### Markets (`markets_data.js`)
 
@@ -98,7 +98,7 @@ Workflow [`.github/workflows/refresh-caches.yml`](.github/workflows/refresh-cach
 |----------------|------|
 | **Midnight** | Markets |
 | **Noon** | Markets + Ownership |
-| **Every 4h (UTC)** | Prices predictor (`refresh-prices.yml`) |
+| **Hourly (UTC)** | Prices predictor (`refresh-prices.yml`) |
 | **~00:00 UK** | Actual price changes (`refresh-price-actual.yml`) |
 
 Cron is UTC (`07:00` / `19:00` ≈ PDT). In winter (PST) those fire one hour later local. Manual run: Actions → **Refresh caches** → Run workflow.
@@ -134,7 +134,7 @@ cp .env.example .env
 python3 site/build.py                 # after CSV / snapshot updates
 python3 site/fetch_history_past.py    # optional: rebuild history_past snapshot
 python3 site/fetch_ownership.py       # ownership check-in + history bundle
-python3 site/fetch_prices.py          # price predictor check-ins (4h in CI)
+python3 site/fetch_prices.py          # price predictor check-ins (hourly in CI)
 python3 site/fetch_price_actual.py    # UK-midnight actual change detection
 python3 site/fetch_markets.py         # ~few Odds API credits per pull
 python3 site/fetch_leagues.py

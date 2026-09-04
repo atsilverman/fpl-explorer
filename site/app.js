@@ -10764,17 +10764,17 @@
                 ? "Swipe or use the dots under the table — Risers and Fallers are separate pages."
                 : "Two stacked tables — risers above, fallers below, each ranked by status tier then |progress|."
             ),
-            spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of 4-hour check-ins. Line colour follows 3d Δ (green up, red down)."),
+            spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of hourly check-ins. Line colour follows 3d Δ (green up, red down)."),
             spitRow(spitRank("Progress filter"), "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."),
             spitRow(spitRank("Countdown"), "Time until the next daily price update. Change time is shown in your local timezone."),
             spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
           ];
       const intro = isActual
         ? "Confirmed £0.1m price moves from bootstrap snapshot diffs."
-        : "Official FPL price-change predictor from 4-hour bootstrap check-ins.";
+        : "Official FPL price-change predictor from hourly bootstrap check-ins.";
       const note = isActual
-        ? "Actual log starts empty on deploy and fills as daily/4h fetches detect changes."
-        : "Refreshed every 4 hours via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
+        ? "Actual log starts empty on deploy and fills as daily/hourly fetches detect changes."
+        : "Refreshed hourly via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
       return `${spitHead("pound-sterling", "How Prices works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
