@@ -152,8 +152,13 @@
   const SCHEDULE_GW_MAX = FIXTURE_GAMEWEEKS.length ? Math.max(...FIXTURE_GAMEWEEKS) : 38;
 
   // FPL triad: current when a GW is live; otherwise next (preseason / between GWs).
+  // Prefer live Home GW when the static ownership/data.js triad lags behind FPL.
   function activeGameweek() {
+    const liveGw = livePlanningGw();
     const cur = Number(GAMEWEEKS.current && GAMEWEEKS.current.id);
+    if (Number.isFinite(liveGw) && liveGw > 0) {
+      if (!Number.isFinite(cur) || liveGw >= cur) return liveGw;
+    }
     if (Number.isFinite(cur)) return cur;
     const nxt = Number(GAMEWEEKS.next && GAMEWEEKS.next.id);
     if (Number.isFinite(nxt)) return nxt;
@@ -4682,7 +4687,11 @@
   }
 
   function homeSquadFixtureGwList() {
-    const start = planningGameweek();
+    // Include the Home scoring GW (current) so fixture FDR matches the squad label.
+    // Fall back to planning horizon when Home is not linked yet.
+    const homeGw = Number(HOME && HOME.gw);
+    const start =
+      Number.isFinite(homeGw) && homeGw > 0 ? homeGw : planningGameweek();
     const limit = homeSquadFixtureGwCount();
     const gws = [];
     for (let gw = start; gw <= SCHEDULE_GW_MAX && gws.length < limit; gw += 1) {
@@ -5564,9 +5573,14 @@
 
 
   function homeNextDeadlineLabel() {
+    const liveGw = livePlanningGw();
     const next = GAMEWEEKS && GAMEWEEKS.next;
     const cur = GAMEWEEKS && GAMEWEEKS.current;
     let gw = next && next.deadlineTime ? next : null;
+    // Static triad behind live Home: next may still be the Home current GW.
+    if (gw && Number.isFinite(liveGw) && Number(gw.id) <= liveGw) {
+      gw = null;
+    }
     if (!gw && cur && cur.deadlineTime) {
       const t = Date.parse(cur.deadlineTime);
       if (Number.isFinite(t) && t > Date.now()) gw = cur;

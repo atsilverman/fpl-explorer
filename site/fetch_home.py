@@ -168,7 +168,12 @@ def compute_transfers(
     active_chip: str | None,
     stats: dict[int, dict] | None = None,
 ) -> dict:
-    """Diff previous vs current squad picks into transfer moves."""
+    """Diff previous vs current squad picks into transfer moves.
+
+    Pair like-for-like by ``element_type`` (GK/DEF/MID/FWD) first so a DEF→DEF
+    and MID→MID swap is not crossed by picks-list order; leftover true position
+    changes are zipped afterward.
+    """
     prev_ids = [
         int(p["element"])
         for p in (prev_picks or [])
@@ -187,6 +192,12 @@ def compute_transfers(
     def el_name(eid: int) -> str:
         return player_display_name(elements.get(eid) or {})
 
+    def el_type(eid: int) -> int:
+        try:
+            return int((elements.get(eid) or {}).get("element_type") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     def el_gw_points(eid: int) -> int:
         st = (stats or {}).get(eid) if isinstance(stats, dict) else None
         if not isinstance(st, dict):
@@ -196,28 +207,56 @@ def compute_transfers(
         except (TypeError, ValueError):
             return 0
 
-    moves: list[dict] = []
-    pair_count = max(len(outs), len(ins))
-    for i in range(pair_count):
+    def make_move(out_eid: int | None, in_eid: int | None) -> dict | None:
         move: dict = {}
-        if i < len(outs):
-            out_eid = outs[i]
+        if out_eid is not None:
             move["out"] = {
                 "id": out_eid,
                 "name": el_name(out_eid),
                 "gwPoints": el_gw_points(out_eid),
+                "elementType": el_type(out_eid) or None,
             }
-        if i < len(ins):
-            in_eid = ins[i]
+        if in_eid is not None:
             move["in"] = {
                 "id": in_eid,
                 "name": el_name(in_eid),
                 "gwPoints": el_gw_points(in_eid),
+                "elementType": el_type(in_eid) or None,
             }
+        if not move:
+            return None
+        in_pts = int((move.get("in") or {}).get("gwPoints") or 0)
+        out_pts = int((move.get("out") or {}).get("gwPoints") or 0)
+        move["ptsDelta"] = in_pts - out_pts
+        return move
+
+    outs_by: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: [], 4: []}
+    ins_by: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: [], 4: []}
+    for eid in outs:
+        outs_by[el_type(eid)].append(eid)
+    for eid in ins:
+        ins_by[el_type(eid)].append(eid)
+
+    moves: list[dict] = []
+    used_out: set[int] = set()
+    used_in: set[int] = set()
+    for et in (1, 2, 3, 4, 0):
+        for out_eid, in_eid in zip(outs_by[et], ins_by[et]):
+            move = make_move(out_eid, in_eid)
+            if move:
+                moves.append(move)
+            used_out.add(out_eid)
+            used_in.add(in_eid)
+
+    rem_outs = [eid for eid in outs if eid not in used_out]
+    rem_ins = [eid for eid in ins if eid not in used_in]
+    pair_count = max(len(rem_outs), len(rem_ins))
+    for i in range(pair_count):
+        move = make_move(
+            rem_outs[i] if i < len(rem_outs) else None,
+            rem_ins[i] if i < len(rem_ins) else None,
+        )
         if move:
-            in_pts = int((move.get("in") or {}).get("gwPoints") or 0)
-            out_pts = int((move.get("out") or {}).get("gwPoints") or 0)
-            move["ptsDelta"] = in_pts - out_pts
             moves.append(move)
 
     eh = entry_history if isinstance(entry_history, dict) else {}
