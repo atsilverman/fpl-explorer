@@ -4427,6 +4427,20 @@ td.has-source-warning {
 
 /* ---------- Compare mode ---------- */
 tbody tr.row-selectable { cursor: pointer; }
+/* Statistics players: whole row opens details (when not in compare select mode). */
+html[data-page="opta"] #table-body tr[data-player-code]:not(.row-selectable) {
+  cursor: pointer;
+}
+/* Live / Ownership / Prices / xData player rows → details overlay. */
+html[data-page="live"] #live-page tr[data-player-code],
+html[data-page="live"] #live-page .live-bonus-row[data-player-code],
+html[data-page="ownership"] #ownership-table-body tr[data-player-code],
+html[data-page="ownership"] .ownership-treemap-cell[data-player-code],
+html[data-page="prices"] #prices-page tr[data-player-code],
+html[data-page="expected"] .barbell-row[data-player-code],
+html[data-page="expected"] .barbell-group[data-player-code] {
+  cursor: pointer;
+}
 tbody tr.row-selected { background: hsl(var(--primary) / 0.08); }
 tbody tr.row-selected:hover { background: hsl(var(--primary) / 0.12); }
 tbody tr.row-selected td.col-player,
@@ -14142,6 +14156,47 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+}
+/* Wide desktop: roomier modal + side-by-side profile | matchup+owners. */
+@media (min-width: 900px) {
+  .home-player-modal-panel {
+    width: min(920px, 92vw);
+    max-height: min(88vh, 900px);
+  }
+  .home-player-modal-body > .home-player-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px 14px;
+    align-items: start;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-profile {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    min-width: 0;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-matchup {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-owners {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    align-self: stretch;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-owners {
+    max-height: min(42vh, 380px);
+    display: flex;
+    flex-direction: column;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-owners-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
 }
 .home-player-modal-header {
   display: flex;

@@ -7580,6 +7580,157 @@
     syncHomeLookupUI();
   }
 
+  /** Resolve a full catalog/stats row for the shared player-details overlay. */
+  function playerDetailsRowFromLike(rowLike) {
+    if (!rowLike) return null;
+    const code = rowLike.code != null ? Number(rowLike.code) : NaN;
+    if (Number.isFinite(code)) {
+      const fromCatalog = homeSearchCatalog().find((r) => Number(r.code) === code);
+      if (fromCatalog) return fromCatalog;
+      const combined = (DATA.players && DATA.players.combined) || [];
+      const fromData = combined.find((r) => Number(r.code) === code);
+      if (fromData) return fromData;
+    }
+    const eid =
+      rowLike.element != null
+        ? Number(rowLike.element)
+        : rowLike.element2627 != null
+          ? Number(rowLike.element2627)
+          : NaN;
+    if (Number.isFinite(eid)) {
+      const fromElement = homeLookupRowForElement(eid);
+      if (fromElement) return fromElement;
+    }
+    return rowLike.name ? rowLike : null;
+  }
+
+  /**
+   * Open Home's player details (mobile sheet / desktop modal) from any player-like
+   * object or Statistics/Live table row. Re-selecting the same player closes.
+   */
+  function openPlayerDetailsFromRow(rowLike) {
+    const row = playerDetailsRowFromLike(rowLike);
+    if (!row) return false;
+    const eid = homeLookupElementId(row);
+    if (
+      homeLookupPlayer &&
+      eid != null &&
+      homeLookupElementId(homeLookupPlayer) === eid
+    ) {
+      clearHomePlayerLookup();
+      return true;
+    }
+    hideFixtureTooltip();
+    setHomePlayerLookup(row);
+    return true;
+  }
+
+  function openPlayerDetailsFromTableRow(tr) {
+    return openPlayerDetailsFromEl(tr);
+  }
+
+  /** Resolve player details from a DOM node bearing code/element datasets. */
+  function openPlayerDetailsFromEl(node) {
+    if (!node || !(node instanceof Element)) return false;
+    const codeRaw = node.dataset.playerCode || node.dataset.pricesCode;
+    if (codeRaw != null && String(codeRaw).trim() !== "") {
+      return openPlayerDetailsFromRow({
+        code: Number(codeRaw),
+        name: (node.dataset.rowName || "").trim() || undefined,
+        team: node.dataset.team || undefined,
+      });
+    }
+    const eid = node.dataset.element;
+    if (eid != null && String(eid).trim() !== "") {
+      const row = homeLookupRowForElement(eid);
+      if (row) return openPlayerDetailsFromRow(row);
+    }
+    return false;
+  }
+
+  /**
+   * Click / tap anywhere on a player row (table tr, list item, barbell row)
+   * opens the shared details overlay. Ignores sort headers, links, nested
+   * buttons, and xData track dots (those keep their own tips).
+   */
+  function bindPlayerDetailsRowClicks(root, {
+    rowSelector = "[data-player-code], [data-prices-code]",
+  } = {}) {
+    if (!root || root.dataset.playerDetailsBound === "1") return;
+    root.dataset.playerDetailsBound = "1";
+    let touchStart = null;
+    let touchMoved = false;
+    const MOVE_PX = 10;
+
+    root.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1) return;
+        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchMoved = false;
+      },
+      { passive: true }
+    );
+    root.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!touchStart || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - touchStart.x;
+        const dy = e.touches[0].clientY - touchStart.y;
+        if (Math.hypot(dx, dy) > MOVE_PX) touchMoved = true;
+      },
+      { passive: true }
+    );
+    root.addEventListener(
+      "touchend",
+      () => {
+        touchStart = null;
+      },
+      { passive: true }
+    );
+
+    function rowFromEventTarget(target) {
+      if (!(target instanceof Element)) return null;
+      if (target.closest("th")) return null;
+      if (target.closest(".barbell-dot")) return null;
+      if (target.closest("a, input, select, textarea")) return null;
+      const row = target.closest(rowSelector);
+      if (!row || !root.contains(row)) return null;
+      const nestedBtn = target.closest("button");
+      if (nestedBtn && nestedBtn !== row) return null;
+      return row;
+    }
+
+    root.addEventListener("click", (e) => {
+      const row = rowFromEventTarget(e.target);
+      if (!row) return;
+      if (touchMoved) {
+        touchMoved = false;
+        return;
+      }
+      e.preventDefault();
+      openPlayerDetailsFromEl(row);
+    });
+
+    root.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target.closest(rowSelector);
+      if (!row || row !== e.target || !root.contains(row)) return;
+      e.preventDefault();
+      openPlayerDetailsFromEl(row);
+    });
+  }
+
+  function bindPlayerDetailsSurfaces() {
+    bindPlayerDetailsRowClicks(el.livePage);
+    bindPlayerDetailsRowClicks(el.ownershipTableBody);
+    bindPlayerDetailsRowClicks(el.ownershipTreemapPlot, {
+      rowSelector: ".ownership-treemap-cell[data-player-code]",
+    });
+    bindPlayerDetailsRowClicks(el.pricesPage);
+    bindPlayerDetailsRowClicks(el.barbellBody || el.barbellWrap);
+  }
+
   function syncHomeStandingsLookupEmpty() {
     const empty = el.homeStandingsLookupEmpty;
     const pager = el.homeStandingsPanel && el.homeStandingsPanel.querySelector(".home-standings-pager");
@@ -12274,6 +12425,22 @@
       if (state.page !== "opta") return;
       if (state.compareMode) return; // row click selects for compare
       if (e.target.closest("a, button")) return;
+
+      // Players view: full details overlay (same as Home) — not fixtures tip.
+      if (state.view === "players") {
+        const playerTr = e.target.closest("tbody tr[data-player-code]");
+        if (!playerTr || !tbody.contains(playerTr)) {
+          hideFixtureTooltip();
+          return;
+        }
+        e.stopPropagation();
+        clearTimeout(fixtureTtTimer);
+        hideFixtureTooltip();
+        openPlayerDetailsFromTableRow(playerTr);
+        return;
+      }
+
+      // Teams view: fixtures / matchups tip (desktop float or mobile sheet).
       if (isFixtureTtNameColumnTarget(e.target)) {
         hideFixtureTooltip();
         return;
@@ -12294,17 +12461,15 @@
 
       clearTimeout(fixtureTtTimer);
       hideFixtureTooltip();
-      const rowName = (tr.dataset.rowName || "").trim();
       const teamLabel = TEAM_NAMES[team] || team;
-      const title = state.view === "players" && rowName ? rowName : teamLabel;
-      const key = `fixture:${team}:${rowName || team}`;
+      const key = `fixture:${team}`;
       if (mobileSheetOpen && mobileSheetKey === key) {
         closeMobileSheet();
         return;
       }
       openMobileSheet({
-        title,
-        titleHtml: `${badgeHTML(team)}<span>${escapeHtml(title)}</span>`,
+        title: teamLabel,
+        titleHtml: `${badgeHTML(team)}<span>${escapeHtml(teamLabel)}</span>`,
         html: fixtureTooltipHTML(team, { sheetMode: true }),
         key,
       });
@@ -13372,6 +13537,11 @@
     div.className = "barbell-row";
     if (locSuffix) div.classList.add(locSuffix === "Home" ? "loc-home" : "loc-away");
     if (omitIdentity) div.classList.add("is-split");
+    if (state.view === "players" && row.code != null) {
+      div.dataset.playerCode = String(row.code);
+      if (row.team) div.dataset.team = String(currentTeamCode(row) || row.team);
+      if (row.name) div.dataset.rowName = row.name;
+    }
 
     if (omitIdentity) {
       const loc = document.createElement("div");
@@ -13495,6 +13665,13 @@
   function buildBarbellCompareGroup(baseRow, homeRow, awayRow, cat, maxVal, maxAbsDiff) {
     const group = document.createElement("div");
     group.className = "barbell-group is-compare";
+    if (state.view === "players" && baseRow && baseRow.code != null) {
+      group.dataset.playerCode = String(baseRow.code);
+      if (baseRow.team) {
+        group.dataset.team = String(currentTeamCode(baseRow) || baseRow.team);
+      }
+      if (baseRow.name) group.dataset.rowName = baseRow.name;
+    }
     group.appendChild(buildBarbellCompareIdentity(baseRow));
     const splits = document.createElement("div");
     splits.className = "barbell-group-splits";
@@ -20817,7 +20994,13 @@
   }
 
   function ownershipRowHTML(row, rank) {
-    return `<tr data-own-key="${escapeHtml(row.key)}">
+    const codeAttr =
+      row.kind !== "team" && row.code != null
+        ? ` data-player-code="${escapeHtml(String(row.code))}"`
+        : "";
+    const teamAttr = row.team ? ` data-team="${escapeHtml(String(row.team))}"` : "";
+    const nameAttr = row.name ? ` data-row-name="${escapeHtml(String(row.name))}"` : "";
+    return `<tr data-own-key="${escapeHtml(row.key)}"${codeAttr}${teamAttr}${nameAttr}>
       <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
       <td class="col-num">${ownershipPillHTML(row.owned7)}</td>
       <td class="col-num ownership-col-arrow"><span class="ownership-then-arrow" aria-hidden="true">→</span></td>
@@ -21033,9 +21216,19 @@
       paint.tone,
       isWide ? "is-wide" : "",
     ].filter(Boolean).join(" ");
+    const codeAttr =
+      cell.row.kind !== "team" && cell.row.code != null
+        ? ` data-player-code="${escapeHtml(String(cell.row.code))}"`
+        : "";
+    const teamAttr = cell.row.team
+      ? ` data-team="${escapeHtml(String(cell.row.team))}"`
+      : "";
+    const nameAttr = cell.row.name
+      ? ` data-row-name="${escapeHtml(String(cell.row.name))}"`
+      : "";
     return `<button type="button" class="${cls}"
       style="left:${left.toFixed(2)}%;top:${topPct.toFixed(2)}%;width:${width.toFixed(2)}%;height:${height.toFixed(2)}%;--ot-bg:${paint.bg};--ot-fg:${paint.fg}"
-      data-own-key="${escapeHtml(cell.row.key)}"
+      data-own-key="${escapeHtml(cell.row.key)}"${codeAttr}${teamAttr}${nameAttr}
       aria-label="${escapeHtml(tip)}"${tipAttr(tip)}>
       ${thumb}
       ${showName || showDelta ? `<span class="ownership-treemap-meta">${
@@ -22050,7 +22243,13 @@
   }
 
   function pricesRowHTML(row, rank) {
-    return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
+    const code = row.code != null ? String(row.code) : "";
+    const codeAttr = code
+      ? ` data-player-code="${escapeHtml(code)}" data-prices-code="${escapeHtml(code)}"`
+      : "";
+    const teamAttr = row.team ? ` data-team="${escapeHtml(String(row.team))}"` : "";
+    const nameAttr = row.name ? ` data-row-name="${escapeHtml(String(row.name))}"` : "";
+    return `<tr${codeAttr}${teamAttr}${nameAttr}>
       <td class="col-player">${ownershipIdCellHTML(row, rank)}</td>
       <td class="col-num prices-col-status">${pricesStatusPillHTML(row)}</td>
       <td class="col-num prices-col-metric">${pricesProgressPillHTML(row.progress)}</td>
@@ -22200,7 +22399,13 @@
     const dateTd =
       dateCell ||
       `<td class="col-date prices-col-date">${escapeHtml(pricesActualDateLabel(row))}</td>`;
-    return `<tr data-prices-code="${escapeHtml(String(row.code ?? ""))}">
+    const code = row.code != null ? String(row.code) : "";
+    const codeAttr = code
+      ? ` data-player-code="${escapeHtml(code)}" data-prices-code="${escapeHtml(code)}"`
+      : "";
+    const teamAttr = row.team ? ` data-team="${escapeHtml(String(row.team))}"` : "";
+    const nameAttr = row.name ? ` data-row-name="${escapeHtml(String(row.name))}"` : "";
+    return `<tr${codeAttr}${teamAttr}${nameAttr}>
       ${dateTd}
       <td class="col-player">${pricesActualPlayerCellHTML(row, rank)}</td>
       ${pricesActualMetricCellsHTML(row, cat)}
@@ -22234,7 +22439,13 @@
           ? `<td class="col-date prices-col-date prices-actual-day" rowspan="${g.rows.length}">${escapeHtml(pricesActualDateLabel(g.labelRow))}</td>`
           : "";
         const trCls = dayStart ? ' class="prices-actual-day-start"' : "";
-        html += `<tr${trCls} data-prices-code="${escapeHtml(String(row.code ?? ""))}">`;
+        const code = row.code != null ? String(row.code) : "";
+        const codeAttr = code
+          ? ` data-player-code="${escapeHtml(code)}" data-prices-code="${escapeHtml(code)}"`
+          : "";
+        const teamAttr = row.team ? ` data-team="${escapeHtml(String(row.team))}"` : "";
+        const nameAttr = row.name ? ` data-row-name="${escapeHtml(String(row.name))}"` : "";
+        html += `<tr${trCls}${codeAttr}${teamAttr}${nameAttr}>`;
         if (dateCell) html += dateCell;
         html += `<td class="col-player">${pricesActualPlayerCellHTML(row, rank++)}</td>`;
         html += pricesActualMetricCellsHTML(row, catalog);
@@ -24318,6 +24529,7 @@
       renderOwnership();
     });
   }
+  bindPlayerDetailsSurfaces();
   if (el.pricesViewSeg) {
     el.pricesViewSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-prices-view]");
