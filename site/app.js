@@ -7085,11 +7085,20 @@
     )}</article>`;
   }
 
-  function homePlayerOwnersLegendHTML() {
-    return `<div class="home-player-owners-legend" aria-label="Ownership legend">
-      <span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>XI</span>
-      <span class="home-player-owners-legend-item is-bench"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Bench</span>
-    </div>`;
+  function homePlayerOwnersLegendHTML({ hasStarter = false, hasBench = false } = {}) {
+    const items = [];
+    if (hasStarter) {
+      items.push(
+        `<span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>XI</span>`
+      );
+    }
+    if (hasBench) {
+      items.push(
+        `<span class="home-player-owners-legend-item is-bench"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Bench</span>`
+      );
+    }
+    if (!items.length) return "";
+    return `<div class="home-player-owners-legend" aria-label="Ownership legend">${items.join("")}</div>`;
   }
 
   function homePlayerOwnersHTML(elementId) {
@@ -7126,10 +7135,14 @@
         <p class="home-player-owners-empty">No managers in ${escapeHtml(leagueLabel)} own this player.</p>
       </section>`;
     }
+    let hasStarter = false;
+    let hasBench = false;
     const list = rows
       .map((r) => {
         const entry = Number(r.entry);
         const slot = homeOwnerSlotForElement(entry, elementId);
+        if (slot === "starter") hasStarter = true;
+        else if (slot === "bench") hasBench = true;
         const rank = r.rankOfficial ?? r.rankLive ?? "—";
         const gw = homeStandingsGwPoints(r);
         const total = r.total != null ? Number(r.total) : r.totalPoints;
@@ -7168,7 +7181,7 @@
           <span class="home-player-owners-kicker">Owners</span>
           <span class="home-player-owners-meta">${ownerCount}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
         </h3>
-        ${homePlayerOwnersLegendHTML()}
+        ${homePlayerOwnersLegendHTML({ hasStarter, hasBench })}
       </div>
       <div class="home-player-owners-list" role="list">${cols}${list}</div>
     </section>`;

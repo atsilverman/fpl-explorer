@@ -14350,12 +14350,12 @@ html.home-player-modal-open {
   color: var(--text-dim);
 }
 .home-player-owner-row.is-demote {
-  opacity: 0.42;
+  opacity: 0.26;
 }
 .home-player-owner-row.is-demote:hover,
 .home-player-owner-row.is-demote:focus-visible {
-  opacity: 0.72;
-  background: hsl(var(--muted) / 0.28);
+  opacity: 0.52;
+  background: hsl(var(--muted) / 0.22);
 }
 .home-player-owner-rank,
 .home-player-owner-gw,
