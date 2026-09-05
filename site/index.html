@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1063" />
+<link rel="stylesheet" href="styles.css?v=1070" />
 <script>
 (() => {
   try {
@@ -261,7 +261,7 @@
   <symbol id="i-x" viewBox="0 0 24 24">
     <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
   </symbol>
-  <symbol id="i-x-logo" viewBox="0 0 24 24">
+  <symbol id="i-x-logo" viewBox="0 0 24 24" fill="currentColor" stroke="none">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
   </symbol>
   <symbol id="i-sun" viewBox="0 0 24 24">
@@ -1584,6 +1584,10 @@
     <div class="mobile-sheet-header" data-sheet-drag>
       <h3 id="mobile-sheet-title" class="mobile-sheet-title"></h3>
       <button type="button" class="ghost-btn mobile-sheet-reset" id="mobile-sheet-reset" hidden>Reset</button>
+      <a class="ghost-btn home-player-open-x" id="mobile-sheet-open-x" hidden aria-label="Open X search" target="_blank" rel="noopener noreferrer">
+        <svg class="icon icon-x-logo" aria-hidden="true"><use href="#i-x-logo"/></svg>
+        <span>Open X</span>
+      </a>
       <button type="button" class="ghost-btn icon-only-btn mobile-sheet-close" data-sheet-dismiss aria-label="Close">
         <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
       </button>
@@ -1620,10 +1624,16 @@
   <div class="home-player-modal-backdrop" data-home-player-dismiss aria-hidden="true"></div>
   <div class="home-player-modal-panel" role="dialog" aria-modal="true" aria-labelledby="home-player-modal-title">
     <div class="home-player-modal-header">
-      <h3 id="home-player-modal-title">Player</h3>
-      <button type="button" class="ghost-btn icon-only-btn home-player-modal-close" data-home-player-dismiss aria-label="Close">
-        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
-      </button>
+      <h3 id="home-player-modal-title">Player Details</h3>
+      <div class="home-player-modal-actions">
+        <a class="ghost-btn home-player-open-x" id="home-player-modal-open-x" hidden aria-label="Open X search" target="_blank" rel="noopener noreferrer">
+          <svg class="icon icon-x-logo" aria-hidden="true"><use href="#i-x-logo"/></svg>
+          <span>Open X</span>
+        </a>
+        <button type="button" class="ghost-btn icon-only-btn home-player-modal-close" data-home-player-dismiss aria-label="Close">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </div>
     </div>
     <div id="home-player-modal-body" class="home-player-modal-body"></div>
   </div>
@@ -1634,7 +1644,7 @@
 <script src="ownership_data.js?v=23"></script>
 <script src="price_changes_data.js?v=37"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=40"></script>
+<script src="home_data.js?v=41"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
 (() => {
@@ -1656,7 +1666,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1107"></script>
+<script src="app.js?v=1115"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -46,7 +46,8 @@
   --positive-highlight: var(--spectrum-rise);
   --negative: var(--spectrum-fall);
   --matchup-defence: var(--spectrum-rise);
-  --matchup-attack: var(--spectrum-fall);
+  /* Attack chrome (swords / score chips) — Matchups pink, not Ownership orange. */
+  --matchup-attack: var(--schedule-spectrum-fall);
   --fdr-easy: var(--spectrum-rise);
   --fdr-hard: var(--spectrum-fall);
   --pos-mid: 134 61% 49%;
@@ -170,7 +171,7 @@ html[data-font-pair="figtree"] {
     --positive-highlight: var(--spectrum-rise);
     --negative: var(--spectrum-fall);
     --matchup-defence: var(--spectrum-rise);
-    --matchup-attack: var(--spectrum-fall);
+    --matchup-attack: var(--schedule-spectrum-fall);
     --fdr-easy: var(--spectrum-rise);
     --fdr-hard: var(--spectrum-fall);
     --pos-mid: 142 42% 46%;
@@ -226,7 +227,7 @@ html[data-font-pair="figtree"] {
   --positive-highlight: var(--spectrum-rise);
   --negative: var(--spectrum-fall);
   --matchup-defence: var(--spectrum-rise);
-  --matchup-attack: var(--spectrum-fall);
+  --matchup-attack: var(--schedule-spectrum-fall);
   --fdr-easy: var(--spectrum-rise);
   --fdr-hard: var(--spectrum-fall);
   --pos-mid: 142 42% 46%;
@@ -9214,8 +9215,12 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 
 /* Analyze stays a single responsive grid. The verdict column needs slightly
    wider cards, but every team keeps equal visual weight and appears once. */
+/* Keep attack pink on embedded matchup cards outside #schedule-page too
+   (Home player detail, etc.). Root token already uses schedule pink. */
 #schedule-page,
 .home-player-matchup,
+.home-player-detail-matchup,
+.schedule-card,
 #opta-page,
 .fixture-tooltip:has(.ftt-table-matchups) {
   --matchup-attack: var(--schedule-spectrum-fall);
@@ -12024,6 +12029,40 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   height: 15px;
   font-size: 15px;
 }
+.icon.icon-x-logo {
+  fill: currentColor;
+  stroke: none;
+  stroke-width: 0;
+}
+.home-player-open-x {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+  color: inherit;
+  box-sizing: border-box;
+}
+.home-player-open-x .icon {
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
+}
+.home-player-open-x[hidden] {
+  display: none !important;
+}
+.home-player-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
 .mobile-sheet-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -14170,7 +14209,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-player-modal-body > .home-player-detail {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 12px 14px;
     align-items: start;
   }
@@ -14179,14 +14218,19 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     grid-row: 1 / -1;
     min-width: 0;
   }
-  .home-player-modal-body > .home-player-detail .home-player-detail-matchup {
+  .home-player-modal-body > .home-player-detail .home-player-detail-form {
     grid-column: 2;
     grid-row: 1;
     min-width: 0;
   }
-  .home-player-modal-body > .home-player-detail .home-player-detail-owners {
+  .home-player-modal-body > .home-player-detail .home-player-detail-matchup {
     grid-column: 2;
     grid-row: 2;
+    min-width: 0;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-owners {
+    grid-column: 2;
+    grid-row: 3;
     min-width: 0;
     min-height: 0;
     align-self: stretch;
@@ -14245,6 +14289,189 @@ html.home-player-modal-open {
 .home-player-detail-matchup .schedule-card,
 .home-player-detail-matchup .home-lookup-schedule-card {
   margin: 0;
+}
+/* Match Owners kicker — uppercase muted label, not team-name weight. */
+.home-player-detail-matchup .ftt-head,
+.home-player-matchup .home-lookup-schedule-card .ftt-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.home-form-card {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  box-shadow: var(--shadow-sm);
+  touch-action: pan-y;
+}
+.home-form-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 6px;
+}
+.home-form-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.home-form-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.home-form-chart {
+  min-height: 148px;
+}
+.home-form-chart.is-swap-out {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 90ms ease, transform 90ms ease;
+}
+.home-form-chart.is-swap-in {
+  animation: home-form-swap-in 180ms var(--ease-out);
+}
+@keyframes home-form-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.home-form-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.home-form-grid {
+  stroke: hsl(var(--border-hsl) / 0.85);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.home-form-axis {
+  stroke: hsl(var(--border-hsl));
+  stroke-width: 1;
+}
+.home-form-y-label,
+.home-form-x-label {
+  fill: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.home-form-bar {
+  fill: hsl(var(--blue-hsl));
+  transition: height 0.15s var(--ease-out), y 0.15s var(--ease-out);
+}
+.home-form-bar.is-empty {
+  fill: hsl(var(--muted-foreground) / 0.22);
+}
+.home-form-bar.is-hit {
+  fill: hsl(var(--check-threshold) / 0.82);
+  stroke: hsl(var(--check-threshold));
+  stroke-width: 1.25;
+}
+.home-form-threshold {
+  stroke: hsl(var(--check-threshold) / 0.7);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+}
+.home-form-avg {
+  stroke: hsl(var(--foreground) / 0.55);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+.home-form-avg-pill rect {
+  fill: hsl(var(--card));
+  stroke: hsl(var(--foreground) / 0.28);
+  stroke-width: 1;
+}
+.home-form-avg-pill text {
+  fill: hsl(var(--foreground) / 0.78);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.home-form-legend-slot:empty {
+  display: none;
+}
+.home-form-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  margin: 4px 0 2px;
+  text-align: center;
+}
+.home-form-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.home-form-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.home-form-legend-item.is-avg .home-form-legend-swatch {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  width: 12px;
+  height: 0;
+  border-top: 2px dashed hsl(var(--foreground) / 0.55);
+  align-self: center;
+}
+.home-form-legend-item.is-avg {
+  color: hsl(var(--foreground) / 0.7);
+}
+.home-form-legend-item.is-base .home-form-legend-swatch {
+  background: hsl(var(--blue-hsl) / 0.22);
+  border: 1px solid hsl(var(--blue-hsl) / 0.55);
+}
+.home-form-legend-item.is-base {
+  color: hsl(var(--blue-hsl));
+}
+.home-form-legend-item.is-hit .home-form-legend-swatch {
+  background:
+    repeating-linear-gradient(
+      -55deg,
+      hsl(var(--check-threshold) / 0.2),
+      hsl(var(--check-threshold) / 0.2) 2px,
+      hsl(var(--check-threshold) / 0.55) 2px,
+      hsl(var(--check-threshold) / 0.55) 4px
+    );
+  border: 1px solid hsl(var(--check-threshold) / 0.75);
+}
+.home-form-legend-item.is-hit {
+  color: hsl(var(--check-threshold));
+}
+.home-form-dots {
+  margin-top: 4px;
+}
+.home-player-detail-form {
+  min-width: 0;
 }
 /* Player tray/modal embeds a schedule matchup card — no hover lift (Schedule keeps it). */
 .home-player-detail-matchup .schedule-card:hover,

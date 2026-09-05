@@ -1296,6 +1296,8 @@
     mobileSheetBody: $("#mobile-sheet-body"),
     mobileSheetPanel: document.querySelector("#mobile-sheet .mobile-sheet-panel"),
     mobileSheetReset: $("#mobile-sheet-reset"),
+    mobileSheetOpenX: $("#mobile-sheet-open-x"),
+    homePlayerModalOpenX: $("#home-player-modal-open-x"),
     mobileFilterDock: $("#mobile-filter-dock"),
     mobileViewDock: $("#mobile-view-dock"),
     mobileChromeFade: $("#mobile-chrome-fade"),
@@ -3623,6 +3625,7 @@
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
   let homeLookupStatMode = 0;
+  let homeLookupFormMode = 0;
   let homeLookupCardBound = false;
 
   const HOME_LOOKUP_STAT_MODES = [
@@ -6978,8 +6981,18 @@
     homeLookupCardBound = true;
 
     document.addEventListener("click", (e) => {
+      const formDot = e.target.closest(".home-form-dot");
+      if (formDot) {
+        const root = homePlayerDetailRoot();
+        if (!root || !root.contains(formDot)) return;
+        e.preventDefault();
+        const page = Number(formDot.dataset.page);
+        if (!Number.isFinite(page)) return;
+        setHomeLookupFormMode(page);
+        return;
+      }
       const dot = e.target.closest(".home-lookup-dot");
-      if (!dot) return;
+      if (!dot || dot.classList.contains("home-form-dot")) return;
       const root = homePlayerDetailRoot();
       if (!root || !root.contains(dot)) return;
       e.preventDefault();
@@ -6996,11 +7009,18 @@
     let gesture = null;
 
     const cardFromTarget = (target) => {
-      const card = target && target.closest ? target.closest(".home-lookup-card") : null;
+      if (!target || !target.closest) return null;
+      const formCard = target.closest(".home-form-card");
+      if (formCard) {
+        const root = homePlayerDetailRoot();
+        if (!root || !root.contains(formCard)) return null;
+        return { kind: "form", el: formCard };
+      }
+      const card = target.closest(".home-lookup-card");
       if (!card) return null;
       const root = homePlayerDetailRoot();
       if (!root || !root.contains(card)) return null;
-      return card;
+      return { kind: "stats", el: card };
     };
 
     const cancelSheetDrag = () => {
@@ -7015,9 +7035,11 @@
     };
 
     const begin = (x, y, target) => {
-      if (!cardFromTarget(target)) return;
+      const hit = cardFromTarget(target);
+      if (!hit) return;
       if (target.closest("button, a, input, textarea, label")) return;
-      gesture = { x, y, axis: null, startIdx: homeLookupStatMode, armed: false };
+      const startIdx = hit.kind === "form" ? homeLookupFormMode : homeLookupStatMode;
+      gesture = { x, y, axis: null, startIdx, armed: false, kind: hit.kind };
     };
 
     const move = (x, y, ev) => {
@@ -7044,14 +7066,20 @@
       if (!gesture) return;
       const dx = x - gesture.x;
       const startIdx = gesture.startIdx;
+      const kind = gesture.kind;
       const armed = gesture.armed && gesture.axis === "x";
       gesture = null;
       if (!armed || !homeLookupPlayer) return;
+      const maxIdx =
+        kind === "form"
+          ? Math.max(0, homeFormChartSpecs(homeLookupPlayer.position).length - 1)
+          : HOME_LOOKUP_STAT_MODES.length - 1;
       let next = startIdx;
-      if (dx <= -FLING_PX) next = Math.min(HOME_LOOKUP_STAT_MODES.length - 1, startIdx + 1);
+      if (dx <= -FLING_PX) next = Math.min(maxIdx, startIdx + 1);
       else if (dx >= FLING_PX) next = Math.max(0, startIdx - 1);
       if (next === startIdx) return;
-      setHomeLookupStatMode(next);
+      if (kind === "form") setHomeLookupFormMode(next);
+      else setHomeLookupStatMode(next);
     };
 
     const cancel = () => {
@@ -7116,6 +7144,341 @@
     return byPos[pos] || byPos.FWD;
   }
 
+  /** Rolling 6-GW window: end = max(6, currentGW+1), start = end-5. */
+  function homeFormGwWindow(currentGw = HOME && HOME.gw) {
+    const gw = Number(currentGw);
+    const cur = Number.isFinite(gw) && gw > 0 ? gw : 1;
+    const end = Math.max(6, cur + 1);
+    const start = end - 5;
+    const gws = [];
+    for (let g = start; g <= end; g++) gws.push(g);
+    return { start, end, gws };
+  }
+
+  function homeFormChartSpecs(position) {
+    const pos = String(position || "").toUpperCase();
+    const defRule = DEFCON_RULES[pos] || null;
+    const mapped = homePlayerStatSpecs(position).map((s) => {
+      const spec = {
+        id: s.key,
+        label: s.label,
+        decimals: s.decimals,
+        gwKey: s.key === "defCon" ? "defensiveContribution" : s.key,
+      };
+      if (s.key === "defCon" && defRule) {
+        spec.threshold = {
+          kind: "defcon",
+          line: defRule.threshold,
+          legendBase: "Below threshold",
+          legendHit: "DefCon hit",
+        };
+      } else if (s.key === "saves") {
+        // FPL awards 1 pt per 3 saves.
+        spec.threshold = {
+          kind: "saves",
+          line: 3,
+          legendBase: "Under 3 saves",
+          legendHit: "Save point (3+)",
+        };
+      }
+      return spec;
+    });
+    return [{ id: "pts", label: "Pts", decimals: 0, gwKey: "pts" }, ...mapped];
+  }
+
+  function homeFormGwValue(eg, spec) {
+    if (!eg || !spec) return null;
+    if (spec.gwKey === "__gi") {
+      const g = Number(eg.goals);
+      const a = Number(eg.assists);
+      if (!Number.isFinite(g) && !Number.isFinite(a)) return null;
+      return (Number.isFinite(g) ? g : 0) + (Number.isFinite(a) ? a : 0);
+    }
+    const v = Number(eg[spec.gwKey]);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  function homeFormGwThresholdHit(eg, spec) {
+    if (!eg || !spec || !spec.threshold) return false;
+    if (spec.threshold.kind === "defcon") return !!eg.defConHit;
+    if (spec.threshold.kind === "saves") {
+      return Math.floor(Number(eg.saves) || 0) >= 1;
+    }
+    return false;
+  }
+
+  function homeFormSeriesForPlayer(elementId, spec, window = homeFormGwWindow()) {
+    const currentGw = Number(HOME && HOME.gw);
+    return window.gws.map((gw) => {
+      const playedOrCurrent = Number.isFinite(currentGw) ? gw <= currentGw : true;
+      if (!playedOrCurrent) {
+        return { gw, value: null, empty: true, hit: false };
+      }
+      const eg = (liveElementMapForGw(gw) || {})[String(elementId)];
+      if (!eg) {
+        return { gw, value: null, empty: true, hit: false };
+      }
+      return {
+        gw,
+        value: homeFormGwValue(eg, spec),
+        empty: false,
+        hit: homeFormGwThresholdHit(eg, spec),
+      };
+    });
+  }
+
+  /** Per-game average across appearances so far (minutes > 0), not just the chart window. */
+  function homeFormPlayerAverage(elementId, spec) {
+    const currentGw = Number(HOME && HOME.gw);
+    if (!Number.isFinite(currentGw) || currentGw < 1 || !spec) return null;
+    let sum = 0;
+    let n = 0;
+    for (let gw = 1; gw <= currentGw; gw++) {
+      const eg = (liveElementMapForGw(gw) || {})[String(elementId)];
+      if (!eg) continue;
+      const mins = Number(eg.minutes);
+      if (!Number.isFinite(mins) || mins <= 0) continue;
+      const v = homeFormGwValue(eg, spec);
+      if (v == null || !Number.isFinite(v)) continue;
+      sum += v;
+      n += 1;
+    }
+    return n ? sum / n : null;
+  }
+
+  function homeFormFmtAvg(avg, decimals) {
+    if (avg == null || !Number.isFinite(avg)) return "";
+    if (decimals > 0) {
+      const d = decimals > 1 ? decimals : 1;
+      return (Math.round(avg * 10 ** d) / 10 ** d).toFixed(d).replace(/\.0$/, "");
+    }
+    return (Math.round(avg * 10) / 10).toFixed(1).replace(/\.0$/, "");
+  }
+
+  function homeFormNiceMax(values, decimals) {
+    const nums = values.filter((v) => v != null && Number.isFinite(v) && v > 0);
+    const raw = nums.length ? Math.max(...nums) : decimals > 0 ? 1 : 4;
+    if (decimals > 0) {
+      if (raw <= 0.5) return 0.5;
+      if (raw <= 1) return 1;
+      if (raw <= 1.5) return 1.5;
+      if (raw <= 2) return 2;
+      return Math.ceil(raw * 2) / 2;
+    }
+    if (raw <= 2) return 2;
+    if (raw <= 4) return 4;
+    if (raw <= 6) return 6;
+    if (raw <= 10) return 10;
+    return Math.ceil(raw / 5) * 5;
+  }
+
+  function homeFormYTicks(maxVal, decimals) {
+    const ticks = [];
+    const steps = 4;
+    for (let i = 0; i <= steps; i++) {
+      const v = (maxVal * i) / steps;
+      ticks.push({
+        value: v,
+        label: decimals > 0 ? (Math.round(v * 10) / 10).toFixed(decimals > 1 ? decimals : 1).replace(/\.0$/, "") : String(Math.round(v)),
+      });
+    }
+    return ticks;
+  }
+
+  function homeFormChartSvg(series, spec, { accent = "", average = null } = {}) {
+    const W = 320;
+    const H = 148;
+    const padL = 28;
+    const padR = 8;
+    const padT = 12;
+    const padB = 22;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const thrLine = spec.threshold && Number(spec.threshold.line);
+    const avgLine = average != null && Number.isFinite(Number(average)) ? Number(average) : null;
+    let maxVal = homeFormNiceMax(
+      [...series.map((s) => s.value), avgLine],
+      spec.decimals
+    );
+    if (Number.isFinite(thrLine) && thrLine > 0) {
+      maxVal = Math.max(maxVal, thrLine);
+    }
+    const ticks = homeFormYTicks(maxVal, spec.decimals);
+    const n = series.length || 1;
+    const slot = plotW / n;
+    const barW = Math.min(28, Math.max(12, slot * 0.55));
+    const fillAttr = accent ? ` fill="${escapeHtml(accent)}"` : "";
+    const yAt = (val) => padT + plotH - (Math.min(Math.max(0, val), maxVal) / maxVal) * plotH;
+
+    const grid = ticks
+      .map((t) => {
+        const y = yAt(t.value);
+        return `<line class="home-form-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" />
+          <text class="home-form-y-label" x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${escapeHtml(t.label)}</text>`;
+      })
+      .join("");
+
+    const thrY = Number.isFinite(thrLine) && thrLine > 0 ? yAt(thrLine) : null;
+    const thrSvg =
+      thrY != null
+        ? `<line class="home-form-threshold" x1="${padL}" y1="${thrY.toFixed(1)}" x2="${W - padR}" y2="${thrY.toFixed(1)}" />`
+        : "";
+
+    let avgSvg = "";
+    if (avgLine != null && avgLine >= 0) {
+      const y = yAt(avgLine);
+      const label = homeFormFmtAvg(avgLine, spec.decimals);
+      const pillText = `avg ${label}`;
+      const pillW = Math.max(44, 8 + pillText.length * 5.2);
+      const pillH = 15;
+      const pillX = W - padR - pillW;
+      let pillCy = y;
+      // Keep pill clear of the threshold line when they nearly overlap.
+      if (thrY != null && Math.abs(y - thrY) < pillH + 2) {
+        const roomAbove = thrY - padT;
+        const roomBelow = padT + plotH - thrY;
+        pillCy = roomAbove >= roomBelow ? thrY - (pillH / 2 + 5) : thrY + (pillH / 2 + 5);
+        pillCy = Math.max(padT + pillH / 2, Math.min(padT + plotH - pillH / 2, pillCy));
+      }
+      const pillY = pillCy - pillH / 2;
+      const lineEnd = pillX - 5;
+      avgSvg = `<g class="home-form-avg-group">
+        <line class="home-form-avg" x1="${padL}" y1="${y.toFixed(1)}" x2="${lineEnd.toFixed(1)}" y2="${y.toFixed(1)}" />
+        <g class="home-form-avg-pill">
+          <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH}" rx="7.5" ry="7.5" />
+          <text x="${(pillX + pillW / 2).toFixed(1)}" y="${(pillCy + 3.2).toFixed(1)}" text-anchor="middle">${escapeHtml(pillText)}</text>
+        </g>
+      </g>`;
+    }
+
+    const bars = series
+      .map((s, i) => {
+        const cx = padL + slot * i + slot / 2;
+        const label = `<text class="home-form-x-label" x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">GW${s.gw}</text>`;
+        if (s.empty || s.value == null) {
+          const y0 = padT + plotH;
+          return `${label}<rect class="home-form-bar is-empty" x="${(cx - barW / 2).toFixed(1)}" y="${(y0 - 2).toFixed(1)}" width="${barW}" height="2" rx="1" />`;
+        }
+        const h = Math.max(2, (Math.max(0, s.value) / maxVal) * plotH);
+        const y = padT + plotH - h;
+        const titleBits = [
+          spec.decimals > 0 ? Number(s.value).toFixed(spec.decimals) : String(Math.round(s.value)),
+        ];
+        if (s.hit && spec.threshold) titleBits.push(spec.threshold.legendHit);
+        const hitClass = s.hit ? " is-hit" : "";
+        const barFill = s.hit ? "" : fillAttr;
+        return `${label}<rect class="home-form-bar${hitClass}" x="${(cx - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="3"${barFill}><title>${escapeHtml(titleBits.join(" · "))}</title></rect>`;
+      })
+      .join("");
+
+    // Paint order: grid → threshold → bars → avg line/pill on top (z).
+    return `<svg class="home-form-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="${escapeHtml(spec.label)} by gameweek">
+      ${grid}
+      ${thrSvg}
+      <line class="home-form-axis" x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" />
+      ${bars}
+      ${avgSvg}
+    </svg>`;
+  }
+
+  function homeFormLegendHTML(spec, { average = null } = {}) {
+    const items = [];
+    const avgLabel = homeFormFmtAvg(average, spec && spec.decimals);
+    if (avgLabel) {
+      items.push(
+        `<span class="home-form-legend-item is-avg"><span class="home-form-legend-swatch" aria-hidden="true"></span>Avg ${escapeHtml(avgLabel)}</span>`
+      );
+    }
+    if (spec && spec.threshold) {
+      items.push(
+        `<span class="home-form-legend-item is-base"><span class="home-form-legend-swatch" aria-hidden="true"></span>${escapeHtml(spec.threshold.legendBase)}</span>`,
+        `<span class="home-form-legend-item is-hit"><span class="home-form-legend-swatch" aria-hidden="true"></span>${escapeHtml(spec.threshold.legendHit)}</span>`
+      );
+    }
+    if (!items.length) return "";
+    return `<div class="home-form-legend" aria-label="${escapeHtml((spec && spec.label) || "Form")} legend">${items.join("")}</div>`;
+  }
+
+  function homeFormDotsHTML(activeIdx, count) {
+    const dots = Array.from({ length: count }, (_, i) => {
+      const active = i === activeIdx ? " is-active" : "";
+      return `<button type="button" class="home-lookup-dot home-form-dot${active}" data-page="${i}" aria-label="Form stat ${i + 1}" aria-current="${i === activeIdx ? "true" : "false"}"></button>`;
+    }).join("");
+    return `<div class="home-lookup-dots home-form-dots" role="tablist" aria-label="Form stats">${dots}</div>`;
+  }
+
+  function setHomeLookupFormMode(idx, { animate = true } = {}) {
+    if (!homeLookupPlayer) return;
+    const specs = homeFormChartSpecs(homeLookupPlayer.position);
+    const next = Math.max(0, Math.min(specs.length - 1, Number(idx) || 0));
+    if (next === homeLookupFormMode && animate) {
+      refreshHomeFormCardDisplay({ animate: false });
+      return;
+    }
+    homeLookupFormMode = next;
+    refreshHomeFormCardDisplay({ animate });
+  }
+
+  function refreshHomeFormCardDisplay({ animate = false } = {}) {
+    const root = homePlayerDetailRoot();
+    const card = root && root.querySelector(".home-form-card");
+    if (!card || !homeLookupPlayer) return;
+    const specs = homeFormChartSpecs(homeLookupPlayer.position);
+    const spec = specs[homeLookupFormMode] || specs[0];
+    if (!spec) return;
+    card.dataset.formStat = spec.id;
+    const labelEl = card.querySelector(".home-form-stat-label");
+    if (labelEl) labelEl.textContent = spec.label;
+    const chartEl = card.querySelector(".home-form-chart");
+    const legendEl = card.querySelector(".home-form-legend-slot");
+    const paint = () => {
+      const elementId = homeLookupElementId(homeLookupPlayer);
+      const series = homeFormSeriesForPlayer(elementId, spec);
+      const average = homeFormPlayerAverage(elementId, spec);
+      const accent = TEAM_SCATTER_ACCENT[homeLookupPlayer.team] || "";
+      if (chartEl) chartEl.innerHTML = homeFormChartSvg(series, spec, { accent, average });
+      if (legendEl) legendEl.innerHTML = homeFormLegendHTML(spec, { average });
+    };
+    if (chartEl && animate) {
+      chartEl.classList.add("is-swap-out");
+      window.setTimeout(() => {
+        paint();
+        chartEl.classList.remove("is-swap-out");
+        chartEl.classList.add("is-swap-in");
+        window.setTimeout(() => chartEl.classList.remove("is-swap-in"), 180);
+      }, 90);
+    } else {
+      paint();
+    }
+    card.querySelectorAll(".home-form-dot").forEach((dot) => {
+      const on = Number(dot.dataset.page) === homeLookupFormMode;
+      dot.classList.toggle("is-active", on);
+      dot.setAttribute("aria-current", on ? "true" : "false");
+    });
+  }
+
+  function homePlayerFormHTML(row) {
+    if (!row) return "";
+    const specs = homeFormChartSpecs(row.position);
+    if (!specs.length) return "";
+    const idx = Math.max(0, Math.min(specs.length - 1, homeLookupFormMode));
+    homeLookupFormMode = idx;
+    const spec = specs[idx];
+    const elementId = homeLookupElementId(row);
+    const series = homeFormSeriesForPlayer(elementId, spec);
+    const average = homeFormPlayerAverage(elementId, spec);
+    const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+    return `<article class="home-form-card" data-form-stat="${escapeHtml(spec.id)}">
+      <div class="home-form-head">
+        <span class="home-form-kicker">Form</span>
+        <span class="home-form-stat-label">${escapeHtml(spec.label)}</span>
+      </div>
+      <div class="home-form-chart">${homeFormChartSvg(series, spec, { accent, average })}</div>
+      <div class="home-form-legend-slot">${homeFormLegendHTML(spec, { average })}</div>
+      ${homeFormDotsHTML(idx, specs.length)}
+    </article>`;
+  }
+
   function homePlayerProfileHTML(row) {
     if (!row) return "";
     const initials = String(row.name || "?")
@@ -7168,7 +7531,7 @@
     const highlightMaps = fixtureHighlightMaps();
     const rankMaps = fixtureRankMaps();
     const fixtures = planningFixturesForTeam(teamCode, FIXTURE_TT_COUNT);
-    const profile = teamMatchupProfile(teamCode, fixtures, rankMaps);
+    // Outside Matchups: ranks + pink/blue wash only — no score chips, edges, or team info.
     return `<article class="schedule-card home-lookup-schedule-card" data-team="${escapeHtml(teamCode)}">${fixtureCardHTML(
       teamCode,
       highlightMaps,
@@ -7176,9 +7539,11 @@
       {
         fixtures,
         showMeta: false,
-        showTeamInfo: true,
+        showTeamInfo: false,
+        showBadge: false,
+        headName: "Schedule",
         showMatchups: true,
-        matchupProfile: profile,
+        showMatchupEdges: false,
       }
     )}</article>`;
   }
@@ -7289,6 +7654,7 @@
     if (!row) return "";
     return `<div class="home-player-detail">
       <div class="home-player-detail-profile">${homePlayerProfileHTML(row)}</div>
+      <div class="home-player-detail-form">${homePlayerFormHTML(row)}</div>
       <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
       <div class="home-player-detail-owners">${homePlayerOwnersHTML(homeLookupElementId(row))}</div>
     </div>`;
@@ -7309,24 +7675,58 @@
     return root ? root.querySelector(".home-lookup-card") : null;
   }
 
+  function homePlayerXSearchUrl(row) {
+    const name = String((row && row.name) || "").trim();
+    if (!name) return null;
+    const q = `${name} fpl`;
+    return `https://x.com/search?q=${encodeURIComponent(q)}&src=typed_query`;
+  }
+
+  function syncHomePlayerOpenXBtn(row = homeLookupPlayer) {
+    const url = homePlayerXSearchUrl(row);
+    const show = !!url;
+    const label = row && row.name ? `Open X search for ${row.name} fpl` : "Open X search";
+    [el.mobileSheetOpenX, el.homePlayerModalOpenX].forEach((btn) => {
+      if (!btn) return;
+      btn.hidden = !show;
+      if (show) {
+        btn.href = url;
+        btn.dataset.xSearchUrl = url;
+        btn.setAttribute("aria-label", label);
+      } else {
+        btn.removeAttribute("href");
+        delete btn.dataset.xSearchUrl;
+        btn.setAttribute("aria-label", "Open X search");
+      }
+    });
+  }
+
+  function openHomePlayerXSearch(row = homeLookupPlayer) {
+    const url = homePlayerXSearchUrl(row);
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   function closeHomePlayerModal() {
     if (!el.homePlayerModal || el.homePlayerModal.hidden) return;
     el.homePlayerModal.hidden = true;
     el.homePlayerModal.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("home-player-modal-open");
     if (el.homePlayerModalBody) el.homePlayerModalBody.innerHTML = "";
-    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Player";
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Player Details";
+    syncHomePlayerOpenXBtn(null);
   }
 
   function openHomePlayerModal(row) {
     if (!el.homePlayerModal || !el.homePlayerModalBody) return;
     if (el.homePlayerModalTitle) {
-      el.homePlayerModalTitle.textContent = (row && row.name) || "Player";
+      el.homePlayerModalTitle.textContent = "Player Details";
     }
     el.homePlayerModalBody.innerHTML = homePlayerDetailHTML(row);
     el.homePlayerModal.hidden = false;
     el.homePlayerModal.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("home-player-modal-open");
+    syncHomePlayerOpenXBtn(row);
     bindHomeLookupCard();
     bindHomePlayerDetailEvents(el.homePlayerModalBody);
     upgradeNativeTitles(el.homePlayerModalBody);
@@ -7341,19 +7741,21 @@
       if (mobileSheetOpen && mobileSheetKey === "home-player" && el.mobileSheetBody) {
         if (el.mobileSheetTitle) {
           el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
-          el.mobileSheetTitle.textContent = row.name || "Player";
+          el.mobileSheetTitle.textContent = "Player Details";
         }
         el.mobileSheetBody.innerHTML = homePlayerDetailHTML(row);
+        syncHomePlayerOpenXBtn(row);
         bindHomeLookupCard();
         upgradeNativeTitles(el.mobileSheetBody);
         bindOwnershipPhotoFallback(el.mobileSheetBody);
         return;
       }
       openMobileSheet({
-        title: row.name || "Player",
+        title: "Player Details",
         html: homePlayerDetailHTML(row),
         key: "home-player",
       });
+      syncHomePlayerOpenXBtn(row);
       bindHomeLookupCard();
       if (el.mobileSheetBody) {
         bindHomePlayerDetailEvents(el.mobileSheetBody);
@@ -7374,6 +7776,7 @@
     if (clearState && homeLookupPlayer) {
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
+      homeLookupFormMode = 0;
       syncHomeSearchBtn();
     }
   }
@@ -7603,6 +8006,7 @@
   function clearHomePlayerLookup({ rerender = true } = {}) {
     homeLookupPlayer = null;
     homeLookupStatMode = 0;
+    homeLookupFormMode = 0;
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
@@ -7624,6 +8028,7 @@
     }
     homeLookupPlayer = row;
     homeLookupStatMode = 0;
+    homeLookupFormMode = 0;
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
@@ -10596,9 +11001,11 @@
     if (closingKey === "home-player" && homeLookupPlayer) {
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
+      homeLookupFormMode = 0;
       if (homeOwnerPin && homeOwnerPin.type === "element") homeOwnerPin = null;
       syncHomeSearchBtn();
     }
+    if (closingKey === "home-player") syncHomePlayerOpenXBtn(null);
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;
       restoreSheetHost();
@@ -10661,6 +11068,7 @@
       el.mobileSheet.classList.toggle("is-home-search", key === "home-search");
       el.mobileSheet.classList.toggle("is-home-player", key === "home-player");
     }
+    if (key !== "home-player") syncHomePlayerOpenXBtn(null);
     if (el.mobileSheetTitle) {
       if (titleHtml) {
         el.mobileSheetTitle.classList.add("mobile-sheet-title-rich");
@@ -11622,7 +12030,10 @@
     const showMeta = options.showMeta !== false;
     const showTeamInfo = options.showTeamInfo === true;
     const showMatchups = options.showMatchups === true;
-    const matchupProfile = options.matchupProfile || null;
+    // Score chips + per-row swords/shield edges — Matchups page only unless forced.
+    const showMatchupEdges =
+      options.showMatchupEdges != null ? options.showMatchupEdges === true : showMatchups;
+    const matchupProfile = showMatchupEdges ? options.matchupProfile || null : null;
     const teamLabel = TEAM_NAMES[teamCode] || teamCode;
     const scoreSummary = matchupProfile
       ? `<div class="matchup-score-summary" aria-label="Attack advantage ${fmtMatchupScore(matchupProfile.attackScore)} across ${matchupProfile.attackCount} fixtures; defence advantage ${fmtMatchupScore(matchupProfile.defenceScore)} across ${matchupProfile.defenceCount} fixtures">
@@ -11649,7 +12060,8 @@
       if (headActions) header = `<div class="ftt-head ftt-head-sheet">${headActions}</div>`;
     } else {
       const headName = options.headName || teamLabel;
-      header = `<div class="ftt-head">${badgeHTML(teamCode)}<span>${escapeHtml(headName)}</span>
+      const showBadge = options.showBadge !== false;
+      header = `<div class="ftt-head">${showBadge ? badgeHTML(teamCode) : ""}<span>${escapeHtml(headName)}</span>
       ${showMeta ? `<span class="ftt-sub">next ${fixtures.length}</span>` : ""}
       ${headActions}
       </div>`;
@@ -11660,7 +12072,7 @@
     const rows = fixtures.map((fx) => {
       const stats = opponentStatsForFixture(fx);
       const split = fx.ha === "H" ? "away" : "home";
-      const verdict = showMatchups ? matchupVerdictCell(teamCode, fx, rankMaps) : null;
+      const verdict = showMatchupEdges ? matchupVerdictCell(teamCode, fx, rankMaps) : null;
       const cellOpts = { schedulePalette: showMatchups };
       return `<tr>
         <td class="ftt-gw">${fx.gw}</td>
@@ -11685,7 +12097,7 @@
             <th class="ftt-def-start" title="Opponent expected goals conceded rank (venue split)">xGC</th>
             <th title="Opponent goals conceded rank (venue split)">GC</th>
             <th title="Opponent clean sheets rank (venue split)">CS</th>
-            ${showMatchups ? `<th class="ftt-verdict" title="Favorable matchups for ${escapeHtml(teamLabel)}"></th>` : ""}
+            ${showMatchupEdges ? `<th class="ftt-verdict" title="Favorable matchups for ${escapeHtml(teamLabel)}"></th>` : ""}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -11706,11 +12118,13 @@
       options.showMatchups != null
         ? options.showMatchups
         : state.page === "opta" && state.view === "teams";
-    const merged = { ...options, showMatchups };
-    if (showMatchups && !merged.matchupProfile) {
-      const fixtures = merged.fixtures || planningFixturesForTeam(teamCode, FIXTURE_TT_COUNT);
-      merged.matchupProfile = teamMatchupProfile(teamCode, fixtures, rankMaps);
-    }
+    // Tooltips are never on the Matchups page — ranks wash only, no edge chrome.
+    const merged = {
+      ...options,
+      showMatchups,
+      showMatchupEdges: options.showMatchupEdges === true,
+      matchupProfile: null,
+    };
     return fixtureCardHTML(teamCode, highlightMaps, rankMaps, merged);
   }
 
@@ -24436,6 +24850,16 @@
       }
     });
   }
+  document.addEventListener("click", (e) => {
+    const openX = e.target.closest(".home-player-open-x");
+    if (!openX) return;
+    // Let the native <a href> open X (app handoff on mobile). Only synthesize
+    // navigation when href is missing.
+    e.stopPropagation();
+    if (openX.getAttribute("href")) return;
+    e.preventDefault();
+    openHomePlayerXSearch(homeLookupPlayer);
+  });
   document.addEventListener("pointerdown", (e) => {
     const wrap = el.homeDesktopSearch;
     if (!wrap || wrap.hidden) return;
