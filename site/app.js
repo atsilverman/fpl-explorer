@@ -6713,6 +6713,7 @@
   function bindHomeLookupCard() {
     if (homeLookupCardBound) return;
     homeLookupCardBound = true;
+
     document.addEventListener("click", (e) => {
       const dot = e.target.closest(".home-lookup-dot");
       if (!dot) return;
@@ -6723,6 +6724,102 @@
       if (!Number.isFinite(page)) return;
       setHomeLookupStatMode(page);
     });
+
+    // Horizontal fling on the profile card → STATS / RANK·All / RANK·POS.
+    // Cancels mobile-sheet dismiss drag once the gesture locks to X.
+    const SLOP_PX = 14;
+    const FLING_PX = 48;
+    const X_DOMINANCE = 1.15;
+    let gesture = null;
+
+    const cardFromTarget = (target) => {
+      const card = target && target.closest ? target.closest(".home-lookup-card") : null;
+      if (!card) return null;
+      const root = homePlayerDetailRoot();
+      if (!root || !root.contains(card)) return null;
+      return card;
+    };
+
+    const cancelSheetDrag = () => {
+      if (sheetDragStartY == null) return;
+      sheetDragStartY = null;
+      sheetDragDy = 0;
+      sheetDragFromHandle = false;
+      if (el.mobileSheetPanel) {
+        el.mobileSheetPanel.style.transition = "";
+        el.mobileSheetPanel.style.transform = "";
+      }
+    };
+
+    const begin = (x, y, target) => {
+      if (!cardFromTarget(target)) return;
+      if (target.closest("button, a, input, textarea, label")) return;
+      gesture = { x, y, axis: null, startIdx: homeLookupStatMode, armed: false };
+    };
+
+    const move = (x, y, ev) => {
+      if (!gesture) return;
+      const dx = x - gesture.x;
+      const dy = y - gesture.y;
+      if (gesture.axis == null) {
+        if (Math.hypot(dx, dy) < SLOP_PX) return;
+        gesture.axis = Math.abs(dx) > Math.abs(dy) * X_DOMINANCE ? "x" : "y";
+        if (gesture.axis === "y") {
+          gesture = null;
+          return;
+        }
+        gesture.armed = true;
+        cancelSheetDrag();
+      }
+      if (gesture.axis === "x" && ev && ev.cancelable) {
+        ev.preventDefault();
+        cancelSheetDrag();
+      }
+    };
+
+    const end = (x) => {
+      if (!gesture) return;
+      const dx = x - gesture.x;
+      const startIdx = gesture.startIdx;
+      const armed = gesture.armed && gesture.axis === "x";
+      gesture = null;
+      if (!armed || !homeLookupPlayer) return;
+      let next = startIdx;
+      if (dx <= -FLING_PX) next = Math.min(HOME_LOOKUP_STAT_MODES.length - 1, startIdx + 1);
+      else if (dx >= FLING_PX) next = Math.max(0, startIdx - 1);
+      if (next === startIdx) return;
+      setHomeLookupStatMode(next);
+    };
+
+    const cancel = () => {
+      gesture = null;
+    };
+
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1) return;
+        begin(e.touches[0].clientX, e.touches[0].clientY, e.target);
+      },
+      { passive: true }
+    );
+    document.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!gesture || e.touches.length !== 1) return;
+        move(e.touches[0].clientX, e.touches[0].clientY, e);
+      },
+      { passive: false }
+    );
+    document.addEventListener(
+      "touchend",
+      (e) => {
+        const t = e.changedTouches && e.changedTouches[0];
+        end(t ? t.clientX : gesture ? gesture.x : 0);
+      },
+      { passive: true }
+    );
+    document.addEventListener("touchcancel", cancel, { passive: true });
   }
 
   function homePlayerStatSpecs(position) {

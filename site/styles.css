@@ -15050,6 +15050,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   box-shadow: var(--shadow-sm);
   padding: 10px 14px 8px;
   border-left: 3px solid var(--home-lookup-accent, hsl(var(--border)));
+  touch-action: pan-y;
 }
 .home-lookup-top {
   display: flex;
