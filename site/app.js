@@ -1342,6 +1342,7 @@
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
     homeSummarySeg: $("#home-summary-seg"),
+    fontPairSelect: $("#font-pair-select"),
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplManagerSelect: $("#fpl-manager-select"),
@@ -2620,6 +2621,7 @@
       setHomeManagerModalOpen(false);
       homePageEnterArmed = true;
       homeLiveApplyAfterEnter = true;
+      armHomeRowEnter(el.homePage);
       primeOptaHighlightEnter(el.homePage);
       renderHome({ leaveRollsPending: true });
       playPageEnter(el.homePage);
@@ -2735,7 +2737,7 @@
   let homeLivePrefetchStarted = false;
   const HOME_SUMMARY_ROLL_MS = 2800;
   const HOME_VIEW_SWITCH_ROLL_MS = 2400;
-  const HOME_ENTER_CLEAR_MS = HOME_SUMMARY_ROLL_MS + 120;
+  const HOME_ENTER_CLEAR_MS = HOME_SUMMARY_ROLL_MS + 400;
   const HOME_RANK_BORDER_REVEAL_RATIO = 0.18;
   const HOME_SCROLL_TOP_MS = 920;
   let homeScrollAnimToken = 0;
@@ -2766,8 +2768,48 @@
       homePageEnterArmed ||
       (el.homePage &&
         (el.homePage.classList.contains("is-entering") ||
-          el.homePage.classList.contains("is-enter-pending")))
+          el.homePage.classList.contains("is-enter-pending") ||
+          el.homePage.classList.contains("is-home-row-enter")))
     );
+  }
+
+  /** Hold Team/League rows invisible until the Home enter cascade starts. */
+  function armHomeRowEnter(pane = el.homePage) {
+    if (!pane || prefersReducedMotion()) return;
+    pane.classList.add("is-home-row-enter");
+  }
+
+  function clearHomeRowEnter(pane = el.homePage) {
+    if (!pane) return;
+    pane.classList.remove("is-home-row-enter");
+  }
+
+  /** Stamp lockstep stagger indices for Team + League rows (per-tbody ordinals). */
+  function stampHomeRowEnterIndices(pane = el.homePage) {
+    if (!pane) return;
+    const bodies = pane.querySelectorAll(
+      [
+        ".home-squad-table tbody",
+        ".home-standings-table tbody",
+        ".home-transfers-table tbody",
+      ].join(", ")
+    );
+    bodies.forEach((tbody) => {
+      let i = 0;
+      tbody.querySelectorAll(":scope > tr").forEach((row) => {
+        if (row.classList.contains("home-squad-loading-row")) return;
+        const isSquad =
+          row.classList.contains("home-squad-row") || row.classList.contains("home-bench-divider");
+        const isStanding = row.hasAttribute("data-entry");
+        if (!isSquad && !isStanding) return;
+        const idx = Math.min(i, 14);
+        row.style.setProperty("--enter-i", String(idx));
+        row.querySelectorAll(".home-imp-fill").forEach((track) => {
+          track.style.setProperty("--enter-i", String(idx));
+        });
+        i += 1;
+      });
+    });
   }
 
   function flushHomeRenderAfterEnter() {
@@ -3180,7 +3222,7 @@
     const enterBusy = homeIsEnterBusy();
     if (rerender) renderHome({ settleQuiet: true, deferDuringEnter: enterBusy });
     if (!enterBusy) {
-      el.homePage.classList.remove("is-enter-pending", "is-entering");
+      el.homePage.classList.remove("is-enter-pending", "is-entering", "is-home-row-enter");
       finishHomeStatRolls(el.homePage);
     }
   }
@@ -4508,12 +4550,13 @@
         )}><span class="home-transfer-hit-label">Hit</span><span class="home-transfer-hit-cost">−${cost}</span></span>`
       : "";
     const chip = transfers.activeChip === "freehit"
-      ? `<span class="home-transfer-chip">FH</span>`
+      ? `<span class="home-transfer-chip">Free Hit</span>`
       : transfers.activeChip === "wildcard"
-        ? `<span class="home-transfer-chip">WC</span>`
+        ? `<span class="home-transfer-chip">Wildcard</span>`
         : "";
     const multi = moves.length > 1;
-    return `<span class="home-transfers-cell${multi ? " is-multi" : ""}">${moveHTML}${hit}${chip}</span>`;
+    // Chip / hit sit above the player moves (not after).
+    return `<span class="home-transfers-cell${multi ? " is-multi" : ""}">${chip}${hit}${moveHTML}</span>`;
   }
 
   function homeTransfersTableScrollEl() {
@@ -5877,8 +5920,10 @@
       });
     }
 
-    function toggleSquadOwner(tr) {
-      if (!tr || !el.homeSquadTrack.contains(tr)) return;
+    function openHomePlayerLookupFromRow(tr) {
+      const inSquad = !!(el.homeSquadTrack && el.homeSquadTrack.contains(tr));
+      const inFeed = !!(el.homeFeedTrack && el.homeFeedTrack.contains(tr));
+      if (!tr || (!inSquad && !inFeed)) return;
       const eid = Number(tr.dataset.element);
       if (!Number.isFinite(eid)) return;
       if (homeLookupPlayer && homeLookupElementId(homeLookupPlayer) === eid) {
@@ -5914,7 +5959,8 @@
       if (setHomeViewEntry(entry)) homeScrollPageToTop();
     }
 
-    bindHomeRowTap(el.homeSquadTrack, "tr.home-squad-row", toggleSquadOwner);
+    bindHomeRowTap(el.homeSquadTrack, "tr.home-squad-row", openHomePlayerLookupFromRow);
+    bindHomeRowTap(el.homeFeedTrack, "tr.home-feed-row", openHomePlayerLookupFromRow);
     bindHomeRowTap(el.homeStandingsTrack, "tr[data-entry]", toggleStandingOwner);
 
     el.homeSquadTrack.addEventListener("keydown", (e) => {
@@ -5922,8 +5968,18 @@
       const tr = e.target.closest("tr.home-squad-row");
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
-      toggleSquadOwner(tr);
+      openHomePlayerLookupFromRow(tr);
     });
+
+    if (el.homeFeedTrack) {
+      el.homeFeedTrack.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const tr = e.target.closest("tr.home-feed-row");
+        if (!tr || !el.homeFeedTrack.contains(tr)) return;
+        e.preventDefault();
+        openHomePlayerLookupFromRow(tr);
+      });
+    }
 
     el.homeStandingsTrack.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -6134,9 +6190,9 @@
       const inPlay = homeSquadFixtureIsInPlay(f);
       if (inPlay || f.finished) {
         const mins = f.minutes != null ? f.minutes : row.minutes;
-        const dot = inPlay
+        const liveDot = inPlay
           ? `<span class="home-status-dot is-live" aria-label="Live"></span>`
-          : `<span class="home-status-dot is-done" aria-label="Played"></span>`;
+          : "";
         const minsHTML =
           mins != null && Number.isFinite(Number(mins))
             ? statRollSpan(Number(mins), {
@@ -6146,7 +6202,7 @@
                 className: "home-stat-roll home-mp-roll",
               })
             : `${escapeHtml(String(mins ?? "—"))}′`;
-        return `<span class="home-mp-line">${minsHTML}${dot}</span>`;
+        return `<span class="home-mp-line">${minsHTML}${liveDot}</span>`;
       }
       return homeKickoffHTML(f.kickoff || row.kickoff);
     }).join("");
@@ -7275,11 +7331,14 @@
       applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     };
     if (!pane || prefersReducedMotion()) {
+      clearHomeRowEnter(pane);
       finishAll();
       return;
     }
     const token = ++homeEnterMotionToken;
     // Tables, feed, IMP, and rank chrome snap immediately — only summary cards roll briefly.
+    // Team/League row cascade is CSS-driven via is-home-row-enter + is-entering.
+    stampHomeRowEnterIndices(pane);
     finishHomeStatRolls(pane, { summary: false, tables: true });
     animateHomeImpBars(pane, { animate: false });
     finishHighlightSatEnter(pane);
@@ -7295,10 +7354,12 @@
     }
     const rollMs = Math.max(400, Number(duration) || HOME_SUMMARY_ROLL_MS);
     summaryRolls.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
+    // Staggered digit drums can finish after the base roll window — wait for
+    // the slowest column, then force plain-text settle (no sticky half-digits).
     window.setTimeout(() => {
       if (token !== homeEnterMotionToken) return;
       summaryRolls.forEach(finishStatRollNode);
-    }, rollMs + 48);
+    }, rollMs + 520);
   }
 
   function renderHomeUnlinked() {
@@ -18011,7 +18072,8 @@
     const impactHTML = liveFeedImpactHTML(ev, { homeEmbed: compact && homeEmbed });
     const rowCls = compact ? "live-feed-row home-feed-row" : "live-feed-row";
     if (compact && homeEmbed) {
-      return `<tr class="${rowCls}" style="--enter-i:${enterI}" data-element="${escapeHtml(String(ev.eid ?? ""))}" data-player-code="${escapeHtml(String(ev.player.code || ""))}">
+      const name = (ev.player && ev.player.name) || "this player";
+      return `<tr class="${rowCls}" style="--enter-i:${enterI}" data-element="${escapeHtml(String(ev.eid ?? ""))}" data-player-code="${escapeHtml(String(ev.player.code || ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(name))}">
       ${homeFeedPlayerCellHTML(ev.player, ev.pos)}
       <td class="home-col-feed-event"><span class="home-feed-event-label">${escapeHtml(ev.label)}</span></td>
       <td class="home-col-feed-impact col-num ${impactCls}">${impactHTML}</td>
@@ -19474,11 +19536,22 @@
       return { cls, style: "" };
     }
     const t = ownershipDeltaIntensity(delta);
-    const a = (0.16 + t * 0.84).toFixed(3);
-    // Pale washes keep hue as type color; solid pills use white type.
-    const fg = t < 0.38
-      ? (cls === "is-up" ? "hsl(217 72% 36%)" : "hsl(24 78% 34%)")
-      : "#fff";
+    // Light: pale wash + dark type for weak movers; solid + white for strong.
+    // Dark: soft tinted fill + bright type (dark-on-dark washes are unreadable).
+    const dark = themePrefersDark();
+    let a;
+    let fg;
+    if (dark) {
+      a = (0.32 + t * 0.52).toFixed(3);
+      fg = t < 0.42
+        ? (cls === "is-up" ? "hsl(210 95% 78%)" : "hsl(28 95% 72%)")
+        : "#fff";
+    } else {
+      a = (0.16 + t * 0.84).toFixed(3);
+      fg = t < 0.38
+        ? (cls === "is-up" ? "hsl(217 72% 36%)" : "hsl(24 78% 34%)")
+        : "#fff";
+    }
     return {
       cls,
       style: ` style="--own-delta-a:${a};--own-delta-fg:${fg}"`,
@@ -21939,7 +22012,8 @@
     wheel.className = "stat-roll-digit";
     const strip = document.createElement("span");
     strip.className = "stat-roll-strip";
-    for (let cycle = 0; cycle < 2; cycle++) {
+    // Three cycles (0–9 × 3) so staggered spins never run past the strip.
+    for (let cycle = 0; cycle < 3; cycle++) {
       for (let d = 0; d <= 9; d++) {
         const cell = document.createElement("span");
         cell.textContent = String(d);
@@ -21947,54 +22021,98 @@
       }
     }
     wheel.appendChild(strip);
-    const h = () => {
-      const cell = strip.firstElementChild;
-      if (cell) {
-        const rect = cell.getBoundingClientRect();
-        if (rect.height > 0) return rect.height;
-      }
-      const fs = parseFloat(getComputedStyle(wheel).fontSize);
-      return fs > 0 ? fs : 16;
-    };
-    const setDigit = (digit, extraRows) => {
-      const row = Number(digit) + (extraRows || 0) * 10;
-      strip.style.transform = `translateY(${-row * h()}px)`;
-    };
-    setDigit(fromDigit);
     wheel._statRollStrip = strip;
-    wheel._statRollSet = setDigit;
-    wheel._statRollHeight = h;
+    wheel._statRollCycles = 3;
+    wheel._statRollFrom = String(fromDigit);
+    wheel._statRollTo = String(toDigit);
+    // Initial pose — pixel metrics locked once mounted (see lockStatRollWheelMetrics).
+    strip.style.transform = `translate3d(0, ${-Number(fromDigit) * 100}%, 0)`;
     return wheel;
   }
 
-  function animateStatRollDigitWheel(wheel, fromDigit, toDigit, duration) {
+  /** Pin drum geometry to the wheel's live font-size so transforms land on digit centers. */
+  function lockStatRollWheelMetrics(wheel) {
+    if (!wheel || wheel._statRollRowH > 0) return wheel && wheel._statRollRowH;
+    const strip = wheel._statRollStrip;
+    if (!strip) return 0;
+    const local = parseFloat(getComputedStyle(wheel).fontSize);
+    const rowH = Math.max(8, Math.round(local > 0 ? local : 16));
+    wheel.style.height = `${rowH}px`;
+    strip.querySelectorAll(":scope > span").forEach((cell) => {
+      cell.style.height = `${rowH}px`;
+      cell.style.lineHeight = `${rowH}px`;
+    });
+    wheel._statRollRowH = rowH;
+    return rowH;
+  }
+
+  function animateStatRollDigitWheel(wheel, fromDigit, toDigit, duration, opts = {}) {
     const strip = wheel._statRollStrip;
     if (!strip) return;
+    const fromIdx = Number(fromDigit);
+    const toIdxBase = Number(toDigit);
+    if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdxBase)) return;
+    // Unchanged column — leave static (independent of neighbors).
+    if (fromIdx === toIdxBase && !(opts.extraSpins > 0)) return;
+
     if (wheel._statRollSettleTimer) {
       clearTimeout(wheel._statRollSettleTimer);
       wheel._statRollSettleTimer = 0;
     }
-    void wheel.offsetHeight;
-    const h = wheel._statRollHeight();
-    let fromIdx = Number(fromDigit);
-    let toIdx = Number(toDigit);
-    if (toIdx < fromIdx) toIdx += 10;
-    strip.style.transition = "none";
-    strip.style.transform = `translateY(${-fromIdx * h}px)`;
-    void strip.offsetHeight;
-    strip.style.transition = `transform ${duration}ms cubic-bezier(0.16, 1, 0.3, 1)`;
-    strip.style.transform = `translateY(${-toIdx * h}px)`;
+    if (wheel._statRollStartTimer) {
+      clearTimeout(wheel._statRollStartTimer);
+      wheel._statRollStartTimer = 0;
+    }
+
+    const delay = Math.max(0, Number(opts.delay) || 0);
+    const cycles = wheel._statRollCycles || 3;
+    const maxIdx = cycles * 10 - 1;
+    const h = lockStatRollWheelMetrics(wheel);
+    if (!(h > 0)) return;
+
+    let toIdx = toIdxBase;
+    // Always travel forward on the strip so motion reads as a real drum.
+    if (toIdx <= fromIdx) toIdx += 10;
+    const room = Math.floor((maxIdx - toIdx) / 10);
+    const extraSpins = Math.max(0, Math.min(room, Number(opts.extraSpins) || 0));
+    toIdx += extraSpins * 10;
+    if (toIdx > maxIdx) toIdx = toIdxBase + (toIdxBase <= fromIdx ? 10 : 0);
+
+    const start = () => {
+      strip.style.transition = "none";
+      strip.style.transform = `translate3d(0, ${-fromIdx * h}px, 0)`;
+      void strip.offsetHeight;
+      strip.classList.add("is-rolling");
+      // Ease-out that actually reaches the end (avoid sticky mid-frame looks).
+      strip.style.transition =
+        `transform ${duration}ms cubic-bezier(0.15, 0.85, 0.25, 1)`;
+      strip.style.transform = `translate3d(0, ${-toIdx * h}px, 0)`;
+    };
+
     const settle = () => {
       wheel._statRollSettleTimer = 0;
-      const hh = wheel._statRollHeight() || h;
+      strip.classList.remove("is-rolling");
       strip.style.transition = "none";
-      strip.style.transform = `translateY(${-Number(toDigit) * hh}px)`;
+      // Snap to the final digit center using the locked row height.
+      strip.style.transform = `translate3d(0, ${-toIdxBase * h}px, 0)`;
+      strip.style.willChange = "auto";
     };
+
+    strip.style.willChange = "transform";
+    if (delay > 0) {
+      wheel._statRollStartTimer = window.setTimeout(() => {
+        wheel._statRollStartTimer = 0;
+        start();
+      }, delay);
+    } else {
+      start();
+    }
+
     strip.addEventListener("transitionend", (evt) => {
       if (evt.propertyName !== "transform") return;
       settle();
     }, { once: true });
-    wheel._statRollSettleTimer = window.setTimeout(settle, duration + 60);
+    wheel._statRollSettleTimer = window.setTimeout(settle, delay + duration + 100);
   }
 
   function renderStatRollNode(node, fromVal, toVal, opts = {}) {
@@ -22029,6 +22147,22 @@
   }
 
   function finishStatRollNode(node) {
+    if (!node) return;
+    if (node._statRollFinishTimer) {
+      clearTimeout(node._statRollFinishTimer);
+      node._statRollFinishTimer = 0;
+    }
+    // Cancel pending drum timers so late settles don't fight the snap.
+    node.querySelectorAll(".stat-roll-digit").forEach((wheel) => {
+      if (wheel._statRollSettleTimer) {
+        clearTimeout(wheel._statRollSettleTimer);
+        wheel._statRollSettleTimer = 0;
+      }
+      if (wheel._statRollStartTimer) {
+        clearTimeout(wheel._statRollStartTimer);
+        wheel._statRollStartTimer = 0;
+      }
+    });
     const to = Number(node.dataset.countTo);
     const decimals = Number(node.dataset.countDecimals) || 0;
     const signed = node.dataset.countSigned === "1";
@@ -22038,11 +22172,29 @@
       node.textContent = "—";
       return;
     }
-    // Plain text settle — avoids frozen half-digits when a second render or
-    // enter-clear interrupts CSS transform transitions on digit strips.
-    node.textContent = grouped
-      ? `${Math.round(to).toLocaleString()}${suffix}`
-      : `${statRollFormat(to, decimals, signed)}${suffix}`;
+    // Keep the digit-drum layout — plain textContent collapses width because
+    // parent letter-spacing (-0.03em) only applies after drums become a string.
+    const snapWheels = (wheels) => {
+      wheels.forEach((wheel) => {
+        const toCh = wheel._statRollTo;
+        const strip = wheel._statRollStrip;
+        if (!strip || toCh == null) return;
+        const h = wheel._statRollRowH || lockStatRollWheelMetrics(wheel);
+        strip.classList.remove("is-rolling");
+        strip.style.transition = "none";
+        strip.style.willChange = "auto";
+        if (h > 0) {
+          strip.style.transform = `translate3d(0, ${-Number(toCh) * h}px, 0)`;
+        }
+      });
+    };
+    let wheels = [...node.querySelectorAll(".stat-roll-digit")];
+    if (!wheels.length) {
+      renderStatRollNode(node, to, to, { decimals, signed, suffix, grouped });
+      wheels = [...node.querySelectorAll(".stat-roll-digit")];
+      wheels.forEach((wheel) => lockStatRollWheelMetrics(wheel));
+    }
+    snapWheels(wheels);
   }
 
   function animateStatRollNode(node, opts = {}) {
@@ -22056,18 +22208,39 @@
     const signed = node.dataset.countSigned === "1";
     const suffix = node.dataset.countSuffix || "";
     const grouped = node.dataset.countGrouped === "1";
-    const duration = opts.duration != null ? opts.duration : 520;
+    const baseDuration = opts.duration != null ? opts.duration : 520;
+    if (node._statRollFinishTimer) {
+      clearTimeout(node._statRollFinishTimer);
+      node._statRollFinishTimer = 0;
+    }
     renderStatRollNode(node, from, to, { decimals, signed, suffix, grouped });
-    const chars = grouped
-      ? statRollAlignGroupedChars(from, to)
-      : statRollAlignChars(from, to, decimals, signed);
-    let digitIdx = 0;
-    chars.forEach(({ from: fromCh, to: toCh }) => {
-      if (!(toCh >= "0" && toCh <= "9" && fromCh >= "0" && fromCh <= "9")) return;
-      const wheel = node.querySelectorAll(".stat-roll-digit")[digitIdx];
-      digitIdx += 1;
-      if (wheel) animateStatRollDigitWheel(wheel, fromCh, toCh, duration);
+    const wheels = [...node.querySelectorAll(".stat-roll-digit")];
+    const n = wheels.length;
+    if (!n) return;
+    // Lock metrics after mount so large hero fonts don't step by root 16px.
+    wheels.forEach((wheel) => lockStatRollWheelMetrics(wheel));
+    // Rightmost digit (ones) spins longest and settles last — reads as independent drums.
+    const delayStep = Math.min(36, Math.max(14, Math.round(baseDuration / 80)));
+    let maxEnd = baseDuration;
+    wheels.forEach((wheel, i) => {
+      const fromRight = n - 1 - i;
+      const fromCh = wheel._statRollFrom;
+      const toCh = wheel._statRollTo;
+      if (fromCh == null || toCh == null) return;
+      const delay = fromRight * delayStep;
+      const duration = Math.max(
+        Math.round(baseDuration * 0.55),
+        baseDuration - delay + fromRight * Math.round(delayStep * 1.35)
+      );
+      maxEnd = Math.max(maxEnd, delay + duration);
+      const extraSpins = fromRight >= 4 ? 1 : 0;
+      animateStatRollDigitWheel(wheel, fromCh, toCh, duration, { delay, extraSpins });
     });
+    // Guaranteed settle — snap drums in place (no plain-text width jump).
+    node._statRollFinishTimer = window.setTimeout(() => {
+      node._statRollFinishTimer = 0;
+      if (node.querySelector(".stat-roll-digit")) finishStatRollNode(node);
+    }, maxEnd + 120);
   }
 
   function mountAndAnimateStatRolls(root, opts = {}) {
@@ -22192,6 +22365,7 @@
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
         homePageEnterArmed = false;
+        clearHomeRowEnter(pane);
         finishHighlightSatEnter(pane);
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
@@ -22278,14 +22452,7 @@
       pane.querySelectorAll(".home-tables-grid > .home-panel").forEach((node) => {
         node.style.setProperty("--enter-i", "1");
       });
-      pane.querySelectorAll(".home-squad-table tbody, .home-standings-table tbody").forEach((tbody) => {
-        tbody.querySelectorAll(":scope > tr").forEach((row, i) => {
-          row.style.setProperty("--enter-i", String(Math.min(i, 12)));
-          row.querySelectorAll(".home-imp-fill").forEach((track) => {
-            track.style.setProperty("--enter-i", String(Math.min(i, 12)));
-          });
-        });
-      });
+      stampHomeRowEnterIndices(pane);
     }
     if (marketsEnter) {
       pane.querySelectorAll(".markets-divider").forEach((node, i) => {
@@ -22353,6 +22520,7 @@
         pane._enterClear = setTimeout(() => {
           if (homeEnter) {
             homeEnterMotionToken += 1;
+            clearHomeRowEnter(pane);
             finishHighlightSatEnter(pane);
             finishHomeStatRolls(pane);
             // Snap IMP before dropping is-entering — changing enter CSS used to
@@ -22585,6 +22753,7 @@
   function setPage(page) {
     if (state.page === "home" && page !== "home") {
       homePageEnterArmed = false;
+      clearHomeRowEnter(el.homePage);
       flushHomeRenderAfterEnter();
     }
     page = normalizeStoredPage(page);
@@ -22798,6 +22967,7 @@
     } else if (page === "home") {
       homePageEnterArmed = true;
       homeLiveApplyAfterEnter = true;
+      armHomeRowEnter(el.homePage);
       syncHomeLivePolling({ skipImmediate: false });
       renderHome({ leaveRollsPending: true });
     } else if (page === "live") {
@@ -24713,7 +24883,7 @@
     if (typeof syncSegThumb === "function") syncSegThumb(el.themeSeg, { animate: false });
   }
 
-  function applyTheme(mode) {
+  function applyTheme(mode, { repaint = false } = {}) {
     const next = THEME_ORDER.includes(mode) ? mode : "system";
     if (next === "system") {
       document.documentElement.removeAttribute("data-theme");
@@ -24723,13 +24893,19 @@
     localStorage.setItem(THEME_KEY, next);
     syncThemeCycleButton(next);
     syncThemeSeg(next);
+    // Ownership Δ pills bake light/dark contrast into inline vars — refresh.
+    if (repaint) {
+      if (state.page === "home") renderHome({ settleQuiet: true, deferDuringEnter: true });
+      else if (state.page === "ownership") renderOwnership();
+      else if (state.page === "prices") renderPrices();
+    }
   }
 
   if (el.themeCycleBtn) {
     el.themeCycleBtn.addEventListener("click", () => {
       const current = currentThemeMode();
       const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
-      applyTheme(next);
+      applyTheme(next, { repaint: true });
     });
   }
 
@@ -24737,7 +24913,7 @@
     el.themeSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-theme-mode]");
       if (!btn || !el.themeSeg.contains(btn)) return;
-      applyTheme(btn.dataset.themeMode || "system");
+      applyTheme(btn.dataset.themeMode || "system", { repaint: true });
       btn.blur();
     });
   }
@@ -24798,6 +24974,69 @@
   }
 
   syncHomeSummaryLayout(homeSummaryLayout());
+
+  const FONT_PAIR_KEY = "fpl-explorer-font-pair-v3";
+  const FONT_PAIR_IDS = ["manrope", "jakarta", "dm", "source", "outfit", "plex", "figtree"];
+  const FONT_PAIR_GOOGLE = {
+    jakarta: "family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700",
+    dm: "family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600",
+    source: "family=Source+Code+Pro:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700",
+    outfit: "family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700",
+    plex: "family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700",
+    figtree: "family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600",
+  };
+
+  function currentFontPair() {
+    try {
+      const stored = localStorage.getItem(FONT_PAIR_KEY);
+      return FONT_PAIR_IDS.includes(stored) ? stored : "manrope";
+    } catch {
+      return "manrope";
+    }
+  }
+
+  function ensureFontPairStylesheet(pair) {
+    let link = document.getElementById("font-pair-link");
+    if (!link) {
+      link = document.createElement("link");
+      link.id = "font-pair-link";
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    if (!pair || pair === "manrope" || !FONT_PAIR_GOOGLE[pair]) {
+      link.removeAttribute("href");
+      link.disabled = true;
+      return;
+    }
+    const href = `https://fonts.googleapis.com/css2?${FONT_PAIR_GOOGLE[pair]}&display=swap`;
+    if (link.getAttribute("href") !== href) link.href = href;
+    link.disabled = false;
+  }
+
+  function applyFontPair(pair, { persist = true } = {}) {
+    const next = FONT_PAIR_IDS.includes(pair) ? pair : "manrope";
+    const root = document.documentElement;
+    if (next === "manrope") root.removeAttribute("data-font-pair");
+    else root.setAttribute("data-font-pair", next);
+    ensureFontPairStylesheet(next);
+    if (el.fontPairSelect && el.fontPairSelect.value !== next) {
+      el.fontPairSelect.value = next;
+    }
+    if (persist) {
+      try {
+        localStorage.setItem(FONT_PAIR_KEY, next);
+      } catch {
+        /* private browsing */
+      }
+    }
+  }
+
+  if (el.fontPairSelect) {
+    applyFontPair(currentFontPair(), { persist: false });
+    el.fontPairSelect.addEventListener("change", () => {
+      applyFontPair(el.fontPairSelect.value || "manrope");
+    });
+  }
 
   // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
   try {
@@ -25110,11 +25349,12 @@
       // BFCache restore can leave enter classes mid-flight; clear so we don't
       // resume a half-finished cascade when the user scrolls.
       document.querySelectorAll(".page-pane.is-entering, .page-pane.is-enter-pending, .page-pane.is-hl-entering, .page-pane.is-live-entering").forEach((pane) => {
-        pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering", "is-live-entering");
+        pane.classList.remove("is-entering", "is-enter-pending", "is-hl-entering", "is-live-entering", "is-home-row-enter");
       });
       if (el.homePage) {
         homePageEnterArmed = false;
         homeEnterMotionToken += 1;
+        clearHomeRowEnter(el.homePage);
         finishHighlightSatEnter(el.homePage);
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });

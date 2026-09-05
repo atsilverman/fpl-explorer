@@ -74,7 +74,35 @@
 
   --mono: "Fira Code", ui-monospace, monospace;
   --sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+}
 
+/* Preferences font pairs — clean / crisp / modern UI + tabular mono. */
+html[data-font-pair="jakarta"] {
+  --sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+html[data-font-pair="dm"] {
+  --sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+html[data-font-pair="source"] {
+  --sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Source Code Pro", ui-monospace, monospace;
+}
+html[data-font-pair="outfit"] {
+  --sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Fira Code", ui-monospace, monospace;
+}
+html[data-font-pair="plex"] {
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+html[data-font-pair="figtree"] {
+  --sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
   /* Compatibility shim — existing selectors keep working */
   --bg: hsl(var(--background));
   --bg-panel: hsl(var(--card));
@@ -1190,16 +1218,16 @@ html.has-gw-live[data-theme="dark"][data-page="live"] #page-tray-btn {
   margin: 2px 0 0;
 }
 .font-pair-select {
-  min-width: 0;
-  max-width: 220px;
-  height: 28px;
-  padding: 0 8px;
+  width: 100%;
+  max-width: none;
+  height: 32px;
+  padding: 0 10px;
   color: var(--text);
   background: hsl(var(--background));
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -3146,10 +3174,35 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 #home-page.is-entering .home-view-banner {
   animation: none !important;
 }
-#home-page.is-entering .home-squad-table tbody tr > *,
-#home-page.is-entering .home-standings-table tbody tr > *,
+/* Feed stays put — Team + League rows cascade below. */
 #home-page.is-entering .home-feed-table tbody tr > * {
   animation: none !important;
+}
+
+/* Home Team / League: hold rows invisible while enter is armed, then cascade
+   cell content together (never animate <tr> — WebKit drops table layout). */
+@keyframes home-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+#home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-squad-row > *,
+#home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-bench-divider > *,
+#home-page.is-home-row-enter:not(.is-entering) .home-standings-table tbody tr[data-entry] > *,
+#home-page.is-home-row-enter:not(.is-entering) .home-transfers-table tbody tr[data-entry] > * {
+  opacity: 0;
+}
+#home-page.is-entering.is-home-row-enter .home-squad-table tbody tr.home-squad-row > *,
+#home-page.is-entering.is-home-row-enter .home-squad-table tbody tr.home-bench-divider > *,
+#home-page.is-entering.is-home-row-enter .home-standings-table tbody tr[data-entry] > *,
+#home-page.is-entering.is-home-row-enter .home-transfers-table tbody tr[data-entry] > * {
+  animation: home-row-enter 0.52s var(--ease-out) both;
+  animation-delay: calc(0.38s + (min(var(--enter-i, 0), 14) * 0.046s));
 }
 
 /* Desktop Home: no IMP bar / track / rank-delta motion (summary odometer still rolls). */
@@ -3211,8 +3264,15 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #home-page.is-entering .home-tables-grid > .home-panel,
   #home-page.is-entering .home-squad-table tbody tr > *,
   #home-page.is-entering .home-standings-table tbody tr > *,
+  #home-page.is-entering .home-transfers-table tbody tr > *,
   #home-page.is-entering .home-feed-table tbody tr > * {
     animation: none;
+  }
+  #home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-squad-row > *,
+  #home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-bench-divider > *,
+  #home-page.is-home-row-enter:not(.is-entering) .home-standings-table tbody tr[data-entry] > *,
+  #home-page.is-home-row-enter:not(.is-entering) .home-transfers-table tbody tr[data-entry] > * {
+    opacity: 1;
   }
 }
 
@@ -4900,6 +4960,8 @@ tbody tr.row-selected td:first-child {
   vertical-align: baseline;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  /* Don't inherit parent tracking — flex digits vs plain text would jump width. */
+  letter-spacing: 0;
 }
 .stat-roll-digit {
   display: inline-block;
@@ -4907,10 +4969,24 @@ tbody tr.row-selected td:first-child {
   overflow: hidden;
   vertical-align: baseline;
   line-height: 1;
+  /* Isolate each drum so adjacent strips don't visually bleed. */
+  contain: paint;
+  isolation: isolate;
+  width: 1ch;
+  min-width: 1ch;
+  text-align: center;
+}
+.stat-roll-static {
+  display: inline-block;
+  letter-spacing: 0;
 }
 .stat-roll-strip {
   display: flex;
   flex-direction: column;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+.stat-roll-strip.is-rolling {
   will-change: transform;
 }
 .stat-roll-strip > span {
@@ -4919,9 +4995,7 @@ tbody tr.row-selected td:first-child {
   justify-content: center;
   height: 1em;
   line-height: 1;
-}
-.stat-roll-static {
-  display: inline-block;
+  flex: none;
 }
 .stat-roll-suffix {
   margin-left: 0;
@@ -5003,6 +5077,29 @@ tbody tr.row-selected td:first-child {
 .ownership-delta.is-down {
   background: hsl(var(--negative) / var(--own-delta-a, 1));
   color: var(--own-delta-fg, #fff);
+}
+/* Dark fallback when --own-delta-fg wasn't stamped (pre-paint / flat theme flip). */
+:root[data-theme="dark"] .data-delta.is-up,
+:root[data-theme="dark"] .ownership-delta.is-up,
+:root:not([data-theme="light"]) .data-delta.is-up,
+:root:not([data-theme="light"]) .ownership-delta.is-up {
+  color: var(--own-delta-fg, hsl(210 95% 78%));
+}
+:root[data-theme="dark"] .data-delta.is-down,
+:root[data-theme="dark"] .ownership-delta.is-down,
+:root:not([data-theme="light"]) .data-delta.is-down,
+:root:not([data-theme="light"]) .ownership-delta.is-down {
+  color: var(--own-delta-fg, hsl(28 95% 72%));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .data-delta.is-up,
+  :root:not([data-theme="light"]) .ownership-delta.is-up {
+    color: var(--own-delta-fg, hsl(210 95% 78%));
+  }
+  :root:not([data-theme="light"]) .data-delta.is-down,
+  :root:not([data-theme="light"]) .ownership-delta.is-down {
+    color: var(--own-delta-fg, hsl(28 95% 72%));
+  }
 }
 .data-delta.is-flat,
 .data-delta.is-quiet,
@@ -9819,11 +9916,6 @@ html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-standings-tab
   --home-row-bg: hsl(var(--card));
   background: hsl(var(--card));
 }
-html[data-pointer="coarse"] .home-squad-table tbody tr.home-squad-row:nth-child(even):hover > td,
-html[data-pointer="coarse"] .home-standings-table tbody tr[data-entry]:nth-child(even):hover > td {
-  --home-row-bg: color-mix(in srgb, hsl(var(--foreground)) 2.5%, hsl(var(--card)));
-  background: var(--home-row-bg);
-}
 html[data-pointer="coarse"] .home-squad-row.is-owner-pinned:hover > td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.16);
   background: var(--home-row-bg);
@@ -14505,6 +14597,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-summary-hero-value .stat-roll-digit {
   font: inherit;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 .home-summary-hero-delta {
   margin: 10px 0 0;
@@ -15348,6 +15441,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-rank-num .stat-roll {
   line-height: 1;
   vertical-align: baseline;
+  letter-spacing: 0;
 }
 .home-stat-value .stat-roll-digit,
 .home-rank-num .stat-roll-digit {
@@ -15792,13 +15886,11 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   font-size: 12px;
   padding: 12px 8px;
 }
-html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
-  cursor: default;
+#home-feed-panel .home-feed-table tbody tr.home-feed-row {
+  cursor: pointer;
 }
-@media (hover: hover) and (pointer: fine) {
-  html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
-    cursor: pointer;
-  }
+html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
+  cursor: pointer;
 }
 @container home-standings (max-width: 900px) {
   .home-captains-table .home-col-vice {
@@ -16006,8 +16098,9 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     overflow-y: auto;
     min-height: 0;
   }
+  #home-standings-panel .home-transfers-table tbody tr[data-entry] > td,
   #home-standings-panel .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
-    vertical-align: middle;
+    vertical-align: top;
   }
   #home-squad-panel .home-squad-table tbody tr.home-bench-divider {
     height: auto;
@@ -16015,6 +16108,10 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   #home-squad-panel .home-squad-table tbody tr.home-squad-row > td,
   #home-standings-panel .home-standings-table tbody tr[data-entry] > td {
     vertical-align: middle;
+  }
+  /* Transfers: top-align so multi-move stacks don't sit centered vs rank/manager. */
+  #home-standings-panel .home-transfers-table tbody tr[data-entry] > td {
+    vertical-align: top;
   }
   #home-squad-panel .home-squad-dots,
   #home-standings-panel .home-standings-dots {
@@ -16880,7 +16977,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
    keep the group centered under the OPP / fixture header. */
 .home-opp-line {
   --home-opp-crest: 22px;
-  --home-opp-ha: 11px;
+  --home-opp-ha: 16px;
   --home-opp-gap: 3px;
   display: inline-flex;
   align-items: center;
@@ -17277,8 +17374,16 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   white-space: normal;
   width: auto;
 }
+.home-transfers-table tbody tr[data-entry] > td,
 .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
-  vertical-align: middle;
+  vertical-align: top;
+}
+#home-standings-panel .home-transfers-table tbody tr[data-entry] > td,
+#home-standings-panel .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
+  vertical-align: top;
+}
+.home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
+  padding-top: 8px;
 }
 .home-transfers-status {
   margin: 0 0 8px;
@@ -17354,7 +17459,7 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 2px;
+  margin: 0;
   padding: 1px 5px 1px 4px;
   border-radius: 4px;
   font-size: 9.5px;
@@ -17400,9 +17505,10 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
 }
 .home-captain-pick .home-crest-captain,
 .home-captain-pick .home-crest-fallback.home-crest-captain {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex: 0 0 auto;
 }
 .home-captains-table th.home-col-captain,
 .home-captains-table th.home-col-vice {
@@ -17874,7 +17980,7 @@ html[data-page="home"] #subtoolbar {
 }
 .home-opp-line {
   --home-opp-crest: 20px;
-  --home-opp-ha: 10px;
+  --home-opp-ha: 15px;
 }
 .home-kickoff {
   display: inline-flex;
@@ -17908,12 +18014,10 @@ html[data-page="home"] #subtoolbar {
   border-radius: 5px;
 }
 
-/* Subtle zebra — quiet grey lift only. Hover uses a blue wash so it reads
-   clearly apart from both base and even rows. --home-row-bg feeds IMP ticks. */
-.home-squad-table tbody tr.home-squad-row:nth-child(even) > td,
-.home-standings-table tbody tr[data-entry]:nth-child(even) > td {
-  --home-row-bg: color-mix(in srgb, hsl(var(--foreground)) 2.5%, hsl(var(--card)));
-  background: var(--home-row-bg);
+/* Flat rows (no zebra / no hairline dividers). Hover keeps the blue wash; --home-row-bg feeds IMP ticks. */
+.home-squad-table tbody tr.home-squad-row > td,
+.home-standings-table tbody tr[data-entry] > td {
+  border-bottom: none;
 }
 @media (hover: hover) and (pointer: fine) {
   #home-page:not(.is-scroll-interaction) .home-squad-table tbody tr.home-squad-row:hover > td,
@@ -17977,6 +18081,10 @@ html[data-page="home"] #subtoolbar {
 }
 .home-standings-table tbody tr[data-entry] > td {
   vertical-align: middle;
+}
+#home-standings-panel .home-transfers-table tbody tr[data-entry] > td,
+.home-transfers-table tbody tr[data-entry] > td {
+  vertical-align: top;
 }
 .home-standings-table tr[hidden] {
   display: none;

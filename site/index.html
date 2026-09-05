@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=990" />
+<link id="font-pair-link" rel="stylesheet" href="" disabled />
+<link rel="stylesheet" href="styles.css?v=1004" />
 <script>
 (() => {
   try {
@@ -15,6 +16,27 @@
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
     try { localStorage.removeItem("fpl-explorer-accent"); } catch (_) {}
+    // Font pairs — keep in sync with app.js FONT_PAIR_IDS / FONT_PAIR_GOOGLE.
+    const FONT_KEY = "fpl-explorer-font-pair-v3";
+    const FONT_GOOGLE = {
+      jakarta: "family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700",
+      dm: "family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600",
+      source: "family=Source+Code+Pro:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700",
+      outfit: "family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700",
+      plex: "family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700",
+      figtree: "family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600",
+    };
+    try {
+      const pair = localStorage.getItem(FONT_KEY) || "manrope";
+      if (pair && pair !== "manrope" && FONT_GOOGLE[pair]) {
+        root.setAttribute("data-font-pair", pair);
+        const link = document.getElementById("font-pair-link");
+        if (link) {
+          link.href = `https://fonts.googleapis.com/css2?${FONT_GOOGLE[pair]}&display=swap`;
+          link.disabled = false;
+        }
+      }
+    } catch (_) {}
     const PAGE_KEY = "fpl-explorer-page";
     // Keep in sync with app.js PAGES / PLANNER_NAV_ENABLED — missing entries flash
     // the wrong shell before JS loads (e.g. omitting "live" painted Home on refresh).
@@ -427,6 +449,19 @@
                 <button type="button" data-home-summary="classic" class="active" title="Four equal summary cards">Classic</button>
                 <button type="button" data-home-summary="hero" title="Overall Rank hero band with overlapping cards">Hero</button>
               </div>
+            </div>
+            <div class="prefs-field">
+              <label class="prefs-field-label" for="font-pair-select">Font</label>
+              <select id="font-pair-select" class="prefs-select font-pair-select" aria-describedby="font-pair-hint">
+                <option value="manrope">Manrope · Fira Code</option>
+                <option value="jakarta">Jakarta · JetBrains Mono</option>
+                <option value="dm">DM Sans · IBM Plex Mono</option>
+                <option value="source">Source Sans · Source Code</option>
+                <option value="outfit">Outfit · Fira Code</option>
+                <option value="plex">IBM Plex Sans · Plex Mono</option>
+                <option value="figtree">Figtree · JetBrains Mono</option>
+              </select>
+              <p class="prefs-field-hint" id="font-pair-hint">UI + numbers. Default is Manrope.</p>
             </div>
           </section>
           <section class="settings-section">
@@ -1586,7 +1621,7 @@
 <script src="home_data.js?v=39"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1034"></script>
+<script src="app.js?v=1044"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
