@@ -18100,7 +18100,7 @@
     if (switchingGw) liveFeedClearSession();
   }
 
-  const LIVE_FEED_SESSION_KEY = "fpl_live_feed_v1";
+  const LIVE_FEED_SESSION_KEY = "fpl_live_feed_v2";
 
   function liveFeedClearSession() {
     try {
@@ -18211,6 +18211,7 @@
       goals: Number(eg.goals) || 0,
       assists: Number(eg.assists) || 0,
       cleanSheets: Number(eg.cleanSheets) || 0,
+      goalsConceded: Number(eg.goalsConceded) || 0,
       saves: Number(eg.saves) || 0,
       bonus: Number(eg.bonus) || 0,
       yellowCards: Number(eg.yellowCards) || 0,
@@ -18394,7 +18395,8 @@
   }
 
   function liveFeedGoalPts(pos) {
-    if (pos === "GK" || pos === "DEF") return 6;
+    if (pos === "GK") return 10;
+    if (pos === "DEF") return 6;
     if (pos === "MID") return 5;
     return 4;
   }
@@ -18403,6 +18405,39 @@
     if (pos === "GK" || pos === "DEF") return 4;
     if (pos === "MID") return 1;
     return 0;
+  }
+
+  /** FPL docks GK/DEF −1 for every 2 goals conceded while on the pitch. */
+  function liveFeedGoalsConcededDockPts(pos) {
+    return pos === "GK" || pos === "DEF" ? 1 : 0;
+  }
+
+  function liveFeedDiffCleanSheets(oldVal, newVal, pos, push) {
+    const o = Number(oldVal) || 0;
+    const n = Number(newVal) || 0;
+    const p = liveFeedCleanSheetPts(pos);
+    if (!p || n === o) return;
+    if (n > o) {
+      for (let i = 0; i < n - o; i += 1) {
+        push("cleanSheet", "Clean sheet", p, "cleanSheets");
+      }
+      return;
+    }
+    // FPL already keeps CS for subbed 60′+ players — a drop means the CS was revoked.
+    for (let i = 0; i < o - n; i += 1) {
+      push("cleanSheetLost", "Clean sheet lost", -p, "cleanSheetLost");
+    }
+  }
+
+  function liveFeedDiffGoalsConceded(oldVal, newVal, pos, push) {
+    const dock = liveFeedGoalsConcededDockPts(pos);
+    if (!dock) return;
+    const o = Math.floor((Number(oldVal) || 0) / 2);
+    const n = Math.floor((Number(newVal) || 0) / 2);
+    if (n <= o) return;
+    for (let i = 0; i < n - o; i += 1) {
+      push("goalsConceded", "Goals conceded", -dock, "goalsConceded");
+    }
   }
 
   function liveFeedEntryMultiplier(entryId, eid) {
@@ -18499,11 +18534,8 @@
     liveFeedDiffCounter(oldRec.assists, newRec.assists, () =>
       push("assist", "Assist", 3, "assists")
     );
-    liveFeedDiffCounter(oldRec.cleanSheets, newRec.cleanSheets, () => {
-      const p = liveFeedCleanSheetPts(pos);
-      if (!p) return;
-      push("cleanSheet", "Clean sheet", p, "cleanSheets");
-    });
+    liveFeedDiffCleanSheets(oldRec.cleanSheets, newRec.cleanSheets, pos, push);
+    liveFeedDiffGoalsConceded(oldRec.goalsConceded, newRec.goalsConceded, pos, push);
     const oldSavePts = Math.floor((Number(oldRec.saves) || 0) / 3);
     const newSavePts = Math.floor((Number(newRec.saves) || 0) / 3);
     if (newSavePts > oldSavePts) {
@@ -18535,6 +18567,7 @@
     goals: 0,
     assists: 0,
     cleanSheets: 0,
+    goalsConceded: 0,
     saves: 0,
     bonus: 0,
     yellowCards: 0,
@@ -18552,6 +18585,8 @@
     goal: 22,
     assist: 24,
     cleanSheet: 88,
+    cleanSheetLost: 72,
+    goalsConceded: 55,
     saves: 40,
     yellowCard: 32,
     redCard: 48,
@@ -19466,7 +19501,9 @@
     if (
       colKey === "redCards" ||
       colKey === "ownGoals" ||
-      colKey === "penaltiesMissed"
+      colKey === "penaltiesMissed" ||
+      colKey === "goalsConceded" ||
+      colKey === "cleanSheetLost"
     ) {
       return "is-bad";
     }
