@@ -6505,9 +6505,11 @@
       rankable: true,
     }));
     // Home search always uses the 2026/27 FPL catalog — omit Hub/OPTA-only stats.
+    // 8 tiles: GW + 4 position + season Pts + League + TSB.
     return [
       { id: "gwPts", label: "GW pts", lowerBetter: false, allowHot: true, rankable: true },
       ...season,
+      { id: "pts", key: "pts", label: "Pts", decimals: 0, lowerBetter: false, rankable: true },
       { id: "league", label: "League", lowerBetter: false, rankable: false },
       { id: "tsb", label: "TSB", lowerBetter: false, rankable: false },
     ];
@@ -6858,7 +6860,7 @@
         { key: "saves", label: "Saves", decimals: 0 },
         { key: "cleanSheets", label: "CS", decimals: 0 },
         { key: "goalsConceded", label: "GC", decimals: 0 },
-        { key: "pts", label: "Pts", decimals: 0 },
+        { key: "bonus", label: "Bonus", decimals: 0 },
       ],
       DEF: [
         { key: "cleanSheets", label: "CS", decimals: 0 },
@@ -6987,12 +6989,18 @@
         </button>`;
       })
       .join("");
+    const cols = `<div class="home-player-owners-cols" aria-hidden="true">
+      <span class="home-player-owner-rank">#</span>
+      <span class="home-player-owner-id">Manager</span>
+      <span class="home-player-owner-gw">GW</span>
+      <span class="home-player-owner-total">Total</span>
+    </div>`;
     return `<section class="home-player-owners">
       <h3 class="home-player-owners-heading">
         <span class="home-player-owners-kicker">Owners</span>
         <span class="home-player-owners-meta">${rows.length}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
       </h3>
-      <div class="home-player-owners-list" role="list">${list}</div>
+      <div class="home-player-owners-list" role="list">${cols}${list}</div>
     </section>`;
   }
 

@@ -14257,6 +14257,7 @@ html.home-player-modal-open {
   display: flex;
   flex-direction: column;
 }
+.home-player-owners-cols,
 .home-player-owner-row {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 40px 48px;
@@ -14265,6 +14266,35 @@ html.home-player-modal-open {
   width: 100%;
   margin: 0;
   padding: 9px 12px;
+  box-sizing: border-box;
+}
+.home-player-owners-cols {
+  padding-top: 6px;
+  padding-bottom: 5px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+  background: hsl(var(--muted) / 0.22);
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+.home-player-owners-cols .home-player-owner-id {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-player-owners-cols .home-player-owner-gw,
+.home-player-owners-cols .home-player-owner-total {
+  text-align: right;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.home-player-owner-row {
   border: 0;
   border-top: 1px solid hsl(var(--border) / 0.65);
   background: transparent;
@@ -14273,7 +14303,7 @@ html.home-player-modal-open {
   text-align: left;
   cursor: pointer;
 }
-.home-player-owners-list .home-player-owner-row:first-child {
+.home-player-owners-list .home-player-owner-row:first-of-type {
   border-top: 0;
 }
 .home-player-owner-row:hover,
