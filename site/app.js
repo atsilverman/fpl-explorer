@@ -2494,6 +2494,7 @@
       standings: Array.isArray(HOME.standings) ? HOME.standings : [],
       summary: HOME.summary && typeof HOME.summary === "object" ? HOME.summary : null,
       managerId: HOME.managerId ?? null,
+      leagueId: HOME.leagueId ?? null,
       transfersByEntry: HOME.transfersByEntry && typeof HOME.transfersByEntry === "object"
         ? HOME.transfersByEntry
         : {},
@@ -2612,8 +2613,22 @@
     window.FPL_HOME = HOME;
     if (fromSessionSnapshot) homeBootstrapSource = "session";
     else if (fromLivePoll) homeBootstrapSource = "live";
-    homeOwnerPin = null;
-    homeViewEntryId = null;
+    // Keep league manager view / owner pin across live polls — only reset when
+    // the linked manager, league, or GW actually changes.
+    const identityChanged =
+      String(priorHome.managerId ?? "") !== String(HOME.managerId ?? "")
+      || String(priorHome.leagueId ?? "") !== String(HOME.leagueId ?? "")
+      || gwChanged;
+    if (identityChanged) {
+      homeOwnerPin = null;
+      homeViewEntryId = null;
+    } else if (homeViewEntryId != null) {
+      const viewId = Number(homeViewEntryId);
+      const stillInLeague = (Array.isArray(HOME.standings) ? HOME.standings : []).some(
+        (row) => Number(row && row.entry) === viewId
+      );
+      if (!stillInLeague) homeViewEntryId = null;
+    }
     homeElementGwCache = null;
     syncPlanningHorizon({ rerender: state.page === "home" || state.page === "team" || state.page === "schedule" });
     syncLiveNavChrome();
@@ -2746,8 +2761,8 @@
   // When true, refreshManagerDependentUI skips Home/Live DOM (restore boot path).
   let homeBootDeferPaint = false;
   let homeLivePrefetchStarted = false;
-  const HOME_SUMMARY_ROLL_MS = 2800;
-  const HOME_VIEW_SWITCH_ROLL_MS = 2400;
+  const HOME_SUMMARY_ROLL_MS = 3400;
+  const HOME_VIEW_SWITCH_ROLL_MS = 2600;
   const HOME_ENTER_CLEAR_MS = HOME_SUMMARY_ROLL_MS + 400;
   const HOME_RANK_BORDER_REVEAL_RATIO = 0.18;
   const HOME_SCROLL_TOP_MS = 920;
@@ -3751,6 +3766,21 @@
     return new Set(list.map(Number).filter((n) => Number.isFinite(n)));
   }
 
+  /** "starter" | "bench" | null — null if entry does not own the element. */
+  function homeOwnerSlotForElement(entryId, elementId) {
+    const entry = Number(entryId);
+    const eid = Number(elementId);
+    if (!Number.isFinite(entry) || !Number.isFinite(eid)) return null;
+    if (!homeOwnersForElement(eid).has(entry)) return null;
+    const squad = homeSquadForEntry(entry) || [];
+    const row = squad.find((r) => Number(r.element) === eid);
+    if (!row) return "starter";
+    if (row.starter) return "starter";
+    if (row.onBench || Number(row.position) > 11) return "bench";
+    // Selected XI slot but not active (e.g. auto-subbed out).
+    return "bench";
+  }
+
   function homeElementsForEntry(entryId) {
     if (entryId == null || entryId === "") return new Set();
     const entry = Number(entryId);
@@ -3801,13 +3831,16 @@
     if (el.homeStandingsChipsBody) el.homeStandingsChipsBody.classList.remove("has-owner-filter");
     forEachHomeStandingsRow((tr) => {
       const entry = Number(tr.dataset.entry);
-      const ownsPinned = !!(elementPin && ownerEntries && ownerEntries.has(entry));
+      const ownerSlot =
+        elementPin && ownerEntries ? homeOwnerSlotForElement(entry, elementPin.id) : null;
+      const ownsPinned = !!ownerSlot;
       // Unowned lookup: empty message replaces the list — don't keep demoted rows.
       const hideForEmptyLookup =
         !!(elementPin && ownerEntries && ownerEntries.size === 0);
       tr.hidden = hideForEmptyLookup;
       tr.classList.remove("is-owner-source", "is-owner-pinned");
-      tr.classList.toggle("is-owner-match", ownsPinned);
+      tr.classList.toggle("is-owner-match", ownerSlot === "starter");
+      tr.classList.toggle("is-owner-bench", ownerSlot === "bench");
       tr.classList.toggle(
         "is-owner-demote",
         !!(elementPin && ownerEntries && ownerEntries.size > 0 && !ownsPinned)
@@ -4155,13 +4188,16 @@
     syncHomeSummaryHeroTone(overallDelta);
   }
 
-  /** Hero band follows overall rank Δ: blue up / orange down / zinc flat. */
+  /** Hero band follows overall rank Δ: green up / red down / zinc flat. */
   function syncHomeSummaryHeroTone(overallDelta) {
     const hero = el.homeSummaryHero;
     if (!hero) return;
-    hero.classList.remove("is-rank-up", "is-rank-down");
-    if (!(Number.isFinite(overallDelta) && overallDelta !== 0)) return;
-    hero.classList.add(overallDelta > 0 ? "is-rank-up" : "is-rank-down");
+    hero.classList.remove("is-rank-up", "is-rank-down", "is-rank-flat", "is-rank-ready");
+    if (!(Number.isFinite(overallDelta) && overallDelta !== 0)) {
+      hero.classList.add("is-rank-flat", "is-rank-ready");
+      return;
+    }
+    hero.classList.add(overallDelta > 0 ? "is-rank-up" : "is-rank-down", "is-rank-ready");
   }
 
   function homeStandingsRankValue(row) {
@@ -4809,6 +4845,7 @@
       panels.forEach((p) => {
         if (!p) return;
         p.style.height = "";
+        p.style.maxHeight = "";
         p.style.minHeight = "";
         p.style.removeProperty("align-self");
       });
@@ -4820,22 +4857,29 @@
       return;
     }
 
-    // Measure squad + standings at intrinsic height without display:none on
-    // the feed (that reflowed the whole grid and delayed enter by hundreds of ms).
+    // Measure squad + standings at intrinsic height. Do not let Feed's long
+    // event list set the shared row height (grid stretch) — cap + inner scroll.
     [el.homeSquadPanel, el.homeStandingsPanel].forEach((p) => {
       p.style.height = "auto";
+      p.style.maxHeight = "none";
       p.style.minHeight = "0";
       p.style.alignSelf = "start";
     });
+    if (feed) {
+      feed.style.height = "auto";
+      feed.style.maxHeight = "none";
+      feed.style.minHeight = "0";
+      feed.style.alignSelf = "start";
+    }
     void el.homeTablesGrid.offsetHeight;
 
-    const cap = Math.max(
+    const intrinsic = Math.max(
       Math.ceil(el.homeStandingsPanel.getBoundingClientRect().height),
       Math.ceil(el.homeSquadPanel.getBoundingClientRect().height)
     );
-    [el.homeSquadPanel, el.homeStandingsPanel].forEach((p) => {
-      p.style.removeProperty("align-self");
-    });
+    // Viewport ceiling so a tall league still leaves room; Feed scrolls past this.
+    const vhCap = Math.max(320, Math.round(window.innerHeight * 0.62));
+    const cap = Math.min(Math.max(intrinsic, 280), vhCap, 680);
 
     if (!(cap > 0)) {
       clearPanelHeights();
@@ -4847,7 +4891,9 @@
     panels.forEach((p) => {
       if (!p) return;
       p.style.height = px;
-      p.style.minHeight = px;
+      p.style.maxHeight = px;
+      p.style.minHeight = "0";
+      p.style.alignSelf = "start";
     });
   }
 
@@ -4870,6 +4916,101 @@
     });
     syncHomeStandingsPagerDots(index);
     syncHomeStandingsLayout(index);
+  }
+
+  /**
+   * Mac trackpad horizontal pans often leak to page scroll instead of flipping
+   * scroll-snap pager tracks. Discrete fling + preventDefault claims the gesture.
+   * One page per continuous wheel gesture — inertia must not chain flips.
+   */
+  function bindHomePagerTrackpad(track, {
+    getIndex,
+    setPage,
+    pageCount,
+    stepFrom,
+    threshold = 48,
+    gestureIdleMs = 180,
+  } = {}) {
+    if (!track || track.dataset.pagerWheelBound === "1") return;
+    if (typeof getIndex !== "function" || typeof setPage !== "function") return;
+    track.dataset.pagerWheelBound = "1";
+    let acc = 0;
+    let pagedThisGesture = false;
+    let idleTimer = 0;
+
+    const count = () => {
+      if (typeof pageCount === "function") return Math.max(0, Number(pageCount()) || 0);
+      return Math.max(0, Number(pageCount) || 0);
+    };
+
+    const nextIndex = (idx, dir) => {
+      if (typeof stepFrom === "function") return stepFrom(idx, dir);
+      const n = count();
+      if (n < 2) return idx;
+      return Math.max(0, Math.min(n - 1, idx + dir));
+    };
+
+    const endGesture = () => {
+      idleTimer = 0;
+      acc = 0;
+      pagedThisGesture = false;
+    };
+
+    const bumpIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(endGesture, gestureIdleMs);
+    };
+
+    track.addEventListener(
+      "wheel",
+      (e) => {
+        let dx = e.deltaX;
+        let dy = e.deltaY;
+        // Shift+vertical is the common Mac “horizontal scroll” remap.
+        if (e.shiftKey && Math.abs(dy) >= Math.abs(dx)) {
+          dx = dy;
+          dy = 0;
+        }
+        if (Math.abs(dx) <= Math.abs(dy) || Math.abs(dx) < 0.5) return;
+        e.preventDefault();
+        e.stopPropagation();
+        bumpIdle();
+        // Already flipped once this pan — absorb remaining inertia.
+        if (pagedThisGesture) return;
+        if (count() < 2) return;
+        acc += dx;
+        if (Math.abs(acc) < threshold) return;
+        const idx = getIndex();
+        const next = nextIndex(idx, acc > 0 ? 1 : -1);
+        acc = 0;
+        pagedThisGesture = true;
+        if (next === idx) return;
+        setPage(next);
+      },
+      { passive: false, capture: true }
+    );
+  }
+
+  function homeSquadPagerPageCount() {
+    if (!el.homeSquadTrack) return 0;
+    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    if (!homeSquadIsWideLayout()) return pages.length;
+    return pages.filter((_, i) => i !== 1).length;
+  }
+
+  /** Next/prev physical squad index, skipping the wide-layout Points slot (page 1). */
+  function homeSquadPagerStep(fromIdx, dir) {
+    if (!el.homeSquadTrack) return fromIdx;
+    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    const skip = homeSquadIsWideLayout() ? 1 : -1;
+    let i = fromIdx;
+    for (let step = 0; step < pages.length; step += 1) {
+      i += dir;
+      if (i < 0 || i >= pages.length) return fromIdx;
+      if (i === skip) continue;
+      return i;
+    }
+    return fromIdx;
   }
 
   function bindHomeStandingsPager() {
@@ -4898,6 +5039,11 @@
     };
     el.homeStandingsTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeStandingsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    bindHomePagerTrackpad(el.homeStandingsTrack, {
+      getIndex: homeStandingsActivePageIndex,
+      setPage: (i) => setHomeStandingsPage(i, { smooth: true }),
+      pageCount: () => el.homeStandingsTrack.querySelectorAll(".home-standings-page").length,
+    });
     bindHomeStandingsNestedSwipe();
     bindHomeTransfersMainScrollChain();
     let lastCompactCaptains = homeLeagueCompactCaptains();
@@ -5046,29 +5192,7 @@
     });
 
     // Trackpad horizontal over the nested list → page fling.
-    if (nested) {
-      let wheelAcc = 0;
-      let wheelTimer = 0;
-      nested.addEventListener(
-        "wheel",
-        (e) => {
-          const absX = Math.abs(e.deltaX);
-          const absY = Math.abs(e.deltaY);
-          if (absX <= absY || absX < 1) return;
-          e.preventDefault();
-          wheelAcc += e.deltaX;
-          clearTimeout(wheelTimer);
-          wheelTimer = window.setTimeout(() => {
-            const acc = wheelAcc;
-            wheelAcc = 0;
-            const idx = homeStandingsActivePageIndex();
-            if (acc > FLING_PX) setHomeStandingsPage(Math.min(pageCount() - 1, idx + 1));
-            else if (acc < -FLING_PX) setHomeStandingsPage(Math.max(0, idx - 1));
-          }, 80);
-        },
-        { passive: false }
-      );
-    }
+    // (Whole-track Mac trackpad paging is bindHomePagerTrackpad on the track.)
   }
 
   /**
@@ -5250,18 +5374,9 @@
     }
   }
 
-  function homeFeedPageEventCount(pageIndex) {
-    const body = pageIndex === 0 ? el.homeFeedBody : el.homeFeedAllBody;
-    if (!body) return 0;
-    return body.querySelectorAll("tr.home-feed-row").length;
-  }
-
-  function syncHomeFeedCountLabel(activeIndex) {
+  function syncHomeFeedCountLabel() {
     if (!el.homeFeedCountLabel || !HOME || HOME.gw == null) return;
-    const idx =
-      activeIndex != null && Number.isFinite(activeIndex) ? activeIndex : homeFeedActivePageIndex();
-    const n = homeFeedPageEventCount(idx);
-    el.homeFeedCountLabel.textContent = `${n} · GW${HOME.gw}`;
+    el.homeFeedCountLabel.textContent = `GW${HOME.gw}`;
   }
 
   function syncHomeFeedPagerDots(activeIndex) {
@@ -5316,6 +5431,11 @@
     };
     el.homeFeedTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeFeedTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    bindHomePagerTrackpad(el.homeFeedTrack, {
+      getIndex: homeFeedActivePageIndex,
+      setPage: (i) => setHomeFeedPage(i, { smooth: true }),
+      pageCount: () => el.homeFeedTrack.querySelectorAll(".home-feed-page").length,
+    });
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
       const idx = homeFeedActivePageIndex();
@@ -5681,6 +5801,12 @@
     };
     el.homeSquadTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeSquadTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    bindHomePagerTrackpad(el.homeSquadTrack, {
+      getIndex: homeSquadActivePageIndex,
+      setPage: (i) => setHomeSquadPage(i, { smooth: true }),
+      pageCount: homeSquadPagerPageCount,
+      stepFrom: homeSquadPagerStep,
+    });
     window.addEventListener("resize", () => {
       if (state.page !== "home") return;
       const wide = syncHomeSquadWideLayout();
@@ -6121,8 +6247,8 @@
     return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(row.element ?? ""))}" role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
       ${homeSquadPlayerCellHTML(row, opts)}
       <td class="home-col-own-tsb col-num">${ownershipPillHTML(live, { live: true })}</td>
-      <td class="home-col-own-d1 col-num">${ownershipDeltaPillHTML(d1, { quiet: true })}</td>
       <td class="home-col-own-d3 col-num">${ownershipDeltaPillHTML(d3)}</td>
+      <td class="home-col-own-d1 col-num">${ownershipDeltaPillHTML(d1, { quiet: true })}</td>
       ${priceCell}
     </tr>`;
   }
@@ -6141,6 +6267,28 @@
 
   const HOME_IMP_BAR_MAX = 200;
 
+  /** Classic green (+) / red (−) IMP fill — soft near 0, saturated near ±200. */
+  function homeImpToneColors(imp, abs) {
+    const mag = Math.min(1, abs / HOME_IMP_BAR_MAX);
+    // Ease so mid values stay readable; punch hard near captain / TC levels.
+    const tone = Math.pow(mag, 0.72);
+    const dark = themePrefersDark();
+    const isPos = imp > 0;
+    const hue = isPos ? 142 : 0;
+    const sat = Math.round(26 + tone * (isPos ? 44 : 52)); // ~26 → 70/78
+    const light = dark
+      ? Math.round(56 - tone * 14) // soft pale → deeper
+      : Math.round(46 - tone * 16);
+    const alpha = (0.28 + tone * 0.72).toFixed(3); // ~0.28 → 1.0
+    const fill = `hsl(${hue} ${sat}% ${light}% / ${alpha})`;
+    const fgSat = Math.round(40 + tone * 32);
+    const fgLight = dark
+      ? Math.round(64 - tone * 10)
+      : Math.round(28 + (1 - tone) * 10);
+    const fg = `hsl(${hue} ${fgSat}% ${fgLight}%)`;
+    return { fill, fg, tone };
+  }
+
   function homeImpBarVisual(impRaw) {
     const imp = Number.isFinite(Number(impRaw)) ? Math.round(Number(impRaw)) : 0;
     const abs = Math.abs(imp);
@@ -6150,28 +6298,12 @@
       return { imp: 0, barPct: 0, sign: "is-flat", fillStyle: "--imp-pct:0%" };
     }
     const sign = imp > 0 ? "is-pos" : "is-neg";
-    // Multi-step tone: faint differentials → saturated at captain-level IMP.
-    const mag = Math.min(1, abs / HOME_IMP_BAR_MAX);
-    const tone = 0.2 + 0.8 * Math.pow(mag, 0.85);
-    const dark = themePrefersDark();
-    const isPos = imp > 0;
-    let fill;
-    if (tone < 0.45) {
-      const alpha = (dark ? 0.28 + tone * 0.5 : 0.32 + tone * 0.55).toFixed(3);
-      fill = isPos ? positiveFill(alpha) : negativeFill(alpha);
-    } else if (tone < 0.78) {
-      const alpha = (dark ? 0.48 + (tone - 0.45) * 0.7 : 0.55 + (tone - 0.45) * 0.85).toFixed(3);
-      fill = isPos ? positiveHighlightFill(alpha) : negativeFill(alpha);
-    } else {
-      const blackPct = Math.round(6 + ((tone - 0.78) / 0.22) * 14);
-      const base = isPos ? "hsl(var(--positive))" : "hsl(var(--negative))";
-      fill = `color-mix(in srgb, ${base} ${100 - blackPct}%, black)`;
-    }
+    const { fill, fg } = homeImpToneColors(imp, abs);
     return {
       imp,
       barPct,
       sign,
-      fillStyle: `--imp-pct:${barPct}%;--imp-fill:${fill}`,
+      fillStyle: `--imp-pct:${barPct}%;--imp-fill:${fill};--imp-fg:${fg}`,
     };
   }
 
@@ -6228,8 +6360,8 @@
       <td class="home-col-mp"><div class="home-fx-stack">${mpHTML}</div></td>
       <td class="home-col-opp"><div class="home-fx-stack home-fx-opp">${oppHTML}</div></td>
       <td class="home-col-imp">
-        <div class="home-imp ${impVis.sign}">
-          <span class="home-imp-track"><span class="home-imp-fill ${impVis.sign}" style="${impVis.fillStyle}"></span></span>
+        <div class="home-imp ${impVis.sign}" style="${impVis.fillStyle}">
+          <span class="home-imp-track"><span class="home-imp-fill ${impVis.sign}"></span></span>
           <span class="home-imp-pct">${impPctHTML}</span>
         </div>
       </td>
@@ -6953,6 +7085,13 @@
     )}</article>`;
   }
 
+  function homePlayerOwnersLegendHTML() {
+    return `<div class="home-player-owners-legend" aria-label="Ownership legend">
+      <span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>XI</span>
+      <span class="home-player-owners-legend-item is-bench"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Bench</span>
+    </div>`;
+  }
+
   function homePlayerOwnersHTML(elementId) {
     const owners = homeOwnersForElement(elementId);
     const standings = Array.isArray(HOME.standings) ? HOME.standings : [];
@@ -6967,31 +7106,46 @@
     const ownerCount = rows.filter((r) => owners.has(Number(r.entry))).length;
     if (!rows.length) {
       return `<section class="home-player-owners">
-        <h3 class="home-player-owners-heading">
-          <span class="home-player-owners-kicker">League</span>
-          <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
-        </h3>
+        <div class="home-player-owners-head">
+          <h3 class="home-player-owners-heading">
+            <span class="home-player-owners-kicker">League</span>
+            <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
+          </h3>
+        </div>
         <p class="home-player-owners-empty">No managers loaded for ${escapeHtml(leagueLabel)}.</p>
       </section>`;
     }
     if (!ownerCount) {
       return `<section class="home-player-owners">
-        <h3 class="home-player-owners-heading">
-          <span class="home-player-owners-kicker">Owners</span>
-          <span class="home-player-owners-meta">0/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
-        </h3>
+        <div class="home-player-owners-head">
+          <h3 class="home-player-owners-heading">
+            <span class="home-player-owners-kicker">Owners</span>
+            <span class="home-player-owners-meta">0/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
+          </h3>
+        </div>
         <p class="home-player-owners-empty">No managers in ${escapeHtml(leagueLabel)} own this player.</p>
       </section>`;
     }
     const list = rows
       .map((r) => {
         const entry = Number(r.entry);
-        const owns = owners.has(entry);
+        const slot = homeOwnerSlotForElement(entry, elementId);
         const rank = r.rankOfficial ?? r.rankLive ?? "—";
         const gw = homeStandingsGwPoints(r);
         const total = r.total != null ? Number(r.total) : r.totalPoints;
-        const ownLabel = owns ? "owns" : "does not own";
-        return `<button type="button" class="home-player-owner-row${owns ? " is-owner" : " is-demote"}" data-entry="${escapeHtml(String(entry))}" aria-label="${escapeHtml(r.playerName || "Manager")} ${ownLabel} this player">
+        const ownLabel =
+          slot === "starter"
+            ? "starts"
+            : slot === "bench"
+              ? "owns on the bench"
+              : "does not own";
+        const rowClass =
+          slot === "starter"
+            ? " is-owner"
+            : slot === "bench"
+              ? " is-owner-bench"
+              : " is-demote";
+        return `<button type="button" class="home-player-owner-row${rowClass}" data-entry="${escapeHtml(String(entry))}" aria-label="${escapeHtml(r.playerName || "Manager")} ${ownLabel} this player">
           <span class="home-player-owner-rank">${escapeHtml(String(rank))}</span>
           <span class="home-player-owner-id">
             <span class="home-player-owner-name">${escapeHtml(r.playerName || "—")}</span>
@@ -7009,10 +7163,13 @@
       <span class="home-player-owner-total">Total</span>
     </div>`;
     return `<section class="home-player-owners">
-      <h3 class="home-player-owners-heading">
-        <span class="home-player-owners-kicker">Owners</span>
-        <span class="home-player-owners-meta">${ownerCount}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
-      </h3>
+      <div class="home-player-owners-head">
+        <h3 class="home-player-owners-heading">
+          <span class="home-player-owners-kicker">Owners</span>
+          <span class="home-player-owners-meta">${ownerCount}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
+        </h3>
+        ${homePlayerOwnersLegendHTML()}
+      </div>
       <div class="home-player-owners-list" role="list">${cols}${list}</div>
     </section>`;
   }
@@ -7450,7 +7607,12 @@
     if (!Number.isFinite(abs) || abs <= 0) return "—";
     if (fullDigits) {
       return animateRoll
-        ? `<span class="home-stat-roll is-grouped">${escapeHtml(formatHomeRankDeltaGrouped(places))}</span>`
+        ? statRollSpan(abs, {
+            from: 0,
+            decimals: 0,
+            className: "home-stat-roll",
+            grouped: true,
+          })
         : formatHomeRankDeltaGrouped(places);
     }
     if (animateRoll) return homeRankStatRollHTML(abs, 0);
@@ -7750,7 +7912,7 @@
         el.homePageSubtitle.textContent = bits.length
           ? viewingOther
             ? `${bits.join(" · ")} — viewing another manager's team.`
-            : `${bits.join(" · ")} — live GW scoring from the last refresh.`
+            : bits.join(" · ")
           : "Your manager team and mini-league gameweek standings from the last refresh.";
       }
     }
@@ -7779,16 +7941,7 @@
     if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
       mountHomeSummaryRollsAtStart(el.homePage);
     }
-    const deferRankChrome = homeShouldDeferSummaryRankChrome({ animateView, settleQuiet });
-    if (deferRankChrome) {
-      if (homeSummaryRankChromePending) {
-        stageHomeSummaryRankChrome(summary, { viewingOther });
-      } else {
-        clearHomeSummaryRankChrome();
-      }
-    } else {
-      applyHomeSummaryRankChrome(summary, { viewingOther });
-    }
+    applyHomeSummaryRankChrome(summary, { viewingOther });
     if (el.homeGwMeta) {
       const chipKey = summary.activeChip ? String(summary.activeChip).trim() : "";
       const chip = chipKey ? (HOME_CHIP_ABBR[chipKey] || chipKey.toUpperCase()) : "";
@@ -7873,17 +8026,17 @@
           el.homeSquadOwnershipCols.innerHTML =
             `<col class="home-col-player" />` +
             `<col class="home-col-own-tsb" />` +
-            `<col class="home-col-own-d1" />` +
             `<col class="home-col-own-d3" />` +
+            `<col class="home-col-own-d1" />` +
             `<col class="home-col-price" />`;
         }
         if (el.homeSquadOwnershipHead) {
           el.homeSquadOwnershipHead.innerHTML =
             `<th scope="col" class="home-col-player">Player</th>` +
-            `<th scope="col" class="home-col-own-tsb col-num"${tipAttr("Live ownership (TSB)")}>TSB</th>` +
-            `<th scope="col" class="home-col-own-d1 col-num"${tipAttr("1-day ownership change")}>1d</th>` +
-            `<th scope="col" class="home-col-own-d3 col-num"${tipAttr("3-day ownership change")}>3d</th>` +
-            `<th scope="col" class="home-col-price"${tipAttr("Predicted price rise / fall")}>Price</th>`;
+            `<th scope="col" class="home-col-own-tsb col-num"${tipAttr("Live ownership (TSB%)")}>TSB%</th>` +
+            `<th scope="col" class="home-col-own-d3 col-num"${tipAttr("3-day ownership change")}>3d Δ</th>` +
+            `<th scope="col" class="home-col-own-d1 col-num"${tipAttr("1-day ownership change")}>1d Δ</th>` +
+            `<th scope="col" class="home-col-price"${tipAttr("Predicted price rise / fall")}>Price Δ</th>`;
         }
         if (el.homeSquadOwnershipBody) {
           const ownParts = [];
@@ -7997,8 +8150,10 @@
     const feedGw = HOME.gw != null ? Number(HOME.gw) : null;
     if (feedGw != null && homeSquadIsWideLayout()) renderHomeFeed(feedGw);
     requestAnimationFrame(() => {
-      if (state.page !== "home") return;
-      settleHomeTablesLayout({ standingsPageIdx });
+      requestAnimationFrame(() => {
+        if (state.page !== "home") return;
+        settleHomeTablesLayout({ standingsPageIdx });
+      });
     });
     const enterBusyNow = homeIsEnterBusy();
     const snapRolls = !leaveRollsPending && !animateView && !enterBusyNow;
@@ -9880,9 +10035,53 @@
     else sticky.style.removeProperty("--name-collapse");
     const colW = host.style.getPropertyValue("--name-col-w");
     if (colW) sticky.style.setProperty("--name-col-w", colW);
+    // Widths before scrollLeft — body/header must share the same scroll range.
+    syncLivePointsStickyColWidths();
     const inner = sticky.querySelector(".live-sticky-head-inner");
     if (inner && scrollLeft != null && inner.scrollLeft !== scrollLeft) {
       inner.scrollLeft = scrollLeft;
+    }
+  }
+
+  /** Copy measured body column widths onto the detached Points sticky head.
+      Separate tables otherwise size cols from th labels vs pills and drift. */
+  function syncLivePointsStickyColWidths() {
+    const sticky = el.liveTableStickyHead;
+    const bodyTable = el.liveTable;
+    if (
+      !NARROW_MQ.matches ||
+      !sticky ||
+      sticky.hidden ||
+      !bodyTable ||
+      state.liveMode !== "points"
+    ) {
+      return;
+    }
+    const headTable = sticky.querySelector("table");
+    const headRow = headTable && headTable.querySelector("thead tr");
+    const bodyRow =
+      bodyTable.querySelector("tbody tr.live-points-row") ||
+      bodyTable.querySelector("tbody tr");
+    if (!headTable || !headRow || !bodyRow) return;
+    const headCells = headRow.children;
+    const bodyCells = bodyRow.children;
+    if (!headCells.length || headCells.length !== bodyCells.length) return;
+
+    for (let i = 0; i < headCells.length; i++) {
+      const w = bodyCells[i].getBoundingClientRect().width;
+      if (!(w > 0)) continue;
+      const px = `${Math.round(w * 100) / 100}px`;
+      const th = headCells[i];
+      th.style.width = px;
+      th.style.minWidth = px;
+      th.style.maxWidth = px;
+      th.style.boxSizing = "border-box";
+    }
+    const bodyW = bodyTable.getBoundingClientRect().width;
+    if (bodyW > 0) {
+      const px = `${Math.round(bodyW * 100) / 100}px`;
+      headTable.style.width = px;
+      headTable.style.minWidth = px;
     }
   }
 
@@ -11392,12 +11591,12 @@
           "Fixture finished (incl. FPL provisional FT)"
         ),
         spitRow(
-          `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span><span class="home-imp-pct">70%</span></span>`,
+          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
           "IMP ahead of league top third",
           "spit-symbol-wide"
         ),
         spitRow(
-          `<span class="home-imp is-neg spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-neg is-drawn" style="--imp-pct:55%;--imp-fill:hsl(var(--negative) / 0.7)"></span></span><span class="home-imp-pct">55%</span></span>`,
+          `<span class="home-imp is-neg spit-home-swatch" style="--imp-pct:55%;--imp-fill:hsl(0 70% 46% / 0.75);--imp-fg:hsl(0 70% 42%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-neg is-drawn"></span></span><span class="home-imp-pct">55%</span></span>`,
           "IMP behind league top third",
           "spit-symbol-wide"
         ),
@@ -11626,7 +11825,7 @@
           "spit-symbol-wide"
         ),
         spitRow(
-          `<span class="home-imp is-pos spit-home-swatch" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn" style="--imp-pct:70%;--imp-fill:hsl(var(--positive) / 0.78)"></span></span></span>`,
+          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span></span>`,
           "DefCon progress — solid blue fill when threshold hit (+2 pts).",
           "spit-symbol-wide"
         ),
@@ -18602,10 +18801,17 @@
     stickyEl.hidden = false;
     const inner = stickyEl.querySelector(".live-sticky-head-inner");
     if (inner && el.liveTableWrap && stickyEl === el.liveTableStickyHead) {
-      inner.scrollLeft = el.liveTableWrap.scrollLeft || 0;
       wireLiveStickyHeadInnerScroll(stickyEl);
       if (state.liveMode === "points") {
         syncLivePointsStickySimplifyFromHost(el.liveTableWrap, el.liveTableWrap.scrollLeft || 0);
+        // Layout may settle after name-col measure — one more pass next frame.
+        requestAnimationFrame(() => {
+          syncLivePointsStickyColWidths();
+          const again = stickyEl.querySelector(".live-sticky-head-inner");
+          if (again) again.scrollLeft = el.liveTableWrap.scrollLeft || 0;
+        });
+      } else {
+        inner.scrollLeft = el.liveTableWrap.scrollLeft || 0;
       }
     }
   }
@@ -19007,9 +19213,11 @@
     }
     const sorted = state.liveSortKey === key;
     const arrow = sorted
-      ? `<span class="arrow">${iconHTML(state.liveSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`
+      ? `<span class="arrow" aria-hidden="true">${iconHTML(state.liveSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`
       : "";
-    return `<th class="${extraClass || ""}${sorted ? " sorted" : ""}" data-live-sort="${escapeHtml(key)}"${tipAttr(title || label)}>${escapeHtml(label)}${arrow}</th>`;
+    // Label stays in-flow (centered); arrow is absolutely positioned so sorting
+    // doesn't shift the header off its column / pills.
+    return `<th class="${extraClass || ""}${sorted ? " sorted" : ""}" data-live-sort="${escapeHtml(key)}"${tipAttr(title || label)}><span class="live-th-sort"><span class="live-th-label">${escapeHtml(label)}</span>${arrow}</span></th>`;
   }
 
   /** Subtle live-match row tint — skipped when the Live status filter is already on. */
@@ -19446,6 +19654,9 @@
       updateNameColumnSimplify(el.liveTableWrap);
     }
     syncLiveStickyHeads();
+    if (state.liveMode === "points") {
+      requestAnimationFrame(() => syncLivePointsStickyColWidths());
+    }
   }
 
   let liveEnterMotionToken = 0;
@@ -22719,39 +22930,28 @@
     const signed = node.dataset.countSigned === "1";
     const suffix = node.dataset.countSuffix || "";
     const grouped = node.dataset.countGrouped === "1";
-    const baseDuration = opts.duration != null ? opts.duration : 520;
+    const duration = opts.duration != null ? opts.duration : 520;
     if (node._statRollFinishTimer) {
       clearTimeout(node._statRollFinishTimer);
       node._statRollFinishTimer = 0;
     }
     renderStatRollNode(node, from, to, { decimals, signed, suffix, grouped });
     const wheels = [...node.querySelectorAll(".stat-roll-digit")];
-    const n = wheels.length;
-    if (!n) return;
+    if (!wheels.length) return;
     // Lock metrics after mount so large hero fonts don't step by root 16px.
     wheels.forEach((wheel) => lockStatRollWheelMetrics(wheel));
-    // Rightmost digit (ones) spins longest and settles last — reads as independent drums.
-    const delayStep = Math.min(36, Math.max(14, Math.round(baseDuration / 80)));
-    let maxEnd = baseDuration;
-    wheels.forEach((wheel, i) => {
-      const fromRight = n - 1 - i;
+    // Full-duration drums (no early settle) — matches pre-saturate Home enter.
+    wheels.forEach((wheel) => {
       const fromCh = wheel._statRollFrom;
       const toCh = wheel._statRollTo;
       if (fromCh == null || toCh == null) return;
-      const delay = fromRight * delayStep;
-      const duration = Math.max(
-        Math.round(baseDuration * 0.55),
-        baseDuration - delay + fromRight * Math.round(delayStep * 1.35)
-      );
-      maxEnd = Math.max(maxEnd, delay + duration);
-      const extraSpins = fromRight >= 4 ? 1 : 0;
-      animateStatRollDigitWheel(wheel, fromCh, toCh, duration, { delay, extraSpins });
+      animateStatRollDigitWheel(wheel, fromCh, toCh, duration);
     });
     // Guaranteed settle — snap drums in place (no plain-text width jump).
     node._statRollFinishTimer = window.setTimeout(() => {
       node._statRollFinishTimer = 0;
       if (node.querySelector(".stat-roll-digit")) finishStatRollNode(node);
-    }, maxEnd + 120);
+    }, duration + 120);
   }
 
   function mountAndAnimateStatRolls(root, opts = {}) {

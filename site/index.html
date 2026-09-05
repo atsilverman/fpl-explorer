@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1031" />
+<link rel="stylesheet" href="styles.css?v=1047" />
 <script>
 (() => {
   try {
@@ -1639,9 +1639,28 @@
 <script src="price_changes_data.js?v=34"></script>
 <script src="leagues_data.js?v=5"></script>
 <script src="home_data.js?v=39"></script>
+<!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
+<script>
+(() => {
+  try {
+    const hero = document.getElementById("home-summary-hero");
+    const summary = window.FPL_HOME && window.FPL_HOME.summary;
+    if (!hero || !summary) return;
+    const cur = Number(summary.overallRank);
+    const prev = Number(summary.overallRankPrev);
+    hero.classList.remove("is-rank-up", "is-rank-down", "is-rank-flat", "is-rank-ready");
+    if (Number.isFinite(cur) && Number.isFinite(prev) && cur > 0 && prev > 0 && cur !== prev) {
+      hero.classList.add(prev - cur > 0 ? "is-rank-up" : "is-rank-down");
+    } else {
+      hero.classList.add("is-rank-flat");
+    }
+    hero.classList.add("is-rank-ready");
+  } catch (_) {}
+})();
+</script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1073"></script>
+<script src="app.js?v=1091"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

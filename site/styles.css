@@ -697,33 +697,12 @@ html:not(.planner-nav-enabled) [data-page-clone="team"] {
   color: hsl(var(--blue-hsl) / 0.9);
 }
 
-/* Live tab + page title — green while a GW fixture is in play */
-@keyframes page-live-nav-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 0 hsl(142 55% 38% / 0));
-  }
-  50% {
-    filter: drop-shadow(0 0 5px hsl(142 55% 42% / 0.5));
-  }
-}
-@keyframes page-live-nav-pulse-dark {
-  0%, 100% {
-    filter: drop-shadow(0 0 0 hsl(142 48% 52% / 0));
-  }
-  50% {
-    filter: drop-shadow(0 0 5px hsl(142 48% 52% / 0.48));
-  }
-}
+/* Live tab + page title — green while a GW fixture is in play (no glow). */
 html.has-gw-live #page-live,
 html.has-gw-live #page-live .icon,
 html.has-gw-live [data-page-clone="live"] .page-tab-btn,
 html.has-gw-live [data-page-clone="live"] .page-tab-btn .icon {
   color: hsl(142 55% 38%);
-}
-html.has-gw-live #page-live,
-html.has-gw-live [data-page-clone="live"] .page-tab-btn,
-html.has-gw-live[data-page="live"] #page-tray-btn {
-  animation: page-live-nav-pulse 2.2s ease-in-out infinite;
 }
 html.has-gw-live #page-live.active,
 html.has-gw-live #page-live.active .icon {
@@ -748,11 +727,6 @@ html.has-gw-live[data-theme="dark"] #live-page .page-header h2,
 html.has-gw-live[data-theme="dark"] #live-page .page-title-icon {
   color: hsl(142 48% 52%);
 }
-html.has-gw-live[data-theme="dark"] #page-live,
-html.has-gw-live[data-theme="dark"] [data-page-clone="live"] .page-tab-btn,
-html.has-gw-live[data-theme="dark"][data-page="live"] #page-tray-btn {
-  animation-name: page-live-nav-pulse-dark;
-}
 @media (prefers-color-scheme: dark) {
   html.has-gw-live:not([data-theme="light"]) #page-live,
   html.has-gw-live:not([data-theme="light"]) #page-live .icon,
@@ -761,18 +735,6 @@ html.has-gw-live[data-theme="dark"][data-page="live"] #page-tray-btn {
   html.has-gw-live:not([data-theme="light"]) #live-page .page-header h2,
   html.has-gw-live:not([data-theme="light"]) #live-page .page-title-icon {
     color: hsl(142 48% 52%);
-  }
-  html.has-gw-live:not([data-theme="light"]) #page-live,
-  html.has-gw-live:not([data-theme="light"]) [data-page-clone="live"] .page-tab-btn,
-  html.has-gw-live:not([data-theme="light"])[data-page="live"] #page-tray-btn {
-    animation-name: page-live-nav-pulse-dark;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  html.has-gw-live #page-live,
-  html.has-gw-live [data-page-clone="live"] .page-tab-btn,
-  html.has-gw-live[data-page="live"] #page-tray-btn {
-    animation: none;
   }
 }
 
@@ -3182,17 +3144,13 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   animation: none !important;
 }
 
-/* Desktop Home: no IMP bar / track / rank-delta motion (summary odometer still rolls). */
+/* Desktop Home: no IMP bar / track motion (summary odometer still rolls). */
 @media (min-width: 901px) {
   #home-page .home-imp-fill,
   #home-page .home-squad-track,
   #home-page .home-standings-track,
   #home-page .home-feed-track {
     transition: none !important;
-  }
-  #home-page .home-rank-delta:not([hidden]),
-  #home-page .home-dashboard.is-rank-chrome-staged .home-rank-delta:not([hidden]) {
-    animation: none !important;
   }
 }
 
@@ -8544,14 +8502,14 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   transform: translate(-50%, -50%);
   color: var(--text);
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border-hsl) / 0.95);
-  border-radius: 8px;
+  border-radius: 7px;
   box-shadow: none;
   cursor: pointer;
   overflow: hidden;
@@ -9906,6 +9864,10 @@ html[data-pointer="coarse"] .home-squad-row.is-owner-pinned:hover > td {
 }
 html[data-pointer="coarse"] .home-standings-table tr.is-owner-match:hover td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.12);
+  background: var(--home-row-bg);
+}
+html[data-pointer="coarse"] .home-standings-table tr.is-owner-bench:hover td {
+  --home-row-bg: hsl(var(--muted-foreground) / 0.10);
   background: var(--home-row-bg);
 }
 html[data-pointer="coarse"] .home-standings-table tr.is-owner-demote:hover td {
@@ -14236,14 +14198,20 @@ html.home-player-modal-open {
   background: hsl(var(--background) / 0.45);
   overflow: hidden;
 }
+.home-player-owners-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
 .home-player-owners-heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
   margin: 0;
-  padding: 10px 12px 8px;
-  border-bottom: 1px solid var(--border);
+  padding: 0;
 }
 .home-player-owners-kicker {
   font-size: 11px;
@@ -14258,6 +14226,43 @@ html.home-player-modal-open {
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.home-player-owners-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.home-player-owners-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.home-player-owners-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.home-player-owners-legend-item.is-starter .home-player-owners-legend-swatch {
+  background: hsl(var(--blue-hsl) / 0.22);
+  border: 1px solid hsl(var(--blue-hsl) / 0.55);
+}
+.home-player-owners-legend-item.is-starter {
+  color: hsl(var(--blue-hsl));
+}
+.home-player-owners-legend-item.is-bench .home-player-owners-legend-swatch {
+  background: hsl(var(--muted-foreground) / 0.14);
+  border: 1px solid hsl(var(--muted-foreground) / 0.35);
+}
+.home-player-owners-legend-item.is-bench {
+  color: var(--text-dim);
 }
 .home-player-owners-empty {
   margin: 0;
@@ -14333,6 +14338,16 @@ html.home-player-modal-open {
 }
 .home-player-owner-row.is-owner .home-player-owner-name {
   color: hsl(var(--blue-hsl));
+}
+.home-player-owner-row.is-owner-bench {
+  background: hsl(var(--muted-foreground) / 0.08);
+}
+.home-player-owner-row.is-owner-bench:hover,
+.home-player-owner-row.is-owner-bench:focus-visible {
+  background: hsl(var(--muted-foreground) / 0.14);
+}
+.home-player-owner-row.is-owner-bench .home-player-owner-name {
+  color: var(--text-dim);
 }
 .home-player-owner-row.is-demote {
   opacity: 0.42;
@@ -14630,6 +14645,16 @@ html.home-player-modal-open {
   flex-direction: column;
   gap: 12px;
   margin: 8px 0 32px;
+  /* Full-bleed hero under the nav (same in configured + viewing-manager). */
+  --home-hero-bleed-x: var(--main-pad-x, 20px);
+  --home-hero-pad-x: var(--main-pad-x, 20px);
+  --home-hero-radius: 0px;
+}
+/* Player lookup keeps the hero in-card (profile stack sits above). */
+.home-dashboard.is-player-lookup {
+  --home-hero-bleed-x: 0px;
+  --home-hero-pad-x: 14px;
+  --home-hero-radius: var(--radius);
 }
 /* Player lookup: space under brand/topbar; keep the card stack tight (no double margins). */
 .home-dashboard.is-player-lookup {
@@ -14694,8 +14719,19 @@ html.home-player-modal-open {
   html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-feed-panel {
     grid-column: span 1;
   }
+  /* Wide desktop: don't stretch Team/League to Feed's event list height.
+     Shared --home-tables-panel-h caps all three; overflow scrolls inside. */
+  html.home-squad-wide .home-dashboard:not(.is-player-lookup) > #home-squad-panel,
+  html.home-squad-wide .home-dashboard:not(.is-player-lookup) > #home-standings-panel,
+  html.home-squad-wide .home-dashboard:not(.is-player-lookup) > #home-feed-panel {
+    align-self: start;
+    min-height: 0;
+    max-height: var(--home-tables-panel-h, min(62vh, 640px));
+    overflow: hidden;
+  }
 }
-/* Viewing another manager — blue rail on the banner only; rank cards use delta borders. */
+/* Viewing another manager — blue rail on the banner only; rank cards use delta borders.
+   Hero stays full-bleed like the configured-manager Home view. */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
 }
@@ -14734,18 +14770,30 @@ html.home-player-modal-open {
   display: block;
 }
 .home-summary-hero {
-  /* Neutral zinc by default; direction classes tint to rise/fall. */
+  /* Transparent until is-rank-ready — avoids zinc FOUC before red/green stamp. */
   --home-hero-bg: 240 6% 28%;
   --home-hero-bg-deep: 240 8% 18%;
   --home-hero-fg: 0 0% 100%;
   --home-hero-muted: 240 8% 78%;
-  --home-hero-delta-up: 210 90% 78%;
-  /* Matchups pink (schedule-spectrum-fall), not ownership orange. */
-  --home-hero-delta-down: 328 72% 78%;
+  --home-hero-delta-up: 142 55% 72%;
+  --home-hero-delta-down: 0 78% 78%;
   position: relative;
   z-index: 0;
-  margin: 0 calc(-1 * var(--main-pad-x, 20px));
-  padding: 22px var(--main-pad-x, 20px) 52px;
+  margin: 0 calc(-1 * var(--home-hero-bleed-x, var(--main-pad-x, 20px)));
+  padding: 22px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 52px;
+  color: transparent;
+  background: transparent;
+  border-radius: var(--home-hero-radius, 0px);
+}
+html[data-page="home"] .home-dashboard.is-player-lookup .home-summary-hero {
+  margin-left: 0;
+  margin-right: 0;
+  margin-inline: 0;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: var(--radius);
+}
+.home-summary-hero.is-rank-ready {
   color: hsl(var(--home-hero-fg));
   background:
     linear-gradient(
@@ -14753,64 +14801,68 @@ html.home-player-modal-open {
       hsl(var(--home-hero-bg-deep)) 0%,
       hsl(var(--home-hero-bg)) 72%
     );
-  border-radius: 0;
-  transition:
-    background-color 0.45s var(--ease-out, ease),
-    filter 0.45s var(--ease-out, ease);
+}
+.home-summary-hero.is-rank-flat {
+  /* Neutral zinc when overall Δ is flat / unknown. */
+  --home-hero-bg: 240 6% 28%;
+  --home-hero-bg-deep: 240 8% 18%;
+  --home-hero-muted: 240 8% 78%;
 }
 .home-summary-hero.is-rank-up {
-  /* Matchups blue (easy / rise). */
-  --home-hero-bg: 217 55% 34%;
-  --home-hero-bg-deep: 217 58% 24%;
-  --home-hero-muted: 214 40% 82%;
-  --home-hero-delta-up: 210 95% 84%;
+  /* Classic green — rank rise. */
+  --home-hero-bg: 142 42% 32%;
+  --home-hero-bg-deep: 142 48% 22%;
+  --home-hero-muted: 142 28% 82%;
+  --home-hero-delta-up: 142 60% 78%;
 }
 .home-summary-hero.is-rank-down {
-  /* Matchups pink (hard / fall) — same family as schedule-spectrum-fall. */
-  --home-hero-bg: 328 42% 36%;
-  --home-hero-bg-deep: 328 48% 24%;
-  --home-hero-muted: 328 32% 86%;
-  --home-hero-delta-down: 328 78% 86%;
+  /* Classic red — rank fall. */
+  --home-hero-bg: 0 48% 36%;
+  --home-hero-bg-deep: 0 52% 24%;
+  --home-hero-muted: 0 28% 86%;
+  --home-hero-delta-down: 0 78% 84%;
 }
-/* Dark: quiet charcoal wash + bright delta — avoids a loud color slab on near-black UI. */
-html[data-theme="dark"] .home-summary-hero {
+/* Dark: quiet charcoal wash + bright green/red delta. */
+html[data-theme="dark"] .home-summary-hero.is-rank-flat,
+html[data-theme="dark"] .home-summary-hero:not(.is-rank-up):not(.is-rank-down) {
   --home-hero-bg: 240 5% 15%;
   --home-hero-bg-deep: 240 6% 9%;
   --home-hero-muted: 240 5% 66%;
-  --home-hero-delta-up: 210 90% 78%;
-  --home-hero-delta-down: 328 70% 76%;
+  --home-hero-delta-up: 142 55% 62%;
+  --home-hero-delta-down: 0 72% 68%;
 }
 html[data-theme="dark"] .home-summary-hero.is-rank-up {
-  --home-hero-bg: 217 22% 16%;
-  --home-hero-bg-deep: 217 28% 10%;
-  --home-hero-muted: 214 18% 70%;
-  --home-hero-delta-up: 210 92% 80%;
+  --home-hero-bg: 142 22% 14%;
+  --home-hero-bg-deep: 142 28% 9%;
+  --home-hero-muted: 142 18% 70%;
+  --home-hero-delta-up: 142 58% 64%;
 }
 html[data-theme="dark"] .home-summary-hero.is-rank-down {
-  --home-hero-bg: 328 18% 15%;
-  --home-hero-bg-deep: 328 24% 9%;
-  --home-hero-muted: 328 16% 70%;
-  --home-hero-delta-down: 328 72% 78%;
+  --home-hero-bg: 0 22% 15%;
+  --home-hero-bg-deep: 0 28% 9%;
+  --home-hero-muted: 0 18% 72%;
+  --home-hero-delta-down: 0 72% 70%;
 }
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .home-summary-hero {
+  html:not([data-theme="light"]) .home-summary-hero.is-rank-flat,
+  html:not([data-theme="light"]) .home-summary-hero:not(.is-rank-up):not(.is-rank-down) {
     --home-hero-bg: 240 5% 15%;
     --home-hero-bg-deep: 240 6% 9%;
     --home-hero-muted: 240 5% 66%;
-    --home-hero-delta-up: 210 90% 78%;
-    --home-hero-delta-down: 328 70% 76%;
+    --home-hero-delta-up: 142 55% 62%;
+    --home-hero-delta-down: 0 72% 68%;
   }
   html:not([data-theme="light"]) .home-summary-hero.is-rank-up {
-    --home-hero-bg: 217 22% 16%;
-    --home-hero-bg-deep: 217 28% 10%;
-    --home-hero-muted: 214 18% 70%;
-    --home-hero-delta-up: 210 92% 80%;
+    --home-hero-bg: 142 22% 14%;
+    --home-hero-bg-deep: 142 28% 9%;
+    --home-hero-muted: 142 18% 70%;
+    --home-hero-delta-up: 142 58% 64%;
   }
   html:not([data-theme="light"]) .home-summary-hero.is-rank-down {
-    --home-hero-bg: 328 18% 15%;
-    --home-hero-bg-deep: 328 24% 9%;
-    --home-hero-muted: 328 16% 70%;
-    --home-hero-delta-down: 328 72% 78%;
+    --home-hero-bg: 0 22% 15%;
+    --home-hero-bg-deep: 0 28% 9%;
+    --home-hero-muted: 0 18% 72%;
+    --home-hero-delta-down: 0 72% 70%;
   }
 }
 .home-summary-hero-label {
@@ -14877,12 +14929,12 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-up ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 4px 14px hsl(217 40% 16% / 0.08),
+    0 4px 14px hsl(142 40% 16% / 0.08),
     var(--shadow-sm);
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-down ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 4px 14px hsl(328 40% 16% / 0.08),
+    0 4px 14px hsl(0 40% 16% / 0.08),
     var(--shadow-sm);
 }
 .home-summary-cards {
@@ -15626,24 +15678,31 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   padding: 10px 12px;
   min-width: 0;
 }
-/* Rank delta borders on summary rank cards (live or not). */
-.home-stat-panel {
-  --home-rank-saturate-duration: 3.4s;
-  --home-rank-saturate-ease: cubic-bezier(0.12, 0.88, 0.22, 1);
-  transition:
-    border-color var(--home-rank-saturate-duration) var(--home-rank-saturate-ease),
-    box-shadow var(--home-rank-saturate-duration) var(--home-rank-saturate-ease);
+/* Rank delta borders on summary rank cards — classic green / red. */
+.home-dashboard {
+  --home-rank-up: 142 65% 34%;
+  --home-rank-down: 0 70% 46%;
+}
+html[data-theme="dark"] .home-dashboard {
+  --home-rank-up: 142 55% 48%;
+  --home-rank-down: 0 72% 58%;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-dashboard {
+    --home-rank-up: 142 55% 48%;
+    --home-rank-down: 0 72% 58%;
+  }
 }
 .home-stat-panel.is-rank-border-up {
-  border-color: hsl(var(--positive) / 0.55);
+  border-color: hsl(var(--home-rank-up) / 0.55);
   box-shadow:
-    0 0 0 1px hsl(var(--positive) / 0.18),
+    0 0 0 1px hsl(var(--home-rank-up) / 0.18),
     var(--shadow-sm);
 }
 .home-stat-panel.is-rank-border-down {
-  border-color: hsl(var(--negative) / 0.55);
+  border-color: hsl(var(--home-rank-down) / 0.55);
   box-shadow:
-    0 0 0 1px hsl(var(--negative) / 0.18),
+    0 0 0 1px hsl(var(--home-rank-down) / 0.18),
     var(--shadow-sm);
 }
 .home-standings-live-table td.home-col-live,
@@ -15811,38 +15870,6 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-rank-num {
   min-width: 0;
 }
-.home-rank-delta:not([hidden]) {
-  animation: home-rank-chrome-in 0.42s var(--ease-out) both;
-}
-.home-dashboard.is-rank-chrome-staged .home-rank-delta:not([hidden]) {
-  animation: home-rank-chrome-in 0.42s var(--ease-out) both;
-}
-@keyframes home-rank-chrome-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .home-rank-delta:not([hidden]) {
-    animation: none;
-  }
-  .home-stat-panel {
-    transition: none;
-  }
-  .home-rank-delta.is-up,
-  .home-rank-delta.is-down {
-    transition: none;
-  }
-  .home-standings-pill.is-emphasize,
-  .home-standings-pill.is-strong {
-    transition: none;
-  }
-}
 .home-rank-delta {
   display: inline-flex;
   align-items: center;
@@ -15850,14 +15877,6 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   flex-shrink: 0;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-}
-.home-rank-delta.is-up,
-.home-rank-delta.is-down {
-  transition: color var(--home-rank-saturate-duration, 3.4s) var(--home-rank-saturate-ease, cubic-bezier(0.12, 0.88, 0.22, 1));
-}
-.home-rank-delta.is-chrome-muted.is-up,
-.home-rank-delta.is-chrome-muted.is-down {
-  color: var(--text-faint);
 }
 .home-rank-delta .icon {
   width: 14px;
@@ -15886,12 +15905,12 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   overflow: hidden;
 }
 .home-rank-delta.is-up {
-  color: hsl(var(--positive));
+  color: hsl(var(--home-rank-up));
 }
 .home-rank-delta.is-down {
-  color: hsl(var(--negative));
+  color: hsl(var(--home-rank-down));
 }
-/* Hero delta must beat .home-rank-delta orange/blue (same specificity otherwise). */
+/* Hero delta uses band-local tokens (also classic green / red). */
 .home-summary-hero .home-summary-hero-delta.is-up {
   color: hsl(var(--home-hero-delta-up));
 }
@@ -16012,8 +16031,10 @@ html.home-squad-wide #home-feed-panel {
   overflow: hidden;
 }
 html.home-squad-wide .home-tables-grid > .home-table-panel {
-  max-height: var(--home-tables-panel-h, none);
+  max-height: var(--home-tables-panel-h, min(62vh, 640px));
   overflow: hidden;
+  align-self: start;
+  min-height: 0;
 }
 html.home-squad-wide .home-squad-page:nth-child(2) {
   display: none;
@@ -16419,6 +16440,10 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     height: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   #home-squad-panel .home-squad-table,
   #home-standings-panel .home-standings-table {
@@ -16752,11 +16777,32 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-squad-ownership-table .ownership-delta {
   font-size: 11px;
   min-width: 2.6em;
-  padding: 2px 5px;
+  /* Match Price Δ status pill height (icon + pad). */
+  padding: 3px 6px;
+  line-height: 1.25;
+  box-sizing: border-box;
+  min-height: 22px;
+}
+/* Live TSB% — muted grey pill, dark text (not the black Ownership live chip). */
+.home-squad-ownership-table .ownership-pill.is-live {
+  background: hsl(var(--muted));
+  color: var(--text);
+}
+html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
+  background: hsl(var(--muted));
+  color: var(--text);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-squad-ownership-table .ownership-pill.is-live {
+    background: hsl(var(--muted));
+    color: var(--text);
+  }
 }
 .home-squad-ownership-table .prices-status-pill {
   font-size: 10px;
-  padding: 2px 6px;
+  padding: 3px 6px;
+  min-height: 22px;
+  box-sizing: border-box;
   max-width: 100%;
 }
 .home-squad-ownership-table .prices-status-pill .prices-status-label {
@@ -17420,14 +17466,6 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   line-height: 1.2;
   background-color: var(--hl-fill);
   color: var(--hl-text, var(--text));
-  transition:
-    background-color var(--home-rank-saturate-duration, 3.4s) var(--home-rank-saturate-ease, cubic-bezier(0.12, 0.88, 0.22, 1)),
-    color var(--home-rank-saturate-duration, 3.4s) var(--home-rank-saturate-ease, cubic-bezier(0.12, 0.88, 0.22, 1));
-}
-.home-dashboard.is-rank-chrome-staged .home-standings-live-table .home-standings-pill.is-emphasize,
-.home-dashboard.is-rank-chrome-staged .home-standings-live-table .home-standings-pill.is-strong {
-  background-color: transparent !important;
-  color: var(--text) !important;
 }
 .home-standings-pill.is-emphasize {
   font-weight: 700;
@@ -17602,40 +17640,28 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   font-variant-numeric: tabular-nums;
 }
 .home-imp.is-pos .home-imp-pct {
-  color: hsl(var(--positive));
+  color: var(--imp-fg, hsl(142 65% 34%));
 }
 .home-imp.is-neg .home-imp-pct {
-  color: hsl(var(--negative));
+  color: var(--imp-fg, hsl(0 70% 46%));
 }
-/* Home IMP — always driven by --hl-sat (default 1) so enter can finish at full color. */
+/* Home IMP — --imp-fill / --imp-fg from JS (green/red intensity by |imp|). */
 #home-page {
   --hl-sat: 1;
 }
-#home-page .home-imp-fill.is-pos {
-  background: color-mix(
-    in srgb,
-    hsl(var(--positive)) calc(var(--hl-sat, 1) * 100%),
-    hsl(var(--foreground) / 0.16)
-  );
-}
+#home-page .home-imp-fill.is-pos,
 #home-page .home-imp-fill.is-neg {
   background: color-mix(
     in srgb,
-    hsl(var(--negative)) calc(var(--hl-sat, 1) * 100%),
+    var(--imp-fill, hsl(142 65% 34%)) calc(var(--hl-sat, 1) * 100%),
     hsl(var(--foreground) / 0.16)
   );
 }
-#home-page .home-imp.is-pos .home-imp-pct {
-  color: color-mix(
-    in srgb,
-    hsl(var(--positive)) calc(var(--hl-sat, 1) * 100%),
-    var(--text-faint)
-  );
-}
+#home-page .home-imp.is-pos .home-imp-pct,
 #home-page .home-imp.is-neg .home-imp-pct {
   color: color-mix(
     in srgb,
-    hsl(var(--negative)) calc(var(--hl-sat, 1) * 100%),
+    var(--imp-fg, var(--imp-fill, hsl(142 65% 34%))) calc(var(--hl-sat, 1) * 100%),
     var(--text-faint)
   );
 }
@@ -18139,7 +18165,13 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   .home-squad-ownership-table .ownership-delta {
     font-size: 10px;
     min-width: 2.35em;
-    padding: 2px 4px;
+    padding: 3px 5px;
+    line-height: 1.25;
+    min-height: 22px;
+  }
+  .home-squad-ownership-table .prices-status-pill {
+    min-height: 22px;
+    padding: 3px 6px;
   }
   .home-squad-table .home-imp {
     min-width: 0;
@@ -18312,12 +18344,6 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   html[data-page="home"] .home-summary[data-home-summary="hero"] .home-summary-hero {
     margin-top: 0;
   }
-  /* Viewing: keep hero inside the same gutters as the banner + cards. */
-  html[data-page="home"] .home-dashboard.is-viewing-manager .home-summary-hero {
-    margin-left: 0;
-    margin-right: 0;
-    border-radius: var(--radius);
-  }
 }
 html[data-page="home"] .filters,
 html[data-page="home"] #subtoolbar {
@@ -18484,6 +18510,13 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tr.is-owner-match .home-standings-name {
   color: hsl(var(--blue-hsl));
 }
+.home-standings-table tr.is-owner-bench td {
+  --home-row-bg: hsl(var(--muted-foreground) / 0.10);
+  background: var(--home-row-bg);
+}
+.home-standings-table tr.is-owner-bench .home-standings-name {
+  color: var(--text-dim);
+}
 .home-standings-table tr.is-owner-demote {
   opacity: 0.38;
 }
@@ -18508,6 +18541,11 @@ html[data-page="home"] #subtoolbar {
   #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-match:hover td,
   html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-match.is-home-cross-hover td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.12);
+    background: var(--home-row-bg);
+  }
+  #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-bench:hover td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-bench.is-home-cross-hover td {
+    --home-row-bg: hsl(var(--muted-foreground) / 0.10);
     background: var(--home-row-bg);
   }
   #home-page:not(.is-scroll-interaction) .home-standings-table tr.is-owner-demote:hover td {
@@ -19326,6 +19364,33 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-points-table thead th.col-num {
   font-size: 11px;
 }
+/* Sort caret hangs off the label without shifting it — keeps headers centered
+   over pills whether or not the column is sorted. */
+#live-page .live-points-table thead th[data-live-sort] .live-th-sort,
+#live-page .live-sticky-head .live-points-table thead th[data-live-sort] .live-th-sort {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+#live-page .live-points-table thead th[data-live-sort] .live-th-label,
+#live-page .live-sticky-head .live-points-table thead th[data-live-sort] .live-th-label {
+  display: inline-block;
+}
+#live-page .live-points-table thead th[data-live-sort] .arrow,
+#live-page .live-sticky-head .live-points-table thead th[data-live-sort] .arrow {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  margin: 0 0 0 1px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+#live-page .live-points-table thead th[data-live-sort] .arrow .icon,
+#live-page .live-sticky-head .live-points-table thead th[data-live-sort] .arrow .icon {
+  width: 11px;
+  height: 11px;
+}
 
 /* Live Points — photo | name+pin / TEAM · POS (simplify rules shared with Statistics) */
 #live-page .live-points-table .live-points-id {
@@ -19598,6 +19663,20 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
+  }
+  /* Match body Points col padding — generic sticky th padding is tighter and
+     drifts header labels off the pills when tables size independently. */
+  #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-num {
+    padding-left: 14px;
+    padding-right: 14px;
+    min-width: 3.45em;
+    font-size: 10px;
+  }
+  #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-num-narrow {
+    padding-left: 10px;
+    padding-right: 10px;
+    min-width: 2.85em;
+    font-size: 10px;
   }
   #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-player {
     /* Keep vertical padding from the taller sticky header; horizontal from morph. */
