@@ -182,6 +182,12 @@
     <path d="M6 21h12"/>
     <path d="M6 13h10"/>
   </symbol>
+  <symbol id="i-pound-sterling-circle" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M10 16V9.5a2.5 2.5 0 0 1 5 0"/>
+    <path d="M8 12h4"/>
+    <path d="M8 16h7"/>
+  </symbol>
   <symbol id="i-check" viewBox="0 0 24 24">
     <path d="M20 6 9 17l-5-5"/>
   </symbol>
@@ -376,7 +382,7 @@
       Ownership
     </button>
     <button id="page-prices" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling"/></svg>
+      <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
       Prices
     </button>
     <button id="page-team" class="page-tab-btn" type="button" hidden>
@@ -1215,7 +1221,7 @@
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling"/></svg>Prices<button class="page-info-btn" type="button" aria-label="How Prices works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Prices<button class="page-info-btn" type="button" aria-label="How Prices works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Official FPL price-change predictor — players very likely or likely to rise or fall before the next daily price update. Refreshed hourly from bootstrap-static.</p>
           </div>
         </div>
@@ -1633,7 +1639,7 @@
 <script src="home_data.js?v=39"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1062"></script>
+<script src="app.js?v=1063"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

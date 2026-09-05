@@ -11533,7 +11533,7 @@
       const note = isActual
         ? "Actual log starts empty on deploy and fills as daily/hourly fetches detect changes."
         : "Refreshed hourly via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
-      return `${spitHead("pound-sterling", "How Prices works")}
+      return `${spitHead("pound-sterling-circle", "How Prices works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
