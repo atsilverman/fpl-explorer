@@ -1079,6 +1079,8 @@
     liveFeedTable: $("#live-feed-table"),
     liveFeedHead: $("#live-feed-head"),
     liveFeedBody: $("#live-feed-body"),
+    liveFeedStickyHead: $("#live-feed-sticky-head"),
+    liveTableStickyHead: $("#live-table-sticky-head"),
     liveFeedFilters: $("#live-feed-filters"),
     liveFeedOwnedSeg: $("#live-feed-owned-seg"),
     liveUpdatedFooter: $("#live-updated-footer"),
@@ -6956,18 +6958,27 @@
     const standings = Array.isArray(HOME.standings) ? HOME.standings : [];
     const leagueLabel = HOME.leagueName || "League";
     const rows = standings
-      .filter((r) => owners.has(Number(r.entry)))
       .slice()
       .sort((a, b) => {
         const ra = Number(a.rankOfficial ?? a.rankLive ?? 9999);
         const rb = Number(b.rankOfficial ?? b.rankLive ?? 9999);
         return ra - rb;
       });
+    const ownerCount = rows.filter((r) => owners.has(Number(r.entry))).length;
     if (!rows.length) {
       return `<section class="home-player-owners">
         <h3 class="home-player-owners-heading">
           <span class="home-player-owners-kicker">League</span>
           <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
+        </h3>
+        <p class="home-player-owners-empty">No managers loaded for ${escapeHtml(leagueLabel)}.</p>
+      </section>`;
+    }
+    if (!ownerCount) {
+      return `<section class="home-player-owners">
+        <h3 class="home-player-owners-heading">
+          <span class="home-player-owners-kicker">Owners</span>
+          <span class="home-player-owners-meta">0/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
         </h3>
         <p class="home-player-owners-empty">No managers in ${escapeHtml(leagueLabel)} own this player.</p>
       </section>`;
@@ -6975,10 +6986,12 @@
     const list = rows
       .map((r) => {
         const entry = Number(r.entry);
+        const owns = owners.has(entry);
         const rank = r.rankOfficial ?? r.rankLive ?? "—";
         const gw = homeStandingsGwPoints(r);
         const total = r.total != null ? Number(r.total) : r.totalPoints;
-        return `<button type="button" class="home-player-owner-row" data-entry="${escapeHtml(String(entry))}">
+        const ownLabel = owns ? "owns" : "does not own";
+        return `<button type="button" class="home-player-owner-row${owns ? " is-owner" : " is-demote"}" data-entry="${escapeHtml(String(entry))}" aria-label="${escapeHtml(r.playerName || "Manager")} ${ownLabel} this player">
           <span class="home-player-owner-rank">${escapeHtml(String(rank))}</span>
           <span class="home-player-owner-id">
             <span class="home-player-owner-name">${escapeHtml(r.playerName || "—")}</span>
@@ -6998,7 +7011,7 @@
     return `<section class="home-player-owners">
       <h3 class="home-player-owners-heading">
         <span class="home-player-owners-kicker">Owners</span>
-        <span class="home-player-owners-meta">${rows.length}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
+        <span class="home-player-owners-meta">${ownerCount}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
       </h3>
       <div class="home-player-owners-list" role="list">${cols}${list}</div>
     </section>`;
@@ -7306,15 +7319,13 @@
 
   function syncHomeSearchBtn() {
     if (el.homeSearchBtn) {
-      const clearMode = !!homeLookupPlayer;
+      // Overlay/tray has its own close control — keep this as Search only.
       const iconUse = el.homeSearchBtn.querySelector("use");
-      if (iconUse) iconUse.setAttribute("href", clearMode ? "#i-x" : "#i-search");
-      const label = clearMode ? "Clear player search" : "Search players";
-      setTip(el.homeSearchBtn, label);
-      el.homeSearchBtn.setAttribute("aria-label", label);
-      el.homeSearchBtn.classList.toggle("is-clear", clearMode);
-      el.homeSearchBtn.setAttribute("aria-pressed", clearMode ? "true" : "false");
-      el.homeSearchBtn.classList.toggle("on", clearMode);
+      if (iconUse) iconUse.setAttribute("href", "#i-search");
+      setTip(el.homeSearchBtn, "Search players");
+      el.homeSearchBtn.setAttribute("aria-label", "Search players");
+      el.homeSearchBtn.classList.remove("is-clear", "on");
+      el.homeSearchBtn.setAttribute("aria-pressed", "false");
       // Mobile nav only — desktop uses the expanded header search.
       el.homeSearchBtn.hidden = state.page !== "home" || !NARROW_MQ.matches;
     }
@@ -8658,7 +8669,7 @@
     const ownershipTree =
       NARROW_MQ.matches && state.page === "ownership" && ownershipIsTreemap();
     // Expected + Ownership treemap: nested fill. Stats / Ownership table /
-    // Planner: page-level .main scroll (no fill height).
+    // Planner / Live: page-level .main scroll (no fill height).
     const expectedFill = state.page === "expected";
     if (!NARROW_MQ.matches || (!expectedFill && !ownershipTree)) {
       root.style.removeProperty("--mobile-scrollport-min-h");
@@ -9048,6 +9059,7 @@
       refreshNameSimplifyOrigins();
       syncMobileScrollportHeight();
       syncMobileTopChromeInset();
+      if (state.page === "live") syncLiveStickyHeads();
       scheduleOptaMobileNameColWidth();
       scheduleTeamTableHeadHeightSync();
       syncExpectedCatToolbar();
@@ -9373,6 +9385,8 @@
   const NAME_SIMPLIFY_START = 28;
   const NAME_SIMPLIFY_END = 220;
   const OPTA_NAME_SIMPLIFY_END = 110;
+  /** Points: finish compact early so the PS end-pan doesn't fight column morph. */
+  const LIVE_POINTS_NAME_SIMPLIFY_END = 64;
   const nameSimplifyRafs = new WeakMap();
 
   function nameSimplifyWraps() {
@@ -9632,12 +9646,18 @@
         wrap.style.removeProperty("--name-col-w");
         wrap.removeAttribute("data-view");
       }
+      if (el.liveTableStickyHead) {
+        el.liveTableStickyHead.style.removeProperty("--name-col-w");
+      }
       return;
     }
     if (NARROW_MQ.matches) {
       liveMobileNameColW = LIVE_POINTS_MOBILE_NAME_COL_W;
       wrap.dataset.view = "players";
       wrap.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
+      if (el.liveTableStickyHead) {
+        el.liveTableStickyHead.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
+      }
       return;
     }
     const measured = measureNameColWidth(wrap, {
@@ -9650,6 +9670,9 @@
     const prev = wrap.style.getPropertyValue("--name-col-w");
     wrap.dataset.view = "players";
     wrap.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
+    if (el.liveTableStickyHead) {
+      el.liveTableStickyHead.style.setProperty("--name-col-w", `${liveMobileNameColW}px`);
+    }
     if (prev !== `${liveMobileNameColW}px`) invalidateNameSimplifyOrigin(wrap);
   }
 
@@ -9751,12 +9774,19 @@
     }
     const rel = Math.max(0, scrollLeft - origin);
     if (rel <= NAME_SIMPLIFY_START) return 0;
-    const end =
-      state.page === "opta" ||
-      state.page === "team" ||
-      (state.page === "live" && state.liveMode === "points")
+    const livePoints = state.page === "live" && state.liveMode === "points";
+    const end = livePoints
+      ? LIVE_POINTS_NAME_SIMPLIFY_END
+      : state.page === "opta" || state.page === "team"
         ? OPTA_NAME_SIMPLIFY_END
         : NAME_SIMPLIFY_END;
+    // Hysteresis near compact: once fully collapsed, stay there until the user
+    // pans clearly back left — kills right-edge jitter when width morph changes
+    // maxScroll and clamps scrollLeft.
+    if (livePoints && wrap) {
+      const prev = Number(wrap.dataset.nameSimplifyT || 0);
+      if (prev >= 0.999 && rel >= end - 18) return 1;
+    }
     const linear = Math.min(1, (rel - NAME_SIMPLIFY_START) / Math.max(1, end - NAME_SIMPLIFY_START));
     // smoothstep — soft after the initial drag, soft landing at compact
     return linear * linear * (3 - 2 * linear);
@@ -9819,8 +9849,41 @@
       node.classList.remove("name-simplify-ready", "is-name-simplifying");
       node.style.removeProperty("--name-collapse");
       node.removeAttribute("data-view");
+      delete node.dataset.nameSimplifyT;
     });
+    if (host === el.liveTableWrap) clearLivePointsStickySimplify();
     invalidateNameSimplifyOrigin(scrollEl);
+  }
+
+  function clearLivePointsStickySimplify() {
+    const sticky = el.liveTableStickyHead;
+    if (!sticky) return;
+    sticky.classList.remove("name-simplify-ready", "is-name-simplifying");
+    sticky.style.removeProperty("--name-collapse");
+    sticky.removeAttribute("data-view");
+  }
+
+  /** Keep detached Points sticky head in lockstep with row name-col morph. */
+  function syncLivePointsStickySimplifyFromHost(host, scrollLeft) {
+    const sticky = el.liveTableStickyHead;
+    if (!sticky || sticky.hidden || host !== el.liveTableWrap) return;
+    if (state.liveMode !== "points" || !nameSimplifyActive()) {
+      clearLivePointsStickySimplify();
+      return;
+    }
+    sticky.classList.toggle("name-simplify-ready", host.classList.contains("name-simplify-ready"));
+    sticky.classList.toggle("is-name-simplifying", host.classList.contains("is-name-simplifying"));
+    if (host.dataset.view) sticky.dataset.view = host.dataset.view;
+    else sticky.removeAttribute("data-view");
+    const collapse = host.style.getPropertyValue("--name-collapse");
+    if (collapse !== "") sticky.style.setProperty("--name-collapse", collapse);
+    else sticky.style.removeProperty("--name-collapse");
+    const colW = host.style.getPropertyValue("--name-col-w");
+    if (colW) sticky.style.setProperty("--name-col-w", colW);
+    const inner = sticky.querySelector(".live-sticky-head-inner");
+    if (inner && scrollLeft != null && inner.scrollLeft !== scrollLeft) {
+      inner.scrollLeft = scrollLeft;
+    }
   }
 
   function updateNameColumnSimplify(scrollEl, scrollLeftOverride) {
@@ -9838,6 +9901,10 @@
         : state.view;
     host.style.setProperty("--name-collapse", String(t));
     host.classList.toggle("is-name-simplifying", t > 0.02);
+    if (host === el.liveTableWrap) {
+      host.dataset.nameSimplifyT = String(t);
+    }
+    syncLivePointsStickySimplifyFromHost(host, scrollLeft);
   }
 
   function bindNameColumnSimplify(wrap) {
@@ -9846,6 +9913,12 @@
     wrap.addEventListener(
       "scroll",
       () => {
+        // Points sticky head needs same-frame collapse + scrollLeft — rAF lag
+        // desyncs the Player header from the sticky body column.
+        if (wrap === el.liveTableWrap && state.page === "live" && state.liveMode === "points") {
+          updateNameColumnSimplify(wrap);
+          return;
+        }
         if (nameSimplifyRafs.has(wrap)) return;
         nameSimplifyRafs.set(
           wrap,
@@ -18515,6 +18588,92 @@
     });
   }
 
+  /** Mobile-only: clone table column headers into a sticky bar outside the
+      overflow-x wrap so page scroll can pin them flush above the rows. */
+  function syncLiveStickyHead(stickyEl, headEl, tableEl) {
+    if (!stickyEl) return;
+    if (!NARROW_MQ.matches || !headEl || !tableEl || !headEl.innerHTML.trim()) {
+      stickyEl.hidden = true;
+      stickyEl.innerHTML = "";
+      return;
+    }
+    const cls = escapeHtml(tableEl.className || "");
+    stickyEl.innerHTML = `<div class="live-sticky-head-inner"><table class="${cls}"><thead>${headEl.innerHTML}</thead></table></div>`;
+    stickyEl.hidden = false;
+    const inner = stickyEl.querySelector(".live-sticky-head-inner");
+    if (inner && el.liveTableWrap && stickyEl === el.liveTableStickyHead) {
+      inner.scrollLeft = el.liveTableWrap.scrollLeft || 0;
+      wireLiveStickyHeadInnerScroll(stickyEl);
+      if (state.liveMode === "points") {
+        syncLivePointsStickySimplifyFromHost(el.liveTableWrap, el.liveTableWrap.scrollLeft || 0);
+      }
+    }
+  }
+
+  function syncLiveStickyHeads() {
+    const mode = state.liveMode;
+    if (el.liveFeedStickyHead) {
+      if (mode === "feed" && el.liveFeedWrap && !el.liveFeedWrap.hidden) {
+        syncLiveStickyHead(el.liveFeedStickyHead, el.liveFeedHead, el.liveFeedTable);
+      } else {
+        el.liveFeedStickyHead.hidden = true;
+        el.liveFeedStickyHead.innerHTML = "";
+      }
+    }
+    if (el.liveTableStickyHead) {
+      if (
+        (mode === "defcon" || mode === "points") &&
+        el.liveTableWrap &&
+        !el.liveTableWrap.hidden
+      ) {
+        syncLiveStickyHead(el.liveTableStickyHead, el.liveTableHead, el.liveTable);
+      } else {
+        el.liveTableStickyHead.hidden = true;
+        el.liveTableStickyHead.innerHTML = "";
+      }
+    }
+  }
+
+  function bindLiveStickyHeadScrollSync() {
+    const wrap = el.liveTableWrap;
+    const sticky = el.liveTableStickyHead;
+    if (!wrap || !sticky || wrap.dataset.stickyHeadScroll === "1") return;
+    wrap.dataset.stickyHeadScroll = "1";
+    let syncing = false;
+    wrap.addEventListener(
+      "scroll",
+      () => {
+        if (syncing || sticky.hidden) return;
+        // Points: name-simplify path syncs scrollLeft + collapse together.
+        if (state.liveMode === "points" && nameSimplifyActive()) return;
+        const inner = sticky.querySelector(".live-sticky-head-inner");
+        if (!inner) return;
+        syncing = true;
+        inner.scrollLeft = wrap.scrollLeft;
+        syncing = false;
+      },
+      { passive: true }
+    );
+  }
+
+  function wireLiveStickyHeadInnerScroll(stickyEl) {
+    const inner = stickyEl && stickyEl.querySelector(".live-sticky-head-inner");
+    const wrap = el.liveTableWrap;
+    if (!inner || !wrap || inner.dataset.scrollWired === "1") return;
+    inner.dataset.scrollWired = "1";
+    let syncing = false;
+    inner.addEventListener(
+      "scroll",
+      () => {
+        if (syncing || stickyEl.hidden) return;
+        syncing = true;
+        wrap.scrollLeft = inner.scrollLeft;
+        syncing = false;
+      },
+      { passive: true }
+    );
+  }
+
   function liveFilteredRows(rows) {
     let out = rows;
     if (state.liveMatchups.size) {
@@ -18728,6 +18887,7 @@
       const tr = byCode.get(livePointsRowCode(entry));
       if (!tr) return;
       tr.style.setProperty("--enter-i", String(i));
+      tr.classList.toggle("is-match-live", !!liveMatchLiveRowClass(entry));
       const numCells = tr.querySelectorAll("td.col-num");
       LIVE_POINTS_COLS.forEach((col, ci) => {
         const td = numCells[ci];
@@ -18835,18 +18995,28 @@
       const cls = ["col-num", col.narrow ? "col-num-narrow" : ""].filter(Boolean).join(" ");
       return `<td class="${cls}">${inner}</td>`;
     }).join("");
-    return `<tr class="live-points-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
+    return `<tr class="live-points-row${liveMatchLiveRowClass(entry)}" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
       <td class="col-player">${livePointsIdentityHTML(player, pos)}</td>
       ${cells}
     </tr>`;
   }
 
-  function liveSortTh(key, label, extraClass, title) {
+  function liveSortTh(key, label, extraClass, title, { sortable = true } = {}) {
+    if (!sortable) {
+      return `<th class="${extraClass || ""}"${tipAttr(title || label)}>${escapeHtml(label)}</th>`;
+    }
     const sorted = state.liveSortKey === key;
     const arrow = sorted
       ? `<span class="arrow">${iconHTML(state.liveSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`
       : "";
     return `<th class="${extraClass || ""}${sorted ? " sorted" : ""}" data-live-sort="${escapeHtml(key)}"${tipAttr(title || label)}>${escapeHtml(label)}${arrow}</th>`;
+  }
+
+  /** Subtle live-match row tint — skipped when the Live status filter is already on. */
+  function liveMatchLiveRowClass(entry) {
+    if (state.liveStatus === "live") return "";
+    if (!(entry && (entry.live || liveEgIsInPlay(entry.eg)))) return "";
+    return " is-match-live";
   }
 
   function liveRowHTML(entry, enterI) {
@@ -18861,7 +19031,7 @@
       decimals: 0,
       className: "live-stat-roll",
     });
-    return `<tr class="live-defcon-row" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
+    return `<tr class="live-defcon-row${liveMatchLiveRowClass(entry)}" style="--enter-i:${enterI}" data-player-code="${escapeHtml(String(player.code || ""))}">
       <td class="col-player">${tableOwnershipIdentityHTML(player)}</td>
       <td class="col-live-defcon">
         <div class="live-defcon-cell">
@@ -19142,8 +19312,8 @@
   function renderLiveDefcon(gw) {
     const rows = liveSortRows(liveFilteredRows(liveBuildRows(gw)));
     el.liveTableHead.innerHTML = `<tr>
-      ${liveSortTh("name", "Player", "col-player")}
-      ${liveSortTh("actions", "DefCon", "col-live-defcon", "Position-correct actions toward threshold (DEF 10 CBIT · MID/FWD 12 CBIRT)")}
+      ${liveSortTh("name", "Player", "col-player", "Player", { sortable: false })}
+      ${liveSortTh("actions", "DefCon", "col-live-defcon", "Position-correct actions toward threshold (DEF 10 CBIT · MID/FWD 12 CBIRT)", { sortable: false })}
     </tr>`;
     if (!rows.length) {
       el.liveTableBody.innerHTML = `<tr class="live-empty-row"><td colspan="2">No DefCon rows for the current filters.</td></tr>`;
@@ -19246,6 +19416,7 @@
     syncLiveNavChrome();
     syncLivePointsCoreUnder();
     if (mode === "points") primeLivePointsTableLayout();
+    syncLiveStickyHeads();
     bindOwnershipPhotoFallback(el.livePage);
 
     if (quiet) {
@@ -19274,6 +19445,7 @@
     if (el.liveTableWrap && state.liveMode === "points") {
       updateNameColumnSimplify(el.liveTableWrap);
     }
+    syncLiveStickyHeads();
   }
 
   let liveEnterMotionToken = 0;
@@ -23367,10 +23539,6 @@
       e.preventDefault();
       e.stopPropagation();
       if (state.page !== "home") setPage("home");
-      if (homeLookupPlayer) {
-        clearHomePlayerLookup();
-        return;
-      }
       if (mobileSheetOpen && mobileSheetKey === "home-search") {
         closeMobileSheet();
         return;
@@ -23520,6 +23688,21 @@
     el.liveTableHead.addEventListener("click", (e) => {
       const th = e.target.closest("th[data-live-sort]");
       if (!th || !el.liveTableHead.contains(th)) return;
+      const key = th.dataset.liveSort;
+      if (!key) return;
+      if (state.liveSortKey === key) {
+        state.liveSortDir = state.liveSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.liveSortKey = key;
+        state.liveSortDir = key === "name" ? "asc" : "desc";
+      }
+      renderLive({ animate: true });
+    });
+  }
+  if (el.liveTableStickyHead) {
+    el.liveTableStickyHead.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-live-sort]");
+      if (!th || !el.liveTableStickyHead.contains(th)) return;
       const key = th.dataset.liveSort;
       if (!key) return;
       if (state.liveSortKey === key) {
@@ -25761,6 +25944,7 @@
     });
     bindAllNameColumnSimplifies();
     bindNestedTableScroll();
+    bindLiveStickyHeadScrollSync();
     bindPricesPredictionColumnsObserver();
     bindPricesActualColumnsObserver();
     bindMobileChromeScrollHide();

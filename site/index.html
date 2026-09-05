@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1019" />
+<link rel="stylesheet" href="styles.css?v=1031" />
 <script>
 (() => {
   try {
@@ -1121,12 +1121,14 @@
           </div>
         </div>
       </div>
+      <div class="live-sticky-head" id="live-feed-sticky-head" hidden></div>
       <div class="live-feed-wrap table-wrap" id="live-feed-wrap">
         <table class="live-feed-table ownership-table" id="live-feed-table">
           <thead id="live-feed-head"></thead>
           <tbody id="live-feed-body"></tbody>
         </table>
       </div>
+      <div class="live-sticky-head" id="live-table-sticky-head" hidden></div>
       <div class="table-wrap live-table-wrap" id="live-table-wrap" hidden>
         <table class="live-defcon-table ownership-table" id="live-table">
           <thead id="live-table-head"></thead>
@@ -1639,7 +1641,7 @@
 <script src="home_data.js?v=39"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1064"></script>
+<script src="app.js?v=1073"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

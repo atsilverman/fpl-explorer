@@ -3496,8 +3496,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     margin-bottom: 8px;
   }
 
-  /* Live: page (.main) scrolls vertically — same model as Statistics / Ownership table. */
+  /* Live: page (.main) scrolls vertically — same model as Statistics / Ownership table.
+     Mobile column headers use a detached sticky bar (outside overflow-x wraps). */
   html[data-page="live"] .main {
+    padding-top: 0;
     padding-bottom: var(--main-pad-x, 8px);
     overflow-x: hidden;
     overflow-y: auto;
@@ -3508,6 +3510,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: block;
     flex: none;
     min-height: 0;
+    padding-top: var(--main-pad-top, 8px);
   }
   html[data-page="live"] #live-page .live-table-wrap {
     overflow-x: auto;
@@ -3530,7 +3533,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html[data-page="live"] #live-page .live-feed-wrap {
     overflow: auto;
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
   }
   html.has-mobile-bottom-dock[data-page="live"] #live-page .page-data-footer:not([hidden]) {
@@ -4039,10 +4042,18 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #prices-page .prices-table-wrap.name-simplify-ready,
 #opta-page .table-wrap.name-simplify-ready,
 #team-page .table-wrap.name-simplify-ready,
-#live-page .live-table-wrap.name-simplify-ready {
+#live-page .live-table-wrap.name-simplify-ready,
+#live-page .live-sticky-head.name-simplify-ready {
   --name-col-compact-players: 54px;
   --name-col-compact-teams: 54px;
   --own-photo: 30px;
+}
+#live-page .live-sticky-head.name-simplify-ready {
+  --name-col-full: var(--name-col-w, 118px);
+  --name-col-compact: var(--name-col-compact-players);
+  --name-col-w-morph: calc(
+    var(--name-col-full) - var(--name-collapse) * (var(--name-col-full) - var(--name-col-compact))
+  );
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
 #ownership-table-wrap.name-simplify-ready tbody td.col-player,
@@ -4059,7 +4070,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
 #team-picker-view .table-wrap.name-simplify-ready thead th.col-player,
 #team-picker-view .table-wrap.name-simplify-ready tbody td.col-player,
 #live-page .live-table-wrap.name-simplify-ready thead th.col-player,
-#live-page .live-table-wrap.name-simplify-ready tbody td.col-player {
+#live-page .live-table-wrap.name-simplify-ready tbody td.col-player,
+#live-page .live-sticky-head.name-simplify-ready thead th.col-player {
   width: var(--name-col-w-morph);
   min-width: var(--name-col-w-morph);
   max-width: var(--name-col-w-morph);
@@ -4087,7 +4099,8 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   #team-picker-view .table-wrap.name-simplify-ready thead th.col-player,
   #team-picker-view .table-wrap.name-simplify-ready tbody td.col-player,
   #live-page .live-table-wrap.name-simplify-ready thead th.col-player,
-  #live-page .live-table-wrap.name-simplify-ready tbody td.col-player {
+  #live-page .live-table-wrap.name-simplify-ready tbody td.col-player,
+  #live-page .live-sticky-head.name-simplify-ready thead th.col-player {
     padding-left: 10px;
   }
 }
@@ -14260,22 +14273,22 @@ html.home-player-modal-open {
 .home-player-owners-cols,
 .home-player-owner-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 40px 48px;
+  grid-template-columns: 28px minmax(0, 1fr) 36px 44px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   margin: 0;
-  padding: 9px 12px;
+  padding: 5px 10px;
   box-sizing: border-box;
 }
 .home-player-owners-cols {
-  padding-top: 6px;
-  padding-bottom: 5px;
+  padding-top: 5px;
+  padding-bottom: 4px;
   border: 0;
   border-bottom: 1px solid hsl(var(--border) / 0.65);
   background: hsl(var(--muted) / 0.22);
   color: var(--text-faint);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -14296,7 +14309,7 @@ html.home-player-modal-open {
 }
 .home-player-owner-row {
   border: 0;
-  border-top: 1px solid hsl(var(--border) / 0.65);
+  border-top: 1px solid hsl(var(--border) / 0.55);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -14311,11 +14324,29 @@ html.home-player-modal-open {
   background: hsl(var(--muted) / 0.45);
   outline: none;
 }
+.home-player-owner-row.is-owner {
+  background: hsl(var(--blue-hsl) / 0.08);
+}
+.home-player-owner-row.is-owner:hover,
+.home-player-owner-row.is-owner:focus-visible {
+  background: hsl(var(--blue-hsl) / 0.14);
+}
+.home-player-owner-row.is-owner .home-player-owner-name {
+  color: hsl(var(--blue-hsl));
+}
+.home-player-owner-row.is-demote {
+  opacity: 0.42;
+}
+.home-player-owner-row.is-demote:hover,
+.home-player-owner-row.is-demote:focus-visible {
+  opacity: 0.72;
+  background: hsl(var(--muted) / 0.28);
+}
 .home-player-owner-rank,
 .home-player-owner-gw,
 .home-player-owner-total {
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text-dim);
 }
@@ -14326,18 +14357,20 @@ html.home-player-modal-open {
 .home-player-owner-id {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   min-width: 0;
 }
 .home-player-owner-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .home-player-owner-team {
-  font-size: 11.5px;
+  font-size: 10.5px;
+  line-height: 1.2;
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -18510,16 +18543,29 @@ html[data-page="home"] #subtoolbar {
   width: 100%;
   table-layout: fixed;
 }
-/* No sticky/freezer header or name column on Live DefCon — two equal scroll columns. */
-#live-page .live-table-wrap:has(.live-defcon-table) > table > thead {
-  position: static;
-  top: auto;
-  z-index: auto;
-  isolation: auto;
-  background: transparent;
+/* In-play match tint — omitted in JS when the Live status filter is already on. */
+#live-page .live-defcon-row.is-match-live,
+#live-page .live-points-row.is-match-live {
+  background: hsl(142 55% 38% / 0.08);
 }
+:root[data-theme="dark"] #live-page .live-defcon-row.is-match-live,
+:root[data-theme="dark"] #live-page .live-points-row.is-match-live,
+:root:not([data-theme="light"]) #live-page .live-defcon-row.is-match-live,
+:root:not([data-theme="light"]) #live-page .live-points-row.is-match-live {
+  background: hsl(142 48% 52% / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #live-page .live-defcon-row.is-match-live,
+  :root:not([data-theme="light"]) #live-page .live-points-row.is-match-live {
+    background: hsl(142 48% 52% / 0.1);
+  }
+}
+/* DefCon: no frozen name column — headers still stick while rows scroll. */
 #live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-player,
-#live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-live-defcon,
+#live-page .live-table-wrap:has(.live-defcon-table) > table > thead tr:not(.section-row) th.col-live-defcon {
+  left: auto;
+  box-shadow: none;
+}
 #live-page .live-table-wrap:has(.live-defcon-table) > table > tbody td.col-player {
   position: static;
   left: auto;
@@ -18705,7 +18751,13 @@ html[data-page="live"] #team-filters .chip.team-chip {
 
 .live-defcon-table thead th.col-live-defcon {
   text-align: left;
-  cursor: pointer;
+  cursor: default;
+}
+.live-defcon-table thead th.col-player {
+  cursor: default;
+}
+#live-page .live-sticky-head-inner > table.live-defcon-table > thead tr:not(.section-row) th {
+  cursor: default;
 }
 .live-defcon-table tbody td.col-live-defcon {
   vertical-align: middle;
@@ -19156,6 +19208,21 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   font-size: 11px;
   color: var(--text-muted);
 }
+@media (max-width: 720px) {
+  /* Extra runway after name-compact so the PS edge doesn't fight morph. */
+  #live-page .live-points-table thead th.col-num,
+  #live-page .live-points-table tbody td.col-num {
+    min-width: 3.45em;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  #live-page .live-points-table thead th.col-num-narrow,
+  #live-page .live-points-table tbody td.col-num-narrow {
+    min-width: 2.85em;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
 #live-page .live-points-table tbody td.col-num {
   font-size: 13px;
   font-weight: 600;
@@ -19362,11 +19429,26 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     vertical-align: middle;
   }
   #live-page .live-points-table thead th.col-player {
-    z-index: 8;
+    top: 0;
+    z-index: 10;
     background-color: hsl(var(--muted));
   }
   #live-page .live-points-table tbody tr:hover > td.col-player {
     background-color: color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card)));
+  }
+  #live-page .live-points-table tbody tr.is-match-live > td.col-player {
+    background-color: color-mix(in srgb, hsl(142 55% 38%) 8%, hsl(var(--card)));
+  }
+  #live-page .live-points-table tbody tr.is-match-live:hover > td.col-player {
+    background-color: color-mix(in srgb, hsl(142 55% 38%) 10%, color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card))));
+  }
+  :root[data-theme="dark"] #live-page .live-points-table tbody tr.is-match-live > td.col-player,
+  :root:not([data-theme="light"]) #live-page .live-points-table tbody tr.is-match-live > td.col-player {
+    background-color: color-mix(in srgb, hsl(142 48% 52%) 12%, hsl(var(--card)));
+  }
+  :root[data-theme="dark"] #live-page .live-points-table tbody tr.is-match-live:hover > td.col-player,
+  :root:not([data-theme="light"]) #live-page .live-points-table tbody tr.is-match-live:hover > td.col-player {
+    background-color: color-mix(in srgb, hsl(142 48% 52%) 14%, color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card))));
   }
   #live-page .live-points-table .ownership-id-text {
     min-width: 0;
@@ -19420,6 +19502,155 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   overflow-y: auto;
   padding: 0 0 12px;
   -webkit-overflow-scrolling: touch;
+}
+/* Desktop: sticky thead inside the card scrollport. */
+#live-page .live-feed-wrap.table-wrap > table > thead,
+#live-page .live-table-wrap > table > thead {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: hsl(var(--card));
+  isolation: isolate;
+}
+/* Mobile: detached sticky bar outside overflow-x wraps (flush with the table card). */
+#live-page .live-sticky-head {
+  display: none;
+}
+@media (max-width: 720px) {
+  #live-page .live-sticky-head:not([hidden]) {
+    display: block;
+    position: sticky;
+    /* Keep the same gap under the mode slider — don't slide flush into it. */
+    top: var(--main-pad-top, 8px);
+    z-index: 8;
+    isolation: isolate;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  /* Opaque page-bg shield above (and behind) the bar so rows can't bleed
+     through the chrome gap or rounded-corner cutouts while scrolling. */
+  #live-page .live-sticky-head:not([hidden])::before {
+    content: "";
+    position: absolute;
+    left: calc(-1 * var(--mobile-gutter-x, 8px));
+    right: calc(-1 * var(--mobile-gutter-x, 8px));
+    top: calc(-1 * (var(--mobile-top-chrome-h, 96px) + 24px));
+    bottom: 0;
+    background: var(--bg);
+    z-index: 0;
+    pointer-events: none;
+  }
+  #live-page .live-sticky-head:not([hidden]) + .table-wrap {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top-color: transparent;
+    margin-top: -1px;
+  }
+  #live-page .live-sticky-head:not([hidden]) + .table-wrap > table > thead {
+    display: none;
+  }
+  #live-page .live-sticky-head-inner {
+    position: relative;
+    z-index: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    background: hsl(var(--muted));
+    border: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    scrollbar-width: none;
+  }
+  #live-page .live-sticky-head-inner::-webkit-scrollbar {
+    display: none;
+  }
+  #live-page .live-sticky-head-inner > table {
+    width: 100%;
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  #live-page .live-sticky-head-inner > table.live-points-table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: fixed;
+  }
+  /* Match .table-wrap thead metrics — sticky clone sits outside .table-wrap. */
+  #live-page .live-sticky-head-inner > table > thead tr:not(.section-row) th {
+    position: static;
+    top: auto;
+    z-index: auto;
+    background: hsl(var(--muted));
+    color: var(--text-dim);
+    text-align: center;
+    vertical-align: middle;
+    padding: 8px 4px;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
+    border-bottom: none;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-player {
+    /* Keep vertical padding from the taller sticky header; horizontal from morph. */
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  #live-page .live-sticky-head-inner > table > thead tr:not(.section-row) th.col-player {
+    text-align: left;
+    padding-left: 8px;
+  }
+  #live-page .live-sticky-head-inner > table.live-feed-table > thead tr:not(.section-row) th {
+    cursor: default;
+  }
+  #live-page .live-sticky-head-inner > table.live-feed-table > thead tr:not(.section-row) th:hover {
+    color: var(--text-dim);
+    background: hsl(var(--muted));
+  }
+  #live-page .live-sticky-head-inner > table.live-feed-table thead th.col-player {
+    text-align: center;
+    padding-left: 8px;
+    padding-right: 4px;
+  }
+  #live-page .live-sticky-head-inner > table.live-feed-table thead th.col-feed-impact,
+  #live-page .live-sticky-head-inner > table.live-feed-table thead th.col-feed-pts,
+  #live-page .live-sticky-head-inner > table.live-feed-table thead th.col-feed-total {
+    font-size: 10px;
+  }
+  #live-page .live-sticky-head-inner > table.live-points-table thead th.col-player {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: hsl(var(--muted));
+    box-shadow: 1px 0 0 var(--border);
+  }
+  /* After generic sticky th padding — lock Points Player morph to body metrics. */
+  #live-page .live-sticky-head.name-simplify-ready thead th.col-player {
+    width: var(--name-col-w-morph);
+    min-width: var(--name-col-w-morph);
+    max-width: var(--name-col-w-morph);
+    padding-left: 10px;
+    padding-right: calc(8px - var(--name-collapse) * 6px);
+    padding-top: 8px;
+    padding-bottom: 8px;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  #live-page .live-sticky-head:not(.name-simplify-ready) .live-points-table thead th.col-player {
+    width: var(--name-col-w, 118px);
+    min-width: var(--name-col-w, 118px);
+    max-width: var(--name-col-w, 118px);
+    padding-left: 10px;
+    padding-right: 6px;
+  }
 }
 #live-page .live-feed-wrap[hidden] {
   display: none !important;
@@ -19628,7 +19859,15 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     width: 100% !important;
     table-layout: fixed;
   }
-  #live-page .live-feed-table thead th.col-player,
+  #live-page .live-feed-table thead th.col-player {
+    width: 32% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    left: auto;
+    box-shadow: none;
+    padding-left: 8px;
+    padding-right: 4px;
+  }
   #live-page .live-feed-table tbody td.col-player {
     width: 32% !important;
     min-width: 0 !important;
