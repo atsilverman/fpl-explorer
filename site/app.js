@@ -4469,6 +4469,40 @@
     return inPts - outPts;
   }
 
+  function homeTransferMoveIsValid(move) {
+    const out = move && move.out ? move.out : null;
+    const inn = move && move.in ? move.in : null;
+    if (!out && !inn) return false;
+    const outType = out && out.elementType != null ? Number(out.elementType) : NaN;
+    const inType = inn && inn.elementType != null ? Number(inn.elementType) : NaN;
+    if (Number.isFinite(outType) && Number.isFinite(inType) && outType > 0 && inType > 0 && outType !== inType) {
+      return false;
+    }
+    return true;
+  }
+
+  /** Per-manager GW transfer net: Σ(in − out) − hit cost. */
+  function homeTransfersEntryNet(transfers) {
+    if (!transfers || typeof transfers !== "object") return 0;
+    const moves = Array.isArray(transfers.moves) ? transfers.moves : [];
+    let net = 0;
+    for (const move of moves) {
+      if (!homeTransferMoveIsValid(move)) continue;
+      const d = homeTransferMovePtsDelta(move);
+      if (Number.isFinite(d)) net += d;
+    }
+    const cost = Number(transfers.cost) || 0;
+    if (transfers.hit && cost > 0) net -= cost;
+    return net;
+  }
+
+  function homeTransfersForStandingRow(row) {
+    if (!row) return null;
+    return (HOME.transfersByEntry && HOME.transfersByEntry[String(row.entry)])
+      || row.transfers
+      || null;
+  }
+
   function homeTransferPtsDeltaHTML(delta) {
     const n = Number(delta);
     if (!Number.isFinite(n)) return "";
@@ -4479,14 +4513,9 @@
   }
 
   function homeTransferMoveHTML(move) {
+    if (!homeTransferMoveIsValid(move)) return "";
     const out = move && move.out ? move.out : null;
     const inn = move && move.in ? move.in : null;
-    // Belt-and-suspenders: never render cross-position pairs if types are known.
-    const outType = out && out.elementType != null ? Number(out.elementType) : NaN;
-    const inType = inn && inn.elementType != null ? Number(inn.elementType) : NaN;
-    if (Number.isFinite(outType) && Number.isFinite(inType) && outType > 0 && inType > 0 && outType !== inType) {
-      return "";
-    }
     const parts = [];
     if (out && out.name) {
       parts.push(`<span class="home-transfer-out">${escapeHtml(out.name)}</span>`);
@@ -4524,8 +4553,10 @@
         ? `<span class="home-transfer-chip">Wildcard</span>`
         : "";
     const multi = moves.length > 1;
-    // Chip / hit sit above the player moves (not after).
-    return `<span class="home-transfers-cell${multi ? " is-multi" : ""}">${chip}${hit}${moveHTML}</span>`;
+    const net = homeTransfersEntryNet(transfers);
+    const netHTML = `<span class="home-transfer-net"${tipAttr("Net this GW (in − out − hits)")}><span class="home-transfer-net-label">Net</span>${homeTransferPtsDeltaHTML(net)}</span>`;
+    // Chip / hit sit above the player moves; net closes the stack.
+    return `<span class="home-transfers-cell${multi ? " is-multi" : ""} has-net">${chip}${hit}${moveHTML}${netHTML}</span>`;
   }
 
   function homeTransfersTableScrollEl() {
@@ -4557,9 +4588,7 @@
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     // Prefer transfersByEntry (canonical) over standings-embedded copies — session
     // snapshots can carry stale pairings on row.transfers after a pairing fix.
-    const transfers = (HOME.transfersByEntry && HOME.transfersByEntry[String(row.entry)])
-      || row.transfers
-      || null;
+    const transfers = homeTransfersForStandingRow(row);
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
       ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}

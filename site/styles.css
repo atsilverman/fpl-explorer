@@ -17732,6 +17732,30 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   font-weight: 500;
   opacity: 0.72;
 }
+.home-transfer-net {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid hsl(var(--border) / 0.75);
+  font-size: 11px;
+  line-height: 1.25;
+}
+.home-transfer-net-label {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.home-transfer-net .home-transfer-pts {
+  margin-left: auto;
+  font-size: 11px;
+}
 .home-transfer-out {
   color: hsl(var(--negative) / 0.85);
   font-weight: 500;
