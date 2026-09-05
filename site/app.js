@@ -7036,9 +7036,18 @@
 
   function homeRankStatRollHTML(to, from, { fullDigits = false } = {}) {
     if (to == null || !Number.isFinite(Number(to)) || Number(to) <= 0) return "—";
-    // Hero full ranks: paint grouped commas (no K/M odometer — commas read clearly).
+    // Full ranks (Hero overall / GW): digit odometer with grouping commas.
     if (fullDigits) {
-      return `<span class="home-stat-roll is-grouped">${escapeHtml(formatHomeRankGrouped(to))}</span>`;
+      const fromVal =
+        from != null && Number.isFinite(Number(from)) && Number(from) > 0
+          ? Number(from)
+          : 0;
+      return statRollSpan(Number(to), {
+        from: fromVal,
+        decimals: 0,
+        className: "home-stat-roll",
+        grouped: true,
+      });
     }
     const spec = homeRankRollSpec(Number(to));
     // Always roll from 0 on enter (same unit). Avoid from===to which skips the odometer.
@@ -7106,8 +7115,9 @@
       const next = homePositiveRank(summary.gwRank);
       const kept = homePositiveRank(gwRankEl.dataset.lastGwRank);
       if (next != null) {
-        // Avoid re-paint flicker when live polls restate the same rank.
-        if (kept !== next) {
+        // Skip live re-paint flicker when the rank is unchanged; always remount
+        // on enter so the odometer can run.
+        if (kept !== next || enterPending) {
           gwRankEl.innerHTML = homeRankStatRollHTML(next, 0, { fullDigits: hero });
           gwRankEl.dataset.lastGwRank = String(next);
         }
@@ -7161,6 +7171,7 @@
         decimals: Number(node.dataset.countDecimals) || 0,
         signed: node.dataset.countSigned === "1",
         suffix: node.dataset.countSuffix || "",
+        grouped: node.dataset.countGrouped === "1",
       });
     });
   }
@@ -7169,20 +7180,34 @@
     // Summary cards are rebuilt so rolls always start at 0; squad / league / feed
     // rolls are already mounted as empty .home-stat-roll nodes from renderHome.
     const summary = homeSummaryForView(homeActiveViewEntryId());
+    const hero = homeSummaryLayout() === "hero";
     const specs = [
       { el: el.homeGwPoints, value: summary.gwPoints, kind: "int" },
       { el: el.homeOverallRankNum || el.homeOverallRank, value: summary.overallRank, kind: "rank" },
+      {
+        el: el.homeHeroOverallRank,
+        value: summary.overallRank,
+        kind: "rank",
+        fullDigits: true,
+        skip: !hero,
+      },
+      {
+        el: el.homeGwRankNum || el.homeGwRank,
+        value: summary.gwRank,
+        kind: "rank",
+        fullDigits: hero,
+      },
       { el: el.homeTotalPoints, value: summary.overallPoints, kind: "rank" },
       { el: el.homeLeagueRankNum || el.homeLeagueRank, value: summary.leagueRank, kind: "rank" },
     ];
-    specs.forEach(({ el: node, value, kind }) => {
-      if (!node) return;
+    specs.forEach(({ el: node, value, kind, fullDigits = false, skip = false }) => {
+      if (!node || skip) return;
       if (kind === "rank") {
         if (value == null || !Number.isFinite(Number(value)) || Number(value) <= 0) {
           node.textContent = "—";
           return;
         }
-        node.innerHTML = homeRankStatRollHTML(Number(value), 0);
+        node.innerHTML = homeRankStatRollHTML(Number(value), 0, { fullDigits });
         return;
       }
       if (value == null || !Number.isFinite(Number(value))) {
@@ -21851,6 +21876,7 @@
       suffix = "",
       className = "",
       textFallback = "—",
+      grouped = false,
     } = opts;
     if (to == null || Number.isNaN(Number(to))) {
       return `<span class="${className}">${escapeHtml(textFallback)}</span>`;
@@ -21862,6 +21888,7 @@
     ];
     if (signed) attrs.push('data-count-signed="1"');
     if (suffix) attrs.push(`data-count-suffix="${suffix}"`);
+    if (grouped) attrs.push('data-count-grouped="1"');
     if (from != null && Number.isFinite(Number(from))) attrs.push(`data-count-from="${Number(from)}"`);
     if (opts.rollKind) attrs.push(`data-count-roll="${escapeHtml(String(opts.rollKind))}"`);
     return `<span ${attrs.join(" ")}></span>`;
@@ -21884,6 +21911,25 @@
     const chars = [];
     for (let i = 0; i < len; i++) {
       chars.push({ from: fromPad[i], to: toPad[i] });
+    }
+    return chars;
+  }
+
+  /** Full integer ranks with grouping commas — digits roll, commas stay fixed. */
+  function statRollAlignGroupedChars(fromVal, toVal) {
+    const toN = Math.round(Number(toVal));
+    if (!Number.isFinite(toN)) return [];
+    const toStr = toN.toLocaleString();
+    const toDigits = String(Math.abs(toN));
+    const fromN = Number(fromVal);
+    const fromDigitsRaw =
+      Number.isFinite(fromN) && fromN > 0 ? String(Math.round(Math.abs(fromN))) : "0";
+    const fromDigits = fromDigitsRaw.padStart(toDigits.length, "0");
+    let di = 0;
+    const fromStr = toStr.replace(/\d/g, () => fromDigits[di++] || "0");
+    const chars = [];
+    for (let i = 0; i < toStr.length; i++) {
+      chars.push({ from: fromStr[i] || "0", to: toStr[i] });
     }
     return chars;
   }
@@ -21955,9 +22001,15 @@
     const decimals = Number(opts.decimals) || 0;
     const signed = !!opts.signed;
     const suffix = opts.suffix || "";
-    const chars = statRollAlignChars(fromVal, toVal, decimals, signed);
+    const grouped = !!opts.grouped;
+    const chars = grouped
+      ? statRollAlignGroupedChars(fromVal, toVal)
+      : statRollAlignChars(fromVal, toVal, decimals, signed);
     node.textContent = "";
-    node.setAttribute("aria-label", `${statRollFormat(toVal, decimals, signed)}${suffix}`);
+    const label = grouped
+      ? `${Math.round(Number(toVal)).toLocaleString()}${suffix}`
+      : `${statRollFormat(toVal, decimals, signed)}${suffix}`;
+    node.setAttribute("aria-label", label);
     chars.forEach(({ from, to }) => {
       if (to >= "0" && to <= "9" && from >= "0" && from <= "9") {
         node.appendChild(buildStatRollDigitWheel(from, to));
@@ -21981,13 +22033,16 @@
     const decimals = Number(node.dataset.countDecimals) || 0;
     const signed = node.dataset.countSigned === "1";
     const suffix = node.dataset.countSuffix || "";
+    const grouped = node.dataset.countGrouped === "1";
     if (!Number.isFinite(to)) {
       node.textContent = "—";
       return;
     }
     // Plain text settle — avoids frozen half-digits when a second render or
     // enter-clear interrupts CSS transform transitions on digit strips.
-    node.textContent = `${statRollFormat(to, decimals, signed)}${suffix}`;
+    node.textContent = grouped
+      ? `${Math.round(to).toLocaleString()}${suffix}`
+      : `${statRollFormat(to, decimals, signed)}${suffix}`;
   }
 
   function animateStatRollNode(node, opts = {}) {
@@ -22000,9 +22055,12 @@
     const decimals = Number(node.dataset.countDecimals) || 0;
     const signed = node.dataset.countSigned === "1";
     const suffix = node.dataset.countSuffix || "";
+    const grouped = node.dataset.countGrouped === "1";
     const duration = opts.duration != null ? opts.duration : 520;
-    renderStatRollNode(node, from, to, { decimals, signed, suffix });
-    const chars = statRollAlignChars(from, to, decimals, signed);
+    renderStatRollNode(node, from, to, { decimals, signed, suffix, grouped });
+    const chars = grouped
+      ? statRollAlignGroupedChars(from, to)
+      : statRollAlignChars(from, to, decimals, signed);
     let digitIdx = 0;
     chars.forEach(({ from: fromCh, to: toCh }) => {
       if (!(toCh >= "0" && toCh <= "9" && fromCh >= "0" && fromCh <= "9")) return;
