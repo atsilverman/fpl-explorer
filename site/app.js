@@ -5992,6 +5992,46 @@
       });
   }
 
+  /**
+   * Home mobile: block pull-down rubber-band / browser refresh when .main is
+   * already scrolled to the top (hero sits flush under the nav).
+   */
+  function bindHomeMainPullLock() {
+    const main = document.querySelector("main.main");
+    if (!main || main.dataset.homePullLock === "1") return;
+    main.dataset.homePullLock = "1";
+    let startY = 0;
+    let armed = false;
+
+    main.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!NARROW_MQ.matches || state.page !== "home" || e.touches.length !== 1) {
+          armed = false;
+          return;
+        }
+        startY = e.touches[0].clientY;
+        armed = main.scrollTop <= 0;
+      },
+      { passive: true }
+    );
+
+    main.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!armed || !NARROW_MQ.matches || state.page !== "home" || e.touches.length !== 1) return;
+        if (main.scrollTop > 0) {
+          armed = false;
+          return;
+        }
+        const dy = e.touches[0].clientY - startY;
+        // Finger moving down while already at top → pull gesture.
+        if (dy > 0) e.preventDefault();
+      },
+      { passive: false }
+    );
+  }
+
   function bindHomeOwnerHighlighting() {
     if (homeOwnerBindingsReady) return;
     if (!el.homeSquadTrack || !el.homeStandingsTrack) return;
@@ -6001,6 +6041,7 @@
     bindHomeFeedPager();
     bindHomeScrollHoverGuard();
     bindHomeCrossHover();
+    bindHomeMainPullLock();
 
     function bindHomeRowTap(container, rowSelector, onRow) {
       if (!container) return;
@@ -18048,12 +18089,116 @@
 
   function liveFeedResetIfGwChanged(gw) {
     if (liveFeedGw === gw) return;
+    const switchingGw = liveFeedGw != null;
     liveFeedGw = gw;
     liveFeedEvents = [];
     liveFeedSnapshot = null;
     liveFeedSeq = 0;
     liveFeedIngestFp = "";
     homeFeedAllRendered = false;
+    // Keep session on first bind (null → gw) so mobile refresh can restore.
+    if (switchingGw) liveFeedClearSession();
+  }
+
+  const LIVE_FEED_SESSION_KEY = "fpl_live_feed_v1";
+
+  function liveFeedClearSession() {
+    try {
+      sessionStorage.removeItem(LIVE_FEED_SESSION_KEY);
+    } catch {
+      /* private browsing */
+    }
+  }
+
+  function liveFeedPersistSession() {
+    try {
+      if (!Number.isFinite(liveFeedGw) || !liveFeedEvents.length) return;
+      const lean = liveFeedEvents.map((e) => ({
+        id: e.id,
+        seq: e.seq,
+        gw: e.gw,
+        eid: e.eid,
+        kind: e.kind,
+        label: e.label,
+        ptsDelta: e.ptsDelta,
+        colKey: e.colKey,
+        totalPts: e.totalPts,
+        ts: e.ts,
+        matchupId: e.matchupId,
+        pos: e.pos,
+        team: e.team,
+        live: !!e.live,
+      }));
+      sessionStorage.setItem(
+        LIVE_FEED_SESSION_KEY,
+        JSON.stringify({
+          gw: liveFeedGw,
+          fp: liveFeedIngestFp,
+          seq: liveFeedSeq,
+          events: lean,
+          snapshot: liveFeedSnapshot,
+          savedAt: Date.now(),
+        })
+      );
+    } catch {
+      /* private browsing / quota */
+    }
+  }
+
+  function liveFeedRestoreSession(gw) {
+    try {
+      const raw = sessionStorage.getItem(LIVE_FEED_SESSION_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || Number(data.gw) !== Number(gw)) return false;
+      if (!Array.isArray(data.events) || !data.events.length) return false;
+      const byElement = livePlayerByElement();
+      const restored = [];
+      for (const e of data.events) {
+        const eid = Number(e.eid);
+        const player = byElement.get(eid);
+        if (!player || !Number.isFinite(eid)) continue;
+        restored.push({
+          id: e.id,
+          seq: Number(e.seq) || 0,
+          gw: Number(e.gw) || Number(gw),
+          eid,
+          kind: e.kind,
+          label: e.label,
+          ptsDelta: e.ptsDelta,
+          colKey: e.colKey,
+          totalPts: e.totalPts,
+          ts: Number(e.ts) || 0,
+          matchupId: e.matchupId || null,
+          pos: e.pos,
+          team: e.team,
+          live: !!e.live,
+          player,
+        });
+      }
+      if (!restored.length) return false;
+      liveFeedGw = Number(gw);
+      liveFeedEvents = restored;
+      liveFeedSnapshot =
+        data.snapshot && typeof data.snapshot === "object" ? data.snapshot : null;
+      liveFeedSeq = Math.max(
+        Number(data.seq) || 0,
+        restored.reduce((m, e) => Math.max(m, Number(e.seq) || 0), 0)
+      );
+      liveFeedIngestFp = typeof data.fp === "string" ? data.fp : "";
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function liveFeedBuildSnapshot(egMap) {
+    const nextSnap = {};
+    for (const [eidStr, eg] of Object.entries(egMap || {})) {
+      const rec = liveFeedSnapRecord(eg);
+      if (rec) nextSnap[eidStr] = rec;
+    }
+    return nextSnap;
   }
 
   function liveFeedSnapRecord(eg) {
@@ -18425,16 +18570,9 @@
 
   function liveFeedEventTs(matchup, kind, index, eid, eg) {
     const kick = liveFeedKickoffMs(matchup);
-    let minute = (LIVE_FEED_KIND_MINUTE[kind] ?? 45) + index;
-    if (matchup && eg && liveEgIsInPlay(eg)) {
-      const playerMins = Number(eg.minutes) || 0;
-      if (
-        playerMins > 0
-        && ["goal", "assist", "ownGoal", "yellowCard", "redCard", "penMissed", "penSaved", "defCon"].includes(kind)
-      ) {
-        minute = Math.max(minute, playerMins);
-      }
-    }
+    // Fixed kind minutes only — do not bump live events to current player minutes
+    // (that made early goals float to the top on every rebuild/refresh).
+    const minute = (LIVE_FEED_KIND_MINUTE[kind] ?? 45) + index;
     const eidSkew = Number.isFinite(Number(eid)) ? (Number(eid) % 500) : 0;
     return kick + minute * 60_000 + eidSkew;
   }
@@ -18476,7 +18614,7 @@
     return events;
   }
 
-  /** Rebuild feed from current elementGw — same data → same order on every client. */
+  /** Rebuild feed from current elementGw — cold start / GW change only. */
   function liveFeedBuildEvents(gw, egMap) {
     const byElement = livePlayerByElement();
     const matchups = liveMatchupsForGw(gw);
@@ -18539,21 +18677,192 @@
     return events;
   }
 
+  function liveFeedRefreshEventMeta(gw, egMap) {
+    const byElement = livePlayerByElement();
+    const matchups = liveMatchupsForGw(gw);
+    const matchupByTeam = new Map();
+    for (const m of matchups) {
+      matchupByTeam.set(m.home, m.id);
+      matchupByTeam.set(m.away, m.id);
+    }
+    for (const ev of liveFeedEvents) {
+      if (Number(ev.gw) !== Number(gw)) continue;
+      const eg = egMap && egMap[String(ev.eid)];
+      const player = byElement.get(Number(ev.eid));
+      if (player) {
+        ev.player = player;
+        ev.team = player.team || currentTeamCode(player) || ev.team;
+        const mid = matchupByTeam.get(ev.team);
+        if (mid) ev.matchupId = mid;
+      }
+      if (eg) {
+        ev.live = liveEgIsInPlay(eg);
+        if (Number.isFinite(Number(eg.pts))) ev.totalPts = Number(eg.pts);
+      }
+    }
+  }
+
+  /**
+   * Append only newly observed stat/bonus deltas with discovery-time timestamps.
+   * Returns number of appended rows.
+   */
+  function liveFeedAppendFromDiff(gw, egMap) {
+    const byElement = livePlayerByElement();
+    const matchups = liveMatchupsForGw(gw);
+    const matchupByTeam = new Map();
+    const matchupById = new Map();
+    for (const m of matchups) {
+      matchupByTeam.set(m.home, m.id);
+      matchupByTeam.set(m.away, m.id);
+      matchupById.set(m.id, m);
+    }
+    const matchupBonusEligible = liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement);
+    const bonusMeta = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, matchupBonusEligible);
+    const prevSnap = liveFeedSnapshot || {};
+    const discoveredAt = Date.now();
+    let skew = 0;
+    const appended = [];
+
+    const pushDiff = (ctx, kind, label, ptsDelta, colKey, totalPts) => {
+      if (!ptsDelta) return;
+      skew += 1;
+      appended.push(liveFeedMakeEvent({
+        ...ctx,
+        kind,
+        label,
+        ptsDelta,
+        colKey,
+        totalPts,
+        ts: discoveredAt + skew,
+      }));
+    };
+
+    const eidKeys = Object.keys(egMap || {}).sort((a, b) => Number(a) - Number(b));
+    for (const eidStr of eidKeys) {
+      const eg = egMap[eidStr];
+      const newRec = liveFeedSnapRecord(eg);
+      if (!newRec) continue;
+      const etype = Number(eg.elementType) || 0;
+      const pos = LIVE_POS_BY_TYPE[etype];
+      if (!pos) continue;
+      const eid = Number(eidStr);
+      const player = byElement.get(eid);
+      if (!player) continue;
+      const team = player.team || currentTeamCode(player);
+      const matchupId = matchupByTeam.get(team) || null;
+      const matchup = matchupId ? matchupById.get(matchupId) : null;
+      const ctx = {
+        eid,
+        gw,
+        player,
+        pos,
+        team,
+        matchupId,
+        live: liveEgIsInPlay(eg),
+      };
+      const oldRec = prevSnap[eidStr] || LIVE_FEED_EMPTY_REC;
+      const totalPts = Number(newRec.pts) || 0;
+      if (newRec.minutes > 0 || newRec.pts !== 0 || oldRec.minutes > 0 || oldRec.pts !== 0) {
+        liveFeedPushStatDiffs(oldRec, newRec, pos, (kind, label, ptsDelta, colKey) => {
+          pushDiff(ctx, kind, label, ptsDelta, colKey, totalPts);
+        });
+      }
+
+      const bonusEff = (bonusMeta.get(eidStr) || {}).effectiveBonus || 0;
+      const bonusOk = bonusEff > 0 && matchupId && matchupBonusEligible.get(matchupId);
+      const existingBonus = liveFeedEvents.find(
+        (e) => e.kind === "bonus" && Number(e.eid) === eid && Number(e.gw) === Number(gw)
+      );
+      if (bonusOk) {
+        const meta = bonusMeta.get(eidStr) || { rank: 0, apiBonus: 0 };
+        const label = liveFeedBonusProjLabel(0, bonusEff, meta.rank, meta.apiBonus);
+        if (existingBonus) {
+          existingBonus.ptsDelta = bonusEff;
+          existingBonus.label = label;
+          existingBonus.totalPts = totalPts || bonusEff;
+          existingBonus.live = ctx.live;
+          existingBonus.matchupId = matchupId;
+          existingBonus.player = player;
+          existingBonus.team = team;
+        } else {
+          // First time we see bonus for this player — discovery time (not synthetic 91′).
+          skew += 1;
+          appended.push(liveFeedMakeEvent({
+            ...ctx,
+            kind: "bonus",
+            label,
+            ptsDelta: bonusEff,
+            colKey: "bonus",
+            totalPts: totalPts || bonusEff,
+            ts: discoveredAt + skew,
+          }));
+        }
+      }
+    }
+
+    // Drop bonus rows that are no longer eligible / projected.
+    liveFeedEvents = liveFeedEvents.filter((e) => {
+      if (e.kind !== "bonus" || Number(e.gw) !== Number(gw)) return true;
+      const eidStr = String(e.eid);
+      const bonusEff = (bonusMeta.get(eidStr) || {}).effectiveBonus || 0;
+      const mid = e.matchupId;
+      return bonusEff > 0 && mid && matchupBonusEligible.get(mid);
+    });
+
+    if (appended.length) {
+      liveFeedEvents = liveFeedEvents.concat(appended);
+    }
+    return appended.length;
+  }
+
   function liveFeedIngest(gw, egMap) {
     if (!Number.isFinite(gw)) return;
     const fp = liveFeedEgMapFingerprint(egMap);
-    if (liveFeedGw === gw && liveFeedIngestFp === fp && liveFeedEvents.length) return;
-    if (liveFeedIngestFp && liveFeedIngestFp !== fp) homeFeedAllRendered = false;
     liveFeedResetIfGwChanged(gw);
-    liveFeedIngestFp = fp;
-    liveFeedSeq = 0;
-    liveFeedEvents = liveFeedBuildEvents(gw, egMap);
-    const nextSnap = {};
-    for (const [eidStr, eg] of Object.entries(egMap || {})) {
-      const rec = liveFeedSnapRecord(eg);
-      if (rec) nextSnap[eidStr] = rec;
+
+    // Cold memory (e.g. mobile refresh): restore discovery order from this tab.
+    if (!liveFeedEvents.length) {
+      liveFeedRestoreSession(gw);
     }
-    liveFeedSnapshot = nextSnap;
+    if (
+      liveFeedEvents.length
+      && !(liveFeedSnapshot && typeof liveFeedSnapshot === "object" && Object.keys(liveFeedSnapshot).length)
+    ) {
+      // Incomplete session — cannot diff safely; cold rebuild.
+      liveFeedEvents = [];
+      liveFeedSeq = 0;
+      liveFeedIngestFp = "";
+      liveFeedSnapshot = null;
+    }
+
+    if (liveFeedGw === gw && liveFeedIngestFp === fp && liveFeedEvents.length) {
+      liveFeedRefreshEventMeta(gw, egMap);
+      liveFeedPersistSession();
+      return;
+    }
+
+    const canDiff =
+      liveFeedEvents.length > 0
+      && liveFeedSnapshot
+      && typeof liveFeedSnapshot === "object"
+      && Object.keys(liveFeedSnapshot).length > 0;
+
+    if (!canDiff) {
+      if (liveFeedIngestFp && liveFeedIngestFp !== fp) homeFeedAllRendered = false;
+      liveFeedSeq = 0;
+      liveFeedEvents = liveFeedBuildEvents(gw, egMap);
+      liveFeedSnapshot = liveFeedBuildSnapshot(egMap);
+      liveFeedIngestFp = fp;
+      liveFeedPersistSession();
+      return;
+    }
+
+    if (liveFeedIngestFp && liveFeedIngestFp !== fp) homeFeedAllRendered = false;
+    liveFeedAppendFromDiff(gw, egMap);
+    liveFeedRefreshEventMeta(gw, egMap);
+    liveFeedSnapshot = liveFeedBuildSnapshot(egMap);
+    liveFeedIngestFp = fp;
+    liveFeedPersistSession();
   }
 
   function liveFeedIsLeagueOwned(eid) {
@@ -25716,12 +26025,12 @@
   syncHomeSummaryLayout(homeSummaryLayout());
 
   const FONT_PAIR_KEY = "fpl-explorer-font-pair-v3";
-  const FONT_PAIR_IDS = ["manrope", "jakarta", "dm", "source", "outfit", "plex", "figtree"];
+  const FONT_PAIR_IDS = ["outfit", "manrope", "jakarta", "dm", "source", "plex", "figtree"];
   const FONT_PAIR_GOOGLE = {
+    manrope: "family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700",
     jakarta: "family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700",
     dm: "family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600",
     source: "family=Source+Code+Pro:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700",
-    outfit: "family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700",
     plex: "family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700",
     figtree: "family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600",
   };
@@ -25729,9 +26038,9 @@
   function currentFontPair() {
     try {
       const stored = localStorage.getItem(FONT_PAIR_KEY);
-      return FONT_PAIR_IDS.includes(stored) ? stored : "manrope";
+      return FONT_PAIR_IDS.includes(stored) ? stored : "outfit";
     } catch {
-      return "manrope";
+      return "outfit";
     }
   }
 
@@ -25743,7 +26052,7 @@
       link.rel = "stylesheet";
       document.head.appendChild(link);
     }
-    if (!pair || pair === "manrope" || !FONT_PAIR_GOOGLE[pair]) {
+    if (!pair || pair === "outfit" || !FONT_PAIR_GOOGLE[pair]) {
       link.removeAttribute("href");
       link.disabled = true;
       return;
@@ -25754,9 +26063,9 @@
   }
 
   function applyFontPair(pair, { persist = true } = {}) {
-    const next = FONT_PAIR_IDS.includes(pair) ? pair : "manrope";
+    const next = FONT_PAIR_IDS.includes(pair) ? pair : "outfit";
     const root = document.documentElement;
-    if (next === "manrope") root.removeAttribute("data-font-pair");
+    if (next === "outfit") root.removeAttribute("data-font-pair");
     else root.setAttribute("data-font-pair", next);
     ensureFontPairStylesheet(next);
     if (el.fontPairSelect && el.fontPairSelect.value !== next) {
@@ -25774,7 +26083,7 @@
   if (el.fontPairSelect) {
     applyFontPair(currentFontPair(), { persist: false });
     el.fontPairSelect.addEventListener("change", () => {
-      applyFontPair(el.fontPairSelect.value || "manrope");
+      applyFontPair(el.fontPairSelect.value || "outfit");
     });
   }
 

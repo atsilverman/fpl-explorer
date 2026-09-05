@@ -6,9 +6,9 @@
 <title>FPL Explorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1048" />
+<link rel="stylesheet" href="styles.css?v=1050" />
 <script>
 (() => {
   try {
@@ -19,16 +19,16 @@
     // Font pairs — keep in sync with app.js FONT_PAIR_IDS / FONT_PAIR_GOOGLE.
     const FONT_KEY = "fpl-explorer-font-pair-v3";
     const FONT_GOOGLE = {
+      manrope: "family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700",
       jakarta: "family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700",
       dm: "family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600",
       source: "family=Source+Code+Pro:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700",
-      outfit: "family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700",
       plex: "family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700",
       figtree: "family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600",
     };
     try {
-      const pair = localStorage.getItem(FONT_KEY) || "manrope";
-      if (pair && pair !== "manrope" && FONT_GOOGLE[pair]) {
+      const pair = localStorage.getItem(FONT_KEY) || "outfit";
+      if (pair && pair !== "outfit" && FONT_GOOGLE[pair]) {
         root.setAttribute("data-font-pair", pair);
         const link = document.getElementById("font-pair-link");
         if (link) {
@@ -459,15 +459,15 @@
             <div class="prefs-field">
               <label class="prefs-field-label" for="font-pair-select">Font</label>
               <select id="font-pair-select" class="prefs-select font-pair-select" aria-describedby="font-pair-hint">
+                <option value="outfit">Outfit · Fira Code</option>
                 <option value="manrope">Manrope · Fira Code</option>
                 <option value="jakarta">Jakarta · JetBrains Mono</option>
                 <option value="dm">DM Sans · IBM Plex Mono</option>
                 <option value="source">Source Sans · Source Code</option>
-                <option value="outfit">Outfit · Fira Code</option>
                 <option value="plex">IBM Plex Sans · Plex Mono</option>
                 <option value="figtree">Figtree · JetBrains Mono</option>
               </select>
-              <p class="prefs-field-hint" id="font-pair-hint">UI + numbers. Default is Manrope.</p>
+              <p class="prefs-field-hint" id="font-pair-hint">UI + numbers. Default is Outfit.</p>
             </div>
           </section>
           <section class="settings-section">
@@ -1660,7 +1660,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1092"></script>
+<script src="app.js?v=1095"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

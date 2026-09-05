@@ -73,10 +73,14 @@
   --glass-saturate: 1.2;
 
   --mono: "Fira Code", ui-monospace, monospace;
-  --sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Preferences font pairs — clean / crisp / modern UI + tabular mono. */
+html[data-font-pair="manrope"] {
+  --sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Fira Code", ui-monospace, monospace;
+}
 html[data-font-pair="jakarta"] {
   --sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
@@ -18317,25 +18321,16 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
 }
 
 @media (max-width: 720px) {
-  /* Drop Home title + blurb on small screens — tables start immediately. */
-  html[data-page="home"] .home-header .opta-header-text {
+  /* Drop Home title / live count strip — hero sits flush under page-nav. */
+  html[data-page="home"] .home-header {
     display: none !important;
   }
-  html[data-page="home"] .home-header {
-    margin: 0;
-    padding: 0;
-    min-height: 0;
-    border: none;
-  }
-  html[data-page="home"] .home-header .page-header-meta {
-    margin-left: 0;
-  }
   /* Hero: flush under the page-nav rule — cancel main pad + dashboard top margin.
-     Skip when viewing another manager or player lookup so those views keep breathing room. */
-  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)):not(:has(.home-dashboard.is-player-lookup)) .main {
+     Keep breathing room only for player lookup (profile stack above). */
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)) .main {
     padding-top: 0;
   }
-  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)):not(:has(.home-dashboard.is-player-lookup)) .home-dashboard {
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)) .home-dashboard {
     margin-top: 0;
   }
   html[data-page="home"] .home-summary[data-home-summary="hero"] {
@@ -18343,6 +18338,13 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   }
   html[data-page="home"] .home-summary[data-home-summary="hero"] .home-summary-hero {
     margin-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  /* Stop rubber-band / pull-down chaining on Home mobile. */
+  html[data-page="home"] .main {
+    overscroll-behavior-y: none;
+    overscroll-behavior: none;
   }
 }
 html[data-page="home"] .filters,
