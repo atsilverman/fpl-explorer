@@ -2173,6 +2173,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   .page-nav {
     --page-nav-pad-y: 8px;
+    --page-nav-pad-bottom: 8px;
     /* viewport-fit=cover: keep brand/page tray clear of the Dynamic Island.
        iOS search/keyboard often collapses the URL bar and leaves chrome under
        the status region without this inset. --vv-offset-top covers Chrome iOS
@@ -2186,7 +2187,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding:
       calc(var(--page-nav-pad-y) + env(safe-area-inset-top, 0px))
       var(--mobile-gutter-x, 8px)
-      var(--page-nav-pad-y);
+      var(--page-nav-pad-bottom);
     gap: 8px;
     flex-wrap: nowrap;
     overflow: visible;
@@ -6521,13 +6522,25 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     padding-left: 7px;
     padding-right: 7px;
   }
+  /* Pull 7d → Live together — less pad around the bridge arrow. */
   #ownership-table-wrap .ownership-table th.ownership-col-arrow,
   #ownership-table-wrap .ownership-table td.ownership-col-arrow {
-    width: 36px;
-    min-width: 36px;
-    max-width: 36px;
-    padding-left: 5px;
-    padding-right: 5px;
+    width: 16px;
+    min-width: 16px;
+    max-width: 16px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  #ownership-table-wrap .ownership-table .ownership-then-arrow {
+    font-size: 11px;
+  }
+  #ownership-table-wrap .ownership-table th.col-num:has(+ .ownership-col-arrow),
+  #ownership-table-wrap .ownership-table td.col-num:has(+ .ownership-col-arrow) {
+    padding-right: 2px;
+  }
+  #ownership-table-wrap .ownership-table th.ownership-col-arrow + th.col-num,
+  #ownership-table-wrap .ownership-table td.ownership-col-arrow + td.col-num {
+    padding-left: 2px;
   }
   #ownership-table-wrap .ownership-id .player-name,
   #prices-page .prices-table-wrap .ownership-id .player-name {
@@ -14399,7 +14412,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   --home-hero-fg: 0 0% 100%;
   --home-hero-muted: 240 8% 78%;
   --home-hero-delta-up: 210 90% 78%;
-  --home-hero-delta-down: 24 90% 72%;
+  /* Matchups pink (schedule-spectrum-fall), not ownership orange. */
+  --home-hero-delta-down: 328 72% 78%;
   position: relative;
   z-index: 0;
   margin: 0 calc(-1 * var(--main-pad-x, 20px));
@@ -14417,49 +14431,58 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     filter 0.45s var(--ease-out, ease);
 }
 .home-summary-hero.is-rank-up {
-  /* Match rank-up arrow / --positive (blue). */
+  /* Matchups blue (easy / rise). */
   --home-hero-bg: 217 55% 34%;
   --home-hero-bg-deep: 217 58% 24%;
   --home-hero-muted: 214 40% 82%;
   --home-hero-delta-up: 210 95% 84%;
 }
 .home-summary-hero.is-rank-down {
-  /* Match rank-down arrow / --negative (orange). */
-  --home-hero-bg: 24 62% 38%;
-  --home-hero-bg-deep: 24 68% 28%;
-  --home-hero-muted: 28 40% 86%;
-  --home-hero-delta-down: 32 95% 82%;
+  /* Matchups pink (hard / fall) — same family as schedule-spectrum-fall. */
+  --home-hero-bg: 328 42% 36%;
+  --home-hero-bg-deep: 328 48% 24%;
+  --home-hero-muted: 328 32% 86%;
+  --home-hero-delta-down: 328 78% 86%;
 }
+/* Dark: quiet charcoal wash + bright delta — avoids a loud color slab on near-black UI. */
 html[data-theme="dark"] .home-summary-hero {
-  --home-hero-bg: 240 5% 18%;
-  --home-hero-bg-deep: 240 6% 12%;
-  --home-hero-muted: 240 6% 68%;
+  --home-hero-bg: 240 5% 15%;
+  --home-hero-bg-deep: 240 6% 9%;
+  --home-hero-muted: 240 5% 66%;
+  --home-hero-delta-up: 210 90% 78%;
+  --home-hero-delta-down: 328 70% 76%;
 }
 html[data-theme="dark"] .home-summary-hero.is-rank-up {
-  --home-hero-bg: 217 48% 26%;
-  --home-hero-bg-deep: 217 52% 16%;
-  --home-hero-muted: 214 28% 72%;
+  --home-hero-bg: 217 22% 16%;
+  --home-hero-bg-deep: 217 28% 10%;
+  --home-hero-muted: 214 18% 70%;
+  --home-hero-delta-up: 210 92% 80%;
 }
 html[data-theme="dark"] .home-summary-hero.is-rank-down {
-  --home-hero-bg: 24 52% 28%;
-  --home-hero-bg-deep: 24 58% 18%;
-  --home-hero-muted: 28 30% 74%;
+  --home-hero-bg: 328 18% 15%;
+  --home-hero-bg-deep: 328 24% 9%;
+  --home-hero-muted: 328 16% 70%;
+  --home-hero-delta-down: 328 72% 78%;
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-summary-hero {
-    --home-hero-bg: 240 5% 18%;
-    --home-hero-bg-deep: 240 6% 12%;
-    --home-hero-muted: 240 6% 68%;
+    --home-hero-bg: 240 5% 15%;
+    --home-hero-bg-deep: 240 6% 9%;
+    --home-hero-muted: 240 5% 66%;
+    --home-hero-delta-up: 210 90% 78%;
+    --home-hero-delta-down: 328 70% 76%;
   }
   html:not([data-theme="light"]) .home-summary-hero.is-rank-up {
-    --home-hero-bg: 217 48% 26%;
-    --home-hero-bg-deep: 217 52% 16%;
-    --home-hero-muted: 214 28% 72%;
+    --home-hero-bg: 217 22% 16%;
+    --home-hero-bg-deep: 217 28% 10%;
+    --home-hero-muted: 214 18% 70%;
+    --home-hero-delta-up: 210 92% 80%;
   }
   html:not([data-theme="light"]) .home-summary-hero.is-rank-down {
-    --home-hero-bg: 24 52% 28%;
-    --home-hero-bg-deep: 24 58% 18%;
-    --home-hero-muted: 28 30% 74%;
+    --home-hero-bg: 328 18% 15%;
+    --home-hero-bg-deep: 328 24% 9%;
+    --home-hero-muted: 328 16% 70%;
+    --home-hero-delta-down: 328 72% 78%;
   }
 }
 .home-summary-hero-label {
@@ -14512,17 +14535,25 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 8px 24px hsl(240 10% 10% / 0.16),
+    0 4px 14px hsl(240 10% 10% / 0.08),
     var(--shadow-sm);
+}
+/* Keep hero card values on one baseline — GW was oversized vs rank. */
+.home-summary[data-home-summary="hero"] .home-stat-value,
+.home-summary[data-home-summary="hero"] .home-stat-gw .home-stat-value {
+  font-size: 28px;
+}
+.home-summary[data-home-summary="hero"] .home-stat-meta:empty {
+  display: none;
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-up ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 8px 24px hsl(217 40% 16% / 0.16),
+    0 4px 14px hsl(217 40% 16% / 0.08),
     var(--shadow-sm);
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-down ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 8px 24px hsl(24 40% 16% / 0.16),
+    0 4px 14px hsl(328 40% 16% / 0.08),
     var(--shadow-sm);
 }
 .home-summary-cards {
@@ -15414,6 +15445,13 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-rank-delta.is-down {
   color: hsl(var(--negative));
 }
+/* Hero delta must beat .home-rank-delta orange/blue (same specificity otherwise). */
+.home-summary-hero .home-summary-hero-delta.is-up {
+  color: hsl(var(--home-hero-delta-up));
+}
+.home-summary-hero .home-summary-hero-delta.is-down {
+  color: hsl(var(--home-hero-delta-down));
+}
 .home-rank-delta.is-flat {
   color: var(--text-faint);
 }
@@ -15478,6 +15516,35 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   flex-direction: column;
   min-height: 0;
 }
+/* Team + League: zebra rows flush to the card edge; heading stays inset. */
+#home-squad-panel.home-table-panel,
+#home-standings-panel.home-table-panel {
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden;
+}
+#home-squad-panel > .home-panel-heading,
+#home-standings-panel > .home-panel-heading {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+#home-squad-panel .home-table-wrap,
+#home-standings-panel .home-table-wrap {
+  margin-left: 0;
+  margin-right: 0;
+}
+#home-squad-panel .home-data-table :is(th, td):first-child,
+#home-standings-panel .home-data-table :is(th, td):first-child {
+  padding-left: 12px;
+}
+#home-squad-panel .home-data-table :is(th, td):last-child,
+#home-standings-panel .home-data-table :is(th, td):last-child {
+  padding-right: 12px;
+}
+#home-squad-panel .home-bench-divider th {
+  padding-left: 12px;
+  padding-right: 12px;
+}
 .home-tables-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -15525,19 +15592,19 @@ html.home-squad-wide .home-squad-live-wrap {
   border-right: 1px solid hsl(var(--border) / 0.65);
 }
 html.home-squad-wide .home-squad-live-table col.home-col-player {
-  width: 42%;
+  width: 36%;
 }
 html.home-squad-wide .home-squad-live-table col.home-col-pts {
   width: 10%;
 }
 html.home-squad-wide .home-squad-live-table col.home-col-mp {
-  width: 13%;
+  width: 15%;
 }
 html.home-squad-wide .home-squad-live-table col.home-col-opp {
-  width: 11%;
+  width: 13%;
 }
 html.home-squad-wide .home-squad-live-table col.home-col-imp {
-  width: 24%;
+  width: 26%;
 }
 html.home-squad-wide .home-squad-live-wrap .home-col-imp {
   padding-left: 2px;
@@ -16499,16 +16566,16 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     table-layout: fixed;
   }
   .home-squad-live-table col.home-col-player {
-    width: 38%;
+    width: 34%;
   }
   .home-squad-live-table col.home-col-pts {
     width: 10%;
   }
   .home-squad-live-table col.home-col-mp {
-    width: 14%;
+    width: 16%;
   }
   .home-squad-live-table col.home-col-opp {
-    width: 12%;
+    width: 14%;
   }
   .home-squad-live-table col.home-col-imp {
     width: 26%;
@@ -16541,16 +16608,16 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     width: 14%;
   }
   .home-squad-table .home-col-player {
-    width: 38%;
+    width: 34%;
   }
   .home-squad-table .home-col-pts {
     width: 10%;
   }
   .home-squad-table .home-col-mp {
-    width: 14%;
+    width: 16%;
   }
   .home-squad-table .home-col-opp {
-    width: 12%;
+    width: 14%;
   }
   .home-squad-table .home-col-imp {
     width: 26%;
@@ -16632,17 +16699,13 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-player-cell .badge-img,
 .home-opp-line .badge-img,
 .home-crest,
-.home-crest-fallback {
+.home-crest-fallback,
+.home-crest-sm {
   width: 22px;
   height: 22px;
   flex: 0 0 auto;
   border-radius: 5px;
   object-fit: contain;
-}
-.home-opp-line .badge-img,
-.home-crest-sm {
-  width: 20px;
-  height: 20px;
 }
 .home-crest-fallback {
   display: inline-flex;
@@ -16816,7 +16879,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 /* Crest + home-icon as one unit: left-align crests across rows,
    keep the group centered under the OPP / fixture header. */
 .home-opp-line {
-  --home-opp-crest: 20px;
+  --home-opp-crest: 22px;
   --home-opp-ha: 11px;
   --home-opp-gap: 3px;
   display: inline-flex;
@@ -17502,35 +17565,41 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
     padding: 7px 4px;
   }
   .home-squad-live-table col.home-col-player {
-    width: 44%;
+    width: 34%;
   }
   .home-squad-live-table col.home-col-pts {
     width: 10%;
   }
   .home-squad-live-table col.home-col-mp {
-    width: 14%;
+    width: 16%;
   }
   .home-squad-live-table col.home-col-opp {
-    width: 12%;
+    width: 14%;
   }
   .home-squad-live-table col.home-col-imp {
-    width: 20%;
+    width: 26%;
   }
   .home-squad-live-table .home-col-player {
-    width: 44%;
+    width: 34%;
     min-width: 0;
   }
   .home-squad-live-table .home-col-pts {
     width: 10%;
   }
   .home-squad-live-table .home-col-mp {
-    width: 14%;
+    width: 16%;
   }
   .home-squad-live-table .home-col-opp {
-    width: 12%;
+    width: 14%;
   }
   .home-squad-live-table .home-col-imp {
-    width: 20%;
+    width: 26%;
+  }
+  .home-squad-live-table .home-player-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
   }
   .home-squad-pts-table col.home-col-player,
   .home-squad-pts-table .home-col-player {
@@ -17697,6 +17766,10 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   .home-stat-gw .home-stat-value {
     font-size: 28px;
   }
+  .home-summary[data-home-summary="hero"] .home-stat-value,
+  .home-summary[data-home-summary="hero"] .home-stat-gw .home-stat-value {
+    font-size: 24px;
+  }
   .home-imp {
     min-width: 52px;
     gap: 4px;
@@ -17735,10 +17808,33 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
     display: none !important;
   }
   html[data-page="home"] .home-header {
-    margin-bottom: 4px;
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+    border: none;
   }
   html[data-page="home"] .home-header .page-header-meta {
     margin-left: 0;
+  }
+  /* Hero: flush under the page-nav rule — cancel main pad + dashboard top margin.
+     Skip when viewing another manager so the Viewing banner keeps breathing room. */
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)) .main {
+    padding-top: 0;
+  }
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)) .home-dashboard {
+    margin-top: 0;
+  }
+  html[data-page="home"] .home-summary[data-home-summary="hero"] {
+    margin-top: 0;
+  }
+  html[data-page="home"] .home-summary[data-home-summary="hero"] .home-summary-hero {
+    margin-top: 0;
+  }
+  /* Viewing: keep hero inside the same gutters as the banner + cards. */
+  html[data-page="home"] .home-dashboard.is-viewing-manager .home-summary-hero {
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: var(--radius);
   }
 }
 html[data-page="home"] .filters,
@@ -17769,20 +17865,15 @@ html[data-page="home"] #subtoolbar {
 .home-player-cell .badge-img,
 .home-opp-line .badge-img,
 .home-crest,
-.home-crest-fallback {
+.home-crest-fallback,
+.home-crest-sm {
   width: 20px;
   height: 20px;
   border-radius: 5px;
   object-fit: contain;
 }
-.home-opp-line .badge-img,
-.home-crest-sm {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-}
 .home-opp-line {
-  --home-opp-crest: 18px;
+  --home-opp-crest: 20px;
   --home-opp-ha: 10px;
 }
 .home-kickoff {

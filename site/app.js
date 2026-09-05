@@ -943,10 +943,10 @@
 
   const PLAYER_COLS = [
     { key: "player", label: "Player", type: "player", pin: true },
-    { key: "price", label: "£m", decimals: 1, group: "Core", title: "Price (£m)" },
-    { key: "owned", label: "TSB%", decimals: 1, group: "Core", title: "FPL selected-by-% (TSB)" },
-    { key: "apps", label: "Apps", decimals: 0, group: "Core", title: "Appearances" },
-    { key: "mins", label: "Mins", decimals: 0, group: "Core", title: "Minutes played" },
+    { key: "price", label: "£m", decimals: 1, group: "Core", section: "General", title: "Price (£m)" },
+    { key: "owned", label: "TSB%", decimals: 1, group: "Core", section: "General", title: "FPL selected-by-% (TSB)" },
+    { key: "apps", label: "Apps", decimals: 0, group: "Core", section: "General", title: "Appearances" },
+    { key: "mins", label: "Mins", decimals: 0, group: "Core", section: "General", title: "Minutes played" },
     { key: "shots", label: "S", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots" },
     { key: "shotsOnTarget", label: "OT", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots on target" },
     { key: "touchesBox", label: "IN", decimals: 0, group: "Attack", section: "Goal Threat", rate: true, title: "Shots in the box" },
@@ -8043,6 +8043,7 @@
         kind: "players",
         teamCode,
         position,
+        omitPrice: true,
         teamTip: teamChanged ? tipAttr(`Was ${TEAM_NAMES[row.team] || row.team}`) : "",
         posTip: posChanged ? tipAttr(`Was ${row.position}`) : "",
       });
