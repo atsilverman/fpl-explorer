@@ -25265,13 +25265,14 @@
 
   const HOME_SUMMARY_KEY = "fpl-explorer-home-summary";
   const HOME_SUMMARY_ORDER = ["classic", "hero"];
+  const HOME_SUMMARY_DEFAULT = "hero";
 
   function homeSummaryLayout() {
     try {
       const stored = localStorage.getItem(HOME_SUMMARY_KEY);
-      return HOME_SUMMARY_ORDER.includes(stored) ? stored : "classic";
+      return HOME_SUMMARY_ORDER.includes(stored) ? stored : HOME_SUMMARY_DEFAULT;
     } catch {
-      return "classic";
+      return HOME_SUMMARY_DEFAULT;
     }
   }
 
@@ -25284,7 +25285,7 @@
   }
 
   function syncHomeSummaryLayout(mode = homeSummaryLayout()) {
-    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : "classic";
+    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : HOME_SUMMARY_DEFAULT;
     if (el.homeSummary) el.homeSummary.dataset.homeSummary = next;
     if (el.homeSummaryHero) el.homeSummaryHero.hidden = next !== "hero";
     const overallCard = el.homeSummary && el.homeSummary.querySelector('[data-home-summary-card="overall"]');
@@ -25295,7 +25296,7 @@
   }
 
   function applyHomeSummaryLayout(mode) {
-    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : "classic";
+    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : HOME_SUMMARY_DEFAULT;
     try {
       localStorage.setItem(HOME_SUMMARY_KEY, next);
     } catch {
@@ -25311,7 +25312,7 @@
     el.homeSummarySeg.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-home-summary]");
       if (!btn || !el.homeSummarySeg.contains(btn)) return;
-      applyHomeSummaryLayout(btn.dataset.homeSummary || "classic");
+      applyHomeSummaryLayout(btn.dataset.homeSummary || HOME_SUMMARY_DEFAULT);
       btn.blur();
     });
   }

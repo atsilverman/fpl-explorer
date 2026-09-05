@@ -452,8 +452,8 @@
             <div class="prefs-field">
               <span class="prefs-field-label" id="home-summary-seg-label">Home summary</span>
               <div class="segmented segmented-block" id="home-summary-seg" role="group" aria-labelledby="home-summary-seg-label">
-                <button type="button" data-home-summary="classic" class="active" title="Four equal summary cards">Classic</button>
-                <button type="button" data-home-summary="hero" title="Overall Rank hero band with overlapping cards">Hero</button>
+                <button type="button" data-home-summary="classic" title="Four equal summary cards">Classic</button>
+                <button type="button" data-home-summary="hero" class="active" title="Overall Rank hero band with overlapping cards">Hero</button>
               </div>
             </div>
             <div class="prefs-field">
@@ -862,8 +862,8 @@
             <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
           </button>
         </div>
-        <div class="home-summary" id="home-summary" data-home-summary="classic">
-          <div class="home-summary-hero" id="home-summary-hero" hidden>
+        <div class="home-summary" id="home-summary" data-home-summary="hero">
+          <div class="home-summary-hero" id="home-summary-hero">
             <p class="home-summary-hero-label">Overall Rank</p>
             <p class="home-summary-hero-value" id="home-hero-overall-rank"></p>
             <p class="home-summary-hero-delta home-rank-delta" id="home-hero-overall-rank-delta" hidden></p>
@@ -874,7 +874,7 @@
               <p class="home-stat-value" id="home-gw-points"></p>
               <div class="home-stat-meta" id="home-gw-meta"></div>
             </article>
-            <article class="home-panel home-stat-panel home-stat-overall" data-home-summary-card="overall">
+            <article class="home-panel home-stat-panel home-stat-overall" data-home-summary-card="overall" hidden>
               <h3 class="home-panel-heading">Overall rank</h3>
               <p class="home-stat-value home-stat-rank" id="home-overall-rank">
                 <span class="home-rank-num" id="home-overall-rank-num"></span>
@@ -882,7 +882,7 @@
               </p>
               <p class="home-stat-subtle" id="home-overall-pct" hidden></p>
             </article>
-            <article class="home-panel home-stat-panel home-stat-gw-rank" data-home-summary-card="gw-rank" hidden>
+            <article class="home-panel home-stat-panel home-stat-gw-rank" data-home-summary-card="gw-rank">
               <h3 class="home-panel-heading">Gameweek rank</h3>
               <p class="home-stat-value home-stat-rank" id="home-gw-rank">
                 <span class="home-rank-num" id="home-gw-rank-num"></span>
@@ -1639,7 +1639,7 @@
 <script src="home_data.js?v=39"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1063"></script>
+<script src="app.js?v=1064"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
