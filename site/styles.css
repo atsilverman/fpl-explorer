@@ -3174,35 +3174,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 #home-page.is-entering .home-view-banner {
   animation: none !important;
 }
-/* Feed stays put — Team + League rows cascade below. */
+/* Home tables stay painted — only summary odometers animate on enter. */
+#home-page.is-entering .home-squad-table tbody tr > *,
+#home-page.is-entering .home-standings-table tbody tr > *,
+#home-page.is-entering .home-transfers-table tbody tr > *,
 #home-page.is-entering .home-feed-table tbody tr > * {
   animation: none !important;
-}
-
-/* Home Team / League: hold rows invisible while enter is armed, then cascade
-   cell content together (never animate <tr> — WebKit drops table layout). */
-@keyframes home-row-enter {
-  from {
-    opacity: 0;
-    transform: translateY(7px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-#home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-squad-row > *,
-#home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-bench-divider > *,
-#home-page.is-home-row-enter:not(.is-entering) .home-standings-table tbody tr[data-entry] > *,
-#home-page.is-home-row-enter:not(.is-entering) .home-transfers-table tbody tr[data-entry] > * {
-  opacity: 0;
-}
-#home-page.is-entering.is-home-row-enter .home-squad-table tbody tr.home-squad-row > *,
-#home-page.is-entering.is-home-row-enter .home-squad-table tbody tr.home-bench-divider > *,
-#home-page.is-entering.is-home-row-enter .home-standings-table tbody tr[data-entry] > *,
-#home-page.is-entering.is-home-row-enter .home-transfers-table tbody tr[data-entry] > * {
-  animation: home-row-enter 0.52s var(--ease-out) both;
-  animation-delay: calc(0.38s + (min(var(--enter-i, 0), 14) * 0.046s));
 }
 
 /* Desktop Home: no IMP bar / track / rank-delta motion (summary odometer still rolls). */
@@ -3267,12 +3244,6 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #home-page.is-entering .home-transfers-table tbody tr > *,
   #home-page.is-entering .home-feed-table tbody tr > * {
     animation: none;
-  }
-  #home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-squad-row > *,
-  #home-page.is-home-row-enter:not(.is-entering) .home-squad-table tbody tr.home-bench-divider > *,
-  #home-page.is-home-row-enter:not(.is-entering) .home-standings-table tbody tr[data-entry] > *,
-  #home-page.is-home-row-enter:not(.is-entering) .home-transfers-table tbody tr[data-entry] > * {
-    opacity: 1;
   }
 }
 
@@ -14162,6 +14133,187 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   cursor: not-allowed;
 }
 
+.home-player-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.home-player-modal[hidden] {
+  display: none !important;
+}
+.home-player-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--foreground) / 0.34);
+}
+.home-player-modal-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(88vh, 820px);
+  background: hsl(var(--card));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.home-player-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.home-player-modal-header h3 {
+  margin: 0;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-player-modal-close {
+  flex: none;
+}
+.home-player-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+html.home-player-modal-open {
+  overflow: hidden;
+}
+.home-player-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.home-player-detail-profile .home-lookup-card {
+  margin: 0;
+}
+.home-player-detail-matchup .schedule-card,
+.home-player-detail-matchup .home-lookup-schedule-card {
+  margin: 0;
+}
+/* Player tray/modal embeds a schedule matchup card — no hover lift (Schedule keeps it). */
+.home-player-detail-matchup .schedule-card:hover,
+.home-player-detail-matchup .home-lookup-schedule-card:hover {
+  position: static;
+  z-index: auto;
+  transform: none;
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.home-player-owners {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--background) / 0.45);
+  overflow: hidden;
+}
+.home-player-owners-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.home-player-owners-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.home-player-owners-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.home-player-owners-empty {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.home-player-owners-list {
+  display: flex;
+  flex-direction: column;
+}
+.home-player-owner-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 40px 48px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-top: 1px solid hsl(var(--border) / 0.65);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-player-owners-list .home-player-owner-row:first-child {
+  border-top: 0;
+}
+.home-player-owner-row:hover,
+.home-player-owner-row:focus-visible {
+  background: hsl(var(--muted) / 0.45);
+  outline: none;
+}
+.home-player-owner-rank,
+.home-player-owner-gw,
+.home-player-owner-total {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.home-player-owner-gw,
+.home-player-owner-total {
+  text-align: right;
+}
+.home-player-owner-id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.home-player-owner-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-player-owner-team {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Home "Updated …" — bottom center on mobile and desktop. */
 .home-updated-footer {
   display: none;
@@ -14415,6 +14567,27 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   flex-direction: column;
   gap: 12px;
   margin: 8px 0 32px;
+}
+/* Player lookup: space under brand/topbar; keep the card stack tight (no double margins). */
+.home-dashboard.is-player-lookup {
+  margin-top: 12px;
+  gap: 8px;
+}
+.home-dashboard.is-player-lookup > .home-player-profile,
+.home-dashboard.is-player-lookup > .home-player-matchup {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.home-dashboard.is-player-lookup .home-tables-grid {
+  gap: 8px;
+  margin-top: 0;
+}
+.home-dashboard.is-player-lookup .home-tables-grid > .home-table-panel {
+  height: auto;
+  margin: 0;
+}
+.home-dashboard.is-player-lookup .home-player-matchup .schedule-card {
+  margin: 0;
 }
 @media (min-width: 1400px) {
   /* Share one 4-col track with summary cards so Team / League / Feed gutters line up. */
@@ -14807,8 +14980,16 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   display: none !important;
 }
 @media (max-width: 720px) {
+  /* Restore main top pad when looking up a player (hero flush no longer applies). */
+  html[data-page="home"]:has(.home-dashboard.is-player-lookup) .main {
+    padding-top: var(--main-pad-top, 8px);
+  }
+  .home-dashboard.is-player-lookup {
+    margin-top: 10px;
+    gap: 8px;
+  }
   .home-dashboard.is-player-lookup .home-player-profile:not([hidden]) {
-    margin-bottom: 8px;
+    margin-bottom: 0;
   }
   .home-dashboard.is-search-open .home-player-profile,
   .home-dashboard.is-search-open .home-player-matchup {
@@ -14862,70 +15043,74 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-lookup-card {
   position: relative;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: hsl(var(--card));
   box-shadow: var(--shadow-sm);
-  padding: 10px;
+  padding: 10px 14px 8px;
   border-left: 3px solid var(--home-lookup-accent, hsl(var(--border)));
 }
-.home-lookup-card.is-lookup-tappable {
-  cursor: pointer;
-  touch-action: manipulation;
+.home-lookup-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
 }
-.home-lookup-card.is-lookup-tappable:focus-visible {
-  outline: 2px solid hsl(var(--primary) / 0.45);
-  outline-offset: 2px;
-}
-.home-lookup-corner {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.home-lookup-heading {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 16px);
-  pointer-events: none;
-  z-index: 1;
-}
-.home-lookup-mode {
-  max-width: 100%;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: hsl(var(--blue-hsl));
-  line-height: 1.2;
-  white-space: nowrap;
-}
-.home-lookup-mode[hidden] {
-  display: none !important;
-}
-.home-lookup-tap-icon {
-  width: 14px;
-  height: 14px;
+  align-items: baseline;
   flex: none;
+  flex-wrap: nowrap;
+  gap: 0;
+  max-width: 42%;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  line-height: 1.2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.home-lookup-heading-kicker {
+  flex: none;
+  font: inherit;
+  color: inherit;
+}
+.home-lookup-heading-view {
+  display: inline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--text-faint);
-  opacity: 0.55;
+  line-height: inherit;
 }
-.home-lookup-card.is-lookup-tappable:focus-visible .home-lookup-tap-icon {
-  opacity: 0.85;
-  color: hsl(var(--blue-hsl) / 0.75);
+.home-lookup-heading-view:not(:empty)::before {
+  content: "·";
+  margin: 0 7px;
+  color: var(--text-faint);
+  font-weight: 500;
 }
-@media (hover: hover) and (pointer: fine) {
-  .home-lookup-card.is-lookup-tappable:hover .home-lookup-tap-icon {
-    opacity: 0.85;
-    color: hsl(var(--blue-hsl) / 0.75);
-  }
+.home-lookup-card.is-rank-overall .home-lookup-heading,
+.home-lookup-card.is-rank-pos .home-lookup-heading {
+  color: hsl(var(--blue-hsl) / 0.92);
 }
-.home-lookup-card.is-rank-overall .home-lookup-mode,
-.home-lookup-card.is-rank-pos .home-lookup-mode {
-  color: hsl(var(--blue-hsl));
+.home-lookup-card.is-rank-overall .home-lookup-heading-view,
+.home-lookup-card.is-rank-pos .home-lookup-heading-view {
+  color: hsl(var(--blue-hsl) / 0.72);
 }
-.home-lookup-card.is-rank-overall .home-lookup-tap-icon,
-.home-lookup-card.is-rank-pos .home-lookup-tap-icon {
-  color: hsl(var(--blue-hsl) / 0.7);
-  opacity: 0.7;
+.home-lookup-card.is-rank-overall .home-lookup-heading-view:not(:empty)::before,
+.home-lookup-card.is-rank-pos .home-lookup-heading-view:not(:empty)::before {
+  color: hsl(var(--blue-hsl) / 0.55);
 }
 .home-lookup-stat.is-rank-val {
   background: hsl(var(--blue-hsl) / 0.08);
@@ -14936,11 +15121,48 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-lookup-stat.is-rank-muted .home-lookup-stat-val {
   color: var(--text-dim);
 }
+.home-lookup-stat-val-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    opacity 0.14s ease,
+    transform 0.18s var(--ease-out);
+}
+.home-lookup-stat-val-text.is-swap-out {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.home-lookup-stat-val-text.is-swap-in {
+  animation: home-lookup-val-in 0.2s var(--ease-out) both;
+}
+@keyframes home-lookup-val-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-lookup-stat-val-text {
+    transition: none;
+  }
+  .home-lookup-stat-val-text.is-swap-in {
+    animation: none;
+  }
+}
 .home-lookup-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .home-lookup-photo-wrap {
   position: relative;
@@ -15003,7 +15225,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-lookup-id {
   min-width: 0;
   flex: 1;
-  padding-right: 52px;
+  padding-right: 0;
 }
 .home-lookup-name {
   margin: 0;
@@ -15019,7 +15241,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin: 3px 0 0;
+  margin: 5px 0 0;
   font-size: 11px;
   color: var(--text-dim);
 }
@@ -15039,6 +15261,44 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   padding-top: 10px;
   border-top: 1px solid hsl(var(--border) / 0.65);
 }
+.home-lookup-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  padding: 8px 0 0;
+}
+.home-lookup-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.22s var(--ease-out),
+    background-color 0.22s ease,
+    opacity 0.22s ease;
+}
+.home-lookup-dot.is-active {
+  background: hsl(var(--primary));
+  transform: scale(1.18);
+  opacity: 1;
+}
+.home-lookup-dot:not(.is-active) {
+  opacity: 0.85;
+}
+.home-lookup-dot:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.55);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-lookup-dot {
+    transition: none;
+  }
+}
 .home-lookup-stat {
   display: flex;
   flex-direction: column;
@@ -15052,6 +15312,8 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   background: hsl(var(--muted) / 0.35);
   text-align: center;
   overflow: hidden;
+  /* Keep grey shells still — only value text eases between pages. */
+  transition: none;
 }
 .home-lookup-stat-val {
   display: flex;
@@ -15068,6 +15330,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.16s ease;
 }
 .home-lookup-stat.is-hot .home-lookup-stat-val {
   width: max-content;
@@ -15180,6 +15443,31 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding-bottom: 8px;
+}
+.mobile-sheet.is-home-player {
+  top: var(--vv-offset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: auto;
+  height: var(--vv-height, 100%);
+  align-items: flex-end;
+}
+.mobile-sheet.is-home-player .mobile-sheet-panel {
+  max-height: min(92%, calc(var(--vv-height, 100dvh) - 8px));
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
+.mobile-sheet.is-home-player .mobile-sheet-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+}
+.mobile-sheet-body > .home-player-detail {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .home-search-input-wrap {
   position: sticky;
@@ -17923,11 +18211,11 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
     margin-left: 0;
   }
   /* Hero: flush under the page-nav rule — cancel main pad + dashboard top margin.
-     Skip when viewing another manager so the Viewing banner keeps breathing room. */
-  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)) .main {
+     Skip when viewing another manager or player lookup so those views keep breathing room. */
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)):not(:has(.home-dashboard.is-player-lookup)) .main {
     padding-top: 0;
   }
-  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)) .home-dashboard {
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-viewing-manager)):not(:has(.home-dashboard.is-player-lookup)) .home-dashboard {
     margin-top: 0;
   }
   html[data-page="home"] .home-summary[data-home-summary="hero"] {

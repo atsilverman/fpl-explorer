@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1004" />
+<link rel="stylesheet" href="styles.css?v=1015" />
 <script>
 (() => {
   try {
@@ -1612,6 +1612,18 @@
     </div>
   </div>
 </div>
+<div id="home-player-modal" class="home-player-modal" hidden aria-hidden="true">
+  <div class="home-player-modal-backdrop" data-home-player-dismiss aria-hidden="true"></div>
+  <div class="home-player-modal-panel" role="dialog" aria-modal="true" aria-labelledby="home-player-modal-title">
+    <div class="home-player-modal-header">
+      <h3 id="home-player-modal-title">Player</h3>
+      <button type="button" class="ghost-btn icon-only-btn home-player-modal-close" data-home-player-dismiss aria-label="Close">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+      </button>
+    </div>
+    <div id="home-player-modal-body" class="home-player-modal-body"></div>
+  </div>
+</div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
 <script src="data.js?v=89"></script>
 <script src="markets_data.js?v=30"></script>
@@ -1621,7 +1633,7 @@
 <script src="home_data.js?v=39"></script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1044"></script>
+<script src="app.js?v=1057"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

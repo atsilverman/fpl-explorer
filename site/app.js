@@ -1167,6 +1167,9 @@
     homeStandingsLookupEmpty: $("#home-standings-lookup-empty"),
     homePlayerProfile: $("#home-player-profile"),
     homePlayerMatchup: $("#home-player-matchup"),
+    homePlayerModal: $("#home-player-modal"),
+    homePlayerModalBody: $("#home-player-modal-body"),
+    homePlayerModalTitle: $("#home-player-modal-title"),
     homeSearchBtn: $("#home-search-btn"),
     subtoolbar: $("#subtoolbar"),
     statsToolbarStart: $("#stats-toolbar-start"),
@@ -2015,6 +2018,11 @@
   function refreshManagerDependentUI() {
     syncFplIdStatus();
     syncPlannerPageUI();
+    // Boot: restoreManagerId(deferHome) sets this so applyLeagueId → refresh
+    // does not paint Home twice before setPage's single enter render.
+    if (homeBootDeferPaint && (state.page === "home" || state.page === "live")) {
+      return;
+    }
     if (state.page === "home") {
       // Defer DOM rebuild while Home enter is playing so squad/stats don't
       // flash a second paint mid-animation.
@@ -2621,7 +2629,6 @@
       setHomeManagerModalOpen(false);
       homePageEnterArmed = true;
       homeLiveApplyAfterEnter = true;
-      armHomeRowEnter(el.homePage);
       primeOptaHighlightEnter(el.homePage);
       renderHome({ leaveRollsPending: true });
       playPageEnter(el.homePage);
@@ -2734,6 +2741,8 @@
   let homeBootstrapSource = null;
   /** True from setPage(home) until playPageEnter arms is-entering — blocks poll rebuild flash. */
   let homePageEnterArmed = false;
+  // When true, refreshManagerDependentUI skips Home/Live DOM (restore boot path).
+  let homeBootDeferPaint = false;
   let homeLivePrefetchStarted = false;
   const HOME_SUMMARY_ROLL_MS = 2800;
   const HOME_VIEW_SWITCH_ROLL_MS = 2400;
@@ -2768,48 +2777,8 @@
       homePageEnterArmed ||
       (el.homePage &&
         (el.homePage.classList.contains("is-entering") ||
-          el.homePage.classList.contains("is-enter-pending") ||
-          el.homePage.classList.contains("is-home-row-enter")))
+          el.homePage.classList.contains("is-enter-pending")))
     );
-  }
-
-  /** Hold Team/League rows invisible until the Home enter cascade starts. */
-  function armHomeRowEnter(pane = el.homePage) {
-    if (!pane || prefersReducedMotion()) return;
-    pane.classList.add("is-home-row-enter");
-  }
-
-  function clearHomeRowEnter(pane = el.homePage) {
-    if (!pane) return;
-    pane.classList.remove("is-home-row-enter");
-  }
-
-  /** Stamp lockstep stagger indices for Team + League rows (per-tbody ordinals). */
-  function stampHomeRowEnterIndices(pane = el.homePage) {
-    if (!pane) return;
-    const bodies = pane.querySelectorAll(
-      [
-        ".home-squad-table tbody",
-        ".home-standings-table tbody",
-        ".home-transfers-table tbody",
-      ].join(", ")
-    );
-    bodies.forEach((tbody) => {
-      let i = 0;
-      tbody.querySelectorAll(":scope > tr").forEach((row) => {
-        if (row.classList.contains("home-squad-loading-row")) return;
-        const isSquad =
-          row.classList.contains("home-squad-row") || row.classList.contains("home-bench-divider");
-        const isStanding = row.hasAttribute("data-entry");
-        if (!isSquad && !isStanding) return;
-        const idx = Math.min(i, 14);
-        row.style.setProperty("--enter-i", String(idx));
-        row.querySelectorAll(".home-imp-fill").forEach((track) => {
-          track.style.setProperty("--enter-i", String(idx));
-        });
-        i += 1;
-      });
-    });
   }
 
   function flushHomeRenderAfterEnter() {
@@ -3222,7 +3191,7 @@
     const enterBusy = homeIsEnterBusy();
     if (rerender) renderHome({ settleQuiet: true, deferDuringEnter: enterBusy });
     if (!enterBusy) {
-      el.homePage.classList.remove("is-enter-pending", "is-entering", "is-home-row-enter");
+      el.homePage.classList.remove("is-enter-pending", "is-entering");
       finishHomeStatRolls(el.homePage);
     }
   }
@@ -3567,9 +3536,9 @@
   let homeLookupCardBound = false;
 
   const HOME_LOOKUP_STAT_MODES = [
-    { key: "values", label: "", className: "" },
-    { key: "overall", label: "Rank · All", className: "is-rank-overall" },
-    { key: "position", label: "Rank · POS", className: "is-rank-pos" },
+    { key: "values", kicker: "STATS", view: "Values", className: "" },
+    { key: "overall", kicker: "RANK", view: "All", className: "is-rank-overall" },
+    { key: "position", kicker: "RANK", view: "POS", className: "is-rank-pos" },
   ];
   let homeElementGwCache = null;
 
@@ -5932,24 +5901,13 @@
       }
       const row = homeLookupRowForElement(eid);
       if (!row) return;
-      const wasViewingOther = homeIsViewingOtherManager();
-      if (wasViewingOther) {
+      if (homeIsViewingOtherManager()) {
         homeViewEntryId = null;
-        homeLookupPlayer = row;
-        homeLookupStatMode = 0;
-        if (el.homeDesktopSearchInput) {
-          el.homeDesktopSearchInput.value = "";
-          el.homeDesktopSearchInput.placeholder = row.name || "Search players";
-          el.homeDesktopSearchInput.blur();
-        }
-        hideHomeDesktopSearchResults();
-        syncHomeSearchBtn();
+        homeOwnerPin = null;
         homeRenderQueued = false;
         renderHome({ animateView: true });
-      } else {
-        setHomePlayerLookup(row);
       }
-      homeScrollPageToTop();
+      setHomePlayerLookup(row);
     }
 
     function toggleStandingOwner(tr) {
@@ -6075,6 +6033,14 @@
 
   function homeSquadRowAriaLabel(name) {
     return `Show details and managers who own ${name || "this player"}`;
+  }
+
+  function homeBenchDividerHTML(colspan, { spacer = false } = {}) {
+    if (!(colspan > 0)) return "";
+    if (spacer) {
+      return `<tr class="home-bench-divider home-bench-divider-spacer" aria-hidden="true"><th scope="rowgroup" colspan="${colspan}"></th></tr>`;
+    }
+    return `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${colspan}">Bench</th></tr>`;
   }
 
   function homeLookupRowForElement(elementId) {
@@ -6603,10 +6569,11 @@
     }
   }
 
-  function homeLookupStatCard(value, label, { hot = false, isRank = false, topRank = false } = {}) {
+  function homeLookupStatCard(value, label, { hot = false, isRank = false, topRank = false, id = "" } = {}) {
     const rankCls = isRank ? (topRank ? " is-rank-val" : " is-rank-muted") : "";
     const hotCls = hot ? " is-hot" : "";
-    return `<div class="home-lookup-stat${hotCls}${rankCls}"><span class="home-lookup-stat-val">${escapeHtml(String(value ?? "—"))}</span><span class="home-lookup-stat-lbl">${escapeHtml(label)}</span></div>`;
+    const idAttr = id ? ` data-stat-id="${escapeHtml(String(id))}"` : "";
+    return `<div class="home-lookup-stat${hotCls}${rankCls}"${idAttr}><span class="home-lookup-stat-val"><span class="home-lookup-stat-val-text">${escapeHtml(String(value ?? "—"))}</span></span><span class="home-lookup-stat-lbl">${escapeHtml(label)}</span></div>`;
   }
 
   function fmtHomeLookupRank(rank) {
@@ -6626,6 +6593,7 @@
           hot: shown.hot,
           isRank: shown.isRank,
           topRank: shown.topRank,
+          id: spec.id,
         });
       })
       .join("");
@@ -6635,41 +6603,125 @@
     return HOME_LOOKUP_STAT_MODES[homeLookupStatMode] || HOME_LOOKUP_STAT_MODES[0];
   }
 
-  function refreshHomeLookupCardDisplay() {
-    const card = el.homePlayerProfile && el.homePlayerProfile.querySelector(".home-lookup-card");
+  function homeLookupModeHeadingHTML(mode = homeLookupStatModeMeta()) {
+    const kicker = mode.kicker || "STATS";
+    const view = mode.view || "";
+    return `<div class="home-lookup-heading" aria-live="polite">
+      <span class="home-lookup-heading-kicker">${escapeHtml(kicker)}</span>
+      ${view ? `<span class="home-lookup-heading-view">${escapeHtml(view)}</span>` : ""}
+    </div>`;
+  }
+
+  function homeLookupDotsHTML(activeIndex = homeLookupStatMode) {
+    return `<div class="home-lookup-dots" role="tablist" aria-label="Player stat views">
+      ${HOME_LOOKUP_STAT_MODES.map((mode, i) => {
+        const on = i === activeIndex;
+        const label = `${mode.kicker}${mode.view ? ` ${mode.view}` : ""}`;
+        return `<button type="button" class="home-lookup-dot${on ? " is-active" : ""}" role="tab" aria-selected="${on ? "true" : "false"}" aria-label="${escapeHtml(label)}" data-page="${i}"></button>`;
+      }).join("")}
+    </div>`;
+  }
+
+  function syncHomeLookupDots(card, activeIndex = homeLookupStatMode) {
+    if (!card) return;
+    card.querySelectorAll(".home-lookup-dot").forEach((dot, i) => {
+      const on = i === activeIndex;
+      dot.classList.toggle("is-active", on);
+      dot.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  }
+
+  function syncHomeLookupHeading(card, mode = homeLookupStatModeMeta()) {
+    if (!card) return;
+    let heading = card.querySelector(".home-lookup-heading");
+    if (!heading) {
+      const top = card.querySelector(".home-lookup-top");
+      if (top) top.insertAdjacentHTML("beforeend", homeLookupModeHeadingHTML(mode));
+      else card.insertAdjacentHTML("afterbegin", homeLookupModeHeadingHTML(mode));
+      return;
+    }
+    const kicker = heading.querySelector(".home-lookup-heading-kicker");
+    let view = heading.querySelector(".home-lookup-heading-view");
+    if (kicker) kicker.textContent = mode.kicker || "STATS";
+    if (mode.view) {
+      if (!view) {
+        view = document.createElement("span");
+        view.className = "home-lookup-heading-view";
+        heading.appendChild(view);
+      }
+      view.textContent = mode.view;
+    } else if (view) {
+      view.remove();
+    }
+  }
+
+  function refreshHomeLookupCardDisplay({ animate = true } = {}) {
+    const card = homeLookupCardEl();
     if (!card || !homeLookupPlayer) return;
     const mode = homeLookupStatModeMeta();
     card.classList.remove("is-rank-overall", "is-rank-pos");
     if (mode.className) card.classList.add(mode.className);
     card.dataset.rankMode = mode.key;
-    const modeEl = card.querySelector(".home-lookup-mode");
-    if (modeEl) {
-      modeEl.textContent = mode.label;
-      modeEl.hidden = !mode.label;
-    }
-    const statsEl = card.querySelector(".home-lookup-stats");
-    if (statsEl) statsEl.innerHTML = homePlayerProfileCardsHTML(homeLookupPlayer, mode.key);
+    syncHomeLookupHeading(card, mode);
+    syncHomeLookupDots(card, homeLookupStatMode);
+
+    const specs = homeLookupStatSpecList(homeLookupPlayer);
+    const rankMaps = homeLookupRankMapsForRow(homeLookupPlayer, mode.key);
+    const reduce = prefersReducedMotion() || !animate;
+    specs.forEach((spec) => {
+      const id = String(spec.id);
+      const cell = [...card.querySelectorAll(".home-lookup-stat")].find(
+        (node) => node.getAttribute("data-stat-id") === id
+      );
+      if (!cell) return;
+      const shown = homeLookupStatDisplay(homeLookupPlayer, spec, mode.key, rankMaps);
+      const next = String(shown.value ?? "—");
+      cell.classList.toggle("is-hot", !!shown.hot);
+      cell.classList.toggle("is-rank-val", !!(shown.isRank && shown.topRank));
+      cell.classList.toggle("is-rank-muted", !!(shown.isRank && !shown.topRank));
+      const valEl = cell.querySelector(".home-lookup-stat-val-text");
+      if (!valEl) return;
+      if (valEl.textContent === next) return;
+      if (reduce) {
+        valEl.textContent = next;
+        return;
+      }
+      valEl.classList.add("is-swap-out");
+      window.setTimeout(() => {
+        if (!valEl.isConnected) return;
+        valEl.textContent = next;
+        valEl.classList.remove("is-swap-out");
+        valEl.classList.add("is-swap-in");
+        window.setTimeout(() => {
+          if (valEl.isConnected) valEl.classList.remove("is-swap-in");
+        }, 180);
+      }, 120);
+    });
   }
 
-  function cycleHomeLookupStatMode() {
+  function setHomeLookupStatMode(index, { animate = true } = {}) {
     if (!homeLookupPlayer) return;
-    homeLookupStatMode = (homeLookupStatMode + 1) % HOME_LOOKUP_STAT_MODES.length;
-    refreshHomeLookupCardDisplay();
+    const next = Math.max(0, Math.min(HOME_LOOKUP_STAT_MODES.length - 1, Number(index) || 0));
+    if (next === homeLookupStatMode) {
+      refreshHomeLookupCardDisplay({ animate: false });
+      return;
+    }
+    homeLookupStatMode = next;
+    refreshHomeLookupCardDisplay({ animate });
   }
 
   function bindHomeLookupCard() {
-    if (homeLookupCardBound || !el.homePlayerProfile) return;
+    if (homeLookupCardBound) return;
     homeLookupCardBound = true;
-    el.homePlayerProfile.addEventListener("click", (e) => {
-      if (!e.target.closest(".home-lookup-card")) return;
-      cycleHomeLookupStatMode();
-    });
-    el.homePlayerProfile.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      const card = e.target.closest(".home-lookup-card");
-      if (!card || !el.homePlayerProfile.contains(card)) return;
+    document.addEventListener("click", (e) => {
+      const dot = e.target.closest(".home-lookup-dot");
+      if (!dot) return;
+      const root = homePlayerDetailRoot();
+      if (!root || !root.contains(dot)) return;
       e.preventDefault();
-      cycleHomeLookupStatMode();
+      const page = Number(dot.dataset.page);
+      if (!Number.isFinite(page)) return;
+      setHomeLookupStatMode(page);
     });
   }
 
@@ -6730,22 +6782,22 @@
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
     const photoRing = teamRingAttrs(row.team);
     const mode = homeLookupStatModeMeta();
-    return `<article class="home-lookup-card is-lookup-tappable${mode.className ? ` ${mode.className}` : ""}" data-rank-mode="${escapeHtml(mode.key)}" role="button" tabindex="0" aria-label="Player stats. Tap to cycle rank views."${accentStyle ? ` style="${accentStyle}"` : ""}>
-      <span class="home-lookup-corner" aria-hidden="true">
-        <span class="home-lookup-mode"${mode.label ? "" : " hidden"}>${escapeHtml(mode.label)}</span>
-        ${iconHTML("mouse-pointer-click", "home-lookup-tap-icon")}
-      </span>
-      <div class="home-lookup-head">
+    return `<article class="home-lookup-card${mode.className ? ` ${mode.className}` : ""}" data-rank-mode="${escapeHtml(mode.key)}"${accentStyle ? ` style="${accentStyle}"` : ""}>
+      <div class="home-lookup-top">
+        <div class="home-lookup-head">
           <div class="home-lookup-photo-wrap${photoRing.className}"${photoRing.attr}>
-          <div class="home-lookup-photo-clip">${photoBlock}</div>
-          ${badge}
+            <div class="home-lookup-photo-clip">${photoBlock}</div>
+            ${badge}
+          </div>
+          <div class="home-lookup-id">
+            <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}</h3>
+            ${metaBits.length ? `<p class="home-lookup-meta">${metaBits.join("")}</p>` : ""}
+          </div>
         </div>
-        <div class="home-lookup-id">
-          <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}</h3>
-          ${metaBits.length ? `<p class="home-lookup-meta">${metaBits.join("")}</p>` : ""}
-        </div>
+        ${homeLookupModeHeadingHTML(mode)}
       </div>
       <div class="home-lookup-stats">${homePlayerProfileCardsHTML(row, mode.key)}</div>
+      ${homeLookupDotsHTML(homeLookupStatMode)}
     </article>`;
   }
 
@@ -6769,6 +6821,170 @@
         matchupProfile: profile,
       }
     )}</article>`;
+  }
+
+  function homePlayerOwnersHTML(elementId) {
+    const owners = homeOwnersForElement(elementId);
+    const standings = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const leagueLabel = HOME.leagueName || "League";
+    const rows = standings
+      .filter((r) => owners.has(Number(r.entry)))
+      .slice()
+      .sort((a, b) => {
+        const ra = Number(a.rankOfficial ?? a.rankLive ?? 9999);
+        const rb = Number(b.rankOfficial ?? b.rankLive ?? 9999);
+        return ra - rb;
+      });
+    if (!rows.length) {
+      return `<section class="home-player-owners">
+        <h3 class="home-player-owners-heading">
+          <span class="home-player-owners-kicker">League</span>
+          <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
+        </h3>
+        <p class="home-player-owners-empty">No managers in ${escapeHtml(leagueLabel)} own this player.</p>
+      </section>`;
+    }
+    const list = rows
+      .map((r) => {
+        const entry = Number(r.entry);
+        const rank = r.rankOfficial ?? r.rankLive ?? "—";
+        const gw = homeStandingsGwPoints(r);
+        const total = r.total != null ? Number(r.total) : r.totalPoints;
+        return `<button type="button" class="home-player-owner-row" data-entry="${escapeHtml(String(entry))}">
+          <span class="home-player-owner-rank">${escapeHtml(String(rank))}</span>
+          <span class="home-player-owner-id">
+            <span class="home-player-owner-name">${escapeHtml(r.playerName || "—")}</span>
+            <span class="home-player-owner-team">${escapeHtml(r.entryName || "")}</span>
+          </span>
+          <span class="home-player-owner-gw">${escapeHtml(gw == null ? "—" : String(gw))}</span>
+          <span class="home-player-owner-total">${escapeHtml(total == null || !Number.isFinite(Number(total)) ? "—" : String(Math.round(Number(total))))}</span>
+        </button>`;
+      })
+      .join("");
+    return `<section class="home-player-owners">
+      <h3 class="home-player-owners-heading">
+        <span class="home-player-owners-kicker">Owners</span>
+        <span class="home-player-owners-meta">${rows.length}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
+      </h3>
+      <div class="home-player-owners-list" role="list">${list}</div>
+    </section>`;
+  }
+
+  function homePlayerDetailHTML(row) {
+    if (!row) return "";
+    return `<div class="home-player-detail">
+      <div class="home-player-detail-profile">${homePlayerProfileHTML(row)}</div>
+      <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
+      <div class="home-player-detail-owners">${homePlayerOwnersHTML(homeLookupElementId(row))}</div>
+    </div>`;
+  }
+
+  function homePlayerDetailRoot() {
+    if (el.homePlayerModal && !el.homePlayerModal.hidden && el.homePlayerModalBody) {
+      return el.homePlayerModalBody;
+    }
+    if (mobileSheetOpen && mobileSheetKey === "home-player" && el.mobileSheetBody) {
+      return el.mobileSheetBody;
+    }
+    return null;
+  }
+
+  function homeLookupCardEl() {
+    const root = homePlayerDetailRoot();
+    return root ? root.querySelector(".home-lookup-card") : null;
+  }
+
+  function closeHomePlayerModal() {
+    if (!el.homePlayerModal || el.homePlayerModal.hidden) return;
+    el.homePlayerModal.hidden = true;
+    el.homePlayerModal.setAttribute("aria-hidden", "true");
+    document.documentElement.classList.remove("home-player-modal-open");
+    if (el.homePlayerModalBody) el.homePlayerModalBody.innerHTML = "";
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Player";
+  }
+
+  function openHomePlayerModal(row) {
+    if (!el.homePlayerModal || !el.homePlayerModalBody) return;
+    if (el.homePlayerModalTitle) {
+      el.homePlayerModalTitle.textContent = (row && row.name) || "Player";
+    }
+    el.homePlayerModalBody.innerHTML = homePlayerDetailHTML(row);
+    el.homePlayerModal.hidden = false;
+    el.homePlayerModal.setAttribute("aria-hidden", "false");
+    document.documentElement.classList.add("home-player-modal-open");
+    bindHomeLookupCard();
+    bindHomePlayerDetailEvents(el.homePlayerModalBody);
+    upgradeNativeTitles(el.homePlayerModalBody);
+    bindOwnershipPhotoFallback(el.homePlayerModalBody);
+  }
+
+  function openHomePlayerDetailOverlay(row = homeLookupPlayer) {
+    if (!row) return;
+    if (preferMobileSheet()) {
+      closeHomePlayerModal();
+      if (el.homeBento) el.homeBento.classList.remove("is-search-open");
+      if (mobileSheetOpen && mobileSheetKey === "home-player" && el.mobileSheetBody) {
+        if (el.mobileSheetTitle) {
+          el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
+          el.mobileSheetTitle.textContent = row.name || "Player";
+        }
+        el.mobileSheetBody.innerHTML = homePlayerDetailHTML(row);
+        bindHomeLookupCard();
+        upgradeNativeTitles(el.mobileSheetBody);
+        bindOwnershipPhotoFallback(el.mobileSheetBody);
+        return;
+      }
+      openMobileSheet({
+        title: row.name || "Player",
+        html: homePlayerDetailHTML(row),
+        key: "home-player",
+      });
+      bindHomeLookupCard();
+      if (el.mobileSheetBody) {
+        bindHomePlayerDetailEvents(el.mobileSheetBody);
+        upgradeNativeTitles(el.mobileSheetBody);
+        bindOwnershipPhotoFallback(el.mobileSheetBody);
+      }
+      return;
+    }
+    if (mobileSheetOpen) closeMobileSheet();
+    openHomePlayerModal(row);
+  }
+
+  function closeHomePlayerDetailOverlay({ clearState = false } = {}) {
+    if (mobileSheetOpen && mobileSheetKey === "home-player") {
+      closeMobileSheet();
+    }
+    closeHomePlayerModal();
+    if (clearState && homeLookupPlayer) {
+      homeLookupPlayer = null;
+      homeLookupStatMode = 0;
+      syncHomeSearchBtn();
+    }
+  }
+
+  function bindHomePlayerDetailEvents(root) {
+    if (!root || root.dataset.homePlayerDetailBound === "1") return;
+    root.dataset.homePlayerDetailBound = "1";
+    root.addEventListener("click", (e) => {
+      const ownerBtn = e.target.closest(".home-player-owner-row");
+      if (ownerBtn && root.contains(ownerBtn)) {
+        e.preventDefault();
+        const entry = Number(ownerBtn.dataset.entry);
+        if (!Number.isFinite(entry)) return;
+        // setHomeViewEntry clears lookup (closes overlay) when active.
+        setHomeViewEntry(entry);
+        return;
+      }
+      const verdict = e.target.closest(".ftt-verdict-tip");
+      if (verdict && root.contains(verdict)) {
+        e.preventDefault();
+        e.stopPropagation();
+        hideTeamRankTooltip();
+        if (matchupEdgeActiveCell === verdict) hideMatchupEdgeTooltip();
+        else showMatchupEdgeTooltip(verdict, e);
+      }
+    });
   }
 
   function homeSearchResultRowHTML(row) {
@@ -6883,16 +7099,13 @@
         );
         if (!row) return;
         setHomePlayerLookup(row);
-        closeMobileSheet();
       });
     }
   }
 
   function openHomeSearchSheet() {
-    if (NARROW_MQ.matches) {
-      clearHomePlayerLookup({ rerender: false });
-      if (el.homeBento) el.homeBento.classList.add("is-search-open");
-    }
+    if (homeLookupPlayer) clearHomePlayerLookup({ rerender: true });
+    if (NARROW_MQ.matches && el.homeBento) el.homeBento.classList.add("is-search-open");
     openMobileSheet({
       title: "",
       html: homeSearchSheetHTML(""),
@@ -6986,7 +7199,9 @@
     }
     hideHomeDesktopSearchResults();
     syncHomeSearchBtn();
+    closeHomePlayerDetailOverlay();
     if (rerender) syncHomeLookupUI();
+    else syncHomeOwnerHighlights();
   }
 
   function setHomePlayerLookup(row) {
@@ -6996,6 +7211,9 @@
     }
     homeLookupPlayer = row;
     homeLookupStatMode = 0;
+    if (homeOwnerPin && homeOwnerPin.type === "element") {
+      homeOwnerPin = null;
+    }
     if (el.homeDesktopSearchInput) {
       el.homeDesktopSearchInput.value = "";
       el.homeDesktopSearchInput.placeholder = row.name || "Search players";
@@ -7006,77 +7224,39 @@
     syncHomeLookupUI();
   }
 
-  function syncHomeStandingsLookupEmpty(hasOwners) {
+  function syncHomeStandingsLookupEmpty() {
     const empty = el.homeStandingsLookupEmpty;
     const pager = el.homeStandingsPanel && el.homeStandingsPanel.querySelector(".home-standings-pager");
-    if (!empty) return;
-    if (!homeLookupPlayer) {
+    if (empty) {
       empty.hidden = true;
       empty.textContent = "";
-      if (pager) pager.hidden = false;
-      return;
     }
-    if (hasOwners) {
-      empty.hidden = true;
-      empty.textContent = "";
-      if (pager) pager.hidden = false;
-      return;
-    }
-    const leagueLabel = HOME.leagueName || "this league";
-    empty.textContent = `No managers in ${leagueLabel} own this player.`;
-    empty.hidden = false;
-    if (pager) pager.hidden = true;
+    if (pager) pager.hidden = false;
   }
 
   function syncHomeLookupUI() {
-    if (!el.homeBento) return;
-    const active = !!homeLookupPlayer;
-    el.homeBento.classList.toggle("is-player-lookup", active);
+    // Player detail lives in a mobile sheet / desktop modal — leave Home layout alone.
+    if (el.homeBento) {
+      el.homeBento.classList.remove("is-player-lookup", "has-lookup-owners");
+    }
+    if (el.homePlayerProfile) {
+      el.homePlayerProfile.hidden = true;
+      el.homePlayerProfile.innerHTML = "";
+    }
+    if (el.homePlayerMatchup) {
+      el.homePlayerMatchup.hidden = true;
+      el.homePlayerMatchup.innerHTML = "";
+    }
+    if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
+    if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
+    syncHomeStandingsLookupEmpty();
+    syncHomeOwnerHighlights();
 
-    if (!active) {
-      el.homeBento.classList.remove("has-lookup-owners");
-      if (el.homePlayerProfile) {
-        el.homePlayerProfile.hidden = true;
-        el.homePlayerProfile.innerHTML = "";
-      }
-      if (el.homePlayerMatchup) {
-        el.homePlayerMatchup.hidden = true;
-        el.homePlayerMatchup.innerHTML = "";
-      }
-      if (el.homeSquadPanel) el.homeSquadPanel.hidden = false;
-      if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
-      syncHomeStandingsLookupEmpty(true);
-      syncHomeOwnerHighlights();
+    if (!homeLookupPlayer) {
+      closeHomePlayerDetailOverlay();
       return;
     }
-
-    const elementId = homeLookupElementId(homeLookupPlayer);
-    const hasOwners = homeLeagueOwnsElement(elementId);
-    el.homeBento.classList.toggle("has-lookup-owners", hasOwners);
-
-    if (Number.isFinite(elementId)) {
-      homeOwnerPin = { type: "element", id: elementId };
-    } else if (homeOwnerPin && homeOwnerPin.type === "element") {
-      homeOwnerPin = null;
-    }
-
-    if (el.homePlayerProfile) {
-      el.homePlayerProfile.hidden = false;
-      el.homePlayerProfile.innerHTML = homePlayerProfileHTML(homeLookupPlayer);
-      bindHomeLookupCard();
-      bindOwnershipPhotoFallback(el.homePlayerProfile);
-    }
-
-    // Lookup replaces Team with the club matchup; Standings shows ownership.
-    if (el.homeSquadPanel) el.homeSquadPanel.hidden = true;
-    if (el.homeStandingsPanel) el.homeStandingsPanel.hidden = false;
-    if (el.homePlayerMatchup) {
-      el.homePlayerMatchup.hidden = false;
-      el.homePlayerMatchup.innerHTML = homePlayerMatchupHTML(homeLookupPlayer.team);
-      upgradeNativeTitles(el.homePlayerMatchup);
-    }
-    syncHomeStandingsLookupEmpty(hasOwners);
-    syncHomeOwnerHighlights();
+    openHomePlayerDetailOverlay(homeLookupPlayer);
   }
 
   function homeRankRollSpec(v) {
@@ -7205,11 +7385,13 @@
       root.querySelectorAll(".home-summary .home-stat-roll[data-count-to]").forEach(finishStatRollNode);
     }
     if (tables) {
+      // Tables never odometer on Home enter — plain settle avoids building
+      // 3×10 digit drums (+ getComputedStyle) per cell (was ~2s main-thread).
       root.querySelectorAll(
         ".home-stat-roll[data-count-to], .live-stat-roll[data-count-to], .ownership-stat-roll[data-count-to]"
       ).forEach((node) => {
         if (node.closest(".home-summary")) return;
-        finishStatRollNode(node);
+        finishStatRollNode(node, { plain: true });
       });
     }
   }
@@ -7331,14 +7513,11 @@
       applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     };
     if (!pane || prefersReducedMotion()) {
-      clearHomeRowEnter(pane);
       finishAll();
       return;
     }
     const token = ++homeEnterMotionToken;
-    // Tables, feed, IMP, and rank chrome snap immediately — only summary cards roll briefly.
-    // Team/League row cascade is CSS-driven via is-home-row-enter + is-entering.
-    stampHomeRowEnterIndices(pane);
+    // Tables, feed, IMP, and rank chrome snap immediately — only summary cards roll.
     finishHomeStatRolls(pane, { summary: false, tables: true });
     animateHomeImpBars(pane, { animate: false });
     finishHighlightSatEnter(pane);
@@ -7499,9 +7678,7 @@
         let benchLabeled = false;
         for (const r of rows) {
           if (r.onBench && !benchLabeled) {
-            parts.push(
-              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="5">Bench</th></tr>`
-            );
+            parts.push(homeBenchDividerHTML(5));
             benchLabeled = true;
           }
           parts.push(homeSquadRowHTML(r, pinOpts(r)));
@@ -7531,9 +7708,7 @@
         const colspan = Math.max(2, 1 + gws.length);
         for (const r of rows) {
           if (r.onBench && !benchLabeled) {
-            parts.push(
-              `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${colspan}">Bench</th></tr>`
-            );
+            parts.push(homeBenchDividerHTML(colspan));
             benchLabeled = true;
           }
           parts.push(homeSquadFixturesRowHTML(r, gws, pinOpts(r)));
@@ -7570,9 +7745,7 @@
           let ownBenchLabeled = false;
           rows.forEach((r, i) => {
             if (r.onBench && !ownBenchLabeled) {
-              ownParts.push(
-                `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${ownColCount}">Bench</th></tr>`
-              );
+              ownParts.push(homeBenchDividerHTML(ownColCount));
               ownBenchLabeled = true;
             }
             ownParts.push(
@@ -7605,11 +7778,7 @@
         let benchLabeled = false;
         for (const entry of ptsEntries) {
           if (entry.row.onBench && !benchLabeled) {
-            parts.push(
-              wideSquad
-                ? `<tr class="home-bench-divider home-bench-divider-spacer" aria-hidden="true"><th scope="rowgroup" colspan="${ptsColCount}"></th></tr>`
-                : `<tr class="home-bench-divider"><th scope="rowgroup" colspan="${ptsColCount}">Bench</th></tr>`
-            );
+            parts.push(homeBenchDividerHTML(ptsColCount, { spacer: wideSquad }));
             benchLabeled = true;
           }
           parts.push(
@@ -7777,6 +7946,7 @@
   }
 
   async function restoreManagerId({ deferHome = false } = {}) {
+    if (deferHome) homeBootDeferPaint = true;
     let saved = "";
     try {
       saved = localStorage.getItem(FPL_ID_KEY) || "";
@@ -7796,10 +7966,24 @@
       if (el.fplManagerSelect) el.fplManagerSelect.value = saved;
       rebuildLeagueSelect();
       if (!deferHome) prefetchHomeLiveCache();
-      try {
-        await syncManagerFromApi(saved, { seedPlannerIfEmpty: true, quiet: true });
-      } catch {
+      // Never block first paint / Home enter on the FPL squad proxy — that
+      // fetch is often multi-second and made refresh feel like a 3–5s hang.
+      const syncPromise = syncManagerFromApi(saved, {
+        seedPlannerIfEmpty: true,
+        quiet: true,
+      }).catch(() => {
         syncFplIdStatus();
+      });
+      if (!deferHome) {
+        await syncPromise;
+      } else {
+        syncPromise.then(() => {
+          syncFplIdStatus();
+          syncPlannerPageUI();
+          if (state.page === "home" || state.page === "team" || state.page === "live") {
+            refreshManagerDependentUI();
+          }
+        });
       }
     } else {
       if (saved && !trackedManagerById(saved)) {
@@ -7820,6 +8004,7 @@
       syncFplIdStatus();
       syncPlannerPageUI();
     } else {
+      homeBootDeferPaint = false;
       refreshManagerDependentUI();
     }
   }
@@ -9682,6 +9867,7 @@
     releaseMobileSheetFocus();
     el.mobileSheet.classList.remove("is-open");
     el.mobileSheet.classList.remove("is-home-search");
+    el.mobileSheet.classList.remove("is-home-player");
     el.mobileSheet.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("mobile-sheet-active");
     if (el.homeBento) el.homeBento.classList.remove("is-search-open");
@@ -9730,6 +9916,12 @@
     if (closingKey === "team-row") {
       teamRowMenuRow = null;
       if (typeof clearTeamRowActions === "function") clearTeamRowActions();
+    }
+    if (closingKey === "home-player" && homeLookupPlayer) {
+      homeLookupPlayer = null;
+      homeLookupStatMode = 0;
+      if (homeOwnerPin && homeOwnerPin.type === "element") homeOwnerPin = null;
+      syncHomeSearchBtn();
     }
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;
@@ -9791,6 +9983,7 @@
     mobileSheetKey = key;
     if (el.mobileSheet) {
       el.mobileSheet.classList.toggle("is-home-search", key === "home-search");
+      el.mobileSheet.classList.toggle("is-home-player", key === "home-player");
     }
     if (el.mobileSheetTitle) {
       if (titleHtml) {
@@ -9905,7 +10098,13 @@
   }
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && mobileSheetOpen) closeMobileSheet();
+    if (event.key !== "Escape") return;
+    if (el.homePlayerModal && !el.homePlayerModal.hidden) {
+      event.preventDefault();
+      clearHomePlayerLookup();
+      return;
+    }
+    if (mobileSheetOpen) closeMobileSheet();
   });
 
   function positionUiTooltip(anchor) {
@@ -22146,7 +22345,7 @@
     }
   }
 
-  function finishStatRollNode(node) {
+  function finishStatRollNode(node, { plain = false } = {}) {
     if (!node) return;
     if (node._statRollFinishTimer) {
       clearTimeout(node._statRollFinishTimer);
@@ -22170,6 +22369,12 @@
     const grouped = node.dataset.countGrouped === "1";
     if (!Number.isFinite(to)) {
       node.textContent = "—";
+      return;
+    }
+    if (plain) {
+      node.textContent = grouped
+        ? `${Math.round(to).toLocaleString()}${suffix}`
+        : `${statRollFormat(to, decimals, signed)}${suffix}`;
       return;
     }
     // Keep the digit-drum layout — plain textContent collapses width because
@@ -22365,7 +22570,6 @@
     if (prefersReducedMotion()) {
       if (pane.id === "home-page") {
         homePageEnterArmed = false;
-        clearHomeRowEnter(pane);
         finishHighlightSatEnter(pane);
         finishHomeStatRolls(pane);
         animateHomeImpBars(pane, { animate: false });
@@ -22439,8 +22643,7 @@
         row.style.setProperty("--enter-i", String(i));
       });
     });
-    // Home: summary cards cascade; squad + standings cards share one index so
-    // both tables load together; rows use per-tbody ordinals in lockstep.
+    // Home: summary cards / panels only — tables stay static (odometer-only enter).
     if (homeEnter) {
       const summaryPanels = [
         ...pane.querySelectorAll(".home-summary-hero:not([hidden])"),
@@ -22452,7 +22655,6 @@
       pane.querySelectorAll(".home-tables-grid > .home-panel").forEach((node) => {
         node.style.setProperty("--enter-i", "1");
       });
-      stampHomeRowEnterIndices(pane);
     }
     if (marketsEnter) {
       pane.querySelectorAll(".markets-divider").forEach((node, i) => {
@@ -22520,7 +22722,6 @@
         pane._enterClear = setTimeout(() => {
           if (homeEnter) {
             homeEnterMotionToken += 1;
-            clearHomeRowEnter(pane);
             finishHighlightSatEnter(pane);
             finishHomeStatRolls(pane);
             // Snap IMP before dropping is-entering — changing enter CSS used to
@@ -22751,9 +22952,10 @@
   }
 
   function setPage(page) {
+    // First real navigation paints once; clear boot skip so later syncs refresh UI.
+    homeBootDeferPaint = false;
     if (state.page === "home" && page !== "home") {
       homePageEnterArmed = false;
-      clearHomeRowEnter(el.homePage);
       flushHomeRenderAfterEnter();
     }
     page = normalizeStoredPage(page);
@@ -22967,7 +23169,6 @@
     } else if (page === "home") {
       homePageEnterArmed = true;
       homeLiveApplyAfterEnter = true;
-      armHomeRowEnter(el.homePage);
       syncHomeLivePolling({ skipImmediate: false });
       renderHome({ leaveRollsPending: true });
     } else if (page === "live") {
@@ -23084,6 +23285,14 @@
       );
       if (!row) return;
       setHomePlayerLookup(row);
+    });
+  }
+  if (el.homePlayerModal) {
+    el.homePlayerModal.addEventListener("click", (e) => {
+      if (e.target.closest("[data-home-player-dismiss]")) {
+        e.preventDefault();
+        clearHomePlayerLookup();
+      }
     });
   }
   document.addEventListener("pointerdown", (e) => {
@@ -25354,7 +25563,6 @@
       if (el.homePage) {
         homePageEnterArmed = false;
         homeEnterMotionToken += 1;
-        clearHomeRowEnter(el.homePage);
         finishHighlightSatEnter(el.homePage);
         finishHomeStatRolls(el.homePage);
         animateHomeImpBars(el.homePage, { animate: false });
