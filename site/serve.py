@@ -242,13 +242,112 @@ def proxy_live_home():
         return 502, {"ok": False, "error": str(exc)}
 
 
+def merge_fixture_final_flags(live_home: dict, local_home: dict | None) -> dict:
+    """Copy `final` from a newer local fetch_home cache onto the live droplet payload.
+
+    Local serve.py proxies DO which may not have shipped the `final` field yet.
+    """
+    if not local_home or not isinstance(live_home, dict):
+        return live_home
+
+    def index_finals(home: dict) -> dict[str, bool]:
+        out: dict[str, bool] = {}
+        for row in home.get("squad") or []:
+            if not isinstance(row, dict):
+                continue
+            eid = row.get("element")
+            for fx in row.get("fixtures") or []:
+                if not isinstance(fx, dict) or "final" not in fx:
+                    continue
+                key = f"{eid}|{fx.get('opp')}|{fx.get('kickoff')}"
+                out[key] = bool(fx.get("final"))
+        by_entry = home.get("squadsByEntry") or {}
+        if isinstance(by_entry, dict):
+            for squad in by_entry.values():
+                if not isinstance(squad, list):
+                    continue
+                for row in squad:
+                    if not isinstance(row, dict):
+                        continue
+                    eid = row.get("element")
+                    for fx in row.get("fixtures") or []:
+                        if not isinstance(fx, dict) or "final" not in fx:
+                            continue
+                        key = f"{eid}|{fx.get('opp')}|{fx.get('kickoff')}"
+                        out[key] = bool(fx.get("final"))
+        return out
+
+    finals = index_finals(local_home)
+    if not finals:
+        return live_home
+
+    def apply_rows(rows: list | None) -> list | None:
+        if not isinstance(rows, list):
+            return rows
+        next_rows = []
+        changed = False
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("fixtures"), list):
+                next_rows.append(row)
+                continue
+            eid = row.get("element")
+            fx_rows = []
+            row_changed = False
+            for fx in row["fixtures"]:
+                if not isinstance(fx, dict):
+                    fx_rows.append(fx)
+                    continue
+                key = f"{eid}|{fx.get('opp')}|{fx.get('kickoff')}"
+                if key in finals and fx.get("final") is not finals[key]:
+                    fx = {**fx, "final": finals[key]}
+                    row_changed = True
+                elif "final" not in fx:
+                    fx = {**fx, "final": finals.get(key, False)}
+                    row_changed = True
+                fx_rows.append(fx)
+            if row_changed:
+                changed = True
+                next_rows.append({**row, "fixtures": fx_rows})
+            else:
+                next_rows.append(row)
+        return next_rows if changed else rows
+
+    squad = apply_rows(live_home.get("squad"))
+    by_entry = live_home.get("squadsByEntry")
+    next_by = by_entry
+    if isinstance(by_entry, dict):
+        rebuilt = {}
+        entry_changed = False
+        for key, rows in by_entry.items():
+            applied = apply_rows(rows if isinstance(rows, list) else None)
+            rebuilt[key] = applied if applied is not None else rows
+            if applied is not rows:
+                entry_changed = True
+        if entry_changed:
+            next_by = rebuilt
+
+    if squad is live_home.get("squad") and next_by is by_entry:
+        return live_home
+    out = dict(live_home)
+    if squad is not live_home.get("squad"):
+        out["squad"] = squad
+    if next_by is not by_entry:
+        out["squadsByEntry"] = next_by
+    return out
+
+
 def home_api_response():
     if HOME_LOCAL_CACHE:
         home = read_local_home_cache()
         if not home:
             return 503, {"ok": False, "error": "Home cache not ready"}
         return 200, {"ok": True, "home": home}
-    return proxy_live_home()
+    status, body = proxy_live_home()
+    if status == 200 and isinstance(body, dict) and isinstance(body.get("home"), dict):
+        local = read_local_home_cache()
+        if local:
+            body = {**body, "home": merge_fixture_final_flags(body["home"], local)}
+    return status, body
 
 
 class Handler(SimpleHTTPRequestHandler):

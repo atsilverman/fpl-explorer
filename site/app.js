@@ -1351,7 +1351,6 @@
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplManagerSelect: $("#fpl-manager-select"),
-    fplLeagueLabel: $("#fpl-league-label"),
     fplIdClear: $("#fpl-id-clear"),
     prefsPlannerSection: $("#prefs-planner-section"),
     posFilters: $("#pos-filters"),
@@ -2147,7 +2146,6 @@
 
   function syncFixedHomeLeague({ persist = true, quiet = true } = {}) {
     applyLeagueId(HOME_LEAGUE_ID, { persist, quiet });
-    if (el.fplLeagueLabel) el.fplLeagueLabel.textContent = HOME_LEAGUE_NAME;
   }
 
   function rebuildLeagueSelect() {
@@ -2175,7 +2173,6 @@
       }
       persistHomePrefs();
     }
-    if (el.fplLeagueLabel) el.fplLeagueLabel.textContent = HOME_LEAGUE_NAME;
     if (!quiet) syncFplIdStatus();
     // Rebuild Home + site-wide owned indicators when the league target changes.
     if (String(prevLeague || "") !== String(id)) {
@@ -2487,11 +2484,65 @@
     });
   }
 
+  function homeFixtureFinalKey(row, fx) {
+    if (!row || !fx) return "";
+    return `${row.element || ""}|${fx.opp || ""}|${fx.kickoff || ""}`;
+  }
+
+  function homeFixtureFinalLookup(squad) {
+    const map = new Map();
+    for (const row of squad || []) {
+      for (const fx of row.fixtures || []) {
+        if (!fx || typeof fx !== "object" || !("final" in fx)) continue;
+        const key = homeFixtureFinalKey(row, fx);
+        if (key) map.set(key, fx.final === true);
+      }
+    }
+    return map;
+  }
+
+  /** Ensure every fixture has boolean `final`. Live droplet may omit it. */
+  function homeNormalizeSquadFixtureFinal(squad, priorSquad) {
+    const priorFinal = homeFixtureFinalLookup(priorSquad);
+    return (Array.isArray(squad) ? squad : []).map((row) => {
+      if (!row || !Array.isArray(row.fixtures) || !row.fixtures.length) return row;
+      let changed = false;
+      const fixtures = row.fixtures.map((fx) => {
+        if (!fx || typeof fx !== "object") return fx;
+        if ("final" in fx) {
+          const next = fx.final === true;
+          if (fx.final === next) return fx;
+          changed = true;
+          return { ...fx, final: next };
+        }
+        const key = homeFixtureFinalKey(row, fx);
+        const preserved = key && priorFinal.has(key) ? priorFinal.get(key) : false;
+        changed = true;
+        return { ...fx, final: preserved };
+      });
+      return changed ? { ...row, fixtures } : row;
+    });
+  }
+
+  function homeNormalizeSquadsByEntryFinal(byEntry, priorByEntry) {
+    const src = byEntry && typeof byEntry === "object" ? byEntry : {};
+    const prior = priorByEntry && typeof priorByEntry === "object" ? priorByEntry : {};
+    const out = {};
+    Object.keys(src).forEach((key) => {
+      out[key] = homeNormalizeSquadFixtureFinal(src[key], prior[key] || []);
+    });
+    return out;
+  }
+
   function applyHomePayload(payload, { skipFeedIngest = false, fromSessionSnapshot = false, fromLivePoll = false } = {}) {
     if (!payload || typeof payload !== "object") return false;
     const priorHome = {
       gw: HOME.gw ?? null,
       standings: Array.isArray(HOME.standings) ? HOME.standings : [],
+      squad: Array.isArray(HOME.squad) ? HOME.squad : [],
+      squadsByEntry: HOME.squadsByEntry && typeof HOME.squadsByEntry === "object"
+        ? HOME.squadsByEntry
+        : {},
       summary: HOME.summary && typeof HOME.summary === "object" ? HOME.summary : null,
       managerId: HOME.managerId ?? null,
       leagueId: HOME.leagueId ?? null,
@@ -2557,10 +2608,18 @@
       const gwRankEl = el.homeGwRankNum || el.homeGwRank;
       if (gwRankEl) delete gwRankEl.dataset.lastGwRank;
     }
-    HOME.squad = Array.isArray(payload.squad) ? payload.squad : [];
-    HOME.squadsByEntry = payload.squadsByEntry && typeof payload.squadsByEntry === "object"
-      ? payload.squadsByEntry
-      : {};
+    HOME.squad = homeNormalizeSquadFixtureFinal(
+      Array.isArray(payload.squad) ? payload.squad : [],
+      Array.isArray(priorHome.squad) ? priorHome.squad : []
+    );
+    HOME.squadsByEntry = homeNormalizeSquadsByEntryFinal(
+      payload.squadsByEntry && typeof payload.squadsByEntry === "object"
+        ? payload.squadsByEntry
+        : {},
+      priorHome.squadsByEntry && typeof priorHome.squadsByEntry === "object"
+        ? priorHome.squadsByEntry
+        : {}
+    );
     HOME.standings = mergeHomeGwRank(
       mergeHomeOverallRankPrev(
         Array.isArray(payload.standings) ? payload.standings : [],
@@ -2870,7 +2929,13 @@
         r.live ? 1 : 0,
         r.imp,
         ...(r.fixtures || []).map((f) =>
-          [f.minutes, f.live ? 1 : 0, f.finished ? 1 : 0].join(",")
+          [
+            f.minutes,
+            f.live ? 1 : 0,
+            f.finished ? 1 : 0,
+            // Missing final (live droplet) counts as provisional, same as UI.
+            f.final === true ? 1 : 0,
+          ].join(",")
         ),
       ].join(":"))
       .join("|");
@@ -3525,8 +3590,16 @@
       kickoff: row.kickoff,
       live: !!row.live,
       finished: row.matchStatus === "finished",
+      // Unknown without fixture payload — don't treat as official final.
+      final: false,
       minutes: row.minutes,
     }];
+  }
+
+  /** Grey MP dot while FT is provisional; cleared only when final === true. */
+  function homeFixtureIsProvisional(fx) {
+    if (!fx || fx.live || !fx.finished) return false;
+    return fx.final !== true;
   }
 
 
@@ -4734,8 +4807,8 @@
     el.homeStandingsTrack.style.height = next;
   }
 
-  /** Equalize header + per-manager row heights across Table / Captains / Chips.
-   *  Transfers rows stay natural height; the table scrolls inside a fixed viewport. */
+  /** Clear stale inline row heights. Mobile used to equalize Table/Captains/Chips
+   *  across pager pages (post-load jump); each page now sizes intrinsically. */
   function syncHomeStandingsRowHeights() {
     const transfersTable =
       el.homeStandingsTransfersBody && el.homeStandingsTransfersBody.closest("table");
@@ -4745,62 +4818,11 @@
       el.homeStandingsChipsBody && el.homeStandingsChipsBody.closest("table"),
     ].filter(Boolean);
     const allTables = transfersTable ? [...coreTables, transfersTable] : coreTables;
-    if (allTables.length < 2 && !coreTables.length) return;
+    if (!allTables.length) return;
 
-    const clearRowHeights = (table) => {
+    allTables.forEach((table) => {
       table.querySelectorAll("thead tr, tbody tr[data-entry]").forEach((tr) => {
         tr.style.height = "";
-      });
-    };
-
-    // Desktop rows are content-height (no equal-share stretch); drop stale mobile heights.
-    if (homeSquadIsDesktopLayout()) {
-      allTables.forEach(clearRowHeights);
-      return;
-    }
-
-    const measureTr = (tr) => {
-      const prev = tr.style.height;
-      tr.style.height = "auto";
-      const h = Math.ceil(tr.getBoundingClientRect().height);
-      tr.style.height = prev;
-      return h;
-    };
-
-    const heads = allTables.map((t) => t.querySelector("thead tr")).filter(Boolean);
-    if (heads.length > 1) {
-      const maxHead = Math.max(...heads.map(measureTr));
-      if (maxHead > 0) {
-        const px = `${maxHead}px`;
-        heads.forEach((tr) => {
-          tr.style.height = px;
-        });
-      }
-    }
-
-    allTables.forEach(clearRowHeights);
-    if (transfersTable) {
-      transfersTable.querySelectorAll("tbody tr[data-entry]").forEach((tr) => {
-        tr.style.height = "";
-      });
-    }
-
-    const byEntry = new Map();
-    coreTables.forEach((table) => {
-      table.querySelectorAll("tbody tr[data-entry]").forEach((tr) => {
-        const key = String(tr.dataset.entry || "");
-        if (!key) return;
-        if (!byEntry.has(key)) byEntry.set(key, []);
-        byEntry.get(key).push(tr);
-      });
-    });
-    byEntry.forEach((trs) => {
-      if (trs.length < 1) return;
-      const maxH = Math.max(...trs.map(measureTr));
-      if (!(maxH > 0)) return;
-      const px = `${maxH}px`;
-      trs.forEach((tr) => {
-        tr.style.height = px;
       });
     });
   }
@@ -5608,62 +5630,17 @@
       : [liveTable, ptsTable, fixturesTable, ownershipTable].filter(Boolean);
     if (!tables.length) return;
 
+    // Drop stale inline heights (from prior wide sync or older mobile equalize).
     tables.forEach((table) => {
       table.querySelectorAll("thead tr, tbody tr.home-squad-row, tbody tr.home-bench-divider").forEach((tr) => {
         tr.style.height = "";
       });
     });
 
-    // Desktop uses content-height rows; wide split still aligns live/pts halves in JS.
-    if (homeSquadIsDesktopLayout() && !wide) return;
-    if (wide && tables.length >= 2) {
-      syncHomeSquadWideRowHeights(tables);
-      return;
-    }
-    if (tables.length < 2) return;
-
-    const heads = tables.map((t) => t.querySelector("thead tr")).filter(Boolean);
-    if (heads.length > 1) {
-      const maxHead = Math.max(...heads.map((tr) => tr.getBoundingClientRect().height));
-      if (maxHead > 0) {
-        const px = `${Math.ceil(maxHead)}px`;
-        heads.forEach((tr) => {
-          tr.style.height = px;
-        });
-      }
-    }
-
-    const byElement = new Map();
-    tables.forEach((table) => {
-      table.querySelectorAll("tbody tr.home-squad-row").forEach((tr) => {
-        const key = String(tr.dataset.element || "");
-        if (!key) return;
-        if (!byElement.has(key)) byElement.set(key, []);
-        byElement.get(key).push(tr);
-      });
-    });
-    byElement.forEach((trs) => {
-      if (trs.length < 2) return;
-      const maxH = Math.max(...trs.map((tr) => tr.getBoundingClientRect().height));
-      if (!(maxH > 0)) return;
-      const px = `${Math.ceil(maxH)}px`;
-      trs.forEach((tr) => {
-        tr.style.height = px;
-      });
-    });
-
-    const dividers = tables.map((t) => [...t.querySelectorAll("tbody tr.home-bench-divider")]);
-    const maxDiv = Math.max(0, ...dividers.map((list) => list.length));
-    for (let i = 0; i < maxDiv; i += 1) {
-      const pair = dividers.map((list) => list[i]).filter(Boolean);
-      if (pair.length < 2) continue;
-      const maxH = Math.max(...pair.map((tr) => tr.getBoundingClientRect().height));
-      if (!(maxH > 0)) continue;
-      const px = `${Math.ceil(maxH)}px`;
-      pair.forEach((tr) => {
-        tr.style.height = px;
-      });
-    }
+    // Wide desktop: align live + pts halves. Mobile pager pages are independent —
+    // locking Starting XI rows to Points/Ownership/Schedule caused a post-load jump.
+    if (!wide) return;
+    if (tables.length >= 2) syncHomeSquadWideRowHeights(tables);
   }
 
   function syncHomeSquadWideRowHeights(tables) {
@@ -5882,6 +5859,77 @@
     });
   }
 
+  function homeScrollPanelIntoView(panel, { duration = 560 } = {}) {
+    if (!panel || !NARROW_MQ.matches) return;
+    const main = document.querySelector("main.main");
+    requestAnimationFrame(() => {
+      if (main) {
+        const mainRect = main.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const pad = 10;
+        const nextTop = Math.max(0, main.scrollTop + (panelRect.top - mainRect.top) - pad);
+        animateHomeScrollTo(main, { top: nextTop, left: 0, duration });
+        return;
+      }
+      panel.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    });
+  }
+
+  let homeSummaryJumpBound = false;
+  function bindHomeSummaryCardJumps() {
+    if (homeSummaryJumpBound || !el.homeSummaryCards) return;
+    homeSummaryJumpBound = true;
+    let touchStart = null;
+    let touchMoved = false;
+    const MOVE_PX = 10;
+
+    el.homeSummaryCards.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1) return;
+        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchMoved = false;
+      },
+      { passive: true }
+    );
+    el.homeSummaryCards.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!touchStart || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - touchStart.x;
+        const dy = e.touches[0].clientY - touchStart.y;
+        if (Math.hypot(dx, dy) > MOVE_PX) touchMoved = true;
+      },
+      { passive: true }
+    );
+    el.homeSummaryCards.addEventListener(
+      "touchend",
+      () => {
+        touchStart = null;
+      },
+      { passive: true }
+    );
+    el.homeSummaryCards.addEventListener("click", (e) => {
+      if (!NARROW_MQ.matches) return;
+      const card = e.target.closest("[data-home-jump]");
+      if (!card || !el.homeSummaryCards.contains(card)) return;
+      if (touchMoved) {
+        touchMoved = false;
+        return;
+      }
+      const jump = card.getAttribute("data-home-jump");
+      const panel =
+        jump === "squad"
+          ? el.homeSquadPanel
+          : jump === "league"
+            ? el.homeStandingsPanel
+            : null;
+      if (!panel || panel.hidden) return;
+      e.preventDefault();
+      homeScrollPanelIntoView(panel);
+    });
+  }
+
   function homeCrossHoverEnabled() {
     return (
       state.page === "home"
@@ -6042,6 +6090,7 @@
     bindHomeScrollHoverGuard();
     bindHomeCrossHover();
     bindHomeMainPullLock();
+    bindHomeSummaryCardJumps();
 
     function bindHomeRowTap(container, rowSelector, onRow) {
       if (!container) return;
@@ -6360,19 +6409,27 @@
       const inPlay = homeSquadFixtureIsInPlay(f);
       if (inPlay || f.finished) {
         const mins = f.minutes != null ? f.minutes : row.minutes;
-        const liveDot = inPlay
+        const minsN = mins != null && Number.isFinite(Number(mins)) ? Number(mins) : null;
+        // Finished or provisional FT with 0' → Did Not Play (not live 0').
+        if (f.finished && !inPlay && minsN != null && minsN <= 0) {
+          return `<span class="home-mp-line home-mp-dnp" title="Did not play"><span class="home-dnp-badge" aria-label="Did not play">DNP</span></span>`;
+        }
+        // Green while live; grey while provisional FT; gone once FPL finalizes.
+        const statusDot = inPlay
           ? `<span class="home-status-dot is-live" aria-label="Live"></span>`
-          : "";
+          : homeFixtureIsProvisional(f)
+            ? `<span class="home-status-dot is-done" aria-label="Provisional"></span>`
+            : "";
         const minsHTML =
-          mins != null && Number.isFinite(Number(mins))
-            ? statRollSpan(Number(mins), {
+          minsN != null
+            ? statRollSpan(minsN, {
                 from: 0,
                 decimals: 0,
                 suffix: "′",
                 className: "home-stat-roll home-mp-roll",
               })
             : `${escapeHtml(String(mins ?? "—"))}′`;
-        return `<span class="home-mp-line">${minsHTML}${liveDot}</span>`;
+        return `<span class="home-mp-line">${minsHTML}${statusDot}</span>`;
       }
       return homeKickoffHTML(f.kickoff || row.kickoff);
     }).join("");
@@ -7130,7 +7187,7 @@
     const items = [];
     if (hasStarter) {
       items.push(
-        `<span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>XI</span>`
+        `<span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Starting XI</span>`
       );
     }
     if (hasBench) {
@@ -8354,12 +8411,20 @@
     settleHomeSquadSplitLayout({ deferMeasure: true });
     const feedGw = HOME.gw != null ? Number(HOME.gw) : null;
     if (feedGw != null && homeSquadIsWideLayout()) renderHomeFeed(feedGw);
-    requestAnimationFrame(() => {
+    const runHomeTablesSettle = () => {
       requestAnimationFrame(() => {
-        if (state.page !== "home") return;
-        settleHomeTablesLayout({ standingsPageIdx });
+        requestAnimationFrame(() => {
+          if (state.page !== "home") return;
+          settleHomeTablesLayout({ standingsPageIdx });
+        });
       });
-    });
+    };
+    // Wait for webfonts so track/row measures don't jump when Outfit swaps in.
+    if (document.fonts && document.fonts.status !== "loaded") {
+      document.fonts.ready.then(runHomeTablesSettle).catch(runHomeTablesSettle);
+    } else {
+      runHomeTablesSettle();
+    }
     const enterBusyNow = homeIsEnterBusy();
     const snapRolls = !leaveRollsPending && !animateView && !enterBusyNow;
     if (snapRolls) {
@@ -11793,7 +11858,11 @@
         ),
         spitRow(
           `<span class="home-status-dot is-done spit-home-swatch" aria-hidden="true"></span>`,
-          "Fixture finished (incl. FPL provisional FT)"
+          "Provisional FT — removed once FPL finalizes the fixture"
+        ),
+        spitRow(
+          `<span class="home-dnp-badge spit-home-swatch" aria-hidden="true">DNP</span>`,
+          "Did not play — 0′ after provisional or final FT"
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
@@ -26272,6 +26341,7 @@
   }
 
   syncHomeSummaryLayout(homeSummaryLayout());
+  bindHomeSummaryCardJumps();
 
   const FONT_PAIR_KEY = "fpl-explorer-font-pair-v3";
   const FONT_PAIR_IDS = ["outfit", "manrope", "jakarta", "dm", "source", "plex", "figtree"];
@@ -26306,7 +26376,7 @@
       link.disabled = true;
       return;
     }
-    const href = `https://fonts.googleapis.com/css2?${FONT_PAIR_GOOGLE[pair]}&display=swap`;
+    const href = `https://fonts.googleapis.com/css2?${FONT_PAIR_GOOGLE[pair]}&display=optional`;
     if (link.getAttribute("href") !== href) link.href = href;
     link.disabled = false;
   }
@@ -26726,6 +26796,9 @@
     });
     // Manager prefs first so the initial Home paint already has the linked ID.
     try {
+      // Baked home_data may omit `final`; normalize so provisional dots paint immediately.
+      HOME.squad = homeNormalizeSquadFixtureFinal(HOME.squad, []);
+      HOME.squadsByEntry = homeNormalizeSquadsByEntryFinal(HOME.squadsByEntry, {});
       await restoreManagerId({ deferHome: true });
     } catch {
       syncFplIdStatus();

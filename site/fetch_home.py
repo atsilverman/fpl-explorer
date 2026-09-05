@@ -36,6 +36,7 @@ from live_scoring import (
     effective_element_multipliers,
     element_by_id,
     element_type_map,
+    fixture_is_final,
     fixture_is_finished,
     fixture_is_live,
     fixtures_for_element,
@@ -909,6 +910,8 @@ def build_squad_rows(
                     "kickoff": fx.get("kickoff_time"),
                     "live": live,
                     "finished": finished,
+                    # Official FPL `finished` (not merely finished_provisional).
+                    "final": fixture_is_final(fx),
                     "minutes": mins if live or finished else None,
                 }
             )
@@ -920,6 +923,7 @@ def build_squad_rows(
                     "kickoff": None,
                     "live": False,
                     "finished": False,
+                    "final": False,
                     "minutes": None,
                 }
             ]

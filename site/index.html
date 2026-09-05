@@ -6,9 +6,9 @@
 <title>FPL Explorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1054" />
+<link rel="stylesheet" href="styles.css?v=1063" />
 <script>
 (() => {
   try {
@@ -32,7 +32,7 @@
         root.setAttribute("data-font-pair", pair);
         const link = document.getElementById("font-pair-link");
         if (link) {
-          link.href = `https://fonts.googleapis.com/css2?${FONT_GOOGLE[pair]}&display=swap`;
+          link.href = `https://fonts.googleapis.com/css2?${FONT_GOOGLE[pair]}&display=optional`;
           link.disabled = false;
         }
       }
@@ -489,10 +489,6 @@
               </select>
             </div>
             <div class="prefs-field">
-              <span class="prefs-field-label">League</span>
-              <p class="prefs-league-fixed" id="fpl-league-label">SoCal Big Guy FPL</p>
-            </div>
-            <div class="prefs-field">
               <div class="prefs-action-row">
                 <button id="fpl-id-clear" class="ghost-btn prefs-action-btn" type="button">Clear</button>
               </div>
@@ -869,7 +865,7 @@
             <p class="home-summary-hero-delta home-rank-delta" id="home-hero-overall-rank-delta" hidden></p>
           </div>
           <div class="home-summary-cards" id="home-summary-cards">
-            <article class="home-panel home-stat-panel home-stat-gw">
+            <article class="home-panel home-stat-panel home-stat-gw" data-home-jump="squad">
               <h3 class="home-panel-heading" id="home-gw-heading">GW points</h3>
               <p class="home-stat-value" id="home-gw-points"></p>
               <div class="home-stat-meta" id="home-gw-meta"></div>
@@ -883,7 +879,7 @@
               <p class="home-stat-subtle" id="home-overall-pct" hidden></p>
             </article>
             <article class="home-panel home-stat-panel home-stat-gw-rank" data-home-summary-card="gw-rank">
-              <h3 class="home-panel-heading">Gameweek rank</h3>
+              <h3 class="home-panel-heading">GW rank</h3>
               <p class="home-stat-value home-stat-rank" id="home-gw-rank">
                 <span class="home-rank-num" id="home-gw-rank-num"></span>
               </p>
@@ -892,7 +888,7 @@
               <h3 class="home-panel-heading">Total points</h3>
               <p class="home-stat-value" id="home-total-points"></p>
             </article>
-            <article class="home-panel home-stat-panel">
+            <article class="home-panel home-stat-panel home-stat-league" data-home-jump="league">
               <h3 class="home-panel-heading">League rank</h3>
               <p class="home-stat-value home-stat-rank" id="home-league-rank">
                 <span class="home-rank-num" id="home-league-rank-num"></span>
@@ -1638,7 +1634,7 @@
 <script src="ownership_data.js?v=23"></script>
 <script src="price_changes_data.js?v=37"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=39"></script>
+<script src="home_data.js?v=40"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
 (() => {
@@ -1660,7 +1656,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1100"></script>
+<script src="app.js?v=1107"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

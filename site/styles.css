@@ -1045,16 +1045,6 @@ html.has-gw-live[data-theme="dark"] #live-page .page-title-icon {
   outline: none;
   box-shadow: var(--focus-ring);
 }
-.prefs-league-fixed {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: calc(var(--radius) - 2px);
-  border: 1px solid var(--border);
-  background: hsl(var(--muted) / 0.25);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
 .prefs-select:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -6759,15 +6749,17 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     border-color 0.18s var(--ease-out);
 }
 
-.rankings-card:hover {
-  position: relative;
-  z-index: 2;
-  transform: translateY(-2px);
-  border-color: hsl(var(--border-hsl) / 0.65);
-  box-shadow: var(--shadow-lg);
+@media (hover: hover) and (pointer: fine) {
+  .rankings-card:hover {
+    position: relative;
+    z-index: 2;
+    transform: translateY(-2px);
+    border-color: hsl(var(--border-hsl) / 0.65);
+    box-shadow: var(--shadow-lg);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
   .rankings-card:hover {
     transform: none;
   }
@@ -8534,12 +8526,19 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   transition: transform 0.14s var(--ease-out), border-color 0.14s var(--ease-out);
 }
 
-.schedule-scatter-point:hover,
 .schedule-scatter-point:focus-visible {
   z-index: 5;
   transform: translate(-50%, -50%) scale(1.18);
   border-color: hsl(var(--ring));
   outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .schedule-scatter-point:hover {
+    z-index: 5;
+    transform: translate(-50%, -50%) scale(1.18);
+    border-color: hsl(var(--ring));
+  }
 }
 
 .schedule-scatter-point:focus-visible {
@@ -9251,15 +9250,17 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     border-color 0.18s var(--ease-out);
 }
 
-.schedule-card:hover {
-  position: relative;
-  z-index: 2;
-  transform: translateY(-3px);
-  border-color: hsl(var(--border-hsl) / 0.65);
-  box-shadow: var(--shadow-lg);
+@media (hover: hover) and (pointer: fine) {
+  .schedule-card:hover {
+    position: relative;
+    z-index: 2;
+    transform: translateY(-3px);
+    border-color: hsl(var(--border-hsl) / 0.65);
+    box-shadow: var(--shadow-lg);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
   .schedule-card:hover {
     transform: none;
   }
@@ -9847,8 +9848,9 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   }
 }
 
-/* Coarse / touch: neutralize sticky :hover lifts and row tints. Fine-pointer
-   desktop keeps the existing hover UX; tap affordances live in JS via
+/* Coarse / touch: neutralize sticky :hover row tints. Card lifts are already
+   gated to (hover: hover) and (pointer: fine); this keeps row chrome calm after tap.
+   Fine-pointer desktop keeps the existing hover UX; tap affordances live in JS via
    html[data-pointer="coarse"]. */
 html[data-pointer="coarse"] {
   /* Taps leave :focus-visible on; kill the black ring so it doesn't stick. */
@@ -11288,15 +11290,17 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
     border-color 0.18s var(--ease-out);
 }
 
-.markets-card:hover {
-  position: relative;
-  z-index: 2;
-  transform: translateY(-2px);
-  border-color: hsl(var(--border-hsl) / 0.65);
-  box-shadow: var(--shadow-lg);
+@media (hover: hover) and (pointer: fine) {
+  .markets-card:hover {
+    position: relative;
+    z-index: 2;
+    transform: translateY(-2px);
+    border-color: hsl(var(--border-hsl) / 0.65);
+    box-shadow: var(--shadow-lg);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
   .markets-card:hover {
     transform: none;
   }
@@ -14838,8 +14842,12 @@ html.home-player-modal-open {
   --home-hero-delta-down: 0 78% 78%;
   position: relative;
   z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   margin: 0 calc(-1 * var(--home-hero-bleed-x, var(--main-pad-x, 20px)));
-  padding: 22px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 52px;
+  padding: 22px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 56px;
   color: transparent;
   background: transparent;
   border-radius: var(--home-hero-radius, 0px);
@@ -14925,19 +14933,22 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   }
 }
 .home-summary-hero-label {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0 0 10px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: hsl(var(--home-hero-muted));
 }
 .home-summary-hero-value {
   margin: 0;
-  font-size: clamp(2.4rem, 8vw, 3.4rem);
-  font-weight: 750;
+  font-size: clamp(2.85rem, 10vw, 4rem);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  /* Reserve rank line box so odometer → settled text doesn't shrink the hero. */
+  min-height: 1em;
   color: hsl(var(--home-hero-fg));
 }
 .home-summary-hero-value .home-stat-roll,
@@ -14946,12 +14957,16 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
+.home-summary-hero-value .stat-roll-digit {
+  height: 1em;
+}
 .home-summary-hero-delta {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 14px;
+  justify-content: center;
+  gap: 5px;
+  font-size: 15px;
   font-weight: 650;
   color: hsl(var(--home-hero-muted));
 }
@@ -15888,6 +15903,15 @@ html[data-theme="dark"] .home-dashboard {
     content: "·";
     margin-right: 8px;
     color: var(--text-faint);
+  }
+}
+@media (max-width: 720px) {
+  .home-stat-panel[data-home-jump] {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-stat-panel[data-home-jump]:active {
+    transform: scale(0.985);
   }
 }
 .home-stat-panel {
@@ -17460,6 +17484,25 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.home-dnp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid hsl(var(--border-hsl) / 0.85);
+  background: hsl(var(--muted) / 0.45);
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.home-mp-dnp .home-dnp-badge {
+  flex: 0 0 auto;
+}
 .home-kickoff {
   color: var(--text-faint);
   font-size: 10.5px;
@@ -18381,20 +18424,30 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
     display: none !important;
   }
   /* Hero: flush under the page-nav rule — cancel main pad + dashboard top margin.
-     Keep breathing room only for player lookup (profile stack above). */
-  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)) .main {
+     Keep breathing room for player lookup and when viewing another manager (banner). */
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)):not(:has(.home-dashboard.is-viewing-manager)) .main {
     padding-top: 0;
   }
-  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)) .home-dashboard {
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)):not(:has(.home-dashboard.is-viewing-manager)) .home-dashboard {
     margin-top: 0;
+  }
+  html[data-page="home"] .home-dashboard.is-viewing-manager {
+    margin-top: 10px;
+  }
+  html[data-page="home"] .home-dashboard.is-viewing-manager > .home-view-banner:not([hidden]) {
+    margin-top: 2px;
   }
   html[data-page="home"] .home-summary[data-home-summary="hero"] {
     margin-top: 0;
   }
   html[data-page="home"] .home-summary[data-home-summary="hero"] .home-summary-hero {
     margin-top: 0;
+    padding-bottom: 44px;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
+  }
+  html[data-page="home"] .home-summary[data-home-summary="hero"] .home-summary-cards {
+    margin-top: -40px;
   }
   /* Stop rubber-band / pull-down chaining on Home mobile. */
   html[data-page="home"] .main {
