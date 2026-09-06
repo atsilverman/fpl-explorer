@@ -14570,6 +14570,7 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   background: hsl(var(--card));
   box-shadow: var(--shadow-sm);
   touch-action: pan-y;
+  cursor: pointer;
 }
 .home-form-head {
   display: flex;
@@ -14635,7 +14636,6 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 }
 .home-form-bar {
   fill: hsl(var(--blue-hsl));
-  transition: height 0.15s var(--ease-out), y 0.15s var(--ease-out);
 }
 .home-form-bar.is-empty {
   fill: hsl(var(--muted-foreground) / 0.22);
@@ -14644,6 +14644,22 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   fill: hsl(var(--check-threshold) / 0.82);
   stroke: hsl(var(--check-threshold));
   stroke-width: 1.25;
+}
+.home-form-svg.is-enter .home-form-bar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: home-form-bar-grow 0.48s var(--ease-out) both;
+  animation-delay: calc(var(--form-enter-delay, 0ms) + var(--bar-i, 0) * 48ms);
+}
+@keyframes home-form-bar-grow {
+  from {
+    transform: scaleY(0);
+    opacity: 0.35;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 .home-form-threshold {
   stroke: hsl(var(--check-threshold) / 0.7);
@@ -14654,6 +14670,36 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   stroke: hsl(var(--foreground) / 0.55);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
+}
+.home-form-avg-group {
+  opacity: 1;
+}
+.home-form-svg.is-enter .home-form-avg-group {
+  opacity: 0;
+  animation: home-form-avg-in 0.38s ease forwards;
+  animation-delay: calc(var(--form-enter-delay, 0ms) + var(--form-bar-n, 6) * 48ms + 0.28s);
+}
+.home-form-card.is-form-entering .home-form-legend-item.is-avg {
+  opacity: 0;
+  animation: home-form-avg-in 0.38s ease forwards;
+  animation-delay: calc(var(--form-enter-delay, 0ms) + var(--form-bar-n, 6) * 48ms + 0.28s);
+}
+@keyframes home-form-avg-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-form-svg.is-enter .home-form-bar,
+  .home-form-svg.is-enter .home-form-avg-group,
+  .home-form-card.is-form-entering .home-form-legend-item.is-avg {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 .home-form-avg-pill rect {
   fill: hsl(var(--card));
@@ -15864,6 +15910,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
   padding: 10px 14px 8px;
   border-left: 3px solid var(--home-lookup-accent, hsl(var(--border)));
   touch-action: pan-y;
+  cursor: pointer;
 }
 .home-lookup-top {
   display: flex;

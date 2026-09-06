@@ -7003,37 +7003,25 @@
     refreshHomeLookupCardDisplay({ animate });
   }
 
+  function advanceHomeLookupCardPage(kind) {
+    if (!homeLookupPlayer) return;
+    if (kind === "form") {
+      const n = homeFormChartSpecs(homeLookupPlayer.position).length;
+      if (n <= 1) return;
+      setHomeLookupFormMode((homeLookupFormMode + 1) % n);
+      return;
+    }
+    const n = HOME_LOOKUP_STAT_MODES.length;
+    if (n <= 1) return;
+    setHomeLookupStatMode((homeLookupStatMode + 1) % n);
+  }
+
   function bindHomeLookupCard() {
     if (homeLookupCardBound) return;
     homeLookupCardBound = true;
 
-    document.addEventListener("click", (e) => {
-      const formDot = e.target.closest(".home-form-dot");
-      if (formDot) {
-        const root = homePlayerDetailRoot();
-        if (!root || !root.contains(formDot)) return;
-        e.preventDefault();
-        const page = Number(formDot.dataset.page);
-        if (!Number.isFinite(page)) return;
-        setHomeLookupFormMode(page);
-        return;
-      }
-      const dot = e.target.closest(".home-lookup-dot");
-      if (!dot || dot.classList.contains("home-form-dot")) return;
-      const root = homePlayerDetailRoot();
-      if (!root || !root.contains(dot)) return;
-      e.preventDefault();
-      const page = Number(dot.dataset.page);
-      if (!Number.isFinite(page)) return;
-      setHomeLookupStatMode(page);
-    });
-
-    // Horizontal fling on the profile card → STATS / RANK·All / RANK·POS.
-    // Cancels mobile-sheet dismiss drag once the gesture locks to X.
-    const SLOP_PX = 14;
-    const FLING_PX = 48;
-    const X_DOMINANCE = 1.15;
-    let gesture = null;
+    // After a horizontal swipe, the browser may still synthesize a click — ignore it.
+    let suppressCardClick = false;
 
     const cardFromTarget = (target) => {
       if (!target || !target.closest) return null;
@@ -7049,6 +7037,46 @@
       if (!root || !root.contains(card)) return null;
       return { kind: "stats", el: card };
     };
+
+    document.addEventListener("click", (e) => {
+      const formDot = e.target.closest(".home-form-dot");
+      if (formDot) {
+        const root = homePlayerDetailRoot();
+        if (!root || !root.contains(formDot)) return;
+        e.preventDefault();
+        const page = Number(formDot.dataset.page);
+        if (!Number.isFinite(page)) return;
+        setHomeLookupFormMode(page);
+        return;
+      }
+      const dot = e.target.closest(".home-lookup-dot");
+      if (dot && !dot.classList.contains("home-form-dot")) {
+        const root = homePlayerDetailRoot();
+        if (!root || !root.contains(dot)) return;
+        e.preventDefault();
+        const page = Number(dot.dataset.page);
+        if (!Number.isFinite(page)) return;
+        setHomeLookupStatMode(page);
+        return;
+      }
+      if (suppressCardClick) {
+        suppressCardClick = false;
+        return;
+      }
+      if (e.target.closest("button, a, input, textarea, label")) return;
+      const hit = cardFromTarget(e.target);
+      if (!hit) return;
+      e.preventDefault();
+      advanceHomeLookupCardPage(hit.kind);
+    });
+
+    // Horizontal fling on Form / Player Details cards → next/prev page.
+    // Tap (click) also advances to the next page (wraps).
+    // Cancels mobile-sheet dismiss drag once the gesture locks to X.
+    const SLOP_PX = 14;
+    const FLING_PX = 48;
+    const X_DOMINANCE = 1.15;
+    let gesture = null;
 
     const cancelSheetDrag = () => {
       if (sheetDragStartY == null) return;
@@ -7097,6 +7125,8 @@
       const armed = gesture.armed && gesture.axis === "x";
       gesture = null;
       if (!armed || !homeLookupPlayer) return;
+      // Any locked horizontal drag should not also count as a tap-to-advance.
+      suppressCardClick = true;
       const maxIdx =
         kind === "form"
           ? Math.max(0, homeFormChartSpecs(homeLookupPlayer.position).length - 1)
@@ -7312,7 +7342,7 @@
     return ticks;
   }
 
-  function homeFormChartSvg(series, spec, { accent = "", average = null } = {}) {
+  function homeFormChartSvg(series, spec, { accent = "", average = null, enter = true, enterDelayMs = 0 } = {}) {
     const W = 320;
     const H = 148;
     const padL = 28;
@@ -7382,9 +7412,10 @@
       .map((s, i) => {
         const cx = padL + slot * i + slot / 2;
         const label = `<text class="home-form-x-label" x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">GW${s.gw}</text>`;
+        const barStyle = ` style="--bar-i:${i}"`;
         if (s.empty || s.value == null) {
           const y0 = padT + plotH;
-          return `${label}<rect class="home-form-bar is-empty" x="${(cx - barW / 2).toFixed(1)}" y="${(y0 - 2).toFixed(1)}" width="${barW}" height="2" rx="1" />`;
+          return `${label}<rect class="home-form-bar is-empty"${barStyle} x="${(cx - barW / 2).toFixed(1)}" y="${(y0 - 2).toFixed(1)}" width="${barW}" height="2" rx="1" />`;
         }
         const h = Math.max(2, (Math.max(0, s.value) / maxVal) * plotH);
         const y = padT + plotH - h;
@@ -7394,18 +7425,44 @@
         if (s.hit && spec.threshold) titleBits.push(spec.threshold.legendHit);
         const hitClass = s.hit ? " is-hit" : "";
         const barFill = s.hit ? "" : fillAttr;
-        return `${label}<rect class="home-form-bar${hitClass}" x="${(cx - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="3"${barFill}><title>${escapeHtml(titleBits.join(" · "))}</title></rect>`;
+        return `${label}<rect class="home-form-bar${hitClass}"${barStyle} x="${(cx - barW / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="3"${barFill}><title>${escapeHtml(titleBits.join(" · "))}</title></rect>`;
       })
       .join("");
 
+    const enterCls = prefersReducedMotion() || enter === false ? "" : " is-enter";
+    const delayMs = Math.max(0, Number(enterDelayMs) || 0);
+    const delayStyle = delayMs > 0 ? `--form-enter-delay:${delayMs}ms;` : "";
     // Paint order: grid → threshold → bars → avg line/pill on top (z).
-    return `<svg class="home-form-svg" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="${escapeHtml(spec.label)} by gameweek">
+    return `<svg class="home-form-svg${enterCls}" style="--form-bar-n:${series.length};${delayStyle}" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="${escapeHtml(spec.label)} by gameweek">
       ${grid}
       ${thrSvg}
       <line class="home-form-axis" x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" />
       ${bars}
       ${avgSvg}
     </svg>`;
+  }
+
+  function armHomeFormChartEnter(card, barCount) {
+    if (!card) return;
+    const n = Math.max(0, Number(barCount) || 0);
+    card.style.setProperty("--form-bar-n", String(n));
+    card.style.removeProperty("--form-enter-delay");
+    const svg = card.querySelector(".home-form-svg");
+    if (prefersReducedMotion()) {
+      card.classList.remove("is-form-entering");
+      if (svg) svg.classList.remove("is-enter");
+      return;
+    }
+    if (svg) {
+      svg.style.setProperty("--form-bar-n", String(n));
+      svg.style.removeProperty("--form-enter-delay");
+      svg.classList.remove("is-enter");
+      void svg.getBoundingClientRect();
+      svg.classList.add("is-enter");
+    }
+    card.classList.remove("is-form-entering");
+    void card.getBoundingClientRect();
+    card.classList.add("is-form-entering");
   }
 
   function homeFormLegendHTML(spec, { average = null } = {}) {
@@ -7465,6 +7522,7 @@
       const accent = TEAM_SCATTER_ACCENT[homeLookupPlayer.team] || "";
       if (chartEl) chartEl.innerHTML = homeFormChartSvg(series, spec, { accent, average });
       if (legendEl) legendEl.innerHTML = homeFormLegendHTML(spec, { average });
+      armHomeFormChartEnter(card, series.length);
     };
     if (chartEl && animate) {
       chartEl.classList.add("is-swap-out");
@@ -7484,7 +7542,7 @@
     });
   }
 
-  function homePlayerFormHTML(row) {
+  function homePlayerFormHTML(row, { enterDelayMs = 0 } = {}) {
     if (!row) return "";
     const specs = homeFormChartSpecs(row.position);
     if (!specs.length) return "";
@@ -7495,12 +7553,15 @@
     const series = homeFormSeriesForPlayer(elementId, spec);
     const average = homeFormPlayerAverage(elementId, spec);
     const accent = TEAM_SCATTER_ACCENT[row.team] || "";
-    return `<article class="home-form-card" data-form-stat="${escapeHtml(spec.id)}">
+    const delayMs = Math.max(0, Number(enterDelayMs) || 0);
+    const enterCls = prefersReducedMotion() ? "" : " is-form-entering";
+    const delayStyle = delayMs > 0 ? `--form-enter-delay:${delayMs}ms;` : "";
+    return `<article class="home-form-card${enterCls}" data-form-stat="${escapeHtml(spec.id)}" style="--form-bar-n:${series.length};${delayStyle}">
       <div class="home-form-head">
         <span class="home-form-kicker">Form</span>
         <span class="home-form-stat-label">${escapeHtml(spec.label)}</span>
       </div>
-      <div class="home-form-chart">${homeFormChartSvg(series, spec, { accent, average })}</div>
+      <div class="home-form-chart">${homeFormChartSvg(series, spec, { accent, average, enterDelayMs: delayMs })}</div>
       <div class="home-form-legend-slot">${homeFormLegendHTML(spec, { average })}</div>
       ${homeFormDotsHTML(idx, specs.length)}
     </article>`;
@@ -7701,12 +7762,12 @@
     </div>`;
   }
 
-  function homePlayerDetailHTML(row) {
+  function homePlayerDetailHTML(row, { formEnterDelayMs = 0 } = {}) {
     if (!row) return "";
     return `<div class="home-player-detail">
       ${homePlayerFlagBannerHTML(row)}
       <div class="home-player-detail-profile">${homePlayerProfileHTML(row)}</div>
-      <div class="home-player-detail-form">${homePlayerFormHTML(row)}</div>
+      <div class="home-player-detail-form">${homePlayerFormHTML(row, { enterDelayMs: formEnterDelayMs })}</div>
       <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
       <div class="home-player-detail-owners">${homePlayerOwnersHTML(homeLookupElementId(row))}</div>
     </div>`;
@@ -7774,7 +7835,8 @@
     if (el.homePlayerModalTitle) {
       el.homePlayerModalTitle.textContent = "Player Details";
     }
-    el.homePlayerModalBody.innerHTML = homePlayerDetailHTML(row);
+    // Modal has no slide-in; small settle so form bars don't compete with first paint.
+    el.homePlayerModalBody.innerHTML = homePlayerDetailHTML(row, { formEnterDelayMs: 120 });
     el.homePlayerModal.hidden = false;
     el.homePlayerModal.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("home-player-modal-open");
@@ -7795,6 +7857,7 @@
           el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
           el.mobileSheetTitle.textContent = "Player Details";
         }
+        // Sheet already open — no tray animation; form can enter immediately.
         el.mobileSheetBody.innerHTML = homePlayerDetailHTML(row);
         syncHomePlayerOpenXBtn(row);
         bindHomeLookupCard();
@@ -7802,9 +7865,10 @@
         bindOwnershipPhotoFallback(el.mobileSheetBody);
         return;
       }
+      // Sheet slide is 0.28s — hold form bar grow until the tray lands.
       openMobileSheet({
         title: "Player Details",
-        html: homePlayerDetailHTML(row),
+        html: homePlayerDetailHTML(row, { formEnterDelayMs: 320 }),
         key: "home-player",
       });
       syncHomePlayerOpenXBtn(row);
