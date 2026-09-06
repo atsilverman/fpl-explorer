@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1070" />
+<link rel="stylesheet" href="styles.css?v=1077" />
 <script>
 (() => {
   try {
@@ -1226,23 +1226,35 @@
       </div>
       <div class="prices-countdown-bar" id="prices-countdown-bar">
         <p class="prices-countdown-main">Next price changes in: <strong id="prices-countdown-value">—</strong></p>
-        <p class="prices-countdown-sub" id="prices-countdown-sub">Changes at —</p>
       </div>
       <div class="ownership-mover-bar prices-mover-bar">
         <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
-          <button type="button" data-prices-view="prediction" class="active">Prediction</button>
-          <button type="button" data-prices-view="actual">Actual</button>
+          <button type="button" data-prices-view="prediction" class="active">
+            Predicted
+          </button>
+          <button type="button" data-prices-view="actual">
+            Actual
+          </button>
         </div>
         <div class="segmented ownership-mover-seg prices-mover-kind-seg" id="prices-mover-kind-seg" role="group" aria-label="Risers or fallers" hidden>
-          <button type="button" data-prices-mover-kind="risers" class="active">Risers</button>
-          <button type="button" data-prices-mover-kind="fallers">Fallers</button>
+          <button type="button" data-prices-mover-kind="risers" class="active" aria-label="Risers" title="Risers">
+            <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
+            <span class="prices-mover-kind-label">Risers</span>
+          </button>
+          <button type="button" data-prices-mover-kind="fallers" aria-label="Fallers" title="Fallers">
+            <svg class="icon" aria-hidden="true"><use href="#i-trending-down"/></svg>
+            <span class="prices-mover-kind-label">Fallers</span>
+          </button>
         </div>
         <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-prediction-scope-seg" role="group" aria-label="Prediction movers scope" hidden>
           <button type="button" data-prices-scope="all" class="active" title="Every price mover matching filters">All</button>
           <button type="button" data-prices-scope="owned" title="Only players in your FPL squad">Owned</button>
         </div>
         <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-actual-scope-seg" role="group" aria-label="Actual changes scope" hidden>
-          <button type="button" data-prices-scope="top" title="Top 5 risers and fallers by ownership per day">Top 5</button>
+          <button type="button" data-prices-scope="top" title="Top 5 risers and fallers by ownership per day">
+            <span class="prices-scope-label-full">Top 5</span>
+            <span class="prices-scope-label-short" aria-hidden="true">Top</span>
+          </button>
           <button type="button" data-prices-scope="all" title="Every recorded price change">All</button>
         </div>
         <div class="ownership-mover-end">
@@ -1304,10 +1316,6 @@
             <button type="button" class="prices-mover-dot" role="tab" aria-selected="false" aria-label="Fallers" data-page="1"></button>
           </div>
         </div>
-      </div>
-      <div class="prices-next-update-footer" id="prices-next-update-footer" hidden>
-        <p class="prices-countdown-main">Next price changes in: <strong id="prices-next-update-value">—</strong></p>
-        <p class="prices-countdown-sub" id="prices-next-update-sub">Changes at —</p>
       </div>
       <p class="page-updated-text page-data-footer" id="prices-updated-footer" hidden></p>
     </div>
@@ -1666,7 +1674,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1115"></script>
+<script src="app.js?v=1119"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

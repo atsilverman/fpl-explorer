@@ -1201,10 +1201,6 @@
     ownershipUpdatedFooter: $("#ownership-updated-footer"),
     pricesPage: $("#prices-page"),
     pricesCountdownValue: $("#prices-countdown-value"),
-    pricesCountdownSub: $("#prices-countdown-sub"),
-    pricesNextUpdateFooter: $("#prices-next-update-footer"),
-    pricesNextUpdateValue: $("#prices-next-update-value"),
-    pricesNextUpdateSub: $("#prices-next-update-sub"),
     pricesViewSeg: $("#prices-view-seg"),
     pricesMoverKindSeg: $("#prices-mover-kind-seg"),
     pricesActualScopeSeg: $("#prices-actual-scope-seg"),
@@ -12479,7 +12475,7 @@
             spitRow(
               spitRank("Risers / Fallers"),
               mobile
-                ? "Swipe or use the dots under the table — Risers and Fallers are separate pages."
+                ? "Use the ↑ / ↓ toggle (or swipe the table) to switch Risers and Fallers."
                 : "Two stacked tables — risers above, fallers below, each ranked by status tier then |progress|."
             ),
             spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of hourly check-ins. Line colour follows 3d Δ (green up, red down)."),
@@ -17806,7 +17802,9 @@
       return;
     }
     node.textContent = text;
-    if (title) setTip(node, title);
+    // Prices footer: skip tip — mobile opens a useless "Details" sheet for the
+    // same refresh timestamp already shown as "Updated …".
+    if (title && node !== el.pricesUpdatedFooter) setTip(node, title);
     else setTip(node, "");
     node.hidden = false;
   }
@@ -23037,11 +23035,23 @@
 
   function syncPricesMoverPagerUI() {
     const mobile = NARROW_MQ.matches && state.page === "prices";
-    if (el.pricesMoverKindSeg) el.pricesMoverKindSeg.hidden = true;
-    if (el.pricesPage) delete el.pricesPage.dataset.pricesMover;
-
+    const kind = pricesMoverKind();
+    if (el.pricesPage) {
+      if (mobile) el.pricesPage.dataset.pricesMover = kind;
+      else delete el.pricesPage.dataset.pricesMover;
+    }
+    if (el.pricesMoverKindSeg) {
+      // Mobile: riser/faller toggle (icons). Desktop keeps both stacked tables.
+      el.pricesMoverKindSeg.hidden = !mobile;
+      el.pricesMoverKindSeg.querySelectorAll("button[data-prices-mover-kind]").forEach((btn) => {
+        const on = btn.dataset.pricesMoverKind === kind;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+    // Dots replaced by the kind toggle on mobile.
     [el.pricesPredictionDots, el.pricesActualDots].forEach((dots) => {
-      if (dots) dots.hidden = !mobile;
+      if (dots) dots.hidden = true;
     });
 
     if (!mobile) {
@@ -23053,18 +23063,15 @@
       return;
     }
 
-    const idx = pricesMoverPageIndex();
+    const idx = pricesMoverPageIndex(kind);
     const mode = pricesViewMode();
     const track = mode === "actual" ? el.pricesActualTrack : el.pricesPredictionTrack;
-    const dots = mode === "actual" ? el.pricesActualDots : el.pricesPredictionDots;
     if (!track) return;
     snapPricesMoverPage(track, idx);
-    syncPricesMoverDots(track, dots, idx);
     syncPricesMoverTrackHeight(track, idx);
   }
 
   function syncPricesMoverKindUI({ animate = false } = {}) {
-    // Kept for call sites — Risers/Fallers are a swipe pager on mobile now.
     void animate;
     syncPricesMoverPagerUI();
   }
@@ -23098,13 +23105,17 @@
         const idx = pricesMoverActivePageIndex(track);
         snapPricesMoverPage(track, idx);
         state.pricesMoverKind = idx === 1 ? "fallers" : "risers";
-        syncPricesMoverDots(track, dots, idx);
         syncPricesMoverTrackHeight(track, idx);
+        if (el.pricesMoverKindSeg) {
+          el.pricesMoverKindSeg.querySelectorAll("button[data-prices-mover-kind]").forEach((btn) => {
+            const on = btn.dataset.pricesMoverKind === state.pricesMoverKind;
+            btn.classList.toggle("active", on);
+            btn.setAttribute("aria-pressed", on ? "true" : "false");
+          });
+        }
       };
       const onScrollTick = () => {
         if (!NARROW_MQ.matches) return;
-        const idx = pricesMoverActivePageIndex(track);
-        syncPricesMoverDots(track, dots, idx);
         clearTimeout(scrollSettleTimer);
         scrollSettleTimer = setTimeout(onScrollSettled, 140);
       };
@@ -23367,21 +23378,6 @@
     return pricesNextChangeAtIso();
   }
 
-  function fmtPricesChangeAtLabel(iso) {
-    if (!iso) return "Changes at —";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "Changes at —";
-    try {
-      const time = d.toLocaleTimeString(undefined, {
-        ...localeTimeOptions(),
-        timeZoneName: "short",
-      });
-      return `Changes at ${time}`;
-    } catch {
-      return "Changes at —";
-    }
-  }
-
   function fmtPricesCountdownClock(iso) {
     if (!iso) return "—";
     const ms = new Date(iso).getTime() - Date.now();
@@ -23399,22 +23395,12 @@
         clearInterval(pricesCountdownTimer);
         pricesCountdownTimer = null;
       }
-      if (el.pricesNextUpdateFooter) el.pricesNextUpdateFooter.hidden = true;
       return;
-    }
-    if (el.pricesNextUpdateFooter) {
-      el.pricesNextUpdateFooter.hidden = !NARROW_MQ.matches;
     }
     const tick = () => {
       const iso = pricesEffectiveNextChangeAt();
-      const clock = fmtPricesCountdownClock(iso);
-      const atLabel = fmtPricesChangeAtLabel(iso);
-      if (el.pricesCountdownSub) el.pricesCountdownSub.textContent = atLabel;
-      if (el.pricesCountdownValue) el.pricesCountdownValue.textContent = clock;
-      if (el.pricesNextUpdateSub) el.pricesNextUpdateSub.textContent = atLabel;
-      if (el.pricesNextUpdateValue) el.pricesNextUpdateValue.textContent = clock;
-      if (el.pricesNextUpdateFooter) {
-        el.pricesNextUpdateFooter.hidden = state.page !== "prices" || !NARROW_MQ.matches;
+      if (el.pricesCountdownValue) {
+        el.pricesCountdownValue.textContent = fmtPricesCountdownClock(iso);
       }
     };
     tick();
@@ -25040,8 +25026,15 @@
     });
   }
   if (el.pricesMoverKindSeg) {
-    // Legacy toggle kept in DOM for cache safety; pager owns Risers/Fallers on mobile.
-    el.pricesMoverKindSeg.hidden = true;
+    el.pricesMoverKindSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-prices-mover-kind]");
+      if (!btn || !el.pricesMoverKindSeg.contains(btn)) return;
+      const kind = btn.dataset.pricesMoverKind === "fallers" ? "fallers" : "risers";
+      if (kind === pricesMoverKind()) return;
+      state.pricesMoverKind = kind;
+      setPricesMoverPage(pricesMoverPageIndex(kind), { smooth: true, syncKind: false });
+      syncPricesMoverPagerUI();
+    });
   }
   bindPricesMoverPager();
   function bindPricesScopeSeg(seg, { scopes, getScope, setScope, rerender }) {

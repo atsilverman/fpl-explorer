@@ -5115,11 +5115,12 @@ html[data-page="prices"] .layout .main {
 }
 .prices-countdown-bar {
   flex: none;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: hsl(var(--muted) / 0.35);
+  margin: 0 0 10px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: center;
 }
 .prices-countdown-main {
   margin: 0;
@@ -5131,23 +5132,6 @@ html[data-page="prices"] .layout .main {
   font-family: "Fira Code", ui-monospace, monospace;
   font-weight: 600;
   letter-spacing: 0.04em;
-}
-.prices-countdown-sub {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.prices-next-update-footer {
-  display: none;
-  flex: none;
-  margin: 14px 0 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: hsl(var(--muted) / 0.35);
-}
-.prices-next-update-footer[hidden] {
-  display: none !important;
 }
 .prices-mover-bar {
   margin-bottom: 10px;
@@ -5195,7 +5179,25 @@ html[data-page="prices"] .layout .main {
   display: none !important;
 }
 .prices-mover-kind-seg {
-  display: none !important;
+  display: none;
+}
+.prices-mover-kind-seg:not([hidden]) {
+  display: inline-flex;
+}
+.prices-mover-kind-seg button {
+  min-width: 2.4em;
+  gap: 5px;
+}
+.prices-mover-kind-seg .icon {
+  font-size: 14px;
+}
+.prices-mover-kind-label {
+  display: none;
+}
+@media (min-width: 721px) {
+  .prices-mover-kind-seg {
+    display: none !important;
+  }
 }
 @media (min-width: 721px) {
   html[data-page="prices"] .layout .main {
@@ -5315,8 +5317,8 @@ html[data-page="prices"] .layout .main {
 .prices-scope-seg button {
   min-width: 3.6em;
 }
-.prices-mover-kind-seg button {
-  min-width: 4.6em;
+.prices-scope-label-short {
+  display: none;
 }
 #prices-prediction-wrap {
   flex: 1 1 auto;
@@ -6235,6 +6237,9 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     min-height: 0;
+    /* Edge-to-edge tables; toolbar/footers keep a small inset below. */
+    padding-left: 0;
+    padding-right: 0;
     padding-bottom: var(--main-pad-x, 8px);
   }
   html[data-page="prices"] #prices-page {
@@ -6244,16 +6249,52 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     min-height: 0;
     overflow: visible;
   }
-  html[data-page="prices"] #prices-page .prices-header,
-  html[data-page="prices"] #prices-countdown-bar {
+  html[data-page="prices"] #prices-page .prices-header {
     display: none;
   }
-  html[data-page="prices"] #prices-next-update-footer:not([hidden]) {
-    display: block;
+  html[data-page="prices"] #prices-countdown-bar {
+    padding-left: var(--mobile-gutter-x, 8px);
+    padding-right: var(--mobile-gutter-x, 8px);
+    margin-bottom: 8px;
   }
   .prices-mover-bar {
-    flex-wrap: wrap;
-    row-gap: 8px;
+    flex-wrap: nowrap;
+    gap: 6px;
+    justify-content: flex-start;
+    width: 100%;
+    box-sizing: border-box;
+    padding-left: var(--mobile-gutter-x, 8px);
+    padding-right: var(--mobile-gutter-x, 8px);
+  }
+  .prices-mover-bar .ownership-mover-end {
+    display: none;
+  }
+  .prices-mover-bar .segmented:not([hidden]) {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+  }
+  .prices-mover-bar .prices-mover-kind-seg:not([hidden]) {
+    flex: 0 0 auto;
+  }
+  .prices-mover-bar .segmented button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 12px;
+  }
+  .prices-mover-kind-seg button {
+    flex: 0 0 auto;
+    min-width: 2.15em;
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+  .prices-scope-label-full {
+    display: none;
+  }
+  .prices-scope-label-short {
+    display: inline;
   }
   .prices-mover-pager {
     min-width: 0;
@@ -6290,8 +6331,8 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     scroll-snap-stop: always;
     overflow: hidden;
   }
-  .prices-mover-dots:not([hidden]) {
-    display: flex;
+  .prices-mover-dots {
+    display: none !important;
   }
   .prices-prediction-panel .prices-section-divider,
   .prices-actual-panel .prices-section-divider {
@@ -6311,9 +6352,14 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     flex: none;
     overflow: visible;
   }
-  html[data-page="prices"] #prices-updated-footer,
-  html[data-page="prices"] #prices-next-update-footer {
+  html[data-page="prices"] #prices-updated-footer {
     flex: none;
+    padding-left: var(--mobile-gutter-x, 8px);
+    padding-right: var(--mobile-gutter-x, 8px);
+  }
+  #prices-page .prices-section-divider {
+    padding-left: var(--mobile-gutter-x, 8px);
+    padding-right: var(--mobile-gutter-x, 8px);
   }
   #prices-page .prices-table-wrap {
     flex: none;
@@ -6322,73 +6368,78 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     width: 100%;
     max-width: 100%;
     padding-right: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
   }
-  /* Prediction: Ownership-style horizontal pan + scroll-linked name simplify. */
+  /* Prediction: fit full viewport width (spark hidden; no horizontal pan). */
   #prices-page .prices-prediction-table-wrap {
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     overscroll-behavior-x: none;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    --name-col-w: 176px;
+    touch-action: pan-y;
+    --name-col-w: 0px;
     --metric-col-w: 58px;
   }
   #prices-page .prices-prediction-table-wrap > table {
-    width: max-content;
-    min-width: 100%;
-    max-width: none;
-    table-layout: auto;
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
   #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player,
-  #prices-page .prices-prediction-table-wrap > table > tbody td.col-player {
-    position: sticky;
-    left: 0;
-    z-index: 5;
-    background-color: hsl(var(--card));
-    box-shadow: 1px 0 0 var(--border);
-  }
-  #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player {
-    z-index: 10;
-    background-color: hsl(var(--muted));
-  }
+  #prices-page .prices-prediction-table-wrap > table > tbody td.col-player,
   #prices-page .prices-prediction-table-wrap.name-simplify-ready thead th.col-player,
   #prices-page .prices-prediction-table-wrap.name-simplify-ready tbody td.col-player {
-    width: var(--name-col-w-morph);
-    min-width: var(--name-col-w-morph);
-    max-width: var(--name-col-w-morph);
+    position: static;
+    left: auto;
+    z-index: auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    box-shadow: none;
+    padding-left: var(--mobile-gutter-x, 8px);
     padding-right: 4px;
+    overflow: hidden;
+  }
+  #prices-page .prices-prediction-table-wrap > table > thead tr:not(.section-row) th.col-player {
+    background-color: hsl(var(--muted));
   }
   #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-status,
   #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-status {
-    width: auto;
-    min-width: 3.5rem;
+    width: 22%;
+    min-width: 0;
     max-width: none;
     text-align: center;
     vertical-align: middle;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 2px;
+    padding-right: 2px;
   }
   #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-metric,
   #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-metric {
-    width: auto;
-    min-width: 5rem;
+    width: 18%;
+    min-width: 0;
     max-width: none;
     text-align: center;
     vertical-align: middle;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table th.col-num.prices-col-metric + th.col-num.prices-col-metric,
+  #prices-page .prices-prediction-table-wrap .prices-table td.col-num.prices-col-metric + td.col-num.prices-col-metric {
+    padding-right: var(--mobile-gutter-x, 8px);
   }
   #prices-page .prices-prediction-table-wrap .ownership-id-sub {
     overflow: hidden;
-    max-width: none;
+    max-width: 100%;
   }
   #prices-page .prices-prediction-table-wrap .ownership-id-sub > * {
     flex: 0 0 auto;
   }
   #prices-page .prices-prediction-table-wrap .ownership-id .player-name,
   #prices-page .prices-prediction-table-wrap .ownership-id-text .player-name-line > .player-name {
-    overflow: visible;
-    text-overflow: clip;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
   /* Actual keeps a fit-to-viewport fixed layout (no Status / spark columns). */
@@ -6428,6 +6479,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     min-width: 0;
     max-width: none;
     overflow: hidden;
+    padding-left: var(--mobile-gutter-x, 8px);
     padding-right: 4px;
   }
   #prices-page .prices-actual-table-wrap .prices-col-date,
@@ -6455,7 +6507,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     white-space: nowrap;
     text-align: center;
     padding-left: 4px;
-    padding-right: 4px;
+    padding-right: var(--mobile-gutter-x, 8px);
   }
   #prices-page .prices-actual-table-wrap .prices-actual-table .prices-col-actual-price {
     min-width: 0;
@@ -6481,7 +6533,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   }
   #prices-page .prices-table-wrap .prices-table .prices-progress-pill {
     font-size: 11px;
-    min-width: 4.6em;
+    min-width: 0;
     padding: 2px 6px;
   }
   #prices-page .prices-table-wrap .prices-spark {
