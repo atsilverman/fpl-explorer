@@ -438,6 +438,29 @@
     };
   }
 
+  /** Team / Home fixture FDR wash — green easy → red hard (Prices Δ palette). */
+  function fdrScheduleHighlightPaint(kind, intensity) {
+    return spectrumHighlightPaint(kind === "easy", intensity, {
+      easy: "hsl(var(--delta-rise))",
+      hard: "hsl(var(--delta-fall))",
+      easyFill: (alpha) => `hsl(var(--delta-rise) / ${alpha})`,
+      hardFill: (alpha) => `hsl(var(--delta-fall) / ${alpha})`,
+    });
+  }
+
+  function fdrScheduleHighlightInlineStyle(kind, intensity) {
+    const paint = fdrScheduleHighlightPaint(kind, intensity);
+    if (paint.skip) return { style: "", strongClass: "" };
+    const color = paint.color ? `;color:${paint.color}` : "";
+    const kindClass =
+      paint.emphasize || paint.strong ? (kind === "easy" ? " highlight-top" : " highlight-bottom") : "";
+    const strong = paint.strong ? " highlight-strong" : "";
+    return {
+      style: `background-color:${paint.backgroundColor}${color}`,
+      strongClass: `${kindClass}${strong}`,
+    };
+  }
+
   function fdrHighlightInlineStyle(kind, intensity) {
     const paint = fdrHighlightPaint(kind, intensity);
     if (paint.skip) return { style: "", strongClass: "" };
@@ -481,7 +504,7 @@
     }
     const intensity = quiet ? Math.min(1, spec.intensity * 0.4) : spec.intensity;
     const paint = schedulePalette
-      ? scheduleHighlightInlineStyle(spec.kind === "easy" ? "top" : "bottom", intensity)
+      ? fdrScheduleHighlightInlineStyle(spec.kind, intensity)
       : fdrHighlightInlineStyle(spec.kind, intensity);
     return {
       className: ` fdr-${n}`,
@@ -832,7 +855,7 @@
     pricesActualSortTouched: false,
     pricesActualShowAll: false,
     pricesPredictionScope: "all", // all | owned
-    pricesMoverKind: "risers", // risers | fallers (mobile swipe pager page)
+    pricesMoverKind: "risers", // risers | fallers (mobile ↑↓ toggle)
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
@@ -1023,6 +1046,11 @@
       .filter((player) => player && player.code != null && player.price != null)
       .map((player) => [Number(player.code), Number(player.price)])
   );
+  const latestAvailabilityByCode = new Map(
+    ((latestOwnershipCheckIn && latestOwnershipCheckIn.players) || [])
+      .filter((player) => player && player.code != null)
+      .map((player) => [Number(player.code), player])
+  );
 
   function currentOwnership(code) {
     if (code == null || code === "") return null;
@@ -1114,6 +1142,7 @@
     homeGwMeta: $("#home-gw-meta"),
     homeSummary: $("#home-summary"),
     homeSummaryHero: $("#home-summary-hero"),
+    homeHeroLive: $("#home-hero-live"),
     homeHeroOverallRank: $("#home-hero-overall-rank"),
     homeHeroOverallRankDelta: $("#home-hero-overall-rank-delta"),
     homeOverallRank: $("#home-overall-rank"),
@@ -6124,6 +6153,7 @@
         { passive: true }
       );
       container.addEventListener("click", (e) => {
+        if (e.target.closest("a")) return;
         const tr = e.target.closest(rowSelector);
         if (!tr || !container.contains(tr)) return;
         if (touchMoved) {
@@ -6214,11 +6244,12 @@
     const pin = configuredPin
       ? `<span class="owned-flag home-owned-flag"${tipAttr("In your team")} aria-label="In your team">${ownedPinSVG()}</span>`
       : "";
+    const flag = playerFlagHTML(row, { className: "home-player-flag-icon" });
     return `<td class="home-col-player">
         <div class="home-player-cell">
           ${teamBadge}
           <div class="home-player-text">
-            <div class="home-player-name"><span class="home-player-name-text">${escapeHtml(row.name || "—")}</span>${tags.join("")}${pin}</div>
+            <div class="home-player-name"><span class="home-player-name-text">${escapeHtml(row.name || "—")}</span>${flag}${tags.join("")}${pin}</div>
           </div>
         </div>
       </td>`;
@@ -7179,7 +7210,7 @@
       }
       return spec;
     });
-    return [{ id: "pts", label: "Pts", decimals: 0, gwKey: "pts" }, ...mapped];
+    return [{ id: "pts", label: "Points", decimals: 0, gwKey: "pts" }, ...mapped];
   }
 
   function homeFormGwValue(eg, spec) {
@@ -7509,7 +7540,7 @@
             ${badge}
           </div>
           <div class="home-lookup-id">
-            <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}</h3>
+            <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}${playerFlagHTML(row, { className: "home-lookup-flag-icon" })}</h3>
             ${metaBits.length ? `<p class="home-lookup-meta">${metaBits.join("")}</p>` : ""}
           </div>
         </div>
@@ -7646,9 +7677,34 @@
     </section>`;
   }
 
+  function homePlayerFlagBannerHTML(row) {
+    const avail = playerAvailability(row);
+    if (!avail) return "";
+    const chance =
+      avail.chance != null
+        ? `<span class="home-player-flag-banner-chance is-chance-${avail.chanceBucket}">${escapeHtml(String(avail.chance))}%</span>`
+        : "";
+    const news = avail.news
+      ? escapeHtml(avail.news)
+      : escapeHtml(avail.statusLabel || "Flagged");
+    const link = avail.newsUrl
+      ? `<a class="home-player-flag-banner-link" href="${escapeHtml(avail.newsUrl)}" target="_blank" rel="noopener noreferrer">Team news</a>`
+      : "";
+    return `<div class="home-player-flag-banner is-chance-${avail.chanceBucket}" role="status">
+      <div class="home-player-flag-banner-top">
+        ${iconHTML("triangle-alert", `player-flag-icon home-player-flag-banner-icon is-chance-${avail.chanceBucket}`)}
+        <span class="home-player-flag-banner-status">${escapeHtml(avail.statusLabel)}</span>
+        ${chance}
+      </div>
+      <p class="home-player-flag-banner-news">${news}</p>
+      ${link}
+    </div>`;
+  }
+
   function homePlayerDetailHTML(row) {
     if (!row) return "";
     return `<div class="home-player-detail">
+      ${homePlayerFlagBannerHTML(row)}
       <div class="home-player-detail-profile">${homePlayerProfileHTML(row)}</div>
       <div class="home-player-detail-form">${homePlayerFormHTML(row)}</div>
       <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
@@ -9023,8 +9079,86 @@
     return `<span class="owned-flag"${tipAttr("In your squad")} aria-label="In your squad">${ownedPinSVG()}</span>`;
   }
 
+  const AVAIL_STATUS_LABEL = {
+    a: "Available",
+    d: "Doubtful",
+    i: "Injured",
+    s: "Suspended",
+    u: "Unavailable",
+    n: "Not available",
+  };
+
+  function playerAvailability(rowLike) {
+    if (!rowLike || rowLike.kind === "team") return null;
+    const code = rowLike.code != null ? Number(rowLike.code) : NaN;
+    const fromOwn = Number.isFinite(code) ? latestAvailabilityByCode.get(code) : null;
+    const hasInline =
+      rowLike.availStatus != null ||
+      rowLike.chanceNext != null ||
+      rowLike.chanceThis != null ||
+      (rowLike.news && String(rowLike.news).trim());
+    const src = hasInline ? rowLike : fromOwn || rowLike;
+    if (!src) return null;
+
+    const status = String(src.availStatus || "a").toLowerCase() || "a";
+    const chanceNext =
+      src.chanceNext != null && Number.isFinite(Number(src.chanceNext))
+        ? Number(src.chanceNext)
+        : null;
+    const chanceThis =
+      src.chanceThis != null && Number.isFinite(Number(src.chanceThis))
+        ? Number(src.chanceThis)
+        : null;
+    const chance = chanceNext != null ? chanceNext : chanceThis;
+    const news = (src.news && String(src.news).trim()) || "";
+    const newsUrl = (src.newsUrl && String(src.newsUrl).trim()) || "";
+    const newsAdded = src.newsAdded || null;
+
+    const isFlagged = status !== "a" || (chance != null && chance < 100);
+    if (!isFlagged) return null;
+
+    let chanceTier = chance;
+    if (chanceTier == null) {
+      chanceTier = status === "d" ? 50 : 0;
+    }
+    let bucket = 0;
+    if (chanceTier >= 75) bucket = 75;
+    else if (chanceTier >= 50) bucket = 50;
+    else if (chanceTier >= 25) bucket = 25;
+
+    const statusLabel = AVAIL_STATUS_LABEL[status] || "Flagged";
+    const tip =
+      news ||
+      (chance != null
+        ? `${statusLabel} · ${chance}% chance of playing`
+        : statusLabel);
+    return {
+      status,
+      chance,
+      chanceBucket: bucket,
+      news,
+      newsUrl,
+      newsAdded,
+      tip,
+      statusLabel,
+    };
+  }
+
+  function playerFlagHTML(rowLike, { className = "" } = {}) {
+    const avail = playerAvailability(rowLike);
+    if (!avail) return "";
+    const cls = [
+      "player-flag-icon",
+      `is-chance-${avail.chanceBucket}`,
+      className,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return `<span class="player-flag"${tipAttr(avail.tip)} aria-label="${escapeHtml(avail.tip)}">${iconHTML("triangle-alert", cls)}</span>`;
+  }
+
   function playerNameHTML(row) {
-    const icons = ownedFlagHTML(row);
+    const icons = `${playerFlagHTML(row)}${ownedFlagHTML(row)}`;
     const name = String(row.name || "");
     const prefix = name.slice(0, 4);
     const rest = name.slice(4);
@@ -10332,15 +10466,10 @@
       if (id) {
         const idCs = getComputedStyle(id);
         const gap = parseFloat(idCs.columnGap || idCs.gap) || 0;
-        const rank = id.querySelector(".ownership-rank");
         const thumb = id.querySelector(".ownership-photo, .ownership-crest");
         const text = id.querySelector(".ownership-id-text");
         let content = 0;
         let parts = 0;
-        if (rank) {
-          content += Math.ceil(rank.getBoundingClientRect().width);
-          parts += 1;
-        }
         if (thumb) {
           content += Math.ceil(thumb.getBoundingClientRect().width);
           parts += 1;
@@ -12333,7 +12462,7 @@
         ),
         spitRow(
           spitRank("Schedule"),
-          "Upcoming fixtures — crest + home icon; FPL difficulty wash (blue easy → pink hard)."
+          "Upcoming fixtures — crest + home icon; FPL difficulty wash (green easy → red hard)."
         ),
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
         ...(mobile
@@ -12588,7 +12717,7 @@
           ? `Pts, xGI, xG, xA from ${teamStatsSeasonLabel()} FPL season totals. New signings show –.`
           : `Pts, xPts, xGI, xG, xA from ${teamStatsSeasonLabel()}. New signings show –.`),
         spitRow(spitRank("Form"), "Sparkline of GW points (needs 2+ gameweeks)."),
-        spitRow(spitRank("GW"), "Picker sets the planning window; six fixture heat columns start from that GW (blue easy → pink hard)."),
+        spitRow(spitRank("GW"), "Picker sets the planning window; six fixture heat columns start from that GW (green easy → red hard)."),
         spitRow(
           spitRank("Select"),
           mobile
@@ -14584,7 +14713,7 @@
         : "";
     }
     const nameHTML = `<span class="player-name">${escapeHtml(row.name)}</span>`;
-    const flags = showOwned ? ownedFlagHTML(row) : "";
+    const flags = `${playerFlagHTML(row)}${showOwned ? ownedFlagHTML(row) : ""}`;
     const nameLine = `<span class="player-name-line">${nameHTML}${flags}${nameExtras || ""}</span>`;
     return `${thumb}<span class="ownership-id-text rankings-identity-text">${nameLine}${meta}</span>`;
   }
@@ -18534,6 +18663,22 @@
 
   function syncLiveNavChrome() {
     document.documentElement.classList.toggle("has-gw-live", liveGwHasActiveGames());
+    syncHomeHeroLiveBadge();
+  }
+
+  /** Mock: force Live badge on for preview. Keep false in production. */
+  const HOME_HERO_LIVE_MOCK = false;
+
+  function homeHeroShouldShowLive() {
+    if (HOME_HERO_LIVE_MOCK) return true;
+    return liveGwHasActiveGames();
+  }
+
+  function syncHomeHeroLiveBadge() {
+    if (!el.homeHeroLive) return;
+    const on = homeSummaryLayout() === "hero" && homeHeroShouldShowLive();
+    el.homeHeroLive.hidden = !on;
+    el.homeHeroLive.setAttribute("aria-hidden", on ? "false" : "true");
   }
 
   function liveElementMapForGw(gw) {
@@ -20462,8 +20607,14 @@
       .map((m) => {
         const active = state.liveMatchups.has(m.id) ? " active" : "";
         const label = `${m.home} vs ${m.away}`;
+        const home = escapeHtml(m.home);
+        const away = escapeHtml(m.away);
         return `<button type="button" class="chip live-matchup-chip${active}" data-live-matchup="${escapeHtml(m.id)}"${tipAttr(label)} aria-pressed="${state.liveMatchups.has(m.id) ? "true" : "false"}">
-          <span class="live-matchup-badges">${badgeHTML(m.home, "live-matchup-badge")}<span class="live-matchup-vs">v</span>${badgeHTML(m.away, "live-matchup-badge")}</span>
+          <span class="live-matchup-badges">
+            <span class="live-matchup-side">${badgeHTML(m.home, "live-matchup-badge")}<span class="live-matchup-abbr">${home}</span></span>
+            <span class="live-matchup-vs">v</span>
+            <span class="live-matchup-side">${badgeHTML(m.away, "live-matchup-badge")}<span class="live-matchup-abbr">${away}</span></span>
+          </span>
         </button>`;
       })
       .join("");
@@ -21277,12 +21428,12 @@
     if (dark) {
       a = (0.32 + t * 0.52).toFixed(3);
       fg = t < 0.42
-        ? (cls === "is-up" ? "hsl(210 95% 78%)" : "hsl(28 95% 72%)")
+        ? (cls === "is-up" ? "hsl(142 55% 72%)" : "hsl(0 70% 78%)")
         : "#fff";
     } else {
       a = (0.16 + t * 0.84).toFixed(3);
       fg = t < 0.38
-        ? (cls === "is-up" ? "hsl(217 72% 36%)" : "hsl(24 78% 34%)")
+        ? (cls === "is-up" ? "hsl(142 72% 26%)" : "hsl(0 72% 32%)")
         : "#fff";
     }
     return {
@@ -21366,12 +21517,11 @@
     return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
   }
 
-  function ownershipIdCellHTML(row, rank, { hidePrice = false } = {}) {
+  function ownershipIdCellHTML(row, _rank, { hidePrice = false } = {}) {
     if (row.kind === "team") {
       const crest = badgeHTML(row.team, "ownership-crest") ||
         teamCrestFallbackHTML(row.team, "ownership-photo ownership-photo-fallback");
       return `<div class="ownership-id">
-        <span class="ownership-rank">${rank}</span>
         ${crest}
         <div class="ownership-id-text">
           <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span></div>
@@ -21387,11 +21537,11 @@
       row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
     ].filter(Boolean);
     const ownedPin = ownedFlagHTML(row);
+    const flag = playerFlagHTML(row);
     return `<div class="ownership-id">
-      <span class="ownership-rank">${rank}</span>
       ${ownershipPhotoHTML(row)}
       <div class="ownership-id-text">
-        <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span>${ownedPin}</div>
+        <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span>${flag}${ownedPin}</div>
         ${bits.length ? `<div class="ownership-id-sub">${bits.join("<span class=\"ownership-id-sep\">|</span>")}</div>` : ""}
       </div>
     </div>`;
@@ -21654,9 +21804,9 @@
     const t = ownershipDeltaIntensity(delta);
     const a = (0.22 + t * 0.78).toFixed(3);
     if (tone === "is-up") {
-      return { bg: `hsl(var(--positive) / ${a})`, fg: "#fff", tone };
+      return { bg: `hsl(var(--delta-rise) / ${a})`, fg: "#fff", tone };
     }
-    return { bg: `hsl(var(--negative) / ${a})`, fg: "#fff", tone };
+    return { bg: `hsl(var(--delta-fall) / ${a})`, fg: "#fff", tone };
   }
 
   function ownershipTreemapCellHTML(cell, layoutW, layoutH, windowKey) {
@@ -22940,99 +23090,6 @@
     return state.pricesMoverKind === "fallers" ? "fallers" : "risers";
   }
 
-  function pricesMoverPageIndex(kind = pricesMoverKind()) {
-    return kind === "fallers" ? 1 : 0;
-  }
-
-  function pricesActiveMoverTrack() {
-    return pricesViewMode() === "actual" ? el.pricesActualTrack : el.pricesPredictionTrack;
-  }
-
-  function pricesActiveMoverDots() {
-    return pricesViewMode() === "actual" ? el.pricesActualDots : el.pricesPredictionDots;
-  }
-
-  function pricesMoverTrackPages(track) {
-    if (!track) return [];
-    return [...track.querySelectorAll(":scope > .prices-mover-page")];
-  }
-
-  function pricesMoverActivePageIndex(track) {
-    if (!track) return 0;
-    const pages = pricesMoverTrackPages(track);
-    if (!pages.length) return 0;
-    const left = track.scrollLeft;
-    let best = 0;
-    let bestDist = Infinity;
-    pages.forEach((page, i) => {
-      const dist = Math.abs(page.offsetLeft - left);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    });
-    return best;
-  }
-
-  function pricesMoverPageScrollLeft(track, index) {
-    const page = pricesMoverTrackPages(track)[index];
-    return page ? page.offsetLeft : 0;
-  }
-
-  function syncPricesMoverDots(track, dots, index) {
-    if (!dots) return;
-    const pages = pricesMoverTrackPages(track);
-    dots.querySelectorAll(".prices-mover-dot").forEach((dot) => {
-      const page = Number(dot.dataset.page);
-      const active = page === index;
-      dot.classList.toggle("is-active", active);
-      dot.setAttribute("aria-selected", active ? "true" : "false");
-      // Hide unused dots if page count shrinks.
-      dot.hidden = !(page < pages.length);
-    });
-  }
-
-  function syncPricesMoverTrackHeight(track, index) {
-    if (!track || !NARROW_MQ.matches) {
-      if (track) track.style.height = "";
-      return;
-    }
-    const pages = pricesMoverTrackPages(track);
-    const page = pages[index];
-    if (!page) {
-      track.style.height = "";
-      return;
-    }
-    const h = Math.ceil(Math.max(page.scrollHeight, page.offsetHeight));
-    if (!(h > 0)) return;
-    track.style.height = `${h}px`;
-  }
-
-  function setPricesMoverPage(index, { smooth = true, syncKind = true } = {}) {
-    const track = pricesActiveMoverTrack();
-    const dots = pricesActiveMoverDots();
-    if (!track) return;
-    const pages = pricesMoverTrackPages(track);
-    const idx = Math.max(0, Math.min(pages.length - 1, index));
-    if (syncKind) {
-      state.pricesMoverKind = idx === 1 ? "fallers" : "risers";
-    }
-    track.scrollTo({
-      left: pricesMoverPageScrollLeft(track, idx),
-      behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto",
-    });
-    syncPricesMoverDots(track, dots, idx);
-    syncPricesMoverTrackHeight(track, idx);
-  }
-
-  function snapPricesMoverPage(track, index) {
-    if (!track) return;
-    track.scrollTo({
-      left: pricesMoverPageScrollLeft(track, index),
-      behavior: "auto",
-    });
-  }
-
   function syncPricesMoverPagerUI() {
     const mobile = NARROW_MQ.matches && state.page === "prices";
     const kind = pricesMoverKind();
@@ -23049,26 +23106,21 @@
         btn.setAttribute("aria-pressed", on ? "true" : "false");
       });
     }
-    // Dots replaced by the kind toggle on mobile.
     [el.pricesPredictionDots, el.pricesActualDots].forEach((dots) => {
       if (dots) dots.hidden = true;
     });
-
+    // Clear any leftover swipe-pager inline height from older sessions.
     if (!mobile) {
       [el.pricesPredictionTrack, el.pricesActualTrack].forEach((track) => {
         if (!track) return;
         track.style.height = "";
         track.scrollLeft = 0;
       });
-      return;
+    } else {
+      [el.pricesPredictionTrack, el.pricesActualTrack].forEach((track) => {
+        if (track) track.style.height = "";
+      });
     }
-
-    const idx = pricesMoverPageIndex(kind);
-    const mode = pricesViewMode();
-    const track = mode === "actual" ? el.pricesActualTrack : el.pricesPredictionTrack;
-    if (!track) return;
-    snapPricesMoverPage(track, idx);
-    syncPricesMoverTrackHeight(track, idx);
   }
 
   function syncPricesMoverKindUI({ animate = false } = {}) {
@@ -23081,52 +23133,6 @@
   function bindPricesMoverPager() {
     if (pricesMoverPagerReady) return;
     pricesMoverPagerReady = true;
-
-    const bindTrack = (track, dots) => {
-      if (!track || !dots) return;
-      dots.querySelectorAll(".prices-mover-dot").forEach((dot) => {
-        dot.addEventListener("click", () => {
-          if (!NARROW_MQ.matches || state.page !== "prices") return;
-          const page = Number(dot.dataset.page);
-          if (!Number.isFinite(page)) return;
-          // Ensure this track's view is active before paging.
-          if (track === el.pricesActualTrack && pricesViewMode() !== "actual") return;
-          if (track === el.pricesPredictionTrack && pricesViewMode() !== "prediction") return;
-          setPricesMoverPage(page);
-        });
-      });
-
-      let scrollSettleTimer = null;
-      const onScrollSettled = () => {
-        clearTimeout(scrollSettleTimer);
-        scrollSettleTimer = null;
-        if (!NARROW_MQ.matches || state.page !== "prices") return;
-        if (track.hidden || track.closest("[hidden]")) return;
-        const idx = pricesMoverActivePageIndex(track);
-        snapPricesMoverPage(track, idx);
-        state.pricesMoverKind = idx === 1 ? "fallers" : "risers";
-        syncPricesMoverTrackHeight(track, idx);
-        if (el.pricesMoverKindSeg) {
-          el.pricesMoverKindSeg.querySelectorAll("button[data-prices-mover-kind]").forEach((btn) => {
-            const on = btn.dataset.pricesMoverKind === state.pricesMoverKind;
-            btn.classList.toggle("active", on);
-            btn.setAttribute("aria-pressed", on ? "true" : "false");
-          });
-        }
-      };
-      const onScrollTick = () => {
-        if (!NARROW_MQ.matches) return;
-        clearTimeout(scrollSettleTimer);
-        scrollSettleTimer = setTimeout(onScrollSettled, 140);
-      };
-      track.addEventListener("scroll", onScrollTick, { passive: true });
-      track.addEventListener("scrollend", onScrollSettled, { passive: true });
-      bindPricesMoverNestedSwipe(track);
-    };
-
-    bindTrack(el.pricesPredictionTrack, el.pricesPredictionDots);
-    bindTrack(el.pricesActualTrack, el.pricesActualDots);
-
     bindMqChange(NARROW_MQ, () => {
       if (state.page !== "prices") return;
       syncPricesMoverPagerUI();
@@ -23135,121 +23141,6 @@
         syncMobileScrollportHeight();
       });
     });
-  }
-
-  /**
-   * Nested Prices tables can pan horizontally (name simplify). Use discrete page
-   * flings like Home League Transfers so live scrub doesn't fight scroll-snap.
-   * If the table can still scroll in the swipe direction, leave the gesture alone.
-   */
-  function bindPricesMoverNestedSwipe(track) {
-    if (!track || track.dataset.pricesSwipeBound === "1") return;
-    track.dataset.pricesSwipeBound = "1";
-
-    const SLOP_PX = 14;
-    const FLING_PX = 52;
-    const X_DOMINANCE = 1.2;
-    let gesture = null;
-
-    const pageCount = () => pricesMoverTrackPages(track).length;
-
-    const tableCanScroll = (wrap, dx) => {
-      if (!wrap) return false;
-      const max = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
-      if (max <= 1) return false;
-      if (dx < 0) return wrap.scrollLeft < max - 1; // swipe left → more table content
-      if (dx > 0) return wrap.scrollLeft > 1; // swipe right → earlier columns
-      return false;
-    };
-
-    const blockTrailingClick = () => {
-      const blockClick = (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        track.removeEventListener("click", blockClick, true);
-      };
-      track.addEventListener("click", blockClick, true);
-      window.setTimeout(() => track.removeEventListener("click", blockClick, true), 0);
-    };
-
-    const begin = (x, y, target) => {
-      gesture = {
-        x,
-        y,
-        axis: null,
-        startIdx: pricesMoverActivePageIndex(track),
-        armed: false,
-        wrap: target && target.closest ? target.closest(".prices-table-wrap") : null,
-      };
-    };
-
-    const move = (x, y, ev) => {
-      if (!gesture) return;
-      const dx = x - gesture.x;
-      const dy = y - gesture.y;
-      if (gesture.axis == null) {
-        if (Math.hypot(dx, dy) < SLOP_PX) return;
-        gesture.axis = Math.abs(dx) > Math.abs(dy) * X_DOMINANCE ? "x" : "y";
-        if (gesture.axis === "y") {
-          gesture = null;
-          return;
-        }
-        if (tableCanScroll(gesture.wrap, dx)) {
-          gesture = null;
-          return;
-        }
-        gesture.armed = true;
-      }
-      if (gesture.axis === "x" && ev && ev.cancelable) {
-        ev.preventDefault();
-      }
-    };
-
-    const end = (x) => {
-      if (!gesture) return;
-      const dx = x - gesture.x;
-      const startIdx = gesture.startIdx;
-      const armed = gesture.armed && gesture.axis === "x";
-      gesture = null;
-      if (!armed || !NARROW_MQ.matches) return;
-      let next = startIdx;
-      if (dx <= -FLING_PX) next = Math.min(pageCount() - 1, startIdx + 1);
-      else if (dx >= FLING_PX) next = Math.max(0, startIdx - 1);
-      if (next === startIdx) return;
-      blockTrailingClick();
-      setPricesMoverPage(next, { smooth: true });
-    };
-
-    const cancel = () => {
-      gesture = null;
-    };
-
-    track.addEventListener(
-      "touchstart",
-      (e) => {
-        if (!NARROW_MQ.matches || e.touches.length !== 1) return;
-        if (e.target.closest("button, a, input, textarea, label")) return;
-        begin(e.touches[0].clientX, e.touches[0].clientY, e.target);
-      },
-      { passive: true }
-    );
-    track.addEventListener(
-      "touchmove",
-      (e) => {
-        if (!gesture || e.touches.length !== 1) return;
-        move(e.touches[0].clientX, e.touches[0].clientY, e);
-      },
-      { passive: false }
-    );
-    track.addEventListener(
-      "touchend",
-      (e) => {
-        const t = e.changedTouches && e.changedTouches[0];
-        end(t ? t.clientX : gesture ? gesture.x : 0);
-      },
-      { passive: true }
-    );
-    track.addEventListener("touchcancel", cancel, { passive: true });
   }
 
   function syncPricesScopeSeg(seg, { show, activeScope, titles = {} }) {
@@ -23381,12 +23272,12 @@
   function fmtPricesCountdownClock(iso) {
     if (!iso) return "—";
     const ms = new Date(iso).getTime() - Date.now();
-    if (ms <= 0) return "00 : 00 : 00";
+    if (ms <= 0) return "0h 00m 00s";
     const total = Math.floor(ms / 1000);
     const h = Math.floor(total / 3600);
     const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
-    return `${String(h).padStart(2, "0")} : ${String(m).padStart(2, "0")} : ${String(s).padStart(2, "0")}`;
+    return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
   }
 
   function syncPricesCountdown() {
@@ -25032,8 +24923,11 @@
       const kind = btn.dataset.pricesMoverKind === "fallers" ? "fallers" : "risers";
       if (kind === pricesMoverKind()) return;
       state.pricesMoverKind = kind;
-      setPricesMoverPage(pricesMoverPageIndex(kind), { smooth: true, syncKind: false });
       syncPricesMoverPagerUI();
+      requestAnimationFrame(() => {
+        syncPricesActualColumnWidths();
+        syncMobileScrollportHeight();
+      });
     });
   }
   bindPricesMoverPager();
@@ -26733,6 +26627,7 @@
     if (overallCard) overallCard.hidden = next === "hero";
     if (gwRankCard) gwRankCard.hidden = next !== "hero";
     syncHomeSummarySeg(next);
+    syncHomeHeroLiveBadge();
   }
 
   function applyHomeSummaryLayout(mode) {

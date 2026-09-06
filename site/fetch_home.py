@@ -30,6 +30,7 @@ from fpl_gameweeks import (
     picks_gameweek_id,
 )
 from gw_element_stats import normalize_element_gw_record
+from player_availability import player_availability_fields
 from live_scoring import (
     build_match_status_by_element,
     calculate_manager_points_from_live,
@@ -957,6 +958,7 @@ def build_squad_rows(
                 "autoSubOut": eid in auto_sub_out,
                 "autoSubWith": with_id,
                 "autoSubWithName": with_name,
+                **player_availability_fields(el),
             }
         )
     return rows

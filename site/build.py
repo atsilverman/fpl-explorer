@@ -27,6 +27,7 @@ SITE = Path(__file__).resolve().parent
 OUT = SITE / "data.js"
 sys.path.insert(0, str(SITE))
 from fpl_gameweeks import active_gameweek_id, extract_gameweeks  # noqa: E402
+from player_availability import player_availability_fields  # noqa: E402
 SNAPSHOTS_DIR = ROOT / "snapshots"
 OVERRIDES_PATH = Path(__file__).resolve().parent / "price_overrides.json"
 LAST_SEASON_STATS_PATH = SNAPSHOTS_DIR / "history_past_2025-26.json"
@@ -721,6 +722,7 @@ def build_next_season_squad():
             "ppg": float(e.get("points_per_game") or 0),
             "ict": float(e.get("ict_index") or 0),
             "selectedBy": float(e.get("selected_by_percent") or 0),
+            **player_availability_fields(e),
         }
 
     def bootstrap_stats(e, eid):

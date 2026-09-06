@@ -35,6 +35,7 @@ DATE_RE = __import__("re").compile(r"bootstrap-static_(\d{4}-\d{2}-\d{2})\.json$
 
 sys.path.insert(0, str(SITE))
 from fpl_gameweeks import extract_gameweeks  # noqa: E402
+from player_availability import player_availability_fields  # noqa: E402
 from price_changes_lib import rebuild_price_changes_bundle  # noqa: E402
 
 
@@ -112,6 +113,7 @@ def slim_checkin(path: Path) -> dict | None:
                 "position": pos,
                 "price": price,
                 "owned": round(owned, 1),
+                **player_availability_fields(e),
             }
         )
     players.sort(key=lambda p: (-p["owned"], p["code"]))

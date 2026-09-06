@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-<title>FPL Explorer</title>
+<title>FPL.db</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1077" />
+<link rel="stylesheet" href="styles.css?v=1097" />
 <script>
 (() => {
   try {
@@ -346,10 +346,10 @@
 
 <div class="page-nav">
   <div class="brand-group">
-    <a class="brand" href="index.html" id="brand-home" aria-label="FPL Explorer home">
+    <a class="brand" href="index.html" id="brand-home" aria-label="FPL.db home">
       <h1>
         <svg class="icon brand-icon" aria-hidden="true"><use href="#i-database-search"/></svg>
-        FPL Explorer
+        FPL.db
       </h1>
     </a>
     <label class="sr-only" for="season-select">Data season</label>
@@ -860,7 +860,13 @@
         </div>
         <div class="home-summary" id="home-summary" data-home-summary="hero">
           <div class="home-summary-hero" id="home-summary-hero">
-            <p class="home-summary-hero-label">Overall Rank</p>
+            <div class="home-summary-hero-head">
+              <p class="home-summary-hero-label">Overall Rank</p>
+              <span class="home-summary-hero-live" id="home-hero-live" hidden>
+                <span class="home-summary-hero-live-dot" aria-hidden="true"></span>
+                Live
+              </span>
+            </div>
             <p class="home-summary-hero-value" id="home-hero-overall-rank"></p>
             <p class="home-summary-hero-delta home-rank-delta" id="home-hero-overall-rank-delta" hidden></p>
           </div>
@@ -1225,7 +1231,10 @@
         </div>
       </div>
       <div class="prices-countdown-bar" id="prices-countdown-bar">
-        <p class="prices-countdown-main">Next price changes in: <strong id="prices-countdown-value">—</strong></p>
+        <p class="prices-countdown-main">
+          <span class="prices-countdown-label">Next price changes in</span>
+          <span class="prices-countdown-value" id="prices-countdown-value">—</span>
+        </p>
       </div>
       <div class="ownership-mover-bar prices-mover-bar">
         <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
@@ -1647,12 +1656,12 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=97"></script>
+<script src="data.js?v=98"></script>
 <script src="markets_data.js?v=32"></script>
-<script src="ownership_data.js?v=23"></script>
+<script src="ownership_data.js?v=24"></script>
 <script src="price_changes_data.js?v=38"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=41"></script>
+<script src="home_data.js?v=42"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
 (() => {
@@ -1674,7 +1683,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1119"></script>
+<script src="app.js?v=1134"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

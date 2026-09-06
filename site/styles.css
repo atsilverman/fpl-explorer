@@ -2,8 +2,9 @@
    FPL Explorer — shadcn/ui design system, ported to plain CSS (zinc).
 
    Tokens are bare HSL channels so they compose with alpha the way Tailwind
-   does: hsl(var(--primary) / 0.1). Chrome uses --primary; data ramps use
-   --positive/--negative (Ownership-style blue/orange rise/fall).
+   does: hsl(var(--primary) / 0.1). Chrome uses --primary; Matchups/FDR use
+   --positive/--negative (blue/orange); Ownership Δ pills / sparks use
+   --delta-rise/--delta-fall (green/red, same as Prices).
    ========================================================================== */
 
 :root {
@@ -45,6 +46,9 @@
   --positive: var(--spectrum-rise);
   --positive-highlight: var(--spectrum-rise);
   --negative: var(--spectrum-fall);
+  /* Δ pills / sparks (Ownership 7d·3d·1d, Prices 3d) — Prices green/red, not blue/orange. */
+  --delta-rise: 142 48% 36%;
+  --delta-fall: 0 65% 48%;
   --matchup-defence: var(--spectrum-rise);
   /* Attack chrome (swords / score chips) — Matchups pink, not Ownership orange. */
   --matchup-attack: var(--schedule-spectrum-fall);
@@ -170,6 +174,8 @@ html[data-font-pair="figtree"] {
     --positive: var(--spectrum-rise);
     --positive-highlight: var(--spectrum-rise);
     --negative: var(--spectrum-fall);
+    --delta-rise: 142 45% 42%;
+    --delta-fall: 0 60% 52%;
     --matchup-defence: var(--spectrum-rise);
     --matchup-attack: var(--schedule-spectrum-fall);
     --fdr-easy: var(--spectrum-rise);
@@ -226,6 +232,8 @@ html[data-font-pair="figtree"] {
   --positive: var(--spectrum-rise);
   --positive-highlight: var(--spectrum-rise);
   --negative: var(--spectrum-fall);
+  --delta-rise: 142 45% 42%;
+  --delta-fall: 0 60% 52%;
   --matchup-defence: var(--spectrum-rise);
   --matchup-attack: var(--schedule-spectrum-fall);
   --fdr-easy: var(--spectrum-rise);
@@ -4080,16 +4088,6 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   max-height: calc(var(--own-photo, 36px) + 8px);
   overflow: hidden;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-rank,
-#prices-page .prices-table-wrap.name-simplify-ready .ownership-rank {
-  flex: 0 1 auto;
-  width: calc((1 - var(--name-collapse)) * 1.4em);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  opacity: calc(1 - var(--name-collapse));
-  margin: 0;
-}
 #ownership-table-wrap.name-simplify-ready .ownership-photo,
 #ownership-table-wrap.name-simplify-ready .ownership-crest,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-photo,
@@ -4164,14 +4162,19 @@ tbody tr:hover { background: hsl(var(--muted) / 0.5); }
   flex: 0 1 auto;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #team-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .team-role-badge {
   flex: none;
 }
@@ -4478,6 +4481,65 @@ tbody tr.row-selected td:first-child {
   color: var(--red);
   line-height: 0;
   cursor: help;
+}
+.player-flag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  line-height: 0;
+  cursor: help;
+}
+.player-flag-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+}
+.player-flag-icon.is-chance-0 {
+  color: hsl(0 72% 42%);
+}
+.player-flag-icon.is-chance-25 {
+  color: hsl(24 90% 42%);
+}
+.player-flag-icon.is-chance-50 {
+  color: hsl(38 92% 40%);
+}
+.player-flag-icon.is-chance-75 {
+  color: hsl(48 95% 38%);
+}
+html[data-theme="dark"] .player-flag-icon.is-chance-0 {
+  color: hsl(0 78% 62%);
+}
+html[data-theme="dark"] .player-flag-icon.is-chance-25 {
+  color: hsl(24 90% 58%);
+}
+html[data-theme="dark"] .player-flag-icon.is-chance-50 {
+  color: hsl(38 92% 55%);
+}
+html[data-theme="dark"] .player-flag-icon.is-chance-75 {
+  color: hsl(48 92% 52%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .player-flag-icon.is-chance-0 {
+    color: hsl(0 78% 62%);
+  }
+  html:not([data-theme="light"]) .player-flag-icon.is-chance-25 {
+    color: hsl(24 90% 58%);
+  }
+  html:not([data-theme="light"]) .player-flag-icon.is-chance-50 {
+    color: hsl(38 92% 55%);
+  }
+  html:not([data-theme="light"]) .player-flag-icon.is-chance-75 {
+    color: hsl(48 92% 52%);
+  }
+}
+.home-player-name .player-flag,
+.home-lookup-name .player-flag {
+  margin-left: 4px;
+  vertical-align: -1px;
 }
 /* Inline SVG (not .icon) so the pin can fill solid with a contrast check. */
 .owned-flag-icon {
@@ -5021,12 +5083,12 @@ tbody tr.row-selected td:first-child {
 }
 .data-delta.is-up,
 .ownership-delta.is-up {
-  background: hsl(var(--positive) / var(--own-delta-a, 1));
+  background: hsl(var(--delta-rise) / var(--own-delta-a, 1));
   color: var(--own-delta-fg, #fff);
 }
 .data-delta.is-down,
 .ownership-delta.is-down {
-  background: hsl(var(--negative) / var(--own-delta-a, 1));
+  background: hsl(var(--delta-fall) / var(--own-delta-a, 1));
   color: var(--own-delta-fg, #fff);
 }
 /* Dark fallback when --own-delta-fg wasn't stamped (pre-paint / flat theme flip). */
@@ -5034,22 +5096,22 @@ tbody tr.row-selected td:first-child {
 :root[data-theme="dark"] .ownership-delta.is-up,
 :root:not([data-theme="light"]) .data-delta.is-up,
 :root:not([data-theme="light"]) .ownership-delta.is-up {
-  color: var(--own-delta-fg, hsl(210 95% 78%));
+  color: var(--own-delta-fg, hsl(142 55% 72%));
 }
 :root[data-theme="dark"] .data-delta.is-down,
 :root[data-theme="dark"] .ownership-delta.is-down,
 :root:not([data-theme="light"]) .data-delta.is-down,
 :root:not([data-theme="light"]) .ownership-delta.is-down {
-  color: var(--own-delta-fg, hsl(28 95% 72%));
+  color: var(--own-delta-fg, hsl(0 70% 78%));
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .data-delta.is-up,
   :root:not([data-theme="light"]) .ownership-delta.is-up {
-    color: var(--own-delta-fg, hsl(210 95% 78%));
+    color: var(--own-delta-fg, hsl(142 55% 72%));
   }
   :root:not([data-theme="light"]) .data-delta.is-down,
   :root:not([data-theme="light"]) .ownership-delta.is-down {
-    color: var(--own-delta-fg, hsl(28 95% 72%));
+    color: var(--own-delta-fg, hsl(0 70% 78%));
   }
 }
 .data-delta.is-flat,
@@ -5062,12 +5124,12 @@ tbody tr.row-selected td:first-child {
 .data-spark.is-up,
 .ownership-spark.is-up,
 .team-spark.is-up {
-  color: hsl(var(--positive));
+  color: hsl(var(--delta-rise));
 }
 .data-spark.is-down,
 .ownership-spark.is-down,
 .team-spark.is-down {
-  color: hsl(var(--negative));
+  color: hsl(var(--delta-fall));
 }
 .data-spark.is-flat,
 .ownership-spark.is-flat,
@@ -5076,11 +5138,11 @@ tbody tr.row-selected td:first-child {
 }
 .data-trend.is-up,
 .ownership-trend-delta.is-up {
-  color: hsl(var(--positive));
+  color: hsl(var(--delta-rise));
 }
 .data-trend.is-down,
 .ownership-trend-delta.is-down {
-  color: hsl(var(--negative));
+  color: hsl(var(--delta-fall));
 }
 .data-trend.is-flat,
 .ownership-trend-delta.is-flat {
@@ -5115,7 +5177,7 @@ html[data-page="prices"] .layout .main {
 }
 .prices-countdown-bar {
   flex: none;
-  margin: 0 0 10px;
+  margin: 2px 0 14px;
   padding: 0;
   border: none;
   border-radius: 0;
@@ -5124,17 +5186,28 @@ html[data-page="prices"] .layout .main {
 }
 .prices-countdown-main {
   margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35em 0.55em;
   font-size: 12.5px;
-  font-weight: 600;
+  line-height: 1.35;
   color: var(--text);
 }
-.prices-countdown-main strong {
+.prices-countdown-label {
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.prices-countdown-value {
   font-family: "Fira Code", ui-monospace, monospace;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text);
 }
 .prices-mover-bar {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .prices-mover-pager {
   display: flex;
@@ -5390,11 +5463,11 @@ html[data-page="prices"] .layout .main {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 10px 0 8px;
+  margin: 16px 0 10px;
 }
 #prices-page .prices-prediction-panel:first-child .prices-section-divider,
 #prices-page .prices-actual-panel:first-child .prices-section-divider {
-  margin-top: 0;
+  margin-top: 4px;
 }
 @media (min-width: 721px) {
   #prices-page .prices-prediction-panel:not(:first-child) .prices-section-divider,
@@ -6047,16 +6120,6 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   gap: 8px;
   min-width: 0;
 }
-.ownership-rank {
-  flex: none;
-  width: 1.4em;
-  text-align: right;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
 .ownership-photo,
 .ownership-crest {
   width: 36px;
@@ -6255,7 +6318,8 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   html[data-page="prices"] #prices-countdown-bar {
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
-    margin-bottom: 8px;
+    margin-top: 4px;
+    margin-bottom: 12px;
   }
   .prices-mover-bar {
     flex-wrap: nowrap;
@@ -6263,6 +6327,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     justify-content: flex-start;
     width: 100%;
     box-sizing: border-box;
+    margin-bottom: 6px;
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
   }
@@ -6299,53 +6364,46 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   .prices-mover-pager {
     min-width: 0;
   }
+  /* Mobile: one riser/faller panel at a time (↑↓ toggle) — no horizontal swipe. */
   .prices-mover-track {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    scrollbar-width: none;
-    gap: 0;
-  }
-  .prices-mover-track::-webkit-scrollbar {
-    display: none;
+    display: block;
+    overflow: visible;
+    height: auto !important;
+    scroll-snap-type: none;
+    touch-action: auto;
   }
   .prices-prediction-panels.is-columns,
   .prices-actual-panels.is-columns {
-    display: flex;
+    display: block;
     grid-template-columns: none;
   }
   .prices-mover-page {
-    flex: 0 0 100%;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
     overflow: hidden;
+  }
+  #prices-page[data-prices-mover="risers"] .prices-mover-page[data-prices-page="fallers"],
+  #prices-page[data-prices-mover="fallers"] .prices-mover-page[data-prices-page="risers"] {
+    display: none !important;
   }
   .prices-mover-dots {
     display: none !important;
   }
   .prices-prediction-panel .prices-section-divider,
-  .prices-actual-panel .prices-section-divider {
-    margin-top: 0;
+  .prices-actual-panel .prices-section-divider,
+  #prices-page .prices-prediction-panel:first-child .prices-section-divider,
+  #prices-page .prices-actual-panel:first-child .prices-section-divider,
+  #prices-page .prices-prediction-panel:not(:first-child) .prices-section-divider,
+  #prices-page .prices-actual-panel:not(:first-child) .prices-section-divider {
+    margin-top: 14px;
+    margin-bottom: 10px;
   }
   html[data-page="prices"] #prices-page[data-prices-view="prediction"] #prices-prediction-wrap {
     display: block;
     flex: none;
     overflow: visible;
-  }
-  #prices-page .prices-prediction-panel:not(:first-child) .prices-section-divider {
-    margin-top: 0;
-    margin-bottom: 10px;
   }
   html[data-page="prices"] #prices-page[data-prices-view="actual"] #prices-actual-wrap {
     display: block;
@@ -8889,11 +8947,11 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   opacity: 0.55;
 }
 .spit-ownership-line.is-riser {
-  stroke: hsl(var(--positive));
+  stroke: hsl(var(--delta-rise));
   opacity: 0.9;
 }
 .spit-ownership-line.is-faller {
-  stroke: hsl(var(--negative));
+  stroke: hsl(var(--delta-fall));
   opacity: 0.9;
 }
 .spit-symbol .ownership-trend-delta.spit-ui-swatch {
@@ -14335,6 +14393,143 @@ html.home-player-modal-open {
   flex-direction: column;
   gap: 12px;
 }
+.home-player-flag-banner {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.45);
+  border-left-width: 3px;
+}
+.home-player-flag-banner.is-chance-0 {
+  border-left-color: hsl(0 72% 42%);
+  background: hsl(0 72% 42% / 0.08);
+}
+.home-player-flag-banner.is-chance-25 {
+  border-left-color: hsl(24 90% 42%);
+  background: hsl(24 90% 42% / 0.08);
+}
+.home-player-flag-banner.is-chance-50 {
+  border-left-color: hsl(38 92% 40%);
+  background: hsl(38 92% 40% / 0.09);
+}
+.home-player-flag-banner.is-chance-75 {
+  border-left-color: hsl(48 95% 38%);
+  background: hsl(48 95% 38% / 0.1);
+}
+html[data-theme="dark"] .home-player-flag-banner.is-chance-0 {
+  border-left-color: hsl(0 78% 62%);
+  background: hsl(0 78% 62% / 0.12);
+}
+html[data-theme="dark"] .home-player-flag-banner.is-chance-25 {
+  border-left-color: hsl(24 90% 58%);
+  background: hsl(24 90% 58% / 0.12);
+}
+html[data-theme="dark"] .home-player-flag-banner.is-chance-50 {
+  border-left-color: hsl(38 92% 55%);
+  background: hsl(38 92% 55% / 0.12);
+}
+html[data-theme="dark"] .home-player-flag-banner.is-chance-75 {
+  border-left-color: hsl(48 92% 52%);
+  background: hsl(48 92% 52% / 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-player-flag-banner.is-chance-0 {
+    border-left-color: hsl(0 78% 62%);
+    background: hsl(0 78% 62% / 0.12);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner.is-chance-25 {
+    border-left-color: hsl(24 90% 58%);
+    background: hsl(24 90% 58% / 0.12);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner.is-chance-50 {
+    border-left-color: hsl(38 92% 55%);
+    background: hsl(38 92% 55% / 0.12);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner.is-chance-75 {
+    border-left-color: hsl(48 92% 52%);
+    background: hsl(48 92% 52% / 0.12);
+  }
+}
+.home-player-flag-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.home-player-flag-banner-icon {
+  width: 15px;
+  height: 15px;
+}
+.home-player-flag-banner-status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.home-player-flag-banner-chance {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.home-player-flag-banner-chance.is-chance-0 {
+  color: hsl(0 72% 42%);
+}
+.home-player-flag-banner-chance.is-chance-25 {
+  color: hsl(24 90% 42%);
+}
+.home-player-flag-banner-chance.is-chance-50 {
+  color: hsl(38 92% 40%);
+}
+.home-player-flag-banner-chance.is-chance-75 {
+  color: hsl(48 95% 38%);
+}
+html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-0 {
+  color: hsl(0 78% 62%);
+}
+html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-25 {
+  color: hsl(24 90% 58%);
+}
+html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-50 {
+  color: hsl(38 92% 55%);
+}
+html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
+  color: hsl(48 92% 52%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-player-flag-banner-chance.is-chance-0 {
+    color: hsl(0 78% 62%);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner-chance.is-chance-25 {
+    color: hsl(24 90% 58%);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner-chance.is-chance-50 {
+    color: hsl(38 92% 55%);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner-chance.is-chance-75 {
+    color: hsl(48 92% 52%);
+  }
+}
+.home-player-flag-banner-news {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+}
+.home-player-flag-banner-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: hsl(var(--primary));
+  text-decoration: none;
+}
+.home-player-flag-banner-link:hover {
+  text-decoration: underline;
+}
 .home-player-detail-profile .home-lookup-card {
   margin: 0;
 }
@@ -14991,6 +15186,30 @@ html.home-player-modal-open {
   --home-hero-bleed-x: var(--main-pad-x, 20px);
   --home-hero-pad-x: var(--main-pad-x, 20px);
   --home-hero-radius: 0px;
+  /* iOS-like liquid glass — blue-tinted frosted surfaces over hero / page. */
+  --home-glass-bg: hsl(210 55% 98% / 0.48);
+  --home-glass-bg-strong: hsl(210 50% 98% / 0.62);
+  --home-glass-border: hsl(210 45% 100% / 0.58);
+  --home-glass-highlight: hsl(0 0% 100% / 0.62);
+  --home-glass-blur: 32px;
+  --home-glass-saturate: 1.9;
+  --home-glass-shadow: 0 8px 28px hsl(215 35% 20% / 0.08);
+}
+html[data-theme="dark"] .home-dashboard {
+  --home-glass-bg: hsl(215 28% 14% / 0.4);
+  --home-glass-bg-strong: hsl(215 26% 16% / 0.55);
+  --home-glass-border: hsl(210 40% 100% / 0.14);
+  --home-glass-highlight: hsl(210 50% 100% / 0.1);
+  --home-glass-shadow: 0 10px 32px hsl(0 0% 0% / 0.28);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-dashboard {
+    --home-glass-bg: hsl(215 28% 14% / 0.4);
+    --home-glass-bg-strong: hsl(215 26% 16% / 0.55);
+    --home-glass-border: hsl(210 40% 100% / 0.14);
+    --home-glass-highlight: hsl(210 50% 100% / 0.1);
+    --home-glass-shadow: 0 10px 32px hsl(0 0% 0% / 0.28);
+  }
 }
 /* Player lookup keeps the hero in-card (profile stack sits above). */
 .home-dashboard.is-player-lookup {
@@ -15126,7 +15345,7 @@ html.home-player-modal-open {
   align-items: center;
   text-align: center;
   margin: 0 calc(-1 * var(--home-hero-bleed-x, var(--main-pad-x, 20px)));
-  padding: 22px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 56px;
+  padding: 14px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 56px;
   color: transparent;
   background: transparent;
   border-radius: var(--home-hero-radius, 0px);
@@ -15211,13 +15430,67 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
     --home-hero-delta-down: 0 72% 70%;
   }
 }
-.home-summary-hero-label {
+.home-summary-hero-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
   margin: 0 0 10px;
+  min-height: 24px;
+}
+.home-summary-hero-label {
+  margin: 0;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: hsl(var(--home-hero-muted));
+}
+.home-summary-hero-live {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 8px;
+  border-radius: 999px;
+  border: 1px solid hsl(0 0% 100% / 0.32);
+  background: hsl(0 0% 100% / 0.12);
+  color: hsl(0 0% 100% / 0.92);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateY(-50%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.home-summary-hero-live[hidden] {
+  display: none !important;
+}
+.home-summary-hero-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: hsl(0 0% 100%);
+  box-shadow: 0 0 0 0 hsl(0 0% 100% / 0.5);
+  animation: home-hero-live-pulse 1.7s ease-out infinite;
+}
+@keyframes home-hero-live-pulse {
+  0% { box-shadow: 0 0 0 0 hsl(0 0% 100% / 0.5); }
+  70% { box-shadow: 0 0 0 7px hsl(0 0% 100% / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(0 0% 100% / 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-summary-hero-live-dot {
+    animation: none;
+  }
 }
 .home-summary-hero-value {
   margin: 0;
@@ -15244,23 +15517,79 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  font-size: 15px;
+  gap: 4px;
+  padding: 5px 11px 5px 8px;
+  border-radius: 999px;
+  /* Light: clear white frosted pill so Δ stays readable on green/red hero. */
+  border: 1px solid hsl(0 0% 100% / 0.42);
+  background: hsl(0 0% 100% / 0.22);
+  color: hsl(0 0% 100% / 0.95);
+  font-size: 14px;
   font-weight: 650;
-  color: hsl(var(--home-hero-muted));
+  line-height: 1;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .home-summary-hero-delta:not([hidden]) {
   display: inline-flex;
 }
-.home-summary-hero-delta.is-up {
-  color: hsl(var(--home-hero-delta-up));
-}
-.home-summary-hero-delta.is-down {
-  color: hsl(var(--home-hero-delta-down));
+/* Beat .home-rank-delta.is-up/down — keep white on light hero. */
+.home-summary-hero .home-summary-hero-delta.is-up,
+.home-summary-hero .home-summary-hero-delta.is-down,
+.home-summary-hero .home-summary-hero-delta.is-flat {
+  color: hsl(0 0% 100% / 0.95);
 }
 .home-summary-hero-delta .icon {
   width: 14px;
   height: 14px;
+  fill: currentColor;
+  stroke: none;
+  color: inherit;
+}
+.home-summary-hero-delta .home-rank-delta-n {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: inherit;
+}
+/* Dark: prior green/red Δ chrome on a quiet dark glass pill. */
+html[data-theme="dark"] .home-summary-hero-delta {
+  border-color: hsl(0 0% 100% / 0.16);
+  background: hsl(0 0% 0% / 0.28);
+  color: hsl(var(--home-hero-muted));
+}
+html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-up {
+  color: hsl(var(--home-hero-delta-up));
+  border-color: hsl(var(--home-hero-delta-up) / 0.4);
+  background: hsl(var(--home-hero-delta-up) / 0.12);
+}
+html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
+  color: hsl(var(--home-hero-delta-down));
+  border-color: hsl(var(--home-hero-delta-down) / 0.4);
+  background: hsl(var(--home-hero-delta-down) / 0.12);
+}
+html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
+  color: hsl(var(--home-hero-muted));
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero-delta {
+    border-color: hsl(0 0% 100% / 0.16);
+    background: hsl(0 0% 0% / 0.28);
+    color: hsl(var(--home-hero-muted));
+  }
+  html:not([data-theme="light"]) .home-summary-hero .home-summary-hero-delta.is-up {
+    color: hsl(var(--home-hero-delta-up));
+    border-color: hsl(var(--home-hero-delta-up) / 0.4);
+    background: hsl(var(--home-hero-delta-up) / 0.12);
+  }
+  html:not([data-theme="light"]) .home-summary-hero .home-summary-hero-delta.is-down {
+    color: hsl(var(--home-hero-delta-down));
+    border-color: hsl(var(--home-hero-delta-down) / 0.4);
+    background: hsl(var(--home-hero-delta-down) / 0.12);
+  }
+  html:not([data-theme="light"]) .home-summary-hero .home-summary-hero-delta.is-flat {
+    color: hsl(var(--home-hero-muted));
+  }
 }
 .home-summary[data-home-summary="hero"] .home-summary-cards {
   position: relative;
@@ -15268,8 +15597,12 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   margin-top: -36px;
 }
 .home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel {
+  /* More translucent over the colored hero so green/red washes through. */
+  background: var(--home-glass-bg);
+  border-color: var(--home-glass-border);
   box-shadow:
-    0 4px 14px hsl(240 10% 10% / 0.08),
+    inset 0 1px 0 var(--home-glass-highlight),
+    var(--home-glass-shadow),
     var(--shadow-sm);
 }
 /* Keep hero card values on one baseline — GW was oversized vs rank. */
@@ -15282,12 +15615,14 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-up ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 4px 14px hsl(142 40% 16% / 0.08),
+    inset 0 1px 0 var(--home-glass-highlight),
+    0 8px 28px hsl(142 40% 16% / 0.14),
     var(--shadow-sm);
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-down ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    0 4px 14px hsl(0 40% 16% / 0.08),
+    inset 0 1px 0 var(--home-glass-highlight),
+    0 8px 28px hsl(0 40% 16% / 0.14),
     var(--shadow-sm);
 }
 .home-summary-cards {
@@ -15698,12 +16033,13 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-lookup-name {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
 }
 .home-lookup-meta {
   display: flex;
@@ -16024,12 +16360,26 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   text-align: center;
 }
 .home-panel {
-  border: 1px solid var(--border);
+  border: 1px solid var(--home-glass-border, var(--border));
   border-radius: var(--radius);
-  background: hsl(var(--card));
-  box-shadow: var(--shadow-sm);
+  background: var(--home-glass-bg-strong, hsl(var(--card)));
+  box-shadow:
+    inset 0 1px 0 var(--home-glass-highlight, transparent),
+    var(--home-glass-shadow, var(--shadow-sm));
+  backdrop-filter: blur(var(--home-glass-blur, 0px)) saturate(var(--home-glass-saturate, 1));
+  -webkit-backdrop-filter: blur(var(--home-glass-blur, 0px)) saturate(var(--home-glass-saturate, 1));
   padding: 10px 12px;
   min-width: 0;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .home-panel,
+  .home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel {
+    background: hsl(var(--card));
+    border-color: var(--border);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 /* Rank delta borders on summary rank cards — classic green / red. */
 .home-dashboard {
@@ -16049,14 +16399,16 @@ html[data-theme="dark"] .home-dashboard {
 .home-stat-panel.is-rank-border-up {
   border-color: hsl(var(--home-rank-up) / 0.55);
   box-shadow:
+    inset 0 1px 0 var(--home-glass-highlight, transparent),
     0 0 0 1px hsl(var(--home-rank-up) / 0.18),
-    var(--shadow-sm);
+    var(--home-glass-shadow, var(--shadow-sm));
 }
 .home-stat-panel.is-rank-border-down {
   border-color: hsl(var(--home-rank-down) / 0.55);
   box-shadow:
+    inset 0 1px 0 var(--home-glass-highlight, transparent),
     0 0 0 1px hsl(var(--home-rank-down) / 0.18),
-    var(--shadow-sm);
+    var(--home-glass-shadow, var(--shadow-sm));
 }
 .home-standings-live-table td.home-col-live,
 .home-standings-live-table td.home-col-left,
@@ -16229,6 +16581,9 @@ html[data-theme="dark"] .home-dashboard {
   gap: 6px;
   min-width: 0;
 }
+.home-stat-league .home-stat-rank {
+  gap: 8px;
+}
 .home-rank-num {
   min-width: 0;
 }
@@ -16239,6 +16594,42 @@ html[data-theme="dark"] .home-dashboard {
   flex-shrink: 0;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+/* League card: pill behind Δ so it separates from the rank number. */
+.home-stat-league .home-rank-delta:not([hidden]) {
+  gap: 2px;
+  padding: 3px 7px 3px 5px;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+  border: 1px solid hsl(var(--border) / 0.9);
+}
+.home-stat-league .home-rank-delta.is-up:not([hidden]) {
+  background: hsl(var(--home-rank-up) / 0.12);
+  border-color: hsl(var(--home-rank-up) / 0.28);
+}
+.home-stat-league .home-rank-delta.is-down:not([hidden]) {
+  background: hsl(var(--home-rank-down) / 0.12);
+  border-color: hsl(var(--home-rank-down) / 0.28);
+}
+.home-stat-league .home-rank-delta-n {
+  font-size: 11px;
+  font-weight: 700;
+}
+/* League table #: same Δ pill, compact next to rank. */
+.home-standings-table .home-rank-delta.is-compact {
+  gap: 1px;
+  padding: 2px 5px 2px 3px;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+  border: 1px solid hsl(var(--border) / 0.9);
+}
+.home-standings-table .home-rank-delta.is-compact.is-up {
+  background: hsl(var(--home-rank-up) / 0.12);
+  border-color: hsl(var(--home-rank-up) / 0.28);
+}
+.home-standings-table .home-rank-delta.is-compact.is-down {
+  background: hsl(var(--home-rank-down) / 0.12);
+  border-color: hsl(var(--home-rank-down) / 0.28);
 }
 .home-rank-delta .icon {
   width: 14px;
@@ -16271,13 +16662,6 @@ html[data-theme="dark"] .home-dashboard {
 }
 .home-rank-delta.is-down {
   color: hsl(var(--home-rank-down));
-}
-/* Hero delta uses band-local tokens (also classic green / red). */
-.home-summary-hero .home-summary-hero-delta.is-up {
-  color: hsl(var(--home-hero-delta-up));
-}
-.home-summary-hero .home-summary-hero-delta.is-down {
-  color: hsl(var(--home-hero-delta-down));
 }
 .home-rank-delta.is-flat {
   color: var(--text-faint);
@@ -17395,7 +17779,7 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   padding-left: 4px;
 }
 .home-standings-live-table .home-rank-cell {
-  gap: 2px;
+  gap: 4px;
 }
 .home-standings-table th.home-col-manager,
 .home-standings-table td.home-col-manager {
@@ -17746,6 +18130,24 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   width: calc(var(--home-opp-crest) + var(--home-opp-gap) + var(--home-opp-ha));
   max-width: 100%;
   box-sizing: content-box;
+}
+/* Schedule GW opp crests — keep smaller than player-row crests so Team Schedule
+   row height matches Starting XI / Points / Ownership. */
+.home-squad-fixtures-table .home-fx-stack {
+  gap: 2px;
+}
+.home-squad-fixtures-table .home-opp-line {
+  --home-opp-crest: 16px;
+  --home-opp-ha: 12px;
+  --home-opp-gap: 2px;
+}
+.home-squad-fixtures-table .home-opp-line .badge-img,
+.home-squad-fixtures-table .home-opp-line .home-crest,
+.home-squad-fixtures-table .home-opp-line .home-crest-fallback,
+.home-squad-fixtures-table .home-opp-line .home-crest-sm {
+  width: var(--home-opp-crest);
+  height: var(--home-opp-crest);
+  border-radius: 4px;
 }
 .home-ha-icon {
   width: var(--home-opp-ha);
@@ -18773,6 +19175,11 @@ html[data-page="home"] #subtoolbar {
   --home-opp-crest: 20px;
   --home-opp-ha: 15px;
 }
+.home-squad-fixtures-table .home-opp-line {
+  --home-opp-crest: 14px;
+  --home-opp-ha: 11px;
+  --home-opp-gap: 2px;
+}
 .home-kickoff {
   display: inline-flex;
   flex-direction: column;
@@ -19135,15 +19542,30 @@ html[data-page="live"] #live-filters-group .live-matchup-badges {
   align-items: center;
   gap: 6px;
 }
+html[data-page="live"] #live-filters-group .live-matchup-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
 html[data-page="live"] #live-filters-group .live-matchup-badge {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+html[data-page="live"] #live-filters-group .live-matchup-abbr {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  line-height: 1;
 }
 html[data-page="live"] #live-filters-group .live-matchup-vs {
   font-size: 11px;
   font-weight: 700;
   color: var(--text-faint);
   text-transform: lowercase;
+  flex: none;
 }
 html[data-page="live"] #live-filters-group #live-status-seg {
   width: 100%;
@@ -19412,7 +19834,7 @@ html[data-page="live"] #team-filters .chip.team-chip {
 
 @media (min-width: 721px) {
   html[data-page="live"] #live-filters-group .live-matchup-chips {
-    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
 }
 
