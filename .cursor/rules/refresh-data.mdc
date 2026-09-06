@@ -30,7 +30,7 @@ Scheduled production refreshes (separate from this chat rule):
 - `.github/workflows/refresh-caches.yml` — Markets ~1×/day + Ownership ~noon PT (`ODDS_API_KEY` secret).
 - `.github/workflows/refresh-prices.yml` — Price predictor check-ins every hour UTC (`price_changes_data.js` + `snapshots/price-changes/`).
 - `.github/workflows/refresh-price-actual.yml` — Actual £0.1 changes ~00:00 UK (`fetch_price_actual.py` → `snapshots/price-actual/`).
-- `.github/workflows/rebuild-after-matchday.yml` — polls every 20 min; runs `build.py` once per settled GW matchday (UK calendar day, 45 min after last FT). Updates Statistics / Rankings / Matchups / 2026/27 stats — not Home live, not xData expected (CSV). **Starts GW2** — see `snapshots/matchday_rebuild_state.json`.
+- `.github/workflows/rebuild-after-matchday.yml` — polls every 20 min; runs `build.py` once per settled **kickoff wave** in the active GW (fixtures clustered when kickoffs are within 15 min; 20 min after last FT in that wave). Simultaneous same-KO games share one rebuild. Updates Statistics / Rankings / Matchups / 2026/27 stats — not Home live, not xData expected (CSV). **Starts GW2** — see `snapshots/matchday_rebuild_state.json` (`{gw, matchday, wave}`; legacy `{gw, matchday}` rows still mean whole day done).
 
 Do **not**:
 - Commit or deploy unless they ask

@@ -1,5 +1,5 @@
-# Rebuild site/data.js after each GW matchday completes (UK calendar day).
-# Polls every 20 minutes; no-op when no matchday is settled yet.
+# Rebuild site/data.js after each GW kickoff wave settles (same-time fixture set).
+# Polls every 20 minutes; no-op when no wave is settled yet.
 name: Rebuild after matchday
 
 on:
@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Matchday rebuild
+      - name: Kickoff-wave rebuild
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"

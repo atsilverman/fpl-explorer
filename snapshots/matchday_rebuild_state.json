@@ -1,6 +1,6 @@
 {
   "automationStartGw": 2,
-  "note": "GW1 matchdays seeded — first automated post-matchday rebuild runs for GW2 (Fri 2026-08-28 kickoff).",
+  "note": "GW1 matchdays seeded as whole-day marks. From GW2, automation rebuilds per kickoff wave ({gw, matchday, wave}); legacy {gw, matchday} rows still mean the whole UK day is done.",
   "rebuilt": [
     {"gw": 1, "matchday": "2026-08-21", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
     {"gw": 1, "matchday": "2026-08-22", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},

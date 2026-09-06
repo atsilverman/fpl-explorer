@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Post-matchday Statistics rebuild trigger.
+Post–kickoff-wave Statistics rebuild trigger.
 
-When every fixture on a UK calendar matchday in the active gameweek has finished,
-wait a short settling buffer, then run build.py once per (gw, matchday).
+When every fixture in a kickoff wave (same-time / near-same KO set) in the active
+gameweek has finished, wait a short settling buffer, then run build.py once per
+(gw, matchday, wave). Simultaneous kickoffs share one wave so we do not rebuild
+once per fixture.
 
 Designed for GitHub Actions polling (cheap no-op when nothing to do).
 
@@ -23,6 +25,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import TypedDict
 from zoneinfo import ZoneInfo
 
 SITE = Path(__file__).resolve().parent
@@ -36,14 +39,22 @@ FETCH_FIXTURES = SITE / "fetch_fixtures.py"
 FPL_BASE = "https://fantasy.premierleague.com/api"
 UA = "fpl-explorer/1.0 (+matchday-rebuild)"
 MATCHDAY_TZ = ZoneInfo("Europe/London")
-DEFAULT_SETTLE_MINUTES = 45
+DEFAULT_SETTLE_MINUTES = 20
 DEFAULT_MATCH_DURATION_MINUTES = 105
-# First GW where post-matchday GHA rebuilds run (GW1 handled manually).
+# Fixtures whose kickoffs are within this gap of the wave's first KO stay one wave.
+WAVE_GAP_MINUTES = 15
+# First GW where post-match GHA rebuilds run (GW1 handled manually).
 AUTOMATION_START_GW = 2
 
 sys.path.insert(0, str(SITE))
 from fpl_gameweeks import active_gameweek_id, extract_gameweeks  # noqa: E402
 from live_scoring import fixture_is_finished  # noqa: E402
+
+
+class KickoffWave(TypedDict):
+    matchday: str
+    wave: str
+    fixtures: list[dict]
 
 
 def utc_now() -> datetime:
@@ -89,6 +100,11 @@ def matchday_key_uk(kickoff: datetime) -> str:
     return kickoff.astimezone(MATCHDAY_TZ).strftime("%Y-%m-%d")
 
 
+def wave_key_uk(kickoff: datetime) -> str:
+    """UK-local kickoff stamp for the wave's first fixture (YYYY-MM-DDTHH:MM)."""
+    return kickoff.astimezone(MATCHDAY_TZ).strftime("%Y-%m-%dT%H:%M")
+
+
 def fixture_end_utc(fx: dict) -> datetime | None:
     """Best-estimate UTC when a fixture ended (for settling buffer)."""
     kickoff = parse_kickoff_utc(fx.get("kickoff_time"))
@@ -104,8 +120,8 @@ def fixture_end_utc(fx: dict) -> datetime | None:
     return kickoff + timedelta(minutes=played)
 
 
-def group_gw_fixtures_by_matchday(fixtures: list[dict], gw: int) -> dict[str, list[dict]]:
-    groups: dict[str, list[dict]] = {}
+def gw_fixtures_with_kickoff(fixtures: list[dict], gw: int) -> list[tuple[datetime, dict]]:
+    rows: list[tuple[datetime, dict]] = []
     for fx in fixtures:
         if not isinstance(fx, dict):
             continue
@@ -118,19 +134,69 @@ def group_gw_fixtures_by_matchday(fixtures: list[dict], gw: int) -> dict[str, li
         kickoff = parse_kickoff_utc(fx.get("kickoff_time"))
         if kickoff is None:
             continue
-        key = matchday_key_uk(kickoff)
-        groups.setdefault(key, []).append(fx)
-    return dict(sorted(groups.items()))
+        rows.append((kickoff, fx))
+    rows.sort(key=lambda item: (item[0], int(item[1].get("id") or 0)))
+    return rows
 
 
-def matchday_all_finished(day_fixtures: list[dict]) -> bool:
-    return bool(day_fixtures) and all(fixture_is_finished(fx) for fx in day_fixtures)
+def group_gw_fixtures_by_kickoff_wave(
+    fixtures: list[dict], gw: int, *, gap_minutes: int = WAVE_GAP_MINUTES
+) -> list[KickoffWave]:
+    """
+    Cluster active-GW fixtures into kickoff waves.
+
+    Sort by kickoff; start a new wave when a fixture's kickoff is more than
+    gap_minutes after the first kickoff of the current wave. Same-time games
+    share one wave (12:30 / 15:00 / 17:30 → three waves).
+    """
+    rows = gw_fixtures_with_kickoff(fixtures, gw)
+    if not rows:
+        return []
+
+    gap = timedelta(minutes=max(1, gap_minutes))
+    waves: list[KickoffWave] = []
+    wave_start: datetime | None = None
+    wave_fixtures: list[dict] = []
+
+    def flush() -> None:
+        nonlocal wave_start, wave_fixtures
+        if wave_start is None or not wave_fixtures:
+            wave_start = None
+            wave_fixtures = []
+            return
+        waves.append(
+            {
+                "matchday": matchday_key_uk(wave_start),
+                "wave": wave_key_uk(wave_start),
+                "fixtures": list(wave_fixtures),
+            }
+        )
+        wave_start = None
+        wave_fixtures = []
+
+    for kickoff, fx in rows:
+        if wave_start is None:
+            wave_start = kickoff
+            wave_fixtures = [fx]
+            continue
+        if kickoff - wave_start > gap:
+            flush()
+            wave_start = kickoff
+            wave_fixtures = [fx]
+        else:
+            wave_fixtures.append(fx)
+    flush()
+    return waves
 
 
-def matchday_settled(day_fixtures: list[dict], *, settle_minutes: int, now: datetime) -> bool:
-    ends = [fixture_end_utc(fx) for fx in day_fixtures]
+def wave_all_finished(wave_fixtures: list[dict]) -> bool:
+    return bool(wave_fixtures) and all(fixture_is_finished(fx) for fx in wave_fixtures)
+
+
+def wave_settled(wave_fixtures: list[dict], *, settle_minutes: int, now: datetime) -> bool:
+    ends = [fixture_end_utc(fx) for fx in wave_fixtures]
     ends = [t for t in ends if t is not None]
-    if len(ends) != len(day_fixtures):
+    if len(ends) != len(wave_fixtures):
         return False
     latest_end = max(ends)
     return now >= latest_end + timedelta(minutes=settle_minutes)
@@ -164,53 +230,114 @@ def save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 
-def already_rebuilt(state: dict, gw: int, matchday: str) -> bool:
+def _row_wave(row: dict) -> str:
+    raw = row.get("wave")
+    if raw is None or raw == "":
+        return ""
+    return str(raw)
+
+
+def already_rebuilt(state: dict, gw: int, matchday: str, wave: str) -> bool:
+    """
+    True if this kickoff wave was rebuilt, or a legacy whole-matchday row exists
+    for the same (gw, matchday) with no wave key.
+    """
     for row in state.get("rebuilt") or []:
         if not isinstance(row, dict):
             continue
         try:
-            if int(row.get("gw") or 0) == gw and str(row.get("matchday") or "") == matchday:
-                return True
+            if int(row.get("gw") or 0) != gw:
+                continue
+            if str(row.get("matchday") or "") != matchday:
+                continue
         except (TypeError, ValueError):
             continue
+        row_wave = _row_wave(row)
+        if not row_wave:
+            # Legacy day-level mark covers every wave that day.
+            return True
+        if row_wave == wave:
+            return True
     return False
 
 
-def mark_rebuilt_for_gw_through(
-    state: dict, gw: int, through_matchday: str, groups: dict[str, list[dict]]
+def wave_sort_key(matchday: str, wave: str) -> tuple[str, str]:
+    return (matchday, wave)
+
+
+def mark_rebuilt_for_gw_through_wave(
+    state: dict,
+    gw: int,
+    through: KickoffWave,
+    waves: list[KickoffWave],
+    *,
+    settle_minutes: int,
+    now: datetime,
 ) -> None:
-    """One build covers all prior matchdays in the GW — mark them all done."""
+    """
+    One build covers all settled waves up to `through` — mark those done.
+
+    Unfinished later (or earlier postponed) waves are left unmarked.
+    """
     ts = generated_at()
+    through_key = wave_sort_key(through["matchday"], through["wave"])
+
+    def row_covered(row: dict) -> bool:
+        try:
+            if int(row.get("gw") or 0) != gw:
+                return False
+        except (TypeError, ValueError):
+            return False
+        md = str(row.get("matchday") or "")
+        rw = _row_wave(row)
+        if not rw:
+            # Drop legacy day rows on/before through's matchday so wave rows replace them.
+            return bool(md) and md <= through["matchday"]
+        return wave_sort_key(md, rw) <= through_key
+
     rebuilt = [
         r
         for r in (state.get("rebuilt") or [])
-        if isinstance(r, dict)
-        and not (int(r.get("gw") or 0) == gw and str(r.get("matchday") or "") <= through_matchday)
+        if isinstance(r, dict) and not row_covered(r)
     ]
-    for day in sorted(d for d in groups if d <= through_matchday):
-        rebuilt.append({"gw": gw, "matchday": day, "rebuiltAt": ts})
+    for w in waves:
+        key = wave_sort_key(w["matchday"], w["wave"])
+        if key > through_key:
+            break
+        if not wave_all_finished(w["fixtures"]):
+            continue
+        if not wave_settled(w["fixtures"], settle_minutes=settle_minutes, now=now):
+            continue
+        rebuilt.append(
+            {
+                "gw": gw,
+                "matchday": w["matchday"],
+                "wave": w["wave"],
+                "rebuiltAt": ts,
+            }
+        )
     state["rebuilt"] = rebuilt[-120:]
     save_state(state)
 
 
-def find_pending_matchday(
-    groups: dict[str, list[dict]],
+def find_pending_wave(
+    waves: list[KickoffWave],
     gw: int,
     state: dict,
     *,
     settle_minutes: int,
     now: datetime,
-) -> tuple[str, list[dict]] | None:
-    """Latest settled matchday in the GW that has not been rebuilt yet."""
-    pending: tuple[str, list[dict]] | None = None
-    for matchday, day_fixtures in groups.items():
-        if already_rebuilt(state, gw, matchday):
+) -> KickoffWave | None:
+    """Latest settled kickoff wave in the GW that has not been rebuilt yet."""
+    pending: KickoffWave | None = None
+    for wave in waves:
+        if already_rebuilt(state, gw, wave["matchday"], wave["wave"]):
             continue
-        if not matchday_all_finished(day_fixtures):
+        if not wave_all_finished(wave["fixtures"]):
             continue
-        if not matchday_settled(day_fixtures, settle_minutes=settle_minutes, now=now):
+        if not wave_settled(wave["fixtures"], settle_minutes=settle_minutes, now=now):
             continue
-        pending = (matchday, day_fixtures)
+        pending = wave
     return pending
 
 
@@ -256,7 +383,7 @@ def bump_data_js_cache() -> bool:
     return n > 0
 
 
-def git_commit_push(gw: int, matchday: str) -> bool:
+def git_commit_push(gw: int, wave: str) -> bool:
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
     subprocess.run(
         ["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
@@ -266,21 +393,23 @@ def git_commit_push(gw: int, matchday: str) -> bool:
     if subprocess.run(["git", "diff", "--staged", "--quiet"]).returncode == 0:
         print("No file changes to commit.")
         return False
-    msg = f"Rebuild Statistics after GW{gw} matchday {matchday}.\n"
+    msg = f"Rebuild Statistics after GW{gw} kickoff wave {wave}.\n"
     subprocess.run(["git", "commit", "-m", msg], check=True)
     subprocess.run(["git", "push"], check=True)
     return True
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Rebuild Statistics after a GW matchday completes.")
+    parser = argparse.ArgumentParser(
+        description="Rebuild Statistics after a GW kickoff wave completes."
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print decision only; no build or writes.")
     parser.add_argument("--commit", action="store_true", help="Git commit and push after rebuild.")
     parser.add_argument(
         "--settle-minutes",
         type=int,
         default=DEFAULT_SETTLE_MINUTES,
-        help=f"Wait this long after last FT before rebuild (default {DEFAULT_SETTLE_MINUTES}).",
+        help=f"Wait this long after last FT in the wave before rebuild (default {DEFAULT_SETTLE_MINUTES}).",
     )
     args = parser.parse_args()
 
@@ -318,22 +447,23 @@ def main() -> int:
             return 1
 
     now = utc_now()
-    groups = group_gw_fixtures_by_matchday(fixtures, gw)
-    pending = find_pending_matchday(
-        groups,
+    settle_minutes = max(5, args.settle_minutes)
+    waves = group_gw_fixtures_by_kickoff_wave(fixtures, gw)
+    pending = find_pending_wave(
+        waves,
         gw,
         state,
-        settle_minutes=max(5, args.settle_minutes),
+        settle_minutes=settle_minutes,
         now=now,
     )
     if not pending:
-        print(f"GW{gw}: no settled matchday pending rebuild.")
+        print(f"GW{gw}: no settled kickoff wave pending rebuild.")
         return 0
 
-    matchday, day_fixtures = pending
-    ids = sorted(int(fx["id"]) for fx in day_fixtures if fx.get("id") is not None)
+    wave_fixtures = pending["fixtures"]
+    ids = sorted(int(fx["id"]) for fx in wave_fixtures if fx.get("id") is not None)
     print(
-        f"GW{gw} matchday {matchday}: {len(day_fixtures)} fixtures finished — "
+        f"GW{gw} kickoff wave {pending['wave']}: {len(wave_fixtures)} fixtures finished — "
         f"rebuild ready (fixtures {ids})."
     )
 
@@ -346,16 +476,20 @@ def main() -> int:
 
     if args.commit:
         try:
-            if git_commit_push(gw, matchday):
+            if git_commit_push(gw, pending["wave"]):
                 print("Committed and pushed.")
             else:
                 print("No file changes to commit.")
         except subprocess.CalledProcessError:
             print("Git commit/push failed.", file=sys.stderr)
             return 1
-        mark_rebuilt_for_gw_through(state, gw, matchday, groups)
+        mark_rebuilt_for_gw_through_wave(
+            state, gw, pending, waves, settle_minutes=settle_minutes, now=now
+        )
     else:
-        mark_rebuilt_for_gw_through(state, gw, matchday, groups)
+        mark_rebuilt_for_gw_through_wave(
+            state, gw, pending, waves, settle_minutes=settle_minutes, now=now
+        )
         print("Rebuild complete (local only — pass --commit to push).")
 
     return 0
