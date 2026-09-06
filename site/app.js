@@ -1677,31 +1677,60 @@
     return row.position;
   }
 
+  /** Fold names for search: Ø→o, ß→ss, strip accents, drop apostrophes (O'Reilly → oreilly). */
+  function searchFoldText(value) {
+    let s = String(value || "").toLowerCase();
+    s = s
+      .replace(/ø/g, "o")
+      .replace(/æ/g, "ae")
+      .replace(/œ/g, "oe")
+      .replace(/ß/g, "ss")
+      .replace(/ł/g, "l")
+      .replace(/đ/g, "d")
+      .replace(/ð/g, "d")
+      .replace(/þ/g, "th")
+      .replace(/ı/g, "i");
+    try {
+      s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    } catch {
+      /* ignore */
+    }
+    s = s.replace(/[''`´ʼ′\u2018\u2019\u201A\u201B]/g, "");
+    s = s.replace(/[^a-z0-9\s]+/g, " ").replace(/\s+/g, " ").trim();
+    return s;
+  }
+
   function playerSearchHaystack(row) {
     const team = filterTeamCode(row);
     const parts = [row.name, team, teamNameForSeason(team)];
     if (row.team && row.team !== team) {
       parts.push(row.team, teamNameForSeason(row.team));
     }
-    return parts.join(" ").toLowerCase();
+    return searchFoldText(parts.join(" "));
   }
 
   function playerMatchesSearch(row, q) {
     if (!q) return true;
-    if (KNOWN_TEAM_CODES_LOWER.has(q)) {
+    const qRaw = String(q).trim().toLowerCase();
+    if (KNOWN_TEAM_CODES_LOWER.has(qRaw)) {
       const team = String(filterTeamCode(row) || "").toLowerCase();
       const prev = String(row.team || "").toLowerCase();
-      return team === q || prev === q;
+      return team === qRaw || prev === qRaw;
     }
-    return playerSearchHaystack(row).includes(q);
+    const needle = searchFoldText(qRaw);
+    if (!needle) return true;
+    return playerSearchHaystack(row).includes(needle);
   }
 
   function teamRowMatchesSearch(row, q) {
     if (!q) return true;
+    const qRaw = String(q).trim().toLowerCase();
     const code = String(row.team || "").toLowerCase();
-    if (KNOWN_TEAM_CODES_LOWER.has(q)) return code === q;
-    const hay = `${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team)}`.toLowerCase();
-    return hay.includes(q);
+    if (KNOWN_TEAM_CODES_LOWER.has(qRaw)) return code === qRaw;
+    const needle = searchFoldText(qRaw);
+    if (!needle) return true;
+    const hay = searchFoldText(`${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team)}`);
+    return hay.includes(needle);
   }
 
   function perMillionValue(row, col) {
@@ -2157,6 +2186,7 @@
     if (el.homeSquadPtsBody) el.homeSquadPtsBody.innerHTML = "";
     if (el.homeSquadPtsHead) el.homeSquadPtsHead.innerHTML = "";
     if (el.homeSquadPtsCols) el.homeSquadPtsCols.innerHTML = "";
+    homeSquadTablesRenderKey = "";
     if (el.homeStandingsBody) el.homeStandingsBody.innerHTML = "";
     if (el.homeStandingsTransfersBody) el.homeStandingsTransfersBody.innerHTML = "";
     if (el.homeStandingsCaptainsBody) el.homeStandingsCaptainsBody.innerHTML = "";
@@ -3652,6 +3682,8 @@
   let homeLookupStatMode = 0;
   let homeLookupFormMode = 0;
   let homeLookupCardBound = false;
+  /** Last squad/pts table paint — skip rebuild on settleQuiet when only standings/summary moved. */
+  let homeSquadTablesRenderKey = "";
 
   const HOME_LOOKUP_STAT_MODES = [
     { key: "values", kicker: "STATS", view: "Values", className: "" },
@@ -6051,9 +6083,10 @@
       clearHomeCrossHover();
       el.homePage.classList.add("is-scroll-interaction");
       clearTimeout(clearTimer);
+      // Hold long enough that sticky :hover after finger-up cannot flash a wash.
       clearTimer = window.setTimeout(() => {
         el.homePage.classList.remove("is-scroll-interaction");
-      }, 160);
+      }, 420);
     };
     const scrollNodes = [
       main,
@@ -6065,6 +6098,8 @@
     scrollNodes.forEach((node) => {
         node.addEventListener("scroll", arm, { passive: true });
         node.addEventListener("touchmove", arm, { passive: true });
+        node.addEventListener("touchend", arm, { passive: true });
+        node.addEventListener("touchcancel", arm, { passive: true });
       });
   }
 
@@ -6148,6 +6183,12 @@
       container.addEventListener(
         "touchend",
         () => {
+          if (touchMoved) {
+            const active = document.activeElement;
+            if (active && container.contains(active) && typeof active.blur === "function") {
+              active.blur();
+            }
+          }
           touchStart = null;
         },
         { passive: true }
@@ -6666,6 +6707,20 @@
       ${showPlayer ? homeSquadPlayerCellHTML(entry.row, opts) : ""}
       ${cells}
     </tr>`;
+  }
+
+  function homeSquadTablesRenderKeyFor(viewEntry) {
+    const pin = homeOwnerPin
+      ? `${homeOwnerPin.type || ""}:${homeOwnerPin.id ?? homeOwnerPin.element ?? ""}`
+      : "";
+    return [
+      String(viewEntry ?? ""),
+      pin,
+      homeSquadFingerprint(HOME && HOME.squad),
+      homeElementGwFingerprint(HOME),
+      String(HOME && HOME.gw != null ? HOME.gw : ""),
+      homeSquadIsWideLayout() ? "wide" : "pager",
+    ].join("|");
   }
 
   function homeSearchGwTier(stats) {
@@ -7240,7 +7295,23 @@
       }
       return spec;
     });
-    return [{ id: "pts", label: "Points", decimals: 0, gwKey: "pts" }, ...mapped];
+    // Points → Minutes (60′ appearance point) → position stats.
+    return [
+      { id: "pts", label: "Points", decimals: 0, gwKey: "pts" },
+      {
+        id: "minutes",
+        label: "Minutes",
+        decimals: 0,
+        gwKey: "minutes",
+        threshold: {
+          kind: "minutes",
+          line: 60,
+          legendBase: "Under 60′",
+          legendHit: "60+ minutes",
+        },
+      },
+      ...mapped,
+    ];
   }
 
   function homeFormGwValue(eg, spec) {
@@ -7260,6 +7331,9 @@
     if (spec.threshold.kind === "defcon") return !!eg.defConHit;
     if (spec.threshold.kind === "saves") {
       return Math.floor(Number(eg.saves) || 0) >= 1;
+    }
+    if (spec.threshold.kind === "minutes") {
+      return (Number(eg.minutes) || 0) >= 60;
     }
     return false;
   }
@@ -7822,6 +7896,7 @@
 
   function closeHomePlayerModal() {
     if (!el.homePlayerModal || el.homePlayerModal.hidden) return;
+    unbindHomePlayerDetailCardMetrics();
     el.homePlayerModal.hidden = true;
     el.homePlayerModal.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("home-player-modal-open");
@@ -7845,6 +7920,109 @@
     bindHomePlayerDetailEvents(el.homePlayerModalBody);
     upgradeNativeTitles(el.homePlayerModalBody);
     bindOwnershipPhotoFallback(el.homePlayerModalBody);
+    bindHomePlayerDetailCardMetrics();
+  }
+
+  let homePlayerDetailCardSyncRaf = 0;
+  let homePlayerDetailCardLastH = 0;
+
+  function homePlayerDetailCardMetricsActive() {
+    return !!(
+      el.homePlayerModal &&
+      !el.homePlayerModal.hidden &&
+      el.homePlayerModalBody &&
+      window.matchMedia("(min-width: 900px)").matches
+    );
+  }
+
+  function unbindHomePlayerDetailCardMetrics() {
+    if (homePlayerDetailCardSyncRaf) {
+      cancelAnimationFrame(homePlayerDetailCardSyncRaf);
+      homePlayerDetailCardSyncRaf = 0;
+    }
+    window.removeEventListener("resize", scheduleHomePlayerDetailCardMetrics);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", scheduleHomePlayerDetailCardMetrics);
+    }
+    homePlayerDetailCardLastH = 0;
+  }
+
+  function scheduleHomePlayerDetailCardMetrics() {
+    if (homePlayerDetailCardSyncRaf) return;
+    homePlayerDetailCardSyncRaf = requestAnimationFrame(() => {
+      homePlayerDetailCardSyncRaf = 0;
+      syncHomePlayerDetailCardMetrics();
+    });
+  }
+
+  /** Intrinsic Schedule height (head + table), not the stretched grid cell. */
+  function homePlayerScheduleIntrinsicHeight(scheduleEl) {
+    if (!scheduleEl) return 0;
+    const head = scheduleEl.querySelector(".ftt-head");
+    const table = scheduleEl.querySelector("table");
+    const cs = getComputedStyle(scheduleEl);
+    const chromeY =
+      (Number.parseFloat(cs.paddingTop) || 0) +
+      (Number.parseFloat(cs.paddingBottom) || 0) +
+      (Number.parseFloat(cs.borderTopWidth) || 0) +
+      (Number.parseFloat(cs.borderBottomWidth) || 0);
+    if (head && table) {
+      return Math.ceil(
+        head.getBoundingClientRect().height + table.getBoundingClientRect().height + chromeY
+      );
+    }
+    const fttBody = scheduleEl.querySelector(".ftt-body");
+    if (head && fttBody) {
+      return Math.ceil(
+        head.getBoundingClientRect().height + fttBody.scrollHeight + chromeY
+      );
+    }
+    return Math.ceil(scheduleEl.scrollHeight || scheduleEl.getBoundingClientRect().height);
+  }
+
+  /** Size all four desktop cards to the Schedule card’s natural height (capped to the viewport). */
+  function syncHomePlayerDetailCardMetrics() {
+    if (!homePlayerDetailCardMetricsActive()) return;
+    const detail = el.homePlayerModalBody.querySelector(":scope > .home-player-detail");
+    const matchup = detail && detail.querySelector(".home-player-detail-matchup");
+    if (!detail || !matchup) return;
+
+    const scheduleEl =
+      matchup.querySelector(".schedule-card, .home-lookup-schedule-card") || matchup;
+    // Measure content, not the Owners-stretched cell.
+    detail.classList.add("is-measuring");
+    detail.style.removeProperty("--pd-card-h");
+    void detail.offsetHeight;
+    const naturalH = homePlayerScheduleIntrinsicHeight(scheduleEl);
+    detail.classList.remove("is-measuring");
+
+    const flag = detail.querySelector(":scope > .home-player-flag-banner");
+    const styles = getComputedStyle(detail);
+    const gap = Number.parseFloat(styles.rowGap || styles.gap) || 12;
+    const flagH = flag ? Math.ceil(flag.getBoundingClientRect().height) + gap : 0;
+    const bodyH = el.homePlayerModalBody.clientHeight;
+    const availForGrid = Math.max(0, bodyH - flagH);
+    const maxCellH = Math.max(120, Math.floor((availForGrid - gap) / 2));
+    const cellH = Math.max(120, Math.min(naturalH || 120, maxCellH));
+
+    if (Math.abs(cellH - homePlayerDetailCardLastH) < 1) {
+      detail.style.setProperty("--pd-card-h", `${homePlayerDetailCardLastH || cellH}px`);
+      return;
+    }
+    homePlayerDetailCardLastH = cellH;
+    detail.style.setProperty("--pd-card-h", `${cellH}px`);
+  }
+
+  function bindHomePlayerDetailCardMetrics() {
+    unbindHomePlayerDetailCardMetrics();
+    if (!homePlayerDetailCardMetricsActive()) return;
+    scheduleHomePlayerDetailCardMetrics();
+    // Second frame: fonts / SVG / table paint can still shift Schedule height.
+    requestAnimationFrame(() => scheduleHomePlayerDetailCardMetrics());
+    window.addEventListener("resize", scheduleHomePlayerDetailCardMetrics);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", scheduleHomePlayerDetailCardMetrics);
+    }
   }
 
   function openHomePlayerDetailOverlay(row = homeLookupPlayer) {
@@ -7951,21 +8129,22 @@
   }
 
   function homeSearchFilteredRows(query) {
-    const q = String(query || "").trim().toLowerCase();
+    const qRaw = String(query || "").trim().toLowerCase();
+    const q = searchFoldText(query);
     const catalog = homeSearchCatalog();
-    if (!q) return homeSearchSortRows(catalog).slice(0, 40);
-    const exactTeam = KNOWN_TEAM_CODES_LOWER.has(q);
+    if (!qRaw) return homeSearchSortRows(catalog).slice(0, 40);
+    const exactTeam = KNOWN_TEAM_CODES_LOWER.has(qRaw);
     const scored = [];
     for (const row of catalog) {
-      const name = String(row.name || "").toLowerCase();
+      const name = searchFoldText(row.name);
       const team = String(row.team || "").toLowerCase();
-      const teamFull = String(teamNameForSeason(row.team) || "").toLowerCase();
+      const teamFull = searchFoldText(teamNameForSeason(row.team));
       if (exactTeam) {
-        if (team !== q) continue;
-      } else if (!name.includes(q) && !team.includes(q) && !teamFull.includes(q)) {
+        if (team !== qRaw) continue;
+      } else if (!q || (!name.includes(q) && !team.includes(qRaw) && !teamFull.includes(q))) {
         continue;
       }
-      const starts = name.startsWith(q) ? 0 : 1;
+      const starts = q && name.startsWith(q) ? 0 : 1;
       scored.push({ row, starts, name });
     }
     scored.sort((a, b) =>
@@ -8092,6 +8271,8 @@
     results.innerHTML = rows.length
       ? rows.map(homeSearchResultRowHTML).join("")
       : `<div class="home-search-empty">No players match “${escapeHtml(q)}”.</div>`;
+    // Ensure panel lives under the field (undo any prior body portal).
+    if (wrap && results.parentElement !== wrap) wrap.appendChild(results);
     results.hidden = false;
     if (wrap) wrap.classList.add("is-open");
   }
@@ -8102,7 +8283,13 @@
     if (!results) return;
     results.hidden = true;
     results.innerHTML = "";
-    if (wrap) wrap.classList.remove("is-open");
+    if (wrap) {
+      wrap.classList.remove("is-open");
+      if (results.parentElement !== wrap) wrap.appendChild(results);
+    }
+    document.documentElement.classList.remove("home-desktop-search-open");
+    const bd = document.getElementById("home-desktop-search-backdrop");
+    if (bd) bd.remove();
   }
 
   function syncHomeSearchBtn() {
@@ -8744,7 +8931,21 @@
     if (el.homeLeagueTitle) {
       el.homeLeagueTitle.textContent = HOME.leagueName || "";
     }
-    if (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead || el.homeSquadPtsBody || el.homeSquadOwnershipBody) {
+    const squadTablesKey = homeSquadTablesRenderKeyFor(viewEntry);
+    // Live poll often updates standings/summary only — rewriting the Pts half
+    // (G/A/CS pills) caused a desktop flicker even when player stats were unchanged.
+    const skipSquadTables =
+      settleQuiet
+      && !animateView
+      && !leaveRollsPending
+      && !homePageEnterArmed
+      && !homeIsEnterBusy()
+      && squadTablesKey === homeSquadTablesRenderKey
+      && !!(el.homeSquadBody && el.homeSquadBody.querySelector("tr.home-squad-row"));
+    if (
+      !skipSquadTables
+      && (el.homeSquadBody || el.homeSquadFixturesBody || el.homeSquadFixturesHead || el.homeSquadPtsBody || el.homeSquadOwnershipBody)
+    ) {
       const rows = homeSquadForEntry(viewEntry);
       const configuredOwned = viewingOther && homeConfiguredEntryId() != null
         ? homeElementsForEntry(homeConfiguredEntryId())
@@ -8880,6 +9081,9 @@
             ? homeSquadLoadingHTML(ptsColCount)
             : homeSquadEmptyHTML(ptsColCount));
       }
+      syncHomeSquadPtsMount();
+      homeSquadTablesRenderKey = squadTablesKey;
+    } else if (skipSquadTables) {
       syncHomeSquadPtsMount();
     }
     if (el.homeStandingsBody) {
@@ -17138,7 +17342,7 @@
   }
 
   function teamSearchHaystack(row) {
-    return `${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team)}`.toLowerCase();
+    return searchFoldText(`${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team)}`);
   }
 
   function teamSearchPts(row) {
@@ -17148,20 +17352,23 @@
 
   function teamSearchScore(row, q) {
     if (!q) return 99;
-    const name = String(row.name || "").toLowerCase();
+    const qRaw = String(q).trim().toLowerCase();
+    const needle = searchFoldText(qRaw);
+    const name = searchFoldText(row.name);
     const team = String(row.team || "").toLowerCase();
-    const teamName = teamNameForSeason(row.team).toLowerCase();
-    if (KNOWN_TEAM_CODES_LOWER.has(q)) return team === q ? 0 : 99;
-    const tokens = name.split(/[\s.]+/).filter(Boolean);
+    const teamName = searchFoldText(teamNameForSeason(row.team));
+    if (KNOWN_TEAM_CODES_LOWER.has(qRaw)) return team === qRaw ? 0 : 99;
+    if (!needle) return 99;
+    const tokens = name.split(/\s+/).filter(Boolean);
     const last = tokens[tokens.length - 1] || "";
-    if (name === q || team === q) return 0;
-    if (name.startsWith(q)) return 1;
-    if (last.startsWith(q)) return 2;
-    if (tokens.some((t) => t.startsWith(q))) return 3;
-    if (name.includes(q)) return 4;
-    if (team.startsWith(q) || teamName.startsWith(q)) return 5;
-    if (team.includes(q) || teamName.includes(q)) return 6;
-    if (teamSearchHaystack(row).includes(q)) return 7;
+    if (name === needle || team === qRaw) return 0;
+    if (name.startsWith(needle)) return 1;
+    if (last.startsWith(needle)) return 2;
+    if (tokens.some((t) => t.startsWith(needle))) return 3;
+    if (name.includes(needle)) return 4;
+    if (team.startsWith(qRaw) || teamName.startsWith(needle)) return 5;
+    if (team.includes(qRaw) || teamName.includes(needle)) return 6;
+    if (teamSearchHaystack(row).includes(needle)) return 7;
     return 99;
   }
 
@@ -23697,7 +23904,11 @@
     if (grouped) attrs.push('data-count-grouped="1"');
     if (from != null && Number.isFinite(Number(from))) attrs.push(`data-count-from="${Number(from)}"`);
     if (opts.rollKind) attrs.push(`data-count-roll="${escapeHtml(String(opts.rollKind))}"`);
-    return `<span ${attrs.join(" ")}></span>`;
+    // Seed visible text so settleQuiet / delayed finishStatRollNode never paints blank pills.
+    const seed = grouped
+      ? `${Math.round(Number(to)).toLocaleString()}${suffix}`
+      : `${statRollFormat(Number(to), decimals, signed)}${suffix}`;
+    return `<span ${attrs.join(" ")}>${escapeHtml(seed)}</span>`;
   }
 
   function statRollPadBody(str, len) {

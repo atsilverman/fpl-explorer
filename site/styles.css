@@ -3928,7 +3928,11 @@ tbody td.is-enhanced::before {
   color: color-mix(in srgb, #fff calc(var(--hl-sat, 1) * 100%), var(--text));
 }
 tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; font-family: var(--sans); }
-tbody tr:hover { background: hsl(var(--muted) / 0.5); }
+/* Hover wash is desktop-cursor only — sticky :hover after tap/scroll on iOS
+   otherwise leaves a dim band on the last touched row. */
+@media (hover: hover) and (pointer: fine) {
+  tbody tr:hover { background: hsl(var(--muted) / 0.5); }
+}
 
 .pos-badge {
   display: inline-block;
@@ -10001,6 +10005,33 @@ html[data-pointer="coarse"] tbody tr:hover {
   background: transparent;
 }
 
+/* Touch: never leave a sticky hover wash on Home rows (belt + suspenders vs
+   data-pointer / (hover:hover) mismatches on some WebKit builds). */
+@media (hover: none), (pointer: coarse) {
+  .home-squad-table tbody tr.home-squad-row:hover > td,
+  .home-standings-table tbody tr[data-entry]:hover > td,
+  .home-feed-table tbody tr.home-feed-row:hover > td {
+    --home-row-bg: hsl(var(--card));
+    background: transparent;
+  }
+  .home-squad-row.is-owner-pinned:hover > td {
+    --home-row-bg: hsl(var(--blue-hsl) / 0.16);
+    background: var(--home-row-bg);
+  }
+  .home-standings-table tr.is-owner-match:hover td {
+    --home-row-bg: hsl(var(--blue-hsl) / 0.12);
+    background: var(--home-row-bg);
+  }
+  .home-standings-table tr.is-owner-bench:hover td {
+    --home-row-bg: hsl(var(--muted-foreground) / 0.10);
+    background: var(--home-row-bg);
+  }
+  .home-standings-table tr.is-view-active:hover td {
+    --home-row-bg: hsl(var(--blue-hsl) / 0.10);
+    background: var(--home-row-bg);
+  }
+}
+
 html[data-pointer="coarse"] .home-squad-table tbody tr.home-squad-row:hover > td,
 html[data-pointer="coarse"] .home-standings-table tbody tr[data-entry]:hover > td,
 html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-squad-table tbody tr.home-squad-row:hover > td,
@@ -14325,45 +14356,161 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
-/* Wide desktop: roomier modal + side-by-side profile | matchup+owners. */
+/* Wide desktop: compact 2×2 — equal cards sized from Schedule (see syncHomePlayerDetailCardMetrics). */
 @media (min-width: 900px) {
   .home-player-modal-panel {
-    width: min(920px, 92vw);
+    width: min(920px, 94vw);
     max-height: min(88vh, 900px);
   }
   .home-player-modal-body > .home-player-detail {
+    --pd-card-gap: 12px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    gap: 12px 14px;
-    align-items: start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: var(--pd-card-h, auto) var(--pd-card-h, auto);
+    gap: var(--pd-card-gap);
+    align-items: stretch;
+    justify-items: stretch;
+  }
+  .home-player-modal-body > .home-player-detail > .home-player-flag-banner {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) {
+    grid-template-rows: auto var(--pd-card-h, auto) var(--pd-card-h, auto);
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-profile,
+  .home-player-modal-body > .home-player-detail .home-player-detail-form,
+  .home-player-modal-body > .home-player-detail .home-player-detail-matchup,
+  .home-player-modal-body > .home-player-detail .home-player-detail-owners {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-profile {
     grid-column: 1;
-    grid-row: 1 / -1;
-    min-width: 0;
+    grid-row: 1;
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-form {
     grid-column: 2;
     grid-row: 1;
-    min-width: 0;
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-matchup {
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 2;
-    min-width: 0;
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-owners {
     grid-column: 2;
-    grid-row: 3;
-    min-width: 0;
-    min-height: 0;
-    align-self: stretch;
+    grid-row: 2;
   }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-profile {
+    grid-row: 2;
+  }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-form {
+    grid-row: 2;
+  }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-matchup {
+    grid-row: 3;
+  }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-owners {
+    grid-row: 3;
+  }
+  /* Measuring pass: Schedule content-sized; don't stretch to Owners height. */
+  .home-player-modal-body > .home-player-detail.is-measuring {
+    grid-template-rows: auto auto;
+  }
+  .home-player-modal-body > .home-player-detail.is-measuring:has(> .home-player-flag-banner) {
+    grid-template-rows: auto auto auto;
+  }
+  .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-matchup {
+    height: auto;
+    align-self: start;
+    overflow: visible;
+  }
+  .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-matchup > * {
+    flex: none;
+    height: auto;
+    overflow: visible;
+  }
+  .home-player-modal-body > .home-player-detail.is-measuring .home-lookup-schedule-card .ftt-body,
+  .home-player-modal-body > .home-player-detail.is-measuring .schedule-card .ftt-body {
+    flex: none;
+    overflow: visible;
+  }
+  .home-player-modal-body > .home-player-detail .home-lookup-card,
+  .home-player-modal-body > .home-player-detail .home-form-card,
+  .home-player-modal-body > .home-player-detail .home-player-detail-matchup > *,
   .home-player-modal-body > .home-player-detail .home-player-owners {
-    max-height: min(42vh, 380px);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+  .home-player-modal-body > .home-player-detail .home-lookup-stats {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* Grow the grey tiles into leftover card height instead of floating mid-card. */
+    align-content: stretch;
+    grid-auto-rows: minmax(44px, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    overflow: hidden;
+  }
+  .home-player-modal-body > .home-player-detail .home-lookup-stat {
+    height: 100%;
+    min-height: 44px;
+    padding: 8px 4px;
+    justify-content: center;
+    gap: 4px;
+  }
+  .home-player-modal-body > .home-player-detail .home-lookup-stat-val {
+    flex: none;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    align-items: center;
+    font-size: 17px;
+    line-height: 1.1;
+  }
+  .home-player-modal-body > .home-player-detail .home-lookup-stat-lbl {
+    height: auto;
+    margin-top: 0;
+    font-size: 10.5px;
+    line-height: 1.2;
+    letter-spacing: 0.03em;
+  }
+  .home-player-modal-body > .home-player-detail .home-lookup-dots,
+  .home-player-modal-body > .home-player-detail .home-form-head,
+  .home-player-modal-body > .home-player-detail .home-form-legend-slot,
+  .home-player-modal-body > .home-player-detail .home-form-dots,
+  .home-player-modal-body > .home-player-detail .home-player-owners-head,
+  .home-player-modal-body > .home-player-detail .home-player-owners-cols,
+  .home-player-modal-body > .home-player-detail .home-lookup-schedule-card .ftt-head,
+  .home-player-modal-body > .home-player-detail .schedule-card .ftt-head {
+    flex: none;
+  }
+  .home-player-modal-body > .home-player-detail .home-form-chart {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+  }
+  .home-player-modal-body > .home-player-detail .home-form-svg {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+  }
+  /* Schedule table stays content-sized — no stretched void under the last row. */
+  .home-player-modal-body > .home-player-detail .home-lookup-schedule-card .ftt-body,
+  .home-player-modal-body > .home-player-detail .schedule-card .ftt-body {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow: auto;
   }
   .home-player-modal-body > .home-player-detail .home-player-owners-list {
     flex: 1 1 auto;
@@ -15251,7 +15398,6 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   --home-glass-bg: hsl(210 55% 98% / 0.48);
   --home-glass-bg-strong: hsl(210 50% 98% / 0.62);
   --home-glass-border: hsl(210 45% 100% / 0.58);
-  --home-glass-highlight: hsl(0 0% 100% / 0.62);
   --home-glass-blur: 32px;
   --home-glass-saturate: 1.9;
   --home-glass-shadow: 0 8px 28px hsl(215 35% 20% / 0.08);
@@ -15260,7 +15406,6 @@ html[data-theme="dark"] .home-dashboard {
   --home-glass-bg: hsl(215 28% 14% / 0.4);
   --home-glass-bg-strong: hsl(215 26% 16% / 0.55);
   --home-glass-border: hsl(210 40% 100% / 0.14);
-  --home-glass-highlight: hsl(210 50% 100% / 0.1);
   --home-glass-shadow: 0 10px 32px hsl(0 0% 0% / 0.28);
 }
 @media (prefers-color-scheme: dark) {
@@ -15268,7 +15413,6 @@ html[data-theme="dark"] .home-dashboard {
     --home-glass-bg: hsl(215 28% 14% / 0.4);
     --home-glass-bg-strong: hsl(215 26% 16% / 0.55);
     --home-glass-border: hsl(210 40% 100% / 0.14);
-    --home-glass-highlight: hsl(210 50% 100% / 0.1);
     --home-glass-shadow: 0 10px 32px hsl(0 0% 0% / 0.28);
   }
 }
@@ -15662,7 +15806,6 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
   background: var(--home-glass-bg);
   border-color: var(--home-glass-border);
   box-shadow:
-    inset 0 1px 0 var(--home-glass-highlight),
     var(--home-glass-shadow),
     var(--shadow-sm);
 }
@@ -15676,13 +15819,11 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-up ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    inset 0 1px 0 var(--home-glass-highlight),
     0 8px 28px hsl(142 40% 16% / 0.14),
     var(--shadow-sm);
 }
 .home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-down ~ .home-summary-cards > .home-stat-panel {
   box-shadow:
-    inset 0 1px 0 var(--home-glass-highlight),
     0 8px 28px hsl(0 40% 16% / 0.14),
     var(--shadow-sm);
 }
@@ -15707,7 +15848,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
 .home-desktop-search {
   display: none;
   position: relative;
-  width: min(280px, 42vw);
+  width: min(400px, 46vw);
   flex: none;
   margin-top: 2px;
 }
@@ -15793,8 +15934,15 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
 .home-desktop-search-results .home-search-row {
   border-radius: calc(var(--radius) - 2px);
 }
+.home-desktop-search-results .home-search-row-meta {
+  white-space: nowrap;
+}
 .home-desktop-search-results .home-search-empty {
   padding: 14px 10px;
+}
+/* Drop any leftover centered-popover backdrop from the brief experiment. */
+.home-desktop-search-backdrop {
+  display: none !important;
 }
 @media (min-width: 721px) {
   html[data-page="home"] .home-desktop-search {
@@ -16420,9 +16568,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
   border: 1px solid var(--home-glass-border, var(--border));
   border-radius: var(--radius);
   background: var(--home-glass-bg-strong, hsl(var(--card)));
-  box-shadow:
-    inset 0 1px 0 var(--home-glass-highlight, transparent),
-    var(--home-glass-shadow, var(--shadow-sm));
+  box-shadow: var(--home-glass-shadow, var(--shadow-sm));
   backdrop-filter: blur(var(--home-glass-blur, 0px)) saturate(var(--home-glass-saturate, 1));
   -webkit-backdrop-filter: blur(var(--home-glass-blur, 0px)) saturate(var(--home-glass-saturate, 1));
   padding: 10px 12px;
@@ -16456,14 +16602,12 @@ html[data-theme="dark"] .home-dashboard {
 .home-stat-panel.is-rank-border-up {
   border-color: hsl(var(--home-rank-up) / 0.55);
   box-shadow:
-    inset 0 1px 0 var(--home-glass-highlight, transparent),
     0 0 0 1px hsl(var(--home-rank-up) / 0.18),
     var(--home-glass-shadow, var(--shadow-sm));
 }
 .home-stat-panel.is-rank-border-down {
   border-color: hsl(var(--home-rank-down) / 0.55);
   box-shadow:
-    inset 0 1px 0 var(--home-glass-highlight, transparent),
     0 0 0 1px hsl(var(--home-rank-down) / 0.18),
     var(--home-glass-shadow, var(--shadow-sm));
 }
@@ -16818,6 +16962,10 @@ html[data-theme="dark"] .home-dashboard {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
+  /* Above summary-card shadows (those cards are z-index: 1) so Team/League
+     top edges stay crisp — especially light mode white-on-white. */
+  position: relative;
+  z-index: 2;
 }
 @media (min-width: 1400px) {
   .home-tables-grid {
@@ -16967,6 +17115,8 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 }
 .home-tables-grid > .home-table-panel {
   height: 100%;
+  position: relative;
+  z-index: 2;
 }
 #home-standings-panel {
   container-type: inline-size;
@@ -19296,6 +19446,10 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tr[data-entry] {
   cursor: pointer;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-feed-row {
+  -webkit-tap-highlight-color: transparent;
 }
 @media (max-width: 720px) {
   .home-squad-row {
