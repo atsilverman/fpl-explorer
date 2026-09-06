@@ -7982,6 +7982,7 @@
       key: "home-search",
     });
     bindHomeSearchSheetEvents();
+    syncHomeSearchBtn();
   }
 
   function syncHomeDesktopSearchUI() {
@@ -8042,17 +8043,22 @@
 
   function syncHomeSearchBtn() {
     if (el.homeSearchBtn) {
-      // Overlay/tray has its own close control — keep this as Search only.
       const iconUse = el.homeSearchBtn.querySelector("use");
       if (iconUse) iconUse.setAttribute("href", "#i-search");
       setTip(el.homeSearchBtn, "Search players");
       el.homeSearchBtn.setAttribute("aria-label", "Search players");
-      el.homeSearchBtn.classList.remove("is-clear", "on");
-      el.homeSearchBtn.setAttribute("aria-pressed", "false");
-      // Mobile nav only — desktop uses the expanded header search.
-      el.homeSearchBtn.hidden = state.page !== "home" || !NARROW_MQ.matches;
+      const searchOpen = !!(mobileSheetOpen && mobileSheetKey === "home-search");
+      el.homeSearchBtn.classList.toggle("on", searchOpen);
+      el.homeSearchBtn.classList.toggle("is-clear", false);
+      el.homeSearchBtn.setAttribute("aria-pressed", searchOpen ? "true" : "false");
+      el.homeSearchBtn.setAttribute("aria-expanded", searchOpen ? "true" : "false");
+      // Mobile: floating FAB via filter dock. Desktop: header search field.
+      if (!(state.page === "home" && NARROW_MQ.matches)) {
+        el.homeSearchBtn.hidden = true;
+      }
     }
     syncHomeDesktopSearchUI();
+    syncMobileFilterDock();
   }
 
   function clearHomePlayerLookup({ rerender = true } = {}) {
@@ -9789,9 +9795,18 @@
     });
   }
 
+  function restoreAllMobileFilterButtons() {
+    [
+      el.sidebarToggle,
+      el.marketsSlidersToggle,
+      el.scheduleSlidersToggle,
+      el.homeSearchBtn,
+    ].forEach(restoreMobileFilterHome);
+  }
+
   function restoreMobileFilterHome(btn) {
     if (!btn) return;
-    btn.classList.remove("mobile-filter-fab");
+    btn.classList.remove("mobile-filter-fab", "is-fab-icon");
     const home = mobileFilterHomes.get(btn);
     if (!home || !home.parent || !document.contains(home.parent)) return;
     if (home.next && home.next.parentElement === home.parent) {
@@ -9799,14 +9814,6 @@
     } else {
       home.parent.appendChild(btn);
     }
-  }
-
-  function restoreAllMobileFilterButtons() {
-    [
-      el.sidebarToggle,
-      el.marketsSlidersToggle,
-      el.scheduleSlidersToggle,
-    ].forEach(restoreMobileFilterHome);
   }
 
   function mobileFilterButtonForPage() {
@@ -9932,6 +9939,7 @@
       el.scheduleSlidersToggle,
     ].filter(Boolean);
     if (!dock) return;
+    const showHomeSearch = mobileDocksActive() && state.page === "home" && !!el.homeSearchBtn;
     if (!mobileDocksActive()) {
       restoreAllMobileFilterButtons();
       dock.hidden = true;
@@ -9944,16 +9952,30 @@
     buttons.forEach((btn) => {
       if (btn !== active) restoreMobileFilterHome(btn);
     });
-    if (!active) {
+    if (el.homeSearchBtn && !showHomeSearch) {
+      restoreMobileFilterHome(el.homeSearchBtn);
+      el.homeSearchBtn.hidden = true;
+    }
+    if (!active && !showHomeSearch) {
       dock.hidden = true;
       dock.setAttribute("aria-hidden", "true");
       document.documentElement.classList.remove("has-mobile-filter-fab");
       syncMobileChromeFade();
       return;
     }
-    rememberMobileFilterHome(active);
-    if (active.parentElement !== dock) dock.appendChild(active);
-    active.classList.add("mobile-filter-fab");
+    // Clear dock then append in order: search (home) or page filter toggle.
+    while (dock.firstChild) dock.removeChild(dock.firstChild);
+    if (showHomeSearch) {
+      rememberMobileFilterHome(el.homeSearchBtn);
+      el.homeSearchBtn.classList.add("mobile-filter-fab", "is-fab-icon");
+      el.homeSearchBtn.hidden = false;
+      dock.appendChild(el.homeSearchBtn);
+    }
+    if (active) {
+      rememberMobileFilterHome(active);
+      active.classList.add("mobile-filter-fab");
+      dock.appendChild(active);
+    }
     dock.hidden = false;
     dock.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("has-mobile-filter-fab");
@@ -11130,6 +11152,7 @@
       if (homeOwnerPin && homeOwnerPin.type === "element") homeOwnerPin = null;
       syncHomeSearchBtn();
     }
+    if (closingKey === "home-search") syncHomeSearchBtn();
     if (closingKey === "home-player") syncHomePlayerOpenXBtn(null);
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;

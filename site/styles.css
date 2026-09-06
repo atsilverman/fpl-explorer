@@ -2872,6 +2872,21 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-filter-fab:active:not(:disabled) {
     transform: scale(0.96);
   }
+  /* Home search — icon-only FAB, same 40px shell as Filters. */
+  #home-search-btn.mobile-filter-fab.is-fab-icon,
+  .mobile-filter-dock .home-search-btn.mobile-filter-fab.is-fab-icon {
+    width: var(--mobile-dock-size);
+    min-width: var(--mobile-dock-size);
+    max-width: var(--mobile-dock-size);
+    padding: 0;
+    gap: 0;
+  }
+  #home-search-btn.mobile-filter-fab.is-fab-icon .icon,
+  .mobile-filter-dock .home-search-btn.mobile-filter-fab.is-fab-icon .icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
   html.has-mobile-filter-fab #feed-toolbar-start,
   html.has-mobile-filter-fab #schedule-page .page-header,
   html.has-mobile-filter-fab #markets-page .page-header {
@@ -15633,14 +15648,9 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
 .home-search-btn[hidden] {
   display: none !important;
 }
-/* Desktop: search lives under the Updated label — never reserve a nav slot. */
-@media (min-width: 721px) {
-  .page-nav-actions .home-search-btn {
-    display: none !important;
-  }
-}
+/* Home search is a floating FAB on mobile; desktop uses the header field. */
 .page-nav-actions .home-search-btn {
-  flex: none;
+  display: none !important;
 }
 .page-nav-actions .home-search-btn.is-clear,
 .page-nav-actions .home-search-btn.on {
