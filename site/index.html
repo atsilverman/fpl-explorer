@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1115" />
+<link rel="stylesheet" href="styles.css?v=1173" />
 <script>
 (() => {
   try {
@@ -65,12 +65,14 @@
       'html[data-page="ownership"] #ownership-page,' +
       'html[data-page="expected"] #expected-page,' +
       'html[data-page="schedule"] #schedule-page,' +
+      'html[data-page="fixtures"] #fixtures-page,' +
       'html[data-page="markets"] #markets-page,' +
       'html[data-page="team"] #team-page{display:block}' +
       'html[data-page="prices"] #prices-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
-      'html[data-page="schedule"] #subtoolbar{display:none!important}' +
+      'html[data-page="schedule"] #subtoolbar,' +
+      'html[data-page="fixtures"] #subtoolbar{display:none!important}' +
       'html.is-mobile-layout[data-page="markets"] #subtoolbar{display:none!important}' +
       'html[data-page="markets"] #stats-toolbar-start,' +
       'html[data-page="markets"] #search-wrap,' +
@@ -352,11 +354,13 @@
         FPL.db
       </h1>
     </a>
+    <!-- Data season UI removed — app defaults to 2026/27. Keep 2025/26 data + setSeason() for a future restore.
     <label class="sr-only" for="season-select">Data season</label>
     <select id="season-select" class="season-select" aria-label="Data season">
       <option value="2025-26">2025/26</option>
       <option value="2026-27" selected>2026/27</option>
     </select>
+    -->
   </div>
 
   <div class="page-tabs-clip" id="page-tabs-clip">
@@ -394,8 +398,12 @@
       xData
     </button>
     <button id="page-schedule" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
+      <svg class="icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>
       Matchups
+    </button>
+    <button id="page-fixtures" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
+      Fixtures
     </button>
     <button id="page-markets" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
@@ -413,10 +421,6 @@
         <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
       </span>
     </button>
-    <button class="page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
-      aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false">
-      <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-    </button>
   </div>
 
   <div class="page-nav-actions">
@@ -427,6 +431,10 @@
     <button id="home-search-btn" class="icon-btn icon-only-btn home-search-btn" type="button"
       title="Search players" aria-label="Search players" aria-pressed="false" hidden>
       <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+    </button>
+    <button class="icon-btn icon-only-btn page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
+      aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false">
+      <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
     </button>
     <div class="dropdown-wrap" id="prefs-wrap">
       <button id="prefs-btn" class="icon-btn icon-only-btn" type="button"
@@ -439,6 +447,15 @@
           <p class="settings-panel-sub">Your FPL team and display</p>
         </div>
         <div class="settings-panel-body prefs-panel-body">
+          <section class="settings-section">
+            <div class="settings-section-label">FPL</div>
+            <div class="prefs-field">
+              <label class="prefs-field-label" for="fpl-manager-select">Manager</label>
+              <select id="fpl-manager-select" class="prefs-select">
+                <option value="">Select manager…</option>
+              </select>
+            </div>
+          </section>
           <section class="settings-section">
             <div class="settings-section-label">Appearance</div>
             <div class="prefs-field prefs-theme-field">
@@ -470,6 +487,7 @@
               <p class="prefs-field-hint" id="font-pair-hint">UI + numbers. Default is Outfit.</p>
             </div>
           </section>
+          <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
             <div class="settings-section-label">Season</div>
             <div class="prefs-field">
@@ -480,19 +498,23 @@
               </div>
             </div>
           </section>
+          -->
           <section class="settings-section">
-            <div class="settings-section-label">FPL</div>
+            <div class="settings-section-label">Team difficulties</div>
             <div class="prefs-field">
-              <label class="prefs-field-label" for="fpl-manager-select">Manager</label>
-              <select id="fpl-manager-select" class="prefs-select">
-                <option value="">Select manager…</option>
-              </select>
-            </div>
-            <div class="prefs-field">
+              <p class="prefs-field-hint">Manually set each club’s attacking and defending difficulty (home &amp; away).</p>
               <div class="prefs-action-row">
-                <button id="fpl-id-clear" class="ghost-btn prefs-action-btn" type="button">Clear</button>
+                <button type="button" class="ghost-btn prefs-action-btn" id="prefs-difficulty-btn">Set team difficulties</button>
               </div>
             </div>
+            <label class="settings-switch-row prefs-fixtures-diff-toggle" for="prefs-fixtures-custom-colors">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Custom fixture colors</span>
+                <span class="settings-switch-hint">Replace default FPL difficulty with your ratings on Fixtures &amp; Home Schedule</span>
+              </span>
+              <input type="checkbox" id="prefs-fixtures-custom-colors" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
           </section>
           <section class="settings-section" id="prefs-planner-section" hidden>
             <div class="settings-section-label">Planner</div>
@@ -515,12 +537,12 @@
   try {
     if (!window.matchMedia("(max-width: 720px)").matches) return;
     const cluster = document.querySelector(".page-nav-center");
-    const label = document.getElementById("page-tray-label");
-    if (!cluster || !label) return;
+    const tray = document.getElementById("page-tray-btn");
+    if (!cluster || !tray) return;
     const apply = () => {
       const vv = window.visualViewport;
       const screenMid = vv ? vv.offsetLeft + vv.width / 2 : window.innerWidth / 2;
-      const rect = label.getBoundingClientRect();
+      const rect = tray.getBoundingClientRect();
       if (!rect.width) return;
       const raw = cluster.style.getPropertyValue("--page-nav-label-offset").trim();
       const current = raw ? parseFloat(raw) : 0;
@@ -779,6 +801,10 @@
         <input type="range" id="mins-min" step="10" />
         <input type="range" id="mins-max" step="10" class="slider-top" />
       </div>
+      <label class="check-row-block" id="hide-low-mins-row">
+        <span class="check-row-line"><input type="checkbox" id="hide-low-mins-check" /> Hide low minutes (≥90′)</span>
+        <span class="check-row-note">Auto-on with Per 90 — drops tiny samples that inflate rates</span>
+      </label>
     </div>
 
     <div class="filter-group" id="enhance-pct-group" style="display:none;">
@@ -819,11 +845,11 @@
               <div class="home-desktop-search-field">
                 <svg class="icon home-desktop-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
                 <input id="home-desktop-search-input" class="home-desktop-search-input" type="search"
-                  placeholder="Search players" autocomplete="off" enterkeyhint="search"
-                  aria-label="Search players" aria-autocomplete="list"
+                  placeholder="Search players or teams" autocomplete="off" enterkeyhint="search"
+                  aria-label="Search players or teams" aria-autocomplete="list"
                   aria-controls="home-desktop-search-results" />
                 <button type="button" class="home-desktop-search-clear icon-only-btn" id="home-desktop-search-clear"
-                  hidden aria-label="Clear player search" title="Clear player search">
+                  hidden aria-label="Clear search" title="Clear search">
                   <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
                 </button>
               </div>
@@ -1436,7 +1462,7 @@
         <div class="schedule-header-top">
           <div class="schedule-header-text">
             <div class="schedule-title-row">
-              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Matchups<button class="page-info-btn" type="button" aria-label="How Matchups works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>Matchups<button class="page-info-btn" type="button" aria-label="How Matchups works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             </div>
             <p class="page-subtitle">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
           </div>
@@ -1509,6 +1535,23 @@
             </div>
           </div>
 
+          <div class="schedule-control" id="schedule-season-basis-group">
+            <div class="schedule-control-head">
+              <strong>Strength basis
+                <span class="schedule-control-info" tabindex="0"
+                  data-tip="2025/26 uses prior-season OPTA ranks (default). 2026/27 uses this season’s FPL team stats and ranks — switch when enough gameweeks have settled."
+                  aria-label="How Strength basis works">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                </span>
+              </strong>
+            </div>
+            <div class="segmented" id="schedule-season-seg" role="group" aria-label="Team strength season">
+              <button type="button" data-matchups-season="2526" class="active">2025/26</button>
+              <button type="button" data-matchups-season="2627">2026/27</button>
+            </div>
+            <p class="schedule-control-hint" id="schedule-season-hint">Prior-season OPTA ranks · provisional 18–20 for promoted clubs</p>
+          </div>
+
           <div class="schedule-control" id="schedule-edge-min-group">
             <div class="schedule-control-head">
               <strong>Flag threshold
@@ -1535,6 +1578,55 @@
       <section id="schedule-scatter" class="schedule-scatter"></section>
       <div class="schedule-grid schedule-grid-matchups schedule-grid-analyze" id="schedule-grid"></div>
       <p class="page-updated-text page-data-footer" id="schedule-updated-footer" hidden></p>
+    </div>
+
+    <div id="fixtures-page" class="page-pane" style="display:none;">
+      <div class="page-header fixtures-header">
+        <div class="fixtures-header-top">
+          <div class="fixtures-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Fixtures<button class="page-info-btn" type="button" aria-label="How Fixtures works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">Season ticker by club — tap a row to demote it to the bottom.</p>
+          </div>
+        </div>
+        <div class="fixtures-toolbar" id="fixtures-toolbar" role="group" aria-label="Fixture window">
+          <div class="segmented fixtures-sos-seg" id="fixtures-sos-seg" role="group" aria-label="Strength of schedule">
+            <button type="button" data-fixtures-sos="all" class="active">All</button>
+            <button type="button" data-fixtures-sos="atk">Attacking</button>
+            <button type="button" data-fixtures-sos="def">Defending</button>
+          </div>
+          <div class="fixtures-window-control">
+            <div class="fixtures-window-head">
+              <strong>Gameweeks</strong>
+              <span id="fixtures-window-label">GW1–7</span>
+            </div>
+            <div class="dual-slider">
+              <div class="slider-track"></div>
+              <div class="slider-fill" id="fixtures-gw-fill"></div>
+              <input type="range" id="fixtures-gw-min" step="1" aria-label="First gameweek" />
+              <input type="range" id="fixtures-gw-max" step="1" class="slider-top" aria-label="Last gameweek" />
+            </div>
+            <div class="slider-values">
+              <span id="fixtures-gw-min-label">GW1</span>
+              <span id="fixtures-gw-max-label">GW38</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fixtures-table-shell has-sos-rail" id="fixtures-table-shell">
+        <aside class="fixtures-sos-rail" id="fixtures-sos-rail" aria-hidden="false">
+          <span class="fixtures-sos-rail-lab is-top">Easier</span>
+          <span class="fixtures-sos-rail-stem" aria-hidden="true"></span>
+          <span class="fixtures-sos-rail-lab is-bot">Harder</span>
+        </aside>
+        <div class="table-wrap fixtures-table-wrap" id="fixtures-table-wrap" data-view="teams">
+          <table class="fixtures-table">
+            <thead id="fixtures-head"></thead>
+            <tbody id="fixtures-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="page-updated-text page-data-footer" id="fixtures-updated-footer" hidden></p>
     </div>
 
     <div id="markets-page" class="page-pane" style="display:none;">
@@ -1637,6 +1729,49 @@
     </div>
   </div>
 </div>
+<div id="difficulty-wizard" class="difficulty-wizard" hidden aria-hidden="true">
+  <div class="difficulty-wizard-backdrop" data-diff-dismiss aria-hidden="true"></div>
+  <div class="difficulty-wizard-panel" role="dialog" aria-modal="true" aria-labelledby="difficulty-wizard-title">
+    <button type="button" class="ghost-btn icon-only-btn difficulty-wizard-close" data-diff-dismiss aria-label="Close">
+      <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+    </button>
+    <div class="difficulty-wizard-step" data-diff-step="intro">
+      <h3 id="difficulty-wizard-title">Set team difficulties</h3>
+      <p class="difficulty-wizard-copy">Set your own 1–5 club ratings (1 easy → 5 hard). When Custom fixture colors is on in Preferences, those ratings are used site-wide for fixture difficulty colors.</p>
+      <ul class="difficulty-wizard-bullets">
+        <li>Switch anytime between official FPL difficulty and your custom ratings</li>
+        <li>Saved in this browser — edit again from Preferences</li>
+      </ul>
+      <div class="difficulty-wizard-actions">
+        <button type="button" class="ghost-btn" data-diff-skip>Skip for now</button>
+        <button type="button" class="home-manager-modal-continue" data-diff-start>Start</button>
+      </div>
+    </div>
+    <div class="difficulty-wizard-step" data-diff-step="edit" hidden>
+      <header class="difficulty-edit-header">
+        <div class="difficulty-edit-title-row">
+          <h3>Team difficulties</h3>
+        </div>
+        <p class="difficulty-wizard-copy" data-diff-edit-copy>Set attacking or defending strength at home and away (1 easy → 5 hard).</p>
+        <div class="difficulty-axis-bar">
+          <div class="segmented segmented-block difficulty-axis-seg" id="difficulty-axis-seg" role="group" aria-label="Rating type">
+            <button type="button" data-axis="atk" class="active">Attacking</button>
+            <button type="button" data-axis="def">Defending</button>
+          </div>
+        </div>
+      </header>
+      <div class="difficulty-team-list" id="difficulty-team-list" tabindex="0" aria-label="Team difficulty ratings"></div>
+      <footer class="difficulty-wizard-actions difficulty-edit-actions">
+        <button type="button" class="ghost-btn" data-diff-dismiss>Cancel</button>
+        <div class="difficulty-actions-end">
+          <button type="button" class="ghost-btn" data-diff-reset>Reset to FPL</button>
+          <button type="button" class="ghost-btn difficulty-first-run-only" data-diff-skip>Skip</button>
+          <button type="button" class="home-manager-modal-continue" data-diff-save>Save</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
 <div id="home-player-modal" class="home-player-modal" hidden aria-hidden="true">
   <div class="home-player-modal-backdrop" data-home-player-dismiss aria-hidden="true"></div>
   <div class="home-player-modal-panel" role="dialog" aria-modal="true" aria-labelledby="home-player-modal-title">
@@ -1683,7 +1818,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1146"></script>
+<script src="app.js?v=1208"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
