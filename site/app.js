@@ -7,6 +7,15 @@
 
   const DATA = window.FPL_DATA;
   const MARKETS = window.FPL_MARKETS || { generatedAt: null, meta: {}, fixtures: [] };
+  const CALENDAR = window.FPL_CALENDAR || {
+    generatedAt: null,
+    meta: {},
+    competitions: [],
+    byTeam: {},
+    intlWindows: [],
+    roundWindows: [],
+  };
+  if (!window.FPL_CALENDAR) window.FPL_CALENDAR = CALENDAR;
   const OWNERSHIP = window.FPL_OWNERSHIP || { generatedAt: null, checkIns: [] };
   const PRICES = window.FPL_PRICE_CHANGES || {
     generatedAt: null,
@@ -831,7 +840,10 @@
     matchupsSeason: "2526", // 2526 prior OPTA (default) | 2627 current FPL season-to-date
     fixturesWindowStart: null,
     fixturesWindowLen: 7,
+    fixturesMonthStart: null, // index into fixturesSeasonMonthKeys()
+    fixturesMonthLen: 2,
     fixturesDemotedCodes: [],
+    fixturesScope: "pl", // pl | all
     fixturesSosMode: "all", // all | atk | def
     fixturesSosSortKey: "sum", // "sum" | GW number
     fixturesSosSortDir: "asc", // asc (easier→harder) | desc | null (league order)
@@ -1312,6 +1324,10 @@
     fixturesPage: $("#fixtures-page"),
     fixturesUpdatedFooter: $("#fixtures-updated-footer"),
     fixturesToolbar: $("#fixtures-toolbar"),
+    fixturesWindowControl: $("#fixtures-window-control"),
+    fixturesAllHorizonNote: $("#fixtures-all-horizon-note"),
+    fixturesAllHorizonEnd: $("#fixtures-all-horizon-end"),
+    fixturesWindowKind: $("#fixtures-window-kind"),
     fixturesWindowLabel: $("#fixtures-window-label"),
     fixturesGwMin: $("#fixtures-gw-min"),
     fixturesGwMax: $("#fixtures-gw-max"),
@@ -1319,6 +1335,8 @@
     fixturesGwMaxLabel: $("#fixtures-gw-max-label"),
     fixturesGwFill: $("#fixtures-gw-fill"),
     fixturesSosSeg: $("#fixtures-sos-seg"),
+    fixturesScopeSeg: $("#fixtures-scope-seg"),
+    fixturesSosFab: $("#fixtures-sos-fab"),
     fixturesTableShell: $("#fixtures-table-shell"),
     fixturesSosRail: $("#fixtures-sos-rail"),
     fixturesTableWrap: $("#fixtures-table-wrap"),
@@ -4479,7 +4497,7 @@
     });
   }
 
-  function homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther, showActiveChip = false } = {}) {
+  function homeStandingsManagerCellsHTML(row, { showActiveChip = false } = {}) {
     const entry = Number(row.entry);
     const rankVal = homeStandingsRankValue(row);
     const rankPrev = row.rankPrev != null ? Number(row.rankPrev) : (row.lastRank != null ? Number(row.lastRank) : null);
@@ -4488,18 +4506,11 @@
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
       ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${escapeHtml(formatHomeRank(rankVal))}</span>${deltaHTML}</span>`
       : "—";
-    const showConfiguredPin =
-      !!viewingOther &&
-      Number.isFinite(configuredEntry) &&
-      entry === configuredEntry;
-    const pin = showConfiguredPin
-      ? `<span class="owned-flag home-owned-flag"${tipAttr("Your manager")} aria-label="Your manager">${ownedPinSVG()}</span>`
-      : "";
     const chipBadge = showActiveChip ? homeActiveChipBadgeHTML(row) : "";
     return `<td class="home-col-rank">${rankHTML}</td>
       <td class="home-col-manager">
         <div class="home-standings-manager">
-          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${chipBadge}${pin}</span>
+          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${chipBadge}</span>
           <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
         </div>
       </td>`;
@@ -4864,7 +4875,7 @@
       : "—";
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther, showActiveChip: true })}
+      ${homeStandingsManagerCellsHTML(row, { showActiveChip: true })}
       <td class="home-col-live">${liveHTML}</td>
       <td class="home-col-left">${leftHTML}</td>
       <td class="home-col-play">${playHTML}</td>
@@ -4933,7 +4944,7 @@
       && shownPts === topCaptainPts;
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
+      ${homeStandingsManagerCellsHTML(row)}
       <td class="home-col-captain${isTopCaptain ? " is-top-captain" : ""}">${homeCaptainPickHTML(shown, {
         autoSubbed: effective.autoSubbed,
         original: effective.original,
@@ -4999,7 +5010,7 @@
     }).join("");
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
+      ${homeStandingsManagerCellsHTML(row)}
       ${cells}
     </tr>`;
   }
@@ -5148,7 +5159,7 @@
     const transfers = homeTransfersForStandingRow(row);
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
-      ${homeStandingsManagerCellsHTML(row, { configuredEntry, viewingOther })}
+      ${homeStandingsManagerCellsHTML(row)}
       <td class="home-col-transfers">${homeTransfersCellHTML(transfers)}</td>
     </tr>`;
   }
@@ -12275,6 +12286,7 @@
       syncMarketsViewControls();
       syncBarbellHeadHeight();
       syncBarbellCompareNameWidth();
+      syncFixturesSosFabVisibility();
       scheduleOwnershipTreemapRelayout();
       if (!breakpointFlip && state.page === "prices" && pricesViewMode() === "prediction") {
         schedulePricesPredictionColumnsSync();
@@ -12342,6 +12354,7 @@
           state.page === "team" ||
           state.page === "live" ||
           state.page === "prices" ||
+          state.page === "fixtures" ||
           (state.page === "ownership" && !ownershipIsTreemap()))
       );
     }
@@ -16759,7 +16772,11 @@
         maxAbsDiff = Math.max(maxAbsDiff, Math.abs(actual - expected));
       });
     });
-    maxVal = niceCeil(maxVal * 1.08 || 1);
+    // Mobile: hug the data max so the 0→max axis stays in the initial
+    // viewport (1.08 headroom was pushing e.g. 3 → 4 and leaving the top
+    // of the track off-screen). Desktop keeps a little breathing room.
+    const headroom = NARROW_MQ.matches ? 1.0 : 1.08;
+    maxVal = niceCeil(maxVal * headroom || 1);
     const tickInfo = niceTicks(0, maxVal, 4);
     maxVal = tickInfo.niceMax || maxVal;
     return { maxVal, maxAbsDiff, tickInfo };
@@ -18890,6 +18907,285 @@
   /* ---------- Fixtures ticker page ---------- */
 
   const FIXTURES_GW_CEILING = 38;
+  const FIXTURES_MONTH_DEFAULT_LEN = 2;
+  const FIXTURES_COMP_NAMES = {
+    fac: "FA Cup",
+    efl: "EFL Cup",
+    ucl: "UEFA Champions League",
+    uel: "UEFA Europa League",
+    uecl: "UEFA Europa Conference League",
+  };
+  /** Competition badge rings — distinctive kit / brand accents. */
+  const FIXTURES_COMP_ACCENTS = {
+    fac: "#C8102E",
+    efl: "#00A19C",
+    ucl: "#1A2F6B",
+    uel: "#F68E1E",
+    uecl: "#1BA35A",
+  };
+
+  function fixturesIsAllScope() {
+    return state.fixturesScope === "all";
+  }
+
+  function fixturesCalendarSeasonYear() {
+    const y = Number(CALENDAR && CALENDAR.meta && CALENDAR.meta.season);
+    if (Number.isFinite(y) && y >= 2000) return y;
+    const now = new Date();
+    const m = now.getUTCMonth(); // 0–11
+    return m >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  }
+
+  /** Season month keys Aug→May as YYYY-MM. */
+  function fixturesSeasonMonthKeys() {
+    const y = fixturesCalendarSeasonYear();
+    const keys = [];
+    for (let m = 8; m <= 12; m += 1) keys.push(`${y}-${String(m).padStart(2, "0")}`);
+    for (let m = 1; m <= 5; m += 1) keys.push(`${y + 1}-${String(m).padStart(2, "0")}`);
+    return keys;
+  }
+
+  function fixturesMonthKeyNow() {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function ensureFixturesMonthWindow() {
+    const keys = fixturesSeasonMonthKeys();
+    const n = keys.length;
+    if (!n) {
+      state.fixturesMonthStart = 0;
+      state.fixturesMonthLen = 1;
+      return;
+    }
+    let len = Math.min(
+      Math.max(1, Number(state.fixturesMonthLen) || FIXTURES_MONTH_DEFAULT_LEN),
+      n
+    );
+    let start = state.fixturesMonthStart;
+    if (start == null || !Number.isFinite(Number(start))) {
+      const cur = fixturesMonthKeyNow();
+      const idx = Math.max(0, keys.indexOf(cur));
+      start = idx >= 0 ? idx : 0;
+      len = Math.min(FIXTURES_MONTH_DEFAULT_LEN, n - start) || 1;
+      if (start + len > n) start = Math.max(0, n - len);
+    }
+    start = Math.max(0, Math.min(Number(start) || 0, n - 1));
+    len = Math.min(len, n - start);
+    state.fixturesMonthStart = start;
+    state.fixturesMonthLen = Math.max(1, len);
+  }
+
+  function fixturesMonthWindowRange() {
+    ensureFixturesMonthWindow();
+    const keys = fixturesSeasonMonthKeys();
+    const lo = Math.max(0, Number(state.fixturesMonthStart) || 0);
+    const hi = Math.min(keys.length - 1, lo + (Number(state.fixturesMonthLen) || 1) - 1);
+    return [lo, hi];
+  }
+
+  function setFixturesMonthWindowRange(lo, hi) {
+    const keys = fixturesSeasonMonthKeys();
+    const n = keys.length;
+    if (!n) return;
+    const a = Math.max(0, Math.min(Number(lo) || 0, n - 1));
+    const b = Math.max(a, Math.min(Number(hi) || a, n - 1));
+    state.fixturesMonthStart = a;
+    state.fixturesMonthLen = b - a + 1;
+  }
+
+  function fixturesMonthKeysInWindow() {
+    const keys = fixturesSeasonMonthKeys();
+    const [lo, hi] = fixturesMonthWindowRange();
+    return keys.slice(lo, hi + 1);
+  }
+
+  function fixturesFormatMonthKey(ym) {
+    if (!ym) return "—";
+    const [ys, ms] = String(ym).split("-");
+    const d = new Date(Date.UTC(Number(ys), Number(ms) - 1, 1));
+    try {
+      return d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+    } catch {
+      return ym;
+    }
+  }
+
+  /** Latest date among Odds events + soft intl/round windows. */
+  function fixturesCalendarLastEventDate() {
+    let max = null;
+    const consider = (key) => {
+      if (!key) return;
+      if (!max || key > max) max = key;
+    };
+    const byTeam = (CALENDAR && CALENDAR.byTeam) || {};
+    for (const rows of Object.values(byTeam)) {
+      if (!Array.isArray(rows)) continue;
+      for (const ev of rows) {
+        consider(fixturesKickoffDateKey(ev && (ev.date || ev.kickoff)));
+      }
+    }
+    const windows = [
+      ...((CALENDAR && CALENDAR.intlWindows) || []),
+      ...((CALENDAR && CALENDAR.roundWindows) || []),
+    ];
+    for (const w of windows) {
+      consider(w && w.end);
+      consider(w && w.start);
+    }
+    return max;
+  }
+
+  function fixturesUtcTodayKey() {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  /**
+   * All competitions day columns: today → last Odds listing or soft window end.
+   */
+  function fixturesCalendarDays() {
+    const today = fixturesUtcTodayKey();
+    const last = fixturesCalendarLastEventDate();
+    const end = last && last >= today ? last : today;
+    const startMs = Date.UTC(
+      Number(today.slice(0, 4)),
+      Number(today.slice(5, 7)) - 1,
+      Number(today.slice(8, 10))
+    );
+    const endMs = Date.UTC(
+      Number(end.slice(0, 4)),
+      Number(end.slice(5, 7)) - 1,
+      Number(end.slice(8, 10))
+    );
+    const days = [];
+    for (let t = startMs; t <= endMs; t += 86400000) {
+      days.push(new Date(t).toISOString().slice(0, 10));
+    }
+    return days;
+  }
+
+  function fixturesKickoffDateKey(iso) {
+    if (!iso) return null;
+    const s = String(iso);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+  }
+
+  function fixturesFormatDayHeader(dateKey) {
+    const [ys, ms, ds] = String(dateKey).split("-").map(Number);
+    if (!ys || !ms || !ds) return dateKey;
+    const d = new Date(Date.UTC(ys, ms - 1, ds));
+    try {
+      return d.toLocaleDateString("en-GB", { month: "short", day: "numeric", timeZone: "UTC" });
+    } catch {
+      return dateKey;
+    }
+  }
+
+  function fixturesCompDisplayName(ev) {
+    if (!ev) return "Cup";
+    const fromBundle = ((CALENDAR && CALENDAR.competitions) || []).find(
+      (c) => c.key === ev.competitionKey || Number(c.id) === Number(ev.competitionId)
+    );
+    return (
+      (fromBundle && fromBundle.name)
+      || FIXTURES_COMP_NAMES[ev.competitionKey]
+      || ev.competitionKey
+      || "Cup"
+    );
+  }
+
+  function fixturesCompLogoHTML(ev) {
+    const provisional = !!(ev && (ev.provisional || ev.source === "window"));
+    const name = fixturesCompDisplayName(ev);
+    const when = fmtMarketsKickoffParts(ev && ev.kickoff);
+    const timeBit = when.time || when.date || "";
+    const tipBits = [name];
+    if (provisional) {
+      tipBits.push(ev.label || "Round window · dates TBC");
+      if (ev.note) tipBits.push(ev.note);
+    } else {
+      tipBits.push(ev.ha === "A" ? "Away" : "Home");
+      if (ev.oppName) tipBits.push(`vs ${ev.oppName}`);
+      if (timeBit) tipBits.push(timeBit);
+    }
+    const tip = tipBits.join(" · ");
+    const key = String(ev.competitionKey || "");
+    const accent = FIXTURES_COMP_ACCENTS[key] || "";
+    const accentStyle = accent ? ` style="--comp-accent:${accent}"` : "";
+    const ringClass = accent ? " has-comp-ring" : "";
+    const provisionalClass = provisional ? " is-provisional" : "";
+    const logo = ev.logo || ((CALENDAR && CALENDAR.competitions) || []).find(
+      (c) => c.key === ev.competitionKey
+    )?.logo || "";
+    if (logo) {
+      return `<span class="fixtures-comp-badge${ringClass}${provisionalClass}"${accentStyle} ${tipAttr(tip)}><img src="${escapeHtml(logo)}" alt="" width="18" height="18" loading="lazy" decoding="async" /></span>`;
+    }
+    const short = key ? key.toUpperCase() : "CUP";
+    return `<span class="fixtures-comp-badge is-text${ringClass}${provisionalClass}"${accentStyle} ${tipAttr(tip)}>${escapeHtml(short)}</span>`;
+  }
+
+  function fixturesDateInWindows(dateKey, windows) {
+    if (!dateKey || !Array.isArray(windows)) return [];
+    return windows.filter((w) => w && w.start && w.end && dateKey >= w.start && dateKey <= w.end);
+  }
+
+  function fixturesIntlWindowsForDay(dateKey) {
+    return fixturesDateInWindows(dateKey, (CALENDAR && CALENDAR.intlWindows) || []);
+  }
+
+  function fixturesRoundWindowsForDay(dateKey) {
+    return fixturesDateInWindows(dateKey, (CALENDAR && CALENDAR.roundWindows) || []);
+  }
+
+  /** Teams that already have a confirmed Odds row for this competition. */
+  function fixturesTeamInCompetition(teamCode, competitionKey) {
+    const rows = (CALENDAR && CALENDAR.byTeam && CALENDAR.byTeam[teamCode]) || [];
+    return rows.some((ev) => ev && ev.competitionKey === competitionKey && !ev.provisional);
+  }
+
+  function fixturesGhostRoundHTML(teamCode, dateKey, confirmedKeys) {
+    const windows = fixturesRoundWindowsForDay(dateKey);
+    const bits = [];
+    const seen = new Set(confirmedKeys || []);
+    for (const w of windows) {
+      const key = w.competitionKey;
+      if (!key || seen.has(key)) continue;
+      const openToAll = key === "fac";
+      if (!openToAll && !fixturesTeamInCompetition(teamCode, key)) continue;
+      seen.add(key);
+      bits.push(
+        fixturesCompLogoHTML({
+          competitionKey: key,
+          logo: w.logo,
+          provisional: true,
+          source: "window",
+          label: w.label,
+          note: w.note,
+        })
+      );
+    }
+    return bits;
+  }
+
+  function fixturesIntChipHTML(dateKey) {
+    const windows = fixturesIntlWindowsForDay(dateKey);
+    if (!windows.length) return "";
+    const w = windows[0];
+    const tip = [
+      w.label || "International break",
+      w.note,
+      `${fixturesFormatDayHeader(w.start)} – ${fixturesFormatDayHeader(w.end)}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return `<span class="fixtures-int-chip" ${tipAttr(tip)}>International break</span>`;
+  }
 
   /** Slider / ticker floor: first GW after the live/current gameweek. */
   function fixturesHorizonMin() {
@@ -18938,6 +19234,9 @@
     const d = fixturesDefaultWindow();
     state.fixturesWindowStart = d.start;
     state.fixturesWindowLen = d.len;
+    state.fixturesMonthStart = null;
+    state.fixturesMonthLen = FIXTURES_MONTH_DEFAULT_LEN;
+    ensureFixturesMonthWindow();
   }
 
   function fixturesWindowRange() {
@@ -19044,8 +19343,7 @@
     return active.concat(demoted);
   }
 
-  function fixturesPillHTML(teamCode, gw) {
-    const fixtures = (FIXTURES_BY_TEAM[teamCode] || []).filter((fx) => Number(fx.gw) === gw);
+  function fixturesPillHTMLFromList(fixtures) {
     if (!fixtures.length) {
       return `<span class="fixtures-pill is-blank">–</span>`;
     }
@@ -19071,6 +19369,92 @@
       })
       .join(" · ");
     return `<span class="fixtures-pill${ramp.className}${ramp.strongClass}"${ramp.styleAttr}${tipAttr(tip)}>${escapeHtml(label)}</span>`;
+  }
+
+  function fixturesPillHTML(teamCode, gw) {
+    const fixtures = (FIXTURES_BY_TEAM[teamCode] || []).filter((fx) => Number(fx.gw) === gw);
+    return fixturesPillHTMLFromList(fixtures);
+  }
+
+  /** Per-day model for All mode; soft INT/ghost runs merge via colspan. */
+  function fixturesAllDayModel(teamCode, dateKey) {
+    const pl = (FIXTURES_BY_TEAM[teamCode] || []).filter(
+      (fx) => fixturesKickoffDateKey(fx.kickoff) === dateKey
+    );
+    const cups = ((CALENDAR && CALENDAR.byTeam && CALENDAR.byTeam[teamCode]) || []).filter(
+      (ev) => ev && ev.date === dateKey && !ev.provisional
+    );
+    const hardBits = [];
+    if (pl.length) hardBits.push(fixturesPillHTMLFromList(pl));
+    cups.forEach((ev) => hardBits.push(fixturesCompLogoHTML(ev)));
+    const intl = fixturesIntlWindowsForDay(dateKey).length > 0;
+    if (hardBits.length) {
+      return { kind: "hard", html: hardBits.join(""), intl, softKey: null };
+    }
+    const confirmedKeys = cups.map((ev) => ev.competitionKey).filter(Boolean);
+    const ghostBits = fixturesGhostRoundHTML(teamCode, dateKey, confirmedKeys);
+    if (ghostBits.length) {
+      const keys = fixturesRoundWindowsForDay(dateKey)
+        .map((w) => w && w.competitionKey)
+        .filter((key) => {
+          if (!key || confirmedKeys.includes(key)) return false;
+          if (key === "fac") return true;
+          return fixturesTeamInCompetition(teamCode, key);
+        })
+        .sort();
+      return {
+        kind: "soft",
+        softKey: `ghost:${keys.join("|")}`,
+        html: ghostBits.join(""),
+        intl,
+      };
+    }
+    const intChip = fixturesIntChipHTML(dateKey);
+    if (intChip) {
+      return { kind: "soft", softKey: "int", html: intChip, intl: true };
+    }
+    return { kind: "empty", html: "", intl, softKey: null };
+  }
+
+  function fixturesAllDayCellsHTML(teamCode, days) {
+    const models = days.map((day) => fixturesAllDayModel(teamCode, day));
+    const out = [];
+    let i = 0;
+    while (i < models.length) {
+      const m = models[i];
+      if (m.kind === "soft") {
+        let j = i + 1;
+        while (
+          j < models.length
+          && models[j].kind === "soft"
+          && models[j].softKey === m.softKey
+        ) {
+          j += 1;
+        }
+        const span = j - i;
+        const intl = models.slice(i, j).some((x) => x.intl);
+        const spanAttr = span > 1 ? ` colspan="${span}"` : "";
+        const spanClass = span > 1 ? " is-soft-span" : "";
+        const stackClass = span > 1 ? " is-merged-span" : "";
+        out.push(
+          `<td class="col-fixtures-day${intl ? " is-intl-window" : ""}${spanClass}"${spanAttr}><div class="fixtures-day-stack${stackClass}">${m.html}</div></td>`
+        );
+        i = j;
+        continue;
+      }
+      if (m.kind === "hard") {
+        out.push(
+          `<td class="col-fixtures-day${m.intl ? " is-intl-window" : ""}"><div class="fixtures-day-stack">${m.html}</div></td>`
+        );
+        i += 1;
+        continue;
+      }
+      out.push(
+        `<td class="col-fixtures-day${m.intl ? " is-intl-window" : ""}"><span class="fixtures-day-blank" aria-hidden="true"></span></td>`
+      );
+      i += 1;
+    }
+    return out.join("");
   }
 
   function fixturesTeamIdentityHTML(teamCode) {
@@ -19122,6 +19506,21 @@
     </tr>`;
   }
 
+  function fixturesAllHeadHTML(days) {
+    const cols = days
+      .map(
+        (day) =>
+          `<th class="col-fixtures-day" scope="col"><span class="fixtures-day-lab">${escapeHtml(
+            fixturesFormatDayHeader(day)
+          )}</span></th>`
+      )
+      .join("");
+    return `<tr>
+      <th class="col-name" scope="col">Team</th>
+      ${cols}
+    </tr>`;
+  }
+
   function fixturesSosCellHTML(teamCode, gws) {
     const { total, count } = fixturesTeamSosTotal(teamCode, gws);
     if (!count) {
@@ -19138,13 +19537,50 @@
     return `<tr class="${cls}" data-team="${escapeHtml(teamCode)}" tabindex="0" role="row" aria-pressed="${demoted ? "true" : "false"}" title="${demoted ? "Tap to restore" : "Tap to demote"}"><td class="col-name">${fixturesTeamIdentityHTML(teamCode)}</td>${fixturesSosCellHTML(teamCode, gws)}${cells}</tr>`;
   }
 
+  function fixturesAllRowHTML(teamCode, days) {
+    const demoted = (state.fixturesDemotedCodes || []).includes(teamCode);
+    const cells = fixturesAllDayCellsHTML(teamCode, days);
+    const cls = ["fixtures-row", demoted ? "is-demoted" : ""].filter(Boolean).join(" ");
+    return `<tr class="${cls}" data-team="${escapeHtml(teamCode)}" tabindex="0" role="row" aria-pressed="${demoted ? "true" : "false"}" title="${demoted ? "Tap to restore" : "Tap to demote"}"><td class="col-name">${fixturesTeamIdentityHTML(teamCode)}</td>${cells}</tr>`;
+  }
+
   function syncFixturesSosSeg() {
-    if (!el.fixturesSosSeg) return;
     const mode = fixturesSosModeKey();
-    el.fixturesSosSeg.querySelectorAll("button[data-fixtures-sos]").forEach((btn) => {
-      btn.classList.toggle("active", btn.getAttribute("data-fixtures-sos") === mode);
+    if (el.fixturesSosSeg) {
+      el.fixturesSosSeg.querySelectorAll("button[data-fixtures-sos]").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-fixtures-sos") === mode);
+      });
+    }
+    if (el.fixturesSosFab) {
+      el.fixturesSosFab.querySelectorAll("button[data-fixtures-sos]").forEach((btn) => {
+        const on = btn.getAttribute("data-fixtures-sos") === mode;
+        btn.classList.toggle("is-active", on);
+        btn.classList.toggle("active", on);
+      });
+    }
+    syncAllSegThumbs({ animate: false });
+  }
+
+  function syncFixturesScopeSeg() {
+    if (!el.fixturesScopeSeg) return;
+    const scope = fixturesIsAllScope() ? "all" : "pl";
+    el.fixturesScopeSeg.querySelectorAll("button[data-fixtures-scope]").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-fixtures-scope") === scope);
     });
     syncAllSegThumbs({ animate: false });
+  }
+
+  function syncFixturesSosFabVisibility() {
+    if (!el.fixturesSosFab) return;
+    const show = state.page === "fixtures" && NARROW_MQ.matches;
+    el.fixturesSosFab.hidden = !show;
+    document.documentElement.classList.toggle("has-fixtures-sos-fab", show);
+    if (show) {
+      const tabs = el.fixturesSosFab.querySelector(".fixtures-sos-fab-tabs");
+      if (tabs && typeof syncSegThumb === "function") {
+        requestAnimationFrame(() => syncSegThumb(tabs, { animate: false }));
+      }
+    }
   }
 
   function captureFixturesRowTops() {
@@ -19189,6 +19625,14 @@
   function syncFixturesSosRail() {
     const rail = el.fixturesSosRail;
     if (!rail) return;
+    if (fixturesIsAllScope()) {
+      rail.hidden = true;
+      rail.setAttribute("aria-hidden", "true");
+      if (el.fixturesTableShell) el.fixturesTableShell.classList.remove("has-sos-rail");
+      if (el.fixturesTableWrap) el.fixturesTableWrap.classList.add("is-calendar");
+      return;
+    }
+    if (el.fixturesTableWrap) el.fixturesTableWrap.classList.remove("is-calendar");
     const dir = state.fixturesSosSortDir;
     const hardFirst = dir === "desc";
     rail.hidden = false;
@@ -19224,7 +19668,23 @@
   }
 
   function syncFixturesWindowLabel({ syncSlider = true } = {}) {
+    const allScope = fixturesIsAllScope();
+    if (el.fixturesWindowControl) {
+      el.fixturesWindowControl.hidden = allScope;
+    }
+    if (el.fixturesAllHorizonNote) {
+      el.fixturesAllHorizonNote.hidden = !allScope;
+      if (allScope && el.fixturesAllHorizonEnd) {
+        const days = fixturesCalendarDays();
+        const end = days.length ? days[days.length - 1] : fixturesUtcTodayKey();
+        el.fixturesAllHorizonEnd.textContent = fixturesFormatDayHeader(end);
+      }
+    }
+    if (allScope) return;
     if (syncSlider && typeof updateFixturesGwSlider === "function") updateFixturesGwSlider();
+    if (el.fixturesWindowKind) {
+      el.fixturesWindowKind.textContent = "Gameweeks";
+    }
     if (!el.fixturesWindowLabel) return;
     const gws = fixturesGws();
     if (!gws.length) {
@@ -19238,16 +19698,26 @@
 
   function renderFixturesPage({ syncSlider = true, animateReorder = false } = {}) {
     if (!el.fixturesPage || !el.fixturesHead || !el.fixturesBody) return;
-    ensureFixturesWindow();
+    const allScope = fixturesIsAllScope();
+    if (!allScope) ensureFixturesWindow();
     const gws = fixturesGws();
-    ensureFixturesSortKeyInWindow(gws);
+    const days = allScope ? fixturesCalendarDays() : [];
+    if (!allScope) ensureFixturesSortKeyInWindow(gws);
     const teams = fixturesTeamCodes(gws);
     const prevTops = animateReorder ? captureFixturesRowTops() : null;
     syncFixturesWindowLabel({ syncSlider });
     syncFixturesSosSeg();
+    syncFixturesScopeSeg();
     syncFixturesSosRail();
-    el.fixturesHead.innerHTML = fixturesHeadHTML(gws);
-    el.fixturesBody.innerHTML = teams.map((code) => fixturesRowHTML(code, gws)).join("");
+    syncFixturesSosFabVisibility();
+    if (el.fixturesPage) el.fixturesPage.classList.toggle("is-fixtures-all", allScope);
+    if (allScope) {
+      el.fixturesHead.innerHTML = fixturesAllHeadHTML(days);
+      el.fixturesBody.innerHTML = teams.map((code) => fixturesAllRowHTML(code, days)).join("");
+    } else {
+      el.fixturesHead.innerHTML = fixturesHeadHTML(gws);
+      el.fixturesBody.innerHTML = teams.map((code) => fixturesRowHTML(code, gws)).join("");
+    }
     bindAllNameColumnSimplifies();
     syncPageUpdatedFooter(el.fixturesUpdatedFooter, pageDataUpdatedIso("fixtures"));
     if (animateReorder) {
@@ -19273,7 +19743,24 @@
     });
   }
 
+  function setFixturesScope(scope) {
+    const next = scope === "all" ? "all" : "pl";
+    if (state.fixturesScope === next) return;
+    state.fixturesScope = next;
+    if (next === "all") {
+      state.fixturesSosSortDir = null;
+    } else {
+      ensureFixturesWindow();
+      if (state.fixturesSosSortDir == null) {
+        state.fixturesSosSortKey = "sum";
+        state.fixturesSosSortDir = "asc";
+      }
+    }
+    renderFixturesPage({ syncSlider: true, animateReorder: false });
+  }
+
   function cycleFixturesColumnSort(key) {
+    if (fixturesIsAllScope()) return;
     const normalized = key === "sum" ? "sum" : Number(key);
     if (normalized !== "sum" && !Number.isFinite(normalized)) return;
     const same = fixturesSortKeyIs(normalized) && state.fixturesSosSortDir != null;
@@ -21000,7 +21487,11 @@
           : DATA.generatedAt || null;
       case "expected":
       case "schedule":
+        return DATA.generatedAt || null;
       case "fixtures":
+        return fixturesIsAllScope()
+          ? latestDataIso(DATA.generatedAt, CALENDAR.generatedAt)
+          : DATA.generatedAt || null;
       default:
         return DATA.generatedAt || null;
     }
@@ -27839,6 +28330,7 @@
     } else if (page === "team") {
       renderTeam();
     }
+    syncFixturesSosFabVisibility();
     syncTeamPickingClass();
     playPageEnter(pagePaneFor(page));
     requestAnimationFrame(() => {
@@ -28236,6 +28728,22 @@
       if (!btn || !el.fixturesSosSeg.contains(btn)) return;
       e.preventDefault();
       setFixturesSosMode(btn.getAttribute("data-fixtures-sos"));
+    });
+  }
+  if (el.fixturesSosFab) {
+    el.fixturesSosFab.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-fixtures-sos]");
+      if (!btn || !el.fixturesSosFab.contains(btn)) return;
+      e.preventDefault();
+      setFixturesSosMode(btn.getAttribute("data-fixtures-sos"));
+    });
+  }
+  if (el.fixturesScopeSeg) {
+    el.fixturesScopeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-fixtures-scope]");
+      if (!btn || !el.fixturesScopeSeg.contains(btn)) return;
+      e.preventDefault();
+      setFixturesScope(btn.getAttribute("data-fixtures-scope"));
     });
   }
   if (el.fixturesHead) {
@@ -29181,13 +29689,44 @@
       fillEl: el.fixturesGwFill,
       minLabelEl: el.fixturesGwMinLabel,
       maxLabelEl: el.fixturesGwMaxLabel,
-      getBounds: () => ({ min: fixturesHorizonMin(), max: fixturesHorizonMax() }),
+      getBounds: () => {
+        if (fixturesIsAllScope()) {
+          const n = Math.max(1, fixturesSeasonMonthKeys().length);
+          return { min: 0, max: n - 1 };
+        }
+        return { min: fixturesHorizonMin(), max: fixturesHorizonMax() };
+      },
       boundLabels: true,
       step: 1,
-      get: () => fixturesWindowRange(),
-      set: (lo, hi) => setFixturesWindowRange(lo, hi),
-      format: (v) => `GW${v}`,
+      get: () => {
+        if (fixturesIsAllScope()) return fixturesMonthWindowRange();
+        return fixturesWindowRange();
+      },
+      set: (lo, hi) => {
+        if (fixturesIsAllScope()) setFixturesMonthWindowRange(lo, hi);
+        else setFixturesWindowRange(lo, hi);
+      },
+      format: (v) => {
+        if (fixturesIsAllScope()) {
+          const keys = fixturesSeasonMonthKeys();
+          return fixturesFormatMonthKey(keys[v] || keys[0]);
+        }
+        return `GW${v}`;
+      },
       onInput: () => {
+        if (fixturesIsAllScope()) {
+          if (el.fixturesWindowLabel) {
+            const months = fixturesMonthKeysInWindow();
+            if (!months.length) el.fixturesWindowLabel.textContent = "—";
+            else {
+              const a = fixturesFormatMonthKey(months[0]);
+              const b = fixturesFormatMonthKey(months[months.length - 1]);
+              el.fixturesWindowLabel.textContent = a === b ? a : `${a} – ${b}`;
+            }
+          }
+          renderFixturesPage({ syncSlider: false, animateReorder: false });
+          return;
+        }
         // Sliding the window re-ranks by Σ — easiest fixtures on top.
         state.fixturesSosSortKey = "sum";
         state.fixturesSosSortDir = "asc";
@@ -30211,6 +30750,7 @@
       syncHomeLookupUI();
       renderHome({ deferDuringEnter: true });
     }
+    if (state.page === "expected") renderExpected();
     if (state.page === "team") renderTeam();
     if (state.page === "opta") {
       requestAnimationFrame(() => {

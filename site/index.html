@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1177" />
+<link rel="stylesheet" href="styles.css?v=1193" />
 <script>
 (() => {
   try {
@@ -1589,14 +1589,20 @@
           </div>
         </div>
         <div class="fixtures-toolbar" id="fixtures-toolbar" role="group" aria-label="Fixture window">
-          <div class="segmented fixtures-sos-seg" id="fixtures-sos-seg" role="group" aria-label="Strength of schedule">
-            <button type="button" data-fixtures-sos="all" class="active">All</button>
-            <button type="button" data-fixtures-sos="atk">Attacking</button>
-            <button type="button" data-fixtures-sos="def">Defending</button>
+          <div class="fixtures-toolbar-segs" id="fixtures-toolbar-segs">
+            <div class="segmented fixtures-sos-seg" id="fixtures-sos-seg" role="group" aria-label="Strength of schedule">
+              <button type="button" data-fixtures-sos="all" class="active">All</button>
+              <button type="button" data-fixtures-sos="atk">Attacking</button>
+              <button type="button" data-fixtures-sos="def">Defending</button>
+            </div>
+            <div class="segmented fixtures-scope-seg" id="fixtures-scope-seg" role="group" aria-label="Competition scope">
+              <button type="button" data-fixtures-scope="pl" class="active">Premier League</button>
+              <button type="button" data-fixtures-scope="all">All competitions</button>
+            </div>
           </div>
-          <div class="fixtures-window-control">
+          <div class="fixtures-window-control" id="fixtures-window-control">
             <div class="fixtures-window-head">
-              <strong>Gameweeks</strong>
+              <strong id="fixtures-window-kind">Gameweeks</strong>
               <span id="fixtures-window-label">GW1–7</span>
             </div>
             <div class="dual-slider">
@@ -1610,6 +1616,26 @@
               <span id="fixtures-gw-max-label">GW38</span>
             </div>
           </div>
+          <p class="fixtures-all-horizon-note" id="fixtures-all-horizon-note" hidden>
+            Through <span id="fixtures-all-horizon-end">—</span>
+            · Odds listings + soft FIFA / round windows
+          </p>
+        </div>
+      </div>
+
+      <div class="fixtures-sos-fab" id="fixtures-sos-fab" hidden role="group" aria-label="Strength of schedule">
+        <div class="tabs fixtures-sos-fab-tabs" role="presentation">
+          <button type="button" class="tab-btn fixtures-sos-fab-btn active" data-fixtures-sos="all" aria-label="All difficulty">
+            <span class="mobile-dock-label">All</span>
+          </button>
+          <button type="button" class="tab-btn fixtures-sos-fab-btn" data-fixtures-sos="atk" aria-label="Attacking difficulty">
+            <svg class="icon" aria-hidden="true"><use href="#i-swords"/></svg>
+            <span class="mobile-dock-label">ATK</span>
+          </button>
+          <button type="button" class="tab-btn fixtures-sos-fab-btn" data-fixtures-sos="def" aria-label="Defending difficulty">
+            <svg class="icon" aria-hidden="true"><use href="#i-shield-half"/></svg>
+            <span class="mobile-dock-label">DEF</span>
+          </button>
         </div>
       </div>
 
@@ -1799,6 +1825,7 @@
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
 <script src="data.js?v=110"></script>
 <script src="markets_data.js?v=35"></script>
+<script src="calendar_data.js?v=4"></script>
 <script src="ownership_data.js?v=25"></script>
 <script src="price_changes_data.js?v=48"></script>
 <script src="leagues_data.js?v=5"></script>
@@ -1824,7 +1851,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1219"></script>
+<script src="app.js?v=1234"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

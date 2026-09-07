@@ -7821,8 +7821,8 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .barbell-connector {
   position: absolute;
   top: 50%;
-  height: 5px;
-  min-width: 3px;
+  height: 3px;
+  min-width: 2px;
   transform: translateY(-50%);
   border-radius: 999px;
   background: var(--text-faint);
@@ -7847,7 +7847,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   left: 0;
   right: 0;
   top: 50%;
-  height: 12px;
+  height: 8px;
   transform: translateY(-50%);
   overflow: hidden;
   z-index: 1;
@@ -7856,18 +7856,18 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 /* Marching triangles toward the over/underperform (actual) dot. */
 .barbell-ants {
   position: absolute;
-  left: -40px;
+  left: -28px;
   top: 50%;
-  width: calc(100% + 80px);
-  height: 10px;
+  width: calc(100% + 56px);
+  height: 7px;
   transform: translateY(-50%);
   background-color: currentColor;
   opacity: 0.72;
   /* Filled triangle pointing right; wide tile pitch = sparse spacing. */
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'%3E%3Cpath d='M2 0.5 L14 5 L2 9.5 Z' fill='%23000'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'%3E%3Cpath d='M2 0.5 L14 5 L2 9.5 Z' fill='%23000'/%3E%3C/svg%3E");
-  -webkit-mask-size: 40px 10px;
-  mask-size: 40px 10px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 7'%3E%3Cpath d='M1.4 0.35 L9.8 3.5 L1.4 6.65 Z' fill='%23000'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 7'%3E%3Cpath d='M1.4 0.35 L9.8 3.5 L1.4 6.65 Z' fill='%23000'/%3E%3C/svg%3E");
+  -webkit-mask-size: 28px 7px;
+  mask-size: 28px 7px;
   -webkit-mask-repeat: repeat-x;
   mask-repeat: repeat-x;
   -webkit-mask-position: 0 center;
@@ -7878,11 +7878,11 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   animation-name: barbell-ants-left;
 }
 @keyframes barbell-ants-right {
-  to { transform: translateY(-50%) translateX(40px); }
+  to { transform: translateY(-50%) translateX(28px); }
 }
 @keyframes barbell-ants-left {
   from { transform: translateY(-50%) scaleX(-1); }
-  to { transform: translateY(-50%) scaleX(-1) translateX(40px); }
+  to { transform: translateY(-50%) scaleX(-1) translateX(28px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .barbell-ants { animation: none; opacity: 0.45; }
@@ -7893,15 +7893,15 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .barbell-dot {
   position: absolute;
   top: 50%;
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  border: 2.5px solid var(--bg-panel);
+  border: 2px solid var(--bg-panel);
   cursor: pointer;
   z-index: 2;
 }
-.barbell-dot:hover { width: 22px; height: 22px; }
+.barbell-dot:hover { width: 15px; height: 15px; }
 .barbell-dot.expected { background: var(--text-faint); }
 .barbell-dot.actual.over { background: hsl(var(--positive)); }
 .barbell-dot.actual.under { background: hsl(var(--negative)); }
@@ -8182,31 +8182,31 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     width: 7px;
     height: 7px;
   }
-  /* Compact track graphics so more of the chart fits on small screens. */
+  /* Compact track graphics so dots/arrows stay readable on a fitted track. */
   .barbell-track {
-    height: 22px;
+    height: 18px;
   }
   .barbell-connector {
-    height: 3px;
+    height: 2px;
     min-width: 2px;
   }
   .barbell-ants-clip {
-    height: 9px;
+    height: 7px;
   }
   .barbell-ants {
-    height: 7px;
-    left: -28px;
-    width: calc(100% + 56px);
-    -webkit-mask-size: 28px 7px;
-    mask-size: 28px 7px;
-    animation-duration: 3.6s;
+    height: 5px;
+    left: -20px;
+    width: calc(100% + 40px);
+    -webkit-mask-size: 20px 5px;
+    mask-size: 20px 5px;
+    animation-duration: 3.2s;
   }
   @keyframes barbell-ants-right-sm {
-    to { transform: translateY(-50%) translateX(28px); }
+    to { transform: translateY(-50%) translateX(20px); }
   }
   @keyframes barbell-ants-left-sm {
     from { transform: translateY(-50%) scaleX(-1); }
-    to { transform: translateY(-50%) scaleX(-1) translateX(28px); }
+    to { transform: translateY(-50%) scaleX(-1) translateX(20px); }
   }
   .barbell-ants {
     animation-name: barbell-ants-right-sm;
@@ -8215,14 +8215,14 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     animation-name: barbell-ants-left-sm;
   }
   .barbell-dot {
-    width: 12px;
-    height: 12px;
-    border-width: 2px;
+    width: 9px;
+    height: 9px;
+    border-width: 1.5px;
   }
   .barbell-dot:hover,
   html[data-pointer="coarse"] .barbell-dot:hover {
-    width: 12px;
-    height: 12px;
+    width: 9px;
+    height: 9px;
   }
 }
 
@@ -10181,8 +10181,8 @@ html[data-pointer="coarse"] .barbell-group:nth-child(even) .barbell-row:hover .b
 }
 
 html[data-pointer="coarse"] .barbell-dot:hover {
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
 }
 
 html[data-pointer="coarse"] .schedule-scatter-point:hover {
@@ -22152,14 +22152,37 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   max-width: none;
   box-sizing: border-box;
 }
+.fixtures-toolbar-segs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+@media (min-width: 901px) {
+  .fixtures-toolbar-segs {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .fixtures-toolbar-segs .fixtures-sos-seg,
+  .fixtures-toolbar-segs .fixtures-scope-seg {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+}
 .fixtures-sos-seg.segmented,
-.fixtures-sos-seg {
+.fixtures-sos-seg,
+.fixtures-scope-seg.segmented,
+.fixtures-scope-seg {
   display: flex;
   width: 100%;
   max-width: none;
   box-sizing: border-box;
 }
-.fixtures-sos-seg button {
+.fixtures-sos-seg button,
+.fixtures-scope-seg button {
   flex: 1 1 0;
   min-width: 0;
   padding-left: 8px;
@@ -22176,6 +22199,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--card));
+}
+.fixtures-window-control[hidden] {
+  display: none !important;
 }
 .fixtures-window-control .dual-slider,
 .fixtures-window-control .slider-values {
@@ -22209,6 +22235,66 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   width: 100%;
   min-width: 0;
 }
+/* Page (.main) owns vertical scroll — nested max-height + overscroll:none was
+   trapping the mouse wheel after a few pixels and locking the Fixtures table.
+   Keep shell/wrap full-bleed so sparse GW windows still fill the viewport. */
+@media (min-width: 721px) {
+  html[data-page="fixtures"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-width: 0;
+  }
+  html[data-page="fixtures"] #fixtures-page {
+    display: block;
+    width: 100%;
+    max-width: none;
+    flex: none;
+    min-height: 0;
+    overflow: visible;
+  }
+  html[data-page="fixtures"] #fixtures-page .fixtures-table-shell {
+    display: flex;
+    width: 100%;
+    max-width: none;
+    flex: none;
+    min-height: 0;
+    box-sizing: border-box;
+  }
+  html[data-page="fixtures"] #fixtures-page .fixtures-table-wrap {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+  }
+}
+@media (max-width: 720px) {
+  html[data-page="fixtures"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  html[data-page="fixtures"] #fixtures-page .fixtures-table-shell {
+    width: 100%;
+  }
+  html[data-page="fixtures"] #fixtures-page .fixtures-table-wrap {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+  }
+}
 .fixtures-table-shell.has-sos-rail {
   gap: 8px;
   padding-left: 2px;
@@ -22239,6 +22325,14 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   line-height: 1;
   white-space: nowrap;
 }
+.fixtures-sos-rail:not(.is-hard-first) .fixtures-sos-rail-lab.is-top,
+.fixtures-sos-rail.is-hard-first .fixtures-sos-rail-lab.is-bot {
+  color: hsl(var(--delta-rise));
+}
+.fixtures-sos-rail:not(.is-hard-first) .fixtures-sos-rail-lab.is-bot,
+.fixtures-sos-rail.is-hard-first .fixtures-sos-rail-lab.is-top {
+  color: hsl(var(--delta-fall));
+}
 .fixtures-sos-rail-stem {
   flex: 1 1 auto;
   width: 2px;
@@ -22246,9 +22340,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   border-radius: 999px;
   background: linear-gradient(
     180deg,
-    hsl(var(--spectrum-rise) / 0.55) 0%,
-    hsl(var(--muted-foreground) / 0.28) 48%,
-    hsl(var(--spectrum-fall) / 0.55) 100%
+    hsl(var(--delta-rise) / 0.92) 0%,
+    hsl(var(--muted-foreground) / 0.22) 48%,
+    hsl(var(--delta-fall) / 0.92) 100%
   );
   position: relative;
 }
@@ -22261,26 +22355,27 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 6px solid hsl(var(--spectrum-fall) / 0.7);
+  border-top: 6px solid hsl(var(--delta-fall) / 0.9);
   transform: translateX(-50%);
 }
 .fixtures-sos-rail.is-hard-first .fixtures-sos-rail-stem {
   background: linear-gradient(
     180deg,
-    hsl(var(--spectrum-fall) / 0.55) 0%,
-    hsl(var(--muted-foreground) / 0.28) 48%,
-    hsl(var(--spectrum-rise) / 0.55) 100%
+    hsl(var(--delta-fall) / 0.92) 0%,
+    hsl(var(--muted-foreground) / 0.22) 48%,
+    hsl(var(--delta-rise) / 0.92) 100%
   );
 }
 .fixtures-sos-rail.is-hard-first .fixtures-sos-rail-stem::after {
   top: -1px;
   bottom: auto;
   border-top: none;
-  border-bottom: 6px solid hsl(var(--spectrum-rise) / 0.7);
+  border-bottom: 6px solid hsl(var(--delta-rise) / 0.9);
 }
 .fixtures-table-wrap {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -22296,10 +22391,11 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   padding-bottom: 4px;
 }
 .fixtures-table {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: auto;
 }
 .fixtures-table thead th.col-name,
 .fixtures-table tbody td.col-name {
@@ -22343,7 +22439,7 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 .fixtures-table tbody td.col-fixtures-gw {
   width: var(--fixtures-gw-col);
   min-width: var(--fixtures-gw-col);
-  max-width: var(--fixtures-gw-col);
+  /* No max-width — sparse windows expand columns to fill the card. */
   text-align: center;
   vertical-align: middle;
   padding: 5px 4px;
@@ -22584,6 +22680,256 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     padding: 3px 5px;
     font-size: 10.5px;
   }
+  html.is-mobile-layout #fixtures-sos-seg {
+    display: none;
+  }
+}
+
+/* Fixtures All calendar + mobile SOS FAB */
+.fixtures-table-wrap.is-calendar .fixtures-table thead th.col-fixtures-day,
+.fixtures-table-wrap.is-calendar .fixtures-table tbody td.col-fixtures-day {
+  width: 44px;
+  min-width: 44px;
+  max-width: none;
+  padding: 4px 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+.fixtures-day-lab {
+  display: block;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: normal;
+  color: var(--text-dim);
+}
+.fixtures-day-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 1.6em;
+}
+.fixtures-day-blank {
+  display: block;
+  min-height: 1.2em;
+}
+.fixtures-comp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: #fff;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid hsl(var(--border-hsl) / 0.9);
+}
+.fixtures-comp-badge.has-comp-ring {
+  --comp-ring: 1.5px;
+  border: var(--comp-ring) solid var(--comp-accent, hsl(var(--border-hsl)));
+}
+.fixtures-comp-badge.is-provisional {
+  opacity: 0.48;
+  border-style: dashed;
+  background: hsl(var(--muted) / 0.35);
+  filter: grayscale(0.25);
+}
+.fixtures-comp-badge.is-provisional img {
+  opacity: 0.85;
+}
+.fixtures-int-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px dashed hsl(var(--muted-foreground) / 0.5);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--text-dim);
+  background: transparent;
+  opacity: 0.95;
+}
+.fixtures-day-stack.is-merged-span .fixtures-int-chip {
+  width: 100%;
+  align-self: stretch;
+}
+.fixtures-table-wrap.is-calendar .fixtures-table tbody td.col-fixtures-day.is-soft-span {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.fixtures-day-stack.is-merged-span {
+  width: 100%;
+  min-height: 1.6em;
+}
+.fixtures-comp-badge img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  display: block;
+}
+.fixtures-comp-badge.is-text {
+  width: auto;
+  min-width: 20px;
+  padding: 0 4px;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  background: hsl(var(--muted) / 0.55);
+}
+:root[data-theme="dark"] .fixtures-comp-badge:not(.is-text) {
+  background: hsl(0 0% 100% / 0.92);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .fixtures-comp-badge:not(.is-text) {
+    background: hsl(0 0% 100% / 0.92);
+  }
+}
+#fixtures-page.is-fixtures-all .fixtures-window-control,
+#fixtures-page.is-fixtures-all #fixtures-window-control {
+  display: none;
+}
+.fixtures-all-horizon-note {
+  margin: 2px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+.fixtures-all-horizon-note[hidden] {
+  display: none !important;
+}
+.fixtures-all-horizon-note span {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+#fixtures-page:not(.is-fixtures-all) .fixtures-all-horizon-note {
+  display: none !important;
+}
+.fixtures-sos-fab {
+  display: none;
+  position: fixed;
+  left: max(14px, env(safe-area-inset-left, 0px));
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  pointer-events: none;
+  /* Match Players/Teams + Filters dock chrome. */
+  --mobile-dock-size: 40px;
+  --mobile-dock-radius: 12px;
+  --mobile-dock-fg: hsl(var(--foreground));
+  --mobile-dock-fg-muted: hsl(var(--foreground) / 0.72);
+  --mobile-dock-border: hsl(var(--foreground) / 0.26);
+  --mobile-dock-shadow:
+    0 2px 6px hsl(240 6% 10% / 0.1),
+    0 0 0 1px hsl(var(--foreground) / 0.05);
+}
+:root[data-theme="dark"] .fixtures-sos-fab {
+  --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
+  --mobile-dock-border: hsl(var(--foreground) / 0.34);
+  --mobile-dock-shadow:
+    0 2px 8px hsl(0 0% 0% / 0.38),
+    0 0 0 1px hsl(var(--foreground) / 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .fixtures-sos-fab {
+    --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
+    --mobile-dock-border: hsl(var(--foreground) / 0.34);
+    --mobile-dock-shadow:
+      0 2px 8px hsl(0 0% 0% / 0.38),
+      0 0 0 1px hsl(var(--foreground) / 0.08);
+  }
+}
+html.is-mobile-layout[data-page="fixtures"] .fixtures-sos-fab:not([hidden]) {
+  display: block;
+  pointer-events: auto;
+}
+html.is-mobile-layout.has-fixtures-sos-fab .main {
+  padding-bottom: var(--mobile-dock-clearance, 66px);
+}
+.fixtures-sos-fab .fixtures-sos-fab-tabs {
+  display: inline-flex;
+  gap: 2px;
+  height: var(--mobile-dock-size);
+  padding: 2px;
+  position: relative;
+  align-items: stretch;
+  box-sizing: border-box;
+  background: hsl(var(--card));
+  border: 1px solid var(--mobile-dock-border);
+  border-radius: var(--mobile-dock-radius);
+  box-shadow: var(--mobile-dock-shadow);
+}
+.fixtures-sos-fab .fixtures-sos-fab-tabs .seg-thumb {
+  border-radius: calc(var(--mobile-dock-radius) - 3px);
+  background: hsl(var(--blue-hsl) / 0.14);
+}
+.fixtures-sos-fab-btn.tab-btn,
+.fixtures-sos-fab-btn {
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 12px;
+  border: none;
+  border-radius: calc(var(--mobile-dock-radius) - 3px);
+  background: transparent;
+  box-shadow: none;
+  color: var(--mobile-dock-fg-muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color 0.16s ease,
+    transform 0.14s var(--ease-out);
+}
+.fixtures-sos-fab-btn .icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  color: inherit;
+  flex: none;
+}
+.fixtures-sos-fab-btn .mobile-dock-label {
+  display: inline;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  color: inherit;
+}
+.fixtures-sos-fab-btn.active,
+.fixtures-sos-fab-btn.is-active {
+  background: transparent;
+  color: var(--mobile-dock-fg);
+  box-shadow: none;
+}
+.fixtures-sos-fab-btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 /* ---------- Custom team difficulty wizard ---------- */

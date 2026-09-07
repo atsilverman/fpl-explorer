@@ -2,9 +2,9 @@
 # Times are UTC ≈ Pacific Daylight (UTC-7). In winter (PST) they land 1h later local.
 #
 #   07:00 UTC ≈ midnight PT  → Markets
-#   19:00 UTC ≈ noon PT      → Markets + Ownership
+#   19:00 UTC ≈ noon PT      → Markets + Ownership + Calendar (Odds /events)
 #
-# Requires repo secret: ODDS_API_KEY
+# Requires repo secrets: ODDS_API_KEY (Markets + Fixtures All calendar)
 name: Refresh caches
 
 on:
@@ -20,7 +20,9 @@ on:
           - both
           - markets
           - ownership
-        default: both
+          - calendar
+          - all
+        default: all
 
 permissions:
   contents: write
@@ -43,23 +45,28 @@ jobs:
           set -euo pipefail
           MARKETS=0
           OWNERSHIP=0
+          CALENDAR=0
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             case "${{ inputs.targets }}" in
               markets) MARKETS=1 ;;
               ownership) OWNERSHIP=1 ;;
-              *) MARKETS=1; OWNERSHIP=1 ;;
+              calendar) CALENDAR=1 ;;
+              both) MARKETS=1; OWNERSHIP=1 ;;
+              *) MARKETS=1; OWNERSHIP=1; CALENDAR=1 ;;
             esac
           elif [[ "${{ github.event.schedule }}" == "0 7 * * *" ]]; then
             # ~midnight Pacific — markets only
             MARKETS=1
           else
-            # ~noon Pacific (or unknown schedule) — markets + ownership
+            # ~noon Pacific (or unknown schedule) — markets + ownership + calendar
             MARKETS=1
             OWNERSHIP=1
+            CALENDAR=1
           fi
           echo "markets=$MARKETS" >> "$GITHUB_OUTPUT"
           echo "ownership=$OWNERSHIP" >> "$GITHUB_OUTPUT"
-          echo "Plan: markets=$MARKETS ownership=$OWNERSHIP"
+          echo "calendar=$CALENDAR" >> "$GITHUB_OUTPUT"
+          echo "Plan: markets=$MARKETS ownership=$OWNERSHIP calendar=$CALENDAR"
 
       - name: Refresh Markets
         if: steps.plan.outputs.markets == '1'
@@ -76,6 +83,18 @@ jobs:
       - name: Refresh Ownership
         if: steps.plan.outputs.ownership == '1'
         run: python3 site/fetch_ownership.py
+
+      - name: Refresh Calendar
+        if: steps.plan.outputs.calendar == '1'
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ODDS_API_KEY}" ]]; then
+            echo "ODDS_API_KEY secret missing — skipping Fixtures calendar refresh."
+            exit 0
+          fi
+          python3 site/fetch_calendar.py
 
       - name: Bump cache-bust query params
         run: |
@@ -96,6 +115,8 @@ jobs:
           # Same-day ownership overwrite still updates the JS bundle; snapshots too.
           if dirty("site/ownership_data.js") or dirty("snapshots/bootstrap-static_"):
               bumps.append("ownership_data.js")
+          if dirty("site/calendar_data.js"):
+              bumps.append("calendar_data.js")
 
           for name in bumps:
               pat = re.compile(rf'(src="{re.escape(name)}\?v=)(\d+)(")')
@@ -114,13 +135,13 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/markets_data.js site/ownership_data.js site/index.html snapshots/bootstrap-static_*.json || true
+          git add site/markets_data.js site/ownership_data.js site/calendar_data.js site/index.html snapshots/bootstrap-static_*.json snapshots/calendar/*.json || true
           if git diff --staged --quiet; then
             echo "No cache changes to commit."
             exit 0
           fi
           git commit -m "$(cat <<'EOF'
-          Refresh scheduled Markets/Ownership caches.
+          Refresh scheduled Markets/Ownership/Calendar caches.
 
           EOF
           )"

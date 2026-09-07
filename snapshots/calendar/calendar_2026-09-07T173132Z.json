@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-09-07T17:31:32Z",
+  "meta": {
+    "season": 2026,
+    "source": "api-football",
+    "error": "network_error",
+    "requestsRemaining": null
+  },
+  "competitions": [],
+  "byTeam": {},
+  "teamIdByCode": {},
+  "intlWindows": [
+    {
+      "start": "2026-08-31",
+      "end": "2026-09-09",
+      "label": "International break"
+    },
+    {
+      "start": "2026-10-05",
+      "end": "2026-10-13",
+      "label": "International break"
+    },
+    {
+      "start": "2026-11-09",
+      "end": "2026-11-17",
+      "label": "International break"
+    },
+    {
+      "start": "2027-03-22",
+      "end": "2027-03-30",
+      "label": "International break"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "generatedAt": "2026-09-07T17:31:46Z",
+  "meta": {
+    "season": 2026,
+    "source": "api-football",
+    "leagues": [
+      45,
+      48,
+      2,
+      3,
+      848
+    ],
+    "requestsRemaining": null,
+    "plTeamsMapped": 0
+  },
+  "competitions": [
+    {
+      "id": 45,
+      "key": "fac",
+      "name": "FA Cup",
+      "logo": null
+    },
+    {
+      "id": 48,
+      "key": "efl",
+      "name": "EFL Cup",
+      "logo": null
+    },
+    {
+      "id": 2,
+      "key": "ucl",
+      "name": "UEFA Champions League",
+      "logo": null
+    },
+    {
+      "id": 3,
+      "key": "uel",
+      "name": "UEFA Europa League",
+      "logo": null
+    },
+    {
+      "id": 848,
+      "key": "uecl",
+      "name": "UEFA Europa Conference League",
+      "logo": null
+    }
+  ],
+  "byTeam": {},
+  "teamIdByCode": {},
+  "intlWindows": [
+    {
+      "start": "2026-08-31",
+      "end": "2026-09-09",
+      "label": "International break"
+    },
+    {
+      "start": "2026-10-05",
+      "end": "2026-10-13",
+      "label": "International break"
+    },
+    {
+      "start": "2026-11-09",
+      "end": "2026-11-17",
+      "label": "International break"
+    },
+    {
+      "start": "2027-03-22",
+      "end": "2027-03-30",
+      "label": "International break"
+    }
+  ]
+}
