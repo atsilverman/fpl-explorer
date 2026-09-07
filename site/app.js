@@ -1356,7 +1356,9 @@
     mobileSheetPanel: document.querySelector("#mobile-sheet .mobile-sheet-panel"),
     mobileSheetReset: $("#mobile-sheet-reset"),
     mobileSheetOpenX: $("#mobile-sheet-open-x"),
+    mobileSheetCompare: $("#mobile-sheet-compare"),
     homePlayerModalOpenX: $("#home-player-modal-open-x"),
+    homePlayerModalCompare: $("#home-player-modal-compare"),
     mobileFilterDock: $("#mobile-filter-dock"),
     mobileViewDock: $("#mobile-view-dock"),
     mobileChromeFade: $("#mobile-chrome-fade"),
@@ -3054,6 +3056,8 @@
       if (!stillInLeague) homeViewEntryId = null;
     }
     homeElementGwCache = null;
+    // element↔player map can go stale across seasons / identity changes.
+    livePlayerByElementCache = null;
     syncPlanningHorizon({ rerender: state.page === "home" || state.page === "team" || state.page === "schedule" });
     syncLiveNavChrome();
     if (!fromSessionSnapshot && (fromLivePoll || homeLivePollReady())) {
@@ -3630,6 +3634,7 @@
         });
       }
       applyHomePayload(payload, { skipFeedIngest: true, fromSessionSnapshot: true });
+      ensureLiveFeedFromHome();
       if (homeTransfersAreCanonical(bakedTransfers, bakedSchema)) {
         HOME.transfersByEntry = bakedTransfers;
         HOME.transfersSchemaVersion = Math.max(2, bakedSchema || 0);
@@ -3696,6 +3701,8 @@
     if (!Number.isFinite(Number(gw)) || !HOME.elementGw) return;
     const egMap = liveElementMapForGw(Number(gw));
     if (!egMap || !Object.keys(egMap).length) return;
+    // Always ingest when empty — session hydrate skips feed ingest, so Home
+    // must rebuild from baked/cached elementGw instead of painting blank.
     if (liveFeedGw === Number(gw) && liveFeedEvents.length) return;
     liveFeedIngest(Number(gw), egMap);
   }
@@ -4043,9 +4050,11 @@
   let homeOwnerBindingsReady = false;
   let homeCrossHoverElement = null;
   let homeStandingsPagerReady = false;
+  let homeStandingsPagerTarget = null;
   let homeSquadPagerReady = false;
   let homeSquadPagerTarget = null;
   let homeFeedPagerReady = false;
+  let homeFeedPagerTarget = null;
   const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Ownership", "Schedule"];
   const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips"];
@@ -5244,9 +5253,10 @@
     el.homeStandingsTrack.style.height = next;
   }
 
-  /** Clear stale inline row heights. Mobile used to equalize Table/Captains/Chips
-   *  across pager pages (post-load jump); each page now sizes intrinsically. */
-  function syncHomeStandingsRowHeights() {
+  /** Clear stale inline row heights, then on desktop stretch Table/Captains/Chips
+   *  rows to fill the League card when content is shorter than the panel (same
+   *  visual density as Captaincy). Transfers keeps intrinsic heights + scroll. */
+  function clearHomeStandingsRowHeights() {
     const transfersTable =
       el.homeStandingsTransfersBody && el.homeStandingsTransfersBody.closest("table");
     const coreTables = [
@@ -5255,12 +5265,41 @@
       el.homeStandingsChipsBody && el.homeStandingsChipsBody.closest("table"),
     ].filter(Boolean);
     const allTables = transfersTable ? [...coreTables, transfersTable] : coreTables;
-    if (!allTables.length) return;
-
     allTables.forEach((table) => {
       table.querySelectorAll("thead tr, tbody tr[data-entry]").forEach((tr) => {
         tr.style.height = "";
       });
+    });
+    return coreTables;
+  }
+
+  function syncHomeStandingsRowHeights() {
+    const coreTables = clearHomeStandingsRowHeights();
+    if (!coreTables.length) return;
+    if (!homeSquadIsDesktopLayout()) return;
+    coreTables.forEach(fillHomeStandingsTableRowsToWrap);
+  }
+
+  function fillHomeStandingsTableRowsToWrap(table) {
+    if (!table) return;
+    const wrap = table.closest(".home-table-wrap");
+    if (!wrap) return;
+    const rows = [...table.querySelectorAll("tbody tr[data-entry]")];
+    if (!rows.length) return;
+    const head = table.querySelector("thead");
+    const headH = head ? Math.ceil(head.getBoundingClientRect().height) : 0;
+    const avail = Math.floor(wrap.clientHeight - headH);
+    if (!(avail > 48)) return;
+    const naturals = rows.map((tr) => tr.getBoundingClientRect().height);
+    const naturalSum = naturals.reduce((sum, h) => sum + h, 0);
+    if (!(naturalSum > 0)) return;
+    // Already fills or overflows — keep intrinsic heights and let the wrap scroll.
+    if (naturalSum >= avail - 2) return;
+    const target = Math.floor(avail / rows.length);
+    if (!(target > 0)) return;
+    const px = `${target}px`;
+    rows.forEach((tr) => {
+      tr.style.height = px;
     });
   }
 
@@ -5285,13 +5324,25 @@
         ? standingsPageIdx
         : homeStandingsActivePageIndex();
     syncHomeSquadRowHeights();
-    syncHomeStandingsRowHeights();
+    // Intrinsic heights only while measuring the shared Team/League panel cap.
+    clearHomeStandingsRowHeights();
     syncHomeTablesGridHeight();
     syncHomeStandingsTrackHeight(idx, { animate: false, allowShrink: true });
+    // Panel height is known — stretch standings rows to fill the card.
+    syncHomeStandingsRowHeights();
     syncHomeSquadTrackHeight(undefined, { animate: false });
     if (homeSquadIsWideLayout()) {
       document.documentElement.classList.add("home-squad-layout-ready");
     }
+  }
+
+  function syncHomeStandingsLayout(activeIndex, opts) {
+    clearHomeStandingsRowHeights();
+    syncHomeStandingsTrackHeight(activeIndex, opts);
+    requestAnimationFrame(() => {
+      syncHomeTablesGridHeight();
+      syncHomeStandingsRowHeights();
+    });
   }
 
   function syncHomeTablesGridHeight() {
@@ -5371,12 +5422,35 @@
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     if (!pages[index]) return;
     if (index === 1) resetHomeTransfersTableScroll();
+    homeStandingsPagerTarget = index;
     el.homeStandingsTrack.scrollTo({
       left: homeStandingsPageScrollLeft(index),
       behavior: smooth ? "smooth" : "auto",
     });
     syncHomeStandingsPagerDots(index);
     syncHomeStandingsLayout(index);
+    if (!smooth) homeStandingsPagerTarget = null;
+  }
+
+  /** Normalize Mac shift+vertical → horizontal; shared so we can unit-test. */
+  function homePagerNormalizeWheelDeltas(deltaX, deltaY, shiftKey) {
+    let dx = Number(deltaX) || 0;
+    let dy = Number(deltaY) || 0;
+    if (shiftKey && Math.abs(dy) >= Math.abs(dx)) {
+      dx = dy;
+      dy = 0;
+    }
+    return { dx, dy };
+  }
+
+  /**
+   * Claim horizontal page flips when dx dominates enough of dy.
+   * Strict |dx| > |dy| drops real trackpad pans (often slightly diagonal).
+   */
+  function homePagerWheelIsHorizontal(dx, dy, axisRatio = 0.55) {
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    return absX >= 0.75 && absX >= absY * axisRatio;
   }
 
   /**
@@ -5389,8 +5463,10 @@
     setPage,
     pageCount,
     stepFrom,
-    threshold = 48,
-    gestureIdleMs = 180,
+    threshold = 28,
+    gestureIdleMs = 140,
+    /** dx must be at least this fraction of dy (trackpads often send diagonal noise). */
+    axisRatio = 0.55,
   } = {}) {
     if (!track || track.dataset.pagerWheelBound === "1") return;
     if (typeof getIndex !== "function" || typeof setPage !== "function") return;
@@ -5425,14 +5501,8 @@
     track.addEventListener(
       "wheel",
       (e) => {
-        let dx = e.deltaX;
-        let dy = e.deltaY;
-        // Shift+vertical is the common Mac “horizontal scroll” remap.
-        if (e.shiftKey && Math.abs(dy) >= Math.abs(dx)) {
-          dx = dy;
-          dy = 0;
-        }
-        if (Math.abs(dx) <= Math.abs(dy) || Math.abs(dx) < 0.5) return;
+        const { dx, dy } = homePagerNormalizeWheelDeltas(e.deltaX, e.deltaY, e.shiftKey);
+        if (!homePagerWheelIsHorizontal(dx, dy, axisRatio)) return;
         e.preventDefault();
         e.stopPropagation();
         bumpIdle();
@@ -5444,8 +5514,11 @@
         const idx = getIndex();
         const next = nextIndex(idx, acc > 0 ? 1 : -1);
         acc = 0;
+        if (next === idx) {
+          // Edge / no-op — keep gesture open so a reverse flick can still page.
+          return;
+        }
         pagedThisGesture = true;
-        if (next === idx) return;
         setPage(next);
       },
       { passive: false, capture: true }
@@ -5488,20 +5561,24 @@
     const onScrollSettled = () => {
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = null;
+      homeStandingsPagerTarget = null;
       const idx = homeStandingsActivePageIndex();
       snapHomeStandingsPage(idx);
       syncHomeStandingsPagerDots(idx);
       syncHomeStandingsLayout(idx, homeIsEnterBusy() ? { animate: false } : undefined);
     };
     const onScrollTick = () => {
-      syncHomeStandingsPagerDots(homeStandingsActivePageIndex());
+      const idx =
+        homeStandingsPagerTarget != null ? homeStandingsPagerTarget : homeStandingsActivePageIndex();
+      syncHomeStandingsPagerDots(idx);
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = setTimeout(onScrollSettled, 140);
     };
     el.homeStandingsTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeStandingsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
     bindHomePagerTrackpad(el.homeStandingsTrack, {
-      getIndex: homeStandingsActivePageIndex,
+      getIndex: () =>
+        homeStandingsPagerTarget != null ? homeStandingsPagerTarget : homeStandingsActivePageIndex(),
       setPage: (i) => setHomeStandingsPage(i, { smooth: true }),
       pageCount: () => el.homeStandingsTrack.querySelectorAll(".home-standings-page").length,
     });
@@ -5859,11 +5936,13 @@
     const pages = [...el.homeFeedTrack.querySelectorAll(".home-feed-page")];
     if (!pages[index]) return;
     if (index === 1 && HOME && HOME.gw != null) ensureHomeFeedAllRendered(Number(HOME.gw));
+    homeFeedPagerTarget = index;
     el.homeFeedTrack.scrollTo({
       left: homeFeedPageScrollLeft(index),
       behavior: smooth ? "smooth" : "auto",
     });
     syncHomeFeedPagerDots(index);
+    if (!smooth) homeFeedPagerTarget = null;
   }
 
   function bindHomeFeedPager() {
@@ -5880,20 +5959,23 @@
     const onScrollSettled = () => {
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = null;
+      homeFeedPagerTarget = null;
       const idx = homeFeedActivePageIndex();
       if (idx === 1 && HOME && HOME.gw != null) ensureHomeFeedAllRendered(Number(HOME.gw));
       snapHomeFeedPage(idx);
       syncHomeFeedPagerDots(idx);
     };
     const onScrollTick = () => {
-      syncHomeFeedPagerDots(homeFeedActivePageIndex());
+      const idx = homeFeedPagerTarget != null ? homeFeedPagerTarget : homeFeedActivePageIndex();
+      syncHomeFeedPagerDots(idx);
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = setTimeout(onScrollSettled, 140);
     };
     el.homeFeedTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeFeedTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
     bindHomePagerTrackpad(el.homeFeedTrack, {
-      getIndex: homeFeedActivePageIndex,
+      getIndex: () =>
+        homeFeedPagerTarget != null ? homeFeedPagerTarget : homeFeedActivePageIndex(),
       setPage: (i) => setHomeFeedPage(i, { smooth: true }),
       pageCount: () => el.homeFeedTrack.querySelectorAll(".home-feed-page").length,
     });
@@ -6219,7 +6301,8 @@
     el.homeSquadTrack.addEventListener("scroll", onScrollTick, { passive: true });
     el.homeSquadTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
     bindHomePagerTrackpad(el.homeSquadTrack, {
-      getIndex: homeSquadActivePageIndex,
+      getIndex: () =>
+        homeSquadPagerTarget != null ? homeSquadPagerTarget : homeSquadActivePageIndex(),
       setPage: (i) => setHomeSquadPage(i, { smooth: true }),
       pageCount: homeSquadPagerPageCount,
       stepFrom: homeSquadPagerStep,
@@ -6523,6 +6606,71 @@
     );
   }
 
+  /**
+   * Home Team / League pagers: block horizontal rubber-band past the first/last
+   * page (same idea as bindHomeMainPullLock for the hero top edge).
+   */
+  function bindHomePagerEdgeLock(track) {
+    if (!track || track.dataset.pagerEdgeLock === "1") return;
+    track.dataset.pagerEdgeLock = "1";
+    const EPS = 2;
+    let startX = 0;
+    let startY = 0;
+    let edge = null; // "start" | "end" | null
+
+    const maxLeft = () => Math.max(0, track.scrollWidth - track.clientWidth);
+
+    track.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!NARROW_MQ.matches || state.page !== "home" || e.touches.length !== 1) {
+          edge = null;
+          return;
+        }
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        const left = track.scrollLeft;
+        const max = maxLeft();
+        if (left <= EPS) edge = "start";
+        else if (left >= max - EPS) edge = "end";
+        else edge = null;
+      },
+      { passive: true }
+    );
+
+    track.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!edge || !NARROW_MQ.matches || state.page !== "home" || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - startX;
+        const dy = e.touches[0].clientY - startY;
+        // Don't fight vertical page scroll / nested list scroll.
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+          edge = null;
+          return;
+        }
+        const left = track.scrollLeft;
+        const max = maxLeft();
+        if (edge === "start") {
+          if (left > EPS) {
+            edge = null;
+            return;
+          }
+          // Finger moving right while already on first page → overscroll past start.
+          if (dx > 0) e.preventDefault();
+        } else if (edge === "end") {
+          if (left < max - EPS) {
+            edge = null;
+            return;
+          }
+          // Finger moving left while already on last page → overscroll past end.
+          if (dx < 0) e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+  }
+
   function bindHomeOwnerHighlighting() {
     if (homeOwnerBindingsReady) return;
     if (!el.homeSquadTrack || !el.homeStandingsTrack) return;
@@ -6533,6 +6681,8 @@
     bindHomeScrollHoverGuard();
     bindHomeCrossHover();
     bindHomeMainPullLock();
+    bindHomePagerEdgeLock(el.homeSquadTrack);
+    bindHomePagerEdgeLock(el.homeStandingsTrack);
     bindHomeSummaryCardJumps();
 
     function bindHomeRowTap(container, rowSelector, onRow) {
@@ -8186,6 +8336,130 @@
     </article>`;
   }
 
+  function homeOwnershipChartSvg(series, { accent = "" } = {}) {
+    const points = (series && series.points) || [];
+    if (points.length < 2) return "";
+    const w = 320;
+    const h = 132;
+    const padL = 34;
+    const padR = 12;
+    const padT = 14;
+    const padB = 24;
+    const vals = points.map((pt) => Number(pt.owned));
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const rng = hi - lo || 1;
+    const n = points.length;
+    const coords = points.map((pt, i) => {
+      const x = padL + (i / (n - 1)) * (w - padL - padR);
+      const y = padT + (1 - (Number(pt.owned) - lo) / rng) * (h - padT - padB);
+      return { x, y, owned: Number(pt.owned), checkedAt: pt.checkedAt };
+    });
+    const pathD = coords
+      .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
+      .join(" ");
+    const tone = ownershipDeltaClass(series.delta);
+    const stroke =
+      tone === "is-up"
+        ? "hsl(var(--delta-rise))"
+        : tone === "is-down"
+          ? "hsl(var(--delta-fall))"
+          : accent || "hsl(var(--foreground) / 0.55)";
+    const yTop = fmtOwnedPct(hi);
+    const yBot = fmtOwnedPct(lo);
+    const xFirst = fmtOwnershipDate(coords[0].checkedAt);
+    const xLast = fmtOwnershipDate(coords[coords.length - 1].checkedAt);
+    const last = coords[coords.length - 1];
+    const dots = coords
+      .map((c, i) => {
+        const isLast = i === coords.length - 1;
+        return `<circle class="home-own-dot${isLast ? " is-live" : ""}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast ? 3.2 : 2}" />`;
+      })
+      .join("");
+    const pulse = prefersReducedMotion()
+      ? ""
+      : `<circle class="home-own-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.2" />`;
+    const midY = padT + (h - padT - padB) / 2;
+    return `<svg class="home-own-svg ${tone}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" aria-hidden="true" style="--home-own-stroke:${stroke}">
+      <line class="home-own-grid" x1="${padL}" y1="${padT}" x2="${w - padR}" y2="${padT}" />
+      <line class="home-own-grid" x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" />
+      <line class="home-own-grid" x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" />
+      <text class="home-own-y-label" x="${padL - 6}" y="${padT + 3}" text-anchor="end">${escapeHtml(yTop)}</text>
+      <text class="home-own-y-label" x="${padL - 6}" y="${h - padB + 3}" text-anchor="end">${escapeHtml(yBot)}</text>
+      <text class="home-own-x-label" x="${padL}" y="${h - 6}" text-anchor="start">${escapeHtml(xFirst)}</text>
+      <text class="home-own-x-label" x="${w - padR}" y="${h - 6}" text-anchor="end">${escapeHtml(xLast)}</text>
+      <path class="home-own-line" d="${pathD}" />
+      ${dots}
+      ${pulse}
+    </svg>`;
+  }
+
+  function homeOwnershipTrendBadgeHTML(trend) {
+    if (!trend || (trend.kind !== "up" && trend.kind !== "down")) return "";
+    const up = trend.kind === "up";
+    const rank = Number(trend.rank);
+    if (!Number.isFinite(rank) || rank < 1) return "";
+    const tip = tipAttr(
+      up
+        ? `#${rank} ownership riser over 14 days (top 10)`
+        : `#${rank} ownership faller over 14 days (top 10)`
+    );
+    return `<span class="home-own-trend-badge ${up ? "is-up" : "is-down"}"${tip}>${
+      up ? "↑" : "↓"
+    } Trending #${rank}</span>`;
+  }
+
+  function homeOwnershipChartHTML(series, { kicker = "Ownership", sub = "7d", accent = "", trend = null } = {}) {
+    const trendBadge = homeOwnershipTrendBadgeHTML(trend);
+    if (!series || !series.points || series.points.length < 2) {
+      return `<article class="home-form-card home-own-card is-empty">
+        <div class="home-form-head">
+          <span class="home-form-kicker-row"><span class="home-form-kicker">${escapeHtml(kicker)}</span>${trendBadge}</span>
+          <span class="home-form-stat-label">${escapeHtml(sub)}</span>
+        </div>
+        <p class="home-own-empty">No ownership history yet. Ownership check-ins appear after the next cache refresh.</p>
+      </article>`;
+    }
+    const liveLbl = `${fmtOwnedPct(series.live)}%`;
+    const deltaLbl =
+      series.delta == null
+        ? ""
+        : ` · ${fmtOwnershipTrendDelta(series.delta)} 7d`;
+    const updated = fmtOwnershipDate(series.updatedAt);
+    const tone = ownershipDeltaClass(series.delta);
+    return `<article class="home-form-card home-own-card ${tone}">
+      <div class="home-form-head">
+        <span class="home-form-kicker-row"><span class="home-form-kicker">${escapeHtml(kicker)}</span>${trendBadge}</span>
+        <span class="home-form-stat-label">${escapeHtml(liveLbl)}${escapeHtml(deltaLbl)}</span>
+      </div>
+      <div class="home-own-chart">${homeOwnershipChartSvg(series, { accent })}</div>
+      ${updated ? `<p class="home-own-updated">Updated ${escapeHtml(updated)}</p>` : ""}
+    </article>`;
+  }
+
+  function homePlayerOwnershipChartHTML(row) {
+    if (!row) return "";
+    const series = ownershipPlayerWindowSeries(row.code, 7);
+    const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+    return homeOwnershipChartHTML(series, {
+      kicker: "Ownership",
+      sub: "7d TSB",
+      accent,
+      trend: ownershipPlayerTrendBadge(row.code),
+    });
+  }
+
+  function teamDetailsOwnershipChartHTML(teamCode) {
+    const series = ownershipTeamWindowSeries(teamCode, 7);
+    const accent = TEAM_SCATTER_ACCENT[teamCode] || "";
+    return homeOwnershipChartHTML(series, {
+      kicker: "Ownership",
+      sub: "Top 20 avg · 7d",
+      accent,
+      trend: ownershipTeamTrendBadge(teamCode),
+    });
+  }
+
   function homePlayerProfileHTML(row) {
     if (!row) return "";
     const initials = String(row.name || "?")
@@ -8414,6 +8688,7 @@
       <div class="home-player-detail-form">${homePlayerFormHTML(row, { enterDelayMs: formEnterDelayMs })}</div>
       <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
       <div class="home-player-detail-owners">${homePlayerOwnersHTML(homeLookupElementId(row))}</div>
+      <div class="home-player-detail-ownership">${homePlayerOwnershipChartHTML(row)}</div>
     </div>`;
   }
 
@@ -8809,6 +9084,7 @@
       <div class="home-player-detail-form">${teamDetailsStrengthHTML(row.team)}</div>
       <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
       <div class="home-player-detail-owners">${teamDetailsSquadHTML(row.team)}</div>
+      <div class="home-player-detail-ownership">${teamDetailsOwnershipChartHTML(row.team)}</div>
     </div>`;
   }
 
@@ -8997,29 +9273,433 @@
     return `https://x.com/search?q=${encodeURIComponent(q)}&src=typed_query`;
   }
 
-  function syncHomePlayerOpenXBtn(row = homeLookupPlayer) {
+  let homeCompareBase = null;
+  let homeCompareOther = null;
+  let homeCompareMode = "total"; // total | per90 | price
+
+  function homeCompareActive() {
+    return !!(homeCompareBase && homeCompareOther);
+  }
+
+  /** True while compare search/results UI is on screen (sheet or desktop modal). */
+  function homeCompareUiOpen() {
+    if (
+      mobileSheetOpen
+      && (mobileSheetKey === "home-compare" || mobileSheetKey === "home-compare-search")
+    ) {
+      return true;
+    }
+    if (
+      el.homePlayerModal
+      && !el.homePlayerModal.hidden
+      && el.homePlayerModalBody
+      && el.homePlayerModalBody.querySelector(".home-compare-card, .home-compare-search")
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  function clearHomeCompareState() {
+    homeCompareBase = null;
+    homeCompareOther = null;
+    homeCompareMode = "total";
+  }
+
+  function syncHomePlayerHeaderActions(row = homeLookupPlayer) {
     const url = homePlayerXSearchUrl(row);
-    const show = !!url;
-    const label = row && row.name ? `Open X search for ${row.name} fpl` : "Open X search";
+    const showX = !!url;
+    const xLabel = row && row.name ? `Search X for ${row.name} fpl` : "Search X";
+    const detailsOpen = !!(
+      (mobileSheetOpen && mobileSheetKey === "home-player")
+      || (
+        el.homePlayerModal
+        && !el.homePlayerModal.hidden
+        && el.homePlayerModalBody
+        && el.homePlayerModalBody.querySelector(".home-player-detail:not(.home-team-detail)")
+      )
+    );
+    // Home live/view refresh can restore details over compare without clearing
+    // state — drop the stale pair so Compare can show again on details.
+    if (detailsOpen && !homeCompareUiOpen() && homeCompareActive()) {
+      clearHomeCompareState();
+    }
+    const comparing = homeCompareActive() || homeCompareUiOpen();
+    const showCompare = !!row && !comparing && detailsOpen;
+
     [el.mobileSheetOpenX, el.homePlayerModalOpenX].forEach((btn) => {
       if (!btn) return;
-      btn.hidden = !show;
-      if (show) {
+      btn.hidden = !showX;
+      if (showX) {
         btn.href = url;
         btn.dataset.xSearchUrl = url;
-        btn.setAttribute("aria-label", label);
+        btn.setAttribute("aria-label", xLabel);
       } else {
         btn.removeAttribute("href");
         delete btn.dataset.xSearchUrl;
-        btn.setAttribute("aria-label", "Open X search");
+        btn.setAttribute("aria-label", "Search X");
       }
     });
+    [el.mobileSheetCompare, el.homePlayerModalCompare].forEach((btn) => {
+      if (!btn) return;
+      btn.hidden = !showCompare;
+    });
+  }
+
+  function syncHomePlayerOpenXBtn(row = homeLookupPlayer) {
+    syncHomePlayerHeaderActions(row);
   }
 
   function openHomePlayerXSearch(row = homeLookupPlayer) {
     const url = homePlayerXSearchUrl(row);
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  const HOME_COMPARE_PER90_KEYS = new Set([
+    "pts", "goals", "assists", "xg", "xa", "xgi", "bonus", "bps",
+    "cleanSheets", "goalsConceded", "xgc", "saves", "defCon", "ict",
+  ]);
+  // Same counting stats as Per 90 — divided by £m (matches Statistics Per £m).
+  const HOME_COMPARE_PER_POUND_KEYS = HOME_COMPARE_PER90_KEYS;
+
+  function homeCompareSectionsFor(mode, position) {
+    const pos = String(position || "").toUpperCase();
+    const general = [
+      { key: "position", label: "Position", text: true },
+      { key: "price", label: "Price", decimals: 1, lowerBetter: true, fmt: "price" },
+      { key: "owned", label: "TSB%", decimals: 1 },
+      { key: "mins", label: "Minutes", decimals: 0 },
+      { key: "apps", label: "Apps", decimals: 0 },
+      { key: "starts", label: "Starts", decimals: 0 },
+      { key: "pts", label: "Pts", decimals: 0 },
+      { key: "__mpg", label: "Min/G", decimals: 0 },
+    ];
+    const attacking = [
+      { key: "goals", label: "Goals", decimals: 0 },
+      { key: "assists", label: "Assists", decimals: 0 },
+      { key: "xg", label: "xG", decimals: 1 },
+      { key: "xa", label: "xA", decimals: 1 },
+      { key: "xgi", label: "xGI", decimals: 1 },
+    ];
+    const defending = pos === "GK"
+      ? [
+          { key: "saves", label: "Saves", decimals: 0 },
+          { key: "cleanSheets", label: "CS", decimals: 0 },
+          { key: "goalsConceded", label: "GC", decimals: 0, lowerBetter: true },
+          { key: "xgc", label: "xGC", decimals: 1, lowerBetter: true },
+        ]
+      : [
+          { key: "cleanSheets", label: "CS", decimals: 0 },
+          { key: "goalsConceded", label: "GC", decimals: 0, lowerBetter: true },
+          { key: "xgc", label: "xGC", decimals: 1, lowerBetter: true },
+          { key: "defCon", label: "DefCon", decimals: 0 },
+        ];
+    const other = [
+      { key: "bonus", label: "Bonus", decimals: 0 },
+      { key: "bps", label: "BPS", decimals: 0 },
+      { key: "ict", label: "ICT", decimals: 1 },
+      { key: "form", label: "Form", decimals: 1 },
+    ];
+    const sections = [{ title: "General", rows: general }];
+    if (pos !== "GK") sections.push({ title: "Attacking", rows: attacking });
+    sections.push({ title: "Defending", rows: defending });
+    sections.push({ title: "Other", rows: other });
+    return sections;
+  }
+
+  function homeCompareRawValue(row, key) {
+    if (!row) return null;
+    if (key === "position") return row.position || null;
+    if (key === "price") {
+      const p = effectivePrice(row);
+      return p != null && Number.isFinite(Number(p)) ? Number(p) : null;
+    }
+    if (key === "owned") return currentOwnership(row.code);
+    if (key === "__ppound") {
+      const pts = Number(row.pts);
+      const price = effectivePrice(row);
+      if (!Number.isFinite(pts) || !Number.isFinite(Number(price)) || Number(price) <= 0) return null;
+      return pts / Number(price);
+    }
+    if (key === "__mpg") return feedRowStatValue(row, "__mpg");
+    const v = feedRowStatValue(row, key);
+    return v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
+  }
+
+  function homeCompareDisplayValue(row, spec, mode) {
+    if (!spec) return { text: "—", num: null };
+    if (spec.text) {
+      const t = homeCompareRawValue(row, spec.key);
+      return { text: t == null || t === "" ? "—" : String(t), num: null };
+    }
+    let num = homeCompareRawValue(row, spec.key);
+    if (num == null) return { text: "—", num: null };
+    let decimals = spec.decimals != null ? spec.decimals : 0;
+    if (
+      mode === "per90"
+      && HOME_COMPARE_PER90_KEYS.has(spec.key)
+      && spec.key !== "price"
+    ) {
+      const mins = Number(row.mins);
+      const m = Number.isFinite(mins) && mins > 0 ? mins : Number(playerSeasonMinutesForMpg(row));
+      if (!Number.isFinite(m) || m <= 0) return { text: "—", num: null };
+      num = (num / m) * 90;
+      decimals = Math.max(decimals, 1);
+    } else if (
+      mode === "price"
+      && HOME_COMPARE_PER_POUND_KEYS.has(spec.key)
+      && spec.key !== "price"
+    ) {
+      const price = effectivePrice(row);
+      if (!Number.isFinite(Number(price)) || Number(price) <= 0) return { text: "—", num: null };
+      num = num / Number(price);
+      decimals = Math.max(decimals, 1);
+    }
+    if (spec.fmt === "price") {
+      return { text: `£${Number(num).toFixed(1)}m`, num };
+    }
+    if ((mode === "per90" || mode === "price") && num > 0 && num < 0.1) {
+      return { text: "<0.1", num };
+    }
+    return { text: feedStatDisplay(num, decimals), num };
+  }
+
+  function homeCompareSideHTML(row, side) {
+    if (!row) {
+      return `<div class="home-compare-side is-${side} is-empty">
+        <span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("user")}</span>
+        <span class="home-compare-name">Select player</span>
+      </div>`;
+    }
+    const initials = String(row.name || "?")
+      .split(/[\s.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase() || "?";
+    const photo = feedPlayerPhotoUrl(row.code);
+    const photoBlock = photo
+      ? `<img class="home-compare-photo" src="${escapeHtml(photo)}" alt="" width="48" height="48" loading="lazy" data-initials="${escapeHtml(initials)}" />`
+      : `<span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("user")}</span>`;
+    const badge = row.team ? badgeHTML(row.team, "home-compare-badge") : "";
+    const meta = [row.position, row.team].filter(Boolean).join(" · ");
+    const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+    const style = accent ? ` style="--home-compare-accent:${accent}"` : "";
+    return `<div class="home-compare-side is-${side}"${style}>
+      <div class="home-compare-photo-wrap">${photoBlock}${badge}</div>
+      <div class="home-compare-id">
+        <span class="home-compare-name">${escapeHtml(row.name || "—")}</span>
+        ${meta ? `<span class="home-compare-meta">${escapeHtml(meta)}</span>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function homeCompareRowHTML(left, right, spec, mode) {
+    const a = homeCompareDisplayValue(left, spec, mode);
+    const b = homeCompareDisplayValue(right, spec, mode);
+    let better = null;
+    if (!spec.text && a.num != null && b.num != null && a.num !== b.num) {
+      const lower = !!spec.lowerBetter;
+      better = lower ? (a.num < b.num ? "a" : "b") : (a.num > b.num ? "a" : "b");
+    }
+    const cell = (side, shown) => {
+      const win = better === side;
+      const inner = win
+        ? `<span class="home-compare-pill">${escapeHtml(shown.text)}</span>`
+        : escapeHtml(shown.text);
+      return `<span class="home-compare-val is-${side}${win ? " is-better" : ""}">${inner}</span>`;
+    };
+    return `<div class="home-compare-row">
+      ${cell("a", a)}
+      <span class="home-compare-lab">${escapeHtml(spec.label)}</span>
+      ${cell("b", b)}
+    </div>`;
+  }
+
+  function homeCompareViewHTML(left, right, mode = homeCompareMode) {
+    const m = mode === "per90" || mode === "price" ? mode : "total";
+    const pos = left && left.position ? left.position : (right && right.position) || "";
+    const sections = homeCompareSectionsFor(m, pos)
+      .map((sec) => {
+        const rows = sec.rows.map((spec) => homeCompareRowHTML(left, right, spec, m)).join("");
+        return `<section class="home-compare-section">
+          <h4 class="home-compare-section-title">${escapeHtml(sec.title)}</h4>
+          <div class="home-compare-table">${rows}</div>
+        </section>`;
+      })
+      .join("");
+    const seg = (id, label) =>
+      `<button type="button" data-compare-mode="${id}" class="${m === id ? "active" : ""}">${label}</button>`;
+    return `<article class="home-compare-card">
+      <div class="home-compare-heads">
+        ${homeCompareSideHTML(left, "a")}
+        <span class="home-compare-vs" aria-hidden="true">vs</span>
+        ${homeCompareSideHTML(right, "b")}
+      </div>
+      <div class="segmented home-compare-mode-seg" role="group" aria-label="Compare mode">
+        ${seg("total", "Total")}
+        ${seg("per90", "Per 90")}
+        ${seg("price", "Per £")}
+      </div>
+      <div class="home-compare-sections">${sections}</div>
+    </article>`;
+  }
+
+  function homeCompareSearchResultsListHTML(query) {
+    const baseCode = homeCompareBase ? Number(homeCompareBase.code) : NaN;
+    const items = homeSearchResultItems(query).filter((item) => {
+      if (item.type === "team") return false;
+      if (!item.row) return false;
+      if (Number.isFinite(baseCode) && Number(item.row.code) === baseCode) return false;
+      return true;
+    });
+    if (!items.length) {
+      return `<div class="home-search-empty">No players match “${escapeHtml(query)}”.</div>`;
+    }
+    return items.map(homeSearchResultItemHTML).join("");
+  }
+
+  function homeCompareSearchSheetHTML(query = "") {
+    return `<div class="home-search-sheet home-compare-search">
+      <div class="home-search-input-wrap">
+        <input id="home-compare-search-input" class="home-search-input" type="search" enterkeyhint="search"
+          placeholder="Search player to compare" value="${escapeHtml(query)}" autocomplete="off" />
+      </div>
+      <div class="home-search-results" id="home-compare-search-results">${homeCompareSearchResultsListHTML(query)}</div>
+    </div>`;
+  }
+
+  function bindHomeCompareSearchEvents(root = document) {
+    const input = root.querySelector("#home-compare-search-input") || document.getElementById("home-compare-search-input");
+    const results = root.querySelector("#home-compare-search-results") || document.getElementById("home-compare-search-results");
+    if (input) {
+      input.addEventListener("input", () => {
+        if (!results) return;
+        results.innerHTML = homeCompareSearchResultsListHTML(input.value);
+      });
+      requestAnimationFrame(() => {
+        try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+      });
+    }
+    if (results) {
+      results.addEventListener("click", (e) => {
+        const btn = e.target.closest(".home-search-row");
+        if (!btn || !results.contains(btn)) return;
+        if (btn.hasAttribute("data-home-search-team")) return;
+        const code = Number(btn.getAttribute("data-home-search-code"));
+        const id = Number(btn.getAttribute("data-home-search-id"));
+        const row = homeSearchCatalog().find((r) =>
+          (Number.isFinite(code) && Number(r.code) === code)
+          || (Number.isFinite(id) && homeLookupElementId(r) === id)
+        );
+        if (!row) return;
+        homeCompareSelectOther(row);
+      });
+    }
+  }
+
+  function bindHomeCompareViewEvents(root) {
+    const host = root || el.homePlayerModalBody || el.mobileSheetBody;
+    if (!host) return;
+    const seg = host.querySelector(".home-compare-mode-seg");
+    if (seg) {
+      seg.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-compare-mode]");
+        if (!btn || !seg.contains(btn)) return;
+        const next = btn.getAttribute("data-compare-mode");
+        if (next !== "total" && next !== "per90" && next !== "price") return;
+        if (next === homeCompareMode) return;
+        homeCompareMode = next;
+        openHomeCompareView({ replace: true });
+      });
+      requestAnimationFrame(() => {
+        if (typeof syncSegThumb === "function") syncSegThumb(seg, { animate: false });
+      });
+    }
+    const sideB = host.querySelector(".home-compare-side.is-b");
+    if (sideB) {
+      sideB.style.cursor = "pointer";
+      sideB.title = "Change player";
+      sideB.addEventListener("click", () => openHomeCompareSearch());
+    }
+  }
+
+  function openHomeCompareSearch() {
+    const base = homeLookupPlayer || homeCompareBase;
+    if (!base) return;
+    homeCompareBase = base;
+    if (preferMobileSheet()) {
+      openMobileSheet({
+        title: "Select player",
+        html: homeCompareSearchSheetHTML(""),
+        key: "home-compare-search",
+      });
+      bindHomeCompareSearchEvents(el.mobileSheetBody);
+      syncHomePlayerHeaderActions(base);
+      return;
+    }
+    if (!el.homePlayerModal || !el.homePlayerModalBody) return;
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Select player";
+    unbindHomePlayerDetailCardMetrics();
+    el.homePlayerModalBody.innerHTML = homeCompareSearchSheetHTML("");
+    if (el.homePlayerModal.hidden) {
+      el.homePlayerModal.hidden = false;
+      el.homePlayerModal.setAttribute("aria-hidden", "false");
+      document.documentElement.classList.add("home-player-modal-open");
+    }
+    bindHomeCompareSearchEvents(el.homePlayerModalBody);
+    syncHomePlayerHeaderActions(base);
+  }
+
+  function homeCompareSelectOther(row) {
+    if (!row || !homeCompareBase) return;
+    if (Number(row.code) === Number(homeCompareBase.code)) return;
+    homeCompareOther = row;
+    homeCompareMode = "total";
+    if (!homeLookupPlayer) homeLookupPlayer = homeCompareBase;
+    openHomeCompareView();
+  }
+
+  function openHomeCompareView({ replace = false } = {}) {
+    if (!homeCompareBase || !homeCompareOther) return;
+    const html = homeCompareViewHTML(homeCompareBase, homeCompareOther, homeCompareMode);
+    if (preferMobileSheet()) {
+      // Same-key openMobileSheet toggles closed — update the open compare sheet in place.
+      if (mobileSheetOpen && mobileSheetKey === "home-compare" && el.mobileSheetBody) {
+        if (el.mobileSheetTitle) {
+          el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
+          el.mobileSheetTitle.textContent = "Compare";
+        }
+        el.mobileSheetBody.innerHTML = html;
+        bindHomeCompareViewEvents(el.mobileSheetBody);
+        bindOwnershipPhotoFallback(el.mobileSheetBody);
+        syncHomePlayerHeaderActions(homeCompareBase);
+        return;
+      }
+      openMobileSheet({
+        title: "Compare",
+        html,
+        key: "home-compare",
+      });
+      bindHomeCompareViewEvents(el.mobileSheetBody);
+      bindOwnershipPhotoFallback(el.mobileSheetBody);
+      syncHomePlayerHeaderActions(homeCompareBase);
+      return;
+    }
+    if (!el.homePlayerModal || !el.homePlayerModalBody) return;
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Compare";
+    unbindHomePlayerDetailCardMetrics();
+    el.homePlayerModalBody.innerHTML = html;
+    if (el.homePlayerModal.hidden) {
+      el.homePlayerModal.hidden = false;
+      el.homePlayerModal.setAttribute("aria-hidden", "false");
+      document.documentElement.classList.add("home-player-modal-open");
+    }
+    bindHomeCompareViewEvents(el.homePlayerModalBody);
+    bindOwnershipPhotoFallback(el.homePlayerModalBody);
+    syncHomePlayerHeaderActions(homeCompareBase);
   }
 
   function closeHomePlayerModal() {
@@ -9030,6 +9710,7 @@
     document.documentElement.classList.remove("home-player-modal-open");
     if (el.homePlayerModalBody) el.homePlayerModalBody.innerHTML = "";
     if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Player Details";
+    clearHomeCompareState();
     syncHomePlayerOpenXBtn(null);
   }
 
@@ -9125,11 +9806,13 @@
     detail.classList.remove("is-measuring");
 
     const flag = detail.querySelector(":scope > .home-player-flag-banner");
+    const ownSlot = detail.querySelector(":scope > .home-player-detail-ownership");
     const styles = getComputedStyle(detail);
     const gap = Number.parseFloat(styles.rowGap || styles.gap) || 12;
     const flagH = flag ? Math.ceil(flag.getBoundingClientRect().height) + gap : 0;
+    const ownH = ownSlot ? Math.ceil(ownSlot.getBoundingClientRect().height) + gap : 0;
     const bodyH = el.homePlayerModalBody.clientHeight;
-    const availForGrid = Math.max(0, bodyH - flagH);
+    const availForGrid = Math.max(0, bodyH - flagH - ownH);
     const maxCellH = Math.max(120, Math.floor((availForGrid - gap) / 2));
     const cellH = Math.max(120, Math.min(naturalH || 120, maxCellH));
 
@@ -9155,6 +9838,9 @@
 
   function openHomePlayerDetailOverlay(row = homeLookupPlayer) {
     if (!row) return;
+    // Live Home refresh / view switches call syncHomeLookupUI → here. Never
+    // clobber an in-progress compare search or results card.
+    if (homeCompareUiOpen()) return;
     if (preferMobileSheet()) {
       closeHomePlayerModal();
       if (el.homeBento) el.homeBento.classList.remove("is-search-open");
@@ -9546,6 +10232,7 @@
     homeLookupPlayer = null;
     homeLookupStatMode = 0;
     homeLookupFormMode = 0;
+    clearHomeCompareState();
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
@@ -9769,6 +10456,7 @@
       closeHomePlayerDetailOverlay();
       return;
     }
+    if (homeCompareUiOpen()) return;
     openHomePlayerDetailOverlay(homeLookupPlayer);
   }
 
@@ -10389,7 +11077,15 @@
     syncHomeStandingsPagerDots(standingsPageIdx);
     settleHomeSquadSplitLayout({ deferMeasure: true });
     const feedGw = HOME.gw != null ? Number(HOME.gw) : null;
-    if (feedGw != null && homeSquadIsWideLayout()) renderHomeFeed(feedGw);
+    if (feedGw != null && homeSquadIsWideLayout()) {
+      ensureLiveFeedFromHome();
+      renderHomeFeed(feedGw);
+      // Prefill All so a trackpad swipe isn’t a blank second page.
+      requestAnimationFrame(() => {
+        if (state.page !== "home" || HOME.gw == null) return;
+        ensureHomeFeedAllRendered(Number(HOME.gw));
+      });
+    }
     const runHomeTablesSettle = () => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -10449,10 +11145,16 @@
     if (el.fplManagerSelect && el.fplManagerSelect.value !== id) {
       el.fplManagerSelect.value = id;
     }
+    // Keep the manager modal up and skip an early settled Home paint when we
+    // are about to run the single onboarding enter animation.
+    const deferHomePaint = !!animateHomeEnter && !!render && state.page === "home";
+    if (deferHomePaint) homeBootDeferPaint = true;
     rebuildLeagueSelect();
+    let syncOk = true;
     try {
       await syncManagerFromApi(id, { seedPlannerIfEmpty, quiet });
     } catch (err) {
+      syncOk = false;
       ownedCodes = new Set();
       syncFplIdStatus();
       if (!quiet) {
@@ -10462,11 +11164,15 @@
           icon: "triangle-alert",
         });
       }
-      if (render) scheduleSiteRefreshForHomeTargets({ toast: false, animateHomeEnter });
-      return false;
     }
-    if (render) scheduleSiteRefreshForHomeTargets({ toast: !quiet, animateHomeEnter });
-    return true;
+    if (deferHomePaint) homeBootDeferPaint = false;
+    if (render) {
+      scheduleSiteRefreshForHomeTargets({
+        toast: syncOk && !quiet,
+        animateHomeEnter,
+      });
+    }
+    return syncOk;
   }
 
   function clearManagerId({ quiet = false, render = true } = {}) {
@@ -12681,7 +13387,20 @@
       teamDetailsStatMode = 0;
     }
     if (closingKey === "home-search") syncHomeSearchBtn();
-    if (closingKey === "home-player") syncHomePlayerOpenXBtn(null);
+    if (closingKey === "home-player" || closingKey === "home-compare" || closingKey === "home-compare-search") {
+      const restoreDetails =
+        (closingKey === "home-compare-search" || closingKey === "home-compare")
+        && !!homeLookupPlayer;
+      if (closingKey === "home-compare" || closingKey === "home-compare-search") {
+        clearHomeCompareState();
+      }
+      syncHomePlayerOpenXBtn(null);
+      if (restoreDetails) {
+        window.setTimeout(() => {
+          if (homeLookupPlayer && !mobileSheetOpen) openHomePlayerDetailOverlay(homeLookupPlayer);
+        }, 300);
+      }
+    }
     if (closingKey === "team-details") syncHomePlayerOpenXBtn(null);
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;
@@ -12742,10 +13461,20 @@
 
     mobileSheetKey = key;
     if (el.mobileSheet) {
-      el.mobileSheet.classList.toggle("is-home-search", key === "home-search");
-      el.mobileSheet.classList.toggle("is-home-player", key === "home-player");
+      el.mobileSheet.classList.toggle(
+        "is-home-search",
+        key === "home-search" || key === "home-compare-search"
+      );
+      el.mobileSheet.classList.toggle(
+        "is-home-player",
+        key === "home-player" || key === "home-compare"
+      );
     }
-    if (key !== "home-player") syncHomePlayerOpenXBtn(null);
+    if (key === "home-player" || key === "home-compare") {
+      syncHomePlayerOpenXBtn(homeLookupPlayer || homeCompareBase);
+    } else {
+      syncHomePlayerOpenXBtn(null);
+    }
     if (el.mobileSheetTitle) {
       if (titleHtml) {
         el.mobileSheetTitle.classList.add("mobile-sheet-title-rich");
@@ -18661,6 +19390,20 @@
     }
   }
 
+  /** After onboarding Continue: hold Home paint/enter until difficulties done. */
+  let pendingHomeEnterAfterDifficulty = false;
+
+  function finishOnboardingHomeReveal() {
+    if (!pendingHomeEnterAfterDifficulty) return;
+    pendingHomeEnterAfterDifficulty = false;
+    homeBootDeferPaint = false;
+    if (state.page === "home") {
+      scheduleSiteRefreshForHomeTargets({ toast: true, animateHomeEnter: true });
+    } else {
+      refreshManagerDependentUI();
+    }
+  }
+
   function setDifficultyWizardOpen(open, { firstRun = false, step = null } = {}) {
     if (!el.difficultyWizard) return;
     if (open) {
@@ -18696,6 +19439,7 @@
     teamDifficultyStore.completedOnce = true;
     saveTeamDifficultyStore();
     setDifficultyWizardOpen(false);
+    finishOnboardingHomeReveal();
     showToast({ message: "You can set team difficulties anytime in Preferences.", icon: "info" });
   }
 
@@ -18714,6 +19458,7 @@
     teamDifficultyStore.completedOnce = true;
     saveTeamDifficultyStore();
     setDifficultyWizardOpen(false);
+    finishOnboardingHomeReveal();
     refreshTeamDifficultyConsumers();
     showToast({
       title: "Team difficulties saved",
@@ -23447,6 +24192,7 @@
   const OWNERSHIP_MOVER_N = 20;
   const OWNERSHIP_TEAM_TOP_N = 20;
   const OWNERSHIP_LOOKBACK_DAYS = { d1: 1, d3: 3, d7: 7, d14: 14 };
+  const OWNERSHIP_TREND_BADGE_N = 10;
 
   function ownershipCheckIns() {
     return Array.isArray(OWNERSHIP.checkIns) ? OWNERSHIP.checkIns : [];
@@ -23592,6 +24338,58 @@
     };
   }
 
+  /** Last N days of ownership points for a player/team history series. */
+  function ownershipWindowSeries(history, days = 7) {
+    const valid = (history || []).filter(
+      (pt) => pt && pt.owned != null && Number.isFinite(Number(pt.owned))
+    );
+    if (valid.length < 2) return null;
+    const livePt = valid[valid.length - 1];
+    const live = Number(livePt.owned);
+    const liveMs = ownershipCheckInMs(livePt.checkedAt);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const fromMs = liveMs - Math.max(1, Number(days) || 7) * dayMs;
+    let points = valid.filter((pt) => ownershipCheckInMs(pt.checkedAt) >= fromMs);
+    if (points.length < 2) points = valid.slice(-Math.min(valid.length, Math.max(2, Number(days) || 7)));
+    const start = Number(points[0].owned);
+    const delta = ownershipDelta(live, start);
+    return {
+      points: points.map((pt) => ({
+        checkedAt: pt.checkedAt,
+        owned: Number(pt.owned),
+      })),
+      live,
+      start,
+      delta,
+      updatedAt: livePt.checkedAt,
+    };
+  }
+
+  function ownershipPlayerWindowSeries(code, days = 7) {
+    if (code == null || code === "") return null;
+    const checkIns = ownershipCheckIns();
+    if (checkIns.length < 2) return null;
+    const history = ownershipPlayerHistoryMaps(checkIns).get(Number(code));
+    return ownershipWindowSeries(history, days);
+  }
+
+  /** Club ownership = avg TSB% of that club’s 20 most-owned players (Ownership Teams). */
+  function ownershipTeamWindowSeries(teamCode, days = 7) {
+    const team = String(teamCode || "");
+    if (!team) return null;
+    const checkIns = ownershipCheckIns();
+    if (checkIns.length < 2) return null;
+    const history = checkIns.map((ci) => {
+      const list = (ci.players || []).filter((p) => p && String(p.team) === team);
+      const agg = teamTopNAvg(list, OWNERSHIP_TEAM_TOP_N);
+      return {
+        checkedAt: ci.checkedAt,
+        owned: agg ? agg.owned : null,
+      };
+    });
+    return ownershipWindowSeries(history, days);
+  }
+
   function ownershipPlayerHistoryMaps(checkIns) {
     const byCode = new Map();
     for (const ci of checkIns) {
@@ -23695,6 +24493,47 @@
     const b7 = Math.abs(b.d7 || 0);
     if (a7 !== b7) return b7 - a7;
     return (b.live || 0) - (a.live || 0);
+  }
+
+  /** Top-10 14d riser/faller rank for player details Ownership badge. */
+  function ownershipPlayerTrendBadge(code) {
+    if (code == null || code === "") return null;
+    const codeN = Number(code);
+    if (!Number.isFinite(codeN)) return null;
+    const universe = buildOwnershipPlayerMoverUniverse();
+    const risers = universe
+      .filter((row) => Number(row.d14) > 0)
+      .sort(compareOwnershipMovers)
+      .slice(0, OWNERSHIP_TREND_BADGE_N);
+    const ri = risers.findIndex((row) => Number(row.code) === codeN);
+    if (ri >= 0) return { kind: "up", rank: ri + 1, delta: risers[ri].d14 };
+    const fallers = universe
+      .filter((row) => Number(row.d14) < 0)
+      .sort(compareOwnershipMovers)
+      .slice(0, OWNERSHIP_TREND_BADGE_N);
+    const fi = fallers.findIndex((row) => Number(row.code) === codeN);
+    if (fi >= 0) return { kind: "down", rank: fi + 1, delta: fallers[fi].d14 };
+    return null;
+  }
+
+  /** Top-10 14d riser/faller rank for team details Ownership badge. */
+  function ownershipTeamTrendBadge(teamCode) {
+    const team = String(teamCode || "");
+    if (!team) return null;
+    const universe = buildOwnershipTeamMoverUniverse();
+    const risers = universe
+      .filter((row) => Number(row.d14) > 0)
+      .sort(compareOwnershipMovers)
+      .slice(0, OWNERSHIP_TREND_BADGE_N);
+    const ri = risers.findIndex((row) => String(row.team) === team);
+    if (ri >= 0) return { kind: "up", rank: ri + 1, delta: risers[ri].d14 };
+    const fallers = universe
+      .filter((row) => Number(row.d14) < 0)
+      .sort(compareOwnershipMovers)
+      .slice(0, OWNERSHIP_TREND_BADGE_N);
+    const fi = fallers.findIndex((row) => String(row.team) === team);
+    if (fi >= 0) return { kind: "down", rank: fi + 1, delta: fallers[fi].d14 };
+    return null;
   }
 
   function ownershipMoverUniverse() {
@@ -27090,6 +27929,13 @@
     });
   }
   document.addEventListener("click", (e) => {
+    const compareBtn = e.target.closest(".home-player-compare-btn");
+    if (compareBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openHomeCompareSearch();
+      return;
+    }
     const openX = e.target.closest(".home-player-open-x");
     if (!openX) return;
     // Let the native <a href> open X (app handoff on mobile). Only synthesize
@@ -27097,7 +27943,7 @@
     e.stopPropagation();
     if (openX.getAttribute("href")) return;
     e.preventDefault();
-    openHomePlayerXSearch(homeLookupPlayer);
+    openHomePlayerXSearch(homeLookupPlayer || homeCompareBase);
   });
   document.addEventListener("pointerdown", (e) => {
     const wrap = el.homeDesktopSearch;
@@ -29448,8 +30294,28 @@
       if (!id) return;
       el.homeManagerContinue.disabled = true;
       try {
-        const ok = await applyManagerId(id, { quiet: false, animateHomeEnter: true });
-        if (ok) maybeOpenDifficultyWizardAfterManager();
+        const needsWizard = !teamDifficultyStore.completedOnce;
+        // Show difficulties immediately; hold Home paint/enter until skip/save.
+        if (needsWizard) {
+          homeBootDeferPaint = true;
+          pendingHomeEnterAfterDifficulty = true;
+          setHomeManagerModalOpen(false);
+          setDifficultyWizardOpen(true, { firstRun: true, step: "intro" });
+        }
+        const ok = await applyManagerId(id, {
+          quiet: needsWizard,
+          render: !needsWizard,
+          animateHomeEnter: !needsWizard,
+        });
+        if (!ok) {
+          pendingHomeEnterAfterDifficulty = false;
+          homeBootDeferPaint = false;
+          if (needsWizard) {
+            setDifficultyWizardOpen(false);
+            setHomeManagerModalOpen(true);
+          }
+          return;
+        }
       } finally {
         syncHomeManagerContinue();
       }
