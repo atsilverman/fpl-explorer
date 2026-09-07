@@ -1,0 +1,467 @@
+{
+  "generatedAt": "2026-09-07T21:51:30Z",
+  "meta": {
+    "season": 2026,
+    "source": "the-odds-api",
+    "endpoint": "events",
+    "quotaCost": 0,
+    "sports": [
+      "soccer_fa_cup",
+      "soccer_england_efl_cup",
+      "soccer_uefa_champs_league",
+      "soccer_uefa_europa_league",
+      "soccer_uefa_europa_conference_league"
+    ],
+    "requestsRemaining": "444",
+    "freshRows": 33,
+    "previousRows": 33,
+    "mergedRows": 33,
+    "plTeamsWithCups": 22,
+    "keepPastDays": 21
+  },
+  "competitions": [
+    {
+      "key": "fac",
+      "name": "FA Cup",
+      "logo": "https://media.api-sports.io/football/leagues/45.png",
+      "sport": "soccer_fa_cup"
+    },
+    {
+      "key": "efl",
+      "name": "EFL Cup",
+      "logo": "https://media.api-sports.io/football/leagues/48.png",
+      "sport": "soccer_england_efl_cup"
+    },
+    {
+      "key": "ucl",
+      "name": "UEFA Champions League",
+      "logo": "https://media.api-sports.io/football/leagues/2.png",
+      "sport": "soccer_uefa_champs_league"
+    },
+    {
+      "key": "uel",
+      "name": "UEFA Europa League",
+      "logo": "https://media.api-sports.io/football/leagues/3.png",
+      "sport": "soccer_uefa_europa_league"
+    },
+    {
+      "key": "uecl",
+      "name": "UEFA Europa Conference League",
+      "logo": "https://media.api-sports.io/football/leagues/848.png",
+      "sport": "soccer_uefa_europa_conference_league"
+    }
+  ],
+  "byTeam": {
+    "BOU": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "0bac78ed8ce967f5c4c516e698ad6545",
+        "oppName": "Lincoln City"
+      },
+      {
+        "date": "2026-09-17",
+        "kickoff": "2026-09-17T19:00:00Z",
+        "competitionKey": "uel",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/3.png",
+        "eventId": "802837ee46675cf2e15f0492a56d269a",
+        "oppName": "Real Sociedad"
+      }
+    ],
+    "CRY": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "1be15b6b5ee3ca3ab883625b1c6a198a",
+        "oppName": "Middlesbrough"
+      },
+      {
+        "date": "2026-09-17",
+        "kickoff": "2026-09-17T19:00:00Z",
+        "competitionKey": "uel",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/3.png",
+        "eventId": "e21f5417eecd4ef4cb1581eee499b80a",
+        "oppName": "Lech Poznań"
+      }
+    ],
+    "SUN": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "1d7e5b964edbfb5a9183bda56fa9f077",
+        "oppName": "Hull City"
+      },
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T19:00:00Z",
+        "competitionKey": "uel",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/3.png",
+        "eventId": "4283f064a57c57a3515d04eceead72d6",
+        "oppName": "AZ Alkmaar"
+      }
+    ],
+    "HUL": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "1d7e5b964edbfb5a9183bda56fa9f077",
+        "oppName": "Sunderland"
+      }
+    ],
+    "NEW": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "48871776013e64232ad967270b78707f",
+        "oppName": "Millwall"
+      }
+    ],
+    "EVE": [
+      {
+        "date": "2026-09-09",
+        "kickoff": "2026-09-09T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e4204c8919899ef684135de944d2def2",
+        "oppName": "Wolverhampton Wanderers"
+      },
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e5aae117566cd50b43b237e6ca44d4d6",
+        "oppName": "Wolverhampton Wanderers"
+      }
+    ],
+    "WOL": [
+      {
+        "date": "2026-09-09",
+        "kickoff": "2026-09-09T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e4204c8919899ef684135de944d2def2",
+        "oppName": "Everton"
+      },
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e5aae117566cd50b43b237e6ca44d4d6",
+        "oppName": "Everton"
+      }
+    ],
+    "CHE": [
+      {
+        "date": "2026-09-09",
+        "kickoff": "2026-09-09T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "850e1ef05ee29890ea102d814aa9f830",
+        "oppName": "Leeds United"
+      }
+    ],
+    "LEE": [
+      {
+        "date": "2026-09-09",
+        "kickoff": "2026-09-09T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "850e1ef05ee29890ea102d814aa9f830",
+        "oppName": "Chelsea"
+      }
+    ],
+    "WHU": [
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "c600bd30eb7a7689be8d92af9fd011da",
+        "oppName": "Fulham"
+      }
+    ],
+    "FUL": [
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "c600bd30eb7a7689be8d92af9fd011da",
+        "oppName": "West Ham United"
+      }
+    ],
+    "IPS": [
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "83bb3c98698353668712654f247b7bd6",
+        "oppName": "Arsenal"
+      }
+    ],
+    "ARS": [
+      {
+        "date": "2026-09-09",
+        "kickoff": "2026-09-09T19:00:00Z",
+        "competitionKey": "ucl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/2.png",
+        "eventId": "a43752f35ceb66893134410ad476bca9",
+        "oppName": "Napoli"
+      },
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "83bb3c98698353668712654f247b7bd6",
+        "oppName": "Ipswich Town"
+      }
+    ],
+    "BRE": [
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "3d625253860c4bd1cc2271c2de6ee94d",
+        "oppName": "Reading"
+      }
+    ],
+    "LIV": [
+      {
+        "date": "2026-09-09",
+        "kickoff": "2026-09-09T19:00:00Z",
+        "competitionKey": "ucl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/2.png",
+        "eventId": "0f3bf8fff62bb732883c00265d28f766",
+        "oppName": "Atlético Madrid"
+      },
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "4965041443287743a4253c03a1798962",
+        "oppName": "Tottenham Hotspur"
+      }
+    ],
+    "TOT": [
+      {
+        "date": "2026-09-15",
+        "kickoff": "2026-09-15T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "4965041443287743a4253c03a1798962",
+        "oppName": "Liverpool"
+      }
+    ],
+    "SHU": [
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T18:45:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "b8524613accaac8ace07beccb20865ad",
+        "oppName": "Fleetwood Town"
+      }
+    ],
+    "COV": [
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e332a111f0da6e34863f085bb8caa6a6",
+        "oppName": "Aston Villa"
+      }
+    ],
+    "AVL": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T16:45:00Z",
+        "competitionKey": "ucl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/2.png",
+        "eventId": "8f1221dd6bc88a3ebbfe573332840741",
+        "oppName": "Club Brugge"
+      },
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e332a111f0da6e34863f085bb8caa6a6",
+        "oppName": "Coventry City"
+      }
+    ],
+    "MUN": [
+      {
+        "date": "2026-09-10",
+        "kickoff": "2026-09-10T19:00:00Z",
+        "competitionKey": "ucl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/2.png",
+        "eventId": "347bee87359150e58c8883fc2cf6495a",
+        "oppName": "Sabah FK"
+      },
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "366b82e6380983c90a783336fab7cf81",
+        "oppName": "Brighton and Hove Albion"
+      }
+    ],
+    "BHA": [
+      {
+        "date": "2026-09-16",
+        "kickoff": "2026-09-16T19:00:00Z",
+        "competitionKey": "efl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "366b82e6380983c90a783336fab7cf81",
+        "oppName": "Manchester United"
+      },
+      {
+        "date": "2026-10-15",
+        "kickoff": "2026-10-15T19:00:00Z",
+        "competitionKey": "uecl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/848.png",
+        "eventId": "5ff465ad69bca8753070b0d3bb7dd3d5",
+        "oppName": "FK Kauno Žalgiris"
+      }
+    ],
+    "MCI": [
+      {
+        "date": "2026-09-08",
+        "kickoff": "2026-09-08T19:00:00Z",
+        "competitionKey": "ucl",
+        "ha": "A",
+        "logo": "https://media.api-sports.io/football/leagues/2.png",
+        "eventId": "bfeab0a3d8931c7cdff0056c041ff97c",
+        "oppName": "Porto"
+      },
+      {
+        "date": "2026-09-17",
+        "kickoff": "2026-09-17T18:30:00Z",
+        "competitionKey": "efl",
+        "ha": "H",
+        "logo": "https://media.api-sports.io/football/leagues/48.png",
+        "eventId": "e521d4165ecf78c3b58864293e866030",
+        "oppName": "Norwich City"
+      }
+    ]
+  },
+  "intlWindows": [
+    {
+      "start": "2026-09-21",
+      "end": "2026-10-06",
+      "label": "International break",
+      "note": "FIFA window (16 days · up to 4 matches)"
+    },
+    {
+      "start": "2026-11-09",
+      "end": "2026-11-17",
+      "label": "International break",
+      "note": "FIFA window"
+    },
+    {
+      "start": "2027-03-22",
+      "end": "2027-03-30",
+      "label": "International break",
+      "note": "FIFA window"
+    }
+  ],
+  "roundWindows": [
+    {
+      "competitionKey": "efl",
+      "start": "2026-10-27",
+      "end": "2026-10-29",
+      "label": "EFL Cup R4",
+      "note": "Round window · dates TBC",
+      "logo": "https://media.api-sports.io/football/leagues/48.png"
+    },
+    {
+      "competitionKey": "ucl",
+      "start": "2026-10-21",
+      "end": "2026-10-23",
+      "label": "UCL MD3",
+      "note": "League-phase window · dates TBC",
+      "logo": "https://media.api-sports.io/football/leagues/2.png"
+    },
+    {
+      "competitionKey": "uel",
+      "start": "2026-10-22",
+      "end": "2026-10-24",
+      "label": "UEL MD3",
+      "note": "League-phase window · dates TBC",
+      "logo": "https://media.api-sports.io/football/leagues/3.png"
+    },
+    {
+      "competitionKey": "uecl",
+      "start": "2026-10-22",
+      "end": "2026-10-24",
+      "label": "UECL MD3",
+      "note": "League-phase window · dates TBC",
+      "logo": "https://media.api-sports.io/football/leagues/848.png"
+    },
+    {
+      "competitionKey": "efl",
+      "start": "2026-12-15",
+      "end": "2026-12-17",
+      "label": "EFL Cup QF",
+      "note": "Round window · dates TBC",
+      "logo": "https://media.api-sports.io/football/leagues/48.png"
+    },
+    {
+      "competitionKey": "fac",
+      "start": "2027-01-09",
+      "end": "2027-01-12",
+      "label": "FA Cup R3",
+      "note": "Prem enter · dates TBC",
+      "logo": "https://media.api-sports.io/football/leagues/45.png"
+    }
+  ]
+}
