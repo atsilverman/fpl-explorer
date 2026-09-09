@@ -153,6 +153,8 @@
   };
   const FIXTURE_TT_DELAY_MS = 1000;
   const FIXTURE_TT_COUNT = 7;
+  /** Player/Team Details Schedule — a few more rows than fixture tooltips (7). */
+  const HOME_DETAIL_SCHEDULE_COUNT = 10;
   const OWNERSHIP_FILTER_DEFAULT = 5;
   const OWNERSHIP_FILTER_MAX = 100;
   // Floor for the "Hide low minutes" filter — ~1 full match. Auto-on with
@@ -4090,13 +4092,12 @@
   let homeLookupPlayer = null;
   let homeLookupStatMode = 0;
   let homeLookupFormMode = 0;
-  /** Ownership details chart window: 7d → 14d → 30d → All (live point stays right). */
+  /** Ownership details chart window: 7d → 14d → 30d (live point stays right). */
   let homeOwnChartWindowIdx = 0;
   const HOME_OWN_CHART_WINDOWS = [
     { days: 7, label: "7d" },
     { days: 14, label: "14d" },
     { days: 30, label: "30d" },
-    { days: null, label: "All" },
   ];
   let homeLookupCardBound = false;
   /** Last squad/pts table paint — skip rebuild on settleQuiet when only standings/summary moved. */
@@ -8441,9 +8442,7 @@
       const y = padT + (1 - (Number(pt.owned) - yLo) / rng) * plotH;
       return { x, y, owned: Number(pt.owned), checkedAt: pt.checkedAt };
     });
-    const pathD = coords
-      .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
-      .join(" ");
+    const pathD = homeOwnSmoothPathD(coords);
     const toneDeltaVal =
       toneDelta != null && Number.isFinite(Number(toneDelta))
         ? Number(toneDelta)
@@ -8500,11 +8499,43 @@
     </svg>`;
   }
 
+  /** Catmull–Rom → cubic Bézier so Overall TSB reads as a smooth curve. */
+  function homeOwnSmoothPathD(coords) {
+    if (!coords || coords.length < 2) return "";
+    const fmt = (n) => Number(n).toFixed(1);
+    if (coords.length === 2) {
+      return `M${fmt(coords[0].x)} ${fmt(coords[0].y)} L${fmt(coords[1].x)} ${fmt(coords[1].y)}`;
+    }
+    let d = `M${fmt(coords[0].x)} ${fmt(coords[0].y)}`;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i - 1] || coords[i];
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+      const p3 = coords[i + 2] || p2;
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C${fmt(cp1x)} ${fmt(cp1y)}, ${fmt(cp2x)} ${fmt(cp2y)}, ${fmt(p2.x)} ${fmt(p2.y)}`;
+    }
+    return d;
+  }
+
+  function homeOwnChartWindowLabel(win) {
+    if (!win) return "7d";
+    return win.label || `${win.days}d`;
+  }
+
+  function homeOwnChartKickerHTML(baseKicker, windowLabel) {
+    const label = windowLabel || "7d";
+    return `${escapeHtml(baseKicker)} <span class="home-own-window-inline">(${escapeHtml(label)})</span>`;
+  }
+
   function homeOwnChartHistorySpanDays(kind, key) {
     const full =
       kind === "team"
-        ? ownershipTeamWindowSeries(key, null)
-        : ownershipPlayerWindowSeries(key, null);
+        ? ownershipTeamWindowSeries(key, 30)
+        : ownershipPlayerWindowSeries(key, 30);
     if (!full || !full.points || full.points.length < 2) return 0;
     const a = ownershipCheckInMs(full.points[0].checkedAt);
     const b = ownershipCheckInMs(full.points[full.points.length - 1].checkedAt);
@@ -8518,13 +8549,6 @@
     if (span <= 7.5) return opts;
     opts.push({ days: 14, label: "14d" });
     if (span > 14.5) opts.push({ days: 30, label: "30d" });
-    const lastFixed = opts[opts.length - 1].days;
-    if (lastFixed != null && span > lastFixed + 0.5) {
-      opts.push({ days: null, label: "All" });
-    } else if (opts.length === 2 && span > 7.5) {
-      // 7–14d of history: offer All as the second step beyond 7d.
-      opts[1] = { days: null, label: "All" };
-    }
     return opts;
   }
 
@@ -8555,14 +8579,12 @@
     const dots = windows
       .map((w, i) => {
         const active = i === activeIdx ? " is-active" : "";
-        const label = w.label || `${w.days}d`;
+        const label = homeOwnChartWindowLabel(w);
         return `<button type="button" class="home-lookup-dot home-own-dot-page${active}" data-page="${i}" aria-label="Ownership ${escapeHtml(label)}" aria-current="${i === activeIdx ? "true" : "false"}" title="${escapeHtml(label)}"></button>`;
       })
       .join("");
-    const cur = windows[Math.max(0, Math.min(windows.length - 1, activeIdx))] || windows[0];
     return `<div class="home-own-window-nav">
       <div class="home-lookup-dots home-own-dots" role="tablist" aria-label="Ownership window">${dots}</div>
-      <span class="home-own-window-label">${escapeHtml(cur.label || "7d")}</span>
     </div>`;
   }
 
@@ -8598,10 +8620,14 @@
       ? `<div class="home-own-trend-row">${trendBadge}</div>`
       : "";
     const head = headerSeries || chartSeries;
+    const winList = windows && windows.length ? windows : [{ days: 7, label: "7d" }];
+    const idx = Math.max(0, Math.min(winList.length - 1, Number(windowIdx) || 0));
+    const winLabel = homeOwnChartWindowLabel(winList[idx] || winList[0]);
+    const kickerHtml = homeOwnChartKickerHTML(kicker, winLabel);
     if (!chartSeries || !chartSeries.points || chartSeries.points.length < 2) {
       return `<article class="home-form-card home-own-card is-empty" data-own-chart="1">
         <div class="home-form-head">
-          <span class="home-form-kicker">${escapeHtml(kicker)}</span>
+          <span class="home-form-kicker">${kickerHtml}</span>
           <span class="home-form-stat-label">7d</span>
         </div>
         ${trendRow}
@@ -8613,11 +8639,9 @@
       head.delta == null ? "" : ` · ${fmtOwnershipTrendDelta(head.delta)} 7d`;
     const updated = fmtOwnershipDate(head.updatedAt || chartSeries.updatedAt);
     const tone = ownershipDeltaClass(head.delta);
-    const winList = windows && windows.length ? windows : [{ days: 7, label: "7d" }];
-    const idx = Math.max(0, Math.min(winList.length - 1, Number(windowIdx) || 0));
     return `<article class="home-form-card home-own-card ${tone}${trendBadge ? " has-trend" : ""}" data-own-chart="1">
       <div class="home-form-head">
-        <span class="home-form-kicker">${escapeHtml(kicker)}</span>
+        <span class="home-form-kicker">${kickerHtml}</span>
         <span class="home-form-stat-label">${escapeHtml(liveLbl)}${escapeHtml(deltaLbl)}</span>
       </div>
       ${trendRow}
@@ -8700,7 +8724,16 @@
     const chartSeries = homeOwnChartSeriesFor(ctx, win.days);
     if (!chartSeries || !headerSeries) return;
     const chartEl = card.querySelector(".home-own-chart");
+    const kickerBase =
+      ctx.kind === "team" ? "Overall TSB · Top 20" : "Overall TSB";
     const paint = () => {
+      const kickerEl = card.querySelector(".home-form-kicker");
+      if (kickerEl) {
+        kickerEl.innerHTML = homeOwnChartKickerHTML(
+          kickerBase,
+          homeOwnChartWindowLabel(win)
+        );
+      }
       if (chartEl) {
         chartEl.innerHTML = homeOwnershipChartSvg(chartSeries, {
           accent: ctx.accent,
@@ -8788,7 +8821,7 @@
     }
     const highlightMaps = fixtureHighlightMaps();
     const rankMaps = fixtureRankMaps();
-    const fixtures = planningFixturesForTeam(teamCode, FIXTURE_TT_COUNT);
+    const fixtures = planningFixturesForTeam(teamCode, HOME_DETAIL_SCHEDULE_COUNT);
     const customFdr = teamDifficultyUsesFixtures();
     // Outside Matchups: ranks + pink/blue wash only — no score chips, edges, or team info.
     return `<article class="schedule-card home-lookup-schedule-card" data-team="${escapeHtml(teamCode)}">${fixtureCardHTML(
@@ -16746,24 +16779,64 @@
     window.setTimeout(() => node.remove(), 200);
   }
 
-  function showToast({ title, message, icon = "info", duration = 4200 } = {}) {
+  function showToast({ title, message, icon = "info", duration = 4200, animateCheck = false } = {}) {
     hideToast();
     if (!el.toastRoot) return;
+    const success = !!animateCheck || icon === "circle-check" || icon === "check";
     const node = document.createElement("div");
-    node.className = "toast";
+    node.className = `toast${success ? " is-success" : ""}`;
     node.setAttribute("role", "status");
+    const iconHtml = success
+      ? `<svg class="toast-check-icon" viewBox="0 0 24 24" aria-hidden="true"><circle class="toast-check-ring" cx="12" cy="12" r="10"/><path class="toast-check-mark" d="m9 12 2 2 4-4"/></svg>`
+      : iconHTML(icon);
     node.innerHTML = `
-      <span class="toast-icon">${iconHTML(icon)}</span>
+      <span class="toast-icon">${iconHtml}</span>
       <div class="toast-body">
-        ${title ? `<div class="toast-title">${title}</div>` : ""}
-        ${message ? `<div class="toast-msg">${message}</div>` : ""}
+        ${title ? `<div class="toast-title">${escapeHtml(title)}</div>` : ""}
+        ${message ? `<div class="toast-msg">${escapeHtml(message)}</div>` : ""}
       </div>`;
     el.toastRoot.appendChild(node);
     toastEl = node;
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => node.classList.add("visible"));
+      requestAnimationFrame(() => {
+        node.classList.add("visible");
+        if (success && !prefersReducedMotion()) {
+          requestAnimationFrame(() => node.classList.add("is-check-drawn"));
+        } else if (success) {
+          node.classList.add("is-check-drawn");
+        }
+      });
     });
     toastTimer = window.setTimeout(hideToast, duration);
+  }
+
+  function configuredManagerDisplayName() {
+    const id = savedManagerId || (HOME && HOME.managerId);
+    const tracked = trackedManagerById(id);
+    if (tracked && tracked.name) return String(tracked.name);
+    if (tracked && tracked.teamName) return String(tracked.teamName);
+    const summary = HOME && HOME.summary;
+    if (summary && summary.managerName) return String(summary.managerName);
+    if (summary && summary.teamName) return String(summary.teamName);
+    const sel = el.fplManagerSelect;
+    if (sel && sel.selectedOptions && sel.selectedOptions[0]) {
+      const label = String(sel.selectedOptions[0].textContent || "").trim();
+      if (label && !/^select/i.test(label)) {
+        return label.split("·")[0].split("—")[0].trim() || label;
+      }
+    }
+    return "Manager";
+  }
+
+  function showManagerConfiguredToast({ skipped = false } = {}) {
+    const name = configuredManagerDisplayName();
+    showToast({
+      title: `${name} is configured`,
+      message: skipped ? "You can set team difficulties anytime in Preferences." : "",
+      icon: "circle-check",
+      animateCheck: true,
+      duration: skipped ? 4800 : 4200,
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -20502,6 +20575,17 @@
     return teamDifficultyWizardAxis === "def" ? "def" : "atk";
   }
 
+  function difficultySliderPct(value) {
+    const v = clampDifficultyRating(value);
+    return `${((v - 1) / 4) * 100}%`;
+  }
+
+  function difficultySliderTickMarksHTML() {
+    return [1, 2, 3, 4, 5]
+      .map((n) => `<span class="diff-tick" style="left:${((n - 1) / 4) * 100}%"></span>`)
+      .join("");
+  }
+
   function difficultySliderGhostMarksHTML(teamCode, venue) {
     const axis = difficultyWizardAxisKey();
     const seed = fplDifficultySeedForTeam(teamCode);
@@ -20519,16 +20603,28 @@
     return marks.join("");
   }
 
+  function syncDifficultySliderFill(slider) {
+    if (!slider) return;
+    const wrap = slider.closest(".diff-slider-wrap");
+    if (!wrap) return;
+    wrap.style.setProperty("--diff-pct", difficultySliderPct(slider.value));
+  }
+
   function difficultyVenueControlHTML(teamCode, venue, value) {
     const label = venue === "A" ? "Away" : "Home";
     const shortLab = venue === "A" ? "Away" : "Home";
     const ramp = fdrRampInlineStyle(value, { schedulePalette: true });
     const axis = difficultyWizardAxisKey();
+    const pct = difficultySliderPct(value);
     return `<label class="diff-axis diff-axis-${venue === "A" ? "away" : "home"}">
       <span class="diff-axis-lab">${shortLab}</span>
       <span class="diff-axis-ctrl">
-        <span class="diff-slider-wrap">
-          <span class="diff-ghost-rail" aria-hidden="true">${difficultySliderGhostMarksHTML(teamCode, venue)}</span>
+        <span class="diff-slider-wrap" style="--diff-pct:${pct}">
+          <span class="diff-track" aria-hidden="true">
+            <span class="diff-track-fill"></span>
+            <span class="diff-tick-rail">${difficultySliderTickMarksHTML()}</span>
+            <span class="diff-ghost-rail">${difficultySliderGhostMarksHTML(teamCode, venue)}</span>
+          </span>
           <input type="range" class="diff-slider" min="1" max="5" step="1"
             data-team="${escapeHtml(teamCode)}" data-venue="${venue}" data-axis="${axis}"
             value="${value}" aria-label="${escapeHtml(`${label} ${axis === "def" ? "defence" : "attack"}`)} difficulty" />
@@ -20640,11 +20736,18 @@
   }
 
   function skipDifficultyWizard() {
+    const onboarding = !!teamDifficultyWizardFirstRun;
     teamDifficultyStore.completedOnce = true;
     saveTeamDifficultyStore();
     setDifficultyWizardOpen(false);
     finishOnboardingHomeReveal();
-    showToast({ message: "You can set team difficulties anytime in Preferences.", icon: "info" });
+    if (onboarding) showManagerConfiguredToast({ skipped: true });
+    else {
+      showToast({
+        message: "You can set team difficulties anytime in Preferences.",
+        icon: "info",
+      });
+    }
   }
 
   function resetDifficultyDraftToFpl() {
@@ -20653,6 +20756,7 @@
   }
 
   function commitDifficultyWizard({ enableFixtures = null } = {}) {
+    const onboarding = !!teamDifficultyWizardFirstRun;
     ensureTeamDifficultyDraftFromSeed();
     teamDifficultyStore.ratings = cloneTeamDifficultyRatings(teamDifficultyDraft);
     teamDifficultyStore.advanced = true;
@@ -20664,12 +20768,17 @@
     setDifficultyWizardOpen(false);
     finishOnboardingHomeReveal();
     refreshTeamDifficultyConsumers();
+    if (onboarding) {
+      showManagerConfiguredToast({ skipped: false });
+      return;
+    }
     showToast({
       title: "Team difficulties saved",
       message: teamDifficultyStore.useOnFixtures
         ? "Custom fixture colors are on — Fixtures and Home Schedule use your ratings."
         : "Stored in this browser. Turn on Custom fixture colors in Preferences to apply them (Matchups keep OPTA/FPL ranks).",
-      icon: "info",
+      icon: "circle-check",
+      animateCheck: true,
     });
   }
 
@@ -29584,6 +29693,7 @@
       if (!teamDifficultyDraft[team]) teamDifficultyDraft[team] = emptyTeamRatings();
       teamDifficultyDraft[team][venue][key] = val;
       slider.value = String(val);
+      syncDifficultySliderFill(slider);
       const pill = slider.closest(".diff-axis")?.querySelector(".diff-axis-val");
       if (pill) {
         const ramp = fdrRampInlineStyle(val, { schedulePalette: true });
