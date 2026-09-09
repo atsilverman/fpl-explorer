@@ -60,7 +60,7 @@
   };
   // Badge SVGs have no index.html ?v= — bump when crest tiles change so browsers
   // don't keep serving cached legacy tall shields under the same path.
-  const BADGE_CACHE_V = "5";
+  const BADGE_CACHE_V = "6";
   function badgeSrc(src) {
     if (!src) return src;
     const join = src.includes("?") ? "&" : "?";
@@ -1166,6 +1166,7 @@
     homeGwMeta: $("#home-gw-meta"),
     homeSummary: $("#home-summary"),
     homeSummaryHero: $("#home-summary-hero"),
+    homeHeroChip: $("#home-hero-chip"),
     homeHeroLive: $("#home-hero-live"),
     homeHeroOverallRank: $("#home-hero-overall-rank"),
     homeHeroOverallRankDelta: $("#home-hero-overall-rank-delta"),
@@ -2489,6 +2490,11 @@
     if (el.homeGwHeading) el.homeGwHeading.textContent = "GW points";
     if (el.homeGwPoints) el.homeGwPoints.textContent = "—";
     if (el.homeGwMeta) el.homeGwMeta.innerHTML = "";
+    if (el.homeHeroChip) {
+      el.homeHeroChip.hidden = true;
+      el.homeHeroChip.textContent = "";
+      el.homeHeroChip.removeAttribute("title");
+    }
     const overallRankEl = el.homeOverallRankNum || el.homeOverallRank;
     if (overallRankEl) overallRankEl.textContent = "—";
     if (el.homeHeroOverallRank) el.homeHeroOverallRank.textContent = "";
@@ -4962,6 +4968,12 @@
     freehit: "FH",
     bboost: "BB",
     "3xc": "TC",
+  };
+  const HOME_CHIP_LABELS = {
+    wildcard: "Wildcard",
+    freehit: "Free Hit",
+    bboost: "Bench Boost",
+    "3xc": "Triple Captain",
   };
 
   function homeActiveChipName(row) {
@@ -8391,7 +8403,7 @@
       ? ""
       : `<circle class="home-own-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.2" />`;
     const midY = padT + (h - padT - padB) / 2;
-    return `<svg class="home-own-svg ${tone}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" aria-hidden="true" style="--home-own-stroke:${stroke}">
+    return `<svg class="home-own-svg ${tone}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="--home-own-stroke:${stroke}">
       <line class="home-own-grid" x1="${padL}" y1="${padT}" x2="${w - padR}" y2="${padT}" />
       <line class="home-own-grid" x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" />
       <line class="home-own-grid" x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" />
@@ -8420,14 +8432,18 @@
     } Trending #${rank}</span>`;
   }
 
-  function homeOwnershipChartHTML(series, { kicker = "Ownership", sub = "7d", accent = "", trend = null } = {}) {
+  function homeOwnershipChartHTML(series, { kicker = "Overall TSB", sub = "7d", accent = "", trend = null } = {}) {
     const trendBadge = homeOwnershipTrendBadgeHTML(trend);
+    const trendRow = trendBadge
+      ? `<div class="home-own-trend-row">${trendBadge}</div>`
+      : "";
     if (!series || !series.points || series.points.length < 2) {
       return `<article class="home-form-card home-own-card is-empty">
         <div class="home-form-head">
-          <span class="home-form-kicker-row"><span class="home-form-kicker">${escapeHtml(kicker)}</span>${trendBadge}</span>
+          <span class="home-form-kicker">${escapeHtml(kicker)}</span>
           <span class="home-form-stat-label">${escapeHtml(sub)}</span>
         </div>
+        ${trendRow}
         <p class="home-own-empty">No ownership history yet. Ownership check-ins appear after the next cache refresh.</p>
       </article>`;
     }
@@ -8438,11 +8454,12 @@
         : ` · ${fmtOwnershipTrendDelta(series.delta)} 7d`;
     const updated = fmtOwnershipDate(series.updatedAt);
     const tone = ownershipDeltaClass(series.delta);
-    return `<article class="home-form-card home-own-card ${tone}">
+    return `<article class="home-form-card home-own-card ${tone}${trendBadge ? " has-trend" : ""}">
       <div class="home-form-head">
-        <span class="home-form-kicker-row"><span class="home-form-kicker">${escapeHtml(kicker)}</span>${trendBadge}</span>
+        <span class="home-form-kicker">${escapeHtml(kicker)}</span>
         <span class="home-form-stat-label">${escapeHtml(liveLbl)}${escapeHtml(deltaLbl)}</span>
       </div>
+      ${trendRow}
       <div class="home-own-chart">${homeOwnershipChartSvg(series, { accent })}</div>
       ${updated ? `<p class="home-own-updated">Updated ${escapeHtml(updated)}</p>` : ""}
     </article>`;
@@ -8453,7 +8470,7 @@
     const series = ownershipPlayerWindowSeries(row.code, 7);
     const accent = TEAM_SCATTER_ACCENT[row.team] || "";
     return homeOwnershipChartHTML(series, {
-      kicker: "Ownership",
+      kicker: "Overall TSB",
       sub: "7d TSB",
       accent,
       trend: ownershipPlayerTrendBadge(row.code),
@@ -8464,7 +8481,7 @@
     const series = ownershipTeamWindowSeries(teamCode, 7);
     const accent = TEAM_SCATTER_ACCENT[teamCode] || "";
     return homeOwnershipChartHTML(series, {
-      kicker: "Ownership",
+      kicker: "Overall TSB",
       sub: "Top 20 avg · 7d",
       accent,
       trend: ownershipTeamTrendBadge(teamCode),
@@ -8565,20 +8582,20 @@
     upgradeNativeTitles(matchup);
   }
 
-  function homePlayerOwnersLegendHTML({ hasStarter = false, hasBench = false } = {}) {
+  function homePlayerOwnersLegendHTML({ starterCount = 0, benchCount = 0 } = {}) {
     const items = [];
-    if (hasStarter) {
+    if (starterCount > 0) {
       items.push(
-        `<span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Starting XI</span>`
+        `<span class="home-player-owners-legend-item is-starter"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Starting XI (${starterCount})</span>`
       );
     }
-    if (hasBench) {
+    if (benchCount > 0) {
       items.push(
-        `<span class="home-player-owners-legend-item is-bench"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Bench</span>`
+        `<span class="home-player-owners-legend-item is-bench"><span class="home-player-owners-legend-swatch" aria-hidden="true"></span>Bench (${benchCount})</span>`
       );
     }
     if (!items.length) return "";
-    return `<div class="home-player-owners-legend" aria-label="Ownership legend">${items.join("")}</div>`;
+    return `<div class="home-player-owners-legend" aria-label="League ownership legend">${items.join("")}</div>`;
   }
 
   function homePlayerOwnersHTML(elementId) {
@@ -8597,7 +8614,7 @@
       return `<section class="home-player-owners">
         <div class="home-player-owners-head">
           <h3 class="home-player-owners-heading">
-            <span class="home-player-owners-kicker">League</span>
+            <span class="home-player-owners-kicker">League Ownership</span>
             <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
           </h3>
         </div>
@@ -8608,21 +8625,21 @@
       return `<section class="home-player-owners">
         <div class="home-player-owners-head">
           <h3 class="home-player-owners-heading">
-            <span class="home-player-owners-kicker">Owners</span>
-            <span class="home-player-owners-meta">0/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
+            <span class="home-player-owners-kicker">League Ownership</span>
+            <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
           </h3>
         </div>
         <p class="home-player-owners-empty">No managers in ${escapeHtml(leagueLabel)} own this player.</p>
       </section>`;
     }
-    let hasStarter = false;
-    let hasBench = false;
+    let starterCount = 0;
+    let benchCount = 0;
     const list = rows
       .map((r) => {
         const entry = Number(r.entry);
         const slot = homeOwnerSlotForElement(entry, elementId);
-        if (slot === "starter") hasStarter = true;
-        else if (slot === "bench") hasBench = true;
+        if (slot === "starter") starterCount += 1;
+        else if (slot === "bench") benchCount += 1;
         const rank = r.rankOfficial ?? r.rankLive ?? "—";
         const gw = homeStandingsGwPoints(r);
         const total = r.total != null ? Number(r.total) : r.totalPoints;
@@ -8658,10 +8675,10 @@
     return `<section class="home-player-owners">
       <div class="home-player-owners-head">
         <h3 class="home-player-owners-heading">
-          <span class="home-player-owners-kicker">Owners</span>
-          <span class="home-player-owners-meta">${ownerCount}/${standings.length || "—"} · ${escapeHtml(leagueLabel)}</span>
+          <span class="home-player-owners-kicker">League Ownership</span>
+          <span class="home-player-owners-meta">${escapeHtml(leagueLabel)}</span>
         </h3>
-        ${homePlayerOwnersLegendHTML({ hasStarter, hasBench })}
+        ${homePlayerOwnersLegendHTML({ starterCount, benchCount })}
       </div>
       <div class="home-player-owners-list" role="list">${cols}${list}</div>
     </section>`;
@@ -9154,11 +9171,23 @@
   }
 
   function clearTeamDetails({ clearState = true } = {}) {
-    if (mobileSheetOpen && mobileSheetKey === "team-details") closeMobileSheet();
+    if (mobileSheetOpen && (
+      mobileSheetKey === "team-details"
+      || mobileSheetKey === "home-team-compare"
+      || mobileSheetKey === "home-team-compare-search"
+    )) {
+      closeMobileSheet();
+    }
     if (el.homePlayerModal && !el.homePlayerModal.hidden) {
       const body = el.homePlayerModalBody;
-      if (body && body.querySelector(".home-team-detail")) closeHomePlayerModal();
+      if (
+        body
+        && body.querySelector(".home-team-detail, .home-team-compare-card, .home-team-compare-search")
+      ) {
+        closeHomePlayerModal();
+      }
     }
+    clearHomeTeamCompareState();
     if (clearState) {
       teamDetailsCode = null;
       teamDetailsStatMode = 0;
@@ -9183,6 +9212,9 @@
   function openTeamDetailsOverlay(teamCode) {
     const code = String(teamCode || "");
     if (!code) return;
+    if (homeTeamCompareUiOpen() && String(homeTeamCompareBase) === code) return;
+    clearHomeCompareState();
+    clearHomeTeamCompareState();
     if (homeLookupPlayer) {
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
@@ -9321,7 +9353,7 @@
     const url = homePlayerXSearchUrl(row);
     const showX = !!url;
     const xLabel = row && row.name ? `Search X for ${row.name} fpl` : "Search X";
-    const detailsOpen = !!(
+    const playerDetailsOpen = !!(
       (mobileSheetOpen && mobileSheetKey === "home-player")
       || (
         el.homePlayerModal
@@ -9330,13 +9362,31 @@
         && el.homePlayerModalBody.querySelector(".home-player-detail:not(.home-team-detail)")
       )
     );
+    const teamDetailsOpen = !!(
+      (mobileSheetOpen && mobileSheetKey === "team-details")
+      || (
+        el.homePlayerModal
+        && !el.homePlayerModal.hidden
+        && el.homePlayerModalBody
+        && el.homePlayerModalBody.querySelector(".home-team-detail")
+      )
+    );
     // Home live/view refresh can restore details over compare without clearing
     // state — drop the stale pair so Compare can show again on details.
-    if (detailsOpen && !homeCompareUiOpen() && homeCompareActive()) {
+    if (playerDetailsOpen && !homeCompareUiOpen() && homeCompareActive()) {
       clearHomeCompareState();
     }
-    const comparing = homeCompareActive() || homeCompareUiOpen();
-    const showCompare = !!row && !comparing && detailsOpen;
+    if (teamDetailsOpen && !homeTeamCompareUiOpen() && homeTeamCompareActive()) {
+      clearHomeTeamCompareState();
+    }
+    const comparing =
+      homeCompareActive()
+      || homeCompareUiOpen()
+      || homeTeamCompareActive()
+      || homeTeamCompareUiOpen();
+    const showPlayerCompare = !!row && !comparing && playerDetailsOpen;
+    const showTeamCompare = !!teamDetailsCode && !comparing && teamDetailsOpen;
+    const showCompare = showPlayerCompare || showTeamCompare;
 
     [el.mobileSheetOpenX, el.homePlayerModalOpenX].forEach((btn) => {
       if (!btn) return;
@@ -9354,6 +9404,9 @@
     [el.mobileSheetCompare, el.homePlayerModalCompare].forEach((btn) => {
       if (!btn) return;
       btn.hidden = !showCompare;
+      const label = showTeamCompare ? "Compare team" : "Compare player";
+      btn.setAttribute("aria-label", label);
+      btn.title = label;
     });
   }
 
@@ -9507,6 +9560,41 @@
     </div>`;
   }
 
+  function homeCompareBarPcts(aNum, bNum) {
+    const absA = aNum == null || !Number.isFinite(Number(aNum)) ? 0 : Math.abs(Number(aNum));
+    const absB = bNum == null || !Number.isFinite(Number(bNum)) ? 0 : Math.abs(Number(bNum));
+    const max = Math.max(absA, absB);
+    if (!(max > 0)) return { a: 0, b: 0 };
+    return {
+      a: Math.round((absA / max) * 1000) / 10,
+      b: Math.round((absB / max) * 1000) / 10,
+    };
+  }
+
+  function homeCompareDivergingRowHTML(label, a, b, { better = null, textOnly = false } = {}) {
+    if (textOnly || (a.num == null && b.num == null)) {
+      return `<div class="home-compare-row is-text">
+        <span class="home-compare-val is-a">${escapeHtml(a.text)}</span>
+        <span class="home-compare-lab">${escapeHtml(label)}</span>
+        <span class="home-compare-val is-b">${escapeHtml(b.text)}</span>
+      </div>`;
+    }
+    const pct = homeCompareBarPcts(a.num, b.num);
+    const metric = (side, shown, width) => {
+      const win = better === side;
+      const bar = `<div class="home-compare-bar-rail" aria-hidden="true"><span class="home-compare-bar" style="width:${width}%"></span></div>`;
+      const val = `<span class="home-compare-val">${escapeHtml(shown.text)}</span>`;
+      return `<div class="home-compare-metric is-${side}${win ? " is-better" : ""}">${
+        side === "a" ? `${val}${bar}` : `${bar}${val}`
+      }</div>`;
+    };
+    return `<div class="home-compare-row is-bars">
+      ${metric("a", a, pct.a)}
+      <span class="home-compare-lab">${escapeHtml(label)}</span>
+      ${metric("b", b, pct.b)}
+    </div>`;
+  }
+
   function homeCompareRowHTML(left, right, spec, mode) {
     const a = homeCompareDisplayValue(left, spec, mode);
     const b = homeCompareDisplayValue(right, spec, mode);
@@ -9515,18 +9603,10 @@
       const lower = !!spec.lowerBetter;
       better = lower ? (a.num < b.num ? "a" : "b") : (a.num > b.num ? "a" : "b");
     }
-    const cell = (side, shown) => {
-      const win = better === side;
-      const inner = win
-        ? `<span class="home-compare-pill">${escapeHtml(shown.text)}</span>`
-        : escapeHtml(shown.text);
-      return `<span class="home-compare-val is-${side}${win ? " is-better" : ""}">${inner}</span>`;
-    };
-    return `<div class="home-compare-row">
-      ${cell("a", a)}
-      <span class="home-compare-lab">${escapeHtml(spec.label)}</span>
-      ${cell("b", b)}
-    </div>`;
+    return homeCompareDivergingRowHTML(spec.label, a, b, {
+      better,
+      textOnly: !!spec.text,
+    });
   }
 
   function homeCompareViewHTML(left, right, mode = homeCompareMode) {
@@ -9543,7 +9623,15 @@
       .join("");
     const seg = (id, label) =>
       `<button type="button" data-compare-mode="${id}" class="${m === id ? "active" : ""}">${label}</button>`;
-    return `<article class="home-compare-card">
+    const accentA = (left && TEAM_SCATTER_ACCENT[left.team]) || "";
+    const accentB = (right && TEAM_SCATTER_ACCENT[right.team]) || "";
+    const accentStyle = [
+      accentA ? `--compare-accent-a:${accentA}` : "",
+      accentB ? `--compare-accent-b:${accentB}` : "",
+    ]
+      .filter(Boolean)
+      .join(";");
+    return `<article class="home-compare-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
       <div class="home-compare-heads">
         ${homeCompareSideHTML(left, "a")}
         <span class="home-compare-vs" aria-hidden="true">vs</span>
@@ -9713,6 +9801,354 @@
     syncHomePlayerHeaderActions(homeCompareBase);
   }
 
+  // ---------------------------------------------------------------------
+  // Team compare — same shell as player compare (search → Values / Rank card)
+  // ---------------------------------------------------------------------
+  let homeTeamCompareBase = null;
+  let homeTeamCompareOther = null;
+  let homeTeamCompareMode = "values"; // values | overall
+
+  function homeTeamCompareActive() {
+    return !!(homeTeamCompareBase && homeTeamCompareOther);
+  }
+
+  function homeTeamCompareUiOpen() {
+    if (
+      mobileSheetOpen
+      && (mobileSheetKey === "home-team-compare" || mobileSheetKey === "home-team-compare-search")
+    ) {
+      return true;
+    }
+    if (
+      el.homePlayerModal
+      && !el.homePlayerModal.hidden
+      && el.homePlayerModalBody
+      && el.homePlayerModalBody.querySelector(".home-team-compare-card, .home-team-compare-search")
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  function clearHomeTeamCompareState() {
+    homeTeamCompareBase = null;
+    homeTeamCompareOther = null;
+    homeTeamCompareMode = "values";
+  }
+
+  function homeTeamCompareSections() {
+    return [
+      {
+        title: "General",
+        rows: [
+          { key: "__leaguePos", label: "League pos", decimals: 0, lowerBetter: true },
+          { key: "gp", label: "GP", decimals: 0 },
+          { key: "pts", label: "Pts", decimals: 0 },
+          { key: "gd", label: "GD", decimals: 0 },
+          { key: "xgd", label: "xGD", decimals: 1 },
+        ],
+      },
+      {
+        title: "Attack",
+        rows: [
+          { key: "xg", label: "xG", decimals: 1 },
+          { key: "goals", label: "G", decimals: 0 },
+        ],
+      },
+      {
+        title: "Defence",
+        rows: [
+          { key: "xgc", label: "xGC", decimals: 1, lowerBetter: true },
+          { key: "goalsConceded", label: "GC", decimals: 0, lowerBetter: true },
+          { key: "cleanSheets", label: "CS", decimals: 0 },
+        ],
+      },
+    ];
+  }
+
+  function homeTeamCompareRawValue(row, key) {
+    if (!row) return null;
+    if (key === "__leaguePos") {
+      const pos = LEAGUE_POSITIONS[row.team];
+      return pos != null && Number.isFinite(Number(pos)) ? Number(pos) : null;
+    }
+    const raw = row[key];
+    return raw == null || raw === "" || Number.isNaN(Number(raw)) ? null : Number(raw);
+  }
+
+  function homeTeamCompareDisplayValue(row, spec, mode) {
+    if (!spec || !row) return { text: "—", num: null };
+    if (mode === "overall") {
+      if (spec.key === "__leaguePos") {
+        const pos = homeTeamCompareRawValue(row, "__leaguePos");
+        if (pos == null) return { text: "—", num: null };
+        return { text: `${pos}${ordinalSuffix(pos)}`, num: pos };
+      }
+      if (spec.key === "gp") {
+        const gp = homeTeamCompareRawValue(row, "gp");
+        return gp == null ? { text: "—", num: null } : { text: String(gp), num: gp };
+      }
+      const teamSpec = TEAM_DETAILS_STAT_SPECS.find((s) => s.key === spec.key || s.id === spec.key);
+      if (!teamSpec) return { text: "—", num: null };
+      const maps = teamDetailsRankMaps("overall");
+      const rank = maps.get(teamSpec.id)?.get(String(row.team));
+      const n = Number(rank);
+      if (!Number.isFinite(n) || n < 1) return { text: "—", num: null };
+      return { text: fmtHomeLookupRank(rank), num: n, lowerBetter: true };
+    }
+    const num = homeTeamCompareRawValue(row, spec.key);
+    if (num == null) return { text: "—", num: null };
+    if (spec.key === "__leaguePos") {
+      return { text: `${num}${ordinalSuffix(num)}`, num };
+    }
+    return { text: feedStatDisplay(num, spec.decimals != null ? spec.decimals : 0), num };
+  }
+
+  function homeTeamCompareSideHTML(teamCode, side) {
+    const code = String(teamCode || "");
+    if (!code) {
+      return `<div class="home-compare-side is-${side} is-empty is-team">
+        <span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("shield-half")}</span>
+        <span class="home-compare-name">Select team</span>
+      </div>`;
+    }
+    const row = teamDetailsRow(code);
+    const crest =
+      badgeHTML(code, "home-compare-badge home-compare-team-crest")
+      || `<span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("shield-half")}</span>`;
+    const name = (row && row.name) || teamNameForSeason(code) || code;
+    const metaBits = [];
+    const pos = LEAGUE_POSITIONS[code];
+    if (pos != null) metaBits.push(`${pos}${ordinalSuffix(pos)}`);
+    if (row && row.gp != null) metaBits.push(`${row.gp} GP`);
+    const accent = TEAM_SCATTER_ACCENT[code] || "";
+    const style = accent ? ` style="--home-compare-accent:${accent}"` : "";
+    return `<div class="home-compare-side is-${side} is-team"${style}>
+      <div class="home-compare-photo-wrap is-crest-only">${crest}</div>
+      <div class="home-compare-id">
+        <span class="home-compare-name">${escapeHtml(name)}</span>
+        ${metaBits.length ? `<span class="home-compare-meta">${escapeHtml(metaBits.join(" · "))}</span>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function homeTeamCompareRowHTML(left, right, spec, mode) {
+    const a = homeTeamCompareDisplayValue(left, spec, mode);
+    const b = homeTeamCompareDisplayValue(right, spec, mode);
+    let better = null;
+    if (a.num != null && b.num != null && a.num !== b.num) {
+      // Rank mode: lower rank wins; GP stays higher-better. Values use spec.lowerBetter.
+      const useLower = mode === "overall"
+        ? spec.key !== "gp"
+        : !!spec.lowerBetter;
+      better = useLower ? (a.num < b.num ? "a" : "b") : (a.num > b.num ? "a" : "b");
+    }
+    return homeCompareDivergingRowHTML(spec.label, a, b, { better });
+  }
+
+  function homeTeamCompareViewHTML(leftCode, rightCode, mode = homeTeamCompareMode) {
+    const m = mode === "overall" ? "overall" : "values";
+    const left = teamDetailsRow(leftCode);
+    const right = teamDetailsRow(rightCode);
+    const sections = homeTeamCompareSections()
+      .map((sec) => {
+        const rows = sec.rows.map((spec) => homeTeamCompareRowHTML(left, right, spec, m)).join("");
+        return `<section class="home-compare-section">
+          <h4 class="home-compare-section-title">${escapeHtml(sec.title)}</h4>
+          <div class="home-compare-table">${rows}</div>
+        </section>`;
+      })
+      .join("");
+    const seg = (id, label) =>
+      `<button type="button" data-team-compare-mode="${id}" class="${m === id ? "active" : ""}">${label}</button>`;
+    const accentA = TEAM_SCATTER_ACCENT[leftCode] || "";
+    const accentB = TEAM_SCATTER_ACCENT[rightCode] || "";
+    const accentStyle = [
+      accentA ? `--compare-accent-a:${accentA}` : "",
+      accentB ? `--compare-accent-b:${accentB}` : "",
+    ]
+      .filter(Boolean)
+      .join(";");
+    return `<article class="home-compare-card home-team-compare-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
+      <div class="home-compare-heads">
+        ${homeTeamCompareSideHTML(leftCode, "a")}
+        <span class="home-compare-vs" aria-hidden="true">vs</span>
+        ${homeTeamCompareSideHTML(rightCode, "b")}
+      </div>
+      <div class="segmented home-compare-mode-seg" role="group" aria-label="Team compare mode">
+        ${seg("values", "Values")}
+        ${seg("overall", "Rank")}
+      </div>
+      <div class="home-compare-sections">${sections}</div>
+    </article>`;
+  }
+
+  function homeTeamCompareCandidateCodes(query) {
+    const base = String(homeTeamCompareBase || "");
+    const qRaw = String(query || "").trim();
+    let codes;
+    if (qRaw) {
+      codes = homeSearchMatchedTeams(qRaw);
+    } else {
+      codes = teamDetailsCatalog()
+        .map((t) => String(t.team || ""))
+        .filter(Boolean);
+      codes.sort((a, b) =>
+        String(teamNameForSeason(a) || a).localeCompare(String(teamNameForSeason(b) || b))
+      );
+    }
+    return codes.filter((code) => code && code !== base);
+  }
+
+  function homeTeamCompareSearchResultsListHTML(query) {
+    const codes = homeTeamCompareCandidateCodes(query);
+    if (!codes.length) {
+      return `<div class="home-search-empty">No teams match “${escapeHtml(query)}”.</div>`;
+    }
+    return codes.map((code) => homeSearchTeamResultRowHTML(code)).join("");
+  }
+
+  function homeTeamCompareSearchSheetHTML(query = "") {
+    return `<div class="home-search-sheet home-team-compare-search">
+      <div class="home-search-input-wrap">
+        <input id="home-team-compare-search-input" class="home-search-input" type="search" enterkeyhint="search"
+          placeholder="Search team to compare" value="${escapeHtml(query)}" autocomplete="off" />
+      </div>
+      <div class="home-search-results" id="home-team-compare-search-results">${homeTeamCompareSearchResultsListHTML(query)}</div>
+    </div>`;
+  }
+
+  function bindHomeTeamCompareSearchEvents(root = document) {
+    const input =
+      root.querySelector("#home-team-compare-search-input")
+      || document.getElementById("home-team-compare-search-input");
+    const results =
+      root.querySelector("#home-team-compare-search-results")
+      || document.getElementById("home-team-compare-search-results");
+    if (input) {
+      input.addEventListener("input", () => {
+        if (!results) return;
+        results.innerHTML = homeTeamCompareSearchResultsListHTML(input.value);
+      });
+      requestAnimationFrame(() => {
+        try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+      });
+    }
+    if (results) {
+      results.addEventListener("click", (e) => {
+        const btn = e.target.closest(".home-search-row[data-home-search-team]");
+        if (!btn || !results.contains(btn)) return;
+        const code = btn.getAttribute("data-home-search-team");
+        if (!code) return;
+        homeTeamCompareSelectOther(code);
+      });
+    }
+  }
+
+  function bindHomeTeamCompareViewEvents(root) {
+    const host = root || el.homePlayerModalBody || el.mobileSheetBody;
+    if (!host) return;
+    const seg = host.querySelector(".home-compare-mode-seg");
+    if (seg) {
+      seg.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-team-compare-mode]");
+        if (!btn || !seg.contains(btn)) return;
+        const next = btn.getAttribute("data-team-compare-mode");
+        if (next !== "values" && next !== "overall") return;
+        if (next === homeTeamCompareMode) return;
+        homeTeamCompareMode = next;
+        openHomeTeamCompareView({ replace: true });
+      });
+      requestAnimationFrame(() => {
+        if (typeof syncSegThumb === "function") syncSegThumb(seg, { animate: false });
+      });
+    }
+    const sideB = host.querySelector(".home-compare-side.is-b");
+    if (sideB) {
+      sideB.style.cursor = "pointer";
+      sideB.title = "Change team";
+      sideB.addEventListener("click", () => openHomeTeamCompareSearch());
+    }
+  }
+
+  function openHomeTeamCompareSearch() {
+    const base = teamDetailsCode || homeTeamCompareBase;
+    if (!base) return;
+    clearHomeCompareState();
+    homeTeamCompareBase = String(base);
+    if (preferMobileSheet()) {
+      openMobileSheet({
+        title: "Select team",
+        html: homeTeamCompareSearchSheetHTML(""),
+        key: "home-team-compare-search",
+      });
+      bindHomeTeamCompareSearchEvents(el.mobileSheetBody);
+      syncHomePlayerHeaderActions(null);
+      return;
+    }
+    if (!el.homePlayerModal || !el.homePlayerModalBody) return;
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Select team";
+    unbindHomePlayerDetailCardMetrics();
+    el.homePlayerModalBody.innerHTML = homeTeamCompareSearchSheetHTML("");
+    if (el.homePlayerModal.hidden) {
+      el.homePlayerModal.hidden = false;
+      el.homePlayerModal.setAttribute("aria-hidden", "false");
+      document.documentElement.classList.add("home-player-modal-open");
+    }
+    bindHomeTeamCompareSearchEvents(el.homePlayerModalBody);
+    syncHomePlayerHeaderActions(null);
+  }
+
+  function homeTeamCompareSelectOther(teamCode) {
+    const code = String(teamCode || "");
+    if (!code || !homeTeamCompareBase) return;
+    if (code === String(homeTeamCompareBase)) return;
+    homeTeamCompareOther = code;
+    homeTeamCompareMode = "values";
+    if (!teamDetailsCode) teamDetailsCode = homeTeamCompareBase;
+    openHomeTeamCompareView();
+  }
+
+  function openHomeTeamCompareView({ replace = false } = {}) {
+    if (!homeTeamCompareBase || !homeTeamCompareOther) return;
+    const html = homeTeamCompareViewHTML(
+      homeTeamCompareBase,
+      homeTeamCompareOther,
+      homeTeamCompareMode
+    );
+    if (preferMobileSheet()) {
+      if (mobileSheetOpen && mobileSheetKey === "home-team-compare" && el.mobileSheetBody) {
+        if (el.mobileSheetTitle) {
+          el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
+          el.mobileSheetTitle.textContent = "Compare teams";
+        }
+        el.mobileSheetBody.innerHTML = html;
+        bindHomeTeamCompareViewEvents(el.mobileSheetBody);
+        syncHomePlayerHeaderActions(null);
+        return;
+      }
+      openMobileSheet({
+        title: "Compare teams",
+        html,
+        key: "home-team-compare",
+      });
+      bindHomeTeamCompareViewEvents(el.mobileSheetBody);
+      syncHomePlayerHeaderActions(null);
+      return;
+    }
+    if (!el.homePlayerModal || !el.homePlayerModalBody) return;
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Compare teams";
+    unbindHomePlayerDetailCardMetrics();
+    el.homePlayerModalBody.innerHTML = html;
+    if (el.homePlayerModal.hidden) {
+      el.homePlayerModal.hidden = false;
+      el.homePlayerModal.setAttribute("aria-hidden", "false");
+      document.documentElement.classList.add("home-player-modal-open");
+    }
+    bindHomeTeamCompareViewEvents(el.homePlayerModalBody);
+    syncHomePlayerHeaderActions(null);
+  }
+
   function closeHomePlayerModal() {
     if (!el.homePlayerModal || el.homePlayerModal.hidden) return;
     unbindHomePlayerDetailCardMetrics();
@@ -9722,6 +10158,7 @@
     if (el.homePlayerModalBody) el.homePlayerModalBody.innerHTML = "";
     if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Player Details";
     clearHomeCompareState();
+    clearHomeTeamCompareState();
     syncHomePlayerOpenXBtn(null);
   }
 
@@ -9800,7 +10237,7 @@
     return Math.ceil(scheduleEl.scrollHeight || scheduleEl.getBoundingClientRect().height);
   }
 
-  /** Size all four desktop cards to the Schedule card’s natural height (capped to the viewport). */
+  /** Size desktop cards to the Schedule card’s natural height (capped to the viewport). */
   function syncHomePlayerDetailCardMetrics() {
     if (!homePlayerDetailCardMetricsActive()) return;
     const detail = el.homePlayerModalBody.querySelector(":scope > .home-player-detail");
@@ -9809,7 +10246,8 @@
 
     const scheduleEl =
       matchup.querySelector(".schedule-card, .home-lookup-schedule-card") || matchup;
-    // Measure content, not the Owners-stretched cell.
+    // Measure content, not the Owners-stretched cell. Ownership sits in a
+    // side column (not below), so it is hidden during measure.
     detail.classList.add("is-measuring");
     detail.style.removeProperty("--pd-card-h");
     void detail.offsetHeight;
@@ -9817,13 +10255,11 @@
     detail.classList.remove("is-measuring");
 
     const flag = detail.querySelector(":scope > .home-player-flag-banner");
-    const ownSlot = detail.querySelector(":scope > .home-player-detail-ownership");
     const styles = getComputedStyle(detail);
     const gap = Number.parseFloat(styles.rowGap || styles.gap) || 12;
     const flagH = flag ? Math.ceil(flag.getBoundingClientRect().height) + gap : 0;
-    const ownH = ownSlot ? Math.ceil(ownSlot.getBoundingClientRect().height) + gap : 0;
     const bodyH = el.homePlayerModalBody.clientHeight;
-    const availForGrid = Math.max(0, bodyH - flagH - ownH);
+    const availForGrid = Math.max(0, bodyH - flagH);
     const maxCellH = Math.max(120, Math.floor((availForGrid - gap) / 2));
     const cellH = Math.max(120, Math.min(naturalH || 120, maxCellH));
 
@@ -9851,7 +10287,12 @@
     if (!row) return;
     // Live Home refresh / view switches call syncHomeLookupUI → here. Never
     // clobber an in-progress compare search or results card.
-    if (homeCompareUiOpen()) return;
+    if (homeCompareUiOpen() || homeTeamCompareUiOpen()) return;
+    clearHomeTeamCompareState();
+    if (teamDetailsCode) {
+      teamDetailsCode = null;
+      teamDetailsStatMode = 0;
+    }
     if (preferMobileSheet()) {
       closeHomePlayerModal();
       if (el.homeBento) el.homeBento.classList.remove("is-search-open");
@@ -10865,12 +11306,23 @@
     } else {
       applyHomeSummaryRankChrome(summary, { viewingOther });
     }
-    if (el.homeGwMeta) {
+    if (el.homeGwMeta) el.homeGwMeta.innerHTML = "";
+    if (el.homeHeroChip) {
       const chipKey = summary.activeChip ? String(summary.activeChip).trim() : "";
-      const chip = chipKey ? (HOME_CHIP_ABBR[chipKey] || chipKey.toUpperCase()) : "";
-      el.homeGwMeta.innerHTML = chip
-        ? `<span class="home-chip">${escapeHtml(chip)}</span>`
+      const label = chipKey
+        ? (HOME_CHIP_LABELS[chipKey] || HOME_CHIP_ABBR[chipKey] || chipKey)
         : "";
+      if (label) {
+        el.homeHeroChip.hidden = false;
+        el.homeHeroChip.textContent = label;
+        el.homeHeroChip.title = `${label} active this gameweek`;
+        el.homeHeroChip.setAttribute("aria-label", `${label} active this gameweek`);
+      } else {
+        el.homeHeroChip.hidden = true;
+        el.homeHeroChip.textContent = "";
+        el.homeHeroChip.removeAttribute("title");
+        el.homeHeroChip.removeAttribute("aria-label");
+      }
     }
     if (el.homeSquadGwLabel) {
       el.homeSquadGwLabel.textContent = HOME.gw != null ? `Gameweek ${HOME.gw}` : "";
@@ -13398,6 +13850,7 @@
     if (closingKey === "team-details") {
       teamDetailsCode = null;
       teamDetailsStatMode = 0;
+      clearHomeTeamCompareState();
     }
     if (closingKey === "home-search") syncHomeSearchBtn();
     if (closingKey === "home-player" || closingKey === "home-compare" || closingKey === "home-compare-search") {
@@ -13411,6 +13864,19 @@
       if (restoreDetails) {
         window.setTimeout(() => {
           if (homeLookupPlayer && !mobileSheetOpen) openHomePlayerDetailOverlay(homeLookupPlayer);
+        }, 300);
+      }
+    }
+    if (
+      closingKey === "home-team-compare"
+      || closingKey === "home-team-compare-search"
+    ) {
+      const restoreTeam = teamDetailsCode || homeTeamCompareBase;
+      clearHomeTeamCompareState();
+      syncHomePlayerOpenXBtn(null);
+      if (restoreTeam) {
+        window.setTimeout(() => {
+          if (!mobileSheetOpen) openTeamDetailsOverlay(restoreTeam);
         }, 300);
       }
     }
@@ -28425,7 +28891,17 @@
     if (compareBtn) {
       e.preventDefault();
       e.stopPropagation();
-      openHomeCompareSearch();
+      const teamDetailsOpen = !!(
+        (mobileSheetOpen && mobileSheetKey === "team-details")
+        || (
+          el.homePlayerModal
+          && !el.homePlayerModal.hidden
+          && el.homePlayerModalBody
+          && el.homePlayerModalBody.querySelector(".home-team-detail")
+        )
+      );
+      if (teamDetailsOpen && teamDetailsCode) openHomeTeamCompareSearch();
+      else openHomeCompareSearch();
       return;
     }
     const openX = e.target.closest(".home-player-open-x");

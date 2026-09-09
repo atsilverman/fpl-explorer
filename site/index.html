@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1193" />
+<link rel="stylesheet" href="styles.css?v=1208" />
 <script>
 (() => {
   try {
@@ -887,6 +887,7 @@
         <div class="home-summary" id="home-summary" data-home-summary="hero">
           <div class="home-summary-hero" id="home-summary-hero">
             <div class="home-summary-hero-head">
+              <span class="home-summary-hero-chip" id="home-hero-chip" hidden></span>
               <p class="home-summary-hero-label">Overall Rank</p>
               <span class="home-summary-hero-live" id="home-hero-live" hidden>
                 <span class="home-summary-hero-live-dot" aria-hidden="true"></span>
@@ -1807,8 +1808,9 @@
     <div class="home-player-modal-header">
       <h3 id="home-player-modal-title">Player Details</h3>
       <div class="home-player-modal-actions">
-        <button type="button" class="ghost-btn icon-only-btn home-player-compare-btn" id="home-player-modal-compare" hidden aria-label="Compare player">
+        <button type="button" class="ghost-btn icon-label-btn home-player-compare-btn" id="home-player-modal-compare" hidden aria-label="Compare player" title="Compare player">
           <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+          <span class="btn-label">Compare</span>
         </button>
         <a class="ghost-btn home-player-open-x" id="home-player-modal-open-x" hidden aria-label="Search X" target="_blank" rel="noopener noreferrer">
           <span>Search</span>
@@ -1851,7 +1853,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1234"></script>
+<script src="app.js?v=1242"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

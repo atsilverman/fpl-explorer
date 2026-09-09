@@ -12283,6 +12283,22 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .home-player-compare-btn {
   flex: none;
 }
+#home-player-modal-compare.home-player-compare-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+#home-player-modal-compare.home-player-compare-btn .icon {
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
+}
+#home-player-modal-compare.home-player-compare-btn .btn-label {
+  line-height: 1;
+}
 .home-player-modal-actions {
   display: inline-flex;
   align-items: center;
@@ -12426,8 +12442,8 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-  min-height: 36px;
-  padding: 7px 0;
+  min-height: 40px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
 .home-compare-lab {
@@ -12436,6 +12452,7 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   color: var(--text-faint);
   text-align: center;
   white-space: nowrap;
+  min-width: 3.2em;
 }
 .home-compare-val {
   font-family: var(--mono);
@@ -12445,29 +12462,87 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   color: var(--text);
   line-height: 1.2;
 }
-.home-compare-val.is-a {
+.home-compare-row.is-text .home-compare-val.is-a {
   text-align: left;
   justify-self: start;
 }
-.home-compare-val.is-b {
+.home-compare-row.is-text .home-compare-val.is-b {
   text-align: right;
   justify-self: end;
 }
-.home-compare-pill {
+.home-compare-metric {
+  display: grid;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.home-compare-metric.is-a {
+  grid-template-columns: auto minmax(0, 1fr);
+  --compare-bar: var(--compare-accent-a, hsl(210 70% 46%));
+}
+.home-compare-metric.is-a .home-compare-val {
+  text-align: right;
+}
+.home-compare-metric.is-b {
+  grid-template-columns: minmax(0, 1fr) auto;
+  --compare-bar: var(--compare-accent-b, hsl(12 75% 48%));
+}
+.home-compare-metric.is-b .home-compare-val {
+  text-align: left;
+}
+.home-compare-bar-rail {
+  height: 9px;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+  overflow: hidden;
+  min-width: 0;
+}
+.home-compare-metric.is-a .home-compare-bar-rail {
+  display: flex;
+  justify-content: flex-end;
+}
+.home-compare-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  max-width: 100%;
+  background: color-mix(
+    in srgb,
+    var(--compare-bar, hsl(var(--foreground) / 0.45)) 70%,
+    hsl(var(--muted))
+  );
+  opacity: 0.55;
+  transition: width 0.2s var(--ease-out, ease), opacity 0.15s ease;
+}
+.home-compare-metric.is-better .home-compare-bar {
+  opacity: 1;
+}
+.home-compare-metric.is-better .home-compare-val {
+  font-weight: 750;
+}
+.home-compare-photo-wrap.is-crest-only {
+  width: 48px;
+  height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.6em;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: hsl(var(--delta-rise) / 0.16);
-  color: hsl(var(--delta-rise));
-  font: inherit;
-  font-weight: 750;
 }
-.home-compare-val.is-better .home-compare-pill {
-  background: hsl(var(--delta-rise) / 0.18);
-  color: hsl(var(--delta-rise));
+.home-compare-photo-wrap.is-crest-only .home-compare-team-crest.badge-img,
+.home-compare-photo-wrap.is-crest-only .badge-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.home-compare-side.is-team .home-compare-photo-wrap.is-crest-only {
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--home-compare-accent, hsl(var(--muted))) 22%, transparent),
+      transparent 70%
+    ),
+    hsl(var(--muted) / 0.35);
 }
 .home-player-modal-body .home-compare-card,
 .mobile-sheet-body .home-compare-card {
@@ -14614,17 +14689,17 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
-/* Wide desktop: compact 2×2 — equal cards sized from Schedule (see syncHomePlayerDetailCardMetrics). */
+/* Wide desktop: 3×2 — Ownership sits beside Form; bottom-right slot left open. */
 @media (min-width: 900px) {
   .home-player-modal-panel {
-    width: min(920px, 94vw);
-    max-height: min(88vh, 900px);
+    width: min(1280px, 96vw);
+    max-height: min(90vh, 940px);
   }
   .home-player-modal-body > .home-player-detail {
     --pd-card-gap: 12px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: var(--pd-card-h, auto) var(--pd-card-h, auto) auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: var(--pd-card-h, auto) var(--pd-card-h, auto);
     gap: var(--pd-card-gap);
     align-items: stretch;
     justify-items: stretch;
@@ -14634,7 +14709,7 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     grid-row: auto;
   }
   .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) {
-    grid-template-rows: auto var(--pd-card-h, auto) var(--pd-card-h, auto) auto;
+    grid-template-rows: auto var(--pd-card-h, auto) var(--pd-card-h, auto);
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-profile,
   .home-player-modal-body > .home-player-detail .home-player-detail-form,
@@ -14656,6 +14731,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     grid-column: 2;
     grid-row: 1;
   }
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership {
+    grid-column: 3;
+    grid-row: 1;
+  }
   .home-player-modal-body > .home-player-detail .home-player-detail-matchup {
     grid-column: 1;
     grid-row: 2;
@@ -14664,16 +14743,16 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     grid-column: 2;
     grid-row: 2;
   }
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    height: auto;
-    overflow: visible;
+  .home-player-modal-body > .home-player-detail.home-team-detail .home-player-detail-owners {
+    grid-column: 2 / -1;
   }
   .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-profile {
     grid-row: 2;
   }
   .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-form {
+    grid-row: 2;
+  }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-ownership {
     grid-row: 2;
   }
   .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-matchup {
@@ -14682,15 +14761,15 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-owners {
     grid-row: 3;
   }
-  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-ownership {
-    grid-row: 4;
-  }
-  /* Measuring pass: Schedule content-sized; don't stretch to Owners height. */
+  /* Measuring pass: Schedule content-sized; hide ownership so it doesn't inflate rows. */
   .home-player-modal-body > .home-player-detail.is-measuring {
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
   }
   .home-player-modal-body > .home-player-detail.is-measuring:has(> .home-player-flag-banner) {
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto;
+  }
+  .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-ownership {
+    display: none;
   }
   .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-matchup {
     height: auto;
@@ -14710,7 +14789,8 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   .home-player-modal-body > .home-player-detail .home-lookup-card,
   .home-player-modal-body > .home-player-detail .home-form-card,
   .home-player-modal-body > .home-player-detail .home-player-detail-matchup > *,
-  .home-player-modal-body > .home-player-detail .home-player-owners {
+  .home-player-modal-body > .home-player-detail .home-player-owners,
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-card {
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
@@ -14718,10 +14798,27 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     flex-direction: column;
     overflow: hidden;
   }
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-card {
-    flex: none;
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-chart {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-svg {
+    flex: 1 1 auto;
+    width: 100%;
     height: auto;
-    overflow: visible;
+    max-height: 100%;
+    min-height: 0;
+    aspect-ratio: 320 / 132;
+  }
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-form-head,
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-trend-row,
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-updated {
+    flex: none;
   }
   .home-player-modal-body > .home-player-detail .home-lookup-stats {
     flex: 1 1 auto;
@@ -14796,6 +14893,12 @@ html.is-team-landscape #team-page .team-add-slot .icon {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+  }
+}
+@media (min-width: 1400px) {
+  .home-player-modal-panel {
+    width: min(1480px, 94vw);
+    max-height: min(90vh, 980px);
   }
 }
 .home-player-modal-header {
@@ -15089,6 +15192,16 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 .home-own-trend-badge.is-down {
   background: hsl(var(--delta-fall) / 0.16);
   color: hsl(var(--delta-fall));
+}
+.home-own-trend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 6px;
+}
+.home-own-card.has-trend .home-form-head {
+  margin-bottom: 4px;
 }
 .home-own-chart {
   position: relative;
@@ -15466,10 +15579,19 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 }
 .home-team-squad .home-player-owners-cols,
 .home-team-squad .home-team-squad-row {
-  grid-template-columns: 22px minmax(52px, 1fr) repeat(6, minmax(26px, 32px)) 34px;
+  grid-template-columns: 22px minmax(88px, 1.1fr) repeat(7, minmax(28px, 1fr));
   gap: 4px;
   padding-left: 8px;
   padding-right: 8px;
+}
+@media (min-width: 900px) {
+  .home-player-modal-body > .home-team-detail .home-team-squad .home-player-owners-cols,
+  .home-player-modal-body > .home-team-detail .home-team-squad .home-team-squad-row {
+    grid-template-columns: 24px minmax(120px, 1.1fr) repeat(7, minmax(40px, 1fr));
+    gap: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 .home-team-squad .home-team-squad-stat {
   position: relative;
@@ -16270,15 +16392,42 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-summary-hero-head {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
+  gap: 8px;
   width: 100%;
   margin: 0 0 10px;
   min-height: 24px;
 }
+.home-summary-hero-chip {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid hsl(0 0% 100% / 0.32);
+  background: hsl(0 0% 100% / 0.12);
+  color: hsl(0 0% 100% / 0.92);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.home-summary-hero-chip[hidden] {
+  display: none !important;
+}
 .home-summary-hero-label {
   margin: 0;
+  grid-column: 2;
+  justify-self: center;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -16290,9 +16439,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   );
 }
 .home-summary-hero-live {
-  position: absolute;
-  top: 50%;
-  right: 0;
+  justify-self: end;
   z-index: 1;
   display: inline-flex;
   align-items: center;
@@ -16308,7 +16455,6 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   text-transform: uppercase;
   line-height: 1;
   pointer-events: none;
-  transform: translateY(-50%);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
