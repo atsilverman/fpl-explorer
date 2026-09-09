@@ -4090,6 +4090,14 @@
   let homeLookupPlayer = null;
   let homeLookupStatMode = 0;
   let homeLookupFormMode = 0;
+  /** Ownership details chart window: 7d → 14d → 30d → All (live point stays right). */
+  let homeOwnChartWindowIdx = 0;
+  const HOME_OWN_CHART_WINDOWS = [
+    { days: 7, label: "7d" },
+    { days: 14, label: "14d" },
+    { days: 30, label: "30d" },
+    { days: null, label: "All" },
+  ];
   let homeLookupCardBound = false;
   /** Last squad/pts table paint — skip rebuild on settleQuiet when only standings/summary moved. */
   let homeSquadTablesRenderKey = "";
@@ -7719,6 +7727,14 @@
   }
 
   function advanceHomeLookupCardPage(kind) {
+    if (kind === "own") {
+      const ctx = homeOwnChartContext();
+      if (!ctx) return;
+      const windows = homeOwnChartWindowOptions(ctx.kind, ctx.key);
+      if (windows.length <= 1) return;
+      setHomeOwnChartWindow((homeOwnChartWindowIdx + 1) % windows.length);
+      return;
+    }
     if (teamDetailsCode) {
       if (kind === "form") return; // Strength card is static
       const n = TEAM_DETAILS_STAT_MODES.length;
@@ -7747,12 +7763,20 @@
 
     const cardFromTarget = (target) => {
       if (!target || !target.closest) return null;
+      const ownCard = target.closest(".home-own-card[data-own-chart]");
+      if (ownCard) {
+        const root = homePlayerDetailRoot();
+        if (!root || !root.contains(ownCard)) return null;
+        if (ownCard.classList.contains("is-empty")) return null;
+        return { kind: "own", el: ownCard };
+      }
       const formCard = target.closest(".home-form-card");
       if (formCard) {
         const root = homePlayerDetailRoot();
         if (!root || !root.contains(formCard)) return null;
         // Team Strength uses home-form-card chrome but isn't paginated.
         if (formCard.classList.contains("home-team-strength-card")) return null;
+        if (formCard.classList.contains("home-own-card")) return null;
         return { kind: "form", el: formCard };
       }
       const card = target.closest(".home-lookup-card");
@@ -7763,6 +7787,16 @@
     };
 
     document.addEventListener("click", (e) => {
+      const ownDot = e.target.closest(".home-own-dot-page");
+      if (ownDot) {
+        const root = homePlayerDetailRoot();
+        if (!root || !root.contains(ownDot)) return;
+        e.preventDefault();
+        const page = Number(ownDot.dataset.page);
+        if (!Number.isFinite(page)) return;
+        setHomeOwnChartWindow(page);
+        return;
+      }
       const formDot = e.target.closest(".home-form-dot");
       if (formDot) {
         const root = homePlayerDetailRoot();
@@ -7774,7 +7808,7 @@
         return;
       }
       const dot = e.target.closest(".home-lookup-dot");
-      if (dot && !dot.classList.contains("home-form-dot")) {
+      if (dot && !dot.classList.contains("home-form-dot") && !dot.classList.contains("home-own-dot-page")) {
         const root = homePlayerDetailRoot();
         if (!root || !root.contains(dot)) return;
         e.preventDefault();
@@ -7818,11 +7852,13 @@
       if (!hit) return;
       if (target.closest("button, a, input, textarea, label")) return;
       const startIdx =
-        hit.kind === "form"
-          ? homeLookupFormMode
-          : teamDetailsCode
-            ? teamDetailsStatMode
-            : homeLookupStatMode;
+        hit.kind === "own"
+          ? homeOwnChartWindowIdx
+          : hit.kind === "form"
+            ? homeLookupFormMode
+            : teamDetailsCode
+              ? teamDetailsStatMode
+              : homeLookupStatMode;
       gesture = { x, y, axis: null, startIdx, armed: false, kind: hit.kind };
     };
 
@@ -7856,19 +7892,28 @@
       if (!armed || (!homeLookupPlayer && !teamDetailsCode)) return;
       // Any locked horizontal drag should not also count as a tap-to-advance.
       suppressCardClick = true;
-      const maxIdx =
-        kind === "form"
-          ? homeLookupPlayer
-            ? Math.max(0, homeFormChartSpecs(homeLookupPlayer.position).length - 1)
-            : 0
-          : teamDetailsCode
-            ? TEAM_DETAILS_STAT_MODES.length - 1
-            : HOME_LOOKUP_STAT_MODES.length - 1;
+      let maxIdx = 0;
+      if (kind === "own") {
+        const ctx = homeOwnChartContext();
+        maxIdx = ctx
+          ? Math.max(0, homeOwnChartWindowOptions(ctx.kind, ctx.key).length - 1)
+          : 0;
+      } else if (kind === "form") {
+        maxIdx = homeLookupPlayer
+          ? Math.max(0, homeFormChartSpecs(homeLookupPlayer.position).length - 1)
+          : 0;
+      } else if (teamDetailsCode) {
+        maxIdx = TEAM_DETAILS_STAT_MODES.length - 1;
+      } else {
+        maxIdx = HOME_LOOKUP_STAT_MODES.length - 1;
+      }
       let next = startIdx;
+      // Swipe left → more history (own) / next page; swipe right → compress / prev.
       if (dx <= -FLING_PX) next = Math.min(maxIdx, startIdx + 1);
       else if (dx >= FLING_PX) next = Math.max(0, startIdx - 1);
       if (next === startIdx) return;
-      if (kind === "form") setHomeLookupFormMode(next);
+      if (kind === "own") setHomeOwnChartWindow(next);
+      else if (kind === "form") setHomeLookupFormMode(next);
       else setHomeLookupStatMode(next);
     };
 
@@ -8293,7 +8338,7 @@
 
   function refreshHomeFormCardDisplay({ animate = false } = {}) {
     const root = homePlayerDetailRoot();
-    const card = root && root.querySelector(".home-form-card");
+    const card = root && root.querySelector(".home-form-card:not(.home-own-card)");
     if (!card || !homeLookupPlayer) return;
     const specs = homeFormChartSpecs(homeLookupPlayer.position);
     const spec = specs[homeLookupFormMode] || specs[0];
@@ -8359,7 +8404,25 @@
     </article>`;
   }
 
-  function homeOwnershipChartSvg(series, { accent = "" } = {}) {
+  function homeOwnChartYScale(vals) {
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const raw = hi - lo;
+    const pad = Math.max(0.35, (raw || 1) * 0.12);
+    let yLo = lo - pad;
+    let yHi = hi + pad;
+    yLo = Math.max(0, yLo);
+    yHi = Math.min(100, yHi);
+    if (yHi - yLo < 0.5) {
+      const mid = (lo + hi) / 2;
+      yLo = Math.max(0, mid - 0.4);
+      yHi = Math.min(100, mid + 0.4);
+    }
+    const rng = yHi - yLo || 1;
+    return { yLo, yHi, rng };
+  }
+
+  function homeOwnershipChartSvg(series, { accent = "", toneDelta = null, windowDays = 7 } = {}) {
     const points = (series && series.points) || [];
     if (points.length < 2) return "";
     const w = 320;
@@ -8369,30 +8432,49 @@
     const padT = 14;
     const padB = 24;
     const vals = points.map((pt) => Number(pt.owned));
-    const lo = Math.min(...vals);
-    const hi = Math.max(...vals);
-    const rng = hi - lo || 1;
+    const { yLo, yHi, rng } = homeOwnChartYScale(vals);
     const n = points.length;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
     const coords = points.map((pt, i) => {
-      const x = padL + (i / (n - 1)) * (w - padL - padR);
-      const y = padT + (1 - (Number(pt.owned) - lo) / rng) * (h - padT - padB);
+      const x = padL + (i / (n - 1)) * plotW;
+      const y = padT + (1 - (Number(pt.owned) - yLo) / rng) * plotH;
       return { x, y, owned: Number(pt.owned), checkedAt: pt.checkedAt };
     });
     const pathD = coords
       .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
       .join(" ");
-    const tone = ownershipDeltaClass(series.delta);
+    const toneDeltaVal =
+      toneDelta != null && Number.isFinite(Number(toneDelta))
+        ? Number(toneDelta)
+        : series.delta;
+    const tone = ownershipDeltaClass(toneDeltaVal);
     const stroke =
       tone === "is-up"
         ? "hsl(var(--delta-rise))"
         : tone === "is-down"
           ? "hsl(var(--delta-fall))"
           : accent || "hsl(var(--foreground) / 0.55)";
-    const yTop = fmtOwnedPct(hi);
-    const yBot = fmtOwnedPct(lo);
+    const yTop = fmtOwnedPct(yHi);
+    const yBot = fmtOwnedPct(yLo);
     const xFirst = fmtOwnershipDate(coords[0].checkedAt);
     const xLast = fmtOwnershipDate(coords[coords.length - 1].checkedAt);
     const last = coords[coords.length - 1];
+    const liveMs = ownershipCheckInMs(last.checkedAt);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const showBand =
+      windowDays == null || (Number.isFinite(Number(windowDays)) && Number(windowDays) > 7);
+    let bandRect = "";
+    if (showBand && Number.isFinite(liveMs)) {
+      const bandFromMs = liveMs - 7 * dayMs;
+      let bandStart = coords.findIndex((c) => ownershipCheckInMs(c.checkedAt) >= bandFromMs);
+      if (bandStart < 0) bandStart = Math.max(0, coords.length - 2);
+      const x0 = coords[bandStart].x;
+      const x1 = last.x;
+      if (x1 > x0 + 1) {
+        bandRect = `<rect class="home-own-band" x="${x0.toFixed(1)}" y="${padT}" width="${(x1 - x0).toFixed(1)}" height="${plotH}" rx="3" ry="3" />`;
+      }
+    }
     const dots = coords
       .map((c, i) => {
         const isLast = i === coords.length - 1;
@@ -8402,8 +8484,9 @@
     const pulse = prefersReducedMotion()
       ? ""
       : `<circle class="home-own-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.2" />`;
-    const midY = padT + (h - padT - padB) / 2;
+    const midY = padT + plotH / 2;
     return `<svg class="home-own-svg ${tone}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="--home-own-stroke:${stroke}">
+      ${bandRect}
       <line class="home-own-grid" x1="${padL}" y1="${padT}" x2="${w - padR}" y2="${padT}" />
       <line class="home-own-grid" x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" />
       <line class="home-own-grid" x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" />
@@ -8415,6 +8498,72 @@
       ${dots}
       ${pulse}
     </svg>`;
+  }
+
+  function homeOwnChartHistorySpanDays(kind, key) {
+    const full =
+      kind === "team"
+        ? ownershipTeamWindowSeries(key, null)
+        : ownershipPlayerWindowSeries(key, null);
+    if (!full || !full.points || full.points.length < 2) return 0;
+    const a = ownershipCheckInMs(full.points[0].checkedAt);
+    const b = ownershipCheckInMs(full.points[full.points.length - 1].checkedAt);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
+    return (b - a) / (24 * 60 * 60 * 1000);
+  }
+
+  function homeOwnChartWindowOptions(kind, key) {
+    const span = homeOwnChartHistorySpanDays(kind, key);
+    const opts = [{ days: 7, label: "7d" }];
+    if (span <= 7.5) return opts;
+    opts.push({ days: 14, label: "14d" });
+    if (span > 14.5) opts.push({ days: 30, label: "30d" });
+    const lastFixed = opts[opts.length - 1].days;
+    if (lastFixed != null && span > lastFixed + 0.5) {
+      opts.push({ days: null, label: "All" });
+    } else if (opts.length === 2 && span > 7.5) {
+      // 7–14d of history: offer All as the second step beyond 7d.
+      opts[1] = { days: null, label: "All" };
+    }
+    return opts;
+  }
+
+  function homeOwnChartContext() {
+    if (teamDetailsCode) {
+      return { kind: "team", key: String(teamDetailsCode), accent: TEAM_SCATTER_ACCENT[teamDetailsCode] || "" };
+    }
+    if (homeLookupPlayer) {
+      return {
+        kind: "player",
+        key: homeLookupPlayer.code,
+        accent: TEAM_SCATTER_ACCENT[homeLookupPlayer.team] || "",
+        row: homeLookupPlayer,
+      };
+    }
+    return null;
+  }
+
+  function homeOwnChartSeriesFor(ctx, days) {
+    if (!ctx) return null;
+    return ctx.kind === "team"
+      ? ownershipTeamWindowSeries(ctx.key, days)
+      : ownershipPlayerWindowSeries(ctx.key, days);
+  }
+
+  function homeOwnChartDotsHTML(activeIdx, windows) {
+    if (!windows || windows.length < 2) return "";
+    const dots = windows
+      .map((w, i) => {
+        const active = i === activeIdx ? " is-active" : "";
+        const label = w.label || `${w.days}d`;
+        return `<button type="button" class="home-lookup-dot home-own-dot-page${active}" data-page="${i}" aria-label="Ownership ${escapeHtml(label)}" aria-current="${i === activeIdx ? "true" : "false"}" title="${escapeHtml(label)}"></button>`;
+      })
+      .join("");
+    const cur = windows[Math.max(0, Math.min(windows.length - 1, activeIdx))] || windows[0];
+    return `<div class="home-own-window-nav">
+      <div class="home-lookup-dots home-own-dots" role="tablist" aria-label="Ownership window">${dots}</div>
+      <span class="home-own-window-label">${escapeHtml(cur.label || "7d")}</span>
+    </div>`;
   }
 
   function homeOwnershipTrendBadgeHTML(trend) {
@@ -8432,60 +8581,154 @@
     } Trending #${rank}</span>`;
   }
 
-  function homeOwnershipChartHTML(series, { kicker = "Overall TSB", sub = "7d", accent = "", trend = null } = {}) {
+  function homeOwnershipChartHTML(
+    chartSeries,
+    {
+      kicker = "Overall TSB",
+      accent = "",
+      trend = null,
+      headerSeries = null,
+      windowDays = 7,
+      windows = null,
+      windowIdx = 0,
+    } = {}
+  ) {
     const trendBadge = homeOwnershipTrendBadgeHTML(trend);
     const trendRow = trendBadge
       ? `<div class="home-own-trend-row">${trendBadge}</div>`
       : "";
-    if (!series || !series.points || series.points.length < 2) {
-      return `<article class="home-form-card home-own-card is-empty">
+    const head = headerSeries || chartSeries;
+    if (!chartSeries || !chartSeries.points || chartSeries.points.length < 2) {
+      return `<article class="home-form-card home-own-card is-empty" data-own-chart="1">
         <div class="home-form-head">
           <span class="home-form-kicker">${escapeHtml(kicker)}</span>
-          <span class="home-form-stat-label">${escapeHtml(sub)}</span>
+          <span class="home-form-stat-label">7d</span>
         </div>
         ${trendRow}
         <p class="home-own-empty">No ownership history yet. Ownership check-ins appear after the next cache refresh.</p>
       </article>`;
     }
-    const liveLbl = `${fmtOwnedPct(series.live)}%`;
+    const liveLbl = `${fmtOwnedPct(head.live)}%`;
     const deltaLbl =
-      series.delta == null
-        ? ""
-        : ` · ${fmtOwnershipTrendDelta(series.delta)} 7d`;
-    const updated = fmtOwnershipDate(series.updatedAt);
-    const tone = ownershipDeltaClass(series.delta);
-    return `<article class="home-form-card home-own-card ${tone}${trendBadge ? " has-trend" : ""}">
+      head.delta == null ? "" : ` · ${fmtOwnershipTrendDelta(head.delta)} 7d`;
+    const updated = fmtOwnershipDate(head.updatedAt || chartSeries.updatedAt);
+    const tone = ownershipDeltaClass(head.delta);
+    const winList = windows && windows.length ? windows : [{ days: 7, label: "7d" }];
+    const idx = Math.max(0, Math.min(winList.length - 1, Number(windowIdx) || 0));
+    return `<article class="home-form-card home-own-card ${tone}${trendBadge ? " has-trend" : ""}" data-own-chart="1">
       <div class="home-form-head">
         <span class="home-form-kicker">${escapeHtml(kicker)}</span>
         <span class="home-form-stat-label">${escapeHtml(liveLbl)}${escapeHtml(deltaLbl)}</span>
       </div>
       ${trendRow}
-      <div class="home-own-chart">${homeOwnershipChartSvg(series, { accent })}</div>
+      <div class="home-own-chart">${homeOwnershipChartSvg(chartSeries, {
+        accent,
+        toneDelta: head.delta,
+        windowDays,
+      })}</div>
+      ${homeOwnChartDotsHTML(idx, winList)}
       ${updated ? `<p class="home-own-updated">Updated ${escapeHtml(updated)}</p>` : ""}
     </article>`;
   }
 
+  function clampHomeOwnChartWindowIdx(windows) {
+    const max = Math.max(0, (windows && windows.length ? windows.length : 1) - 1);
+    homeOwnChartWindowIdx = Math.max(0, Math.min(max, Number(homeOwnChartWindowIdx) || 0));
+    return homeOwnChartWindowIdx;
+  }
+
   function homePlayerOwnershipChartHTML(row) {
     if (!row) return "";
-    const series = ownershipPlayerWindowSeries(row.code, 7);
+    const windows = homeOwnChartWindowOptions("player", row.code);
+    const idx = clampHomeOwnChartWindowIdx(windows);
+    const win = windows[idx] || windows[0];
+    const headerSeries = ownershipPlayerWindowSeries(row.code, 7);
+    const chartSeries = ownershipPlayerWindowSeries(row.code, win.days);
     const accent = TEAM_SCATTER_ACCENT[row.team] || "";
-    return homeOwnershipChartHTML(series, {
+    return homeOwnershipChartHTML(chartSeries, {
       kicker: "Overall TSB",
-      sub: "7d TSB",
       accent,
       trend: ownershipPlayerTrendBadge(row.code),
+      headerSeries,
+      windowDays: win.days,
+      windows,
+      windowIdx: idx,
     });
   }
 
   function teamDetailsOwnershipChartHTML(teamCode) {
-    const series = ownershipTeamWindowSeries(teamCode, 7);
+    const windows = homeOwnChartWindowOptions("team", teamCode);
+    const idx = clampHomeOwnChartWindowIdx(windows);
+    const win = windows[idx] || windows[0];
+    const headerSeries = ownershipTeamWindowSeries(teamCode, 7);
+    const chartSeries = ownershipTeamWindowSeries(teamCode, win.days);
     const accent = TEAM_SCATTER_ACCENT[teamCode] || "";
-    return homeOwnershipChartHTML(series, {
-      kicker: "Overall TSB",
-      sub: "Top 20 avg · 7d",
+    return homeOwnershipChartHTML(chartSeries, {
+      kicker: "Overall TSB · Top 20",
       accent,
       trend: ownershipTeamTrendBadge(teamCode),
+      headerSeries,
+      windowDays: win.days,
+      windows,
+      windowIdx: idx,
     });
+  }
+
+  function setHomeOwnChartWindow(idx, { animate = true } = {}) {
+    const ctx = homeOwnChartContext();
+    if (!ctx) return;
+    const windows = homeOwnChartWindowOptions(ctx.kind, ctx.key);
+    if (windows.length < 2) return;
+    const next = Math.max(0, Math.min(windows.length - 1, Number(idx) || 0));
+    if (next === homeOwnChartWindowIdx && animate) {
+      refreshHomeOwnChartDisplay({ animate: false });
+      return;
+    }
+    homeOwnChartWindowIdx = next;
+    refreshHomeOwnChartDisplay({ animate });
+  }
+
+  function refreshHomeOwnChartDisplay({ animate = false } = {}) {
+    const ctx = homeOwnChartContext();
+    const root = homePlayerDetailRoot();
+    const card = root && root.querySelector(".home-own-card[data-own-chart]");
+    if (!ctx || !card || card.classList.contains("is-empty")) return;
+    const windows = homeOwnChartWindowOptions(ctx.kind, ctx.key);
+    const idx = clampHomeOwnChartWindowIdx(windows);
+    const win = windows[idx] || windows[0];
+    const headerSeries = homeOwnChartSeriesFor(ctx, 7);
+    const chartSeries = homeOwnChartSeriesFor(ctx, win.days);
+    if (!chartSeries || !headerSeries) return;
+    const chartEl = card.querySelector(".home-own-chart");
+    const paint = () => {
+      if (chartEl) {
+        chartEl.innerHTML = homeOwnershipChartSvg(chartSeries, {
+          accent: ctx.accent,
+          toneDelta: headerSeries.delta,
+          windowDays: win.days,
+        });
+      }
+      const nav = card.querySelector(".home-own-window-nav");
+      const nextNav = homeOwnChartDotsHTML(idx, windows);
+      if (nav && nextNav) {
+        nav.outerHTML = nextNav;
+      } else if (!nav && nextNav) {
+        if (chartEl) chartEl.insertAdjacentHTML("afterend", nextNav);
+      } else if (nav && !nextNav) {
+        nav.remove();
+      }
+    };
+    if (chartEl && animate && !prefersReducedMotion()) {
+      chartEl.classList.add("is-swap-out");
+      window.setTimeout(() => {
+        paint();
+        chartEl.classList.remove("is-swap-out");
+        chartEl.classList.add("is-swap-in");
+        window.setTimeout(() => chartEl.classList.remove("is-swap-in"), 180);
+      }, 90);
+    } else {
+      paint();
+    }
   }
 
   function homePlayerProfileHTML(row) {
@@ -9191,6 +9434,7 @@
     if (clearState) {
       teamDetailsCode = null;
       teamDetailsStatMode = 0;
+      homeOwnChartWindowIdx = 0;
     }
   }
 
@@ -9219,12 +9463,14 @@
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
       homeLookupFormMode = 0;
+      homeOwnChartWindowIdx = 0;
       syncHomeSearchBtn();
     }
     if (mobileSheetOpen && mobileSheetKey === "home-player") closeMobileSheet();
     if (el.homeBento) el.homeBento.classList.remove("is-search-open");
     teamDetailsCode = code;
     teamDetailsStatMode = 0;
+    homeOwnChartWindowIdx = 0;
     const row = teamDetailsRow(code);
     const title = "Team Details";
     const label = (row && row.name) || teamNameForSeason(code) || code;
@@ -10337,6 +10583,7 @@
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
       homeLookupFormMode = 0;
+      homeOwnChartWindowIdx = 0;
       syncHomeSearchBtn();
     }
   }
@@ -10684,6 +10931,7 @@
     homeLookupPlayer = null;
     homeLookupStatMode = 0;
     homeLookupFormMode = 0;
+    homeOwnChartWindowIdx = 0;
     clearHomeCompareState();
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
@@ -10708,6 +10956,7 @@
     homeLookupPlayer = row;
     homeLookupStatMode = 0;
     homeLookupFormMode = 0;
+    homeOwnChartWindowIdx = 0;
     if (homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
@@ -13844,12 +14093,14 @@
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
       homeLookupFormMode = 0;
+      homeOwnChartWindowIdx = 0;
       if (homeOwnerPin && homeOwnerPin.type === "element") homeOwnerPin = null;
       syncHomeSearchBtn();
     }
     if (closingKey === "team-details") {
       teamDetailsCode = null;
       teamDetailsStatMode = 0;
+      homeOwnChartWindowIdx = 0;
       clearHomeTeamCompareState();
     }
     if (closingKey === "home-search") syncHomeSearchBtn();
@@ -25295,7 +25546,7 @@
     };
   }
 
-  /** Last N days of ownership points for a player/team history series. */
+  /** Last N days of ownership points for a player/team history series. Pass null for all. */
   function ownershipWindowSeries(history, days = 7) {
     const valid = (history || []).filter(
       (pt) => pt && pt.owned != null && Number.isFinite(Number(pt.owned))
@@ -25305,9 +25556,16 @@
     const live = Number(livePt.owned);
     const liveMs = ownershipCheckInMs(livePt.checkedAt);
     const dayMs = 24 * 60 * 60 * 1000;
-    const fromMs = liveMs - Math.max(1, Number(days) || 7) * dayMs;
-    let points = valid.filter((pt) => ownershipCheckInMs(pt.checkedAt) >= fromMs);
-    if (points.length < 2) points = valid.slice(-Math.min(valid.length, Math.max(2, Number(days) || 7)));
+    let points;
+    if (days == null || !Number.isFinite(Number(days)) || Number(days) <= 0) {
+      points = valid.slice();
+    } else {
+      const fromMs = liveMs - Math.max(1, Number(days)) * dayMs;
+      points = valid.filter((pt) => ownershipCheckInMs(pt.checkedAt) >= fromMs);
+      if (points.length < 2) {
+        points = valid.slice(-Math.min(valid.length, Math.max(2, Number(days))));
+      }
+    }
     const start = Number(points[0].owned);
     const delta = ownershipDelta(live, start);
     return {

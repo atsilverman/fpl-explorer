@@ -15208,11 +15208,54 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   min-height: 132px;
   margin: 0 0 2px;
 }
+.home-own-chart.is-swap-out {
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.09s ease, transform 0.09s ease;
+}
+.home-own-chart.is-swap-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
 .home-own-svg {
   display: block;
   width: 100%;
   height: auto;
   overflow: visible;
+}
+.home-own-band {
+  fill: var(--home-own-stroke, hsl(var(--foreground) / 0.55));
+  opacity: 0.12;
+  pointer-events: none;
+}
+.home-own-svg.is-up .home-own-band {
+  fill: hsl(var(--delta-rise));
+  opacity: 0.14;
+}
+.home-own-svg.is-down .home-own-band {
+  fill: hsl(var(--delta-fall));
+  opacity: 0.14;
+}
+.home-own-window-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 0;
+  min-height: 18px;
+}
+.home-own-window-label {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.2em;
+}
+.home-own-dots {
+  margin: 0;
 }
 .home-own-grid {
   stroke: hsl(var(--border-hsl) / 0.85);
@@ -15282,6 +15325,12 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   .home-own-pulse {
     animation: none;
     display: none;
+  }
+  .home-own-chart.is-swap-out,
+  .home-own-chart.is-swap-in {
+    transition: none;
+    transform: none;
+    opacity: 1;
   }
 }
 .home-form-head {
