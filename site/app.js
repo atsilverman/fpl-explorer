@@ -1600,7 +1600,9 @@
     state.posFilter.clear();
     state.teamFilter.clear();
     state.liveMatchups.clear();
+    liveStatusUserPicked = false;
     state.liveStatus = "all";
+    if (state.page === "live") applyLiveStatusDefaultForMode(state.liveMode);
     state.liveFeedOwnedFilter = "league";
     const coreDefaults = statisticsCoreFilterDefaults(state.valueMode);
     state.priceMin = coreDefaults.priceMin;
@@ -27604,7 +27606,7 @@
     return state.pricesMoverKind === "fallers" ? "fallers" : "risers";
   }
 
-  function syncPricesMoverPagerUI() {
+  function syncPricesMoverPagerUI({ animate = false } = {}) {
     const mobile = NARROW_MQ.matches && state.page === "prices";
     const kind = pricesMoverKind();
     if (el.pricesPage) {
@@ -27619,6 +27621,7 @@
         btn.classList.toggle("active", on);
         btn.setAttribute("aria-pressed", on ? "true" : "false");
       });
+      if (mobile) syncSegThumb(el.pricesMoverKindSeg, { animate });
     }
     [el.pricesPredictionDots, el.pricesActualDots].forEach((dots) => {
       if (dots) dots.hidden = true;
@@ -27638,8 +27641,7 @@
   }
 
   function syncPricesMoverKindUI({ animate = false } = {}) {
-    void animate;
-    syncPricesMoverPagerUI();
+    syncPricesMoverPagerUI({ animate });
   }
 
   let pricesMoverPagerReady = false;
@@ -28746,8 +28748,21 @@
     mountAndAnimateStatRolls(pane, { duration: 2000 });
   }
 
+  /** User explicitly picked All/Live/Owned — don't auto-override until filters reset. */
+  let liveStatusUserPicked = false;
+
+  function applyLiveStatusDefaultForMode(mode = state.liveMode) {
+    if (mode !== "defcon" && mode !== "points") return false;
+    if (liveStatusUserPicked) return false;
+    if (!liveGwHasActiveGames()) return false;
+    if (state.liveStatus === "live") return false;
+    state.liveStatus = "live";
+    return true;
+  }
+
   function clearLiveViewFilters() {
     state.liveMatchups.clear();
+    liveStatusUserPicked = false;
     state.liveStatus = "all";
     state.posFilter.clear();
     state.teamFilter.clear();
@@ -28786,6 +28801,7 @@
     state.posFilter.clear();
     state.teamFilter.clear();
     state.liveMatchups.clear();
+    liveStatusUserPicked = false;
     state.liveStatus = "all";
     state.setPieceTakersOnly = false;
     if (el.setpieceTakersCheck) el.setpieceTakersCheck.checked = false;
@@ -29141,6 +29157,9 @@
       liveEnterAwaitingPlay = true;
       if (el.livePage) el.livePage.classList.add("is-live-entering");
       ensureLiveFeedFromHome();
+      applyLiveStatusDefaultForMode(state.liveMode);
+      syncLiveStatusSeg();
+      syncFiltersResetUI();
       renderLive();
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
@@ -29326,6 +29345,9 @@
       clearLiveViewFilters();
       resetLiveMotionState(el.livePage);
       state.liveMode = next;
+      applyLiveStatusDefaultForMode(next);
+      syncLiveStatusSeg();
+      syncFiltersResetUI();
       const defSort = liveDefaultSortForMode(next);
       state.liveSortKey = defSort.key;
       state.liveSortDir = defSort.dir;
@@ -29349,6 +29371,7 @@
       const next = btn.dataset.liveStatus;
       if (next !== "all" && next !== "live" && next !== "owned") return;
       if (next === state.liveStatus) return;
+      liveStatusUserPicked = true;
       state.liveStatus = next;
       renderLive({ animate: true });
       syncFiltersResetUI();
@@ -29466,7 +29489,7 @@
       const kind = btn.dataset.pricesMoverKind === "fallers" ? "fallers" : "risers";
       if (kind === pricesMoverKind()) return;
       state.pricesMoverKind = kind;
-      syncPricesMoverPagerUI();
+      syncPricesMoverPagerUI({ animate: true });
       requestAnimationFrame(() => {
         syncPricesActualColumnWidths();
         syncMobileScrollportHeight();
