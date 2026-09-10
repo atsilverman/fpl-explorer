@@ -941,6 +941,10 @@ def build_squad_rows(
         for fx in fx_list:
             finished = fixture_is_finished(fx)
             live = fixture_is_live(fx)
+            try:
+                clock = int(fx.get("minutes") or 0)
+            except (TypeError, ValueError):
+                clock = 0
             fixture_rows.append(
                 {
                     "opp": team_short(teams, int(fx["_opp"])),
@@ -951,6 +955,8 @@ def build_squad_rows(
                     # Official FPL `finished` (not merely finished_provisional).
                     "final": fixture_is_final(fx),
                     "minutes": mins if live or finished else None,
+                    # Match minute from /fixtures/ (not the player's appearance minutes).
+                    "clock": clock if live or finished else None,
                 }
             )
         if not fixture_rows:
@@ -963,6 +969,7 @@ def build_squad_rows(
                     "finished": False,
                     "final": False,
                     "minutes": None,
+                    "clock": None,
                 }
             ]
 

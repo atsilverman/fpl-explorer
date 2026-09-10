@@ -2014,9 +2014,17 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   font-weight: 400;
 }
 .dual-slider {
+  --slider-h: 18px;
+  --slider-thumb: 14px;
   position: relative;
-  height: 18px;
+  height: var(--slider-h);
   margin-bottom: 4px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.dual-slider:active {
+  cursor: grabbing;
 }
 .dual-slider .slider-track {
   position: absolute;
@@ -2028,6 +2036,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   background: hsl(var(--muted));
   border: 1px solid var(--border);
   border-radius: 999px;
+  pointer-events: none;
 }
 .dual-slider .slider-fill {
   position: absolute;
@@ -2036,6 +2045,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   transform: translateY(-50%);
   background: hsl(var(--blue-hsl) / 0.75);
   border-radius: 999px;
+  pointer-events: none;
   transition: left 0.22s var(--ease-out), right 0.22s var(--ease-out), width 0.22s var(--ease-out);
 }
 .dual-slider .slider-fill.is-live { transition: none; }
@@ -2048,45 +2058,53 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   right: 0;
   top: 0;
   width: 100%;
-  height: 18px;
+  height: var(--slider-h);
   margin: 0;
   background: transparent;
   pointer-events: none;
   -webkit-appearance: none;
   appearance: none;
   z-index: 3;
+  touch-action: none;
 }
 .dual-slider input[type="range"].slider-top { z-index: 4; }
 .dual-slider input[type="range"]::-webkit-slider-runnable-track {
   -webkit-appearance: none;
   background: transparent;
-  height: 18px;
+  height: var(--slider-h);
 }
 .dual-slider input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  pointer-events: auto;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
+  pointer-events: none;
+  width: var(--slider-thumb);
+  height: var(--slider-thumb);
+  margin-top: calc((var(--slider-h) - var(--slider-thumb)) / 2);
   border-radius: 50%;
   background: hsl(var(--background));
   border: 2px solid hsl(var(--blue-hsl));
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  box-shadow: 0 0 0 1px hsl(var(--blue-hsl) / 0.18), var(--shadow-sm);
 }
 .dual-slider input[type="range"]::-moz-range-track {
   background: transparent;
-  height: 18px;
+  height: var(--slider-h);
 }
 .dual-slider input[type="range"]::-moz-range-thumb {
-  pointer-events: auto;
-  width: 14px;
-  height: 14px;
+  pointer-events: none;
+  width: var(--slider-thumb);
+  height: var(--slider-thumb);
   border-radius: 50%;
   background: hsl(var(--background));
   border: 2px solid hsl(var(--blue-hsl));
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  box-shadow: 0 0 0 1px hsl(var(--blue-hsl) / 0.18), var(--shadow-sm);
+}
+@media (max-width: 720px), (hover: none), (pointer: coarse) {
+  .dual-slider {
+    /* Taller hit strip for the JS grab handler; knobs stay desktop-sized. */
+    --slider-h: 28px;
+    --slider-thumb: 14px;
+  }
 }
 
 .check-row {
@@ -2282,6 +2300,15 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     margin-left: 0;
     opacity: 0.8;
     color: inherit;
+    overflow: visible;
+    animation: chevron-hint-glow 2.4s ease-in-out infinite;
+  }
+  .page-nav.is-page-tray-open .page-tray-btn .page-tab-caret,
+  .page-tray-btn[aria-expanded="true"] .page-tab-caret,
+  .page-tray-btn:hover .page-tab-caret,
+  .page-tray-btn:focus-visible .page-tab-caret {
+    animation: none;
+    filter: none;
   }
   .page-tray-btn:hover,
   .page-tray-btn:active {
@@ -2453,15 +2480,19 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html[data-page="opta"] #subtoolbar.is-opta-mobile #compare-toggle,
   html.is-mobile-layout[data-page="opta"] #subtoolbar #compare-toggle {
-    width: 32px;
+    width: auto;
     height: 32px;
-    padding: 0;
-    gap: 0;
+    padding: 0 10px;
+    gap: 6px;
     justify-content: center;
+    white-space: nowrap;
   }
   html[data-page="opta"] #subtoolbar.is-opta-mobile #compare-toggle .btn-label,
   html.is-mobile-layout[data-page="opta"] #subtoolbar #compare-toggle .btn-label {
-    display: none;
+    display: inline;
+    font-size: 12.5px;
+    font-weight: 550;
+    letter-spacing: 0.01em;
   }
   html[data-page="opta"] #subtoolbar.is-opta-mobile #search-wrap.search-open,
   html.is-mobile-layout[data-page="opta"] #subtoolbar #search-wrap.search-open {
@@ -5158,14 +5189,18 @@ html[data-theme="dark"] .page-live-badge-dot {
 .stat-roll-suffix {
   margin-left: 0;
 }
-/* Shared data pills — Ownership-style value + delta chips (system-wide). */
+/* Shared data pills — Ownership-style value + delta chips (system-wide).
+   min-width is digits (ch) + horizontal padding so chrome does not shrink
+   with "0.0" vs "100.0" (global box-sizing: border-box). */
 .data-pill,
 .ownership-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3.1em;
-  padding: 3px 7px;
+  box-sizing: border-box;
+  --pill-pad-x: 7px;
+  min-width: calc(5ch + 2 * var(--pill-pad-x));
+  padding: 3px var(--pill-pad-x);
   border-radius: 6px;
   background: hsl(var(--muted));
   color: var(--text);
@@ -5173,6 +5208,8 @@ html[data-theme="dark"] .page-live-badge-dot {
   font-size: 12px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
 }
 .data-pill.is-live,
 .ownership-pill.is-live {
@@ -5217,13 +5254,17 @@ html[data-theme="dark"] .page-live-badge-dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3.2em;
-  padding: 3px 7px;
+  box-sizing: border-box;
+  --pill-pad-x: 7px;
+  min-width: calc(6ch + 2 * var(--pill-pad-x));
+  padding: 3px var(--pill-pad-x);
   border-radius: 6px;
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
   color: hsl(var(--card));
 }
 .data-delta.is-up,
@@ -5521,9 +5562,9 @@ html[data-page="prices"] .layout .main {
   }
   #prices-page .prices-actual-table-wrap .prices-col-owned .ownership-pill,
   #prices-page .prices-actual-table-wrap .prices-col-league-owned .ownership-pill {
-    min-width: 0;
-    padding-left: 5px;
-    padding-right: 5px;
+    --pill-pad-x: 5px;
+    padding-left: var(--pill-pad-x);
+    padding-right: var(--pill-pad-x);
   }
 }
 .prices-mover-bar .segmented {
@@ -5742,7 +5783,10 @@ html[data-page="prices"] .layout .main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   gap: 4px;
+  /* em vs the 11px pill type — rem is 14px on html and was too short for "Very likely". */
+  min-width: 9.6em;
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 11px;
@@ -5782,7 +5826,7 @@ html[data-page="prices"] .layout .main {
   color: #fff;
 }
 .prices-status-pill.is-short {
-  min-width: 2.5rem;
+  min-width: 4.6em;
   padding: 3px 6px;
   font-size: 10px;
   letter-spacing: 0.03em;
@@ -5795,13 +5839,17 @@ html[data-page="prices"] .layout .main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3.1em;
-  padding: 3px 7px;
+  box-sizing: border-box;
+  --pill-pad-x: 7px;
+  min-width: calc(8ch + 2 * var(--pill-pad-x));
+  padding: 3px var(--pill-pad-x);
   border-radius: 6px;
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
 }
 .prices-progress-pill.is-rise {
   background: hsl(142 40% 93%);
@@ -6565,16 +6613,16 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
   }
+  /* Match Ownership: inset card + side borders, not full-bleed. */
   #prices-page .prices-table-wrap {
     flex: none;
     min-height: 0;
     max-height: none;
-    width: 100%;
-    max-width: 100%;
+    width: calc(100% - 2 * var(--mobile-gutter-x, 8px));
+    max-width: calc(100% - 2 * var(--mobile-gutter-x, 8px));
+    margin-left: var(--mobile-gutter-x, 8px);
+    margin-right: var(--mobile-gutter-x, 8px);
     padding-right: 0;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
   }
   /* Prediction: fit full viewport width (spark hidden; no horizontal pan). */
   #prices-page .prices-prediction-table-wrap {
@@ -6691,7 +6739,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     width: var(--prices-actual-date-col-w, 3.25rem);
     min-width: 0;
     max-width: none;
-    padding-left: 6px;
+    padding-left: var(--mobile-gutter-x, 8px);
     padding-right: 8px;
     font-size: 10px;
     line-height: 1.15;
@@ -6737,8 +6785,8 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   }
   #prices-page .prices-table-wrap .prices-table .prices-progress-pill {
     font-size: 11px;
-    min-width: 0;
-    padding: 2px 6px;
+    --pill-pad-x: 6px;
+    padding: 2px var(--pill-pad-x);
   }
   #prices-page .prices-table-wrap .prices-spark {
     gap: 3px;
@@ -8027,13 +8075,17 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3.2em;
-  padding: 3px 7px;
+  box-sizing: border-box;
+  --pill-pad-x: 7px;
+  min-width: calc(5ch + 2 * var(--pill-pad-x));
+  padding: 3px var(--pill-pad-x);
   border-radius: 6px;
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
   line-height: 1.2;
   color: hsl(var(--card));
 }
@@ -8246,8 +8298,8 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     bottom: -6px;
   }
   .diff-pill {
-    min-width: 2.5em;
-    padding: 1px 4px;
+    --pill-pad-x: 4px;
+    padding: 1px var(--pill-pad-x);
     font-size: 10px;
   }
   .expected-legend-inline {
@@ -8806,6 +8858,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
   border-radius: 0;
 }
 
@@ -9169,8 +9222,8 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   gap: 4px;
 }
 .spit-symbol .diff-pill.spit-ui-swatch {
-  min-width: 2.6em;
-  padding: 2px 7px;
+  --pill-pad-x: 7px;
+  padding: 2px var(--pill-pad-x);
   font-size: 11px;
 }
 .spit-barbell-track {
@@ -12042,8 +12095,10 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 3.4em;
-  padding: 3px 9px;
+  box-sizing: border-box;
+  --pill-pad-x: 9px;
+  min-width: calc(3ch + 2 * var(--pill-pad-x));
+  padding: 3px var(--pill-pad-x);
   border-radius: 999px;
   background: hsl(250 28% 28%);
   color: hsl(0 0% 98%);
@@ -12051,6 +12106,8 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
+  text-align: center;
+  white-space: nowrap;
 }
 
 :root[data-theme="dark"] .markets-score-pill {
@@ -12402,18 +12459,6 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   height: 15px;
   font-size: 15px;
 }
-#mobile-sheet-compare.home-player-compare-btn {
-  width: 32px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
-  box-sizing: border-box;
-}
-#mobile-sheet-compare.home-player-compare-btn .icon {
-  width: 15px;
-  height: 15px;
-  font-size: 15px;
-}
 .icon.icon-x-logo {
   fill: currentColor;
   stroke: none;
@@ -12444,23 +12489,24 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   display: none !important;
 }
 .home-player-compare-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
-}
-#home-player-modal-compare.home-player-compare-btn {
+  width: auto;
+  height: auto;
   min-height: 32px;
   padding: 0 10px;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.01em;
   white-space: nowrap;
+  box-sizing: border-box;
 }
-#home-player-modal-compare.home-player-compare-btn .icon {
+.home-player-compare-btn .icon {
   width: 13px;
   height: 13px;
   font-size: 13px;
-}
-#home-player-modal-compare.home-player-compare-btn .btn-label {
-  line-height: 1;
 }
 .home-player-modal-actions {
   display: inline-flex;
@@ -12837,31 +12883,50 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .mobile-sheet-body > .markets-controls.mobile-sheet-hosted {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px 0;
-  padding: 2px 0 4px !important;
+  gap: 18px 0;
+  padding: 4px 0 12px !important;
 }
-.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-toolbar {
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 14px;
+  flex-wrap: nowrap;
+  gap: 0;
   width: 100%;
 }
 .mobile-sheet-body > .schedule-controls.mobile-sheet-hosted .schedule-control,
-.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-control {
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-control {
   padding-inline: 0;
   border-left: none;
 }
-.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-toolbar .markets-control {
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-control {
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-}
-.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-view-seg,
-.mobile-sheet-body > .markets-controls.mobile-sheet-hosted .markets-compare-seg {
+  justify-content: flex-start;
+  gap: 10px;
   width: 100%;
   min-width: 0;
+}
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-control + .markets-control {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid hsl(var(--border-hsl) / 0.6);
+}
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .schedule-control-head {
+  margin: 0;
+  width: 100%;
+}
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-view-seg,
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-compare-seg {
+  width: 100%;
+  min-width: 0;
+  flex: none;
+}
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-view-seg button,
+.mobile-sheet-body > .markets-controls.mobile-sheet-hosted #markets-toolbar .markets-compare-seg button {
+  padding: 0 10px;
+  font-size: 12.5px;
 }
 .mobile-sheet-body > .feed-filters-sidebar.mobile-sheet-hosted {
   display: block !important;
@@ -15410,8 +15475,9 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 .home-schedule-pill {
   flex: none;
   gap: 3px;
-  min-width: 3.2em;
-  padding: 4px 8px;
+  min-width: 3.35em;
+  min-height: 1.65em;
+  padding: 5px 9px;
 }
 .home-schedule-pill .home-schedule-pill-lab {
   line-height: 1;
@@ -15434,12 +15500,15 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 }
 /* Match Owners kicker — uppercase muted label, not team-name weight. */
 .home-player-detail-matchup .ftt-head,
-.home-player-matchup .home-lookup-schedule-card .ftt-head {
+.home-player-matchup .home-lookup-schedule-card .ftt-head,
+.home-player-matchup .schedule-card .ftt-head {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
+  border-bottom: none;
+  padding-bottom: 0;
 }
 .home-player-detail-matchup .ftt-head-hint,
 .home-player-matchup .home-lookup-schedule-card .ftt-head-hint {
@@ -18051,8 +18120,9 @@ html[data-theme="dark"] .home-dashboard {
   text-align: left;
 }
 .home-standings-live-pill {
-  min-width: 2em;
-  padding: 2px 7px;
+  --pill-pad-x: 7px;
+  min-width: calc(2ch + 2 * var(--pill-pad-x));
+  padding: 2px var(--pill-pad-x);
   font-size: 11px;
   font-weight: 650;
 }
@@ -18219,11 +18289,17 @@ html[data-theme="dark"] .home-dashboard {
 }
 /* League card: pill behind Δ so it separates from the rank number. */
 .home-stat-league .home-rank-delta:not([hidden]) {
-  gap: 2px;
-  padding: 3px 7px 3px 5px;
+  gap: 1px;
+  min-width: 0;
+  width: max-content;
+  justify-content: center;
+  padding: 3px 5px 3px 4px;
   border-radius: 999px;
   background: hsl(var(--muted) / 0.55);
   border: 1px solid hsl(var(--border) / 0.9);
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 .home-stat-league .home-rank-delta.is-up:not([hidden]) {
   background: color-mix(
@@ -18258,12 +18334,14 @@ html[data-theme="dark"] .home-dashboard {
   box-sizing: border-box;
   justify-content: center;
   gap: 1px;
-  min-width: 2.35em;
+  min-width: calc(14px + 3ch + 8px);
   height: 1.35em;
   padding: 0 4px;
   border-radius: 999px;
   background: hsl(var(--muted) / 0.55);
   border: 1px solid hsl(var(--border) / 0.9);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 .home-standings-table .home-rank-delta.is-compact.is-up {
   background: hsl(var(--home-rank-up) / 0.12);
@@ -18655,9 +18733,9 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.15em;
+  --pill-pad-x: 5px;
   min-height: 1.65em;
-  padding: 4px 5px;
+  padding: 4px var(--pill-pad-x);
   border-radius: 5px;
   font-size: 11px;
   font-weight: 700;
@@ -19024,9 +19102,9 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.15em;
+  --pill-pad-x: 5px;
   min-height: 1.65em;
-  padding: 4px 5px;
+  padding: 4px var(--pill-pad-x);
   border-radius: 5px;
   font-size: 11px;
   font-weight: 700;
@@ -19158,9 +19236,10 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 }
 .home-squad-fixtures-table .home-schedule-pill,
 .home-squad-fixtures-table .fixtures-pill.home-schedule-pill {
-  min-width: 2.8em;
-  padding: 3px 6px;
-  font-size: 10.5px;
+  min-width: 2.9em;
+  min-height: 1.65em;
+  padding: 4px 7px;
+  font-size: 11px;
 }
 .team-heat-pill-wrap {
   display: inline-flex;
@@ -19223,9 +19302,9 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-squad-ownership-table .ownership-pill,
 .home-squad-ownership-table .ownership-delta {
   font-size: 11px;
-  min-width: 2.6em;
+  --pill-pad-x: 6px;
   /* Match Price Δ status pill height (icon + pad). */
-  padding: 3px 6px;
+  padding: 3px var(--pill-pad-x);
   line-height: 1.25;
   box-sizing: border-box;
   min-height: 22px;
@@ -19246,6 +19325,8 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   }
 }
 .home-squad-ownership-table .prices-status-pill {
+  width: 100%;
+  min-width: 0;
   font-size: 10px;
   padding: 3px 6px;
   min-height: 22px;
@@ -19347,8 +19428,19 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: hsl(var(--card));
-  box-shadow: 0 1px 0 hsl(var(--border) / 0.55);
+  /* Opaque composite of the panel glass over page bg — covers rows, matches card. */
+  background:
+    linear-gradient(
+      var(--home-glass-bg-strong, hsl(var(--card))),
+      var(--home-glass-bg-strong, hsl(var(--card)))
+    ),
+    var(--bg);
+  box-shadow: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .home-transfers-table-wrap .home-transfers-table thead th {
+    background: hsl(var(--card));
+  }
 }
 @media (max-width: 900px) {
   /* Horizontal pager swipe + vertical scroll inside Transfers. */
@@ -19745,15 +19837,16 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
 .home-bench-divider th {
   height: 28px;
   padding: 4px 8px;
-  background: hsl(var(--muted) / 0.72);
+  background: transparent;
   color: var(--text-dim);
-  border-top: 2px solid var(--border);
-  border-bottom: 1px solid hsl(var(--border) / 0.65);
+  border-top: none;
+  border-bottom: none;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-align: left;
+  overflow: visible;
 }
 .home-bench-divider-inner {
   display: flex;
@@ -19798,9 +19891,35 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   font-size: 13px;
   opacity: 0.75;
   flex: none;
+  overflow: visible;
+  transform: translateZ(0);
 }
 .home-bench-toggle:hover .home-bench-toggle-icon {
   opacity: 1;
+}
+@keyframes chevron-hint-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 0 hsl(0 0% 100% / 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 1.5px hsl(0 0% 100% / 0.42));
+  }
+}
+#home-squad-panel.is-bench-collapsed .home-bench-toggle-icon {
+  opacity: 1;
+  animation: chevron-hint-glow 2.4s ease-in-out infinite;
+}
+#home-squad-panel.is-bench-collapsed .home-bench-toggle:hover .home-bench-toggle-icon,
+#home-squad-panel.is-bench-collapsed .home-bench-toggle:focus-visible .home-bench-toggle-icon {
+  animation: none;
+  filter: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  #home-squad-panel.is-bench-collapsed .home-bench-toggle-icon,
+  .page-tray-btn .page-tab-caret {
+    animation: none;
+    filter: none;
+  }
 }
 .home-bench-pts {
   flex: none;
@@ -19977,6 +20096,26 @@ html[data-theme="dark"] .home-dnp-icon {
 .home-status-dot.is-done {
   background: hsl(var(--muted-foreground) / 0.45);
 }
+.home-status-dot.is-short-mins {
+  background: hsl(14 86% 52%);
+}
+.home-status-dot.is-modest-mins {
+  background: hsl(44 92% 50%);
+}
+html[data-theme="dark"] .home-status-dot.is-short-mins {
+  background: hsl(14 80% 58%);
+}
+html[data-theme="dark"] .home-status-dot.is-modest-mins {
+  background: hsl(46 90% 56%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-status-dot.is-short-mins {
+    background: hsl(14 80% 58%);
+  }
+  html:not([data-theme="light"]) .home-status-dot.is-modest-mins {
+    background: hsl(46 90% 56%);
+  }
+}
 .home-play-live,
 .home-play-left {
   display: inline-flex;
@@ -20015,12 +20154,16 @@ html[data-theme="dark"] .home-dnp-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.6em;
-  padding: 2px 7px;
+  box-sizing: border-box;
+  --pill-pad-x: 7px;
+  min-width: calc(2ch + 2 * var(--pill-pad-x));
+  padding: 2px var(--pill-pad-x);
   border-radius: 6px;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
   background-color: var(--hl-fill);
   color: var(--hl-text, var(--text));
 }
@@ -20202,23 +20345,20 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
 .home-imp.is-neg .home-imp-pct {
   color: var(--imp-fg, hsl(0 70% 46%));
 }
-/* Home IMP — --imp-fill / --imp-fg from JS (green/red intensity by |imp|). */
-#home-page {
-  --hl-sat: 1;
-}
+/* Home IMP — grey → green/red with --home-rank-sat (same bloom as league Δ). */
 #home-page .home-imp-fill.is-pos,
 #home-page .home-imp-fill.is-neg {
   background: color-mix(
     in srgb,
-    var(--imp-fill, hsl(142 65% 34%)) calc(var(--hl-sat, 1) * 100%),
-    hsl(var(--foreground) / 0.16)
+    var(--imp-fill, hsl(142 65% 34%)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--muted-foreground) / 0.45)
   );
 }
 #home-page .home-imp.is-pos .home-imp-pct,
 #home-page .home-imp.is-neg .home-imp-pct {
   color: color-mix(
     in srgb,
-    var(--imp-fg, var(--imp-fill, hsl(142 65% 34%))) calc(var(--hl-sat, 1) * 100%),
+    var(--imp-fg, var(--imp-fill, hsl(142 65% 34%))) calc(var(--home-rank-sat, 1) * 100%),
     var(--text-faint)
   );
 }
@@ -20870,8 +21010,8 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   .home-squad-ownership-table .ownership-pill,
   .home-squad-ownership-table .ownership-delta {
     font-size: 10px;
-    min-width: 2.35em;
-    padding: 3px 5px;
+    --pill-pad-x: 5px;
+    padding: 3px var(--pill-pad-x);
     line-height: 1.25;
     min-height: 22px;
   }
@@ -21160,6 +21300,14 @@ html[data-page="home"] #subtoolbar {
 /* Flat rows (no zebra / no hairline dividers). Hover keeps the blue wash; --home-row-bg feeds IMP ticks. */
 .home-squad-table tbody tr.home-squad-row > td,
 .home-standings-table tbody tr[data-entry] > td {
+  border-bottom: none;
+}
+/* Transfers: hairline under each manager, sitting below the Net stack. */
+.home-transfers-table tbody tr[data-entry] > td {
+  border-bottom: 1px solid hsl(var(--border-hsl) / 0.32);
+  padding-bottom: 10px;
+}
+.home-transfers-table tbody tr[data-entry]:last-child > td {
   border-bottom: none;
 }
 @media (hover: hover) and (pointer: fine) and (min-width: 721px) {
@@ -21768,6 +21916,14 @@ html[data-page="live"] #team-filters .chip.team-chip {
 .live-points-pill .stat-roll-digit {
   height: 1em;
 }
+.live-points-pill {
+  box-sizing: border-box;
+  --pill-pad-x: 5px;
+  min-width: calc(2ch + 2 * var(--pill-pad-x));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .live-points-pill .live-stat-roll {
   display: inline-flex;
   align-items: center;
@@ -22026,8 +22182,8 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   font-weight: 600;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill {
-  min-width: 2.4em;
-  padding: 3px 8px;
+  --pill-pad-x: 8px;
+  padding: 3px var(--pill-pad-x);
   font-size: 12px;
   font-weight: 700;
 }
@@ -22593,9 +22749,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-feed-table tbody td.col-feed-pts .live-points-pill,
 #live-page .live-feed-table tbody td.col-feed-total .live-points-pill {
   display: inline-flex;
-  min-width: 2.35em;
+  --pill-pad-x: 8px;
   justify-content: center;
-  padding: 3px 8px;
+  padding: 3px var(--pill-pad-x);
   font-size: 12px;
   font-weight: 700;
 }
@@ -23402,10 +23558,11 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.7em;
+  min-width: 1.85em;
   max-width: 100%;
-  padding: 2px 6px;
-  border-radius: 999px;
+  min-height: 1.65em;
+  padding: 3px 7px;
+  border-radius: 5px;
   box-sizing: border-box;
   font-family: var(--mono);
   font-size: 11px;
@@ -23449,9 +23606,10 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.6em;
-  padding: 4px 7px;
-  border-radius: 999px;
+  min-width: 2.85em;
+  min-height: 1.65em;
+  padding: 5px 8px;
+  border-radius: 5px;
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
@@ -23464,8 +23622,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   box-sizing: border-box;
 }
 .fixtures-pill.is-blank {
-  min-width: 1.4em;
-  padding: 4px 6px;
+  min-width: 1.55em;
+  min-height: 1.65em;
+  padding: 5px 7px;
   background: transparent;
   color: var(--text-faint);
   font-weight: 500;
@@ -23554,9 +23713,10 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     padding: 5px 2px;
   }
   .fixtures-pill {
-    min-width: 2.4em;
-    padding: 3px 5px;
-    font-size: 10.5px;
+    min-width: 2.65em;
+    min-height: 1.6em;
+    padding: 4px 7px;
+    font-size: 11px;
   }
   html.is-mobile-layout #fixtures-sos-seg {
     display: none;
@@ -24217,6 +24377,11 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
     hsl(var(--card));
   box-shadow: 0 1px 2px hsl(0 0% 0% / 0.12);
   cursor: grab;
+}
+@media (max-width: 720px), (hover: none), (pointer: coarse) {
+  .diff-slider {
+    touch-action: none;
+  }
 }
 .diff-axis-val.fixtures-pill {
   flex: 0 0 auto;

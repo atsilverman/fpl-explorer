@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1261" />
+<link rel="stylesheet" href="styles.css?v=1284" />
 <script>
 (() => {
   try {
@@ -1707,8 +1707,9 @@
     <div class="mobile-sheet-header" data-sheet-drag>
       <h3 id="mobile-sheet-title" class="mobile-sheet-title"></h3>
       <button type="button" class="ghost-btn mobile-sheet-reset" id="mobile-sheet-reset" hidden>Reset</button>
-      <button type="button" class="ghost-btn icon-only-btn home-player-compare-btn" id="mobile-sheet-compare" hidden aria-label="Compare player">
+      <button type="button" class="ghost-btn home-player-compare-btn" id="mobile-sheet-compare" hidden aria-label="Compare player">
         <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
+        <span>Compare</span>
       </button>
       <a class="ghost-btn home-player-open-x" id="mobile-sheet-open-x" hidden aria-label="Search X" target="_blank" rel="noopener noreferrer">
         <span>Search</span>
@@ -1795,9 +1796,9 @@
     <div class="home-player-modal-header">
       <h3 id="home-player-modal-title">Player Details</h3>
       <div class="home-player-modal-actions">
-        <button type="button" class="ghost-btn icon-label-btn home-player-compare-btn" id="home-player-modal-compare" hidden aria-label="Compare player" title="Compare player">
+        <button type="button" class="ghost-btn home-player-compare-btn" id="home-player-modal-compare" hidden aria-label="Compare player" title="Compare player">
           <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
-          <span class="btn-label">Compare</span>
+          <span>Compare</span>
         </button>
         <a class="ghost-btn home-player-open-x" id="home-player-modal-open-x" hidden aria-label="Search X" target="_blank" rel="noopener noreferrer">
           <span>Search</span>
@@ -1818,7 +1819,7 @@
 <script src="ownership_data.js?v=28"></script>
 <script src="price_changes_data.js?v=64"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=42"></script>
+<script src="home_data.js?v=43"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
 (() => {
@@ -1840,7 +1841,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1282"></script>
+<script src="app.js?v=1285"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

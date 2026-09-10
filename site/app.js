@@ -3054,6 +3054,7 @@
         ? priorHome.squadsByEntry
         : {}
     );
+    homeObserveAllHomeMinutes(HOME);
     HOME.standings = mergeHomeGwRank(
       mergeHomeOverallRankPrev(
         mergeHomeBenchPoints(
@@ -3439,6 +3440,7 @@
         ...(r.fixtures || []).map((f) =>
           [
             f.minutes,
+            f.clock,
             f.live ? 1 : 0,
             f.finished ? 1 : 0,
             // Missing final (live droplet) counts as provisional, same as UI.
@@ -3862,14 +3864,16 @@
         && String(HOME.generatedAt || "") === String(data.home.generatedAt || "")
         && String(HOME.managerId || "") === String(data.home.managerId || "")
         && String(HOME.leagueId || "") === String(data.home.leagueId || "");
+      const priorWarnFp = homeMinutesWarningFingerprint(HOME);
       applyHomePayload(data.home, { skipFeedIngest: sameElementGw, fromLivePoll: true });
       const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
       const elementGwChanged = priorEgFp !== incomingEgFp;
       const squadChanged = priorSquadFp !== homeSquadFingerprint(HOME.squad);
       const transfersChanged = priorTransfersFp !== homeTransfersFingerprint(HOME.transfersByEntry);
+      const warnChanged = priorWarnFp !== homeMinutesWarningFingerprint(HOME);
       resyncHomeLivePollInterval();
-      if (!standingsChanged && !summaryChanged && !elementGwChanged && !squadChanged && !transfersChanged) {
+      if (!standingsChanged && !summaryChanged && !elementGwChanged && !squadChanged && !transfersChanged && !warnChanged) {
         syncLiveNavChrome();
         settleHomeAfterLivePoll({ rerender: false });
         return;
@@ -4110,6 +4114,7 @@
       // Unknown without fixture payload — don't treat as official final.
       final: false,
       minutes: row.minutes,
+      clock: row.clock != null ? row.clock : null,
     }];
   }
 
@@ -4117,6 +4122,200 @@
   function homeFixtureIsProvisional(fx) {
     if (!fx || fx.live || !fx.finished) return false;
     return fx.final !== true;
+  }
+
+  const HOME_MP_SHORT_MAX = 59;
+  const HOME_MP_MODEST_MAX = 75;
+  const HOME_MP_LIVE_CLOCK_GAP = 8;
+  const HOME_MP_LIVE_FREEZE_POLLS = 2;
+  const HOME_MP_LIVE_FREEZE_MS = 30_000;
+  const HOME_MP_LIVE_NOCLOCK_POLLS = 4;
+  const HOME_MP_LIVE_NOCLOCK_MS = 60_000;
+  const HOME_MP_WATCH_STORE = "fpl.homeMpWatch.v1";
+  let homeMpWatch = new Map();
+  let homeMpWatchGw = null;
+  let homeMpWatchHydrated = false;
+
+  function homeMinutesBand(mins) {
+    const n = Number(mins);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (n <= HOME_MP_SHORT_MAX) return "short";
+    if (n <= HOME_MP_MODEST_MAX) return "modest";
+    return null;
+  }
+
+  function homeFixtureClock(fx) {
+    if (!fx) return null;
+    const n = Number(fx.clock);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function homeMpWatchKey(row, fx) {
+    return `${row && row.element != null ? row.element : ""}:${(fx && (fx.kickoff || fx.opp)) || ""}`;
+  }
+
+  function homeHydrateMpWatch() {
+    if (homeMpWatchHydrated) return;
+    homeMpWatchHydrated = true;
+    try {
+      const raw = sessionStorage.getItem(HOME_MP_WATCH_STORE);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || Number(parsed.gw) !== Number(HOME.gw)) return;
+      homeMpWatchGw = parsed.gw;
+      homeMpWatch = new Map(Object.entries(parsed.items || {}));
+    } catch {
+      /* ignore quota / parse */
+    }
+  }
+
+  function homePersistMpWatch() {
+    try {
+      sessionStorage.setItem(HOME_MP_WATCH_STORE, JSON.stringify({
+        gw: homeMpWatchGw,
+        items: Object.fromEntries(homeMpWatch),
+      }));
+    } catch {
+      /* ignore quota */
+    }
+  }
+
+  function homeObserveFixtureMinutes(row, fx, now) {
+    if (!homeSquadFixtureIsInPlay(fx)) return;
+    const minsN = Number(fx && fx.minutes != null ? fx.minutes : row && row.minutes);
+    if (!Number.isFinite(minsN) || minsN <= 0) return;
+    if (homeMpWatchGw != null && Number(homeMpWatchGw) !== Number(HOME.gw)) {
+      homeMpWatch.clear();
+    }
+    homeMpWatchGw = HOME.gw;
+    const key = homeMpWatchKey(row, fx);
+    const clock = homeFixtureClock(fx);
+    const prev = homeMpWatch.get(key);
+    if (!prev) {
+      homeMpWatch.set(key, {
+        mins: minsN,
+        sameCount: 0,
+        firstFrozenAt: 0,
+        clockWhenMinsChanged: clock,
+        lastClock: clock,
+      });
+      return;
+    }
+    if (minsN > Number(prev.mins)) {
+      homeMpWatch.set(key, {
+        mins: minsN,
+        sameCount: 0,
+        firstFrozenAt: 0,
+        clockWhenMinsChanged: clock,
+        lastClock: clock,
+      });
+      return;
+    }
+    const same = minsN === Number(prev.mins);
+    homeMpWatch.set(key, {
+      mins: minsN,
+      sameCount: same ? (Number(prev.sameCount) || 0) + 1 : 0,
+      firstFrozenAt: same ? (Number(prev.firstFrozenAt) || now) : 0,
+      clockWhenMinsChanged: same ? prev.clockWhenMinsChanged : clock,
+      lastClock: clock,
+    });
+  }
+
+  function homeObserveSquadMinutes(squad, now) {
+    if (!Array.isArray(squad)) return;
+    for (const row of squad) {
+      if (!row) continue;
+      for (const fx of homeSquadFixtures(row)) {
+        homeObserveFixtureMinutes(row, fx, now);
+      }
+    }
+  }
+
+  function homeObserveAllHomeMinutes(home = HOME) {
+    if (!home) return;
+    homeHydrateMpWatch();
+    const now = Date.now();
+    homeObserveSquadMinutes(home.squad, now);
+    const by = home.squadsByEntry;
+    if (by && typeof by === "object") {
+      for (const squad of Object.values(by)) homeObserveSquadMinutes(squad, now);
+    }
+    homePersistMpWatch();
+  }
+
+  function homeMinutesLooksSubbedOff(row, fx) {
+    if (!homeSquadFixtureIsInPlay(fx)) return false;
+    const minsN = Number(fx && fx.minutes != null ? fx.minutes : row && row.minutes);
+    if (!homeMinutesBand(minsN)) return false;
+    homeHydrateMpWatch();
+    const watch = homeMpWatch.get(homeMpWatchKey(row, fx));
+    if (!watch) return false;
+    const now = Date.now();
+    const frozenFor = watch.firstFrozenAt > 0 ? now - Number(watch.firstFrozenAt) : 0;
+    const clock = homeFixtureClock(fx);
+    if (clock == null) {
+      return (Number(watch.sameCount) || 0) >= HOME_MP_LIVE_NOCLOCK_POLLS
+        && frozenFor >= HOME_MP_LIVE_NOCLOCK_MS;
+    }
+    const frozen = (Number(watch.sameCount) || 0) >= HOME_MP_LIVE_FREEZE_POLLS
+      && frozenFor >= HOME_MP_LIVE_FREEZE_MS;
+    if (!frozen) return false;
+    const gap = clock - minsN;
+    const clockMoved = watch.clockWhenMinsChanged != null
+      && clock >= Number(watch.clockWhenMinsChanged) + HOME_MP_LIVE_CLOCK_GAP;
+    return gap >= HOME_MP_LIVE_CLOCK_GAP || clockMoved;
+  }
+
+  /** short (<60′) or modest (60–75′) once the player is done — FT, or live sub. */
+  function homeMinutesWarningBand(row, fx) {
+    const inPlay = homeSquadFixtureIsInPlay(fx);
+    const finished = !!(fx && fx.finished);
+    if (!(inPlay || finished)) return null;
+    const minsN = Number(fx && fx.minutes != null ? fx.minutes : row && row.minutes);
+    if (finished && !inPlay && Number.isFinite(minsN) && minsN <= 0) return null;
+    const band = homeMinutesBand(minsN);
+    if (!band) return null;
+    if (finished && !inPlay) return band;
+    return homeMinutesLooksSubbedOff(row, fx) ? band : null;
+  }
+
+  function homeMinutesWarningFingerprint(home = HOME) {
+    if (!home) return "";
+    const keys = [];
+    const visit = (squad) => {
+      if (!Array.isArray(squad)) return;
+      for (const row of squad) {
+        if (!row) continue;
+        for (const fx of homeSquadFixtures(row)) {
+          const band = homeMinutesWarningBand(row, fx);
+          if (band) keys.push(`${row.element || ""}:${fx.kickoff || fx.opp || ""}:${band}`);
+        }
+      }
+    };
+    visit(home.squad);
+    const by = home.squadsByEntry;
+    if (by && typeof by === "object") {
+      for (const squad of Object.values(by)) visit(squad);
+    }
+    keys.sort();
+    return keys.join("|");
+  }
+
+  function homeMpStatusDotHTML(row, fx, inPlay) {
+    const warn = homeMinutesWarningBand(row, fx);
+    if (warn === "short") {
+      return `<span class="home-status-dot is-short-mins" title="Under 60′" aria-label="Under 60 minutes"></span>`;
+    }
+    if (warn === "modest") {
+      return `<span class="home-status-dot is-modest-mins" title="60–75′" aria-label="60 to 75 minutes"></span>`;
+    }
+    if (inPlay) {
+      return `<span class="home-status-dot is-live" aria-label="Live"></span>`;
+    }
+    if (homeFixtureIsProvisional(fx)) {
+      return `<span class="home-status-dot is-done" aria-label="Provisional"></span>`;
+    }
+    return "";
   }
 
 
@@ -7350,12 +7549,9 @@
         if (f.finished && !inPlay && minsN != null && minsN <= 0) {
           return `<span class="home-mp-line home-mp-dnp" title="Did not play">${iconHTML("circle-x", "home-dnp-icon")}<span class="sr-only">Did not play</span></span>`;
         }
-        // Green while live; grey while provisional FT; gone once FPL finalizes.
-        const statusDot = inPlay
-          ? `<span class="home-status-dot is-live" aria-label="Live"></span>`
-          : homeFixtureIsProvisional(f)
-            ? `<span class="home-status-dot is-done" aria-label="Provisional"></span>`
-            : "";
+        // Green while live; grey while provisional FT; orange/yellow once
+        // minutes are short and the player is done (FT, or live sub).
+        const statusDot = homeMpStatusDotHTML(row, f, inPlay);
         const minsHTML =
           minsN != null
             ? statRollSpan(minsN, {
@@ -7582,6 +7778,7 @@
       String(viewEntry ?? ""),
       pin,
       homeSquadFingerprint(HOME && HOME.squad),
+      homeMinutesWarningFingerprint(HOME),
       homeElementGwFingerprint(HOME),
       String(HOME && HOME.gw != null ? HOME.gw : ""),
       homeSquadIsWideLayout() ? "wide" : "pager",
@@ -16000,6 +16197,14 @@
           "Did not play — 0′ after provisional or final FT"
         ),
         spitRow(
+          `<span class="home-status-dot is-short-mins spit-home-swatch" aria-hidden="true"></span>`,
+          "Under 60′ — after FT, or live once minutes freeze while the match continues"
+        ),
+        spitRow(
+          `<span class="home-status-dot is-modest-mins spit-home-swatch" aria-hidden="true"></span>`,
+          "60–75′ — played, but short of a full match"
+        ),
+        spitRow(
           `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
           "IMP ahead of league top third",
           "spit-symbol-wide"
@@ -16456,19 +16661,39 @@
     return out;
   }
 
-  function renderScheduleScatter(profiles) {
-    if (!el.scheduleScatter) return;
-    const maxAttack = Math.max(1, ...profiles.map((p) => Math.abs(p.signedAttackAvg)));
-    const maxDefence = Math.max(1, ...profiles.map((p) => Math.abs(p.signedDefenceAvg)));
-    // Random DOM order so overlapping badges don't always stack the same way.
-    const points = shuffleCopy(profiles).map((profile) => {
-      const left = 50 + (profile.signedAttackAvg / maxAttack) * 43;
-      const top = 50 - (profile.signedDefenceAvg / maxDefence) * 43;
-      const teamLabel = TEAM_NAMES[profile.teamCode] || profile.teamCode;
-      const quadrant = scheduleQuadrantLabel(profile.signedAttackAvg, profile.signedDefenceAvg);
-      const accent = teamAccentDecl(profile.teamCode);
-      const accentStyle = accent ? `;${accent}` : "";
-      return `<button type="button" class="schedule-scatter-point${accent ? " has-team-ring" : ""}"
+  let scheduleScatterZOrder = [];
+
+  function scheduleScatterLayout(profile, maxAttack, maxDefence) {
+    return {
+      left: 50 + (profile.signedAttackAvg / maxAttack) * 43,
+      top: 50 - (profile.signedDefenceAvg / maxDefence) * 43,
+    };
+  }
+
+  function scheduleScatterPointAria(profile) {
+    const teamLabel = TEAM_NAMES[profile.teamCode] || profile.teamCode;
+    const quadrant = scheduleQuadrantLabel(profile.signedAttackAvg, profile.signedDefenceAvg);
+    return `${teamLabel}: attack advantage ${fmtEdge(profile.signedAttackAvg)}, defence advantage ${fmtEdge(profile.signedDefenceAvg)}; ${quadrant}. Click to jump to card.`;
+  }
+
+  function applyScheduleScatterPoint(btn, profile, maxAttack, maxDefence) {
+    const { left, top } = scheduleScatterLayout(profile, maxAttack, maxDefence);
+    btn.style.left = `${left.toFixed(2)}%`;
+    btn.style.top = `${top.toFixed(2)}%`;
+    btn.setAttribute("data-attack", String(profile.signedAttackAvg));
+    btn.setAttribute("data-defence", String(profile.signedDefenceAvg));
+    btn.setAttribute("data-attack-favorable", String(profile.attackCount));
+    btn.setAttribute("data-defence-favorable", String(profile.defenceCount));
+    btn.setAttribute("data-attack-included", String(profile.signedAttackCount));
+    btn.setAttribute("data-defence-included", String(profile.signedDefenceCount));
+    btn.setAttribute("aria-label", scheduleScatterPointAria(profile));
+  }
+
+  function scheduleScatterPointHTML(profile, maxAttack, maxDefence) {
+    const { left, top } = scheduleScatterLayout(profile, maxAttack, maxDefence);
+    const accent = teamAccentDecl(profile.teamCode);
+    const accentStyle = accent ? `;${accent}` : "";
+    return `<button type="button" class="schedule-scatter-point${accent ? " has-team-ring" : ""}"
         style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%${accentStyle}"
         data-team="${escapeHtml(profile.teamCode)}"
         data-attack="${profile.signedAttackAvg}"
@@ -16477,10 +16702,42 @@
         data-defence-favorable="${profile.defenceCount}"
         data-attack-included="${profile.signedAttackCount}"
         data-defence-included="${profile.signedDefenceCount}"
-        aria-label="${escapeHtml(`${teamLabel}: attack advantage ${fmtEdge(profile.signedAttackAvg)}, defence advantage ${fmtEdge(profile.signedDefenceAvg)}; ${quadrant}. Click to jump to card.`)}">
+        aria-label="${escapeHtml(scheduleScatterPointAria(profile))}">
         ${badgeHTML(profile.teamCode) || `<span class="schedule-scatter-code">${escapeHtml(profile.teamCode)}</span>`}
       </button>`;
-    }).join("");
+  }
+
+  function renderScheduleScatter(profiles) {
+    if (!el.scheduleScatter) return;
+    const maxAttack = Math.max(1, ...profiles.map((p) => Math.abs(p.signedAttackAvg)));
+    const maxDefence = Math.max(1, ...profiles.map((p) => Math.abs(p.signedDefenceAvg)));
+    const byCode = new Map(profiles.map((p) => [p.teamCode, p]));
+    const plot = el.scheduleScatter.querySelector(".schedule-scatter-points");
+    const existing = plot ? [...plot.querySelectorAll(".schedule-scatter-point[data-team]")] : [];
+    const existingCodes = existing.map((btn) => btn.getAttribute("data-team"));
+    const sameSet =
+      plot &&
+      existing.length === profiles.length &&
+      existingCodes.every((code) => byCode.has(code));
+    if (sameSet) {
+      existing.forEach((btn) => {
+        const profile = byCode.get(btn.getAttribute("data-team"));
+        if (profile) applyScheduleScatterPoint(btn, profile, maxAttack, maxDefence);
+      });
+      return;
+    }
+    const codes = profiles.map((p) => p.teamCode);
+    const codeSet = new Set(codes);
+    if (
+      !scheduleScatterZOrder.length ||
+      scheduleScatterZOrder.length !== codes.length ||
+      scheduleScatterZOrder.some((code) => !codeSet.has(code))
+    ) {
+      scheduleScatterZOrder = shuffleCopy(codes);
+    }
+    const order = new Map(scheduleScatterZOrder.map((code, i) => [code, i]));
+    const stacked = profiles.slice().sort((a, b) => (order.get(a.teamCode) || 0) - (order.get(b.teamCode) || 0));
+    const points = stacked.map((profile) => scheduleScatterPointHTML(profile, maxAttack, maxDefence)).join("");
     el.scheduleScatter.innerHTML = `
       <div class="schedule-scatter-head">
         <div>
@@ -16549,7 +16806,8 @@
     }, 2400);
   }
 
-  function renderSchedule() {
+  function renderSchedule(opts = {}) {
+    const live = !!opts.live;
     hideTeamRankTooltip();
     hideMatchupEdgeTooltip();
     hideScheduleScatterTooltip();
@@ -16568,10 +16826,12 @@
     });
 
     renderScheduleScatter(profiles);
-    el.scheduleGrid.innerHTML = profiles.map((profile) =>
-      scheduleCardHTML(profile, highlightMaps, rankMaps)
-    ).join("");
-    upgradeNativeTitles(el.scheduleGrid);
+    if (!live) {
+      el.scheduleGrid.innerHTML = profiles.map((profile) =>
+        scheduleCardHTML(profile, highlightMaps, rankMaps)
+      ).join("");
+      upgradeNativeTitles(el.scheduleGrid);
+    }
 
     el.scheduleRangeLabel.textContent =
       state.scheduleGwMin === state.scheduleGwMax
@@ -20965,6 +21225,47 @@
     el.fixturesWindowLabel.textContent = a === b ? `GW${a}` : `GW${a}–${b}`;
   }
 
+  function fixturesRowFromHTML(html) {
+    const tbody = document.createElement("tbody");
+    tbody.innerHTML = html;
+    return tbody.firstElementChild;
+  }
+
+  function patchFixturesRow(tr, html) {
+    const fresh = fixturesRowFromHTML(html);
+    if (!fresh) return tr;
+    const keepName = tr.querySelector("td.col-name");
+    tr.className = fresh.className;
+    const pressed = fresh.getAttribute("aria-pressed");
+    if (pressed != null) tr.setAttribute("aria-pressed", pressed);
+    const title = fresh.getAttribute("title");
+    if (title) tr.setAttribute("title", title);
+    else tr.removeAttribute("title");
+    if (!keepName) return fresh;
+    while (tr.cells.length > 1) tr.removeChild(tr.lastElementChild);
+    Array.from(fresh.cells).forEach((td, i) => {
+      if (i === 0) return;
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function syncFixturesBody(teams, rowHTML) {
+    const body = el.fixturesBody;
+    const prev = new Map();
+    body.querySelectorAll("tr[data-team]").forEach((tr) => {
+      const code = tr.getAttribute("data-team");
+      if (code) prev.set(code, tr);
+    });
+    const next = teams.map((code) => {
+      const html = rowHTML(code);
+      const old = prev.get(code);
+      if (!old) return fixturesRowFromHTML(html);
+      return patchFixturesRow(old, html);
+    });
+    body.replaceChildren(...next);
+  }
+
   function renderFixturesPage({ syncSlider = true, animateReorder = false } = {}) {
     if (!el.fixturesPage || !el.fixturesHead || !el.fixturesBody) return;
     const allScope = fixturesIsAllScope();
@@ -20982,10 +21283,10 @@
     if (el.fixturesPage) el.fixturesPage.classList.toggle("is-fixtures-all", allScope);
     if (allScope) {
       el.fixturesHead.innerHTML = fixturesAllHeadHTML(days);
-      el.fixturesBody.innerHTML = teams.map((code) => fixturesAllRowHTML(code, days)).join("");
+      syncFixturesBody(teams, (code) => fixturesAllRowHTML(code, days));
     } else {
       el.fixturesHead.innerHTML = fixturesHeadHTML(gws);
-      el.fixturesBody.innerHTML = teams.map((code) => fixturesRowHTML(code, gws)).join("");
+      syncFixturesBody(teams, (code) => fixturesRowHTML(code, gws));
     }
     bindAllNameColumnSimplifies();
     syncPageUpdatedFooter(el.fixturesUpdatedFooter, pageDataUpdatedIso("fixtures"));
@@ -30905,6 +31206,87 @@
   }
 
 
+  function sliderThumbPx(slider) {
+    const raw = getComputedStyle(slider).getPropertyValue("--slider-thumb");
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : 14;
+  }
+
+  function sliderValueFromClientX(input, slider, clientX) {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const step = Number(input.step) || 1;
+    const thumb = sliderThumbPx(slider);
+    const rect = slider.getBoundingClientRect();
+    const inner = Math.max(1, rect.width - thumb);
+    const pct = Math.min(1, Math.max(0, (clientX - rect.left - thumb / 2) / inner));
+    const raw = min + pct * (max - min);
+    const snapped = min + Math.round((raw - min) / step) * step;
+    const decimals = String(step).includes(".") ? String(step).split(".")[1].length : 0;
+    const v = Number(snapped.toFixed(decimals));
+    return Math.min(max, Math.max(min, v));
+  }
+
+  function bindSliderTrackPointer(slider) {
+    if (!slider || slider.dataset.sliderPointerBound === "1") return;
+    slider.dataset.sliderPointerBound = "1";
+    let dragging = null;
+
+    function ranges() {
+      return [...slider.querySelectorAll(":scope > input[type=range]")];
+    }
+
+    function pickInput(clientX) {
+      const list = ranges();
+      if (!list.length) return null;
+      if (list.length === 1) return list[0];
+      const [a, b] = list;
+      const min = Number(a.min);
+      const max = Number(a.max);
+      const span = max - min || 1;
+      const thumb = sliderThumbPx(slider);
+      const rect = slider.getBoundingClientRect();
+      const inner = Math.max(1, rect.width - thumb);
+      const pct = Math.min(1, Math.max(0, (clientX - rect.left - thumb / 2) / inner));
+      const aPct = (Number(a.value) - min) / span;
+      const bPct = (Number(b.value) - min) / span;
+      return Math.abs(pct - aPct) <= Math.abs(pct - bPct) ? a : b;
+    }
+
+    function apply(input, clientX) {
+      const v = sliderValueFromClientX(input, slider, clientX);
+      if (Number(input.value) === v) return;
+      input.value = String(v);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    slider.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const input = pickInput(e.clientX);
+      if (!input) return;
+      e.preventDefault();
+      dragging = input;
+      ranges().forEach((inp) => {
+        inp.classList.toggle("slider-top", inp === input);
+        inp.style.zIndex = inp === input ? "5" : "3";
+      });
+      try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+      apply(input, e.clientX);
+      if (slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
+    });
+    slider.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      apply(dragging, e.clientX);
+    });
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging.dispatchEvent(new Event("change", { bubbles: true }));
+      dragging = null;
+    };
+    slider.addEventListener("pointerup", endDrag);
+    slider.addEventListener("pointercancel", endDrag);
+  }
+
   function setupDualSlider({
     minInput,
     maxInput,
@@ -30955,29 +31337,38 @@
       maxLabelEl.textContent = format(boundLabels ? bMax : curMax);
     }
 
+    let sliding = false;
     minInput.addEventListener("input", () => {
+      sliding = true;
       fillEl.classList.add("is-live");
       const [, curMax] = get();
       const v = Math.min(Number(minInput.value), curMax);
       set(v, curMax);
       updateUI();
-      onInput();
+      onInput({ live: true });
     });
     maxInput.addEventListener("input", () => {
+      sliding = true;
       fillEl.classList.add("is-live");
       const [curMin] = get();
       const v = Math.max(Number(maxInput.value), curMin);
       set(curMin, v);
       updateUI();
-      onInput();
+      onInput({ live: true });
     });
-    const endLive = () => fillEl.classList.remove("is-live");
+    const endLive = () => {
+      fillEl.classList.remove("is-live");
+      if (!sliding) return;
+      sliding = false;
+      onInput({ live: false });
+    };
     minInput.addEventListener("change", endLive);
     maxInput.addEventListener("change", endLive);
     minInput.addEventListener("pointerup", endLive);
     maxInput.addEventListener("pointerup", endLive);
 
     updateUI();
+    bindSliderTrackPointer(minInput.closest(".dual-slider"));
     return updateUI;
   }
 
@@ -31063,7 +31454,7 @@
         }
         return `GW${v}`;
       },
-      onInput: () => {
+      onInput: ({ live } = {}) => {
         if (fixturesIsAllScope()) {
           if (el.fixturesWindowLabel) {
             const months = fixturesMonthKeysInWindow();
@@ -31084,7 +31475,7 @@
           const [a, b] = fixturesWindowRange();
           el.fixturesWindowLabel.textContent = a === b ? `GW${a}` : `GW${a}–${b}`;
         }
-        renderFixturesPage({ syncSlider: false, animateReorder: true });
+        renderFixturesPage({ syncSlider: false, animateReorder: !live });
       },
     });
   }
@@ -31116,17 +31507,25 @@
       labelEl.textContent = format(v);
     }
 
+    let sliding = false;
     input.addEventListener("input", () => {
+      sliding = true;
       fillEl.classList.add("is-live");
       set(Number(input.value));
       updateUI();
-      onInput();
+      onInput({ live: true });
     });
-    const endLive = () => fillEl.classList.remove("is-live");
+    const endLive = () => {
+      fillEl.classList.remove("is-live");
+      if (!sliding) return;
+      sliding = false;
+      onInput({ live: false });
+    };
     input.addEventListener("change", endLive);
     input.addEventListener("pointerup", endLive);
 
     updateUI();
+    bindSliderTrackPointer(input.closest(".dual-slider"));
     return updateUI;
   }
 
@@ -31350,7 +31749,7 @@
 
   function setScheduleSlidersOpen(open) {
     if (!el.scheduleControls || !el.scheduleSlidersToggle) return;
-    if (!hasFineHover()) {
+    if (preferMobileSheet()) {
       if (open) {
         openMobileSheetHost({
           title: "Matchup filters",
@@ -31409,7 +31808,7 @@
 
   if (el.scheduleSlidersToggle) {
     el.scheduleSlidersToggle.addEventListener("click", () => {
-      if (!hasFineHover()) {
+      if (preferMobileSheet()) {
         setScheduleSlidersOpen(!(mobileSheetOpen && mobileSheetKey === "schedule-filters"));
         return;
       }
