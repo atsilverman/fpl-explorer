@@ -1347,6 +1347,7 @@
     fixturesHead: $("#fixtures-head"),
     fixturesBody: $("#fixtures-body"),
     prefsFixturesCustomColors: $("#prefs-fixtures-custom-colors"),
+    prefsDebugMockLive: $("#prefs-debug-mock-live"),
     difficultyWizard: $("#difficulty-wizard"),
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
@@ -5052,9 +5053,16 @@
 
   function animateHomeBenchBars() {
     if (!el.homeStandingsBenchBody) return;
-    const bars = el.homeStandingsBenchBody.querySelectorAll(".home-bench-bar");
+    const bars = [...el.homeStandingsBenchBody.querySelectorAll(".home-bench-bar")];
     if (!bars.length) return;
     bars.forEach((bar) => bar.classList.remove("is-drawn"));
+    // Park values inside bars until width is known again.
+    el.homeStandingsBenchBody.querySelectorAll(".home-bench-meter").forEach((meter) => {
+      meter.classList.remove("is-value-outside");
+      const bar = meter.querySelector(".home-bench-bar");
+      const val = meter.querySelector(".home-bench-bar-val");
+      if (bar && val && val.parentElement !== bar) bar.appendChild(val);
+    });
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const draw = () => {
       bars.forEach((bar) => bar.classList.add("is-drawn"));
@@ -5064,6 +5072,8 @@
       draw();
       return;
     }
+    // Force width:0 to paint so a swipe-back can restart the grow transition.
+    void bars[0].offsetWidth;
     requestAnimationFrame(() => {
       requestAnimationFrame(draw);
     });
@@ -5208,8 +5218,8 @@
     const status = chip && chip.status ? String(chip.status) : "available";
     const label = chip && chip.label ? String(chip.label) : "";
     const ev = chip && chip.event != null ? Number(chip.event) : null;
-    // Reserve "GW 00" width on available cells so columns stay aligned.
-    const gwLabel = Number.isFinite(ev) ? `GW ${ev}` : "GW 00";
+    // Reserve "GW00" width on available cells so columns stay aligned.
+    const gwLabel = Number.isFinite(ev) ? `GW${ev}` : "GW00";
     if (status === "active") {
       return `<span class="home-chip-cell is-active" title="${escapeHtml(label)} active this GW"><span class="home-chip-cell-mark" aria-hidden="true"></span><span class="home-chip-cell-gw">${escapeHtml(gwLabel)}</span></span>`;
     }
@@ -5659,7 +5669,7 @@
     });
     syncHomeStandingsPagerDots(index);
     syncHomeStandingsLayout(index);
-    if (index === HOME_STANDINGS_BENCH_PAGE) animateHomeBenchBars();
+    // Bench bars replay on scroll settle (once the card is in view), not mid-swipe.
     if (!smooth) homeStandingsPagerTarget = null;
   }
 
@@ -6792,6 +6802,8 @@
     ].filter(Boolean);
     scrollNodes.forEach((node) => {
         node.addEventListener("scroll", arm, { passive: true });
+        // Arm before move so finger-down never paints a sticky hover wash.
+        node.addEventListener("touchstart", arm, { passive: true });
         node.addEventListener("touchmove", arm, { passive: true });
         node.addEventListener("touchend", arm, { passive: true });
         node.addEventListener("touchcancel", arm, { passive: true });
@@ -7140,26 +7152,22 @@
     return any ? sum : null;
   }
 
-  function homeBenchCollapsed() {
-    try {
-      const stored = localStorage.getItem("fpl-explorer-home-bench-collapsed");
-      if (stored === "0") return false;
-      return true;
-    } catch {
-      return true;
-    }
+  // Session-only: always collapsed on load / leaving Home. Swiping Team card
+  // pages keeps the in-memory expand state until navigation or refresh.
+  let homeBenchCollapsedState = true;
+  try {
+    localStorage.removeItem("fpl-explorer-home-bench-collapsed");
+  } catch {
+    /* private browsing */
   }
 
-  function setHomeBenchCollapsed(collapsed, { persist = true } = {}) {
-    const next = !!collapsed;
-    if (persist) {
-      try {
-        localStorage.setItem("fpl-explorer-home-bench-collapsed", next ? "1" : "0");
-      } catch {
-        /* private browsing */
-      }
-    }
-    syncHomeBenchCollapsedUI(next);
+  function homeBenchCollapsed() {
+    return homeBenchCollapsedState;
+  }
+
+  function setHomeBenchCollapsed(collapsed) {
+    homeBenchCollapsedState = !!collapsed;
+    syncHomeBenchCollapsedUI(homeBenchCollapsedState);
     if (el.homeSquadPanel) {
       requestAnimationFrame(() => {
         syncHomeSquadLayout(undefined, { animate: false, allowShrink: true });
@@ -12167,7 +12175,7 @@
         });
       });
     };
-    // Wait for webfonts so track/row measures don't jump when Outfit swaps in.
+    // Wait for webfonts so track/row measures don't jump when Figtree swaps in.
     if (document.fonts && document.fonts.status !== "loaded") {
       document.fonts.ready.then(runHomeTablesSettle).catch(runHomeTablesSettle);
     } else {
@@ -12787,7 +12795,140 @@
   function syncMobileLayoutClass() {
     document.documentElement.classList.toggle("is-mobile-layout", NARROW_MQ.matches);
     syncMobileTopChromeInset();
+    if (typeof syncScrollMoreHints === "function") syncScrollMoreHints();
   }
+
+  const SCROLL_MORE_THRESHOLD = 40;
+  let scrollMoreLayer = null;
+  let scrollMoreTarget = null;
+  let scrollMoreRaf = 0;
+  let scrollMoreReady = false;
+
+  function scrollMoreLayerEl() {
+    if (scrollMoreLayer && scrollMoreLayer.isConnected) return scrollMoreLayer;
+    scrollMoreLayer = document.getElementById("scroll-more-layer");
+    return scrollMoreLayer;
+  }
+
+  function scrollMoreCanHint(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node === document.body || node === document.documentElement) return false;
+    const style = window.getComputedStyle(node);
+    const oy = style.overflowY;
+    if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return false;
+    // Ignore mostly-horizontal pagers (tracks) — vertical overflow only.
+    return node.scrollHeight - node.clientHeight >= SCROLL_MORE_THRESHOLD;
+  }
+
+  function scrollMoreProbe(node) {
+    if (!scrollMoreCanHint(node)) return null;
+    const max = node.scrollHeight - node.clientHeight;
+    return {
+      node,
+      above: node.scrollTop > SCROLL_MORE_THRESHOLD,
+      below: node.scrollTop < max - SCROLL_MORE_THRESHOLD,
+    };
+  }
+
+  function scrollMorePickTarget(fromNode) {
+    let node = fromNode;
+    while (node && node !== document && node !== document.documentElement) {
+      const hit = scrollMoreProbe(node);
+      if (hit && (hit.above || hit.below || node.scrollHeight > node.clientHeight + SCROLL_MORE_THRESHOLD)) {
+        return hit;
+      }
+      node = node.parentElement;
+    }
+    const main = document.querySelector("main.main");
+    return scrollMoreProbe(main);
+  }
+
+  function hideScrollMoreHints() {
+    const layer = scrollMoreLayerEl();
+    if (!layer) return;
+    layer.hidden = true;
+    layer.setAttribute("aria-hidden", "true");
+    layer.classList.remove("is-more-above", "is-more-below");
+    scrollMoreTarget = null;
+  }
+
+  function paintScrollMoreHints(state) {
+    const layer = scrollMoreLayerEl();
+    if (!layer) return;
+    if (!NARROW_MQ.matches || !state || !(state.above || state.below)) {
+      hideScrollMoreHints();
+      return;
+    }
+    const rect = state.node.getBoundingClientRect();
+    if (!(rect.width > 24 && rect.height > 80)) {
+      hideScrollMoreHints();
+      return;
+    }
+    scrollMoreTarget = state.node;
+    layer.hidden = false;
+    layer.setAttribute("aria-hidden", "true");
+    layer.style.top = `${Math.round(rect.top)}px`;
+    layer.style.left = `${Math.round(rect.left)}px`;
+    layer.style.width = `${Math.round(rect.width)}px`;
+    layer.style.height = `${Math.round(rect.height)}px`;
+    layer.classList.toggle("is-more-above", !!state.above);
+    layer.classList.toggle("is-more-below", !!state.below);
+  }
+
+  function syncScrollMoreHints(fromNode) {
+    if (!scrollMoreReady) return;
+    if (scrollMoreRaf) cancelAnimationFrame(scrollMoreRaf);
+    scrollMoreRaf = requestAnimationFrame(() => {
+      scrollMoreRaf = 0;
+      try {
+        if (!NARROW_MQ.matches) {
+          hideScrollMoreHints();
+          return;
+        }
+        let state = null;
+        if (fromNode) state = scrollMorePickTarget(fromNode);
+        if (!state && scrollMoreTarget && scrollMoreTarget.isConnected) {
+          state = scrollMoreProbe(scrollMoreTarget);
+        }
+        if (!state) {
+          const main = document.querySelector("main.main");
+          state = scrollMoreProbe(main);
+        }
+        // Prefer sheet body when the mobile sheet is open and overflows.
+        const sheetOpen = !!(el.mobileSheet && el.mobileSheet.classList.contains("is-open"));
+        if (sheetOpen && el.mobileSheetBody) {
+          const sheetState = scrollMoreProbe(el.mobileSheetBody);
+          if (sheetState && (sheetState.above || sheetState.below)) state = sheetState;
+        }
+        paintScrollMoreHints(state);
+      } catch (err) {
+        console.warn("scroll-more hints failed", err);
+        hideScrollMoreHints();
+      }
+    });
+  }
+
+  function bindScrollMoreHints() {
+    if (document.documentElement.dataset.scrollMoreBound === "1") return;
+    document.documentElement.dataset.scrollMoreBound = "1";
+    scrollMoreReady = true;
+    document.addEventListener(
+      "scroll",
+      (e) => {
+        if (!NARROW_MQ.matches) return;
+        const t = e.target;
+        if (t && t.nodeType === 1) syncScrollMoreHints(t);
+        else syncScrollMoreHints();
+      },
+      { passive: true, capture: true }
+    );
+    window.addEventListener("resize", () => syncScrollMoreHints(), { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => syncScrollMoreHints(), { passive: true });
+      window.visualViewport.addEventListener("scroll", () => syncScrollMoreHints(), { passive: true });
+    }
+  }
+
   syncMobileLayoutClass();
 
   // iOS Safari: focusing search scrolls the layout viewport (even with
@@ -14495,6 +14636,7 @@
       }
     }
     if (closingKey === "team-details") syncHomePlayerOpenXBtn(null);
+    syncScrollMoreHints();
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;
       restoreSheetHost();
@@ -14505,6 +14647,7 @@
         el.mobileSheetTitle.textContent = "";
       }
       if (el.mobileSheetReset) el.mobileSheetReset.hidden = true;
+      syncScrollMoreHints();
     }, 280);
     syncSearchClearBtns();
     syncFiltersResetUI();
@@ -14593,6 +14736,7 @@
     sheetIgnoreDismissUntil = Date.now() + 450;
     syncSearchClearBtns();
     syncFiltersResetUI();
+    requestAnimationFrame(() => syncScrollMoreHints(el.mobileSheetBody));
     return true;
   }
 
@@ -15886,11 +16030,11 @@
           "Chip still available (this half)"
         ),
         spitRow(
-          `<span class="home-chip-cell is-used spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW 4</span></span>`,
+          `<span class="home-chip-cell is-used spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW4</span></span>`,
           "Chip used — label is the gameweek played"
         ),
         spitRow(
-          `<span class="home-chip-cell is-active spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW 1</span></span>`,
+          `<span class="home-chip-cell is-active spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW1</span></span>`,
           "Chip active this gameweek"
         ),
       ];
@@ -15898,7 +16042,7 @@
         spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
         spitRow(
           spitRank("Summary"),
-          "Preferences → Home summary: Classic (four equal cards) or Hero (Overall Rank band + Gameweek rank card)."
+          "Home hero: Overall Rank band with Gameweek rank card overlapping below."
         ),
         spitRow(
           spitRank("Own"),
@@ -23383,6 +23527,7 @@
 
   /** True when at least one fixture in the current GW is in play. */
   function liveGwHasActiveGames() {
+    if (debugMockLive()) return true;
     const gw = liveDefaultGw();
     const homeGw = Number(HOME && HOME.gw);
     const trustHomeLive = homeTrustLiveMatchState();
@@ -23412,21 +23557,64 @@
   function syncLiveNavChrome() {
     document.documentElement.classList.toggle("has-gw-live", liveGwHasActiveGames());
     syncHomeHeroLiveBadge();
+    syncPageLiveBadges();
   }
 
-  /** Mock: force Live badge on for preview. Keep false in production. */
-  const HOME_HERO_LIVE_MOCK = false;
+  const DEBUG_MOCK_LIVE_KEY = "fpl-explorer-debug-mock-live";
+  let debugMockLiveState = false;
+  try {
+    debugMockLiveState = sessionStorage.getItem(DEBUG_MOCK_LIVE_KEY) === "1";
+  } catch {
+    debugMockLiveState = false;
+  }
+
+  function debugMockLive() {
+    return debugMockLiveState;
+  }
+
+  function syncDebugMockLiveUI() {
+    if (el.prefsDebugMockLive) el.prefsDebugMockLive.checked = debugMockLiveState;
+  }
+
+  function setDebugMockLive(on) {
+    debugMockLiveState = !!on;
+    try {
+      if (debugMockLiveState) sessionStorage.setItem(DEBUG_MOCK_LIVE_KEY, "1");
+      else sessionStorage.removeItem(DEBUG_MOCK_LIVE_KEY);
+    } catch {
+      /* private browsing */
+    }
+    syncDebugMockLiveUI();
+    syncLiveNavChrome();
+  }
 
   function homeHeroShouldShowLive() {
-    if (HOME_HERO_LIVE_MOCK) return true;
-    return liveGwHasActiveGames();
+    return homeSummaryLayout() === "hero" && liveGwHasActiveGames();
   }
 
   function syncHomeHeroLiveBadge() {
     if (!el.homeHeroLive) return;
-    const on = homeSummaryLayout() === "hero" && homeHeroShouldShowLive();
+    const on = homeHeroShouldShowLive();
     el.homeHeroLive.hidden = !on;
     el.homeHeroLive.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+
+  function syncPageLiveBadges() {
+    const on = liveGwHasActiveGames();
+    document.querySelectorAll(".page-header .page-live-badge").forEach((node) => {
+      node.hidden = !on;
+      node.setAttribute("aria-hidden", on ? "false" : "true");
+    });
+    document.querySelectorAll(".page-tab-live-dot").forEach((node) => {
+      node.hidden = !on;
+      node.setAttribute("aria-hidden", on ? "false" : "true");
+    });
+    const nav = document.getElementById("page-nav-live");
+    if (!nav) return;
+    // Mobile nav i-button badge — skip Home (hero already has Live).
+    const navOn = on && state.page !== "home";
+    nav.hidden = !navOn;
+    nav.setAttribute("aria-hidden", navOn ? "false" : "true");
   }
 
   function liveElementMapForGw(gw) {
@@ -29218,6 +29406,7 @@
     if (state.page === "home" && page !== "home") {
       homePageEnterArmed = false;
       flushHomeRenderAfterEnter();
+      homeBenchCollapsedState = true;
     }
     page = normalizeStoredPage(page);
     const prev = state.page;
@@ -29266,6 +29455,8 @@
     syncTeamCompareHost();
     syncSearchClearBtns();
     syncPageInfoButton();
+    syncPageLiveBadges();
+    syncScrollMoreHints();
     bindAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
@@ -29932,8 +30123,14 @@
   if (el.prefsPanel) {
     el.prefsPanel.addEventListener("change", (e) => {
       const t = e.target;
-      if (!t || t.id !== "prefs-fixtures-custom-colors") return;
-      setTeamDifficultyToggle("fixtures", !!t.checked);
+      if (!t) return;
+      if (t.id === "prefs-fixtures-custom-colors") {
+        setTeamDifficultyToggle("fixtures", !!t.checked);
+        return;
+      }
+      if (t.id === "prefs-debug-mock-live") {
+        setDebugMockLive(!!t.checked);
+      }
     });
   }
   if (el.scheduleSeasonSeg) {
@@ -31672,177 +31869,56 @@
   applyTheme(currentThemeMode());
 
   const HOME_SUMMARY_KEY = "fpl-explorer-home-summary";
-  const HOME_SUMMARY_ORDER = ["classic", "hero"];
   const HOME_SUMMARY_DEFAULT = "hero";
 
   function homeSummaryLayout() {
-    try {
-      const stored = localStorage.getItem(HOME_SUMMARY_KEY);
-      return HOME_SUMMARY_ORDER.includes(stored) ? stored : HOME_SUMMARY_DEFAULT;
-    } catch {
-      return HOME_SUMMARY_DEFAULT;
-    }
+    return HOME_SUMMARY_DEFAULT;
   }
 
-  function syncHomeSummarySeg(mode) {
-    if (!el.homeSummarySeg) return;
-    Array.from(el.homeSummarySeg.querySelectorAll("button[data-home-summary]")).forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.homeSummary === mode);
-    });
-    if (typeof syncSegThumb === "function") syncSegThumb(el.homeSummarySeg, { animate: false });
-  }
-
-  function syncHomeSummaryLayout(mode = homeSummaryLayout()) {
-    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : HOME_SUMMARY_DEFAULT;
+  function syncHomeSummaryLayout() {
+    const next = HOME_SUMMARY_DEFAULT;
     if (el.homeSummary) el.homeSummary.dataset.homeSummary = next;
-    if (el.homeSummaryHero) el.homeSummaryHero.hidden = next !== "hero";
+    if (el.homeSummaryHero) el.homeSummaryHero.hidden = false;
     const overallCard = el.homeSummary && el.homeSummary.querySelector('[data-home-summary-card="overall"]');
     const gwRankCard = el.homeSummary && el.homeSummary.querySelector('[data-home-summary-card="gw-rank"]');
-    if (overallCard) overallCard.hidden = next === "hero";
-    if (gwRankCard) gwRankCard.hidden = next !== "hero";
-    syncHomeSummarySeg(next);
+    if (overallCard) overallCard.hidden = true;
+    if (gwRankCard) gwRankCard.hidden = false;
     syncHomeHeroLiveBadge();
   }
 
-  function applyHomeSummaryLayout(mode) {
-    const next = HOME_SUMMARY_ORDER.includes(mode) ? mode : HOME_SUMMARY_DEFAULT;
-    try {
-      localStorage.setItem(HOME_SUMMARY_KEY, next);
-    } catch {
-      /* private browsing */
-    }
-    syncHomeSummaryLayout(next);
-    if (state.page === "home") {
-      renderHome({ settleQuiet: true });
-    }
-  }
-
-  if (el.homeSummarySeg) {
-    el.homeSummarySeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-home-summary]");
-      if (!btn || !el.homeSummarySeg.contains(btn)) return;
-      applyHomeSummaryLayout(btn.dataset.homeSummary || HOME_SUMMARY_DEFAULT);
-      btn.blur();
-    });
-  }
-
-  syncHomeSummaryLayout(homeSummaryLayout());
+  syncHomeSummaryLayout();
   bindHomeSummaryCardJumps();
 
   const HOME_SURFACE_KEY = "fpl-explorer-home-surface";
-  const HOME_SURFACE_ORDER = ["glass", "solid"];
   const HOME_SURFACE_DEFAULT = "glass";
 
   function homeSurfaceMode() {
-    try {
-      const stored = localStorage.getItem(HOME_SURFACE_KEY);
-      if (stored === "flat") return HOME_SURFACE_DEFAULT;
-      return HOME_SURFACE_ORDER.includes(stored) ? stored : HOME_SURFACE_DEFAULT;
-    } catch {
-      return HOME_SURFACE_DEFAULT;
-    }
+    return HOME_SURFACE_DEFAULT;
   }
 
-  function syncHomeSurfaceSeg(mode) {
-    if (!el.homeSurfaceSeg) return;
-    Array.from(el.homeSurfaceSeg.querySelectorAll("button[data-home-surface]")).forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.homeSurface === mode);
-    });
-    if (typeof syncSegThumb === "function") syncSegThumb(el.homeSurfaceSeg, { animate: false });
+  function applyHomeSurface() {
+    document.documentElement.setAttribute("data-home-surface", HOME_SURFACE_DEFAULT);
   }
 
-  function applyHomeSurface(mode, { persist = true } = {}) {
-    const next = HOME_SURFACE_ORDER.includes(mode) ? mode : HOME_SURFACE_DEFAULT;
-    document.documentElement.setAttribute("data-home-surface", next);
-    syncHomeSurfaceSeg(next);
-    if (persist) {
-      try {
-        localStorage.setItem(HOME_SURFACE_KEY, next);
-      } catch {
-        /* private browsing */
-      }
-    }
-  }
-
-  if (el.homeSurfaceSeg) {
-    el.homeSurfaceSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-home-surface]");
-      if (!btn || !el.homeSurfaceSeg.contains(btn)) return;
-      applyHomeSurface(btn.dataset.homeSurface || HOME_SURFACE_DEFAULT);
-      btn.blur();
-    });
-  }
-
-  applyHomeSurface(homeSurfaceMode(), { persist: false });
+  applyHomeSurface();
 
   const FONT_PAIR_KEY = "fpl-explorer-font-pair-v3";
-  const FONT_PAIR_IDS = ["outfit", "manrope", "jakarta", "dm", "source", "plex", "figtree"];
-  const FONT_PAIR_GOOGLE = {
-    manrope: "family=Fira+Code:wght@400;500;600&family=Manrope:wght@400;500;600;700",
-    jakarta: "family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700",
-    dm: "family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600",
-    source: "family=Source+Code+Pro:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700",
-    plex: "family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700",
-    figtree: "family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600",
-  };
+  const FONT_PAIR_DEFAULT = "figtree";
 
-  function currentFontPair() {
-    try {
-      const stored = localStorage.getItem(FONT_PAIR_KEY);
-      return FONT_PAIR_IDS.includes(stored) ? stored : "outfit";
-    } catch {
-      return "outfit";
-    }
+  function applyFontPair() {
+    document.documentElement.setAttribute("data-font-pair", FONT_PAIR_DEFAULT);
   }
 
-  function ensureFontPairStylesheet(pair) {
-    let link = document.getElementById("font-pair-link");
-    if (!link) {
-      link = document.createElement("link");
-      link.id = "font-pair-link";
-      link.rel = "stylesheet";
-      document.head.appendChild(link);
-    }
-    if (!pair || pair === "outfit" || !FONT_PAIR_GOOGLE[pair]) {
-      link.removeAttribute("href");
-      link.disabled = true;
-      return;
-    }
-    const href = `https://fonts.googleapis.com/css2?${FONT_PAIR_GOOGLE[pair]}&display=optional`;
-    if (link.getAttribute("href") !== href) link.href = href;
-    link.disabled = false;
-  }
+  applyFontPair();
 
-  function applyFontPair(pair, { persist = true } = {}) {
-    const next = FONT_PAIR_IDS.includes(pair) ? pair : "outfit";
-    const root = document.documentElement;
-    if (next === "outfit") root.removeAttribute("data-font-pair");
-    else root.setAttribute("data-font-pair", next);
-    ensureFontPairStylesheet(next);
-    if (el.fontPairSelect && el.fontPairSelect.value !== next) {
-      el.fontPairSelect.value = next;
-    }
-    if (persist) {
-      try {
-        localStorage.setItem(FONT_PAIR_KEY, next);
-      } catch {
-        /* private browsing */
-      }
-    }
-  }
-
-  if (el.fontPairSelect) {
-    applyFontPair(currentFontPair(), { persist: false });
-    el.fontPairSelect.addEventListener("change", () => {
-      applyFontPair(el.fontPairSelect.value || "outfit");
-    });
-  }
-
-  // Drop legacy UI-scale zoom so fixed chrome widths stay stable.
+  // Drop legacy prefs so locked defaults stick for returning visitors.
   try {
     localStorage.removeItem("fpl-explorer-ui-scale");
     localStorage.removeItem("fpl-explorer-font-pair");
     localStorage.removeItem("fpl-explorer-font-pair-v2");
+    localStorage.removeItem(FONT_PAIR_KEY);
+    localStorage.removeItem(HOME_SUMMARY_KEY);
+    localStorage.removeItem(HOME_SURFACE_KEY);
     localStorage.removeItem("fpl-explorer-clock-format");
     localStorage.removeItem("fpl-explorer-fixture-tt-delay");
     localStorage.removeItem("fpl-explorer-accent");
@@ -31945,6 +32021,7 @@
     syncPageTrayTrigger();
     syncPageTabWheel();
     scheduleViewportLayoutSync({ immediate: true });
+    syncScrollMoreHints();
     if (state.page === "home") {
       syncHomeLookupUI();
       renderHome({ deferDuringEnter: true });
@@ -32277,7 +32354,10 @@
     }
     syncPlannerNavVisibility();
     setPage(page);
+    syncDebugMockLiveUI();
     syncLiveNavChrome();
+    bindScrollMoreHints();
+    syncScrollMoreHints();
     if (state.page !== "live" && state.page !== "opta") renderTable();
   }
 

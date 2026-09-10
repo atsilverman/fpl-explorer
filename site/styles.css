@@ -78,35 +78,28 @@
   --glass-blur: 18px;
   --glass-saturate: 1.2;
 
-  --mono: "Fira Code", ui-monospace, monospace;
-  --sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Preferences font pairs — clean / crisp / modern UI + tabular mono. */
-html[data-font-pair="manrope"] {
-  --sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --mono: "Fira Code", ui-monospace, monospace;
+/* Cursor Simple Browser is Electron: keep real backdrop-filter, but a smaller
+   radius than Safari’s 32px so the preview renderer doesn’t OOM (crash code 5). */
+html.is-embedded-browser {
+  --glass-blur: 12px;
+  --glass-saturate: 1.15;
 }
-html[data-font-pair="jakarta"] {
-  --sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
+html.is-embedded-browser .home-dashboard {
+  --home-glass-blur: 18px;
+  --home-glass-saturate: 1.35;
 }
-html[data-font-pair="dm"] {
-  --sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
-}
-html[data-font-pair="source"] {
-  --sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-  --mono: "Source Code Pro", ui-monospace, monospace;
-}
-html[data-font-pair="outfit"] {
-  --sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --mono: "Fira Code", ui-monospace, monospace;
-}
-html[data-font-pair="plex"] {
-  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
-}
+
+/* Legacy font-pair attrs — site is locked to Figtree · JetBrains Mono. */
+html[data-font-pair="manrope"],
+html[data-font-pair="jakarta"],
+html[data-font-pair="dm"],
+html[data-font-pair="source"],
+html[data-font-pair="outfit"],
+html[data-font-pair="plex"],
 html[data-font-pair="figtree"] {
   --sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
@@ -297,6 +290,16 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
+  }
+  /* Hide scrollbars on mobile — overflow still works; more-content hints replace chrome. */
+  html.is-mobile-layout,
+  html.is-mobile-layout * {
+    scrollbar-width: none;
+  }
+  html.is-mobile-layout *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
   body {
     min-height: 100dvh;
@@ -731,44 +734,41 @@ html:not(.planner-nav-enabled) [data-page-clone="team"] {
   color: hsl(var(--blue-hsl) / 0.9);
 }
 
-/* Live tab + page title — green while a GW fixture is in play (no glow). */
-html.has-gw-live #page-live,
-html.has-gw-live #page-live .icon,
-html.has-gw-live [data-page-clone="live"] .page-tab-btn,
-html.has-gw-live [data-page-clone="live"] .page-tab-btn .icon {
-  color: hsl(142 55% 38%);
-}
-html.has-gw-live #page-live.active,
-html.has-gw-live #page-live.active .icon {
-  color: hsl(142 55% 38%);
-}
-html.has-gw-live[data-page="live"] #page-tray-btn,
-html.has-gw-live[data-page="live"] #page-tray-btn .icon {
-  color: hsl(142 55% 38%);
-}
-html.has-gw-live #live-page .page-header h2,
-html.has-gw-live #live-page .page-title-icon {
-  color: hsl(142 55% 38%);
-}
+/* Live chrome: badges + tray pulse — not green page titles. */
 html.has-gw-live #live-page .page-header .page-info-btn {
   color: var(--text-dim);
 }
-html.has-gw-live[data-theme="dark"] #page-live,
-html.has-gw-live[data-theme="dark"] #page-live .icon,
-html.has-gw-live[data-theme="dark"] [data-page-clone="live"] .page-tab-btn,
-html.has-gw-live[data-theme="dark"] [data-page-clone="live"] .page-tab-btn .icon,
-html.has-gw-live[data-theme="dark"] #live-page .page-header h2,
-html.has-gw-live[data-theme="dark"] #live-page .page-title-icon {
-  color: hsl(142 48% 52%);
+
+.page-tab-live-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-radius: 50%;
+  flex: none;
+  background: hsl(142 55% 38%);
+  box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45);
+  vertical-align: middle;
+}
+html.has-gw-live #page-live .page-tab-live-dot:not([hidden]),
+html.has-gw-live [data-page-clone="live"] .page-tab-live-dot:not([hidden]) {
+  display: inline-block;
+  animation: home-live-pulse 1.6s ease-out infinite;
+}
+html[data-theme="dark"] .page-tab-live-dot {
+  background: hsl(142 48% 52%);
+  box-shadow: 0 0 0 0 hsl(142 48% 52% / 0.45);
 }
 @media (prefers-color-scheme: dark) {
-  html.has-gw-live:not([data-theme="light"]) #page-live,
-  html.has-gw-live:not([data-theme="light"]) #page-live .icon,
-  html.has-gw-live:not([data-theme="light"]) [data-page-clone="live"] .page-tab-btn,
-  html.has-gw-live:not([data-theme="light"]) [data-page-clone="live"] .page-tab-btn .icon,
-  html.has-gw-live:not([data-theme="light"]) #live-page .page-header h2,
-  html.has-gw-live:not([data-theme="light"]) #live-page .page-title-icon {
-    color: hsl(142 48% 52%);
+  html:not([data-theme="light"]) .page-tab-live-dot {
+    background: hsl(142 48% 52%);
+    box-shadow: 0 0 0 0 hsl(142 48% 52% / 0.45);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.has-gw-live #page-live .page-tab-live-dot:not([hidden]),
+  html.has-gw-live [data-page-clone="live"] .page-tab-live-dot:not([hidden]) {
+    animation: none;
   }
 }
 
@@ -4762,12 +4762,82 @@ html[data-theme="dark"] .player-flag-icon.is-chance-75 {
 .page-header .page-info-btn {
   display: none;
 }
+.page-header .page-live-badge {
+  display: none;
+}
 @media (hover: hover) and (pointer: fine) and (min-width: 721px) {
   .page-header .page-info-btn {
     display: inline-flex;
   }
+  .page-header .page-live-badge:not([hidden]) {
+    display: inline-flex;
+  }
   .page-info-btn.page-info-nav-btn {
     display: none !important;
+  }
+  .page-nav-actions .page-live-badge {
+    display: none !important;
+  }
+}
+.page-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 3px 8px 3px 7px;
+  border-radius: 999px;
+  border: 1px solid hsl(142 55% 38% / 0.38);
+  background: hsl(142 55% 38% / 0.12);
+  color: hsl(142 55% 34%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
+  vertical-align: middle;
+  flex: none;
+  pointer-events: none;
+  user-select: none;
+}
+.page-live-badge[hidden] {
+  display: none !important;
+}
+.page-live-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: hsl(142 55% 38%);
+  box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45);
+  animation: home-live-pulse 1.6s ease-out infinite;
+}
+html[data-theme="dark"] .page-live-badge {
+  border-color: hsl(142 48% 52% / 0.42);
+  background: hsl(142 48% 52% / 0.14);
+  color: hsl(142 48% 62%);
+}
+html[data-theme="dark"] .page-live-badge-dot {
+  background: hsl(142 48% 52%);
+  box-shadow: 0 0 0 0 hsl(142 48% 52% / 0.45);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .page-live-badge {
+    border-color: hsl(142 48% 52% / 0.42);
+    background: hsl(142 48% 52% / 0.14);
+    color: hsl(142 48% 62%);
+  }
+  html:not([data-theme="light"]) .page-live-badge-dot {
+    background: hsl(142 48% 52%);
+    box-shadow: 0 0 0 0 hsl(142 48% 52% / 0.45);
+  }
+}
+.page-nav-actions .page-live-badge {
+  align-self: center;
+  margin-right: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-live-badge-dot {
+    animation: none;
   }
 }
 .page-info-btn {
@@ -10142,56 +10212,66 @@ html[data-pointer="coarse"] tbody tr:hover {
   background: transparent;
 }
 
-/* Touch: never leave a sticky hover wash on Home rows (belt + suspenders vs
-   data-pointer / (hover:hover) mismatches on some WebKit builds). */
-@media (hover: none), (pointer: coarse) {
-  .home-squad-table tbody tr.home-squad-row:hover > td,
-  .home-standings-table tbody tr[data-entry]:hover > td,
-  .home-feed-table tbody tr.home-feed-row:hover > td {
+/* Touch / phone Home: no hover or press paint — sticky :hover used to flash a
+   solid card fill (looked like a row lift) over the glass panel. Intentional
+   tints stay on real classes only (pinned / view-active / etc.). */
+@media (hover: none), (pointer: coarse), (max-width: 720px) {
+  #home-page .home-squad-table tbody tr.home-squad-row:is(:hover, :active, :focus) > td,
+  #home-page .home-standings-table tbody tr[data-entry]:is(:hover, :active, :focus) > td,
+  #home-page .home-feed-table tbody tr.home-feed-row:is(:hover, :active, :focus) > td {
     --home-row-bg: hsl(var(--card));
     background: transparent;
   }
-  .home-squad-row.is-owner-pinned:hover > td {
+  #home-page .home-squad-row.is-owner-pinned:is(:hover, :active, :focus) > td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.16);
     background: var(--home-row-bg);
   }
-  .home-standings-table tr.is-owner-match:hover td {
+  #home-page .home-standings-table tr.is-owner-match:is(:hover, :active, :focus) td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.12);
     background: var(--home-row-bg);
   }
-  .home-standings-table tr.is-owner-bench:hover td {
+  #home-page .home-standings-table tr.is-owner-bench:is(:hover, :active, :focus) td {
     --home-row-bg: hsl(var(--muted-foreground) / 0.10);
     background: var(--home-row-bg);
   }
-  .home-standings-table tr.is-view-active:hover td {
+  #home-page .home-standings-table tr.is-owner-demote:is(:hover, :active, :focus) td {
+    --home-row-bg: hsl(var(--card));
+    background: transparent;
+  }
+  #home-page .home-standings-table tr.is-view-active:is(:hover, :active, :focus) td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.10);
+    background: var(--home-row-bg);
+  }
+  #home-page .home-dashboard.is-viewing-manager .home-standings-table tr.is-view-active:is(:hover, :active, :focus) td {
+    --home-row-bg: hsl(var(--card));
     background: var(--home-row-bg);
   }
 }
 
-html[data-pointer="coarse"] .home-squad-table tbody tr.home-squad-row:hover > td,
-html[data-pointer="coarse"] .home-standings-table tbody tr[data-entry]:hover > td,
-html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-squad-table tbody tr.home-squad-row:hover > td,
-html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-standings-table tbody tr[data-entry]:hover > td {
+html[data-pointer="coarse"] #home-page .home-squad-table tbody tr.home-squad-row:is(:hover, :active, :focus) > td,
+html[data-pointer="coarse"] #home-page .home-standings-table tbody tr[data-entry]:is(:hover, :active, :focus) > td,
+html[data-pointer="coarse"] #home-page .home-feed-table tbody tr.home-feed-row:is(:hover, :active, :focus) > td,
+html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-squad-table tbody tr.home-squad-row:is(:hover, :active, :focus) > td,
+html[data-pointer="coarse"] #home-page.is-scroll-interaction .home-standings-table tbody tr[data-entry]:is(:hover, :active, :focus) > td {
   --home-row-bg: hsl(var(--card));
-  background: hsl(var(--card));
+  background: transparent;
 }
-html[data-pointer="coarse"] .home-squad-row.is-owner-pinned:hover > td {
+html[data-pointer="coarse"] #home-page .home-squad-row.is-owner-pinned:is(:hover, :active, :focus) > td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.16);
   background: var(--home-row-bg);
 }
-html[data-pointer="coarse"] .home-standings-table tr.is-owner-match:hover td {
+html[data-pointer="coarse"] #home-page .home-standings-table tr.is-owner-match:is(:hover, :active, :focus) td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.12);
   background: var(--home-row-bg);
 }
-html[data-pointer="coarse"] .home-standings-table tr.is-owner-bench:hover td {
+html[data-pointer="coarse"] #home-page .home-standings-table tr.is-owner-bench:is(:hover, :active, :focus) td {
   --home-row-bg: hsl(var(--muted-foreground) / 0.10);
   background: var(--home-row-bg);
 }
-html[data-pointer="coarse"] .home-standings-table tr.is-owner-demote:hover td {
+html[data-pointer="coarse"] #home-page .home-standings-table tr.is-owner-demote:is(:hover, :active, :focus) td {
   background: transparent;
 }
-html[data-pointer="coarse"] .home-standings-table tr.is-view-active:hover td {
+html[data-pointer="coarse"] #home-page .home-standings-table tr.is-view-active:is(:hover, :active, :focus) td {
   --home-row-bg: hsl(var(--blue-hsl) / 0.10);
   background: var(--home-row-bg);
 }
@@ -13949,8 +14029,28 @@ html[data-theme="light"] #team-picker-view tbody td.col-team-pts.highlight-stron
   cursor: default;
 }
 #team-page tbody td.team-heat-cell,
-#team-picker-view tbody td.team-heat-cell {
+#team-picker-view tbody td.team-heat-cell,
+#team-compare-wrap tbody td.team-heat-cell {
   padding: 4px 6px;
+  /* Flat schedule grid — no row/column hairlines around FDR cells. */
+  border: none;
+  box-shadow: none;
+}
+#team-page thead th.col-heat,
+#team-picker-view thead th.col-heat,
+#team-compare-wrap thead th.col-heat {
+  border-bottom: none;
+  border-left: none;
+  border-right: none;
+  box-shadow: none;
+}
+#team-page tbody td.team-heat-cell.sec-divider,
+#team-picker-view tbody td.team-heat-cell.sec-divider,
+#team-compare-wrap tbody td.team-heat-cell.sec-divider,
+#team-page thead th.col-heat.sec-divider,
+#team-picker-view thead th.col-heat.sec-divider,
+#team-compare-wrap thead th.col-heat.sec-divider {
+  border-left: none;
 }
 #team-page tbody td.team-heat-cell.is-blank,
 #team-picker-view tbody td.team-heat-cell.is-blank {
@@ -13969,19 +14069,19 @@ html[data-theme="light"] #team-picker-view tbody td.col-team-pts.highlight-stron
 #team-compare-wrap thead th.col-heat.is-anchor,
 #team-compare-wrap tbody td.team-heat-cell.is-anchor {
   box-shadow: none;
-  border-right: 6px solid hsl(var(--card));
+  border-right: none;
 }
 #team-page thead th.col-heat.is-anchor,
 #team-picker-view thead th.col-heat.is-anchor,
 #team-compare-wrap thead th.col-heat.is-anchor {
-  border-right-color: hsl(var(--muted));
+  border-right: none;
 }
 #team-page tbody tr.team-section-row td.team-heat-cell.is-anchor,
 #team-picker-view tbody tr.team-section-row td.team-heat-cell.is-anchor {
-  border-right-color: color-mix(in srgb, hsl(var(--muted)) 72%, hsl(var(--card)));
+  border-right: none;
 }
 #team-page tbody tr.team-bench-divider td.team-heat-cell.is-anchor {
-  border-right-color: hsl(var(--muted) / 0.72);
+  border-right: none;
 }
 .team-heat-label {
   display: inline-block;
@@ -14519,7 +14619,7 @@ html.is-team-landscape #team-page tbody td.team-heat-cell {
   font-weight: 600;
 }
 html.is-team-landscape #team-page tbody td.team-heat-cell.is-anchor {
-  border-right-width: 4px;
+  border-right: none;
 }
 html.is-team-landscape #team-page .team-add-slot {
   font-size: 9.5px;
@@ -20617,7 +20717,7 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 0;
   min-width: 2.4em;
   vertical-align: middle;
 }
@@ -21062,7 +21162,7 @@ html[data-page="home"] #subtoolbar {
 .home-standings-table tbody tr[data-entry] > td {
   border-bottom: none;
 }
-@media (hover: hover) and (pointer: fine) {
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
   #home-page:not(.is-scroll-interaction) .home-squad-table tbody tr.home-squad-row:hover > td,
   #home-page:not(.is-scroll-interaction) .home-standings-table tbody tr[data-entry]:hover > td {
     --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
@@ -21177,7 +21277,7 @@ html[data-page="home"] #subtoolbar {
   --home-row-bg: hsl(var(--card));
   background: var(--home-row-bg);
 }
-@media (hover: hover) and (pointer: fine) {
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
   #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned:hover > td,
   html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-squad-row.is-owner-pinned.is-home-cross-hover > td {
     --home-row-bg: hsl(var(--blue-hsl) / 0.16);
@@ -24184,4 +24284,77 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   .difficulty-edit-actions {
     flex-wrap: wrap;
   }
+}
+
+/* ---------- Mobile scroll-more hints (replace scrollbars) ---------- */
+.scroll-more-layer {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  box-sizing: border-box;
+  inset: auto;
+}
+.scroll-more-layer[hidden] {
+  display: none !important;
+}
+.scroll-more-hint {
+  position: absolute;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: 999px;
+  background: hsl(var(--card) / 0.72);
+  border: 1px solid hsl(var(--border-hsl) / 0.55);
+  color: hsl(var(--muted-foreground) / 0.72);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.22s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px hsl(240 6% 10% / 0.06);
+}
+.scroll-more-hint .icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+.scroll-more-hint.is-above {
+  top: 6px;
+}
+.scroll-more-hint.is-below {
+  bottom: 6px;
+}
+.scroll-more-layer.is-more-above .scroll-more-hint.is-above,
+.scroll-more-layer.is-more-below .scroll-more-hint.is-below {
+  opacity: 0.7;
+  animation: scroll-more-pulse 1.85s ease-in-out infinite;
+}
+.scroll-more-layer.is-more-above .scroll-more-hint.is-above {
+  animation-name: scroll-more-pulse-up;
+}
+.scroll-more-layer.is-more-below .scroll-more-hint.is-below {
+  animation-name: scroll-more-pulse-down;
+}
+@keyframes scroll-more-pulse-up {
+  0%, 100% { opacity: 0.28; transform: translateX(-50%) translateY(0); }
+  50% { opacity: 0.78; transform: translateX(-50%) translateY(-3px); }
+}
+@keyframes scroll-more-pulse-down {
+  0%, 100% { opacity: 0.28; transform: translateX(-50%) translateY(0); }
+  50% { opacity: 0.78; transform: translateX(-50%) translateY(3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-more-layer.is-more-above .scroll-more-hint.is-above,
+  .scroll-more-layer.is-more-below .scroll-more-hint.is-below {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+/* Desktop / wide: never show the mobile scroll chrome. */
+html:not(.is-mobile-layout) .scroll-more-layer {
+  display: none !important;
 }
