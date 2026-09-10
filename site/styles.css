@@ -9278,6 +9278,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   height: 9px;
   margin-top: 3px;
 }
+.spit-symbol .home-mp-line.spit-home-swatch {
+  font-size: 11px;
+  margin-top: 0;
+}
 .spit-symbol .home-pts.is-hot.spit-home-swatch {
   min-width: 1.6em;
   font-size: 11px;
@@ -20119,7 +20123,41 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   justify-content: center;
   gap: 2px;
   white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.home-mp-line.is-short-mins,
+.home-mp-line.is-modest-mins {
+  min-width: 1.65em;
+  min-height: 1.65em;
+  padding: 4px 5px;
+  border-radius: var(--home-chip-radius, 6px);
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: center;
+}
+.home-mp-line.is-short-mins {
+  border-color: hsl(14 86% 52%);
+}
+.home-mp-line.is-modest-mins {
+  border-color: hsl(44 82% 46%);
+}
+html[data-theme="dark"] .home-mp-line.is-short-mins {
+  border-color: hsl(14 80% 58%);
+}
+html[data-theme="dark"] .home-mp-line.is-modest-mins {
+  border-color: hsl(46 90% 56%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-mp-line.is-short-mins {
+    border-color: hsl(14 80% 58%);
+  }
+  html:not([data-theme="light"]) .home-mp-line.is-modest-mins {
+    border-color: hsl(46 90% 56%);
+  }
 }
 .home-dnp-icon {
   width: 15px;
@@ -20160,26 +20198,6 @@ html[data-theme="dark"] .home-dnp-icon {
 }
 .home-status-dot.is-done {
   background: hsl(var(--muted-foreground) / 0.45);
-}
-.home-status-dot.is-short-mins {
-  background: hsl(14 86% 52%);
-}
-.home-status-dot.is-modest-mins {
-  background: hsl(44 92% 50%);
-}
-html[data-theme="dark"] .home-status-dot.is-short-mins {
-  background: hsl(14 80% 58%);
-}
-html[data-theme="dark"] .home-status-dot.is-modest-mins {
-  background: hsl(46 90% 56%);
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .home-status-dot.is-short-mins {
-    background: hsl(14 80% 58%);
-  }
-  html:not([data-theme="light"]) .home-status-dot.is-modest-mins {
-    background: hsl(46 90% 56%);
-  }
 }
 .home-play-live,
 .home-play-left {

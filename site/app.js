@@ -4319,14 +4319,16 @@
     return keys.join("|");
   }
 
-  function homeMpStatusDotHTML(row, fx, inPlay) {
+  function homeMpWarnClass(row, fx) {
     const warn = homeMinutesWarningBand(row, fx);
-    if (warn === "short") {
-      return `<span class="home-status-dot is-short-mins" title="Under 60′" aria-label="Under 60 minutes"></span>`;
-    }
-    if (warn === "modest") {
-      return `<span class="home-status-dot is-modest-mins" title="60–75′" aria-label="60 to 75 minutes"></span>`;
-    }
+    if (warn === "short") return "is-short-mins";
+    if (warn === "modest") return "is-modest-mins";
+    return "";
+  }
+
+  function homeMpStatusDotHTML(row, fx, inPlay) {
+    // Short / modest minutes use a border pill on .home-mp-line (not a color dot).
+    if (homeMinutesWarningBand(row, fx)) return "";
     if (inPlay) {
       return `<span class="home-status-dot is-live" aria-label="Live"></span>`;
     }
@@ -7601,8 +7603,9 @@
         if (f.finished && !inPlay && minsN != null && minsN <= 0) {
           return `<span class="home-mp-line home-mp-dnp" title="Did not play">${iconHTML("circle-x", "home-dnp-icon")}<span class="sr-only">Did not play</span></span>`;
         }
-        // Green while live; grey while provisional FT; orange/yellow once
+        // Green while live; grey while provisional FT; border pill once
         // minutes are short and the player is done (FT, or live sub).
+        const warnCls = homeMpWarnClass(row, f);
         const statusDot = homeMpStatusDotHTML(row, f, inPlay);
         const minsHTML =
           minsN != null
@@ -7613,7 +7616,14 @@
                 className: "home-stat-roll home-mp-roll",
               })
             : `${escapeHtml(String(mins ?? "—"))}′`;
-        return `<span class="home-mp-line">${minsHTML}${statusDot}</span>`;
+        const warnTitle =
+          warnCls === "is-short-mins"
+            ? ` title="Under 60′" aria-label="Under 60 minutes"`
+            : warnCls === "is-modest-mins"
+              ? ` title="60–75′" aria-label="60 to 75 minutes"`
+              : "";
+        const warnAttr = warnCls ? ` class="home-mp-line ${warnCls}"${warnTitle}` : ` class="home-mp-line"`;
+        return `<span${warnAttr}>${minsHTML}${statusDot}</span>`;
       }
       return homeKickoffHTML(f.kickoff || row.kickoff);
     }).join("");
@@ -16589,11 +16599,11 @@
           "Did not play — 0′ after provisional or final FT"
         ),
         spitRow(
-          `<span class="home-status-dot is-short-mins spit-home-swatch" aria-hidden="true"></span>`,
+          `<span class="home-mp-line is-short-mins spit-home-swatch" aria-hidden="true">45′</span>`,
           "Under 60′ — after FT, or live once minutes freeze while the match continues"
         ),
         spitRow(
-          `<span class="home-status-dot is-modest-mins spit-home-swatch" aria-hidden="true"></span>`,
+          `<span class="home-mp-line is-modest-mins spit-home-swatch" aria-hidden="true">68′</span>`,
           "60–75′ — played, but short of a full match"
         ),
         spitRow(
