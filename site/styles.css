@@ -470,29 +470,39 @@ html[data-page="opta"] {
 }
 
 .page-nav-center {
-  display: inline-flex;
+  display: none;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   flex: none;
-  margin-left: auto;
+  min-width: 0;
   position: relative;
   z-index: 5;
+}
+
+.page-nav-brand-divider {
+  display: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 8px;
+  flex: none;
+  background: hsl(var(--border-hsl));
+  border-radius: 1px;
 }
 
 .page-tray-btn {
   display: none;
   appearance: none;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: none;
   min-width: 0;
-  max-width: min(46vw, 200px);
+  max-width: min(42vw, 160px);
   height: 32px;
-  padding: 0 8px 0 10px;
-  border: 1px solid var(--border);
+  padding: 0 2px 0 0;
+  border: none;
   border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--card));
-  color: var(--text);
+  background: transparent;
+  color: var(--text-dim);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -500,7 +510,7 @@ html[data-page="opta"] {
   white-space: nowrap;
 }
 .page-tray-btn .icon {
-  font-size: 15px;
+  font-size: 14px;
   flex: none;
 }
 .page-tray-current {
@@ -510,9 +520,10 @@ html[data-page="opta"] {
   min-width: 0;
 }
 .page-tray-btn .page-tab-caret {
-  margin-left: auto;
+  margin-left: 0;
   font-size: 13px;
-  opacity: 0.7;
+  opacity: 0.75;
+  color: inherit;
 }
 .page-nav.is-page-tray-open .page-tray-btn .page-tab-caret,
 .page-tray-btn[aria-expanded="true"] .page-tab-caret {
@@ -2196,17 +2207,24 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     overflow: visible;
   }
   .brand-group {
-    display: contents;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 132px);
   }
   .brand {
-    order: 1;
     flex: none;
     position: relative;
     z-index: 5;
   }
   .brand h1 {
     font-size: 15px;
+    font-weight: 650;
     gap: 6px;
+    color: var(--text);
   }
   .page-nav-actions {
     order: 4;
@@ -2214,8 +2232,6 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     margin-left: auto;
     padding-left: 0;
     box-shadow: none;
-    /* Above .page-nav-center (z-index 5). The absolute title band is full-bleed
-       and can cover Search on real devices after label centering. */
     position: relative;
     z-index: 8;
   }
@@ -2223,58 +2239,48 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: inline-flex;
     align-items: center;
     gap: 0;
-    order: 2;
-    position: absolute;
-    /* Keep title clear of brand + theme/search/info/settings cluster. */
-    left: max(52px, calc(44px + env(safe-area-inset-left, 0px)));
-    right: max(148px, calc(136px + env(safe-area-inset-right, 0px)));
-    justify-content: center;
-    /* Nudge so #page-tray-btn (icon + name) mid hits the screen mid (JS). */
-    transform: translateX(var(--page-nav-label-offset, 0px));
-    z-index: 5;
-    max-width: none;
-    pointer-events: none;
-  }
-  .page-nav-center > * {
+    position: static;
+    left: auto;
+    right: auto;
+    transform: none;
+    justify-content: flex-start;
+    max-width: 100%;
+    min-width: 0;
     pointer-events: auto;
+  }
+  .page-nav-brand-divider {
+    display: block;
   }
   .page-tray-btn {
     display: inline-flex;
     position: static;
     left: auto;
     transform: none;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     height: 32px;
-    max-width: min(52vw, 220px);
-    padding: 0;
+    max-width: 100%;
+    padding: 0 2px 0 0;
     border: none;
-    border-radius: 0;
+    border-radius: calc(var(--radius) - 2px);
     background: transparent;
     box-shadow: none;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    color: hsl(var(--blue-hsl) / 0.9);
-    gap: 6px;
+    letter-spacing: -0.01em;
+    color: var(--text-dim);
+    gap: 2px;
   }
   .page-tray-btn::before {
     content: none;
     display: none;
   }
-  .page-tray-btn > .icon:not(.page-tab-caret) {
-    display: block;
-    width: 15px;
-    height: 15px;
-    font-size: 15px;
-    color: inherit;
-    flex: none;
-  }
   .page-tray-btn .page-tray-current {
-    gap: 2px;
+    gap: 1px;
   }
   .page-tray-btn .page-tab-caret {
     margin-left: 0;
-    opacity: 1;
+    opacity: 0.8;
     color: inherit;
   }
   .page-tray-btn:hover,
@@ -5246,7 +5252,7 @@ html[data-page="prices"] .layout .main {
 }
 .prices-countdown-bar {
   flex: none;
-  margin: 2px 0 14px;
+  margin: 0 0 14px;
   padding: 0;
   border: none;
   border-radius: 0;
@@ -5276,7 +5282,7 @@ html[data-page="prices"] .layout .main {
   color: var(--text);
 }
 .prices-mover-bar {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .prices-mover-pager {
   display: flex;
@@ -6387,7 +6393,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   html[data-page="prices"] #prices-countdown-bar {
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
-    margin-top: 4px;
+    margin-top: 0;
     margin-bottom: 12px;
   }
   .prices-mover-bar {
@@ -6396,7 +6402,8 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     justify-content: flex-start;
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 6px;
+    margin-top: 4px;
+    margin-bottom: 8px;
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
   }
@@ -13831,6 +13838,51 @@ html[data-page="team"] .layout .main {
   color: var(--text-faint);
   font-weight: 500;
 }
+/* Light mode: invert Pts column (dark fill, light type). */
+html[data-theme="light"] #team-page thead th.col-team-pts,
+html[data-theme="light"] #team-page tbody td.col-team-pts,
+html[data-theme="light"] #team-picker-view thead th.col-team-pts,
+html[data-theme="light"] #team-picker-view tbody td.col-team-pts {
+  background: hsl(240 10% 16%);
+  color: hsl(0 0% 96%);
+  font-weight: 650;
+  border-color: hsl(240 8% 22%);
+}
+html[data-theme="light"] #team-page tbody td.col-team-pts.is-blank,
+html[data-theme="light"] #team-picker-view tbody td.col-team-pts.is-blank {
+  color: hsl(0 0% 100% / 0.42);
+  font-weight: 500;
+  background: hsl(240 9% 20%);
+}
+html[data-theme="light"] #team-page tbody td.col-team-pts.is-enhanced,
+html[data-theme="light"] #team-picker-view tbody td.col-team-pts.is-enhanced,
+html[data-theme="light"] #team-page tbody td.col-team-pts.highlight-strong,
+html[data-theme="light"] #team-picker-view tbody td.col-team-pts.highlight-strong {
+  color: #fff;
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) #team-page thead th.col-team-pts,
+  html:not([data-theme="dark"]) #team-page tbody td.col-team-pts,
+  html:not([data-theme="dark"]) #team-picker-view thead th.col-team-pts,
+  html:not([data-theme="dark"]) #team-picker-view tbody td.col-team-pts {
+    background: hsl(240 10% 16%);
+    color: hsl(0 0% 96%);
+    font-weight: 650;
+    border-color: hsl(240 8% 22%);
+  }
+  html:not([data-theme="dark"]) #team-page tbody td.col-team-pts.is-blank,
+  html:not([data-theme="dark"]) #team-picker-view tbody td.col-team-pts.is-blank {
+    color: hsl(0 0% 100% / 0.42);
+    font-weight: 500;
+    background: hsl(240 9% 20%);
+  }
+  html:not([data-theme="dark"]) #team-page tbody td.col-team-pts.is-enhanced,
+  html:not([data-theme="dark"]) #team-picker-view tbody td.col-team-pts.is-enhanced,
+  html:not([data-theme="dark"]) #team-page tbody td.col-team-pts.highlight-strong,
+  html:not([data-theme="dark"]) #team-picker-view tbody td.col-team-pts.highlight-strong {
+    color: #fff;
+  }
+}
 #team-page thead th.col-team-setpiece,
 #team-page tbody td.col-team-setpiece,
 #team-picker-view thead th.col-team-setpiece,
@@ -15091,6 +15143,81 @@ html[data-theme="dark"] .home-player-flag-banner.is-chance-75 {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+.home-player-flag-banner-outlook {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+.home-player-flag-banner-outlook.is-chance-0 {
+  color: hsl(0 72% 42%);
+  background: hsl(0 72% 42% / 0.1);
+  border-color: hsl(0 72% 42% / 0.35);
+}
+.home-player-flag-banner-outlook.is-chance-25 {
+  color: hsl(24 90% 42%);
+  background: hsl(24 90% 42% / 0.1);
+  border-color: hsl(24 90% 42% / 0.35);
+}
+.home-player-flag-banner-outlook.is-chance-50 {
+  color: hsl(38 92% 36%);
+  background: hsl(38 92% 40% / 0.12);
+  border-color: hsl(38 92% 40% / 0.4);
+}
+.home-player-flag-banner-outlook.is-chance-75 {
+  color: hsl(48 90% 32%);
+  background: hsl(48 95% 38% / 0.14);
+  border-color: hsl(48 95% 38% / 0.42);
+}
+html[data-theme="dark"] .home-player-flag-banner-outlook.is-chance-0 {
+  color: hsl(0 78% 68%);
+  background: hsl(0 78% 62% / 0.16);
+  border-color: hsl(0 78% 62% / 0.4);
+}
+html[data-theme="dark"] .home-player-flag-banner-outlook.is-chance-25 {
+  color: hsl(24 90% 64%);
+  background: hsl(24 90% 58% / 0.16);
+  border-color: hsl(24 90% 58% / 0.4);
+}
+html[data-theme="dark"] .home-player-flag-banner-outlook.is-chance-50 {
+  color: hsl(38 92% 62%);
+  background: hsl(38 92% 55% / 0.16);
+  border-color: hsl(38 92% 55% / 0.4);
+}
+html[data-theme="dark"] .home-player-flag-banner-outlook.is-chance-75 {
+  color: hsl(48 92% 60%);
+  background: hsl(48 92% 52% / 0.16);
+  border-color: hsl(48 92% 52% / 0.42);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-player-flag-banner-outlook.is-chance-0 {
+    color: hsl(0 78% 68%);
+    background: hsl(0 78% 62% / 0.16);
+    border-color: hsl(0 78% 62% / 0.4);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner-outlook.is-chance-25 {
+    color: hsl(24 90% 64%);
+    background: hsl(24 90% 58% / 0.16);
+    border-color: hsl(24 90% 58% / 0.4);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner-outlook.is-chance-50 {
+    color: hsl(38 92% 62%);
+    background: hsl(38 92% 55% / 0.16);
+    border-color: hsl(38 92% 55% / 0.4);
+  }
+  html:not([data-theme="light"]) .home-player-flag-banner-outlook.is-chance-75 {
+    color: hsl(48 92% 60%);
+    background: hsl(48 92% 52% / 0.16);
+    border-color: hsl(48 92% 52% / 0.42);
+  }
+}
+/* Legacy class kept for any cached markup; mirror outlook colors. */
 .home-player-flag-banner-chance {
   font-size: 12px;
   font-weight: 700;
@@ -15216,8 +15343,8 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 }
 .home-player-detail-matchup .ftt-head-hint,
 .home-player-matchup .home-lookup-schedule-card .ftt-head-hint {
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.01em;
   text-transform: none;
   color: var(--text-faint);
@@ -16231,12 +16358,12 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   --home-hero-pad-x: var(--main-pad-x, 20px);
   --home-hero-radius: 0px;
   /* iOS-like liquid glass — blue-tinted frosted surfaces over hero / page. */
-  --home-glass-bg: hsl(210 55% 98% / 0.48);
-  --home-glass-bg-strong: hsl(210 50% 98% / 0.62);
-  --home-glass-border: hsl(210 45% 100% / 0.58);
+  --home-glass-bg: hsl(210 40% 99% / 0.4);
+  --home-glass-bg-strong: hsl(210 38% 99% / 0.55);
+  --home-glass-border: hsl(210 45% 100% / 0.62);
   --home-glass-blur: 32px;
-  --home-glass-saturate: 1.9;
-  --home-glass-shadow: 0 8px 28px hsl(215 35% 20% / 0.08);
+  --home-glass-saturate: 1.95;
+  --home-glass-shadow: 0 8px 28px hsl(215 35% 20% / 0.1);
 }
 html[data-theme="dark"] .home-dashboard {
   --home-glass-bg: hsl(215 28% 14% / 0.4);
@@ -16250,6 +16377,90 @@ html[data-theme="dark"] .home-dashboard {
     --home-glass-bg-strong: hsl(215 26% 16% / 0.55);
     --home-glass-border: hsl(210 40% 100% / 0.14);
     --home-glass-shadow: 0 10px 32px hsl(0 0% 0% / 0.28);
+  }
+}
+
+/* --- Home surface finishes (Settings → Appearance → Home surface) ---
+   Glass = liquid frost. Solid = opaque cards, no blur.
+   Semantic Δ / Live / rank-border greens·reds·blues stay unchanged. */
+html[data-home-surface="solid"] .home-dashboard {
+  --home-glass-bg: hsl(var(--card));
+  --home-glass-bg-strong: hsl(var(--card));
+  --home-glass-border: hsl(var(--border-hsl));
+  --home-glass-blur: 0px;
+  --home-glass-saturate: 1;
+  --home-glass-shadow: var(--shadow-sm);
+  --home-panel-border-w: 1px;
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-dashboard {
+  --home-glass-border: hsl(var(--border-hsl) / 0.95);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-dashboard {
+    --home-glass-border: hsl(var(--border-hsl) / 0.95);
+  }
+}
+/* Hero chrome: no frosted blur on Solid — keep theme chip/Δ colors. */
+html[data-home-surface="solid"] .home-summary-hero-chip,
+html[data-home-surface="solid"] .home-summary-hero-live,
+html[data-home-surface="solid"] .home-summary-hero-delta {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-home-surface="solid"] .home-summary-hero-chip {
+  background: hsl(0 0% 100%);
+  border-color: hsl(0 0% 100% / 0.9);
+  color: hsl(240 10% 18%);
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-chip {
+  border-color: hsl(0 0% 100% / 0.9);
+  background: hsl(0 0% 100%);
+  color: hsl(240 10% 16%);
+}
+html[data-home-surface="solid"] .home-summary-hero-live {
+  border-color: hsl(var(--delta-rise) / 0.45);
+  background: hsl(var(--delta-rise) / 0.14);
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-live {
+  border-color: hsl(var(--delta-rise) / 0.55);
+  background: hsl(var(--delta-rise) / 0.28);
+}
+html[data-home-surface="solid"] .home-summary-hero-delta {
+  background: hsl(0 0% 100% / 0.88);
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-delta {
+  border-color: hsl(0 0% 100% / 0.18);
+  background: hsl(0 0% 0% / 0.32);
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summary-hero-delta.is-up {
+  border-color: hsl(var(--home-hero-delta-up) / 0.5);
+  background: hsl(var(--home-hero-delta-up) / 0.18);
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summary-hero-delta.is-down {
+  border-color: hsl(var(--home-hero-delta-down) / 0.5);
+  background: hsl(var(--home-hero-delta-down) / 0.18);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-chip {
+    border-color: hsl(0 0% 100% / 0.9);
+    background: hsl(0 0% 100%);
+    color: hsl(240 10% 16%);
+  }
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-live {
+    border-color: hsl(var(--delta-rise) / 0.55);
+    background: hsl(var(--delta-rise) / 0.28);
+  }
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-delta {
+    border-color: hsl(0 0% 100% / 0.18);
+    background: hsl(0 0% 0% / 0.32);
+  }
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero .home-summary-hero-delta.is-up {
+    border-color: hsl(var(--home-hero-delta-up) / 0.5);
+    background: hsl(var(--home-hero-delta-up) / 0.18);
+  }
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero .home-summary-hero-delta.is-down {
+    border-color: hsl(var(--home-hero-delta-down) / 0.5);
+    background: hsl(var(--home-hero-delta-down) / 0.18);
   }
 }
 /* Player lookup keeps the hero in-card (profile stack sits above). */
@@ -16372,17 +16583,16 @@ html[data-theme="dark"] .home-dashboard {
   display: block;
 }
 .home-summary-hero {
-  /* Transparent until is-rank-ready — avoids zinc FOUC before red/green stamp. */
-  --home-hero-bg: 240 6% 28%;
-  --home-hero-bg-deep: 240 8% 18%;
-  --home-hero-fg: 0 0% 100%;
-  --home-hero-muted: 240 8% 78%;
-  --home-hero-delta-up: 142 55% 72%;
-  --home-hero-delta-down: 0 78% 78%;
-  /* White (light) / black (dark) — sat=0 before green/red blooms. */
-  --home-hero-neutral: 0 0% 100%;
-  --home-hero-neutral-deep: 0 0% 96%;
-  --home-hero-neutral-muted: 240 5% 38%;
+  /* Light: soft cool wash — keep top blue restrained so frost stays subtle. */
+  --home-hero-bg: 212 22% 94%;
+  --home-hero-bg-deep: 214 18% 90%;
+  --home-hero-fg: 240 10% 10%;
+  --home-hero-muted: 220 8% 38%;
+  --home-hero-delta-up: 142 48% 32%;
+  --home-hero-delta-down: 0 65% 42%;
+  --home-hero-neutral: 212 22% 94%;
+  --home-hero-neutral-deep: 214 18% 90%;
+  --home-hero-neutral-muted: 220 8% 38%;
   --home-hero-fg-neutral: 240 10% 10%;
   position: relative;
   z-index: 0;
@@ -16411,6 +16621,15 @@ html[data-page="home"] .home-dashboard.is-player-lookup .home-summary-hero {
     hsl(var(--home-hero-fg-neutral))
   );
   background:
+    radial-gradient(
+      ellipse 120% 85% at 50% -10%,
+      color-mix(
+        in srgb,
+        hsl(210 42% 62% / 0.12) calc(var(--home-rank-sat, 1) * 100%),
+        transparent
+      ),
+      transparent 62%
+    ),
     linear-gradient(
       180deg,
       color-mix(
@@ -16422,121 +16641,151 @@ html[data-page="home"] .home-dashboard.is-player-lookup .home-summary-hero {
         in srgb,
         hsl(var(--home-hero-bg)) calc(var(--home-rank-sat, 1) * 100%),
         hsl(var(--home-hero-neutral))
-      ) 72%
+      ) 100%
     );
 }
-.home-summary-hero.is-rank-flat {
-  /* Neutral zinc when overall Δ is flat / unknown. */
-  --home-hero-bg: 240 6% 28%;
-  --home-hero-bg-deep: 240 8% 18%;
-  --home-hero-muted: 240 8% 78%;
+/* Soft Δ bloom under the rank (sits behind frosted GW cards). */
+.home-summary-hero.is-rank-up::after,
+.home-summary-hero.is-rank-down::after {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -8%;
+  height: 58%;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(28px);
+  opacity: calc(0.55 * var(--home-rank-sat, 1));
 }
-.home-summary-hero.is-rank-up {
-  /* Classic green — rank rise. */
-  --home-hero-bg: 142 42% 32%;
-  --home-hero-bg-deep: 142 48% 22%;
-  --home-hero-muted: 142 28% 82%;
-  --home-hero-delta-up: 142 60% 78%;
+.home-summary-hero.is-rank-up::after {
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 70%,
+    hsl(var(--home-hero-delta-up) / 0.42),
+    transparent 72%
+  );
 }
-.home-summary-hero.is-rank-down {
-  /* Classic red — rank fall. */
-  --home-hero-bg: 0 48% 36%;
-  --home-hero-bg-deep: 0 52% 24%;
-  --home-hero-muted: 0 28% 86%;
-  --home-hero-delta-down: 0 78% 84%;
+.home-summary-hero.is-rank-down::after {
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 70%,
+    hsl(var(--home-hero-delta-down) / 0.38),
+    transparent 72%
+  );
 }
-/* Dark: quiet charcoal wash + bright green/red delta. */
-html[data-theme="dark"] .home-summary-hero.is-rank-flat,
-html[data-theme="dark"] .home-summary-hero:not(.is-rank-up):not(.is-rank-down) {
-  --home-hero-bg: 240 5% 15%;
-  --home-hero-bg-deep: 240 6% 9%;
-  --home-hero-muted: 240 5% 66%;
-  --home-hero-neutral: 0 0% 0%;
-  --home-hero-neutral-deep: 0 0% 0%;
-  --home-hero-neutral-muted: 240 5% 66%;
+.home-summary-hero > * {
+  position: relative;
+  z-index: 1;
+}
+/* Dark: blue-tinted charcoal so frost / glass can shine. */
+html[data-theme="dark"] .home-summary-hero {
+  --home-hero-bg: 214 22% 15%;
+  --home-hero-bg-deep: 218 26% 9%;
+  --home-hero-fg: 0 0% 100%;
+  --home-hero-muted: 210 14% 68%;
+  --home-hero-neutral: 214 22% 15%;
+  --home-hero-neutral-deep: 218 26% 9%;
+  --home-hero-neutral-muted: 210 14% 68%;
   --home-hero-fg-neutral: 0 0% 100%;
   --home-hero-delta-up: 142 55% 62%;
   --home-hero-delta-down: 0 72% 68%;
 }
-html[data-theme="dark"] .home-summary-hero.is-rank-up {
-  --home-hero-bg: 142 22% 14%;
-  --home-hero-bg-deep: 142 28% 9%;
-  --home-hero-muted: 142 18% 70%;
-  --home-hero-delta-up: 142 58% 64%;
-  --home-hero-neutral: 0 0% 0%;
-  --home-hero-neutral-deep: 0 0% 0%;
-  --home-hero-neutral-muted: 240 5% 66%;
-  --home-hero-fg-neutral: 0 0% 100%;
-}
-html[data-theme="dark"] .home-summary-hero.is-rank-down {
-  --home-hero-bg: 0 22% 15%;
-  --home-hero-bg-deep: 0 28% 9%;
-  --home-hero-muted: 0 18% 72%;
-  --home-hero-delta-down: 0 72% 70%;
-  --home-hero-neutral: 0 0% 0%;
-  --home-hero-neutral-deep: 0 0% 0%;
-  --home-hero-neutral-muted: 240 5% 66%;
-  --home-hero-fg-neutral: 0 0% 100%;
-}
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .home-summary-hero.is-rank-flat,
-  html:not([data-theme="light"]) .home-summary-hero:not(.is-rank-up):not(.is-rank-down) {
-    --home-hero-bg: 240 5% 15%;
-    --home-hero-bg-deep: 240 6% 9%;
-    --home-hero-muted: 240 5% 66%;
-    --home-hero-neutral: 0 0% 0%;
-    --home-hero-neutral-deep: 0 0% 0%;
-    --home-hero-neutral-muted: 240 5% 66%;
+  html:not([data-theme="light"]) .home-summary-hero {
+    --home-hero-bg: 214 22% 15%;
+    --home-hero-bg-deep: 218 26% 9%;
+    --home-hero-fg: 0 0% 100%;
+    --home-hero-muted: 210 14% 68%;
+    --home-hero-neutral: 214 22% 15%;
+    --home-hero-neutral-deep: 218 26% 9%;
+    --home-hero-neutral-muted: 210 14% 68%;
     --home-hero-fg-neutral: 0 0% 100%;
     --home-hero-delta-up: 142 55% 62%;
     --home-hero-delta-down: 0 72% 68%;
   }
-  html:not([data-theme="light"]) .home-summary-hero.is-rank-up {
-    --home-hero-bg: 142 22% 14%;
-    --home-hero-bg-deep: 142 28% 9%;
-    --home-hero-muted: 142 18% 70%;
-    --home-hero-delta-up: 142 58% 64%;
-    --home-hero-neutral: 0 0% 0%;
-    --home-hero-neutral-deep: 0 0% 0%;
-    --home-hero-neutral-muted: 240 5% 66%;
-    --home-hero-fg-neutral: 0 0% 100%;
-  }
-  html:not([data-theme="light"]) .home-summary-hero.is-rank-down {
-    --home-hero-bg: 0 22% 15%;
-    --home-hero-bg-deep: 0 28% 9%;
-    --home-hero-muted: 0 18% 72%;
-    --home-hero-delta-down: 0 72% 70%;
-    --home-hero-neutral: 0 0% 0%;
-    --home-hero-neutral-deep: 0 0% 0%;
-    --home-hero-neutral-muted: 240 5% 66%;
-    --home-hero-fg-neutral: 0 0% 100%;
+}
+html[data-theme="dark"] .home-summary-hero.is-rank-ready {
+  background:
+    radial-gradient(
+      ellipse 120% 85% at 50% -10%,
+      color-mix(
+        in srgb,
+        hsl(210 62% 48% / 0.18) calc(var(--home-rank-sat, 1) * 100%),
+        transparent
+      ),
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(
+        in srgb,
+        hsl(var(--home-hero-bg-deep)) calc(var(--home-rank-sat, 1) * 100%),
+        hsl(var(--home-hero-neutral-deep))
+      ) 0%,
+      color-mix(
+        in srgb,
+        hsl(var(--home-hero-bg)) calc(var(--home-rank-sat, 1) * 100%),
+        hsl(var(--home-hero-neutral))
+      ) 100%
+    );
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero.is-rank-ready {
+    background:
+      radial-gradient(
+        ellipse 120% 85% at 50% -10%,
+        color-mix(
+          in srgb,
+          hsl(210 62% 48% / 0.18) calc(var(--home-rank-sat, 1) * 100%),
+          transparent
+        ),
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(
+          in srgb,
+          hsl(var(--home-hero-bg-deep)) calc(var(--home-rank-sat, 1) * 100%),
+          hsl(var(--home-hero-neutral-deep))
+        ) 0%,
+        color-mix(
+          in srgb,
+          hsl(var(--home-hero-bg)) calc(var(--home-rank-sat, 1) * 100%),
+          hsl(var(--home-hero-neutral))
+        ) 100%
+      );
   }
 }
 .home-summary-hero-head {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   width: 100%;
   margin: 0 0 10px;
   min-height: 24px;
 }
 .home-summary-hero-chip {
-  justify-self: start;
+  /* White fill chip — vertically centered with Overall Rank label. */
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  max-width: 100%;
-  padding: 4px 9px;
+  max-width: calc(50% - 4.5em);
+  padding: 2px 6px;
   border-radius: 999px;
-  border: 1px solid hsl(0 0% 100% / 0.32);
-  background: hsl(0 0% 100% / 0.12);
-  color: hsl(0 0% 100% / 0.92);
-  font-size: 10px;
+  border: 1px solid hsl(0 0% 100% / 0.85);
+  background: hsl(0 0% 100%);
+  color: hsl(240 10% 18%);
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -16548,12 +16797,11 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 }
 .home-summary-hero-label {
   margin: 0;
-  grid-column: 2;
-  justify-self: center;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  line-height: 1.2;
   color: color-mix(
     in srgb,
     hsl(var(--home-hero-muted)) calc(var(--home-rank-sat, 1) * 100%),
@@ -16561,16 +16809,20 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   );
 }
 .home-summary-hero-live {
-  justify-self: end;
+  /* Live = only green status accent in the hero chrome. */
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 9px 4px 8px;
   border-radius: 999px;
-  border: 1px solid hsl(0 0% 100% / 0.32);
-  background: hsl(0 0% 100% / 0.12);
-  color: hsl(0 0% 100% / 0.92);
+  border: 1px solid hsl(var(--delta-rise) / 0.4);
+  background: hsl(var(--delta-rise) / 0.12);
+  color: hsl(var(--home-hero-delta-up));
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -16588,14 +16840,14 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   height: 6px;
   border-radius: 50%;
   flex: none;
-  background: hsl(0 0% 100%);
-  box-shadow: 0 0 0 0 hsl(0 0% 100% / 0.5);
+  background: hsl(var(--home-hero-delta-up));
+  box-shadow: 0 0 0 0 hsl(var(--home-hero-delta-up) / 0.45);
   animation: home-hero-live-pulse 1.7s ease-out infinite;
 }
 @keyframes home-hero-live-pulse {
-  0% { box-shadow: 0 0 0 0 hsl(0 0% 100% / 0.5); }
-  70% { box-shadow: 0 0 0 7px hsl(0 0% 100% / 0); }
-  100% { box-shadow: 0 0 0 0 hsl(0 0% 100% / 0); }
+  0% { box-shadow: 0 0 0 0 hsl(var(--home-hero-delta-up) / 0.45); }
+  70% { box-shadow: 0 0 0 7px hsl(var(--home-hero-delta-up) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--home-hero-delta-up) / 0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-summary-hero-live-dot {
@@ -16634,21 +16886,13 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   gap: 4px;
   padding: 5px 11px 5px 8px;
   border-radius: 999px;
-  /* Mix from dark glass (sat=0 on white) → white frosted pill on green/red. */
-  border: 1px solid color-mix(
-    in srgb,
-    hsl(0 0% 100% / 0.42) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(0 0% 0% / 0.14)
-  );
-  background: color-mix(
-    in srgb,
-    hsl(0 0% 100% / 0.22) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(0 0% 0% / 0.06)
-  );
+  /* Light: quiet white pill on pale wash. */
+  border: 1px solid hsl(var(--border-hsl));
+  background: hsl(0 0% 100% / 0.72);
   color: color-mix(
     in srgb,
-    hsl(0 0% 100% / 0.95) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(var(--home-hero-fg-neutral))
+    hsl(var(--home-hero-muted)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--home-hero-neutral-muted))
   );
   font-size: 14px;
   font-weight: 650;
@@ -16659,11 +16903,46 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
 .home-summary-hero-delta:not([hidden]) {
   display: inline-flex;
 }
-/* Beat .home-rank-delta.is-up/down — inherit sat-mixed color from the pill. */
-.home-summary-hero .home-summary-hero-delta.is-up,
-.home-summary-hero .home-summary-hero-delta.is-down,
+.home-summary-hero .home-summary-hero-delta.is-up {
+  color: color-mix(
+    in srgb,
+    hsl(var(--home-hero-delta-up)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--home-hero-neutral-muted))
+  );
+  border-color: color-mix(
+    in srgb,
+    hsl(var(--home-hero-delta-up) / 0.35) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--border-hsl))
+  );
+  background: color-mix(
+    in srgb,
+    hsl(var(--home-hero-delta-up) / 0.1) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(0 0% 100% / 0.72)
+  );
+}
+.home-summary-hero .home-summary-hero-delta.is-down {
+  color: color-mix(
+    in srgb,
+    hsl(var(--home-hero-delta-down)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--home-hero-neutral-muted))
+  );
+  border-color: color-mix(
+    in srgb,
+    hsl(var(--home-hero-delta-down) / 0.35) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--border-hsl))
+  );
+  background: color-mix(
+    in srgb,
+    hsl(var(--home-hero-delta-down) / 0.1) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(0 0% 100% / 0.72)
+  );
+}
 .home-summary-hero .home-summary-hero-delta.is-flat {
-  color: inherit;
+  color: color-mix(
+    in srgb,
+    hsl(var(--home-hero-muted)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--home-hero-neutral-muted))
+  );
 }
 .home-summary-hero-delta .icon {
   width: 14px;
@@ -16678,91 +16957,81 @@ html[data-theme="dark"] .home-summary-hero.is-rank-down {
   letter-spacing: -0.01em;
   color: inherit;
 }
-/* Dark: prior green/red Δ chrome on a quiet dark glass pill. */
+/* Dark hero chrome — white chip stays white; Δ pills frost on charcoal. */
+html[data-theme="dark"] .home-summary-hero-chip {
+  border-color: hsl(0 0% 100% / 0.9);
+  background: hsl(0 0% 100%);
+  color: hsl(240 10% 16%);
+}
+html[data-theme="dark"] .home-summary-hero-live {
+  border-color: hsl(var(--delta-rise) / 0.48);
+  background: hsl(var(--delta-rise) / 0.22);
+}
 html[data-theme="dark"] .home-summary-hero-delta {
   border-color: hsl(0 0% 100% / 0.16);
-  background: hsl(0 0% 0% / 0.28);
-  color: hsl(var(--home-hero-muted));
+  background: hsl(0 0% 0% / 0.22);
 }
 html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-up {
-  color: color-mix(
-    in srgb,
-    hsl(var(--home-hero-delta-up)) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(var(--home-hero-neutral-muted))
-  );
   border-color: color-mix(
     in srgb,
-    hsl(var(--home-hero-delta-up) / 0.4) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--home-hero-delta-up) / 0.42) calc(var(--home-rank-sat, 1) * 100%),
     hsl(0 0% 100% / 0.16)
   );
   background: color-mix(
     in srgb,
-    hsl(var(--home-hero-delta-up) / 0.12) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(0 0% 0% / 0.28)
+    hsl(var(--home-hero-delta-up) / 0.14) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(0 0% 0% / 0.22)
   );
 }
 html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
-  color: color-mix(
-    in srgb,
-    hsl(var(--home-hero-delta-down)) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(var(--home-hero-neutral-muted))
-  );
   border-color: color-mix(
     in srgb,
-    hsl(var(--home-hero-delta-down) / 0.4) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--home-hero-delta-down) / 0.42) calc(var(--home-rank-sat, 1) * 100%),
     hsl(0 0% 100% / 0.16)
   );
   background: color-mix(
     in srgb,
-    hsl(var(--home-hero-delta-down) / 0.12) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(0 0% 0% / 0.28)
+    hsl(var(--home-hero-delta-down) / 0.14) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(0 0% 0% / 0.22)
   );
 }
-html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
-  color: hsl(var(--home-hero-muted));
-}
 @media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero-chip {
+    border-color: hsl(0 0% 100% / 0.9);
+    background: hsl(0 0% 100%);
+    color: hsl(240 10% 16%);
+  }
+  html:not([data-theme="light"]) .home-summary-hero-live {
+    border-color: hsl(var(--delta-rise) / 0.48);
+    background: hsl(var(--delta-rise) / 0.22);
+  }
   html:not([data-theme="light"]) .home-summary-hero-delta {
     border-color: hsl(0 0% 100% / 0.16);
-    background: hsl(0 0% 0% / 0.28);
-    color: hsl(var(--home-hero-muted));
+    background: hsl(0 0% 0% / 0.22);
   }
   html:not([data-theme="light"]) .home-summary-hero .home-summary-hero-delta.is-up {
-    color: color-mix(
-      in srgb,
-      hsl(var(--home-hero-delta-up)) calc(var(--home-rank-sat, 1) * 100%),
-      hsl(var(--home-hero-neutral-muted))
-    );
     border-color: color-mix(
       in srgb,
-      hsl(var(--home-hero-delta-up) / 0.4) calc(var(--home-rank-sat, 1) * 100%),
+      hsl(var(--home-hero-delta-up) / 0.42) calc(var(--home-rank-sat, 1) * 100%),
       hsl(0 0% 100% / 0.16)
     );
     background: color-mix(
       in srgb,
-      hsl(var(--home-hero-delta-up) / 0.12) calc(var(--home-rank-sat, 1) * 100%),
-      hsl(0 0% 0% / 0.28)
+      hsl(var(--home-hero-delta-up) / 0.14) calc(var(--home-rank-sat, 1) * 100%),
+      hsl(0 0% 0% / 0.22)
     );
   }
   html:not([data-theme="light"]) .home-summary-hero .home-summary-hero-delta.is-down {
-    color: color-mix(
-      in srgb,
-      hsl(var(--home-hero-delta-down)) calc(var(--home-rank-sat, 1) * 100%),
-      hsl(var(--home-hero-neutral-muted))
-    );
     border-color: color-mix(
       in srgb,
-      hsl(var(--home-hero-delta-down) / 0.4) calc(var(--home-rank-sat, 1) * 100%),
+      hsl(var(--home-hero-delta-down) / 0.42) calc(var(--home-rank-sat, 1) * 100%),
       hsl(0 0% 100% / 0.16)
     );
     background: color-mix(
       in srgb,
-      hsl(var(--home-hero-delta-down) / 0.12) calc(var(--home-rank-sat, 1) * 100%),
-      hsl(0 0% 0% / 0.28)
+      hsl(var(--home-hero-delta-down) / 0.14) calc(var(--home-rank-sat, 1) * 100%),
+      hsl(0 0% 0% / 0.22)
     );
-  }
-  html:not([data-theme="light"]) .home-summary-hero .home-summary-hero-delta.is-flat {
-    color: hsl(var(--home-hero-muted));
   }
 }
 .home-summary[data-home-summary="hero"] .home-summary-cards {
@@ -16771,12 +17040,27 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
   margin-top: -36px;
 }
 .home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel {
-  /* More translucent over the colored hero so green/red washes through. */
+  /* Frosted glass over hero wash. */
   background: var(--home-glass-bg);
   border-color: var(--home-glass-border);
   box-shadow:
     var(--home-glass-shadow),
     var(--shadow-sm);
+}
+/* Overall Δ tint picked up slightly by the top glass row. */
+.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-up) .home-stat-gw,
+.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-up) .home-stat-gw-rank {
+  box-shadow:
+    var(--home-glass-shadow),
+    var(--shadow-sm),
+    0 -10px 26px -6px hsl(var(--delta-rise) / 0.22);
+}
+.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-down) .home-stat-gw,
+.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-down) .home-stat-gw-rank {
+  box-shadow:
+    var(--home-glass-shadow),
+    var(--shadow-sm),
+    0 -10px 26px -6px hsl(var(--delta-fall) / 0.2);
 }
 /* Keep hero card values on one baseline — GW was oversized vs rank. */
 .home-summary[data-home-summary="hero"] .home-stat-value,
@@ -16785,16 +17069,6 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
 }
 .home-summary[data-home-summary="hero"] .home-stat-meta:empty {
   display: none;
-}
-.home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-up ~ .home-summary-cards > .home-stat-panel {
-  box-shadow:
-    0 8px 28px hsl(142 40% 16% / 0.14),
-    var(--shadow-sm);
-}
-.home-summary[data-home-summary="hero"] .home-summary-hero.is-rank-down ~ .home-summary-cards > .home-stat-panel {
-  box-shadow:
-    0 8px 28px hsl(0 40% 16% / 0.14),
-    var(--shadow-sm);
 }
 .home-summary-cards {
   display: grid;
@@ -17347,6 +17621,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
   height: 44px;
   padding: 4px 2px;
   border-radius: calc(var(--radius) - 4px);
+  border: 1px solid hsl(var(--foreground) / 0.08);
   /* Opaque mix — same weight as the old 35% muted over card, without letting the team wash bleed through. */
   background: color-mix(in srgb, hsl(var(--muted)) 35%, hsl(var(--card)));
   text-align: center;
@@ -17594,7 +17869,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-flat {
   text-align: center;
 }
 .home-panel {
-  border: 1px solid var(--home-glass-border, var(--border));
+  border: var(--home-panel-border-w, 1px) solid var(--home-glass-border, var(--border));
   border-radius: var(--radius);
   background: var(--home-glass-bg-strong, hsl(var(--card)));
   box-shadow: var(--home-glass-shadow, var(--shadow-sm));
@@ -17880,8 +18155,12 @@ html[data-theme="dark"] .home-dashboard {
 }
 /* League table #: same Δ pill, compact next to rank. */
 .home-standings-table .home-rank-delta.is-compact {
+  box-sizing: border-box;
+  justify-content: center;
   gap: 1px;
-  padding: 2px 5px 2px 3px;
+  min-width: 2.35em;
+  height: 1.35em;
+  padding: 0 4px;
   border-radius: 999px;
   background: hsl(var(--muted) / 0.55);
   border: 1px solid hsl(var(--border) / 0.9);
@@ -17893,6 +18172,12 @@ html[data-theme="dark"] .home-dashboard {
 .home-standings-table .home-rank-delta.is-compact.is-down {
   background: hsl(var(--home-rank-down) / 0.12);
   border-color: hsl(var(--home-rank-down) / 0.28);
+}
+.home-standings-table .home-rank-delta.is-compact.is-flat {
+  gap: 0;
+  background: hsl(var(--muted-foreground) / 0.14);
+  border-color: hsl(var(--border) / 0.85);
+  color: var(--text-faint);
 }
 .home-rank-delta .icon {
   width: 14px;
@@ -19359,7 +19644,7 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
 }
 .home-bench-divider th {
   height: 28px;
-  padding: 8px 8px 6px;
+  padding: 4px 8px;
   background: hsl(var(--muted) / 0.72);
   color: var(--text-dim);
   border-top: 2px solid var(--border);
@@ -19369,6 +19654,70 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-align: left;
+}
+.home-bench-divider-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.home-bench-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 0;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+.home-bench-toggle:hover {
+  color: var(--text);
+}
+.home-bench-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.home-bench-toggle-label {
+  flex: none;
+}
+.home-bench-toggle-icon {
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
+  opacity: 0.75;
+  flex: none;
+}
+.home-bench-toggle:hover .home-bench-toggle-icon {
+  opacity: 1;
+}
+.home-bench-pts {
+  flex: none;
+  font-size: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: inherit;
+  line-height: 1;
+  opacity: 0.72;
+}
+.home-bench-toggle:hover .home-bench-pts {
+  opacity: 0.9;
+}
+#home-squad-panel.is-bench-collapsed .home-squad-table tbody tr.home-row-bench {
+  display: none;
 }
 .home-row-bench .home-player-name {
   font-weight: 500;
@@ -19488,29 +19837,26 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.home-dnp-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 16px;
-  padding: 0 5px;
-  border-radius: 4px;
-  border: 1px solid hsl(42 88% 28% / 0.55);
-  background: hsl(48 98% 52%);
-  color: #111;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-html[data-theme="dark"] .home-dnp-badge {
-  border-color: hsl(45 90% 42% / 0.7);
-  background: hsl(46 95% 48%);
-  color: #0a0a0a;
-}
-.home-mp-dnp .home-dnp-badge {
+.home-dnp-icon {
+  width: 15px;
+  height: 15px;
   flex: 0 0 auto;
+  color: hsl(var(--delta-fall));
+  stroke-width: 2.25;
+}
+html[data-theme="dark"] .home-dnp-icon {
+  color: hsl(0 72% 62%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-dnp-icon {
+    color: hsl(0 72% 62%);
+  }
+}
+.home-mp-dnp {
+  gap: 0;
+}
+.home-mp-dnp .home-dnp-icon {
+  display: block;
 }
 .home-kickoff {
   color: var(--text-faint);
@@ -20119,13 +20465,160 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+/* League · Bench Points — GW pill + Season bar; top-3 medals on season. */
+.home-bench-points-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.home-bench-points-table .home-col-rank {
+  width: 14%;
+}
+.home-bench-points-table .home-col-manager {
+  width: 32%;
+}
+.home-bench-points-table .home-col-bench-gw {
+  width: 12%;
+  vertical-align: middle;
+  text-align: center;
+}
+.home-bench-points-table .home-col-bench-season {
+  width: 42%;
+  vertical-align: middle;
+}
+.home-bench-points-table th.home-col-bench-gw,
+.home-bench-points-table th.home-col-bench-season {
+  text-align: left;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.home-bench-points-table th.home-col-bench-gw {
+  text-align: center;
+}
+.home-bench-gw-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Same pill width for 0–9 and 10–99 (tabular nums + 2ch). */
+  min-width: calc(2ch + 14px);
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: hsl(var(--muted-foreground) / 0.16);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.home-bench-gw-pill.is-empty {
+  color: var(--text-faint);
+  font-weight: 600;
+  background: hsl(var(--muted-foreground) / 0.1);
+}
+.home-bench-meter {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+.home-bench-meter.is-value-outside {
+  gap: 5px;
+}
+.home-bench-bar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  width: 0;
+  min-width: 0;
+  max-width: 100%;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  background: hsl(var(--muted-foreground) / 0.2);
+  overflow: hidden;
+  flex: none;
+  transition:
+    width 0.65s var(--ease-out),
+    padding 0.65s var(--ease-out),
+    background-color 0.12s ease;
+  transition-delay: calc(var(--bar-i, 0) * 0.045s);
+}
+.home-bench-bar.is-drawn {
+  width: var(--bar-pct, 0%);
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.home-bench-meter:not(.is-value-outside) .home-bench-bar.is-drawn:not(.is-empty) {
+  min-width: min(100%, fit-content);
+  padding: 0 7px;
+}
+.home-bench-meter.is-value-outside .home-bench-bar.is-drawn:not(.is-empty) {
+  min-width: 3px;
+  max-width: calc(100% - 2.4em);
+  padding: 0;
+}
+.home-bench-bar.is-empty.is-drawn {
+  width: auto;
+  min-width: 1.75em;
+  padding: 0 7px;
+  background: hsl(var(--muted-foreground) / 0.1);
+}
+.home-bench-bar.is-empty .home-bench-bar-val {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.home-bench-bar-val {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text);
+  opacity: 0;
+  flex: none;
+  transition: opacity 0.2s ease;
+  transition-delay: calc(var(--bar-i, 0) * 0.045s + 0.28s);
+}
+.home-bench-bar.is-drawn .home-bench-bar-val,
+.home-bench-meter.is-value-outside .home-bench-bar-val {
+  opacity: 1;
+}
+.home-bench-points-table tr.medal-gold { --medal: hsl(var(--blue-hsl)); }
+.home-bench-points-table tr.medal-silver { --medal: hsl(var(--muted-foreground)); }
+.home-bench-points-table tr.medal-bronze { --medal: hsl(var(--fall)); }
+/* Accent on the first cell — tr::before becomes an extra table-cell and shifts columns. */
+.home-bench-points-table tr.medal-gold:not(.is-view-active):not(.is-you) > td.home-col-rank,
+.home-bench-points-table tr.medal-silver:not(.is-view-active):not(.is-you) > td.home-col-rank,
+.home-bench-points-table tr.medal-bronze:not(.is-view-active):not(.is-you) > td.home-col-rank {
+  box-shadow: inset 3px 0 0 var(--medal);
+}
+.home-bench-points-table tr.medal-gold .home-bench-bar.is-medal-tone {
+  background: color-mix(in srgb, hsl(var(--blue-hsl)) 52%, hsl(var(--card)));
+}
+.home-bench-points-table tr.medal-silver .home-bench-bar.is-medal-tone {
+  background: color-mix(in srgb, hsl(var(--muted-foreground)) 50%, hsl(var(--card)));
+}
+.home-bench-points-table tr.medal-bronze .home-bench-bar.is-medal-tone {
+  background: color-mix(in srgb, hsl(var(--fall)) 50%, hsl(var(--card)));
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-bench-bar,
+  .home-bench-bar-val {
+    transition: none;
+  }
+}
+
 .home-chip-cell {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-width: 1.75em;
+  min-width: 2.4em;
   vertical-align: middle;
 }
 .home-chip-cell-mark {
@@ -20149,15 +20642,17 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   animation: home-live-pulse 1.6s ease-out infinite;
 }
 .home-chip-cell-gw {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 8.5px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
   line-height: 1;
-  color: var(--text-dim);
+  color: hsl(var(--muted-foreground) / 0.55);
   min-height: 1em;
+  white-space: nowrap;
 }
 .home-chip-cell.is-active .home-chip-cell-gw {
-  color: hsl(142 55% 32%);
+  color: hsl(142 35% 38% / 0.75);
 }
 .home-chip-cell.is-available .home-chip-cell-gw {
   /* Keep GW slot so used/active rows don't grow taller than available. */
@@ -20363,6 +20858,21 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   }
   .home-chips-table .home-col-chip {
     width: 12%;
+  }
+  .home-bench-points-table {
+    table-layout: fixed;
+  }
+  .home-bench-points-table .home-col-rank {
+    width: 14%;
+  }
+  .home-bench-points-table .home-col-manager {
+    width: 30%;
+  }
+  .home-bench-points-table .home-col-bench-gw {
+    width: 12%;
+  }
+  .home-bench-points-table .home-col-bench-season {
+    width: 44%;
   }
   .home-summary-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));

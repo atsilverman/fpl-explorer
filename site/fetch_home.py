@@ -421,6 +421,43 @@ def gw_rank_from_history(history: dict | None, gw: int) -> int | None:
     return None
 
 
+def entry_bench_points_total(
+    history_payload: dict | None,
+    picks_history: dict | None = None,
+) -> int | None:
+    """Season cumulative points left on the bench (FPL ``points_on_bench``)."""
+    total = 0
+    seen = False
+    events_seen: set[int] = set()
+    current = (history_payload or {}).get("current") if isinstance(history_payload, dict) else None
+    if isinstance(current, list):
+        for row in current:
+            if not isinstance(row, dict) or "points_on_bench" not in row:
+                continue
+            try:
+                total += int(row.get("points_on_bench") or 0)
+                seen = True
+                ev = int(row.get("event") or 0)
+                if ev > 0:
+                    events_seen.add(ev)
+            except (TypeError, ValueError):
+                continue
+    # Live / current GW may land on picks entry_history before history current updates.
+    if isinstance(picks_history, dict) and "points_on_bench" in picks_history:
+        try:
+            gw_bench = int(picks_history.get("points_on_bench") or 0)
+            ev = int(picks_history.get("event") or 0)
+            if ev > 0 and ev not in events_seen:
+                total += gw_bench
+                seen = True
+            elif not events_seen:
+                total += gw_bench
+                seen = True
+        except (TypeError, ValueError):
+            pass
+    return total if seen else None
+
+
 def resolve_gw_rank(
     *,
     gw: int,
@@ -1482,6 +1519,16 @@ def main() -> int:
                     entry=entry if eid == manager_id else None,
                 )
             )
+            bench_points = entry_bench_points_total(
+                history_by_entry.get(eid),
+                picks_history,
+            )
+            bench_points_gw = None
+            if isinstance(picks_history, dict) and "points_on_bench" in picks_history:
+                try:
+                    bench_points_gw = int(picks_history.get("points_on_bench") or 0)
+                except (TypeError, ValueError):
+                    bench_points_gw = None
             standing_rows.append(
                 {
                     "entry": eid,
@@ -1504,6 +1551,8 @@ def main() -> int:
                     "activeChip": chip_by_entry.get(eid),
                     "chips": chips_half,
                     "transfers": transfer_summary,
+                    "benchPoints": bench_points,
+                    "benchPointsGw": bench_points_gw,
                 }
             )
 

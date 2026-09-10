@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=optional" />
 <link id="font-pair-link" rel="stylesheet" href="" disabled />
-<link rel="stylesheet" href="styles.css?v=1216" />
+<link rel="stylesheet" href="styles.css?v=1251" />
 <script>
 (() => {
   try {
@@ -35,6 +35,13 @@
           link.href = `https://fonts.googleapis.com/css2?${FONT_GOOGLE[pair]}&display=optional`;
           link.disabled = false;
         }
+      }
+    } catch (_) {}
+    // Home surface — keep in sync with app.js HOME_SURFACE_ORDER.
+    try {
+      const surface = localStorage.getItem("fpl-explorer-home-surface");
+      if (surface === "solid" || surface === "glass") {
+        root.setAttribute("data-home-surface", surface);
       }
     } catch (_) {}
     const PAGE_KEY = "fpl-explorer-page";
@@ -196,6 +203,9 @@
   <symbol id="i-circle-check" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
   </symbol>
+  <symbol id="i-circle-x" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>
+  </symbol>
   <symbol id="i-star" viewBox="0 0 24 24">
     <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>
   </symbol>
@@ -354,6 +364,16 @@
         FPL.db
       </h1>
     </a>
+    <div class="page-nav-center">
+      <span class="page-nav-brand-divider" aria-hidden="true"></span>
+      <button type="button" class="page-tray-btn" id="page-tray-btn"
+        aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Home">
+        <span class="page-tray-current">
+          <span id="page-tray-label">Home</span>
+          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+        </span>
+      </button>
+    </div>
     <!-- Data season UI removed — app defaults to 2026/27. Keep 2025/26 data + setSeason() for a future restore.
     <label class="sr-only" for="season-select">Data season</label>
     <select id="season-select" class="season-select" aria-label="Data season">
@@ -412,17 +432,6 @@
   </nav>
   </div>
 
-  <div class="page-nav-center">
-    <button type="button" class="page-tray-btn" id="page-tray-btn"
-      aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Home">
-      <svg class="icon" aria-hidden="true"><use id="page-tray-icon-use" href="#i-house"/></svg>
-      <span class="page-tray-current">
-        <span id="page-tray-label">Home</span>
-        <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-      </span>
-    </button>
-  </div>
-
   <div class="page-nav-actions">
     <button id="theme-cycle-btn" class="icon-btn icon-only-btn" type="button"
       title="Theme: Device" aria-label="Theme: Device">
@@ -472,6 +481,14 @@
                 <button type="button" data-home-summary="classic" title="Four equal summary cards">Classic</button>
                 <button type="button" data-home-summary="hero" class="active" title="Overall Rank hero band with overlapping cards">Hero</button>
               </div>
+            </div>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="home-surface-seg-label">Home surface</span>
+              <div class="segmented segmented-block" id="home-surface-seg" role="group" aria-labelledby="home-surface-seg-label">
+                <button type="button" data-home-surface="glass" class="active" title="Frosted liquid glass panels over the hero">Glass</button>
+                <button type="button" data-home-surface="solid" title="Opaque cards with soft elevation — no blur">Solid</button>
+              </div>
+              <p class="prefs-field-hint" id="home-surface-hint">Panel finish on Home. Rank Δ, Live, and spectrum colors stay the same.</p>
             </div>
             <div class="prefs-field">
               <label class="prefs-field-label" for="font-pair-select">Font</label>
@@ -532,30 +549,6 @@
     </div>
   </div>
 </div>
-<script>
-(() => {
-  try {
-    if (!window.matchMedia("(max-width: 720px)").matches) return;
-    const cluster = document.querySelector(".page-nav-center");
-    const tray = document.getElementById("page-tray-btn");
-    if (!cluster || !tray) return;
-    const apply = () => {
-      const vv = window.visualViewport;
-      const screenMid = vv ? vv.offsetLeft + vv.width / 2 : window.innerWidth / 2;
-      const rect = tray.getBoundingClientRect();
-      if (!rect.width) return;
-      const raw = cluster.style.getPropertyValue("--page-nav-label-offset").trim();
-      const current = raw ? parseFloat(raw) : 0;
-      const offset = Number.isFinite(current) ? current : 0;
-      const naturalMid = rect.left + rect.width / 2 - offset;
-      cluster.style.setProperty("--page-nav-label-offset", `${screenMid - naturalMid}px`);
-      cluster.classList.add("is-label-centered");
-    };
-    apply();
-    requestAnimationFrame(apply);
-  } catch (_) {}
-})();
-</script>
 
 <div class="topbar" id="subtoolbar">
   <div class="topbar-cluster topbar-view-cluster" id="stats-toolbar-start">
@@ -1090,12 +1083,28 @@
                   </table>
                 </div>
               </div>
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table home-bench-points-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-bench-gw" title="Points left on the bench this gameweek (0 when Bench Boost is active)">GW</th>
+                        <th scope="col" class="home-col-bench-season" title="Season points left on the bench — excludes Bench Boost weeks (those pts count in the XI)">Season</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-bench-body"></tbody>
+                  </table>
+                </div>
+              </div>
             </div>
             <div class="home-standings-dots" id="home-standings-dots" role="tablist" aria-label="League views">
               <button type="button" class="home-standings-dot is-active" role="tab" aria-selected="true" aria-label="Table" data-page="0"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Transfers" data-page="1"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Captaincy" data-page="2"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Chips" data-page="3"></button>
+              <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Bench Points" data-page="4"></button>
             </div>
           </div>
         </article>
@@ -1257,21 +1266,7 @@
           </div>
         </div>
       </div>
-      <div class="prices-countdown-bar" id="prices-countdown-bar">
-        <p class="prices-countdown-main">
-          <span class="prices-countdown-label">Next price changes in</span>
-          <span class="prices-countdown-value" id="prices-countdown-value">—</span>
-        </p>
-      </div>
       <div class="ownership-mover-bar prices-mover-bar">
-        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
-          <button type="button" data-prices-view="prediction" class="active">
-            Predicted
-          </button>
-          <button type="button" data-prices-view="actual">
-            Actual
-          </button>
-        </div>
         <div class="segmented ownership-mover-seg prices-mover-kind-seg" id="prices-mover-kind-seg" role="group" aria-label="Risers or fallers" hidden>
           <button type="button" data-prices-mover-kind="risers" class="active" aria-label="Risers" title="Risers">
             <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
@@ -1280,6 +1275,14 @@
           <button type="button" data-prices-mover-kind="fallers" aria-label="Fallers" title="Fallers">
             <svg class="icon" aria-hidden="true"><use href="#i-trending-down"/></svg>
             <span class="prices-mover-kind-label">Fallers</span>
+          </button>
+        </div>
+        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
+          <button type="button" data-prices-view="prediction" class="active">
+            Predicted
+          </button>
+          <button type="button" data-prices-view="actual">
+            Actual
           </button>
         </div>
         <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-prediction-scope-seg" role="group" aria-label="Prediction movers scope" hidden>
@@ -1296,6 +1299,12 @@
         <div class="ownership-mover-end">
           <span class="count-label" id="prices-count-label"></span>
         </div>
+      </div>
+      <div class="prices-countdown-bar" id="prices-countdown-bar">
+        <p class="prices-countdown-main">
+          <span class="prices-countdown-label">Next price changes in</span>
+          <span class="prices-countdown-value" id="prices-countdown-value">—</span>
+        </p>
       </div>
       <div id="prices-prediction-wrap" class="prices-prediction-wrap">
         <div class="prices-mover-pager">
@@ -1853,7 +1862,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1250"></script>
+<script src="app.js?v=1272"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
