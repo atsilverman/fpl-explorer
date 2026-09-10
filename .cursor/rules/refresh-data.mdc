@@ -18,7 +18,7 @@ python3 site/fetch_home.py
 python3 site/build.py
 ```
 
-`fetch_ownership.py` writes the newest `snapshots/bootstrap-static_*.json` and rebuilds `site/ownership_data.js`; `fetch_prices.py` writes `snapshots/price-changes/*.json` and rebuilds `site/price_changes_data.js` (hourly check-in history + 3-day progress sparklines). Run ownership fetch before `build.py` so live £ + owned % land in Statistics / Team / Rankings / xData / Matchups.
+`fetch_ownership.py` writes the newest `snapshots/bootstrap-static_*.json`, a slim hourly point in `snapshots/ownership/`, and rebuilds `site/ownership_data.js`; `fetch_prices.py` writes `snapshots/price-changes/*.json` and rebuilds `site/price_changes_data.js` (hourly check-in history + 3-day progress sparklines). Run ownership fetch before `build.py` so live £ + owned % land in Statistics / Team / Rankings / xData / Matchups.
 
 Scripts load API keys from the project-root `.env` (`ODDS_API_KEY` for Markets + Fixtures calendar). Need network. Home uses `site/home_prefs.json` (managerId + leagueId) when present.
 
@@ -27,7 +27,8 @@ Then bump the matching cache-bust query params in `site/index.html` (`data.js?v=
 **Updated footers** on each page must show the embedded bundle's `generatedAt` (when `fetch_*.py` / `build.py` last wrote that cache) — never `Date.now()` or browser reload time. Statistics / Team / Rankings in 2026/27 mode use the newer of `data.js` and `ownership_data.js` because live £ + owned % come from ownership check-ins.
 
 Scheduled production refreshes (separate from this chat rule):
-- `.github/workflows/refresh-caches.yml` — Markets ~1×/day + Ownership + Calendar ~noon PT (`ODDS_API_KEY`; calendar uses free `/events`).
+- `.github/workflows/refresh-caches.yml` — Markets ~1×/day + Calendar ~noon PT (`ODDS_API_KEY`; calendar uses free `/events`).
+- `.github/workflows/refresh-ownership.yml` — Ownership TSB% check-ins every hour UTC (`ownership_data.js` + `snapshots/ownership/` + today’s bootstrap-static). 7d / 3d / 1d stay lookbacks from the latest point.
 - `.github/workflows/refresh-prices.yml` — Price predictor check-ins every hour UTC (`price_changes_data.js` + `snapshots/price-changes/`).
 - `.github/workflows/refresh-price-actual.yml` — Actual £0.1 changes ~00:00 UK (`fetch_price_actual.py` → `snapshots/price-actual/`).
 - `.github/workflows/rebuild-after-matchday.yml` — polls every 20 min; runs `build.py` once per settled **kickoff wave** in the active GW (fixtures clustered when kickoffs are within 15 min; 20 min after last FT in that wave). Simultaneous same-KO games share one rebuild. Updates Statistics / Rankings / Matchups / 2026/27 stats — not Home live, not xData expected (CSV). **Starts GW2** — see `snapshots/matchday_rebuild_state.json` (`{gw, matchday, wave}`; legacy `{gw, matchday}` rows still mean whole day done).

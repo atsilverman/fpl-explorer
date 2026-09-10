@@ -72,9 +72,9 @@ Social Feed + X API pulls are parked under [`archive/feed/`](archive/feed/README
 
 ### Ownership (`ownership_data.js`)
 
-`python3 site/fetch_ownership.py` — pulls `bootstrap-static`, writes `snapshots/bootstrap-static_YYYY-MM-DD.json` if that calendar day is new (overwrites same-day), then rebuilds a slim check-in history from every non-archived bootstrap snapshot. `python3 site/fetch_ownership.py --rebuild-only` skips the live fetch. The page never calls the FPL API.
+`python3 site/fetch_ownership.py` — pulls `bootstrap-static`, overwrites today’s `snapshots/bootstrap-static_YYYY-MM-DD.json`, writes a slim hourly point to `snapshots/ownership/` (kept ~16 days), then rebuilds `site/ownership_data.js`. `python3 site/fetch_ownership.py --rebuild-only` skips the live fetch. The page never calls the FPL API.
 
-**Cadence:** one useful check-in per calendar day. The Ownership UI’s **24h / 3d / 7d** columns compare against the nearest prior daily snapshot — they are not live transfer ticks — so refreshing more than once a day only overwrites today’s point.
+**Cadence:** every **hour** UTC via [`.github/workflows/refresh-ownership.yml`](.github/workflows/refresh-ownership.yml) (10 minutes past the hour, so it doesn’t race the prices job). **7d / 3d / 1d** compare against the nearest check-in on or before that lookback from the latest point — hourly snapshots make **1d** a true ~24h window. The JS bundle keeps every point from the last 36 hours, then one check-in per UTC day for older history (14-day sparklines unchanged).
 
 ### Prices (`price_changes_data.js`)
 
@@ -97,8 +97,9 @@ Workflow [`.github/workflows/refresh-caches.yml`](.github/workflows/refresh-cach
 | When (Pacific) | What |
 |----------------|------|
 | **Midnight** | Markets |
-| **Noon** | Markets + Ownership |
+| **Noon** | Markets + Calendar |
 | **Hourly (UTC)** | Prices predictor (`refresh-prices.yml`) |
+| **Hourly (UTC :10)** | Ownership TSB% (`refresh-ownership.yml`) |
 | **~00:00 UK** | Actual price changes (`refresh-price-actual.yml`) |
 
 Cron is UTC (`07:00` / `19:00` ≈ PDT). In winter (PST) those fire one hour later local. Manual run: Actions → **Refresh caches** → Run workflow.

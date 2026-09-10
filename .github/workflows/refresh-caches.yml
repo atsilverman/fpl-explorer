@@ -2,7 +2,8 @@
 # Times are UTC ≈ Pacific Daylight (UTC-7). In winter (PST) they land 1h later local.
 #
 #   07:00 UTC ≈ midnight PT  → Markets
-#   19:00 UTC ≈ noon PT      → Markets + Ownership + Calendar (Odds /events)
+#   19:00 UTC ≈ noon PT      → Markets + Calendar (Odds /events)
+#   Ownership TSB% is hourly — see refresh-ownership.yml
 #
 # Requires repo secrets: ODDS_API_KEY (Markets + Fixtures All calendar)
 name: Refresh caches
@@ -58,9 +59,9 @@ jobs:
             # ~midnight Pacific — markets only
             MARKETS=1
           else
-            # ~noon Pacific (or unknown schedule) — markets + ownership + calendar
+            # ~noon Pacific (or unknown schedule) — markets + calendar
+            # Ownership check-ins are hourly (refresh-ownership.yml).
             MARKETS=1
-            OWNERSHIP=1
             CALENDAR=1
           fi
           echo "markets=$MARKETS" >> "$GITHUB_OUTPUT"
@@ -113,7 +114,7 @@ jobs:
           if dirty("site/markets_data.js"):
               bumps.append("markets_data.js")
           # Same-day ownership overwrite still updates the JS bundle; snapshots too.
-          if dirty("site/ownership_data.js") or dirty("snapshots/bootstrap-static_"):
+          if dirty("site/ownership_data.js") or dirty("snapshots/bootstrap-static_") or dirty("snapshots/ownership"):
               bumps.append("ownership_data.js")
           if dirty("site/calendar_data.js"):
               bumps.append("calendar_data.js")
@@ -135,7 +136,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/markets_data.js site/ownership_data.js site/calendar_data.js site/index.html snapshots/bootstrap-static_*.json snapshots/calendar/*.json || true
+          git add site/markets_data.js site/ownership_data.js site/calendar_data.js site/index.html snapshots/bootstrap-static_*.json snapshots/ownership/ snapshots/calendar/*.json || true
           if git diff --staged --quiet; then
             echo "No cache changes to commit."
             exit 0

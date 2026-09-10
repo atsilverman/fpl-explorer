@@ -1,0 +1,73 @@
+# Ownership TSB% check-ins every hour (UTC), offset from prices to avoid git races.
+# Writes snapshots/ownership/*.json + overwrites today's bootstrap-static + site/ownership_data.js
+# 7d / 3d / 1d deltas remain lookbacks from the latest point (hourly makes 1d ≈ 24h).
+name: Refresh ownership
+
+on:
+  schedule:
+    - cron: "10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh Ownership
+        run: python3 site/fetch_ownership.py
+
+      - name: Bump cache-bust query params
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          path = Path("site/index.html")
+          text = path.read_text(encoding="utf-8")
+
+          def dirty(rel: str) -> bool:
+              return subprocess.run(["git", "diff", "--quiet", "--", rel]).returncode != 0
+
+          bumps = []
+          if dirty("site/ownership_data.js") or dirty("snapshots/bootstrap-static_") or dirty("snapshots/ownership"):
+              bumps.append("ownership_data.js")
+
+          for name in bumps:
+              pat = re.compile(rf'(src="{re.escape(name)}\?v=)(\d+)(")')
+
+              def repl(m, _name=name):
+                  return f"{m.group(1)}{int(m.group(2)) + 1}{m.group(3)}"
+
+              text, n = pat.subn(repl, text)
+              print(f"{'Bumped' if n else 'No cache param for'} {name}")
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/ownership_data.js site/index.html snapshots/bootstrap-static_*.json snapshots/ownership/ || true
+          if git diff --staged --quiet; then
+            echo "No cache changes to commit."
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          Refresh scheduled ownership check-ins.
+
+          EOF
+          )"
+          git push

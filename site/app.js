@@ -46,6 +46,13 @@
   if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
   if (HOME.gwAwaitingKickoff == null) HOME.gwAwaitingKickoff = null;
   window.FPL_HOME = HOME;
+  const REPORT = window.FPL_REPORT || {
+    generatedAt: null,
+    sourceGw: null,
+    outlookGws: [],
+    reports: {},
+  };
+  if (!window.FPL_REPORT) window.FPL_REPORT = REPORT;
   // Prefer ownership bundle (refreshed with bootstrap) over build-time data.js.
   const GAMEWEEKS =
     OWNERSHIP.gameweeks ||
@@ -1119,6 +1126,7 @@
     pageSchedule: $("#page-schedule"),
     pageFixtures: $("#page-fixtures"),
     pageMarkets: $("#page-markets"),
+    pageReport: $("#page-report"),
     homePage: $("#home-page"),
     livePage: $("#live-page"),
     livePageSubtitle: $("#live-page-subtitle"),
@@ -1138,6 +1146,15 @@
     liveFeedFilters: $("#live-feed-filters"),
     liveFeedOwnedSeg: $("#live-feed-owned-seg"),
     liveUpdatedFooter: $("#live-updated-footer"),
+    reportPage: $("#report-page"),
+    reportPageSubtitle: $("#report-page-subtitle"),
+    reportCountLabel: $("#report-count-label"),
+    reportReadTime: $("#report-read-time"),
+    reportEmpty: $("#report-empty"),
+    reportEmptyTitle: $("#report-empty-title"),
+    reportEmptyCopy: $("#report-empty-copy"),
+    reportArticle: $("#report-article"),
+    reportUpdatedFooter: $("#report-updated-footer"),
     liveFiltersGroup: $("#live-filters-group"),
     liveModeSeg: $("#live-mode-seg"),
     liveMatchupFilters: $("#live-matchup-filters"),
@@ -1208,6 +1225,7 @@
     homeStandingsBenchBody: $("#home-standings-bench-body"),
     homeTransfersStatus: $("#home-transfers-status"),
     homeTransfersTableWrap: $("#home-transfers-table-wrap"),
+    homeCaptainsTableWrap: $("#home-captains-table-wrap"),
     homeStandingsTrack: $("#home-standings-track"),
     homeStandingsDots: $("#home-standings-dots"),
     homeSummaryCards: $("#home-summary-cards"),
@@ -4334,6 +4352,8 @@
   const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Ownership", "Schedule"];
   const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips", "Bench Points"];
+  const HOME_STANDINGS_TRANSFERS_PAGE = 1;
+  const HOME_STANDINGS_CAPTAINS_PAGE = 2;
   const HOME_STANDINGS_BENCH_PAGE = 4;
   const HOME_FEED_VIEW_LABELS = ["League", "All"];
   let homeViewEntryId = null;
@@ -5563,6 +5583,18 @@
     if (wrap) wrap.scrollTop = 0;
   }
 
+  function resetHomeCaptainsTableScroll() {
+    if (el.homeCaptainsTableWrap) el.homeCaptainsTableWrap.scrollTop = 0;
+  }
+
+  function homeStandingsInnerScrollWraps() {
+    return [el.homeTransfersTableWrap, el.homeCaptainsTableWrap].filter(Boolean);
+  }
+
+  function homeStandingsIsInnerScrollPage(idx) {
+    return idx === HOME_STANDINGS_TRANSFERS_PAGE || idx === HOME_STANDINGS_CAPTAINS_PAGE;
+  }
+
   function homeTransfersStatusLabel() {
     const status = HOME.leaguePicksStatus;
     if (!status || typeof status !== "object") return "";
@@ -5633,10 +5665,15 @@
   function syncHomeStandingsTrackHeight(activeIndex, { animate = true, allowShrink = true } = {}) {
     if (!el.homeStandingsTrack) return;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
+    const clearInnerPin = () => {
+      homeStandingsInnerScrollWraps().forEach((wrap) => {
+        wrap.style.maxHeight = "";
+      });
+    };
     if (!pages.length) {
       el.homeStandingsTrack.style.height = "";
       el.homeStandingsTrack.style.maxHeight = "";
-      if (el.homeTransfersTableWrap) el.homeTransfersTableWrap.style.maxHeight = "";
+      clearInnerPin();
       return;
     }
     const idx =
@@ -5645,16 +5682,17 @@
         : homeStandingsActivePageIndex();
     const page = pages[idx];
     if (!page) return;
-    // Pin Transfers to the Table viewport and scroll inside (desktop + mobile).
-    // Prefer Table page height; fall back to Captains/Chips if Table is empty.
-    let measurePage = idx === 1 ? pages[0] : page;
-    if (idx === 1) {
+    // Pin Transfers + Captaincy to the Table viewport and scroll inside.
+    // Prefer Table page height; fall back to another non-scroll page if Table is empty.
+    const innerScroll = homeStandingsIsInnerScrollPage(idx);
+    let measurePage = innerScroll ? pages[0] : page;
+    if (innerScroll) {
       const tableH = pages[0]
         ? Math.ceil(Math.max(pages[0].scrollHeight, pages[0].offsetHeight))
         : 0;
       if (!(tableH > 0)) {
         for (let i = 0; i < pages.length; i += 1) {
-          if (i === 1) continue;
+          if (homeStandingsIsInnerScrollPage(i)) continue;
           const alt = Math.ceil(Math.max(pages[i].scrollHeight, pages[i].offsetHeight));
           if (alt > 0) {
             measurePage = pages[i];
@@ -5670,16 +5708,21 @@
     const next = `${h}px`;
     // Always clamp min/max so flex content-size can't reopen the card on scroll.
     el.homeStandingsTrack.style.minHeight = "0";
-    el.homeStandingsTrack.style.maxHeight = idx === 1 ? next : "";
-    if (el.homeTransfersTableWrap) {
-      el.homeTransfersTableWrap.style.maxHeight = idx === 1 ? next : "";
-    }
-    if (pages[1]) {
-      pages[1].style.height = idx === 1 ? next : "";
-      pages[1].style.maxHeight = idx === 1 ? next : "";
-      pages[1].style.minHeight = "0";
-      pages[1].style.overflow = "hidden";
-    }
+    el.homeStandingsTrack.style.maxHeight = innerScroll ? next : "";
+    homeStandingsInnerScrollWraps().forEach((wrap) => {
+      const wrapIdx = wrap === el.homeTransfersTableWrap
+        ? HOME_STANDINGS_TRANSFERS_PAGE
+        : HOME_STANDINGS_CAPTAINS_PAGE;
+      wrap.style.maxHeight = idx === wrapIdx ? next : "";
+    });
+    [HOME_STANDINGS_TRANSFERS_PAGE, HOME_STANDINGS_CAPTAINS_PAGE].forEach((i) => {
+      if (!pages[i]) return;
+      const on = idx === i;
+      pages[i].style.height = on ? next : "";
+      pages[i].style.maxHeight = on ? next : "";
+      pages[i].style.minHeight = "0";
+      pages[i].style.overflow = on ? "hidden" : "";
+    });
     if (el.homeStandingsTrack.style.height === next) return;
     if (!animate) {
       el.homeStandingsTrack.style.transition = "none";
@@ -5860,7 +5903,8 @@
     if (!el.homeStandingsTrack) return;
     const pages = [...el.homeStandingsTrack.querySelectorAll(".home-standings-page")];
     if (!pages[index]) return;
-    if (index === 1) resetHomeTransfersTableScroll();
+    if (index === HOME_STANDINGS_TRANSFERS_PAGE) resetHomeTransfersTableScroll();
+    if (index === HOME_STANDINGS_CAPTAINS_PAGE) resetHomeCaptainsTableScroll();
     homeStandingsPagerTarget = index;
     el.homeStandingsTrack.scrollTo({
       left: homeStandingsPageScrollLeft(index),
@@ -6175,13 +6219,16 @@
   }
 
   /**
-   * Transfers nests a vertical scroller inside a height-pinned league page.
+   * Transfers / Captaincy nest a vertical scroller inside a height-pinned league page.
    * Detect top/bottom of that list and chain leftover vertical gestures to
    * .main so the rest of Home can scroll (overscroll-behavior: contain blocks
    * the browser's default chain).
    */
   function bindHomeTransfersMainScrollChain() {
-    const nested = el.homeTransfersTableWrap;
+    homeStandingsInnerScrollWraps().forEach(bindHomeStandingsInnerScrollChain);
+  }
+
+  function bindHomeStandingsInnerScrollChain(nested) {
     const main = document.querySelector("main.main");
     if (!nested || !main || nested.dataset.mainScrollChain === "1") return;
     nested.dataset.mainScrollChain = "1";
@@ -7216,6 +7263,7 @@
       if (!btn || !el.homeSquadTrack.contains(btn)) return;
       e.preventDefault();
       e.stopPropagation();
+      if (homeSquadIsDesktopLayout()) return;
       setHomeBenchCollapsed(!homeBenchCollapsed());
     });
 
@@ -7225,6 +7273,7 @@
       if (benchBtn && el.homeSquadTrack.contains(benchBtn)) {
         e.preventDefault();
         e.stopPropagation();
+        if (homeSquadIsDesktopLayout()) return;
         setHomeBenchCollapsed(!homeBenchCollapsed());
         return;
       }
@@ -7351,8 +7400,8 @@
     return any ? sum : null;
   }
 
-  // Session-only: always collapsed on load / leaving Home. Swiping Team card
-  // pages keeps the in-memory expand state until navigation or refresh.
+  // Session-only on mobile: collapsed on load / leaving Home. Desktop always
+  // shows the bench (the Team card scrolls if XI + bench exceeds the cap).
   let homeBenchCollapsedState = true;
   try {
     localStorage.removeItem("fpl-explorer-home-bench-collapsed");
@@ -7361,18 +7410,21 @@
   }
 
   function homeBenchCollapsed() {
+    if (homeSquadIsDesktopLayout()) return false;
     return homeBenchCollapsedState;
   }
 
   function setHomeBenchCollapsed(collapsed) {
-    homeBenchCollapsedState = !!collapsed;
-    syncHomeBenchCollapsedUI(homeBenchCollapsedState);
-    if (el.homeSquadPanel) {
-      requestAnimationFrame(() => {
-        syncHomeSquadLayout(undefined, { animate: false, allowShrink: true });
-        settleHomeTablesLayout();
-      });
-    }
+    if (homeSquadIsDesktopLayout()) collapsed = false;
+    const next = !!collapsed;
+    const changed = homeBenchCollapsedState !== next;
+    homeBenchCollapsedState = next;
+    syncHomeBenchCollapsedUI();
+    if (!changed || !el.homeSquadPanel) return;
+    requestAnimationFrame(() => {
+      syncHomeSquadLayout(undefined, { animate: false, allowShrink: true });
+      settleHomeTablesLayout();
+    });
   }
 
   function syncHomeBenchCollapsedUI(collapsed = homeBenchCollapsed()) {
@@ -11673,6 +11725,338 @@
     });
   }
 
+  function reportForCurrentManager() {
+    const reports = (REPORT && REPORT.reports) || {};
+    const mid = HOME && HOME.managerId != null ? String(HOME.managerId) : "";
+    if (!mid) return null;
+    const hit = reports[mid];
+    return hit && typeof hit === "object" ? hit : null;
+  }
+
+  /** Premium captains that the brief must never recommend selling. */
+  const REPORT_ESSENTIAL_CODES = new Set([223094]); // Haaland
+
+  function reportCatalogRow(player) {
+    if (!player) return null;
+    const eid = Number(player.element);
+    const code = Number(player.code);
+    const squad = (HOME && Array.isArray(HOME.squad) && HOME.squad) || [];
+    const fromSquad = squad.find((r) =>
+      (Number.isFinite(eid) && Number(r.element) === eid) ||
+      (Number.isFinite(code) && Number(r.code) === code)
+    );
+    if (fromSquad) return fromSquad;
+    const combined = (DATA.players && DATA.players.combined) || [];
+    return combined.find((r) => {
+      if (!r) return false;
+      if (Number.isFinite(code) && Number(r.code) === code) return true;
+      if (Number.isFinite(eid) && Number(r.element) === eid) return true;
+      return Number.isFinite(eid) && Number(fplElementIdForRow(r)) === eid;
+    }) || null;
+  }
+
+  function reportPlayerTeam(player) {
+    const row = reportCatalogRow(player);
+    return (row && row.team) || player.team || "";
+  }
+
+  function reportPlayerIsEssential(player) {
+    const code = Number(player && player.code);
+    if (Number.isFinite(code) && REPORT_ESSENTIAL_CODES.has(code)) return true;
+    const name = String((player && player.name) || "").toLowerCase();
+    return name === "haaland";
+  }
+
+  function reportPlayerChipHTML(player) {
+    if (!player) return "";
+    const name = escapeHtml(player.name || "—");
+    const eid = player.element != null ? escapeHtml(String(player.element)) : "";
+    const code = player.code != null ? escapeHtml(String(player.code)) : "";
+    const team = reportPlayerTeam(player);
+    const crest = team
+      ? (badgeHTML(team, "report-player-badge") || teamCrestFallbackHTML(team, "report-player-badge-fallback"))
+      : "";
+    return `<button type="button" class="report-player-link" data-element="${eid}" data-player-code="${code}"><span class="report-player-crest">${crest}</span><span class="report-player-name">${name}</span></button>`;
+  }
+
+  function reportInlineHTML(part) {
+    if (!part) return "";
+    if (part.player) return reportPlayerChipHTML(part.player);
+    return escapeHtml(part.text || "");
+  }
+
+  function reportCollectText(node, out) {
+    if (!node) return;
+    if (typeof node === "string" || typeof node === "number") {
+      out.push(String(node));
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((n) => reportCollectText(n, out));
+      return;
+    }
+    if (typeof node !== "object") return;
+    if (node.player && node.player.name) out.push(node.player.name);
+    ["title", "text", "caption", "label", "value", "delta", "note", "meta", "comp"].forEach((k) => {
+      if (node[k] != null && node[k] !== "") out.push(String(node[k]));
+    });
+    reportCollectText(node.inlines, out);
+    reportCollectText(node.blocks, out);
+    reportCollectText(node.items, out);
+    reportCollectText(node.rows, out);
+    reportCollectText(node.sections, out);
+    reportCollectText(node.series, out);
+  }
+
+  function reportReadMinutes(report) {
+    const parts = [];
+    reportCollectText(report, parts);
+    const words = parts.join(" ").trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round(words / 220));
+  }
+
+  function reportStatsHTML(block) {
+    const items = Array.isArray(block.items) ? block.items : [];
+    if (!items.length) return "";
+    return `<div class="report-stats">${items.map((it) => {
+      const tone = it.tone ? ` is-${escapeHtml(String(it.tone))}` : "";
+      const delta = it.delta
+        ? `<span class="report-stat-delta">${escapeHtml(String(it.delta))}</span>`
+        : "";
+      return `<div class="report-stat${tone}"><span class="report-stat-label">${escapeHtml(it.label || "")}</span><span class="report-stat-value">${escapeHtml(String(it.value ?? ""))}${delta}</span></div>`;
+    }).join("")}</div>`;
+  }
+
+  function reportBarsHTML(block) {
+    const rows = Array.isArray(block.rows) ? block.rows : [];
+    if (!rows.length) return "";
+    const max = Number(block.max) > 0 ? Number(block.max) : Math.max(
+      ...rows.map((r) => Number(r.value) || 0),
+      1
+    );
+    const caption = block.caption
+      ? `<p class="report-viz-caption">${escapeHtml(block.caption)}</p>`
+      : "";
+    return `${caption}<div class="report-bars">${rows.map((row) => {
+      const v = Number(row.value);
+      const pct = Number.isFinite(v) ? Math.max(0, Math.min(100, (v / max) * 100)) : 0;
+      const mark = Number(row.mark);
+      const markPct = Number.isFinite(mark) ? Math.max(0, Math.min(100, (mark / max) * 100)) : null;
+      const markEl = markPct != null
+        ? `<span class="report-bar-mark" style="left:${markPct}%" title="${escapeHtml(String(row.markLabel || row.mark))}"></span>`
+        : "";
+      const lab = row.label != null ? escapeHtml(String(row.label)) : (Number.isFinite(v) ? String(v) : "");
+      const tone = row.tone ? ` is-${escapeHtml(String(row.tone))}` : "";
+      return `<div class="report-bar-row">
+        <div class="report-bar-who">${reportPlayerChipHTML(row.player)}</div>
+        <div class="report-bar-track${tone}"><span class="report-bar-fill" style="width:${pct}%"></span>${markEl}</div>
+        <span class="report-bar-val">${lab}</span>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  function reportMinutesHTML(block) {
+    const rows = Array.isArray(block.rows) ? block.rows : [];
+    if (!rows.length) return "";
+    const caption = block.caption
+      ? `<p class="report-viz-caption">${escapeHtml(block.caption)}</p>`
+      : "";
+    const cap = Number(block.max) > 0 ? Number(block.max) : 90;
+    return `${caption}<div class="report-mins">${rows.map((row) => {
+      const series = Array.isArray(row.series) ? row.series : [];
+      const cells = series.map((n, i) => {
+        const v = Number(n);
+        const h = Number.isFinite(v) ? Math.max(4, Math.round((Math.max(0, v) / cap) * 28)) : 4;
+        const short = Number.isFinite(v) && v > 0 && v < 60;
+        const cls = !Number.isFinite(v) || v <= 0 ? " is-zero" : short ? " is-short" : "";
+        const lab = Number.isFinite(v) ? `${v}′` : "—";
+        return `<span class="report-mins-col${cls}" title="GW${i + 1} · ${escapeHtml(lab)}"><span class="report-mins-bar" style="height:${h}px"></span><span class="report-mins-n">${escapeHtml(lab)}</span></span>`;
+      }).join("");
+      return `<div class="report-mins-row">
+        <div class="report-bar-who">${reportPlayerChipHTML(row.player)}</div>
+        <div class="report-mins-chart">${cells}</div>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  function reportFixturePillsHTML(player, gws) {
+    const team = reportPlayerTeam(player);
+    if (!team || !gws.length) return `<span class="report-fx-empty">—</span>`;
+    return `<div class="report-fx-pills">${gws.map((gw) => {
+      const list = (FIXTURES_BY_TEAM[team] || []).filter((fx) => Number(fx.gw) === Number(gw));
+      if (!list.length) {
+        return `<span class="fixtures-pill home-schedule-pill is-blank">–</span>`;
+      }
+      return list.map((fx) => homeSquadSchedulePillHTML(fx)).join("");
+    }).join("")}</div>`;
+  }
+
+  function reportVerdictOf(row) {
+    if (row && reportPlayerIsEssential(row.player)) return "essential";
+    const v = String((row && row.verdict) || "hold").toLowerCase();
+    if (v === "move" || v === "sell" || v === "out") return "move";
+    if (v === "watch") return "watch";
+    if (v === "essential") return "essential";
+    return "hold";
+  }
+
+  function reportVerdictLabel(verdict) {
+    if (verdict === "essential") return "Essential";
+    if (verdict === "move") return "Move";
+    if (verdict === "watch") return "Watch";
+    return "Hold";
+  }
+
+  function reportFixtureRunsHTML(block) {
+    const rows = Array.isArray(block.rows) ? block.rows : [];
+    if (!rows.length) return "";
+    const gws = Array.isArray(block.gws) && block.gws.length
+      ? block.gws
+      : (Array.isArray(REPORT.outlookGws) ? REPORT.outlookGws : []);
+    const caption = block.caption
+      ? `<p class="report-viz-caption">${escapeHtml(block.caption)}</p>`
+      : "";
+    const head = `<div class="report-fx-head" aria-hidden="true">
+      <span class="report-fx-player-h">Player</span>
+      <span class="report-fx-gws-h">${gws.map((gw) => `<span>GW${escapeHtml(String(gw))}</span>`).join("")}</span>
+      <span class="report-fx-verdict-h"></span>
+    </div>`;
+    return `${caption}<div class="report-fx" style="--report-fx-cols:${Math.max(1, gws.length)}">${head}${rows.map((row) => {
+      const verdict = reportVerdictOf(row);
+      const note = row.note ? `<p class="report-fx-note">${escapeHtml(row.note)}</p>` : "";
+      return `<div class="report-fx-row is-${verdict}">
+        <div class="report-fx-who">${reportPlayerChipHTML(row.player)}</div>
+        ${reportFixturePillsHTML(row.player, gws)}
+        <span class="report-fx-verdict is-${verdict}">${reportVerdictLabel(verdict)}</span>
+        ${note}
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  function reportCalloutsHTML(block) {
+    const rows = Array.isArray(block.rows) ? block.rows : [];
+    if (!rows.length) return "";
+    const caption = block.caption
+      ? `<p class="report-viz-caption">${escapeHtml(block.caption)}</p>`
+      : "";
+    return `${caption}<div class="report-callouts">${rows.map((row) => {
+      const meta = row.meta ? `<span class="report-callout-meta">${escapeHtml(row.meta)}</span>` : "";
+      return `<div class="report-callout">${reportPlayerChipHTML(row.player)}${meta}</div>`;
+    }).join("")}</div>`;
+  }
+
+  function reportWatchHTML(block) {
+    const rows = Array.isArray(block.rows) ? block.rows : [];
+    if (!rows.length) return "";
+    const caption = block.caption
+      ? `<p class="report-viz-caption">${escapeHtml(block.caption)}</p>`
+      : "";
+    return `${caption}<div class="report-watch">${rows.map((row) => {
+      const comp = row.comp ? `<span class="report-watch-comp">${escapeHtml(row.comp)}</span>` : "";
+      const text = row.text ? `<span class="report-watch-text">${escapeHtml(row.text)}</span>` : "";
+      return `<div class="report-watch-row">${reportPlayerChipHTML(row.player)}${comp}${text}</div>`;
+    }).join("")}</div>`;
+  }
+
+  function reportBlockHTML(block) {
+    if (!block) return "";
+    switch (block.type) {
+      case "h3":
+        return `<h3 class="report-subhead">${escapeHtml(block.text || "")}</h3>`;
+      case "stats":
+        return reportStatsHTML(block);
+      case "bars":
+        return reportBarsHTML(block);
+      case "minutes":
+        return reportMinutesHTML(block);
+      case "fixture-runs":
+        return reportFixtureRunsHTML(block);
+      case "callouts":
+        return reportCalloutsHTML(block);
+      case "watch":
+        return reportWatchHTML(block);
+      default: {
+        const inner = (block.inlines || []).map(reportInlineHTML).join("");
+        return inner ? `<p>${inner}</p>` : "";
+      }
+    }
+  }
+
+  function reportBlocksHTML(blocks) {
+    return (blocks || []).map(reportBlockHTML).join("");
+  }
+
+  function renderReport() {
+    const article = el.reportArticle;
+    const empty = el.reportEmpty;
+    const report = reportForCurrentManager();
+    const mid = HOME && HOME.managerId;
+    if (el.reportPageSubtitle) {
+      if (report) {
+        const gw = REPORT.sourceGw;
+        const outlook = Array.isArray(REPORT.outlookGws) ? REPORT.outlookGws : [];
+        const lo = outlook[0];
+        const hi = outlook[outlook.length - 1];
+        const team = report.teamName || "This team";
+        const league = report.leagueName ? ` · ${report.leagueName}` : "";
+        const run =
+          lo != null && hi != null && gw != null
+            ? ` — GW${gw} recap and GW${lo}–${hi} outlook.`
+            : ".";
+        el.reportPageSubtitle.textContent = `${team}${league}${run}`;
+      } else {
+        el.reportPageSubtitle.textContent = "Weekly post-gameweek brief for your linked manager.";
+      }
+    }
+    if (el.reportCountLabel) {
+      el.reportCountLabel.textContent = report && REPORT.sourceGw != null ? `GW${REPORT.sourceGw}` : "";
+    }
+    if (el.reportReadTime) {
+      if (report) {
+        const mins = reportReadMinutes(report);
+        el.reportReadTime.hidden = false;
+        el.reportReadTime.textContent = `${mins} min read`;
+      } else {
+        el.reportReadTime.hidden = true;
+        el.reportReadTime.textContent = "";
+      }
+    }
+    syncPageUpdatedFooter(el.reportUpdatedFooter, pageDataUpdatedIso("report"));
+    if (!report) {
+      if (article) {
+        article.hidden = true;
+        article.innerHTML = "";
+      }
+      if (empty) {
+        empty.hidden = false;
+        if (el.reportEmptyTitle) {
+          el.reportEmptyTitle.textContent = mid
+            ? "No weekly report for this manager"
+            : "No weekly report yet";
+        }
+        if (el.reportEmptyCopy) {
+          el.reportEmptyCopy.textContent = mid
+            ? "This Home manager is not in the latest bake. Add them to report_prefs.json and run the weekly gather."
+            : "Reports are baked after the gameweek is settled. Run the local gather + fill for this manager.";
+        }
+      }
+      return;
+    }
+    if (empty) empty.hidden = true;
+    if (!article) return;
+    article.hidden = false;
+    article.innerHTML = (report.sections || [])
+      .map((sec) => {
+        const id = escapeHtml(sec.id || "");
+        const title = escapeHtml(sec.title || "");
+        return `<section class="report-section"${id ? ` id="report-sec-${id}"` : ""}>
+      <h2 class="report-section-title">${title}</h2>
+      ${reportBlocksHTML(sec.blocks)}
+    </section>`;
+      })
+      .join("");
+  }
+
   function bindPlayerDetailsSurfaces() {
     bindPlayerDetailsRowClicks(el.livePage);
     bindPlayerDetailsRowClicks(el.ownershipTableBody);
@@ -11681,6 +12065,9 @@
     });
     bindPlayerDetailsRowClicks(el.pricesPage);
     bindPlayerDetailsRowClicks(el.barbellBody || el.barbellWrap);
+    bindPlayerDetailsRowClicks(el.reportArticle, {
+      rowSelector: ".report-player-link",
+    });
   }
 
   function syncHomeStandingsLookupEmpty() {
@@ -13454,6 +13841,7 @@
   function mobileFilterButtonForPage() {
     const page = state.page;
     if (page === "home") return null;
+    if (page === "report") return null;
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
     if (page === "team" && !state.teamPickerSlot) return null;
@@ -13470,6 +13858,7 @@
       page === "fixtures" ||
       page === "markets" ||
       page === "home" ||
+      page === "report" ||
       (page === "team" && !state.teamPickerSlot) ||
       (page === "live" && state.liveMode === "bonus")
     );
@@ -13504,6 +13893,7 @@
     // Home has no Players/Teams split — keep the bottom dock clear.
       if (
       page === "home" ||
+      page === "report" ||
       page === "team" ||
       page === "markets" ||
       page === "schedule" ||
@@ -13633,6 +14023,7 @@
       page === "fixtures" ||
       (isMarkets && preferMobileSheet()) ||
       isHome ||
+      page === "report" ||
       (preferMobileSheet() && page === "rankings");
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
     el.subtoolbar.classList.toggle("is-markets-mobile", isMarkets && preferMobileSheet());
@@ -13705,6 +14096,7 @@
       if (preferMobileSheet()) setExpectedCatMenuOpen(false);
       if (state.page === "home") {
         syncHomeSquadWideLayout();
+        syncHomeBenchCollapsedUI();
         if (homeSquadIsDesktopLayout()) settleHomeTablesLayout();
       }
     };
@@ -16360,7 +16752,7 @@
         spitRow(spitRank("Treemap"), "Top movers by 7d / 3d / 1d Δ as tiles (largest changes only). Toggle beside the count."),
         spitRow(spitRank("Players"), "Photo, name, team, price, and position. Sort any numeric column."),
         spitRow(spitRank("Teams"), "Average TSB% of each club’s 20 most-owned players at that check-in."),
-        spitRow(spitRank("Windows"), "7d / 3d / 1d use the nearest snapshot on or before that many days before the latest check-in."),
+        spitRow(spitRank("Windows"), "7d / 3d / 1d use the nearest check-in on or before that many days before the latest point (hourly when available)."),
       ];
       return `${spitHead("trending-up", "How Ownership works")}
         ${spitIntro("FPL selected-by% (TSB%) movers from the saved ownership cache.")}
@@ -16420,7 +16812,7 @@
               spitRank("Risers / Fallers"),
               mobile
                 ? "Use the ↑ / ↓ toggle (or swipe the table) to switch Risers and Fallers."
-                : "Two stacked tables — risers above, fallers below, each ranked by status tier then |progress|."
+                : "Two side-by-side tables when the window is wide enough — otherwise stacked. Ranked by status tier then |progress|."
             ),
             spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of hourly check-ins. Line colour follows 3d Δ (green up, red down)."),
             spitRow(
@@ -16487,6 +16879,22 @@
       return `${spitHead("circle-play", "How Gameweek works")}
         ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
         ${spitSection("Legend", legend)}
+        ${spitSection("Reading", reading)}`;
+    }
+
+    if (state.page === "report") {
+      const reading = [
+        spitRow(spitRank("When"), "Written after the gameweek is settled — not live. Same bake until the next weekly run."),
+        spitRow(
+          spitRank("Names"),
+          "Club badge + name opens Details (same card as Home)."
+        ),
+        spitRow(spitRank("Run"), "Fixture pills are the next 3–5 GWs (same FDR colours as Home Schedule)."),
+        spitRow(spitRank("Starts"), "Fixture-run notes skip bench fodder (backup GK, cheap benched players). Essential holds (Haaland) are never sell recommendations."),
+        spitRow(spitRank("Standouts"), "Form, xGI, and differentials only call out clear gaps — not every 0.2 difference."),
+      ];
+      return `${spitHead("file-text", "How Report works")}
+        ${spitIntro("Weekly brief for your linked manager: last GW recap, then injuries, form, minutes, midweek, the next 3–5 fixtures, and differentials.")}
         ${spitSection("Reading", reading)}`;
     }
 
@@ -17277,6 +17685,7 @@
     const labels = {
       home: "How Home works",
       live: "How Gameweek works",
+      report: "How Report works",
       opta: "How Statistics works",
       rankings: "How Rankings works",
       expected: "How Expected Data works",
@@ -17293,6 +17702,7 @@
       if (pane) {
         if (pane.id === "home-page") page = "home";
         else if (pane.id === "live-page") page = "live";
+        else if (pane.id === "report-page") page = "report";
         else if (pane.id === "opta-page") page = "opta";
         else if (pane.id === "rankings-page") page = "rankings";
         else if (pane.id === "expected-page") page = "expected";
@@ -23078,6 +23488,8 @@
         return HOME.generatedAt || null;
       case "live":
         return latestDataIso(HOME.generatedAt, DATA.generatedAt);
+      case "report":
+        return REPORT.generatedAt || null;
       case "ownership":
         return OWNERSHIP.generatedAt || null;
       case "prices":
@@ -26350,13 +26762,12 @@
 
   function fmtOwnershipDate(iso) {
     if (!iso) return "";
-    const [y, m, d] = String(iso).split("-").map(Number);
-    if (!y || !m || !d) return String(iso);
-    const dt = new Date(Date.UTC(y, m - 1, d));
+    const ms = ownershipCheckInMs(iso);
+    if (!Number.isFinite(ms)) return String(iso);
     try {
-      return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+      return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
     } catch {
-      return `${d} ${m}/${y}`;
+      return String(iso).slice(0, 10);
     }
   }
 
@@ -26371,7 +26782,11 @@
   }
 
   function ownershipCheckInMs(iso) {
-    const [y, m, d] = String(iso || "").split("-").map(Number);
+    const s = String(iso || "").trim();
+    if (!s) return NaN;
+    const parsed = Date.parse(s);
+    if (Number.isFinite(parsed)) return parsed;
+    const [y, m, d] = s.split("-").map(Number);
     if (!y || !m || !d) return NaN;
     return Date.UTC(y, m - 1, d);
   }
@@ -29250,7 +29665,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Planner is ready to ship again (nav + prefs section).
   const PLANNER_NAV_ENABLED = false;
-  const PAGES = ["home", "live", "opta", "rankings", "ownership", "prices", "expected", "schedule", "fixtures", "markets", "team"];
+  const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "fixtures", "markets", "team"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
@@ -29296,6 +29711,7 @@
   function pagePaneFor(page) {
     if (page === "home") return el.homePage;
     if (page === "live") return el.livePage;
+    if (page === "report") return el.reportPage;
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
     if (page === "ownership") return el.ownershipPage;
@@ -29763,6 +30179,7 @@
     el.pageRankings.classList.toggle("active", page === "rankings");
     if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
     if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
+    if (el.pageReport) el.pageReport.classList.toggle("active", page === "report");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
     if (el.pagePrices) el.pagePrices.classList.toggle("active", page === "prices");
     el.pageExpected.classList.toggle("active", page === "expected");
@@ -29776,6 +30193,7 @@
     setPageTrayOpen(false);
     if (el.homePage) el.homePage.style.display = page === "home" ? "" : "none";
     if (el.livePage) el.livePage.style.display = page === "live" ? "" : "none";
+    if (el.reportPage) el.reportPage.style.display = page === "report" ? "" : "none";
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
@@ -29789,15 +30207,16 @@
     const isMarkets = page === "markets";
     const isHome = page === "home";
     const isLive = page === "live";
+    const isReport = page === "report";
     // Schedule hides the subtoolbar. Markets desktop uses it for card view + compare.
     syncSubtoolbarViewport(page);
     syncFiltersChrome();
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isReport || page === "fixtures" ? "none" : "";
     if (el.liveModeSeg) {
       el.liveModeSeg.hidden = !isLive;
       el.liveModeSeg.setAttribute("aria-hidden", isLive ? "false" : "true");
     }
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isReport || page === "fixtures" ? "none" : "";
     if (el.teamToolbarControls) el.teamToolbarControls.hidden = page !== "team";
     if (prev !== page) disarmConfirmButton();
     syncTeamPlannerPrefsBtns();
@@ -29939,6 +30358,8 @@
       syncLiveStatusSeg();
       syncFiltersResetUI();
       renderLive();
+    } else if (page === "report") {
+      renderReport();
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
       renderOwnership();
@@ -29981,6 +30402,7 @@
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
   if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
+  if (el.pageReport) el.pageReport.addEventListener("click", () => setPage("report"));
   if (el.homeViewBannerClear) {
     el.homeViewBannerClear.addEventListener("click", (e) => {
       e.preventDefault();
@@ -30559,6 +30981,7 @@
     if (id === "page-fixtures") return "fixtures";
     if (id === "page-markets") return "markets";
     if (id === "page-live") return "live";
+    if (id === "page-report") return "report";
     const host = btn.closest("[data-page-clone]");
     return host ? host.getAttribute("data-page-clone") : null;
   }

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1284" />
+<link rel="stylesheet" href="styles.css?v=1295" />
 <script>
 (() => {
   try {
@@ -34,7 +34,7 @@
     // the wrong shell before JS loads (e.g. omitting "live" painted Home on refresh).
     const PLANNER_NAV_ENABLED = false;
     if (!PLANNER_NAV_ENABLED) document.documentElement.classList.remove("planner-nav-enabled");
-    const PAGES = ["home", "live", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets", "team"];
+    const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets", "team"];
     let page = "home";
     try {
       const saved = localStorage.getItem(PAGE_KEY);
@@ -52,6 +52,7 @@
       ".page-pane{display:none}" +
       'html[data-page="home"] #home-page,' +
       'html[data-page="live"] #live-page,' +
+      'html[data-page="report"] #report-page,' +
       'html[data-page="opta"] #opta-page,' +
       'html[data-page="rankings"] #rankings-page,' +
       'html[data-page="ownership"] #ownership-page,' +
@@ -63,6 +64,7 @@
       'html[data-page="prices"] #prices-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
+      'html[data-page="report"] #subtoolbar,' +
       'html[data-page="schedule"] #subtoolbar,' +
       'html[data-page="fixtures"] #subtoolbar{display:none!important}' +
       'html.is-mobile-layout[data-page="markets"] #subtoolbar{display:none!important}' +
@@ -113,6 +115,13 @@
   <symbol id="i-circle-play" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="10"/>
     <polygon points="10 8 16 12 10 16 10 8"/>
+  </symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24">
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    <path d="M10 9H8"/>
+    <path d="M16 13H8"/>
+    <path d="M16 17H8"/>
   </symbol>
   <symbol id="i-table" viewBox="0 0 24 24">
     <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
@@ -378,6 +387,10 @@
       <svg class="icon" aria-hidden="true"><use href="#i-circle-play"/></svg>
       Gameweek
       <span class="page-tab-live-dot" hidden aria-hidden="true"></span>
+    </button>
+    <button id="page-report" class="page-tab-btn" type="button">
+      <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg>
+      Report
     </button>
     <button id="page-opta" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-table"/></svg>
@@ -1021,19 +1034,21 @@
                   </div>
                 </div>
               </div>
-              <div class="home-standings-page">
-                <div class="home-table-wrap">
-                  <table class="home-data-table home-standings-table home-captains-table">
-                    <thead>
-                      <tr>
-                        <th scope="col" class="home-col-rank">#</th>
-                        <th scope="col" class="home-col-manager">Manager</th>
-                        <th scope="col" class="home-col-captain">Captain</th>
-                        <th scope="col" class="home-col-vice">Vice</th>
-                      </tr>
-                    </thead>
-                    <tbody id="home-standings-captains-body"></tbody>
-                  </table>
+              <div class="home-standings-page home-standings-page-captains">
+                <div class="home-captains-page-shell">
+                  <div class="home-table-wrap home-captains-table-wrap" id="home-captains-table-wrap">
+                    <table class="home-data-table home-standings-table home-captains-table">
+                      <thead>
+                        <tr>
+                          <th scope="col" class="home-col-rank">#</th>
+                          <th scope="col" class="home-col-manager">Manager</th>
+                          <th scope="col" class="home-col-captain">Captain</th>
+                          <th scope="col" class="home-col-vice">Vice</th>
+                        </tr>
+                      </thead>
+                      <tbody id="home-standings-captains-body"></tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
               <div class="home-standings-page">
@@ -1147,6 +1162,27 @@
         <div class="rankings-grid" id="live-bonus-grid"></div>
       </div>
       <p class="page-updated-text page-data-footer" id="live-updated-footer" hidden></p>
+    </div>
+
+    <div id="report-page" class="page-pane" style="display:none;">
+      <div class="page-header report-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-file-text"/></svg>Report<button class="page-info-btn" type="button" aria-label="How Report works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle" id="report-page-subtitle">Weekly post-gameweek brief for your linked manager.</p>
+          </div>
+          <div class="page-header-meta">
+            <span class="count-label" id="report-count-label"></span>
+            <span class="report-read-time" id="report-read-time" hidden></span>
+          </div>
+        </div>
+      </div>
+      <div id="report-empty" class="home-empty" hidden>
+        <p class="home-empty-title" id="report-empty-title">No weekly report yet</p>
+        <p class="home-empty-copy" id="report-empty-copy">Reports are baked after the gameweek is settled. Run the local gather + fill for this manager.</p>
+      </div>
+      <article id="report-article" class="report-article" hidden></article>
+      <p class="page-updated-text page-data-footer" id="report-updated-footer" hidden></p>
     </div>
 
     <div id="opta-page" class="page-pane" style="display:none;">
@@ -1816,10 +1852,11 @@
 <script src="data.js?v=129"></script>
 <script src="markets_data.js?v=41"></script>
 <script src="calendar_data.js?v=7"></script>
-<script src="ownership_data.js?v=28"></script>
+<script src="ownership_data.js?v=29"></script>
 <script src="price_changes_data.js?v=66"></script>
 <script src="leagues_data.js?v=5"></script>
 <script src="home_data.js?v=43"></script>
+<script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
 (() => {
@@ -1841,7 +1878,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1285"></script>
+<script src="app.js?v=1291"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
