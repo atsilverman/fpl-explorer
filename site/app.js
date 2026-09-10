@@ -29665,21 +29665,29 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Planner is ready to ship again (nav + prefs section).
   const PLANNER_NAV_ENABLED = false;
+  // Flip to true when Weekly Report is ready to show in nav again.
+  const REPORT_NAV_ENABLED = false;
   const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "fixtures", "markets", "team"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
     if (!PAGES.includes(page)) return "home";
     if (!PLANNER_NAV_ENABLED && page === "team") return "home";
+    if (!REPORT_NAV_ENABLED && page === "report") return "home";
     return page;
   }
 
   function syncPlannerNavVisibility() {
     document.documentElement.classList.toggle("planner-nav-enabled", PLANNER_NAV_ENABLED);
+    document.documentElement.classList.toggle("report-nav-enabled", REPORT_NAV_ENABLED);
     if (el.pageTeam) el.pageTeam.hidden = !PLANNER_NAV_ENABLED;
+    if (el.pageReport) el.pageReport.hidden = !REPORT_NAV_ENABLED;
     if (el.pageTabs) {
       el.pageTabs.querySelectorAll('[data-page-clone="team"]').forEach((node) => {
         node.hidden = !PLANNER_NAV_ENABLED;
+      });
+      el.pageTabs.querySelectorAll('[data-page-clone="report"]').forEach((node) => {
+        node.hidden = !REPORT_NAV_ENABLED;
       });
     }
     if (pageTabWheelBuilt) {
@@ -29690,9 +29698,11 @@
 
   function pageTabOriginIsVisible(node) {
     if (!node || node.classList.contains("page-tab-clone")) return false;
-    if (!PLANNER_NAV_ENABLED) {
+    if (!PLANNER_NAV_ENABLED || !REPORT_NAV_ENABLED) {
       const btn = node.matches(".page-tab-btn") ? node : node.querySelector(".page-tab-btn");
-      if (pageKeyFromTabBtn(btn) === "team") return false;
+      const key = pageKeyFromTabBtn(btn);
+      if (!PLANNER_NAV_ENABLED && key === "team") return false;
+      if (!REPORT_NAV_ENABLED && key === "report") return false;
     }
     if (node.matches(".page-tab-btn") && node.hidden) return false;
     const btn = node.querySelector(".page-tab-btn");
@@ -30402,7 +30412,12 @@
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
   if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
-  if (el.pageReport) el.pageReport.addEventListener("click", () => setPage("report"));
+  if (el.pageReport) {
+    el.pageReport.addEventListener("click", () => {
+      if (!REPORT_NAV_ENABLED) return;
+      setPage("report");
+    });
+  }
   if (el.homeViewBannerClear) {
     el.homeViewBannerClear.addEventListener("click", (e) => {
       e.preventDefault();
@@ -31285,7 +31300,7 @@
         const clone = e.target.closest("[data-page-clone]");
         if (!clone || !el.pageTabs.contains(clone)) return;
         const page = clone.getAttribute("data-page-clone");
-        if (!page || (!PLANNER_NAV_ENABLED && page === "team")) return;
+        if (!page || (!PLANNER_NAV_ENABLED && page === "team") || (!REPORT_NAV_ENABLED && page === "report")) return;
         e.preventDefault();
         e.stopPropagation();
         pageTabFocusEl = clone;

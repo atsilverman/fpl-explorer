@@ -724,6 +724,11 @@ html:not(.planner-nav-enabled) #page-team,
 html:not(.planner-nav-enabled) [data-page-clone="team"] {
   display: none !important;
 }
+#page-report[hidden],
+html:not(.report-nav-enabled) #page-report,
+html:not(.report-nav-enabled) [data-page-clone="report"] {
+  display: none !important;
+}
 .page-tab-btn:hover { background: hsl(var(--accent-hsl)); color: var(--text); }
 .page-tab-btn.active {
   background: transparent;
