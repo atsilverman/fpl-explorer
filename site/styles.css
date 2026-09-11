@@ -18580,6 +18580,27 @@ html.home-squad-wide .home-squad-split {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* Desktop Home cards: hide vertical scrollbar chrome (Team / League / Feed).
+   Trackpad and mouse-wheel scrolling still work; mobile already hides via
+   html.is-mobile-layout. */
+html:not(.is-mobile-layout) .home-squad-split,
+html:not(.is-mobile-layout) #home-squad-panel .home-table-wrap,
+html:not(.is-mobile-layout) #home-standings-panel .home-table-wrap,
+html:not(.is-mobile-layout) .home-transfers-table-wrap,
+html:not(.is-mobile-layout) .home-captains-table-wrap,
+html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll {
+  scrollbar-width: none;
+}
+html:not(.is-mobile-layout) .home-squad-split::-webkit-scrollbar,
+html:not(.is-mobile-layout) #home-squad-panel .home-table-wrap::-webkit-scrollbar,
+html:not(.is-mobile-layout) #home-standings-panel .home-table-wrap::-webkit-scrollbar,
+html:not(.is-mobile-layout) .home-transfers-table-wrap::-webkit-scrollbar,
+html:not(.is-mobile-layout) .home-captains-table-wrap::-webkit-scrollbar,
+html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 html.home-squad-wide .home-squad-live-wrap {
   flex: 0 0 46%;
   min-width: 0;
@@ -19473,7 +19494,6 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   margin: 0;
   box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 .home-transfers-table-wrap .home-transfers-table thead th,
 .home-captains-table-wrap .home-captains-table thead th {
