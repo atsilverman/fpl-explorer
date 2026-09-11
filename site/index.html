@@ -11,18 +11,33 @@
 <link rel="manifest" href="site.webmanifest" />
 <meta name="theme-color" content="#1a0a3a" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="FPL.db" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1298" />
+<link rel="stylesheet" href="styles.css?v=1300" />
 <script>
 (() => {
   try {
     const root = document.documentElement;
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
+    // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
+    // keeps the title row clear of the iOS status blur (unlike black-translucent).
+    const standalone = !!(
+      window.navigator.standalone ||
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches
+    );
+    if (standalone) root.classList.add("is-standalone");
+    const statusMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (statusMeta) {
+      const dark =
+        theme === "dark" ||
+        (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      statusMeta.setAttribute("content", dark ? "black" : "default");
+    }
     try { localStorage.removeItem("fpl-explorer-accent"); } catch (_) {}
     // Locked defaults — prefs UI for these was removed.
     try {
@@ -1891,7 +1906,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1293"></script>
+<script src="app.js?v=1294"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

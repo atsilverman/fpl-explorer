@@ -32677,6 +32677,13 @@
     if (typeof syncSegThumb === "function") syncSegThumb(el.themeSeg, { animate: false });
   }
 
+  function syncAppleStatusBarStyle(mode = currentThemeMode()) {
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (!meta) return;
+    // Opaque bars (not black-translucent) — standalone only; Safari ignores this.
+    meta.setAttribute("content", themePrefersDark(mode) ? "black" : "default");
+  }
+
   function applyTheme(mode, { repaint = false } = {}) {
     const next = THEME_ORDER.includes(mode) ? mode : "system";
     if (next === "system") {
@@ -32687,6 +32694,7 @@
     localStorage.setItem(THEME_KEY, next);
     syncThemeCycleButton(next);
     syncThemeSeg(next);
+    syncAppleStatusBarStyle(next);
     // Ownership Δ pills bake light/dark contrast into inline vars — refresh.
     if (repaint) {
       if (state.page === "home") renderHome({ settleQuiet: true, deferDuringEnter: true });

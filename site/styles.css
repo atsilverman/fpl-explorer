@@ -2229,6 +2229,17 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     overflow: visible;
   }
+  /* Add-to-Home-Screen / installed PWA only — not normal Safari browsing.
+     Pairs with opaque apple-mobile-web-app-status-bar-style so the iOS status
+     blur never sits on top of the brand/title row. */
+  html.is-standalone .page-nav {
+    padding-top: calc(
+      var(--page-nav-pad-y) + constant(safe-area-inset-top, 0px)
+    );
+    padding-top: calc(
+      var(--page-nav-pad-y) + env(safe-area-inset-top, 0px)
+    );
+  }
   .brand-group {
     display: inline-flex;
     align-items: center;
