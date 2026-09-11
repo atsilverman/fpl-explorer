@@ -16610,14 +16610,14 @@ html[data-home-surface="solid"] .home-summary-hero-delta {
   -webkit-backdrop-filter: none;
 }
 html[data-home-surface="solid"] .home-summary-hero-chip {
-  background: hsl(0 0% 100%);
-  border-color: hsl(0 0% 100% / 0.9);
-  color: hsl(240 10% 18%);
+  background: hsl(220 16% 94%);
+  border-color: hsl(220 14% 48% / 0.28);
+  color: hsl(220 16% 26%);
 }
 html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-chip {
-  border-color: hsl(0 0% 100% / 0.9);
-  background: hsl(0 0% 100%);
-  color: hsl(240 10% 16%);
+  border-color: hsl(0 0% 100% / 0.16);
+  background: hsl(0 0% 100% / 0.1);
+  color: hsl(210 14% 88%);
 }
 html[data-home-surface="solid"] .home-summary-hero-live {
   border-color: hsl(var(--delta-rise) / 0.45);
@@ -16644,9 +16644,9 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-chip {
-    border-color: hsl(0 0% 100% / 0.9);
-    background: hsl(0 0% 100%);
-    color: hsl(240 10% 16%);
+    border-color: hsl(0 0% 100% / 0.16);
+    background: hsl(0 0% 100% / 0.1);
+    color: hsl(210 14% 88%);
   }
   html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-live {
     border-color: hsl(var(--delta-rise) / 0.55);
@@ -16971,7 +16971,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   min-height: 24px;
 }
 .home-summary-hero-chip {
-  /* White fill chip — vertically centered with Overall Rank label. */
+  /* Neutral frost chip — vertically centered with Overall Rank label. */
   position: absolute;
   left: 0;
   top: 50%;
@@ -16980,11 +16980,11 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   display: inline-flex;
   align-items: center;
   max-width: calc(50% - 4.5em);
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
-  border: 1px solid hsl(0 0% 100% / 0.85);
-  background: hsl(0 0% 100%);
-  color: hsl(240 10% 18%);
+  border: 1px solid hsl(220 14% 48% / 0.28);
+  background: hsl(220 16% 94% / 0.88);
+  color: hsl(220 16% 26%);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -17161,11 +17161,11 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   letter-spacing: -0.01em;
   color: inherit;
 }
-/* Dark hero chrome — white chip stays white; Δ pills frost on charcoal. */
+/* Dark hero chrome — frost chip + Δ pills on charcoal. */
 html[data-theme="dark"] .home-summary-hero-chip {
-  border-color: hsl(0 0% 100% / 0.9);
-  background: hsl(0 0% 100%);
-  color: hsl(240 10% 16%);
+  border-color: hsl(0 0% 100% / 0.16);
+  background: hsl(0 0% 100% / 0.1);
+  color: hsl(210 14% 88%);
 }
 html[data-theme="dark"] .home-summary-hero-live {
   border-color: hsl(var(--delta-rise) / 0.48);
@@ -17201,9 +17201,9 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-summary-hero-chip {
-    border-color: hsl(0 0% 100% / 0.9);
-    background: hsl(0 0% 100%);
-    color: hsl(240 10% 16%);
+    border-color: hsl(0 0% 100% / 0.16);
+    background: hsl(0 0% 100% / 0.1);
+    color: hsl(210 14% 88%);
   }
   html:not([data-theme="light"]) .home-summary-hero-live {
     border-color: hsl(var(--delta-rise) / 0.48);
@@ -20154,27 +20154,32 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   padding: 4px 5px;
   border-radius: var(--home-chip-radius, 6px);
   border: 1px solid transparent;
-  background: transparent;
   text-align: center;
 }
 .home-mp-line.is-short-mins {
-  border-color: hsl(14 86% 52%);
+  border-color: hsl(14 86% 52% / 0.72);
+  background: hsl(14 86% 52% / 0.1);
 }
 .home-mp-line.is-modest-mins {
-  border-color: hsl(44 82% 46%);
+  border-color: hsl(44 82% 46% / 0.72);
+  background: hsl(44 86% 48% / 0.12);
 }
 html[data-theme="dark"] .home-mp-line.is-short-mins {
-  border-color: hsl(14 80% 58%);
+  border-color: hsl(14 80% 58% / 0.75);
+  background: hsl(14 80% 58% / 0.16);
 }
 html[data-theme="dark"] .home-mp-line.is-modest-mins {
-  border-color: hsl(46 90% 56%);
+  border-color: hsl(46 90% 56% / 0.75);
+  background: hsl(46 90% 56% / 0.16);
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-mp-line.is-short-mins {
-    border-color: hsl(14 80% 58%);
+    border-color: hsl(14 80% 58% / 0.75);
+    background: hsl(14 80% 58% / 0.16);
   }
   html:not([data-theme="light"]) .home-mp-line.is-modest-mins {
-    border-color: hsl(46 90% 56%);
+    border-color: hsl(46 90% 56% / 0.75);
+    background: hsl(46 90% 56% / 0.16);
   }
 }
 .home-dnp-icon {
