@@ -16846,32 +16846,34 @@ html[data-page="home"] .home-dashboard.is-player-lookup .home-summary-hero {
       ) 100%
     );
 }
-/* Soft Δ bloom under the rank (sits behind frosted GW cards). */
+/* Soft Δ bloom under the rank delta (glass cards pick it up naturally — no
+   forced card shadows). Keep the ellipse tight around the centered Δ pill. */
 .home-summary-hero.is-rank-up::after,
 .home-summary-hero.is-rank-down::after {
   content: "";
   position: absolute;
-  left: 8%;
-  right: 8%;
-  bottom: -8%;
-  height: 58%;
+  left: 50%;
+  bottom: 4%;
+  width: min(280px, 42%);
+  height: 48%;
+  transform: translateX(-50%);
   pointer-events: none;
   z-index: 0;
   border-radius: 50%;
-  filter: blur(28px);
-  opacity: calc(0.55 * var(--home-rank-sat, 1));
+  filter: blur(26px);
+  opacity: calc(0.62 * var(--home-rank-sat, 1));
 }
 .home-summary-hero.is-rank-up::after {
   background: radial-gradient(
-    ellipse 70% 55% at 50% 70%,
-    hsl(var(--home-hero-delta-up) / 0.42),
+    ellipse 70% 55% at 50% 55%,
+    hsl(var(--home-hero-delta-up) / 0.48),
     transparent 72%
   );
 }
 .home-summary-hero.is-rank-down::after {
   background: radial-gradient(
-    ellipse 70% 55% at 50% 70%,
-    hsl(var(--home-hero-delta-down) / 0.38),
+    ellipse 70% 55% at 50% 55%,
+    hsl(var(--home-hero-delta-down) / 0.44),
     transparent 72%
   );
 }
@@ -17248,21 +17250,6 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   box-shadow:
     var(--home-glass-shadow),
     var(--shadow-sm);
-}
-/* Overall Δ tint picked up slightly by the top glass row. */
-.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-up) .home-stat-gw,
-.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-up) .home-stat-gw-rank {
-  box-shadow:
-    var(--home-glass-shadow),
-    var(--shadow-sm),
-    0 -10px 26px -6px hsl(var(--delta-rise) / 0.22);
-}
-.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-down) .home-stat-gw,
-.home-summary[data-home-summary="hero"]:has(.home-summary-hero.is-rank-down) .home-stat-gw-rank {
-  box-shadow:
-    var(--home-glass-shadow),
-    var(--shadow-sm),
-    0 -10px 26px -6px hsl(var(--delta-fall) / 0.2);
 }
 /* Keep hero card values on one baseline — GW was oversized vs rank. */
 .home-summary[data-home-summary="hero"] .home-stat-value,
