@@ -2921,6 +2921,12 @@
     return paired > 0;
   }
 
+  /** True when live league picks report transfers are ready for the current GW. */
+  function homeLiveTransfersReady(payload) {
+    const status = payload && payload.leaguePicksStatus;
+    return !!(status && typeof status === "object" && status.transfersReady === true);
+  }
+
   function homeSyncStandingsTransfers(standings, byEntry) {
     const map = byEntry && typeof byEntry === "object" ? byEntry : {};
     return (Array.isArray(standings) ? standings : []).map((row) => {
@@ -3118,7 +3124,15 @@
       priorHome.transfersSchemaVersion
     );
     // Never let legacy live/session pairing overwrite canonical transfers (static or v2 live).
-    const keepPriorTransfers = priorCanonical && !incomingCanonical;
+    // Exception: older live servers omit schema/elementType but still ship ready GW moves
+    // (e.g. Wildcard). Prefer those over a stale baked canonical snapshot.
+    const incomingTransfersFp = homeTransfersFingerprint(incomingTransfers);
+    const priorTransfersFp = homeTransfersFingerprint(priorHome.transfersByEntry);
+    const preferIncomingLiveReady =
+      homeLiveTransfersReady(payload)
+      && !!incomingTransfersFp
+      && incomingTransfersFp !== priorTransfersFp;
+    const keepPriorTransfers = priorCanonical && !incomingCanonical && !preferIncomingLiveReady;
     HOME.transfersByEntry = keepPriorTransfers ? priorHome.transfersByEntry : incomingTransfers;
     HOME.transfersSchemaVersion = keepPriorTransfers
       ? Math.max(2, priorHome.transfersSchemaVersion || 0)
@@ -3527,8 +3541,21 @@
         r.toPlay,
         r.benchPoints,
         r.benchPointsGw,
+        r.activeChip || "",
+        homeChipsStatusFingerprint(r.chips),
       ].join(":"))
       .join("|");
+  }
+
+  function homeChipsStatusFingerprint(chips) {
+    if (!chips || typeof chips !== "object") return "";
+    return Object.keys(chips)
+      .sort()
+      .map((key) => {
+        const c = chips[key] || {};
+        return `${key}:${c.status || ""}:${c.event ?? ""}`;
+      })
+      .join(",");
   }
 
   function homeTransfersFingerprint(byEntry) {
@@ -3559,6 +3586,7 @@
       summary.gwRank,
       summary.leagueRank,
       summary.leagueRankPrev,
+      summary.activeChip || "",
     ].join(":");
   }
 
