@@ -4172,11 +4172,14 @@
 
   const HOME_MP_SHORT_MAX = 59;
   const HOME_MP_MODEST_MAX = 75;
-  const HOME_MP_LIVE_CLOCK_GAP = 8;
-  const HOME_MP_LIVE_FREEZE_POLLS = 2;
-  const HOME_MP_LIVE_FREEZE_MS = 30_000;
-  const HOME_MP_LIVE_NOCLOCK_POLLS = 4;
-  const HOME_MP_LIVE_NOCLOCK_MS = 60_000;
+  // FPL minutes routinely lag the live clock by several minutes while the
+  // player is still on — keep this ahead of typical lag so early-match
+  // 18′ + clock 26′ does not look like a sub.
+  const HOME_MP_LIVE_CLOCK_GAP = 12;
+  const HOME_MP_LIVE_FREEZE_POLLS = 3;
+  const HOME_MP_LIVE_FREEZE_MS = 45_000;
+  const HOME_MP_LIVE_NOCLOCK_POLLS = 5;
+  const HOME_MP_LIVE_NOCLOCK_MS = 90_000;
   const HOME_MP_WATCH_STORE = "fpl.homeMpWatch.v1";
   let homeMpWatch = new Map();
   let homeMpWatchGw = null;
@@ -4307,9 +4310,9 @@
       && frozenFor >= HOME_MP_LIVE_FREEZE_MS;
     if (!frozen) return false;
     const gap = clock - minsN;
-    const clockMoved = watch.clockWhenMinsChanged != null
-      && clock >= Number(watch.clockWhenMinsChanged) + HOME_MP_LIVE_CLOCK_GAP;
-    return gap >= HOME_MP_LIVE_CLOCK_GAP || clockMoved;
+    // Require a clear clock lead after minutes freeze. Do not use a weaker
+    // "clock moved since last mins tick" alone — that fires on normal FPL lag.
+    return gap >= HOME_MP_LIVE_CLOCK_GAP;
   }
 
   /** short (<60′) or modest (60–75′) once the player is done — FT, or live sub. */
@@ -5201,18 +5204,32 @@
   }
 
   function homeStandingsBenchPointsGw(row) {
-    const n = row && row.benchPointsGw != null ? Number(row.benchPointsGw) : NaN;
-    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
     // Bench Boost: pine pts count toward the score, not "left on the bench".
     if (homeActiveChipName(row) === "bboost") return 0;
-    const gw = homeSquadBenchPointsTotal(homeSquadForEntry(row && row.entry));
-    return gw != null ? Math.max(0, Math.round(gw)) : 0;
+    // Prefer live squad pine (same as Team card) — FPL points_on_bench often lags mid-GW.
+    const squad = homeSquadForEntry(row && row.entry);
+    if (squad && squad.length && homeCanShowVolatileStats()) {
+      const live = homeSquadBenchPointsTotal(squad);
+      return live != null ? Math.max(0, Math.round(live)) : 0;
+    }
+    const n = row && row.benchPointsGw != null ? Number(row.benchPointsGw) : NaN;
+    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
+    return 0;
   }
 
   function homeStandingsBenchPointsSeason(row) {
-    const n = row && row.benchPoints != null ? Number(row.benchPoints) : NaN;
-    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
-    return null;
+    const season = row && row.benchPoints != null ? Number(row.benchPoints) : NaN;
+    const liveGw = homeStandingsBenchPointsGw(row);
+    if (!Number.isFinite(season)) {
+      // No history yet — season bar tracks the live GW pine only.
+      return liveGw;
+    }
+    const officialGw = row && row.benchPointsGw != null ? Number(row.benchPointsGw) : NaN;
+    if (Number.isFinite(officialGw)) {
+      // Swap the sticky official GW slice for the live pine total.
+      return Math.max(0, Math.round(season - officialGw + liveGw));
+    }
+    return Math.max(0, Math.round(season));
   }
 
   function homeBenchPointsMedalMap(rows) {
@@ -7422,6 +7439,8 @@
     let any = false;
     for (const row of rows || []) {
       if (!row || !row.onBench) continue;
+      // Auto-subbed onto the XI — those pts are in the score, not left on the pine.
+      if (row.autoSubIn) continue;
       const pts = homeSquadRowGwPoints(row);
       if (pts == null || !Number.isFinite(Number(pts))) continue;
       any = true;
@@ -16628,11 +16647,11 @@
         ),
         spitRow(
           `<span class="home-mp-line is-short-mins spit-home-swatch" aria-hidden="true">45′</span>`,
-          "Under 60′ — after FT, or live once minutes freeze while the match continues"
+          "Under 60′ — after FT, or live once minutes stay frozen well behind the match clock (likely subbed)"
         ),
         spitRow(
           `<span class="home-mp-line is-modest-mins spit-home-swatch" aria-hidden="true">68′</span>`,
-          "60–75′ — played, but short of a full match"
+          "60–75′ — after FT, or live once minutes stay frozen well behind the match clock"
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
@@ -16698,7 +16717,7 @@
         spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
         spitRow(
           spitRank("Bench Points"),
-          "Standings swipe → Bench Points: GW pill + Season bar = points left on the pine (FPL points_on_bench). Bench Boost weeks count as 0 — those pts are in the XI score."
+          "Standings swipe → Bench Points: GW pill + Season bar = points left on the pine (live squad; auto-subs excluded). Bench Boost weeks count as 0 — those pts are in the XI score."
         ),
         spitRow(
           spitRank("Search"),
