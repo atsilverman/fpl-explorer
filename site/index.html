@@ -17,12 +17,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
 <link rel="stylesheet" href="styles.css?v=1307" />
+<link rel="stylesheet" href="motion-enhanced.css?v=2" />
 <script>
 (() => {
   try {
     const root = document.documentElement;
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
+    if (localStorage.getItem("fpl-explorer-motion-enhanced") === "1") {
+      root.classList.add("motion-enhanced");
+    }
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
     // keeps the title row clear of the iOS status blur (unlike black-translucent).
     const standalone = !!(
@@ -503,6 +507,14 @@
                 <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
               </div>
             </div>
+            <label class="settings-switch-row" for="prefs-motion-enhanced">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Enhanced motion</span>
+                <span class="settings-switch-hint">Try smoother opens, sheet reveals, and pop-ins (A/B — toggle off anytime)</span>
+              </span>
+              <input type="checkbox" id="prefs-motion-enhanced" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
           </section>
           <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
@@ -1865,7 +1877,7 @@
 <script src="ownership_data.js?v=48"></script>
 <script src="price_changes_data.js?v=86"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=46"></script>
+<script src="home_data.js?v=47"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1888,7 +1900,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1300"></script>
+<script src="app.js?v=1302"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

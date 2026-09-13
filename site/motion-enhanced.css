@@ -1,0 +1,422 @@
+/* Enhanced motion (prefs toggle) — transitions.dev-inspired overrides.
+   Only active when <html class="motion-enhanced">. Default site motion unchanged. */
+
+html.motion-enhanced {
+  /* Shared scale (subset of transitions-dev tokens) */
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --ease-bounce-strong: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --dropdown-open-dur: 250ms;
+  --dropdown-pre-scale: 0.97;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --modal-open-dur: 250ms;
+  --modal-scale: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --panel-open-dur: 400ms;
+  --panel-translate-y: 100px;
+  --panel-blur: 2px;
+  --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --digit-dur: 500ms;
+  --digit-distance: 8px;
+  --digit-blur: 2px;
+  --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --avatar-lift: -3px;
+  --avatar-dur: 320ms;
+  --avatar-scale: 1.04;
+  --avatar-ease-in: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --page-slide-dur: 250ms;
+  --page-fade-dur: 250ms;
+  --page-blur: 3px;
+  --acc-expand: 250ms;
+  --acc-collapse: 250ms;
+  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-ease: ease-in-out;
+  --clear-out-dur: 280ms;
+  --clear-out-fly: 10px;
+  --clear-blur: 2px;
+  --pulse-dur: 1000ms;
+  --reveal-dur: 400ms;
+  --reveal-blur: 2px;
+  --tt-in-dur: 150ms;
+  --tt-out-dur: 50ms;
+  --tt-scale: 0.98;
+  --tt-delay: 80ms;
+  --toggle-dur: 350ms;
+  --toggle-travel: 13px;
+  --toggle-ov1: 1.5px;
+  --toggle-ease: cubic-bezier(0.34, 1.35, 0.64, 1);
+  --badge-slide-dur: 260ms;
+  --badge-pop-dur: 500ms;
+  --badge-blur: 2px;
+  --badge-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --badge-pop-ease: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --reel-spin-blur: 2.5px;
+
+  /* Remap site-wide ease used by sheets / enters / docks */
+  --ease-out: var(--ease-smooth-out);
+}
+
+/* —— Dropdowns / prefs (menu-dropdown) —— */
+@keyframes motion-dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--dropdown-pre-scale));
+    filter: blur(1px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+html.motion-enhanced .dropdown-panel.open,
+html.motion-enhanced .settings-panel.open,
+html.motion-enhanced .page-tab-menu.open,
+html.motion-enhanced .team-row-menu.open {
+  transform-origin: top right;
+  animation: motion-dropdown-in var(--dropdown-open-dur) var(--dropdown-ease) both;
+  will-change: transform, opacity;
+}
+
+html.motion-enhanced .page-tab-menu.open {
+  transform-origin: top center;
+}
+
+/* —— Mobile sheet (panel reveal) —— */
+html.motion-enhanced .mobile-sheet-backdrop {
+  transition: opacity var(--panel-open-dur) var(--panel-ease);
+}
+
+html.motion-enhanced .mobile-sheet-panel {
+  transform: translateY(var(--panel-translate-y)) scale(0.985);
+  filter: blur(var(--panel-blur));
+  opacity: 0.92;
+  transition:
+    transform var(--panel-open-dur) var(--panel-ease),
+    filter var(--panel-open-dur) var(--panel-ease),
+    opacity var(--panel-open-dur) var(--panel-ease);
+}
+
+html.motion-enhanced .mobile-sheet.is-open .mobile-sheet-panel {
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+  opacity: 1;
+}
+
+/* —— Page enter —— */
+html.motion-enhanced .page-pane.is-entering > .page-header {
+  animation-duration: 0.52s;
+  animation-timing-function: var(--ease-smooth-out);
+}
+
+html.motion-enhanced .page-pane.is-entering .home-summary-stat,
+html.motion-enhanced .page-pane.is-entering .home-bento-card,
+html.motion-enhanced .page-pane.is-entering .markets-card,
+html.motion-enhanced .page-pane.is-entering tbody tr {
+  animation-timing-function: var(--ease-smooth-out);
+}
+
+/* —— Rank / value pop (number pop-in lite) —— */
+@keyframes motion-delta-pop {
+  from {
+    opacity: 0;
+    transform: translateY(var(--digit-distance)) scale(0.92);
+    filter: blur(var(--digit-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+html.motion-enhanced .home-rank-delta:not([hidden]):not(.is-flat),
+html.motion-enhanced .page-live-badge:not([hidden]),
+html.motion-enhanced .home-hero-live:not([hidden]),
+html.motion-enhanced .is-motion-pop {
+  animation: motion-delta-pop var(--digit-dur) var(--digit-ease) both;
+}
+
+/* —— Tabs sliding (seg-thumb polish) —— */
+html.motion-enhanced .seg-thumb {
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease),
+    height var(--tabs-dur) var(--tabs-ease),
+    opacity var(--duration-quick) var(--tabs-ease);
+}
+
+/* —— Home swipe tracks (page side-by-side lite) —— */
+html.motion-enhanced .home-squad-track,
+html.motion-enhanced .home-standings-track,
+html.motion-enhanced .home-feed-track {
+  scroll-behavior: smooth;
+}
+
+html.motion-enhanced .home-squad-page,
+html.motion-enhanced .home-standings-page,
+html.motion-enhanced .home-feed-page {
+  transition:
+    opacity var(--page-fade-dur) var(--ease-smooth-out),
+    filter var(--page-slide-dur) var(--ease-smooth-out);
+}
+
+/* —— Bench accordion + icon swap —— */
+@keyframes motion-bench-row-in {
+  from {
+    opacity: 0;
+    filter: blur(var(--reveal-blur));
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+html.motion-enhanced #home-squad-panel:not(.is-bench-collapsed) .home-squad-table tbody tr.home-row-bench {
+  animation: motion-bench-row-in var(--acc-expand) var(--acc-ease) both;
+}
+
+html.motion-enhanced .home-bench-toggle-icon {
+  transition:
+    transform var(--icon-swap-dur) var(--icon-swap-ease),
+    filter var(--icon-swap-dur) var(--icon-swap-ease),
+    opacity var(--icon-swap-dur) var(--icon-swap-ease);
+}
+
+html.motion-enhanced #home-squad-panel.is-bench-collapsed .home-bench-toggle-icon {
+  transform: rotate(-90deg) scale(0.92);
+  filter: blur(0.5px);
+}
+
+html.motion-enhanced #home-squad-panel:not(.is-bench-collapsed) .home-bench-toggle-icon {
+  transform: rotate(0deg) scale(1);
+  filter: blur(0);
+}
+
+/* —— Search clear dissolve (lite) —— */
+@keyframes motion-clear-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--clear-out-fly));
+    filter: blur(var(--clear-blur));
+  }
+}
+
+html.motion-enhanced .search-wrap.is-motion-clearing #search-input,
+html.motion-enhanced .home-desktop-search.is-motion-clearing #home-desktop-search-input,
+html.motion-enhanced input.is-motion-clearing {
+  animation: motion-clear-out var(--clear-out-dur) var(--ease-smooth-out) forwards;
+}
+
+html.motion-enhanced .search-wrap.is-motion-clearing #search-clear-btn,
+html.motion-enhanced .home-desktop-search.is-motion-clearing #home-desktop-search-clear {
+  opacity: 0.35;
+  transition: opacity var(--clear-out-dur) var(--ease-smooth-out);
+}
+
+/* —— Skeleton / loading bars —— */
+html.motion-enhanced .home-squad-loading-bar {
+  animation-duration: var(--pulse-dur);
+  animation-timing-function: ease-in-out;
+  filter: saturate(1.05);
+}
+
+@keyframes motion-content-reveal {
+  from {
+    opacity: 0;
+    filter: blur(var(--reveal-blur));
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+html.motion-enhanced .home-squad-table tbody tr.is-motion-reveal,
+html.motion-enhanced .home-standings-table tbody tr.is-motion-reveal,
+html.motion-enhanced .home-feed-table tbody tr.is-motion-reveal {
+  animation: motion-content-reveal var(--reveal-dur) ease-in-out both;
+  animation-delay: calc(var(--enter-i, 0) * 28ms);
+}
+
+/* —— Tooltips —— */
+html.motion-enhanced .ui-tooltip {
+  transform: translateY(4px) scale(var(--tt-scale));
+  transition:
+    opacity var(--tt-out-dur) ease-out,
+    transform var(--tt-out-dur) ease-out;
+}
+
+html.motion-enhanced .ui-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity var(--tt-in-dur) ease-out var(--tt-delay),
+    transform var(--tt-in-dur) ease-out var(--tt-delay);
+}
+
+html.motion-enhanced .fixture-tooltip,
+html.motion-enhanced .team-rank-tooltip,
+html.motion-enhanced .matchup-edge-tooltip,
+html.motion-enhanced .schedule-scatter-tooltip,
+html.motion-enhanced .page-info-tooltip {
+  opacity: 0;
+  transform: translateY(4px) scale(var(--tt-scale));
+  transition:
+    opacity var(--tt-out-dur) ease-out,
+    transform var(--tt-out-dur) ease-out;
+}
+
+html.motion-enhanced .fixture-tooltip.visible,
+html.motion-enhanced .team-rank-tooltip.visible,
+html.motion-enhanced .matchup-edge-tooltip.visible,
+html.motion-enhanced .schedule-scatter-tooltip.visible,
+html.motion-enhanced .page-info-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity var(--tt-in-dur) ease-out var(--tt-delay),
+    transform var(--tt-in-dur) ease-out var(--tt-delay);
+}
+
+/* —— Prefs switch bounce (toggle) —— */
+@keyframes motion-toggle-on {
+  0% { transform: translateX(0); }
+  55% { transform: translateX(calc(var(--toggle-travel) + var(--toggle-ov1))); }
+  80% { transform: translateX(calc(var(--toggle-travel) - 0.5px)); }
+  100% { transform: translateX(var(--toggle-travel)); }
+}
+
+@keyframes motion-toggle-off {
+  0% { transform: translateX(var(--toggle-travel)); }
+  55% { transform: translateX(calc(0px - var(--toggle-ov1))); }
+  80% { transform: translateX(0.5px); }
+  100% { transform: translateX(0); }
+}
+
+html.motion-enhanced .switch-thumb {
+  transition: background-color var(--duration-quick) ease;
+}
+
+html.motion-enhanced .settings-switch-row.is-motion-init input:checked + .switch-track .switch-thumb {
+  animation: motion-toggle-on var(--toggle-dur) var(--toggle-ease) both;
+}
+
+html.motion-enhanced .settings-switch-row.is-motion-init input:not(:checked) + .switch-track .switch-thumb {
+  animation: motion-toggle-off var(--toggle-dur) var(--toggle-ease) both;
+}
+
+/* —— Live notification badge —— */
+@keyframes motion-badge-slide-in {
+  from {
+    transform: translate(-6px, 8px) scale(0.6);
+    opacity: 0;
+    filter: blur(var(--badge-blur));
+  }
+  to {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+html.motion-enhanced .page-tab-live-dot:not([hidden]),
+html.motion-enhanced #page-nav-live:not([hidden]) {
+  animation:
+    motion-badge-slide-in var(--badge-slide-dur) var(--badge-slide-ease) both,
+    home-live-pulse 1.6s ease-out 0.4s infinite;
+}
+
+/* —— Stat roll / spinning counter polish —— */
+html.motion-enhanced .stat-roll-strip.is-rolling {
+  filter: blur(0 var(--reel-spin-blur));
+}
+
+html.motion-enhanced .stat-roll-digit {
+  transition: filter var(--duration-fast) var(--ease-smooth-out);
+}
+
+/* —— Segmented / tab hover lift —— */
+html.motion-enhanced .segmented button,
+html.motion-enhanced .tabs .tab-btn,
+html.motion-enhanced .page-tab-btn {
+  transition:
+    color 0.18s var(--avatar-ease-in),
+    background-color 0.18s var(--avatar-ease-in),
+    box-shadow 0.18s var(--avatar-ease-in),
+    transform var(--avatar-dur) var(--avatar-ease-in);
+}
+
+html.motion-enhanced .segmented button:hover,
+html.motion-enhanced .tabs .tab-btn:hover,
+html.motion-enhanced .page-tab-btn:hover {
+  transform: translateY(var(--avatar-lift)) scale(var(--avatar-scale));
+}
+
+html.motion-enhanced .segmented button:active,
+html.motion-enhanced .tabs .tab-btn:active,
+html.motion-enhanced .page-tab-btn:active {
+  transform: translateY(0) scale(1);
+}
+
+/* —— Dock / chrome fade —— */
+html.motion-enhanced .mobile-view-dock,
+html.motion-enhanced .mobile-filter-dock {
+  transition:
+    transform var(--duration-medium) var(--ease-smooth-out),
+    opacity var(--duration-medium) var(--ease-smooth-out);
+}
+
+html.motion-enhanced .mobile-scroll-top-fade {
+  transition: opacity var(--duration-fast) var(--ease-smooth-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.motion-enhanced .dropdown-panel.open,
+  html.motion-enhanced .settings-panel.open,
+  html.motion-enhanced .page-tab-menu.open,
+  html.motion-enhanced .team-row-menu.open,
+  html.motion-enhanced .home-rank-delta:not([hidden]),
+  html.motion-enhanced .page-live-badge:not([hidden]),
+  html.motion-enhanced .home-hero-live:not([hidden]),
+  html.motion-enhanced .is-motion-pop,
+  html.motion-enhanced .page-tab-live-dot:not([hidden]),
+  html.motion-enhanced #page-nav-live:not([hidden]),
+  html.motion-enhanced #home-squad-panel:not(.is-bench-collapsed) .home-squad-table tbody tr.home-row-bench,
+  html.motion-enhanced .home-squad-table tbody tr.is-motion-reveal,
+  html.motion-enhanced .home-standings-table tbody tr.is-motion-reveal,
+  html.motion-enhanced .home-feed-table tbody tr.is-motion-reveal,
+  html.motion-enhanced .settings-switch-row.is-motion-init .switch-thumb {
+    animation: none !important;
+  }
+  html.motion-enhanced .mobile-sheet-panel,
+  html.motion-enhanced .mobile-sheet-backdrop,
+  html.motion-enhanced .segmented button,
+  html.motion-enhanced .tabs .tab-btn,
+  html.motion-enhanced .page-tab-btn,
+  html.motion-enhanced .seg-thumb,
+  html.motion-enhanced .ui-tooltip,
+  html.motion-enhanced .fixture-tooltip,
+  html.motion-enhanced .home-squad-track,
+  html.motion-enhanced .home-standings-track,
+  html.motion-enhanced .home-feed-track {
+    transition: none !important;
+    filter: none !important;
+    transform: none !important;
+    scroll-behavior: auto !important;
+  }
+}

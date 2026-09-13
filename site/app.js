@@ -1365,6 +1365,7 @@
     fixturesHead: $("#fixtures-head"),
     fixturesBody: $("#fixtures-body"),
     prefsFixturesCustomColors: $("#prefs-fixtures-custom-colors"),
+    prefsMotionEnhanced: $("#prefs-motion-enhanced"),
     difficultyWizard: $("#difficulty-wizard"),
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
@@ -12822,6 +12823,7 @@
     syncHomeLiveChrome();
     syncLiveNavChrome();
     syncHomeLookupUI();
+    if (typeof motionAfterHomeRender === "function") motionAfterHomeRender();
     syncHomeSquadPagerDots(homeSquadActivePageIndex());
     const standingsPageIdx = homeStandingsActivePageIndex();
     syncHomeStandingsPagerDots(standingsPageIdx);
@@ -30527,8 +30529,14 @@
     el.homeDesktopSearchClear.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      clearHomePlayerLookup();
-      if (el.homeDesktopSearchInput) el.homeDesktopSearchInput.focus();
+      motionRunClear(
+        el.homeDesktopSearchInput && el.homeDesktopSearchInput.closest(".home-desktop-search"),
+        el.homeDesktopSearchInput,
+        () => {
+          clearHomePlayerLookup();
+          if (el.homeDesktopSearchInput) el.homeDesktopSearchInput.focus();
+        }
+      );
     });
   }
   if (el.homeDesktopSearchResults) {
@@ -30925,6 +30933,13 @@
       if (t.id === "prefs-fixtures-custom-colors") {
         setTeamDifficultyToggle("fixtures", !!t.checked);
         return;
+      }
+      if (t.id === "prefs-motion-enhanced") {
+        setMotionEnhanced(!!t.checked);
+        return;
+      }
+      if (t.matches && t.matches("input[type='checkbox']")) {
+        motionMarkSwitchInit(t);
       }
     });
   }
@@ -31696,7 +31711,7 @@
     el.searchClearBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      clearMainSearch();
+      motionRunClear(el.searchWrap, el.search, () => clearMainSearch());
     });
   }
 
@@ -32769,6 +32784,116 @@
   }
 
   applyTheme(currentThemeMode());
+
+  const MOTION_ENHANCED_KEY = "fpl-explorer-motion-enhanced";
+
+  function motionEnhancedOn() {
+    try {
+      return localStorage.getItem(MOTION_ENHANCED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function syncMotionEnhancedUI() {
+    if (el.prefsMotionEnhanced) el.prefsMotionEnhanced.checked = motionEnhancedOn();
+  }
+
+  function setMotionEnhanced(on) {
+    const next = !!on;
+    try {
+      if (next) localStorage.setItem(MOTION_ENHANCED_KEY, "1");
+      else localStorage.removeItem(MOTION_ENHANCED_KEY);
+    } catch {
+      /* private browsing */
+    }
+    document.documentElement.classList.toggle("motion-enhanced", next);
+    syncMotionEnhancedUI();
+    if (next && state.page === "home") motionAfterHomeRender({ forceReveal: true });
+  }
+
+  function motionPulseNode(node) {
+    if (!node || !motionEnhancedOn()) return;
+    node.classList.remove("is-motion-pop");
+    void node.offsetWidth;
+    node.classList.add("is-motion-pop");
+  }
+
+  function motionPulseValuePills(root = document) {
+    if (!motionEnhancedOn() || !root) return;
+    root.querySelectorAll(
+      ".ownership-pill, .data-pill, .home-pts-pill, .home-bench-gw-pill:not(.is-empty), .home-standings-live-pill"
+    ).forEach((node) => {
+      const text = String(node.textContent || "").trim();
+      if (!text || text === "—") return;
+      const prev = node.dataset.motionVal;
+      node.dataset.motionVal = text;
+      if (prev != null && prev !== text) motionPulseNode(node);
+    });
+  }
+
+  function motionRevealHomeRows() {
+    if (!motionEnhancedOn()) return;
+    const bodies = [
+      el.homeSquadBody,
+      el.homeStandingsBody,
+      el.homeStandingsTransfersBody,
+      el.homeStandingsCaptainsBody,
+      el.homeStandingsChipsBody,
+      el.homeStandingsBenchBody,
+    ];
+    bodies.forEach((body) => {
+      if (!body) return;
+      if (body.querySelector(".home-squad-loading-row")) return;
+      body.querySelectorAll("tr").forEach((tr, i) => {
+        if (tr.classList.contains("home-bench-divider")) return;
+        tr.classList.remove("is-motion-reveal");
+        tr.style.setProperty("--enter-i", String(Math.min(i, 12)));
+        void tr.offsetWidth;
+        tr.classList.add("is-motion-reveal");
+      });
+    });
+  }
+
+  let homeMotionWasLoading = false;
+
+  function motionAfterHomeRender({ forceReveal = false } = {}) {
+    if (!motionEnhancedOn()) return;
+    const loadingNow = !!(
+      (typeof homeStandingsShowLoading === "function" && homeStandingsShowLoading())
+      || (typeof homeSquadShowLoading === "function" && homeSquadShowLoading(homeActiveViewEntryId()))
+    );
+    const leftLoading = homeMotionWasLoading && !loadingNow;
+    homeMotionWasLoading = loadingNow;
+    requestAnimationFrame(() => {
+      motionPulseValuePills(el.homePage || document);
+      if (forceReveal || leftLoading) motionRevealHomeRows();
+    });
+  }
+
+  function motionRunClear(host, input, runClear) {
+    if (!motionEnhancedOn() || !input) {
+      runClear();
+      return;
+    }
+    const wrap = host || input.closest(".search-wrap, .home-desktop-search") || input.parentElement;
+    if (wrap) wrap.classList.add("is-motion-clearing");
+    input.classList.add("is-motion-clearing");
+    window.setTimeout(() => {
+      runClear();
+      input.classList.remove("is-motion-clearing");
+      if (wrap) wrap.classList.remove("is-motion-clearing");
+    }, 260);
+  }
+
+  function motionMarkSwitchInit(input) {
+    if (!motionEnhancedOn() || !input) return;
+    const row = input.closest(".settings-switch-row");
+    if (!row) return;
+    row.classList.add("is-motion-init");
+  }
+
+  setMotionEnhanced(motionEnhancedOn());
 
   const HOME_SUMMARY_KEY = "fpl-explorer-home-summary";
   const HOME_SUMMARY_DEFAULT = "hero";
