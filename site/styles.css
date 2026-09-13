@@ -291,7 +291,7 @@ html, body {
     height: 100%;
     overflow: hidden;
   }
-  /* Hide scrollbars on mobile — overflow still works; more-content hints replace chrome. */
+  /* Hide scrollbars on mobile — overflow still works; edge fades replace chrome. */
   html.is-mobile-layout,
   html.is-mobile-layout * {
     scrollbar-width: none;
@@ -528,10 +528,7 @@ html[data-page="opta"] {
   opacity: 0.75;
   color: inherit;
 }
-.page-nav.is-page-tray-open .page-tray-btn .page-tab-caret,
-.page-tray-btn[aria-expanded="true"] .page-tab-caret {
-  transform: rotate(180deg);
-}
+/* chevrons-up-down already reads both ways — no flip when open */
 .page-tray-btn:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -14499,6 +14496,7 @@ html.is-team-landscape #subtoolbar,
 html.is-team-landscape .mobile-view-dock,
 html.is-team-landscape .mobile-filter-dock,
 html.is-team-landscape .mobile-chrome-fade,
+html.is-team-landscape .mobile-scroll-top-fade,
 html.is-team-landscape .sidebar,
 html.is-team-landscape #team-page .page-header,
 html.is-team-landscape #team-page .team-budget-bar,
@@ -24588,76 +24586,45 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   }
 }
 
-/* ---------- Mobile scroll-more hints (replace scrollbars) ---------- */
-.scroll-more-layer {
+/* ---------- Mobile scroll top fade (replaces scroll-more chevrons) ---------- */
+.mobile-scroll-top-fade {
   position: fixed;
-  z-index: 40;
+  z-index: 39;
   pointer-events: none;
   box-sizing: border-box;
-  inset: auto;
+  height: 44px;
+  opacity: 0;
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--background) / 0.72) 0%,
+    hsl(var(--background) / 0.34) 46%,
+    hsl(var(--background) / 0) 100%
+  );
+  will-change: opacity;
 }
-.scroll-more-layer[hidden] {
+.mobile-scroll-top-fade[hidden] {
   display: none !important;
 }
-.scroll-more-hint {
-  position: absolute;
-  left: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin: 0;
-  border-radius: 999px;
-  background: hsl(var(--card) / 0.72);
-  border: 1px solid hsl(var(--border-hsl) / 0.55);
-  color: hsl(var(--muted-foreground) / 0.72);
-  opacity: 0;
-  transform: translateX(-50%);
-  transition: opacity 0.22s ease;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 1px 4px hsl(240 6% 10% / 0.06);
+:root[data-theme="dark"] .mobile-scroll-top-fade {
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--background) / 0.84) 0%,
+    hsl(var(--background) / 0.42) 48%,
+    hsl(var(--background) / 0) 100%
+  );
 }
-.scroll-more-hint .icon {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-}
-.scroll-more-hint.is-above {
-  top: 6px;
-}
-.scroll-more-hint.is-below {
-  bottom: 6px;
-}
-.scroll-more-layer.is-more-above .scroll-more-hint.is-above,
-.scroll-more-layer.is-more-below .scroll-more-hint.is-below {
-  opacity: 0.7;
-  animation: scroll-more-pulse 1.85s ease-in-out infinite;
-}
-.scroll-more-layer.is-more-above .scroll-more-hint.is-above {
-  animation-name: scroll-more-pulse-up;
-}
-.scroll-more-layer.is-more-below .scroll-more-hint.is-below {
-  animation-name: scroll-more-pulse-down;
-}
-@keyframes scroll-more-pulse-up {
-  0%, 100% { opacity: 0.28; transform: translateX(-50%) translateY(0); }
-  50% { opacity: 0.78; transform: translateX(-50%) translateY(-3px); }
-}
-@keyframes scroll-more-pulse-down {
-  0%, 100% { opacity: 0.28; transform: translateX(-50%) translateY(0); }
-  50% { opacity: 0.78; transform: translateX(-50%) translateY(3px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .scroll-more-layer.is-more-above .scroll-more-hint.is-above,
-  .scroll-more-layer.is-more-below .scroll-more-hint.is-below {
-    animation: none;
-    opacity: 0.55;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mobile-scroll-top-fade {
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--background) / 0.84) 0%,
+      hsl(var(--background) / 0.42) 48%,
+      hsl(var(--background) / 0) 100%
+    );
   }
 }
 /* Desktop / wide: never show the mobile scroll chrome. */
-html:not(.is-mobile-layout) .scroll-more-layer {
+html:not(.is-mobile-layout) .mobile-scroll-top-fade {
   display: none !important;
 }
 

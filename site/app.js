@@ -1365,7 +1365,6 @@
     fixturesHead: $("#fixtures-head"),
     fixturesBody: $("#fixtures-body"),
     prefsFixturesCustomColors: $("#prefs-fixtures-custom-colors"),
-    prefsDebugMockLive: $("#prefs-debug-mock-live"),
     difficultyWizard: $("#difficulty-wizard"),
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
@@ -4180,6 +4179,9 @@
   const HOME_MP_LIVE_FREEZE_MS = 45_000;
   const HOME_MP_LIVE_NOCLOCK_POLLS = 5;
   const HOME_MP_LIVE_NOCLOCK_MS = 90_000;
+  // Fixture clock parked (HT / long stoppage) — FPL has no HT flag; infer it.
+  const HOME_MP_CLOCK_FREEZE_POLLS = 3;
+  const HOME_MP_CLOCK_FREEZE_MS = 45_000;
   const HOME_MP_WATCH_STORE = "fpl.homeMpWatch.v1";
   let homeMpWatch = new Map();
   let homeMpWatchGw = null;
@@ -4247,9 +4249,17 @@
         firstFrozenAt: 0,
         clockWhenMinsChanged: clock,
         lastClock: clock,
+        clockSameCount: 0,
+        clockFrozenAt: 0,
       });
       return;
     }
+    const prevClock = prev.lastClock != null ? Number(prev.lastClock) : null;
+    const clockSame = clock != null && prevClock != null && clock === prevClock;
+    const clockSameCount = clockSame ? (Number(prev.clockSameCount) || 0) + 1 : 0;
+    const clockFrozenAt = clockSame
+      ? (Number(prev.clockFrozenAt) || now)
+      : 0;
     if (minsN > Number(prev.mins)) {
       homeMpWatch.set(key, {
         mins: minsN,
@@ -4257,6 +4267,8 @@
         firstFrozenAt: 0,
         clockWhenMinsChanged: clock,
         lastClock: clock,
+        clockSameCount,
+        clockFrozenAt,
       });
       return;
     }
@@ -4267,6 +4279,8 @@
       firstFrozenAt: same ? (Number(prev.firstFrozenAt) || now) : 0,
       clockWhenMinsChanged: same ? prev.clockWhenMinsChanged : clock,
       lastClock: clock,
+      clockSameCount,
+      clockFrozenAt,
     });
   }
 
@@ -4292,6 +4306,17 @@
     homePersistMpWatch();
   }
 
+  function homeFixtureClockLooksParked(watch, clock, now) {
+    if (clock == null || !watch) return false;
+    const clockFrozenFor = watch.clockFrozenAt > 0
+      ? now - Number(watch.clockFrozenAt)
+      : 0;
+    // FPL has no HT flag — when the fixture clock stops (HT / VAR / long
+    // stoppage), player minutes freeze with it. That is not a sub.
+    return (Number(watch.clockSameCount) || 0) >= HOME_MP_CLOCK_FREEZE_POLLS
+      && clockFrozenFor >= HOME_MP_CLOCK_FREEZE_MS;
+  }
+
   function homeMinutesLooksSubbedOff(row, fx) {
     if (!homeSquadFixtureIsInPlay(fx)) return false;
     const minsN = Number(fx && fx.minutes != null ? fx.minutes : row && row.minutes);
@@ -4306,6 +4331,9 @@
       return (Number(watch.sameCount) || 0) >= HOME_MP_LIVE_NOCLOCK_POLLS
         && frozenFor >= HOME_MP_LIVE_NOCLOCK_MS;
     }
+    // HT / stoppage: fixture clock also freezes. A real sub leaves the clock
+    // advancing while player minutes stay put — FPL has no HT flag.
+    if (homeFixtureClockLooksParked(watch, clock, now)) return false;
     const frozen = (Number(watch.sameCount) || 0) >= HOME_MP_LIVE_FREEZE_POLLS
       && frozenFor >= HOME_MP_LIVE_FREEZE_MS;
     if (!frozen) return false;
@@ -4822,7 +4850,7 @@
     const rankVal = homeStandingsRankValue(row);
     const rankPrev = row.rankPrev != null ? Number(row.rankPrev) : (row.lastRank != null ? Number(row.lastRank) : null);
     const deltaPlaces = homeRankDeltaPlaces(rankVal, rankPrev);
-    const deltaHTML = homeRankDeltaHTML(deltaPlaces, { compact: true, showFlat: true });
+    const deltaHTML = homeRankDeltaHTML(deltaPlaces, { compact: true });
     const rankHTML = rankVal != null && Number.isFinite(rankVal)
       ? `<span class="home-rank-cell"><span class="home-rank-cell-num">${escapeHtml(formatHomeRank(rankVal))}</span>${deltaHTML}</span>`
       : "—";
@@ -13436,137 +13464,141 @@
   function syncMobileLayoutClass() {
     document.documentElement.classList.toggle("is-mobile-layout", NARROW_MQ.matches);
     syncMobileTopChromeInset();
-    if (typeof syncScrollMoreHints === "function") syncScrollMoreHints();
+    if (typeof syncMobileScrollTopFade === "function") syncMobileScrollTopFade();
   }
 
-  const SCROLL_MORE_THRESHOLD = 40;
-  let scrollMoreLayer = null;
-  let scrollMoreTarget = null;
-  let scrollMoreRaf = 0;
-  let scrollMoreReady = false;
+  // Soft top wash when a mobile scroller has content above the fold (replaces
+  // the old chevron "scroll more" hints). Opacity tracks scrollTop.
+  const SCROLL_TOP_FADE_OVERFLOW = 40;
+  const SCROLL_TOP_FADE_RANGE = 56;
+  let mobileScrollTopFadeEl = null;
+  let mobileScrollTopFadeTarget = null;
+  let mobileScrollTopFadeRaf = 0;
+  let mobileScrollTopFadeReady = false;
 
-  function scrollMoreLayerEl() {
-    if (scrollMoreLayer && scrollMoreLayer.isConnected) return scrollMoreLayer;
-    scrollMoreLayer = document.getElementById("scroll-more-layer");
-    return scrollMoreLayer;
+  function mobileScrollTopFadeNode() {
+    if (mobileScrollTopFadeEl && mobileScrollTopFadeEl.isConnected) return mobileScrollTopFadeEl;
+    mobileScrollTopFadeEl = document.getElementById("mobile-scroll-top-fade");
+    return mobileScrollTopFadeEl;
   }
 
-  function scrollMoreCanHint(node) {
+  function mobileScrollTopFadeCanTrack(node) {
     if (!node || node.nodeType !== 1) return false;
     if (node === document.body || node === document.documentElement) return false;
     const style = window.getComputedStyle(node);
     const oy = style.overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return false;
-    // Ignore mostly-horizontal pagers (tracks) — vertical overflow only.
-    return node.scrollHeight - node.clientHeight >= SCROLL_MORE_THRESHOLD;
+    return node.scrollHeight - node.clientHeight >= SCROLL_TOP_FADE_OVERFLOW;
   }
 
-  function scrollMoreProbe(node) {
-    if (!scrollMoreCanHint(node)) return null;
-    const max = node.scrollHeight - node.clientHeight;
-    return {
-      node,
-      above: node.scrollTop > SCROLL_MORE_THRESHOLD,
-      below: node.scrollTop < max - SCROLL_MORE_THRESHOLD,
-    };
+  function mobileScrollTopFadeProbe(node) {
+    if (!mobileScrollTopFadeCanTrack(node)) return null;
+    return { node, scrollTop: Math.max(0, node.scrollTop || 0) };
   }
 
-  function scrollMorePickTarget(fromNode) {
+  function mobileScrollTopFadePickTarget(fromNode) {
     let node = fromNode;
     while (node && node !== document && node !== document.documentElement) {
-      const hit = scrollMoreProbe(node);
-      if (hit && (hit.above || hit.below || node.scrollHeight > node.clientHeight + SCROLL_MORE_THRESHOLD)) {
-        return hit;
-      }
+      const hit = mobileScrollTopFadeProbe(node);
+      if (hit) return hit;
       node = node.parentElement;
     }
     const main = document.querySelector("main.main");
-    return scrollMoreProbe(main);
+    return mobileScrollTopFadeProbe(main);
   }
 
-  function hideScrollMoreHints() {
-    const layer = scrollMoreLayerEl();
-    if (!layer) return;
-    layer.hidden = true;
-    layer.setAttribute("aria-hidden", "true");
-    layer.classList.remove("is-more-above", "is-more-below");
-    scrollMoreTarget = null;
+  function hideMobileScrollTopFade({ keepTarget = false } = {}) {
+    const fade = mobileScrollTopFadeNode();
+    if (!fade) return;
+    fade.hidden = true;
+    fade.setAttribute("aria-hidden", "true");
+    fade.style.opacity = "0";
+    if (!keepTarget) mobileScrollTopFadeTarget = null;
   }
 
-  function paintScrollMoreHints(state) {
-    const layer = scrollMoreLayerEl();
-    if (!layer) return;
-    if (!NARROW_MQ.matches || !state || !(state.above || state.below)) {
-      hideScrollMoreHints();
+  function mobileScrollTopFadeOpacity(scrollTop) {
+    const t = Math.min(1, Math.max(0, Number(scrollTop) / SCROLL_TOP_FADE_RANGE));
+    // Smoothstep so the wash eases in with the first finger of scroll.
+    return t * t * (3 - 2 * t);
+  }
+
+  function paintMobileScrollTopFade(state) {
+    const fade = mobileScrollTopFadeNode();
+    if (!fade) return;
+    if (!NARROW_MQ.matches || !state) {
+      hideMobileScrollTopFade();
+      return;
+    }
+    const opacity = mobileScrollTopFadeOpacity(state.scrollTop);
+    if (opacity < 0.02) {
+      hideMobileScrollTopFade({ keepTarget: true });
+      mobileScrollTopFadeTarget = state.node;
       return;
     }
     const rect = state.node.getBoundingClientRect();
     if (!(rect.width > 24 && rect.height > 80)) {
-      hideScrollMoreHints();
+      hideMobileScrollTopFade();
       return;
     }
-    scrollMoreTarget = state.node;
-    layer.hidden = false;
-    layer.setAttribute("aria-hidden", "true");
-    layer.style.top = `${Math.round(rect.top)}px`;
-    layer.style.left = `${Math.round(rect.left)}px`;
-    layer.style.width = `${Math.round(rect.width)}px`;
-    layer.style.height = `${Math.round(rect.height)}px`;
-    layer.classList.toggle("is-more-above", !!state.above);
-    layer.classList.toggle("is-more-below", !!state.below);
+    mobileScrollTopFadeTarget = state.node;
+    fade.hidden = false;
+    fade.setAttribute("aria-hidden", "true");
+    fade.style.top = `${Math.round(rect.top)}px`;
+    fade.style.left = `${Math.round(rect.left)}px`;
+    fade.style.width = `${Math.round(rect.width)}px`;
+    fade.style.opacity = String(opacity);
   }
 
-  function syncScrollMoreHints(fromNode) {
-    if (!scrollMoreReady) return;
-    if (scrollMoreRaf) cancelAnimationFrame(scrollMoreRaf);
-    scrollMoreRaf = requestAnimationFrame(() => {
-      scrollMoreRaf = 0;
+  function syncMobileScrollTopFade(fromNode) {
+    if (!mobileScrollTopFadeReady) return;
+    if (mobileScrollTopFadeRaf) cancelAnimationFrame(mobileScrollTopFadeRaf);
+    mobileScrollTopFadeRaf = requestAnimationFrame(() => {
+      mobileScrollTopFadeRaf = 0;
       try {
         if (!NARROW_MQ.matches) {
-          hideScrollMoreHints();
+          hideMobileScrollTopFade();
           return;
         }
         let state = null;
-        if (fromNode) state = scrollMorePickTarget(fromNode);
-        if (!state && scrollMoreTarget && scrollMoreTarget.isConnected) {
-          state = scrollMoreProbe(scrollMoreTarget);
+        if (fromNode) state = mobileScrollTopFadePickTarget(fromNode);
+        if (!state && mobileScrollTopFadeTarget && mobileScrollTopFadeTarget.isConnected) {
+          state = mobileScrollTopFadeProbe(mobileScrollTopFadeTarget);
         }
         if (!state) {
           const main = document.querySelector("main.main");
-          state = scrollMoreProbe(main);
+          state = mobileScrollTopFadeProbe(main);
         }
-        // Prefer sheet body when the mobile sheet is open and overflows.
         const sheetOpen = !!(el.mobileSheet && el.mobileSheet.classList.contains("is-open"));
         if (sheetOpen && el.mobileSheetBody) {
-          const sheetState = scrollMoreProbe(el.mobileSheetBody);
-          if (sheetState && (sheetState.above || sheetState.below)) state = sheetState;
+          const sheetState = mobileScrollTopFadeProbe(el.mobileSheetBody);
+          if (sheetState && sheetState.scrollTop > 0) state = sheetState;
         }
-        paintScrollMoreHints(state);
+        paintMobileScrollTopFade(state);
       } catch (err) {
-        console.warn("scroll-more hints failed", err);
-        hideScrollMoreHints();
+        console.warn("scroll top fade failed", err);
+        hideMobileScrollTopFade();
       }
     });
   }
 
-  function bindScrollMoreHints() {
-    if (document.documentElement.dataset.scrollMoreBound === "1") return;
-    document.documentElement.dataset.scrollMoreBound = "1";
-    scrollMoreReady = true;
+  function bindMobileScrollTopFade() {
+    if (document.documentElement.dataset.scrollTopFadeBound === "1") return;
+    document.documentElement.dataset.scrollTopFadeBound = "1";
+    mobileScrollTopFadeReady = true;
     document.addEventListener(
       "scroll",
       (e) => {
         if (!NARROW_MQ.matches) return;
         const t = e.target;
-        if (t && t.nodeType === 1) syncScrollMoreHints(t);
-        else syncScrollMoreHints();
+        if (t && t.nodeType === 1) syncMobileScrollTopFade(t);
+        else syncMobileScrollTopFade();
       },
       { passive: true, capture: true }
     );
-    window.addEventListener("resize", () => syncScrollMoreHints(), { passive: true });
+    window.addEventListener("resize", () => syncMobileScrollTopFade(), { passive: true });
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", () => syncScrollMoreHints(), { passive: true });
-      window.visualViewport.addEventListener("scroll", () => syncScrollMoreHints(), { passive: true });
+      window.visualViewport.addEventListener("resize", () => syncMobileScrollTopFade(), { passive: true });
+      window.visualViewport.addEventListener("scroll", () => syncMobileScrollTopFade(), { passive: true });
     }
   }
 
@@ -15282,7 +15314,7 @@
       }
     }
     if (closingKey === "team-details") syncHomePlayerOpenXBtn(null);
-    syncScrollMoreHints();
+    syncMobileScrollTopFade();
     window.setTimeout(() => {
       if (mobileSheetOpen || !el.mobileSheet) return;
       restoreSheetHost();
@@ -15293,7 +15325,7 @@
         el.mobileSheetTitle.textContent = "";
       }
       if (el.mobileSheetReset) el.mobileSheetReset.hidden = true;
-      syncScrollMoreHints();
+      syncMobileScrollTopFade();
     }, 280);
     syncSearchClearBtns();
     syncFiltersResetUI();
@@ -15382,7 +15414,7 @@
     sheetIgnoreDismissUntil = Date.now() + 450;
     syncSearchClearBtns();
     syncFiltersResetUI();
-    requestAnimationFrame(() => syncScrollMoreHints(el.mobileSheetBody));
+    requestAnimationFrame(() => syncMobileScrollTopFade(el.mobileSheetBody));
     return true;
   }
 
@@ -16647,11 +16679,11 @@
         ),
         spitRow(
           `<span class="home-mp-line is-short-mins spit-home-swatch" aria-hidden="true">45′</span>`,
-          "Under 60′ — after FT, or live once minutes stay frozen well behind the match clock (likely subbed)"
+          "Under 60′ — after FT, or live once minutes stay frozen while the match clock keeps moving (likely subbed; not HT)"
         ),
         spitRow(
           `<span class="home-mp-line is-modest-mins spit-home-swatch" aria-hidden="true">68′</span>`,
-          "60–75′ — after FT, or live once minutes stay frozen well behind the match clock"
+          "60–75′ — after FT, or live once minutes stay frozen while the match clock keeps moving"
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
@@ -24297,7 +24329,6 @@
 
   /** True when at least one fixture in the current GW is in play. */
   function liveGwHasActiveGames() {
-    if (debugMockLive()) return true;
     const gw = liveDefaultGw();
     const homeGw = Number(HOME && HOME.gw);
     const trustHomeLive = homeTrustLiveMatchState();
@@ -24328,34 +24359,6 @@
     document.documentElement.classList.toggle("has-gw-live", liveGwHasActiveGames());
     syncHomeHeroLiveBadge();
     syncPageLiveBadges();
-  }
-
-  const DEBUG_MOCK_LIVE_KEY = "fpl-explorer-debug-mock-live";
-  let debugMockLiveState = false;
-  try {
-    debugMockLiveState = sessionStorage.getItem(DEBUG_MOCK_LIVE_KEY) === "1";
-  } catch {
-    debugMockLiveState = false;
-  }
-
-  function debugMockLive() {
-    return debugMockLiveState;
-  }
-
-  function syncDebugMockLiveUI() {
-    if (el.prefsDebugMockLive) el.prefsDebugMockLive.checked = debugMockLiveState;
-  }
-
-  function setDebugMockLive(on) {
-    debugMockLiveState = !!on;
-    try {
-      if (debugMockLiveState) sessionStorage.setItem(DEBUG_MOCK_LIVE_KEY, "1");
-      else sessionStorage.removeItem(DEBUG_MOCK_LIVE_KEY);
-    } catch {
-      /* private browsing */
-    }
-    syncDebugMockLiveUI();
-    syncLiveNavChrome();
   }
 
   function homeHeroShouldShowLive() {
@@ -30240,7 +30243,7 @@
     syncSearchClearBtns();
     syncPageInfoButton();
     syncPageLiveBadges();
-    syncScrollMoreHints();
+    syncMobileScrollTopFade();
     bindAllNameColumnSimplifies();
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
@@ -30922,9 +30925,6 @@
       if (t.id === "prefs-fixtures-custom-colors") {
         setTeamDifficultyToggle("fixtures", !!t.checked);
         return;
-      }
-      if (t.id === "prefs-debug-mock-live") {
-        setDebugMockLive(!!t.checked);
       }
     });
   }
@@ -32923,7 +32923,7 @@
     syncPageTrayTrigger();
     syncPageTabWheel();
     scheduleViewportLayoutSync({ immediate: true });
-    syncScrollMoreHints();
+    syncMobileScrollTopFade();
     if (state.page === "home") {
       syncHomeLookupUI();
       renderHome({ deferDuringEnter: true });
@@ -33256,10 +33256,9 @@
     }
     syncPlannerNavVisibility();
     setPage(page);
-    syncDebugMockLiveUI();
     syncLiveNavChrome();
-    bindScrollMoreHints();
-    syncScrollMoreHints();
+    bindMobileScrollTopFade();
+    syncMobileScrollTopFade();
     if (state.page !== "live" && state.page !== "opta") renderTable();
   }
 

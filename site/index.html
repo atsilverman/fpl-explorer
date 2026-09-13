@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1305" />
+<link rel="stylesheet" href="styles.css?v=1307" />
 <script>
 (() => {
   try {
@@ -392,7 +392,7 @@
         aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Home">
         <span class="page-tray-current">
           <span id="page-tray-label">Home</span>
-          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevrons-up-down"/></svg>
         </span>
       </button>
     </div>
@@ -543,17 +543,6 @@
                 <button type="button" class="ghost-btn prefs-action-btn" id="team-clear-btn" data-team-planner-action="clear">Clear planner</button>
               </div>
             </div>
-          </section>
-          <section class="settings-section">
-            <div class="settings-section-label">Debugging</div>
-            <label class="settings-switch-row" for="prefs-debug-mock-live">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Mock live mode</span>
-                <span class="settings-switch-hint">Force Live chrome (green Gameweek, Live badges) — temporary preview</span>
-              </span>
-              <input type="checkbox" id="prefs-debug-mock-live" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
           </section>
         </div>
       </div>
@@ -1745,14 +1734,7 @@
 </script>
 
 <div id="ui-tooltip" class="ui-tooltip" role="tooltip" style="display:none;"></div>
-<div id="scroll-more-layer" class="scroll-more-layer" hidden aria-hidden="true">
-  <span class="scroll-more-hint is-above">
-    <svg class="icon" aria-hidden="true"><use href="#i-chevron-up"/></svg>
-  </span>
-  <span class="scroll-more-hint is-below">
-    <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
-  </span>
-</div>
+<div id="mobile-scroll-top-fade" class="mobile-scroll-top-fade" hidden aria-hidden="true"></div>
 <div id="fixture-tooltip" class="fixture-tooltip" style="display:none;"></div>
 <div id="team-rank-tooltip" class="fixture-tooltip team-rank-tooltip" role="tooltip" style="display:none;"></div>
 <div id="matchup-edge-tooltip" class="fixture-tooltip matchup-edge-tooltip" role="tooltip" style="display:none;"></div>
@@ -1883,7 +1865,7 @@
 <script src="ownership_data.js?v=48"></script>
 <script src="price_changes_data.js?v=86"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=45"></script>
+<script src="home_data.js?v=46"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1906,7 +1888,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1297"></script>
+<script src="app.js?v=1300"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
