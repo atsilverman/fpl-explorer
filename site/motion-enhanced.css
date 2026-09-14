@@ -1,5 +1,5 @@
-/* Enhanced motion (prefs toggle) — transitions.dev-inspired overrides.
-   Only active when <html class="motion-enhanced">. Default site motion unchanged. */
+/* Enhanced motion — default product motion (transitions.dev-inspired overrides).
+   Always on via <html class="motion-enhanced">; still respects prefers-reduced-motion. */
 
 html.motion-enhanced {
   /* Shared scale (subset of transitions-dev tokens) */

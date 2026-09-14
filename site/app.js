@@ -1366,7 +1366,6 @@
     fixturesHead: $("#fixtures-head"),
     fixturesBody: $("#fixtures-body"),
     prefsFixturesCustomColors: $("#prefs-fixtures-custom-colors"),
-    prefsMotionEnhanced: $("#prefs-motion-enhanced"),
     difficultyWizard: $("#difficulty-wizard"),
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
@@ -4409,6 +4408,10 @@
 
   /** short (<60′) or modest (60–75′) once the player is done — FT, or live sub. */
   function homeMinutesWarningBand(row, fx) {
+    // Session hydrate marks volatile stats ready before live poll corrects
+    // fixture flags — skip MP risk until live (or static with no live API).
+    const phase = homeBootstrapPhase();
+    if (phase === "pending" || phase === "session") return null;
     const inPlay = homeSquadFixtureIsInPlay(fx);
     const finished = !!(fx && fx.finished);
     if (!(inPlay || finished)) return null;
@@ -4416,7 +4419,13 @@
     if (finished && !inPlay && Number.isFinite(minsN) && minsN <= 0) return null;
     const band = homeMinutesBand(minsN);
     if (!band) return null;
-    if (finished && !inPlay) return band;
+    if (finished && !inPlay) {
+      // Stale session/bootstrap can leave finished=true while still live.
+      if (fx && fx.live) return null;
+      return band;
+    }
+    // Live-sub risk needs a trusted live poll (static sites skip this path).
+    if (phase !== "live") return null;
     return homeMinutesLooksSubbedOff(row, fx) ? band : null;
   }
 
@@ -6999,10 +7008,10 @@
     const main = document.querySelector("main.main");
     requestAnimationFrame(() => {
       if (main) {
-        animateHomeScrollTo(main, { top: 0, left: 0, duration: HOME_SCROLL_TOP_MS });
+        animateHomeScrollTo(main, { top: 0, left: 0, duration: 0 });
         return;
       }
-      animateHomeScrollTo(window, { top: 0, left: 0, duration: HOME_SCROLL_TOP_MS });
+      animateHomeScrollTo(window, { top: 0, left: 0, duration: 0 });
     });
   }
 
@@ -31072,10 +31081,6 @@
         setTeamDifficultyToggle("fixtures", !!t.checked);
         return;
       }
-      if (t.id === "prefs-motion-enhanced") {
-        setMotionEnhanced(!!t.checked);
-        return;
-      }
       if (t.matches && t.matches("input[type='checkbox']")) {
         motionMarkSwitchInit(t);
       }
@@ -32923,32 +32928,12 @@
 
   applyTheme(currentThemeMode());
 
-  const MOTION_ENHANCED_KEY = "fpl-explorer-motion-enhanced";
-
   function motionEnhancedOn() {
-    try {
-      return localStorage.getItem(MOTION_ENHANCED_KEY) === "1";
-    } catch {
-      return false;
-    }
+    return true;
   }
 
-  function syncMotionEnhancedUI() {
-    if (el.prefsMotionEnhanced) el.prefsMotionEnhanced.checked = motionEnhancedOn();
-  }
-
-  function setMotionEnhanced(on) {
-    const next = !!on;
-    try {
-      if (next) localStorage.setItem(MOTION_ENHANCED_KEY, "1");
-      else localStorage.removeItem(MOTION_ENHANCED_KEY);
-    } catch {
-      /* private browsing */
-    }
-    document.documentElement.classList.toggle("motion-enhanced", next);
-    syncMotionEnhancedUI();
-    if (next && state.page === "home") motionAfterHomeRender({ forceReveal: true });
-  }
+  document.documentElement.classList.add("motion-enhanced");
+  try { localStorage.removeItem("fpl-explorer-motion-enhanced"); } catch { /* private browsing */ }
 
   function motionPulseNode(node) {
     if (!node || !motionEnhancedOn()) return;
@@ -33031,7 +33016,7 @@
     row.classList.add("is-motion-init");
   }
 
-  setMotionEnhanced(motionEnhancedOn());
+  if (state.page === "home") motionAfterHomeRender({ forceReveal: true });
 
   const HOME_SUMMARY_KEY = "fpl-explorer-home-summary";
   const HOME_SUMMARY_DEFAULT = "hero";

@@ -3217,7 +3217,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 #home-page.is-entering .home-summary-hero,
 #home-page.is-entering .home-summary-cards > .home-panel,
 #home-page.is-entering .home-tables-grid > .home-panel,
-#home-page.is-entering .home-view-banner {
+#home-page.is-entering .home-view-banner,
+#home-page.is-entering .home-view-chip {
   animation: none !important;
 }
 /* Home tables stay painted — only summary odometers animate on enter. */
@@ -3279,6 +3280,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #expected-page.is-entering .barbell-track,
   #home-page.is-entering .home-deadline,
   #home-page.is-entering .home-view-banner,
+  #home-page.is-entering .home-view-chip,
   #home-page.is-entering .home-summary-hero,
   #home-page.is-entering .home-summary-cards > .home-panel,
   #home-page.is-entering .home-tables-grid > .home-panel,
@@ -16603,7 +16605,8 @@ html[data-theme="dark"][data-home-surface="solid"] .home-dashboard {
 /* Hero chrome: no frosted blur on Solid — keep theme chip/Δ colors. */
 html[data-home-surface="solid"] .home-summary-hero-chip,
 html[data-home-surface="solid"] .home-summary-hero-live,
-html[data-home-surface="solid"] .home-summary-hero-delta {
+html[data-home-surface="solid"] .home-summary-hero-delta,
+html[data-home-surface="solid"] .home-view-chip {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -16699,7 +16702,6 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
     align-items: stretch;
   }
   .home-dashboard:not(.is-player-lookup) > .home-deadline,
-  .home-dashboard:not(.is-player-lookup) > .home-view-banner,
   .home-dashboard:not(.is-player-lookup) > .home-owner-banner,
   .home-dashboard:not(.is-player-lookup) > .home-player-profile,
   .home-dashboard:not(.is-player-lookup) > .home-player-matchup {
@@ -16743,23 +16745,131 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
     overflow: hidden;
   }
 }
-/* Viewing another manager — blue rail on the banner only; rank cards use delta borders.
-   Hero stays full-bleed like the configured-manager Home view. */
+/* Viewing another manager — glass chip in the hero (not a card strip). */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
 }
-.home-dashboard.is-viewing-manager .home-view-banner {
-  border-left: 3px solid var(--home-view-accent);
+.home-view-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 22rem);
+  margin: 0 0 10px;
+  padding: 4px 5px 4px 9px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--blue-hsl) / 0.28);
+  background: hsl(210 40% 99% / 0.72);
+  color: hsl(220 16% 26%);
+  line-height: 1;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  min-width: 0;
+  z-index: 2;
 }
-.home-dashboard.is-viewing-manager .home-view-banner-clear {
-  background: hsl(var(--muted) / 0.35);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
+.home-view-chip[hidden] {
+  display: none !important;
 }
-.home-dashboard.is-viewing-manager .home-view-banner-clear:hover {
-  background: hsl(var(--muted) / 0.55);
-  border-color: hsl(var(--border-hsl) / 0.9);
-  color: var(--text);
+.home-view-chip-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--home-view-accent, hsl(var(--blue-hsl)));
+  opacity: 0.9;
+}
+.home-view-chip-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.home-view-chip-clear {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(220 10% 40%);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.home-view-chip-clear .icon {
+  width: 14px;
+  height: 14px;
+}
+.home-view-chip-clear:hover {
+  background: hsl(var(--blue-hsl) / 0.12);
+  color: hsl(220 16% 18%);
+}
+.home-view-chip-clear:focus-visible {
+  outline: 2px solid hsl(var(--blue-hsl) / 0.45);
+  outline-offset: 1px;
+}
+.home-view-chip-clear:active {
+  transform: translateY(0.5px);
+}
+html[data-theme="dark"] .home-view-chip {
+  border-color: hsl(var(--blue-hsl) / 0.4);
+  background: hsl(0 0% 100% / 0.1);
+  color: hsl(210 14% 90%);
+}
+html[data-theme="dark"] .home-view-chip-clear {
+  color: hsl(210 12% 72%);
+}
+html[data-theme="dark"] .home-view-chip-clear:hover {
+  background: hsl(var(--blue-hsl) / 0.22);
+  color: hsl(0 0% 98%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-view-chip {
+    border-color: hsl(var(--blue-hsl) / 0.4);
+    background: hsl(0 0% 100% / 0.1);
+    color: hsl(210 14% 90%);
+  }
+  html:not([data-theme="light"]) .home-view-chip-clear {
+    color: hsl(210 12% 72%);
+  }
+  html:not([data-theme="light"]) .home-view-chip-clear:hover {
+    background: hsl(var(--blue-hsl) / 0.22);
+    color: hsl(0 0% 98%);
+  }
+}
+html[data-home-surface="solid"] .home-view-chip {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: hsl(220 16% 94%);
+  border-color: hsl(var(--blue-hsl) / 0.32);
+}
+html[data-theme="dark"][data-home-surface="solid"] .home-view-chip {
+  background: hsl(0 0% 100% / 0.1);
+  border-color: hsl(var(--blue-hsl) / 0.42);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-view-chip {
+    background: hsl(0 0% 100% / 0.1);
+    border-color: hsl(var(--blue-hsl) / 0.42);
+  }
+}
+@media (max-width: 900px) {
+  .home-view-chip {
+    max-width: 100%;
+    margin-bottom: 8px;
+    padding: 3px 4px 3px 8px;
+  }
+  .home-view-chip-name {
+    font-size: 11.5px;
+  }
 }
 .home-summary {
   display: flex;
@@ -17444,7 +17554,6 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
     align-items: start;
   }
   .home-dashboard.is-player-lookup > .home-deadline,
-  .home-dashboard.is-player-lookup > .home-view-banner,
   .home-dashboard.is-player-lookup > .home-summary,
   .home-dashboard.is-player-lookup > .home-summary-cards,
   .home-dashboard.is-player-lookup > .home-player-profile {

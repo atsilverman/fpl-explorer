@@ -16,17 +16,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1310" />
-<link rel="stylesheet" href="motion-enhanced.css?v=3" />
+<link rel="stylesheet" href="styles.css?v=1311" />
+<link rel="stylesheet" href="motion-enhanced.css?v=4" />
 <script>
 (() => {
   try {
     const root = document.documentElement;
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
-    if (localStorage.getItem("fpl-explorer-motion-enhanced") === "1") {
-      root.classList.add("motion-enhanced");
-    }
+    root.classList.add("motion-enhanced");
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
     // keeps the title row clear of the iOS status blur (unlike black-translucent).
     const standalone = !!(
@@ -50,6 +48,7 @@
       localStorage.removeItem("fpl-explorer-font-pair-v3");
       localStorage.removeItem("fpl-explorer-home-summary");
       localStorage.removeItem("fpl-explorer-home-surface");
+      localStorage.removeItem("fpl-explorer-motion-enhanced");
     } catch (_) {}
     root.setAttribute("data-font-pair", "figtree");
     // Cursor Simple Browser is Electron — cheaper frost tokens, still real blur.
@@ -299,6 +298,10 @@
   <symbol id="i-x" viewBox="0 0 24 24">
     <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
   </symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+    <circle cx="12" cy="12" r="3"/>
+  </symbol>
   <symbol id="i-x-logo" viewBox="0 0 24 24" fill="currentColor" stroke="none">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
   </symbol>
@@ -507,14 +510,6 @@
                 <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
               </div>
             </div>
-            <label class="settings-switch-row" for="prefs-motion-enhanced">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Enhanced motion</span>
-                <span class="settings-switch-hint">Try smoother opens, sheet reveals, and pop-ins (A/B — toggle off anytime)</span>
-              </span>
-              <input type="checkbox" id="prefs-motion-enhanced" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
           </section>
           <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
@@ -869,16 +864,6 @@
       </div>
       <div id="home-bento" class="home-dashboard" hidden>
         <p class="home-deadline" id="home-deadline" hidden></p>
-        <div id="home-view-banner" class="home-view-banner" hidden>
-          <div class="home-view-banner-copy">
-            <span class="home-view-banner-label">Viewing</span>
-            <strong class="home-view-banner-name" id="home-view-banner-name"></strong>
-          </div>
-          <button type="button" class="home-view-banner-clear icon-only-btn" id="home-view-banner-clear"
-            aria-label="Exit viewing" title="Exit viewing">
-            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-          </button>
-        </div>
         <div id="home-owner-banner" class="home-view-banner home-owner-banner" hidden>
           <div class="home-view-banner-copy">
             <span class="home-view-banner-label">Owners</span>
@@ -891,6 +876,14 @@
         </div>
         <div class="home-summary" id="home-summary" data-home-summary="hero">
           <div class="home-summary-hero" id="home-summary-hero">
+            <div id="home-view-banner" class="home-view-chip" hidden>
+              <svg class="icon home-view-chip-icon" aria-hidden="true"><use href="#i-eye"/></svg>
+              <strong class="home-view-chip-name" id="home-view-banner-name"></strong>
+              <button type="button" class="home-view-chip-clear icon-only-btn" id="home-view-banner-clear"
+                aria-label="Back to your team" title="Back to your team">
+                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+              </button>
+            </div>
             <div class="home-summary-hero-head">
               <span class="home-summary-hero-chip" id="home-hero-chip" hidden></span>
               <p class="home-summary-hero-label">Overall Rank</p>
@@ -1900,7 +1893,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1311"></script>
+<script src="app.js?v=1314"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
