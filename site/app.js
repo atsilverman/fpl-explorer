@@ -1450,6 +1450,7 @@
     pageInfoTooltip: $("#page-info-tooltip"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
+    odometerSeg: $("#odometer-seg"),
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
     fontPairSelect: $("#font-pair-select"),
@@ -18524,6 +18525,12 @@
     sticky.style.setProperty("--barbell-head-h", `${el.barbellHead.offsetHeight}px`);
   }
 
+  const BARBELL_NAME_MIN_W = 168;
+  const BARBELL_NAME_MIN_W_MOBILE = 140;
+  const BARBELL_NAME_MAX_FRAC = 0.42;
+  const BARBELL_NAME_MAX_FRAC_MOBILE = 0.5;
+  const BARBELL_NAME_SLACK = 8;
+  const BARBELL_NAME_SLACK_MOBILE = 6;
   const BARBELL_COMPARE_NAME_MIN_W = 176;
   const BARBELL_COMPARE_NAME_MIN_W_MOBILE = 124;
   const BARBELL_COMPARE_NAME_MAX_FRAC = 0.34;
@@ -18531,7 +18538,7 @@
   const BARBELL_COMPARE_NAME_SLACK = 8;
   const BARBELL_COMPARE_NAME_SLACK_MOBILE = 6;
 
-  function measureBarbellCompareIdentityWidth(cell) {
+  function measureBarbellIdentityWidth(cell) {
     if (!cell) return 0;
     const id = cell.querySelector(".rankings-identity");
     const cs = getComputedStyle(cell);
@@ -18570,36 +18577,118 @@
     return content + Math.ceil(pad);
   }
 
-  function syncBarbellCompareNameWidth() {
+  function measureBarbellCompareIdentityWidth(cell) {
+    return measureBarbellIdentityWidth(cell);
+  }
+
+  /** Size xData player column to fit widest identity (name or TEAM|£|POS).
+      Mobile: only set *-full so name-simplify's calc(--name-collapse) still morphs.
+      Never write --barbell-name-w / --barbell-name-w-compare inline on mobile. */
+  function syncBarbellNameWidth() {
     const wrap = el.barbellWrap;
-    if (!wrap || state.page !== "expected" || state.expectedSplit !== "compare") {
+    if (!wrap || state.page !== "expected") {
+      wrap?.style.removeProperty("--barbell-name-w");
+      wrap?.style.removeProperty("--barbell-name-w-full");
       wrap?.style.removeProperty("--barbell-name-w-compare");
       wrap?.style.removeProperty("--barbell-name-w-compare-full");
-      wrap?.classList.remove("is-barbell-compare-measure");
+      wrap?.classList.remove("is-barbell-compare-measure", "is-barbell-name-measure");
       return;
     }
+    const compareMode = state.expectedSplit === "compare";
     const mobile = NARROW_MQ.matches;
-    const minW = mobile ? BARBELL_COMPARE_NAME_MIN_W_MOBILE : BARBELL_COMPARE_NAME_MIN_W;
-    const maxFrac = mobile ? BARBELL_COMPARE_NAME_MAX_FRAC_MOBILE : BARBELL_COMPARE_NAME_MAX_FRAC;
-    const slack = mobile ? BARBELL_COMPARE_NAME_SLACK_MOBILE : BARBELL_COMPARE_NAME_SLACK;
-    const identities = wrap.querySelectorAll(".barbell-group-identity");
-    if (!identities.length) return;
-    const prev = wrap.style.getPropertyValue("--barbell-name-w-compare");
-    wrap.classList.add("is-barbell-compare-measure");
-    wrap.style.setProperty("--barbell-name-w-compare", `${minW}px`);
+    const scroll = expectedScrollWrap();
+
+    if (compareMode) {
+      wrap.style.removeProperty("--barbell-name-w");
+      wrap.style.removeProperty("--barbell-name-w-full");
+      wrap.classList.remove("is-barbell-name-measure");
+      const minW = mobile ? BARBELL_COMPARE_NAME_MIN_W_MOBILE : BARBELL_COMPARE_NAME_MIN_W;
+      const maxFrac = mobile ? BARBELL_COMPARE_NAME_MAX_FRAC_MOBILE : BARBELL_COMPARE_NAME_MAX_FRAC;
+      const slack = mobile ? BARBELL_COMPARE_NAME_SLACK_MOBILE : BARBELL_COMPARE_NAME_SLACK;
+      const identities = wrap.querySelectorAll(".barbell-group-identity");
+      if (!identities.length) return;
+      const prev = mobile
+        ? wrap.style.getPropertyValue("--barbell-name-w-compare-full")
+        : wrap.style.getPropertyValue("--barbell-name-w-compare");
+      wrap.classList.add("is-barbell-compare-measure");
+      if (mobile) {
+        wrap.style.setProperty("--barbell-name-w-compare-full", "280px");
+        wrap.style.removeProperty("--barbell-name-w-compare");
+      } else {
+        wrap.style.setProperty("--barbell-name-w-compare", `${minW}px`);
+        wrap.style.removeProperty("--barbell-name-w-compare-full");
+      }
+      void wrap.offsetWidth;
+      let maxW = minW;
+      identities.forEach((cell) => {
+        maxW = Math.max(maxW, measureBarbellIdentityWidth(cell));
+      });
+      wrap.classList.remove("is-barbell-compare-measure");
+      const cap = scroll ? Math.round(scroll.clientWidth * maxFrac) : maxW + slack;
+      const next = `${Math.max(minW, Math.min(maxW + slack, cap))}px`;
+      if (mobile) {
+        wrap.style.setProperty("--barbell-name-w-compare-full", next);
+        wrap.style.removeProperty("--barbell-name-w-compare");
+      } else {
+        wrap.style.setProperty("--barbell-name-w-compare", next);
+        wrap.style.removeProperty("--barbell-name-w-compare-full");
+      }
+      if (prev !== next) {
+        invalidateNameSimplifyOrigin(scroll);
+        syncBarbellHeadHeight();
+      }
+      return;
+    }
+
+    wrap.style.removeProperty("--barbell-name-w-compare");
+    wrap.style.removeProperty("--barbell-name-w-compare-full");
+    wrap.classList.remove("is-barbell-compare-measure");
+    const labels = wrap.querySelectorAll(".barbell-label");
+    if (!labels.length) {
+      wrap.style.removeProperty("--barbell-name-w");
+      wrap.style.removeProperty("--barbell-name-w-full");
+      wrap.classList.remove("is-barbell-name-measure");
+      return;
+    }
+    const minW = mobile ? BARBELL_NAME_MIN_W_MOBILE : BARBELL_NAME_MIN_W;
+    const maxFrac = mobile ? BARBELL_NAME_MAX_FRAC_MOBILE : BARBELL_NAME_MAX_FRAC;
+    const slack = mobile ? BARBELL_NAME_SLACK_MOBILE : BARBELL_NAME_SLACK;
+    const prev = mobile
+      ? wrap.style.getPropertyValue("--barbell-name-w-full")
+      : wrap.style.getPropertyValue("--barbell-name-w");
+    wrap.classList.add("is-barbell-name-measure");
+    // Wide temp column so TEAM|£|POS chips aren't clipped while measuring.
+    if (mobile) {
+      wrap.style.setProperty("--barbell-name-w-full", "320px");
+      wrap.style.removeProperty("--barbell-name-w");
+    } else {
+      wrap.style.setProperty("--barbell-name-w", "320px");
+      wrap.style.removeProperty("--barbell-name-w-full");
+    }
     void wrap.offsetWidth;
     let maxW = minW;
-    identities.forEach((cell) => {
-      maxW = Math.max(maxW, measureBarbellCompareIdentityWidth(cell));
+    labels.forEach((cell) => {
+      maxW = Math.max(maxW, measureBarbellIdentityWidth(cell));
     });
-    wrap.classList.remove("is-barbell-compare-measure");
-    const scroll = expectedScrollWrap();
-    const cap = scroll ? Math.round(scroll.clientWidth * maxFrac) : maxW;
+    wrap.classList.remove("is-barbell-name-measure");
+    const cap = scroll ? Math.round(scroll.clientWidth * maxFrac) : maxW + slack;
     const next = `${Math.max(minW, Math.min(maxW + slack, cap))}px`;
-    wrap.style.setProperty("--barbell-name-w-compare", next);
-    if (mobile) wrap.style.setProperty("--barbell-name-w-compare-full", next);
-    else wrap.style.removeProperty("--barbell-name-w-compare-full");
-    if (prev !== next) syncBarbellHeadHeight();
+    // Mobile: *-full only — CSS calc(--name-collapse) owns --barbell-name-w.
+    if (mobile) {
+      wrap.style.setProperty("--barbell-name-w-full", next);
+      wrap.style.removeProperty("--barbell-name-w");
+    } else {
+      wrap.style.setProperty("--barbell-name-w", next);
+      wrap.style.removeProperty("--barbell-name-w-full");
+    }
+    if (prev !== next) {
+      invalidateNameSimplifyOrigin(scroll);
+      syncBarbellHeadHeight();
+    }
+  }
+
+  function syncBarbellCompareNameWidth() {
+    syncBarbellNameWidth();
   }
 
   function buildExpectedHead(cat) {
@@ -19038,12 +19127,10 @@
       });
     }
     bindOwnershipPhotoFallback(el.barbellBody);
-    if (compareMode) {
-      requestAnimationFrame(() => {
-        syncBarbellCompareNameWidth();
-        syncBarbellHeadHeight();
-      });
-    }
+    requestAnimationFrame(() => {
+      syncBarbellNameWidth();
+      syncBarbellHeadHeight();
+    });
     if (NARROW_MQ.matches) bindMobileChromeScrollHide();
     if (opts.resetScroll) {
       requestAnimationFrame(() => {
@@ -29637,8 +29724,11 @@
     wheel._statRollCycles = 3;
     wheel._statRollFrom = String(fromDigit);
     wheel._statRollTo = String(toDigit);
-    // Initial pose — pixel metrics locked once mounted (see lockStatRollWheelMetrics).
-    strip.style.transform = `translate3d(0, ${-Number(fromDigit) * 100}%, 0)`;
+    // Classic rests on the first cycle; SFI rests on the middle (HOME=10) so
+    // columns can turn either direction without hitting the strip edge.
+    const fromN = Number(fromDigit);
+    const restIdx = odometerModeIsSfi() ? 10 + fromN : fromN;
+    strip.style.transform = `translate3d(0, ${-restIdx * 100}%, 0)`;
     return wheel;
   }
 
@@ -29648,7 +29738,11 @@
     const strip = wheel._statRollStrip;
     if (!strip) return 0;
     const local = parseFloat(getComputedStyle(wheel).fontSize);
-    const rowH = Math.max(8, Math.round(local > 0 ? local : 16));
+    const sfi = odometerModeIsSfi();
+    const cellEm = sfi
+      ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sfi-numbers-cell")) || 1.15
+      : 1;
+    const rowH = Math.max(8, Math.round((local > 0 ? local : 16) * (sfi ? cellEm : 1)));
     wheel.style.height = `${rowH}px`;
     strip.querySelectorAll(":scope > span").forEach((cell) => {
       cell.style.height = `${rowH}px`;
@@ -29658,7 +29752,146 @@
     return rowH;
   }
 
+  /** SFI turn distance: shortest path in trend direction (wrap 9→0 forward when rising). */
+  function sfiTurnSteps(from, to, dir) {
+    if (from === to) return 0;
+    const CYCLE = 10;
+    const forward = ((((to - from) * dir) % CYCLE) + CYCLE) % CYCLE;
+    return dir * forward;
+  }
+
+  function animateStatRollDigitWheelSfi(wheel, fromDigit, toDigit, duration, opts = {}) {
+    const strip = wheel._statRollStrip;
+    if (!strip) return;
+    const fromIdx = Number(fromDigit);
+    const toIdx = Number(toDigit);
+    if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx)) return;
+    const dir = opts.trendDir === -1 ? -1 : 1;
+    const steps = sfiTurnSteps(fromIdx, toIdx, dir);
+    if (steps === 0 && !(opts.extraSpins > 0)) return;
+
+    if (wheel._statRollSettleTimer) {
+      clearTimeout(wheel._statRollSettleTimer);
+      wheel._statRollSettleTimer = 0;
+    }
+    if (wheel._statRollStartTimer) {
+      clearTimeout(wheel._statRollStartTimer);
+      wheel._statRollStartTimer = 0;
+    }
+    if (wheel._statRollAnim) {
+      try {
+        wheel._statRollAnim.cancel();
+      } catch {
+        /* ignore */
+      }
+      wheel._statRollAnim = null;
+    }
+    if (wheel._statRollBlurAnim) {
+      try {
+        wheel._statRollBlurAnim.cancel();
+      } catch {
+        /* ignore */
+      }
+      wheel._statRollBlurAnim = null;
+    }
+
+    const delay = Math.max(0, Number(opts.delay) || 0);
+    const HOME = 10;
+    const h = lockStatRollWheelMetrics(wheel);
+    if (!(h > 0)) return;
+
+    let travel = steps;
+    if (opts.extraSpins > 0) travel += dir * Math.floor(Number(opts.extraSpins)) * 10;
+
+    const startY = (HOME + fromIdx) * h;
+    const endY = startY + travel * h;
+    const ease =
+      getComputedStyle(document.documentElement).getPropertyValue("--sfi-numbers-ease").trim() ||
+      "cubic-bezier(0.32, 0.72, 0, 1)";
+    const deepestRaw = getComputedStyle(document.documentElement).getPropertyValue("--sfi-numbers-blur").trim();
+    const fontSize = parseFloat(getComputedStyle(wheel).fontSize) || 16;
+    const deepest = deepestRaw.includes("em")
+      ? (parseFloat(deepestRaw) || 0.09) * fontSize
+      : parseFloat(deepestRaw) || fontSize * 0.09;
+
+    const start = () => {
+      strip.style.transition = "none";
+      strip.style.transform = `translate3d(0, ${-startY}px, 0)`;
+      void strip.offsetHeight;
+      strip.classList.add("is-rolling");
+      wheel.setAttribute("data-turning", "");
+      if (typeof strip.animate === "function") {
+        wheel._statRollAnim = strip.animate(
+          [
+            { transform: `translate3d(0, ${-startY}px, 0)` },
+            { transform: `translate3d(0, ${-endY}px, 0)` },
+          ],
+          { duration, easing: ease, fill: "forwards" }
+        );
+        wheel._statRollAnim.finished
+          .then(() => settle())
+          .catch(() => settle());
+      } else {
+        strip.style.transition = `transform ${duration}ms ${ease}`;
+        strip.style.transform = `translate3d(0, ${-endY}px, 0)`;
+      }
+      if (deepest > 0 && typeof wheel.animate === "function") {
+        const depth = Math.min(1, Math.abs(travel) / 4) * deepest;
+        wheel._statRollBlurAnim = wheel.animate(
+          [
+            { filter: "blur(0px)", offset: 0 },
+            { filter: `blur(${depth.toFixed(2)}px)`, offset: 0.15 },
+            { filter: "blur(0px)", offset: 0.62 },
+            { filter: "blur(0px)", offset: 1 },
+          ],
+          { duration, easing: "linear" }
+        );
+      }
+    };
+
+    const settle = () => {
+      wheel._statRollSettleTimer = 0;
+      strip.classList.remove("is-rolling");
+      wheel.removeAttribute("data-turning");
+      strip.style.transition = "none";
+      strip.style.transform = `translate3d(0, ${-(HOME + toIdx) * h}px, 0)`;
+      strip.style.willChange = "auto";
+      wheel.style.filter = "";
+      if (wheel._statRollAnim) {
+        try {
+          wheel._statRollAnim.cancel();
+        } catch {
+          /* ignore */
+        }
+        wheel._statRollAnim = null;
+      }
+      if (wheel._statRollBlurAnim) {
+        try {
+          wheel._statRollBlurAnim.cancel();
+        } catch {
+          /* ignore */
+        }
+        wheel._statRollBlurAnim = null;
+      }
+    };
+
+    strip.style.willChange = "transform";
+    if (delay > 0) {
+      wheel._statRollStartTimer = window.setTimeout(() => {
+        wheel._statRollStartTimer = 0;
+        start();
+      }, delay);
+    } else {
+      start();
+    }
+    wheel._statRollSettleTimer = window.setTimeout(settle, delay + duration + 100);
+  }
+
   function animateStatRollDigitWheel(wheel, fromDigit, toDigit, duration, opts = {}) {
+    if (odometerModeIsSfi()) {
+      animateStatRollDigitWheelSfi(wheel, fromDigit, toDigit, duration, opts);
+      return;
+    }
     const strip = wheel._statRollStrip;
     if (!strip) return;
     const fromIdx = Number(fromDigit);
@@ -29799,10 +30032,13 @@
         if (!strip || toCh == null) return;
         const h = wheel._statRollRowH || lockStatRollWheelMetrics(wheel);
         strip.classList.remove("is-rolling");
+        wheel.removeAttribute("data-turning");
         strip.style.transition = "none";
         strip.style.willChange = "auto";
+        wheel.style.filter = "";
         if (h > 0) {
-          strip.style.transform = `translate3d(0, ${-Number(toCh) * h}px, 0)`;
+          const rest = odometerModeIsSfi() ? 10 + Number(toCh) : Number(toCh);
+          strip.style.transform = `translate3d(0, ${-rest * h}px, 0)`;
         }
       });
     };
@@ -29835,13 +30071,17 @@
     const wheels = [...node.querySelectorAll(".stat-roll-digit")];
     if (!wheels.length) return;
     // Lock metrics after mount so large hero fonts don't step by root 16px.
-    wheels.forEach((wheel) => lockStatRollWheelMetrics(wheel));
+    wheels.forEach((wheel) => {
+      wheel._statRollRowH = 0; // allow remeasure when A/B mode flips
+      lockStatRollWheelMetrics(wheel);
+    });
+    const trendDir = Number(to) >= Number(from) ? 1 : -1;
     // Full-duration drums (no early settle) — matches pre-saturate Home enter.
     wheels.forEach((wheel) => {
       const fromCh = wheel._statRollFrom;
       const toCh = wheel._statRollTo;
       if (fromCh == null || toCh == null) return;
-      animateStatRollDigitWheel(wheel, fromCh, toCh, duration);
+      animateStatRollDigitWheel(wheel, fromCh, toCh, duration, { trendDir });
     });
     // Guaranteed settle — snap drums in place (no plain-text width jump).
     node._statRollFinishTimer = window.setTimeout(() => {
@@ -32853,6 +33093,51 @@
     dark: { icon: "moon", label: "Dark" },
   };
 
+  const ODOMETER_KEY = "fpl-explorer-odometer";
+  const ODOMETER_ORDER = ["classic", "sfi"];
+
+  function odometerModeIsSfi() {
+    return document.documentElement.classList.contains("odometer-sfi");
+  }
+
+  function currentOdometerMode() {
+    const stored = localStorage.getItem(ODOMETER_KEY);
+    return ODOMETER_ORDER.includes(stored) ? stored : "classic";
+  }
+
+  function syncOdometerSeg(mode = currentOdometerMode()) {
+    if (!el.odometerSeg) return;
+    Array.from(el.odometerSeg.querySelectorAll("button[data-odometer]")).forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.odometer === mode);
+    });
+    if (typeof syncSegThumb === "function") syncSegThumb(el.odometerSeg, { animate: false });
+  }
+
+  /** Replay Home summary rolls so the A/B mode is obvious without a full reload. */
+  function previewOdometerModeOnHome() {
+    if (state.page !== "home" || !el.homePage) return;
+    try {
+      prepareHomeStatRolls();
+      mountHomeSummaryRollsAtStart(el.homePage);
+      startHomeEnterMotion(el.homePage);
+    } catch {
+      /* best-effort demo roll */
+    }
+  }
+
+  function applyOdometerMode(mode, { preview = true } = {}) {
+    const next = ODOMETER_ORDER.includes(mode) ? mode : "classic";
+    try {
+      if (next === "classic") localStorage.removeItem(ODOMETER_KEY);
+      else localStorage.setItem(ODOMETER_KEY, next);
+    } catch {
+      /* ignore quota */
+    }
+    document.documentElement.classList.toggle("odometer-sfi", next === "sfi");
+    syncOdometerSeg(next);
+    if (preview) previewOdometerModeOnHome();
+  }
+
   function currentThemeMode() {
     const stored = localStorage.getItem(THEME_KEY);
     return THEME_ORDER.includes(stored) ? stored : "system";
@@ -32927,6 +33212,16 @@
   }
 
   applyTheme(currentThemeMode());
+
+  if (el.odometerSeg) {
+    el.odometerSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-odometer]");
+      if (!btn || !el.odometerSeg.contains(btn)) return;
+      applyOdometerMode(btn.dataset.odometer || "classic", { preview: true });
+      btn.blur();
+    });
+  }
+  applyOdometerMode(currentOdometerMode(), { preview: false });
 
   function motionEnhancedOn() {
     return true;

@@ -3649,6 +3649,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding-top: 6px;
     padding-bottom: 6px;
   }
+  /* Statistics only: denser body rows on narrow viewports. */
+  #opta-page .table-wrap > table > tbody td {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
   .table-wrap > table > thead tr:not(.section-row) th.col-name,
   .table-wrap > table > thead tr:not(.section-row) th.col-team,
   .table-wrap > table > thead tr:not(.section-row) th.col-player,
@@ -3954,6 +3959,20 @@ tbody td {
   font-family: var(--mono);
   white-space: nowrap;
   transition: background-color 0.15s ease;
+}
+/* Statistics only: denser rows (top/bottom only so col-name left pad stays). */
+#opta-page .table-wrap {
+  --own-photo: 30px;
+}
+#opta-page .table-wrap > table > tbody td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+#opta-page .table-wrap .ownership-photo,
+#opta-page .table-wrap .ownership-crest {
+  width: var(--own-photo, 30px);
+  height: var(--own-photo, 30px);
+  flex: 0 0 var(--own-photo, 30px);
 }
 tbody td.zero-val { color: var(--text-faint); }
 tbody td.highlight-top,
@@ -7302,6 +7321,15 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   overflow: visible;
 }
 
+/* xData: don't chip-ellipsis TEAM|£|POS — column is measured to fit at rest;
+   name-simplify fades the whole text block on scroll instead. */
+.barbell-wrap .rankings-identity .ownership-id-sub > * {
+  flex: 0 0 auto;
+  min-width: auto;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .rankings-name {
   min-width: 0;
   overflow: hidden;
@@ -8272,9 +8300,17 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     padding: 6px 10px;
     gap: 0 2px;
   }
-  .barbell-wrap.is-barbell-compare-measure .barbell-group-identity .ownership-id-sub {
+  .barbell-wrap.is-barbell-compare-measure .barbell-group-identity .ownership-id-sub,
+  .barbell-wrap.is-barbell-name-measure .barbell-label .ownership-id-sub {
     flex-wrap: nowrap;
     white-space: nowrap;
+  }
+  .barbell-wrap.is-barbell-name-measure .barbell-label .ownership-id-sub > *,
+  .barbell-wrap.is-barbell-compare-measure .barbell-group-identity .ownership-id-sub > * {
+    flex: 0 0 auto;
+    min-width: auto;
+    overflow: visible;
+    text-overflow: clip;
   }
   .barbell-label {
     margin: -7px 0 -7px -10px;

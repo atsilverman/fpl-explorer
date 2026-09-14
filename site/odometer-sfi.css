@@ -1,0 +1,68 @@
+/* SFI-style number roll (A/B). Active only when <html class="odometer-sfi">.
+   Inspired by @sfinterface/numbers (MIT) — vanilla port for compare only.
+   https://numbers.sfinterface.com — not a dependency; classic path stays default. */
+
+html.odometer-sfi {
+  --sfi-numbers-roll: 520ms;
+  --sfi-numbers-cell: 1.15em;
+  --sfi-numbers-blur: 0.09em;
+  --sfi-numbers-fade: 1;
+  --sfi-numbers-fade-roll: 1.9;
+  --sfi-numbers-softness: 0;
+  --sfi-numbers-ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html.odometer-sfi .stat-roll-digit {
+  height: var(--sfi-numbers-cell);
+  /* Soft window veil — neighbours dissolve at the edge of the glyph. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 calc(var(--sfi-numbers-fade) * 18%),
+    #000 calc(100% - var(--sfi-numbers-fade) * 18%),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 calc(var(--sfi-numbers-fade) * 18%),
+    #000 calc(100% - var(--sfi-numbers-fade) * 18%),
+    transparent 100%
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+html.odometer-sfi .stat-roll-digit[data-turning] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 calc(var(--sfi-numbers-fade-roll) * 14%),
+    #000 calc(100% - var(--sfi-numbers-fade-roll) * 14%),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 calc(var(--sfi-numbers-fade-roll) * 14%),
+    #000 calc(100% - var(--sfi-numbers-fade-roll) * 14%),
+    transparent 100%
+  );
+}
+
+html.odometer-sfi .stat-roll-digit .stat-roll-strip > span {
+  height: var(--sfi-numbers-cell);
+  line-height: var(--sfi-numbers-cell);
+}
+
+html.odometer-sfi .stat-roll-strip.is-rolling {
+  /* Ease lives on the WAAPI timeline; keep will-change while turning. */
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.odometer-sfi .stat-roll-digit {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}

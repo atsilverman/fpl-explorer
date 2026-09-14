@@ -16,8 +16,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1311" />
+<link rel="stylesheet" href="styles.css?v=1315" />
 <link rel="stylesheet" href="motion-enhanced.css?v=4" />
+<link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
 (() => {
   try {
@@ -25,6 +26,9 @@
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
     root.classList.add("motion-enhanced");
+    if (localStorage.getItem("fpl-explorer-odometer") === "sfi") {
+      root.classList.add("odometer-sfi");
+    }
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
     // keeps the title row clear of the iOS status blur (unlike black-translucent).
     const standalone = !!(
@@ -508,6 +512,14 @@
                 <button type="button" data-theme-mode="system" class="active" title="Match device light/dark setting">Device</button>
                 <button type="button" data-theme-mode="light" title="Always light">Light</button>
                 <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
+              </div>
+            </div>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="odometer-seg-label">Number roll</span>
+              <p class="prefs-field-hint">A/B compare our odometer with an SFI-style roll (directional turn, soft window, mid-spin blur). Affects Home ranks and other digit rolls.</p>
+              <div class="segmented segmented-block" id="odometer-seg" role="group" aria-labelledby="odometer-seg-label">
+                <button type="button" data-odometer="classic" class="active" title="Current FPL.db drum roll">Ours</button>
+                <button type="button" data-odometer="sfi" title="SFI-inspired roll — numbers.sfinterface.com">SFI</button>
               </div>
             </div>
           </section>
@@ -1893,7 +1905,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1314"></script>
+<script src="app.js?v=1318"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
