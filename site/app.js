@@ -1245,6 +1245,7 @@
     homePlayerProfile: $("#home-player-profile"),
     homePlayerMatchup: $("#home-player-matchup"),
     homePlayerModal: $("#home-player-modal"),
+    homePlayerModalPanel: document.querySelector("#home-player-modal .home-player-modal-panel"),
     homePlayerModalBody: $("#home-player-modal-body"),
     homePlayerModalTitle: $("#home-player-modal-title"),
     homeSearchBtn: $("#home-search-btn"),
@@ -4176,13 +4177,20 @@
   // player is still on — keep this ahead of typical lag so early-match
   // 18′ + clock 26′ does not look like a sub.
   const HOME_MP_LIVE_CLOCK_GAP = 12;
+  // Clock must keep advancing after minutes last moved (not just absolute gap).
+  const HOME_MP_LIVE_CLOCK_ADVANCE = 8;
   const HOME_MP_LIVE_FREEZE_POLLS = 3;
-  const HOME_MP_LIVE_FREEZE_MS = 45_000;
+  const HOME_MP_LIVE_FREEZE_MS = 60_000;
   const HOME_MP_LIVE_NOCLOCK_POLLS = 5;
   const HOME_MP_LIVE_NOCLOCK_MS = 90_000;
   // Fixture clock parked (HT / long stoppage) — FPL has no HT flag; infer it.
   const HOME_MP_CLOCK_FREEZE_POLLS = 3;
   const HOME_MP_CLOCK_FREEZE_MS = 45_000;
+  // Classic HT display: FPL often parks the clock at 45′ (sometimes through
+  // early 2H stoppage reporting ~54′). Used as a clarifying band only —
+  // any parked clock still suppresses live MP risk.
+  const HOME_MP_HT_CLOCK_MIN = 45;
+  const HOME_MP_HT_CLOCK_MAX = 54;
   const HOME_MP_WATCH_STORE = "fpl.homeMpWatch.v1";
   let homeMpWatch = new Map();
   let homeMpWatchGw = null;
@@ -4215,7 +4223,22 @@
       const parsed = JSON.parse(raw);
       if (!parsed || Number(parsed.gw) !== Number(HOME.gw)) return;
       homeMpWatchGw = parsed.gw;
-      homeMpWatch = new Map(Object.entries(parsed.items || {}));
+      // Soft-hydrate: keep mins / lastClock so observe can continue, but scrub
+      // freeze evidence so this page load must re-earn live risk (avoids
+      // first-paint false positives from stale sameCount + FPL lag gap).
+      const scrubbed = Object.entries(parsed.items || {}).map(([key, w]) => {
+        const entry = w && typeof w === "object" ? w : {};
+        return [key, {
+          mins: entry.mins,
+          lastClock: entry.lastClock != null ? entry.lastClock : null,
+          sameCount: 0,
+          firstFrozenAt: 0,
+          clockSameCount: 0,
+          clockFrozenAt: 0,
+          clockWhenMinsChanged: null,
+        }];
+      });
+      homeMpWatch = new Map(scrubbed);
     } catch {
       /* ignore quota / parse */
     }
@@ -4257,6 +4280,26 @@
     }
     const prevClock = prev.lastClock != null ? Number(prev.lastClock) : null;
     const clockSame = clock != null && prevClock != null && clock === prevClock;
+    // HT = parked clock + no MP change; real sub = mins frozen while clock advances.
+    // When the clock unparks after HT, drop freeze earned during the park so 2H
+    // does not inherit “minutes stuck through HT” as a sub signal.
+    const unparkedAfterPark = !clockSame
+      && clock != null
+      && prevClock != null
+      && clock > prevClock
+      && homeFixtureClockLooksParked(prev, prevClock, now);
+    if (unparkedAfterPark) {
+      homeMpWatch.set(key, {
+        mins: minsN,
+        sameCount: 0,
+        firstFrozenAt: 0,
+        clockWhenMinsChanged: clock,
+        lastClock: clock,
+        clockSameCount: 0,
+        clockFrozenAt: 0,
+      });
+      return;
+    }
     const clockSameCount = clockSame ? (Number(prev.clockSameCount) || 0) + 1 : 0;
     const clockFrozenAt = clockSame
       ? (Number(prev.clockFrozenAt) || now)
@@ -4278,7 +4321,11 @@
       mins: minsN,
       sameCount: same ? (Number(prev.sameCount) || 0) + 1 : 0,
       firstFrozenAt: same ? (Number(prev.firstFrozenAt) || now) : 0,
-      clockWhenMinsChanged: same ? prev.clockWhenMinsChanged : clock,
+      // Soft-hydrate clears clockWhenMinsChanged; on first same-mins observe
+      // after load, anchor to current clock so advance-while-frozen can re-earn.
+      clockWhenMinsChanged: same
+        ? (prev.clockWhenMinsChanged != null ? prev.clockWhenMinsChanged : clock)
+        : clock,
       lastClock: clock,
       clockSameCount,
       clockFrozenAt,
@@ -4312,9 +4359,20 @@
     const clockFrozenFor = watch.clockFrozenAt > 0
       ? now - Number(watch.clockFrozenAt)
       : 0;
-    // FPL has no HT flag — when the fixture clock stops (HT / VAR / long
-    // stoppage), player minutes freeze with it. That is not a sub.
-    return (Number(watch.clockSameCount) || 0) >= HOME_MP_CLOCK_FREEZE_POLLS
+    const polls = Number(watch.clockSameCount) || 0;
+    // HT = parked clock + no MP change; real sub = mins frozen while clock advances.
+    // FPL has no HT flag — infer park from an unchanged fixture clock.
+    if (polls >= HOME_MP_CLOCK_FREEZE_POLLS
+      && clockFrozenFor >= HOME_MP_CLOCK_FREEZE_MS) {
+      return true;
+    }
+    // Classic HT window (FPL often sits at 45′, sometimes through ~54′): after
+    // soft-hydrate, poll counters restart — still suppress once the clock has
+    // sat in this band for the freeze duration. Parked-clock remains the main
+    // signal; this band only helps recognize HT sooner post-hydrate.
+    const inHtBand = clock >= HOME_MP_HT_CLOCK_MIN && clock <= HOME_MP_HT_CLOCK_MAX;
+    return inHtBand
+      && polls >= 1
       && clockFrozenFor >= HOME_MP_CLOCK_FREEZE_MS;
   }
 
@@ -4332,16 +4390,21 @@
       return (Number(watch.sameCount) || 0) >= HOME_MP_LIVE_NOCLOCK_POLLS
         && frozenFor >= HOME_MP_LIVE_NOCLOCK_MS;
     }
-    // HT / stoppage: fixture clock also freezes. A real sub leaves the clock
-    // advancing while player minutes stay put — FPL has no HT flag.
+    // Never live MP risk while fixture clock is parked (HT / stoppage).
     if (homeFixtureClockLooksParked(watch, clock, now)) return false;
     const frozen = (Number(watch.sameCount) || 0) >= HOME_MP_LIVE_FREEZE_POLLS
       && frozenFor >= HOME_MP_LIVE_FREEZE_MS;
     if (!frozen) return false;
     const gap = clock - minsN;
-    // Require a clear clock lead after minutes freeze. Do not use a weaker
-    // "clock moved since last mins tick" alone — that fires on normal FPL lag.
-    return gap >= HOME_MP_LIVE_CLOCK_GAP;
+    if (gap < HOME_MP_LIVE_CLOCK_GAP) return false;
+    // Absolute gap alone false-positives under FPL lag (clock leads mins by
+    // 8–15′ while the player is still on). Require the clock to have advanced
+    // since minutes last moved — set by observe; null until then = not yet.
+    const clockWhenMins = watch.clockWhenMinsChanged != null
+      ? Number(watch.clockWhenMinsChanged)
+      : null;
+    if (clockWhenMins == null || !Number.isFinite(clockWhenMins)) return false;
+    return (clock - clockWhenMins) >= HOME_MP_LIVE_CLOCK_ADVANCE;
   }
 
   /** short (<60′) or modest (60–75′) once the player is done — FT, or live sub. */
@@ -4391,9 +4454,6 @@
     if (homeMinutesWarningBand(row, fx)) return "";
     if (inPlay) {
       return `<span class="home-status-dot is-live" aria-label="Live"></span>`;
-    }
-    if (homeFixtureIsProvisional(fx)) {
-      return `<span class="home-status-dot is-done" aria-label="Provisional"></span>`;
     }
     return "";
   }
@@ -7836,11 +7896,17 @@
     for (const entry of entries) {
       const { eg, pos } = entry;
       if (colKey === "defConHit") {
-        if (eg.defConHit) return true;
+        if (pos !== "GK" && (entry.threshold != null || eg.defConHit || Number(entry.actions) > 0)) {
+          return true;
+        }
         continue;
       }
       if (colKey === "saves") {
         if (pos === "GK" && Number(eg.saves) > 0) return true;
+        continue;
+      }
+      if (colKey === "cleanSheets") {
+        if (pos !== "FWD" && Number(eg.cleanSheets) > 0) return true;
         continue;
       }
       const n = Number(eg[colKey]);
@@ -8775,15 +8841,57 @@
     return Math.ceil(raw / 5) * 5;
   }
 
+  function homeFormFmtTick(v, decimals) {
+    if (!Number.isFinite(v)) return "";
+    if (decimals > 0) {
+      const d = decimals > 1 ? decimals : 1;
+      return (Math.round(v * 10 ** d) / 10 ** d).toFixed(d).replace(/\.0$/, "");
+    }
+    // Integer stats — never round half-steps into duplicate labels.
+    return String(Math.round(v));
+  }
+
+  function homeFormYTickStep(maxVal, decimals) {
+    const max = Number(maxVal);
+    if (!(max > 0)) return decimals > 0 ? 0.5 : 1;
+    if (decimals > 0) {
+      // Keep steps that format cleanly at 1 decimal (avoid 0.25 → "0.3").
+      if (max <= 0.5) return 0.5;
+      if (max <= 1) return 0.5;
+      if (max <= 2) return 0.5;
+      if (max <= 5) return 1;
+      return Math.ceil(max / 4 * 2) / 2;
+    }
+    // Whole-number domain: step so we get ~3–5 unique integer labels.
+    if (max <= 2) return 1;
+    if (max <= 4) return 1;
+    if (max <= 6) return 2;
+    if (max <= 10) return 2;
+    if (max <= 20) return 5;
+    if (max <= 45) return 15;
+    if (max <= 90) return 30;
+    return Math.max(1, Math.ceil(max / 4));
+  }
+
   function homeFormYTicks(maxVal, decimals) {
+    const max = Number(maxVal);
+    if (!(max > 0)) {
+      return [{ value: 0, label: "0" }];
+    }
+    const step = homeFormYTickStep(max, decimals);
     const ticks = [];
-    const steps = 4;
-    for (let i = 0; i <= steps; i++) {
-      const v = (maxVal * i) / steps;
-      ticks.push({
-        value: v,
-        label: decimals > 0 ? (Math.round(v * 10) / 10).toFixed(decimals > 1 ? decimals : 1).replace(/\.0$/, "") : String(Math.round(v)),
-      });
+    const seen = new Set();
+    for (let v = 0; v <= max + step * 1e-9; v += step) {
+      const value = Math.round(v / step) * step;
+      const label = homeFormFmtTick(value, decimals);
+      if (seen.has(label)) continue;
+      seen.add(label);
+      ticks.push({ value, label });
+    }
+    // Always include the top of the scale.
+    const topLabel = homeFormFmtTick(max, decimals);
+    if (!seen.has(topLabel)) {
+      ticks.push({ value: max, label: topLabel });
     }
     return ticks;
   }
@@ -16670,10 +16778,6 @@
         spitRow(
           `<span class="home-status-dot is-live spit-home-swatch" aria-hidden="true"></span>`,
           "Fixture in play"
-        ),
-        spitRow(
-          `<span class="home-status-dot is-done spit-home-swatch" aria-hidden="true"></span>`,
-          "Provisional FT — removed once FPL finalizes the fixture"
         ),
         spitRow(
           `${iconHTML("circle-x", "home-dnp-icon spit-home-swatch")}`,
@@ -24572,6 +24676,10 @@
     return `<span class="threshold-dot live-defcon-achieved live-dc-check-enter"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
   }
 
+  function liveCleanSheetDotHTML() {
+    return `<span class="threshold-dot live-cs-achieved live-dc-check-enter"${tipAttr("Clean sheet")}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+  }
+
   let liveFeedEvents = [];
   let liveFeedSnapshot = null;
   let liveFeedGw = null;
@@ -25841,7 +25949,17 @@
   }
 
   function livePointsCellSignature(entry, col) {
-    if (col.key === "defConHit") return entry.eg.defConHit ? "1" : "";
+    if (col.key === "defConHit") {
+      if (entry.pos === "GK" || entry.threshold == null) return "";
+      const thr = entry.threshold || (entry.pos === "DEF" ? 10 : 12);
+      const acts = Number.isFinite(Number(entry.actions)) ? Math.max(0, Number(entry.actions)) : 0;
+      if (entry.eg.defConHit || acts >= thr) return "1";
+      return `${acts}/${thr}`;
+    }
+    if (col.key === "cleanSheets") {
+      if (entry.pos === "FWD") return "";
+      return Number(entry.eg.cleanSheets) > 0 ? "1" : "";
+    }
     if (col.key === "saves" && entry.pos !== "GK") return "";
     const n = Number(entry.eg[col.key]);
     if (!Number.isFinite(n) || n === 0) return "";
@@ -25849,7 +25967,13 @@
   }
 
   function livePointsCellSignatureFromTd(td, col) {
-    if (col.key === "defConHit") return td.querySelector(".live-defcon-achieved") ? "1" : "";
+    if (col.key === "defConHit") {
+      if (td.querySelector(".live-defcon-achieved")) return "1";
+      const frac = td.querySelector(".live-points-dc-frac");
+      if (!frac) return "";
+      return (frac.textContent || "").replace(/\s+/g, "");
+    }
+    if (col.key === "cleanSheets") return td.querySelector(".live-cs-achieved") ? "1" : "";
     const roll = td.querySelector(".live-stat-roll[data-count-to]");
     if (!roll) return "";
     return roll.dataset.countTo || "";
@@ -26003,7 +26127,6 @@
     if (
       colKey === "goals" ||
       colKey === "assists" ||
-      colKey === "cleanSheets" ||
       colKey === "saves" ||
       colKey === "penaltiesSaved"
     ) {
@@ -26011,6 +26134,7 @@
     }
     if (colKey === "bonus") return "is-bonus";
     if (colKey === "defConHit") return "is-defcon";
+    if (colKey === "cleanSheets") return "is-cs";
     if (colKey === "yellowCards") return "is-warn";
     if (
       colKey === "redCards" ||
@@ -26044,12 +26168,26 @@
   function livePointsCellHTML(entry, col) {
     const { eg, pos } = entry;
     if (col.key === "defConHit") {
-      if (!eg.defConHit) return "";
+      if (pos === "GK" || entry.threshold == null) return "";
       const thr = entry.threshold || (pos === "DEF" ? 10 : 12);
-      const acts = entry.actions;
+      const acts = Number.isFinite(Number(entry.actions)) ? Math.max(0, Number(entry.actions)) : 0;
+      const hit = !!eg.defConHit || acts >= thr;
+      if (hit) {
+        return livePointsPillHTML(
+          col.key,
+          `<span class="live-defcon-check-slot">${liveAchievedDotHTML(Math.max(acts, thr), thr, pos)}</span>`
+        );
+      }
+      const tip = `DefCon — ${acts} / ${thr} ${pos} actions (+2 at threshold)`;
+      const frac = `<span class="live-points-dc-frac"${tipAttr(tip)}>${acts}<span class="live-points-dc-thr">/${thr}</span></span>`;
+      return livePointsPillHTML(col.key, frac, { tone: "is-defcon-progress" });
+    }
+    if (col.key === "cleanSheets") {
+      // FPL awards CS points only to GK/DEF/MID — never FWD.
+      if (pos === "FWD" || !(Number(eg.cleanSheets) > 0)) return "";
       return livePointsPillHTML(
         col.key,
-        `<span class="live-defcon-check-slot">${liveAchievedDotHTML(acts, thr, pos)}</span>`
+        `<span class="live-defcon-check-slot">${liveCleanSheetDotHTML()}</span>`
       );
     }
     if (col.key === "saves" && pos !== "GK") return "";

@@ -19162,7 +19162,8 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   line-height: 1;
   box-sizing: border-box;
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon {
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs {
   min-width: 1.55em;
   min-height: 1.55em;
   padding: 3px 4px;
@@ -19171,10 +19172,12 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   width: 12px;
   height: 12px;
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon circle {
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon circle,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs .check-mark-icon circle {
   fill: #fff;
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon path {
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon path,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs .check-mark-icon path {
   stroke: hsl(142 55% 32%);
 }
 /* Home squad DC pills — static check (no Live enter fade). */
@@ -19190,6 +19193,9 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 }
 .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
+  /* Slightly larger than G/A so muted Pts matches visual weight (ga-ring). */
+  --pill-pad-x: 6px;
+  font-size: 12px;
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
 }
@@ -19221,9 +19227,28 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus-1 {
   background: hsl(38 55% 68%);
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon {
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs {
   background: hsl(142 55% 32%);
   color: #fff;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress {
+  --pill-pad-x: 5px;
+  min-width: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-frac {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-thr {
+  color: var(--text-faint);
+  font-weight: 500;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-warn {
   background: hsl(var(--yc-pill-bg));
@@ -22337,13 +22362,18 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   width: 12px;
   height: 12px;
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon circle {
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon circle,
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-cs .check-mark-icon circle {
   fill: #fff;
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon path {
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon path,
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-cs .check-mark-icon path {
   stroke: hsl(142 55% 32%);
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-pts {
+  /* Slightly larger than G/A so Pts matches visual weight (ga-ring). */
+  --pill-pad-x: 9px;
+  font-size: 13px;
   background: hsl(var(--foreground) / 0.88);
   color: hsl(var(--background));
 }
@@ -22389,9 +22419,27 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     color: hsl(40 40% 92%);
   }
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon {
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon,
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-cs {
   background: hsl(142 55% 38%);
   color: #fff;
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress {
+  --pill-pad-x: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-frac {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-thr {
+  color: var(--text-faint);
+  font-weight: 500;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-warn {
   background: hsl(var(--yc-pill-bg));

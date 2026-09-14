@@ -93,25 +93,25 @@ html.motion-enhanced .page-tab-menu.open {
   transform-origin: top center;
 }
 
-/* —— Mobile sheet (panel reveal) —— */
+/* —— Mobile sheet ——
+   Keep the tray's full off-screen exit (108%). The panel-reveal recipe's
+   100px + blur close looked truncated and fought closeMobileSheet's
+   instant transform clear on search / prefs dismiss. */
 html.motion-enhanced .mobile-sheet-backdrop {
-  transition: opacity var(--panel-open-dur) var(--panel-ease);
+  transition: opacity var(--duration-fast) var(--panel-ease);
 }
 
 html.motion-enhanced .mobile-sheet-panel {
-  transform: translateY(var(--panel-translate-y)) scale(0.985);
-  filter: blur(var(--panel-blur));
-  opacity: 0.92;
-  transition:
-    transform var(--panel-open-dur) var(--panel-ease),
-    filter var(--panel-open-dur) var(--panel-ease),
-    opacity var(--panel-open-dur) var(--panel-ease);
+  transform: translateY(108%);
+  opacity: 1;
+  filter: none;
+  transition: transform var(--panel-open-dur) var(--panel-ease);
 }
 
 html.motion-enhanced .mobile-sheet.is-open .mobile-sheet-panel {
-  transform: translateY(0) scale(1);
-  filter: blur(0);
+  transform: translateY(0);
   opacity: 1;
+  filter: none;
 }
 
 /* —— Page enter —— */
