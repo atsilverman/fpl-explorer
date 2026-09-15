@@ -12369,7 +12369,6 @@
   }
 
   function renderHomeSummaryStats(summary, { enterPending = false } = {}) {
-    void enterPending;
     const hero = homeSummaryLayout() === "hero";
     const gwVal = homeGwAwaitingKickoff()
       ? 0
@@ -12392,7 +12391,9 @@
       if (summary.overallRank == null || !Number.isFinite(Number(summary.overallRank)) || Number(summary.overallRank) <= 0) {
         overallRankEl.textContent = "—";
       } else {
-        overallRankEl.innerHTML = homeRankStatRollHTML(Number(summary.overallRank), 0);
+        overallRankEl.innerHTML = homeRankStatRollHTML(Number(summary.overallRank), 0, {
+          fullDigits: hero,
+        });
       }
     }
     if (el.homeHeroOverallRank) {
@@ -12430,7 +12431,9 @@
       if (summary.leagueRank == null || !Number.isFinite(Number(summary.leagueRank)) || Number(summary.leagueRank) <= 0) {
         leagueRankEl.textContent = "—";
       } else {
-        leagueRankEl.innerHTML = homeRankStatRollHTML(Number(summary.leagueRank), 0);
+        leagueRankEl.innerHTML = homeRankStatRollHTML(Number(summary.leagueRank), 0, {
+          fullDigits: hero,
+        });
       }
     }
   }
@@ -12477,7 +12480,14 @@
     const hero = homeSummaryLayout() === "hero";
     const specs = [
       { el: el.homeGwPoints, value: summary.gwPoints, kind: "int" },
-      { el: el.homeOverallRankNum || el.homeOverallRank, value: summary.overallRank, kind: "rank" },
+      {
+        el: el.homeOverallRankNum || el.homeOverallRank,
+        value: summary.overallRank,
+        kind: "rank",
+        // Match GW / hero overall — compact 2.4M finishes in 1–2 steps and
+        // feels “already loaded” next to a full GW digit roll.
+        fullDigits: hero,
+      },
       {
         el: el.homeHeroOverallRank,
         value: summary.overallRank,
@@ -12492,7 +12502,12 @@
         fullDigits: hero,
       },
       { el: el.homeTotalPoints, value: summary.overallPoints, kind: "rank" },
-      { el: el.homeLeagueRankNum || el.homeLeagueRank, value: summary.leagueRank, kind: "rank" },
+      {
+        el: el.homeLeagueRankNum || el.homeLeagueRank,
+        value: summary.leagueRank,
+        kind: "rank",
+        fullDigits: hero,
+      },
     ];
     specs.forEach(({ el: node, value, kind, fullDigits = false, skip = false }) => {
       if (!node || skip) return;
@@ -12588,14 +12603,17 @@
     });
     startHomeRankSatEnter(pane, { duration, token });
 
-    let summaryRolls = homeHeroRollNodes(pane);
-    if (!summaryRolls.length) {
-      prepareHomeStatRolls();
-      mountHomeSummaryRollsAtStart(pane);
-      summaryRolls = homeHeroRollNodes(pane);
-    }
+    // Always rebuild summary drums from 0. Reusing already-painted nodes (common
+    // on soft navigations / live handoff) skipped the roll so overall + league
+    // looked instant while GW still animated after a hard refresh.
+    prepareHomeStatRolls();
+    mountHomeSummaryRollsAtStart(pane);
+    const summaryRolls = homeHeroRollNodes(pane);
     const rollMs = Math.max(400, Number(duration) || HOME_SUMMARY_ROLL_MS);
-    summaryRolls.forEach((node) => animateStatRollNode(node, { duration: rollMs }));
+    summaryRolls.forEach((node) => {
+      node.dataset.countFrom = "0";
+      animateStatRollNode(node, { duration: rollMs });
+    });
     // Staggered digit drums can finish after the base roll window — wait for
     // the slowest column, then force plain-text settle (no sticky half-digits).
     window.setTimeout(() => {
