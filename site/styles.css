@@ -64,6 +64,16 @@
   --yc-pill-fg: 240 10% 8%;
 
   --radius: 0.5rem;
+  /* Data chips — one size language (Home Pts / ownership / standings / schedule,
+     Live, Ownership, Prices, Fixtures, xData). Override here to retune site-wide.
+     Dense exceptions (Team heat cells, report FX grid) stay local. */
+  --data-pill-font-size: 12px;
+  --data-pill-font-weight: 700;
+  --data-pill-pad-y: 4px;
+  --data-pill-pad-x: 6px;
+  --data-pill-min-height: 22px;
+  --data-pill-radius: 6px;
+  --data-pill-line-height: 1;
   --shadow-sm: 0 1px 2px 0 hsl(240 6% 10% / 0.05);
   --shadow: 0 1px 3px 0 hsl(240 6% 10% / 0.1), 0 1px 2px -1px hsl(240 6% 10% / 0.1);
   --shadow-lg: 0 10px 15px -3px hsl(240 6% 10% / 0.1), 0 4px 6px -4px hsl(240 6% 10% / 0.1);
@@ -5234,16 +5244,18 @@ html[data-theme="dark"] .page-live-badge-dot {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  --pill-pad-x: 5px;
+  --pill-pad-x: var(--data-pill-pad-x);
   min-width: calc(5ch + 2 * var(--pill-pad-x));
-  padding: 3px var(--pill-pad-x);
-  border-radius: 6px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--data-pill-radius);
   background: hsl(var(--muted));
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--data-pill-font-size);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  line-height: var(--data-pill-line-height);
   text-align: center;
   white-space: nowrap;
 }
@@ -5291,14 +5303,16 @@ html[data-theme="dark"] .page-live-badge-dot {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  --pill-pad-x: 5px;
+  --pill-pad-x: var(--data-pill-pad-x);
   min-width: calc(5ch + 2 * var(--pill-pad-x));
-  padding: 3px var(--pill-pad-x);
-  border-radius: 6px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--data-pill-radius);
   font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
   font-variant-numeric: tabular-nums;
+  line-height: var(--data-pill-line-height);
   text-align: center;
   white-space: nowrap;
   color: hsl(var(--card));
@@ -5827,13 +5841,14 @@ html[data-page="prices"] .layout .main {
   justify-content: center;
   box-sizing: border-box;
   gap: 4px;
-  /* em vs the 11px pill type — rem is 14px on html and was too short for "Very likely". */
+  /* em vs the pill type — rem is 14px on html and was too short for "Very likely". */
   min-width: 9.6em;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) 8px;
+  border-radius: var(--data-pill-radius);
+  font-size: var(--data-pill-font-size);
   font-weight: 650;
-  line-height: 1.25;
+  line-height: var(--data-pill-line-height);
   text-align: center;
   white-space: nowrap;
 }
@@ -5869,9 +5884,9 @@ html[data-page="prices"] .layout .main {
 }
 .prices-status-pill.is-short {
   min-width: 4.6em;
-  padding: 3px 6px;
-  font-size: 10px;
-  letter-spacing: 0.03em;
+  padding: var(--data-pill-pad-y) var(--data-pill-pad-x);
+  font-size: var(--data-pill-font-size);
+  letter-spacing: 0.02em;
 }
 .prices-status-pill.is-short .prices-status-trend-icon .icon {
   width: 11px;
@@ -5884,12 +5899,14 @@ html[data-page="prices"] .layout .main {
   box-sizing: border-box;
   --pill-pad-x: 7px;
   min-width: calc(8ch + 2 * var(--pill-pad-x));
-  padding: 3px var(--pill-pad-x);
-  border-radius: 6px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--data-pill-radius);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--data-pill-font-size);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  line-height: var(--data-pill-line-height);
   text-align: center;
   white-space: nowrap;
 }
@@ -6826,9 +6843,10 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     white-space: nowrap;
   }
   #prices-page .prices-table-wrap .prices-table .prices-progress-pill {
-    font-size: 11px;
-    --pill-pad-x: 6px;
-    padding: 2px var(--pill-pad-x);
+    --pill-pad-x: var(--data-pill-pad-x);
+    font-size: var(--data-pill-font-size);
+    padding: var(--data-pill-pad-y) var(--pill-pad-x);
+    min-height: var(--data-pill-min-height);
   }
   #prices-page .prices-table-wrap .prices-spark {
     gap: 3px;
@@ -8129,15 +8147,16 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   box-sizing: border-box;
   --pill-pad-x: 7px;
   min-width: calc(5ch + 2 * var(--pill-pad-x));
-  padding: 3px var(--pill-pad-x);
-  border-radius: 6px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--data-pill-radius);
   font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
   font-variant-numeric: tabular-nums;
   text-align: center;
   white-space: nowrap;
-  line-height: 1.2;
+  line-height: var(--data-pill-line-height);
   color: hsl(var(--card));
 }
 .diff-pill.over {
@@ -8357,9 +8376,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     bottom: -6px;
   }
   .diff-pill {
-    --pill-pad-x: 4px;
-    padding: 1px var(--pill-pad-x);
-    font-size: 10px;
+    --pill-pad-x: var(--data-pill-pad-x);
+    padding: var(--data-pill-pad-y) var(--pill-pad-x);
+    font-size: var(--data-pill-font-size);
+    min-height: var(--data-pill-min-height);
   }
   .expected-legend-inline {
     gap: 10px;
@@ -12161,14 +12181,16 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   box-sizing: border-box;
   --pill-pad-x: 9px;
   min-width: calc(3ch + 2 * var(--pill-pad-x));
-  padding: 3px var(--pill-pad-x);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
   border-radius: 999px;
   background: hsl(250 28% 28%);
   color: hsl(0 0% 98%);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
+  line-height: var(--data-pill-line-height);
   text-align: center;
   white-space: nowrap;
 }
@@ -15540,8 +15562,12 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   flex: none;
   gap: 3px;
   min-width: 3.35em;
-  min-height: 1.65em;
-  padding: 5px 9px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) 9px;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
+  border-radius: var(--data-pill-radius);
 }
 .home-schedule-pill .home-schedule-pill-lab {
   line-height: 1;
@@ -16593,8 +16619,8 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   --home-hero-bleed-x: var(--main-pad-x, 20px);
   --home-hero-pad-x: var(--main-pad-x, 20px);
   --home-hero-radius: 0px;
-  /* Team + League chips / crests — one radius; 6px matches data-pill. */
-  --home-chip-radius: 6px;
+  /* Team + League chips / crests — same radius as data pills. */
+  --home-chip-radius: var(--data-pill-radius);
   /* iOS-like liquid glass — blue-tinted frosted surfaces over hero / page. */
   --home-glass-bg: hsl(210 40% 99% / 0.4);
   --home-glass-bg-strong: hsl(210 38% 99% / 0.55);
@@ -18283,12 +18309,15 @@ html[data-theme="dark"] .home-dashboard {
   text-align: left;
 }
 .home-standings-live-pill {
-  --pill-pad-x: 7px;
+  --pill-pad-x: var(--data-pill-pad-x);
   min-width: calc(2ch + 2 * var(--pill-pad-x));
-  padding: 2px var(--pill-pad-x);
-  border-radius: var(--home-chip-radius, 6px);
-  font-size: 11px;
-  font-weight: 650;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
+  box-sizing: border-box;
 }
 .home-standings-live-pill.is-active {
   background: hsl(142 55% 38%);
@@ -18928,13 +18957,13 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  --pill-pad-x: 5px;
-  min-height: 1.65em;
-  padding: 4px var(--pill-pad-x);
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  --pill-pad-x: var(--data-pill-pad-x);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--data-pill-radius);
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
   box-sizing: border-box;
 }
 #home-feed-panel .live-empty-row td {
@@ -19298,13 +19327,13 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  --pill-pad-x: 5px;
-  min-height: 1.65em;
-  padding: 4px var(--pill-pad-x);
-  border-radius: var(--home-chip-radius, 6px);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  --pill-pad-x: var(--data-pill-pad-x);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
   box-sizing: border-box;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon,
@@ -19338,11 +19367,23 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 }
 .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
-  /* Slightly larger than G/A so muted Pts matches visual weight (ga-ring). */
-  --pill-pad-x: 6px;
-  font-size: 12px;
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  --pill-pad-x: var(--data-pill-pad-x);
+  font-size: var(--data-pill-font-size);
+  /* Full-strength Pts contrast — opaque black / white (no alpha dim). */
+  background: #111;
+  color: #fff;
+}
+:root[data-theme="dark"] .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
+:root[data-theme="dark"] .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
+  background: #fff;
+  color: #111;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
+  :root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
+    background: #fff;
+    color: #111;
+  }
 }
 /* 0 pts with 0 minutes — yet to play / DNP (not a played blank). */
 .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts-idle,
@@ -19403,20 +19444,6 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   background: hsl(var(--destructive));
   color: #fff;
 }
-:root[data-theme="dark"] .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
-:root[data-theme="dark"] .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts,
-:root:not([data-theme="light"]) .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
-:root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .home-squad-live-table tbody td.home-col-pts .live-points-pill.is-pts,
-  :root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-pts {
-    background: hsl(var(--muted));
-    color: hsl(var(--foreground));
-  }
-}
 .home-squad-fixtures-table .home-col-fx {
   text-align: center;
   width: 14%;
@@ -19458,10 +19485,13 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-squad-fixtures-table .home-schedule-pill,
 .home-squad-fixtures-table .fixtures-pill.home-schedule-pill {
   min-width: 2.9em;
-  min-height: 1.65em;
-  padding: 4px 7px;
-  font-size: 11px;
-  border-radius: var(--home-chip-radius, 6px);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) 7px;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
+  box-sizing: border-box;
 }
 .team-heat-pill-wrap {
   display: inline-flex;
@@ -19524,13 +19554,14 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 }
 .home-squad-ownership-table .ownership-pill,
 .home-squad-ownership-table .ownership-delta {
-  font-size: 11px;
-  --pill-pad-x: 6px;
-  /* Match Price Δ status pill height (icon + pad). */
-  padding: 3px var(--pill-pad-x);
-  line-height: 1.25;
+  font-size: var(--data-pill-font-size);
+  --pill-pad-x: var(--data-pill-pad-x);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  line-height: var(--data-pill-line-height);
   box-sizing: border-box;
-  min-height: 22px;
+  min-height: var(--data-pill-min-height);
+  font-weight: var(--data-pill-font-weight);
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
 }
 /* Live TSB% — muted grey pill, dark text (not the black Ownership live chip). */
 .home-squad-ownership-table .ownership-pill.is-live {
@@ -19550,11 +19581,12 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
 .home-squad-ownership-table .prices-status-pill {
   width: 100%;
   min-width: 0;
-  font-size: 10px;
-  padding: 3px 6px;
-  min-height: 22px;
+  font-size: var(--data-pill-font-size);
+  padding: var(--data-pill-pad-y) var(--data-pill-pad-x);
+  min-height: var(--data-pill-min-height);
   box-sizing: border-box;
   max-width: 100%;
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
 }
 .home-squad-ownership-table .prices-status-pill .prices-status-label {
   overflow: hidden;
@@ -20429,13 +20461,15 @@ html[data-theme="dark"] .home-dnp-icon {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  --pill-pad-x: 7px;
+  --pill-pad-x: var(--data-pill-pad-x);
   min-width: calc(2ch + 2 * var(--pill-pad-x));
-  padding: 2px var(--pill-pad-x);
-  border-radius: var(--home-chip-radius, 6px);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  line-height: 1.2;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
   text-align: center;
   white-space: nowrap;
   background-color: var(--hl-fill);
@@ -21015,16 +21049,17 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   justify-content: center;
   box-sizing: border-box;
   /* Same pill width for 0–9 and 10–99 (tabular nums + 2ch). */
-  min-width: calc(2ch + 14px);
-  padding: 3px 7px;
-  border-radius: var(--home-chip-radius, 6px);
+  min-width: calc(2ch + 2 * var(--data-pill-pad-x));
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) 7px;
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
   /* Inverted vs season bars (muted / medal washes) so GW reads as a discrete count. */
   background: hsl(var(--foreground) / 0.92);
   color: hsl(var(--background));
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: var(--data-pill-line-height);
 }
 .home-bench-gw-pill.is-empty {
   color: var(--text-faint);
@@ -21293,15 +21328,16 @@ html[data-theme="dark"] .home-bench-gw-pill:not(.is-empty) {
   }
   .home-squad-ownership-table .ownership-pill,
   .home-squad-ownership-table .ownership-delta {
-    font-size: 10px;
-    --pill-pad-x: 5px;
-    padding: 3px var(--pill-pad-x);
-    line-height: 1.25;
-    min-height: 22px;
+    font-size: var(--data-pill-font-size);
+    --pill-pad-x: var(--data-pill-pad-x);
+    padding: var(--data-pill-pad-y) var(--pill-pad-x);
+    line-height: var(--data-pill-line-height);
+    min-height: var(--data-pill-min-height);
   }
   .home-squad-ownership-table .prices-status-pill {
-    min-height: 22px;
-    padding: 3px 6px;
+    min-height: var(--data-pill-min-height);
+    padding: var(--data-pill-pad-y) var(--data-pill-pad-x);
+    font-size: var(--data-pill-font-size);
   }
   .home-squad-table .home-imp {
     min-width: 0;
@@ -22487,10 +22523,14 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   font-weight: 600;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill {
-  --pill-pad-x: 8px;
-  padding: 3px var(--pill-pad-x);
-  font-size: 12px;
-  font-weight: 700;
+  --pill-pad-x: var(--data-pill-pad-x);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
+  border-radius: var(--data-pill-radius);
+  box-sizing: border-box;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill .live-defcon-check-slot {
   flex: none;
@@ -22516,9 +22556,8 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   stroke: hsl(142 55% 32%);
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-pts {
-  /* Slightly larger than G/A so Pts matches visual weight (ga-ring). */
-  --pill-pad-x: 9px;
-  font-size: 13px;
+  --pill-pad-x: var(--data-pill-pad-x);
+  font-size: var(--data-pill-font-size);
   background: hsl(var(--foreground) / 0.88);
   color: hsl(var(--background));
 }
@@ -23077,11 +23116,15 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-feed-table tbody td.col-feed-pts .live-points-pill,
 #live-page .live-feed-table tbody td.col-feed-total .live-points-pill {
   display: inline-flex;
-  --pill-pad-x: 8px;
+  --pill-pad-x: var(--data-pill-pad-x);
   justify-content: center;
-  padding: 3px var(--pill-pad-x);
-  font-size: 12px;
-  font-weight: 700;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
+  border-radius: var(--data-pill-radius);
+  box-sizing: border-box;
 }
 #live-page .live-feed-table tbody td.col-feed-total .live-points-pill.is-pts {
   background: hsl(var(--muted));
@@ -23935,15 +23978,15 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   align-items: center;
   justify-content: center;
   min-width: 2.85em;
-  min-height: 1.65em;
-  padding: 5px 8px;
-  border-radius: 5px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) 8px;
+  border-radius: var(--data-pill-radius);
   font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  line-height: 1.15;
+  line-height: var(--data-pill-line-height);
   text-transform: none;
   white-space: nowrap;
   color: var(--text);
@@ -23951,8 +23994,8 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 }
 .fixtures-pill.is-blank {
   min-width: 1.55em;
-  min-height: 1.65em;
-  padding: 5px 7px;
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) 7px;
   background: transparent;
   color: var(--text-faint);
   font-weight: 500;
@@ -24042,9 +24085,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   }
   .fixtures-pill {
     min-width: 2.65em;
-    min-height: 1.6em;
-    padding: 4px 7px;
-    font-size: 11px;
+    min-height: var(--data-pill-min-height);
+    padding: var(--data-pill-pad-y) 7px;
+    font-size: var(--data-pill-font-size);
   }
   html.is-mobile-layout #fixtures-sos-seg {
     display: none;
