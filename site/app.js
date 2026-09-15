@@ -29724,12 +29724,30 @@
     wheel._statRollCycles = 3;
     wheel._statRollFrom = String(fromDigit);
     wheel._statRollTo = String(toDigit);
-    // Classic rests on the first cycle; SFI rests on the middle (HOME=10) so
-    // columns can turn either direction without hitting the strip edge.
-    const fromN = Number(fromDigit);
-    const restIdx = odometerModeIsSfi() ? 10 + fromN : fromN;
-    strip.style.transform = `translate3d(0, ${-restIdx * 100}%, 0)`;
+    // Pose is applied in px after lockStatRollWheelMetrics — % of the tall
+    // strip is not 1 cell and leaves unchanged 0s wrong until settle.
     return wheel;
+  }
+
+  /** Classic rests on cycle 0; SFI on middle cycle (HOME=10) for bidirectional roll. */
+  function statRollRestIndex(digit) {
+    const n = Number(digit);
+    if (!Number.isFinite(n)) return 0;
+    return odometerModeIsSfi() ? 10 + n : n;
+  }
+
+  /** Snap a drum to a digit using locked px metrics (not % of the 30-cell strip). */
+  function poseStatRollDigitWheel(wheel, digit) {
+    const strip = wheel && wheel._statRollStrip;
+    if (!strip) return 0;
+    const h = lockStatRollWheelMetrics(wheel);
+    if (!(h > 0)) return 0;
+    const idx = statRollRestIndex(digit);
+    strip.style.transition = "none";
+    strip.classList.remove("is-rolling");
+    wheel.removeAttribute("data-turning");
+    strip.style.transform = `translate3d(0, ${-idx * h}px, 0)`;
+    return h;
   }
 
   /** Pin drum geometry to the wheel's live font-size so transforms land on digit centers. */
@@ -29768,7 +29786,12 @@
     if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx)) return;
     const dir = opts.trendDir === -1 ? -1 : 1;
     const steps = sfiTurnSteps(fromIdx, toIdx, dir);
-    if (steps === 0 && !(opts.extraSpins > 0)) return;
+    // Unchanged column — pose immediately (px). Skipping left a bad strip
+    // offset so static 0s in ranks like 10 / 2,404,672 appeared only at settle.
+    if (steps === 0 && !(opts.extraSpins > 0)) {
+      poseStatRollDigitWheel(wheel, toIdx);
+      return;
+    }
 
     if (wheel._statRollSettleTimer) {
       clearTimeout(wheel._statRollSettleTimer);
@@ -29853,12 +29876,14 @@
       wheel._statRollSettleTimer = 0;
       strip.classList.remove("is-rolling");
       wheel.removeAttribute("data-turning");
-      strip.style.transition = "none";
-      strip.style.transform = `translate3d(0, ${-(HOME + toIdx) * h}px, 0)`;
       strip.style.willChange = "auto";
       wheel.style.filter = "";
+      // Commit WAAPI fill before cancel, then snap to HOME+digit in px.
       if (wheel._statRollAnim) {
         try {
+          if (typeof wheel._statRollAnim.commitStyles === "function") {
+            wheel._statRollAnim.commitStyles();
+          }
           wheel._statRollAnim.cancel();
         } catch {
           /* ignore */
@@ -29873,6 +29898,7 @@
         }
         wheel._statRollBlurAnim = null;
       }
+      poseStatRollDigitWheel(wheel, toIdx);
     };
 
     strip.style.willChange = "transform";
@@ -29897,8 +29923,11 @@
     const fromIdx = Number(fromDigit);
     const toIdxBase = Number(toDigit);
     if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdxBase)) return;
-    // Unchanged column — leave static (independent of neighbors).
-    if (fromIdx === toIdxBase && !(opts.extraSpins > 0)) return;
+    // Unchanged column — pose in px immediately (same static-0 lag fix as SFI).
+    if (fromIdx === toIdxBase && !(opts.extraSpins > 0)) {
+      poseStatRollDigitWheel(wheel, toIdxBase);
+      return;
+    }
 
     if (wheel._statRollSettleTimer) {
       clearTimeout(wheel._statRollSettleTimer);
@@ -30037,7 +30066,7 @@
         strip.style.willChange = "auto";
         wheel.style.filter = "";
         if (h > 0) {
-          const rest = odometerModeIsSfi() ? 10 + Number(toCh) : Number(toCh);
+          const rest = statRollRestIndex(toCh);
           strip.style.transform = `translate3d(0, ${-rest * h}px, 0)`;
         }
       });
@@ -30071,9 +30100,11 @@
     const wheels = [...node.querySelectorAll(".stat-roll-digit")];
     if (!wheels.length) return;
     // Lock metrics after mount so large hero fonts don't step by root 16px.
+    // Pose every column in px at `from` before spinning — unchanged 0s used to
+    // sit on a broken % offset until the global settle, so they looked late.
     wheels.forEach((wheel) => {
-      wheel._statRollRowH = 0; // allow remeasure when A/B mode flips
-      lockStatRollWheelMetrics(wheel);
+      wheel._statRollRowH = 0;
+      poseStatRollDigitWheel(wheel, wheel._statRollFrom);
     });
     const trendDir = Number(to) >= Number(from) ? 1 : -1;
     // Full-duration drums (no early settle) — matches pre-saturate Home enter.
