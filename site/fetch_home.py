@@ -421,23 +421,53 @@ def gw_rank_from_history(history: dict | None, gw: int) -> int | None:
     return None
 
 
+def bench_boost_events(history_chips: list | None) -> set[int]:
+    """Gameweeks where Bench Boost was played (pine pts count in the XI, not season bench)."""
+    out: set[int] = set()
+    for ch in history_chips or []:
+        if not isinstance(ch, dict):
+            continue
+        name = str(ch.get("name") or "").strip()
+        if name not in {"bboost", "benchboost", "bench_boost"}:
+            continue
+        try:
+            ev = int(ch.get("event") or 0)
+        except (TypeError, ValueError):
+            continue
+        if ev > 0:
+            out.add(ev)
+    return out
+
+
 def entry_bench_points_total(
     history_payload: dict | None,
     picks_history: dict | None = None,
+    *,
+    exclude_events: set[int] | None = None,
+    display_gw: int | None = None,
 ) -> int | None:
-    """Season cumulative points left on the bench (FPL ``points_on_bench``)."""
+    """Season cumulative points left on the bench (FPL ``points_on_bench``).
+
+    Excludes Bench Boost weeks when ``exclude_events`` is provided (those pts
+    count in the XI). ``display_gw`` ignores stale picks entry_history from a
+    prior GW after a gameweek flip.
+    """
     total = 0
     seen = False
     events_seen: set[int] = set()
+    skip = exclude_events or set()
     current = (history_payload or {}).get("current") if isinstance(history_payload, dict) else None
     if isinstance(current, list):
         for row in current:
             if not isinstance(row, dict) or "points_on_bench" not in row:
                 continue
             try:
+                ev = int(row.get("event") or 0)
+                if ev > 0 and ev in skip:
+                    events_seen.add(ev)
+                    continue
                 total += int(row.get("points_on_bench") or 0)
                 seen = True
-                ev = int(row.get("event") or 0)
                 if ev > 0:
                     events_seen.add(ev)
             except (TypeError, ValueError):
@@ -447,7 +477,12 @@ def entry_bench_points_total(
         try:
             gw_bench = int(picks_history.get("points_on_bench") or 0)
             ev = int(picks_history.get("event") or 0)
-            if ev > 0 and ev not in events_seen:
+            if display_gw is not None and ev > 0 and ev != int(display_gw):
+                # Stale picks history from the previous GW after a flip.
+                pass
+            elif ev > 0 and ev in skip:
+                pass
+            elif ev > 0 and ev not in events_seen:
                 total += gw_bench
                 seen = True
             elif not events_seen:
@@ -1526,14 +1561,43 @@ def main() -> int:
                     entry=entry if eid == manager_id else None,
                 )
             )
+            hist_payload = history_by_entry.get(eid)
+            bb_events = bench_boost_events(history_chips_by_entry.get(eid) or [])
+            if chip_by_entry.get(eid) in {"bboost", "benchboost", "bench_boost"}:
+                bb_events.add(int(gw))
             bench_points = entry_bench_points_total(
-                history_by_entry.get(eid),
+                hist_payload,
                 picks_history,
+                exclude_events=bb_events,
+                display_gw=gw,
             )
-            bench_points_gw = None
-            if isinstance(picks_history, dict) and "points_on_bench" in picks_history:
+            if bench_points is None:
+                cached_bp = (cached_standings.get(eid) or {}).get("benchPoints")
                 try:
-                    bench_points_gw = int(picks_history.get("points_on_bench") or 0)
+                    if cached_bp is not None:
+                        bench_points = int(cached_bp)
+                except (TypeError, ValueError):
+                    bench_points = None
+            bench_points_gw = None
+            if gw_awaiting_kickoff:
+                # New GW not started — don't carry prior-GW pine into the GW column.
+                bench_points_gw = 0
+            elif isinstance(picks_history, dict) and "points_on_bench" in picks_history:
+                try:
+                    picks_ev = int(picks_history.get("event") or 0)
+                    if picks_ev in {0, int(gw)}:
+                        bench_points_gw = int(picks_history.get("points_on_bench") or 0)
+                except (TypeError, ValueError):
+                    bench_points_gw = None
+            if (
+                bench_points_gw is None
+                and not gw_awaiting_kickoff
+                and (cached or {}).get("gw") == gw
+            ):
+                cached_gw_bp = (cached_standings.get(eid) or {}).get("benchPointsGw")
+                try:
+                    if cached_gw_bp is not None:
+                        bench_points_gw = int(cached_gw_bp)
                 except (TypeError, ValueError):
                     bench_points_gw = None
             standing_rows.append(

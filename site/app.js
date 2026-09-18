@@ -2846,13 +2846,11 @@
     });
   }
 
-  /** Keep season/GW bench totals when a live poll omits them (same GW only). */
+  /** Keep season bench totals across polls; never carry prior-GW pine after a GW flip. */
   function mergeHomeBenchPoints(incomingRows, priorHome, incomingGw) {
     const priorGw = Number(priorHome?.gw);
     const nextGw = Number(incomingGw);
-    if (Number.isFinite(priorGw) && Number.isFinite(nextGw) && priorGw !== nextGw) {
-      return incomingRows;
-    }
+    const gwChanged = Number.isFinite(priorGw) && Number.isFinite(nextGw) && priorGw !== nextGw;
     const priorByEntry = new Map();
     for (const row of priorHome?.standings || []) {
       const eid = Number(row?.entry);
@@ -2872,11 +2870,14 @@
       const season = Number(row.benchPoints);
       const gw = Number(row.benchPointsGw);
       const needSeason = !Number.isFinite(season);
-      const needGw = !Number.isFinite(gw);
-      if (!needSeason && !needGw) return row;
+      const needGw = !gwChanged && !Number.isFinite(gw);
+      if (!needSeason && !needGw && !(gwChanged && !Number.isFinite(gw))) return row;
       const next = { ...row };
+      // Season is cumulative — keep last good total when a poll omits history
+      // (including across GW reset before FPL history/picks settle).
       if (needSeason && kept.benchPoints != null) next.benchPoints = kept.benchPoints;
       if (needGw && kept.benchPointsGw != null) next.benchPointsGw = kept.benchPointsGw;
+      if (gwChanged && !Number.isFinite(gw)) next.benchPointsGw = 0;
       return next;
     });
   }
@@ -3649,7 +3650,7 @@
     }
     HOME.standings = (Array.isArray(HOME.standings) ? HOME.standings : []).map((row) => {
       if (!row || typeof row !== "object") return row;
-      return { ...row, gwPointsLive: 0, eventTotalOfficial: 0 };
+      return { ...row, gwPointsLive: 0, eventTotalOfficial: 0, benchPointsGw: 0 };
     });
     const zeroSquadPts = (rows) =>
       (Array.isArray(rows) ? rows : []).map((row) => {
@@ -5305,6 +5306,11 @@
   function homeStandingsBenchPointsGw(row) {
     // Bench Boost: pine pts count toward the score, not "left on the bench".
     if (homeActiveChipName(row) === "bboost") return 0;
+    // After GW reset / pre-kickoff: never read prior-GW squad pine as this GW's bench.
+    if (homeGwAwaitingKickoff()) {
+      const n = row && row.benchPointsGw != null ? Number(row.benchPointsGw) : 0;
+      return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+    }
     // Prefer live squad pine (same as Team card) — FPL points_on_bench often lags mid-GW.
     const squad = homeSquadForEntry(row && row.entry);
     if (squad && squad.length && homeCanShowVolatileStats()) {
@@ -5320,10 +5326,22 @@
     const season = row && row.benchPoints != null ? Number(row.benchPoints) : NaN;
     const liveGw = homeStandingsBenchPointsGw(row);
     if (!Number.isFinite(season)) {
-      // No history yet — season bar tracks the live GW pine only.
+      // No history yet — during pre-kickoff don't pretend GW pine is a season total.
+      if (homeGwAwaitingKickoff()) return 0;
       return liveGw;
     }
     const officialGw = row && row.benchPointsGw != null ? Number(row.benchPointsGw) : NaN;
+    if (homeGwAwaitingKickoff()) {
+      // Finished-GW cumulative only. If official GW slice is stale (>0 while live is 0),
+      // don't subtract it or season collapses toward the old GW pine.
+      if (Number.isFinite(officialGw) && officialGw > 0 && liveGw === 0) {
+        return Math.max(0, Math.round(season));
+      }
+      if (Number.isFinite(officialGw)) {
+        return Math.max(0, Math.round(season - officialGw + liveGw));
+      }
+      return Math.max(0, Math.round(season));
+    }
     if (Number.isFinite(officialGw)) {
       // Swap the sticky official GW slice for the live pine total.
       return Math.max(0, Math.round(season - officialGw + liveGw));
