@@ -2855,8 +2855,8 @@
     for (const row of priorHome?.standings || []) {
       const eid = Number(row?.entry);
       if (!Number.isFinite(eid) || eid <= 0) continue;
-      const season = Number(row?.benchPoints);
-      const gw = Number(row?.benchPointsGw);
+      const season = row?.benchPoints == null ? NaN : Number(row.benchPoints);
+      const gw = row?.benchPointsGw == null ? NaN : Number(row.benchPointsGw);
       priorByEntry.set(eid, {
         benchPoints: Number.isFinite(season) ? season : null,
         benchPointsGw: Number.isFinite(gw) ? gw : null,
@@ -2867,17 +2867,20 @@
       if (!row || typeof row !== "object") return row;
       const kept = priorByEntry.get(Number(row.entry));
       if (!kept) return row;
-      const season = Number(row.benchPoints);
-      const gw = Number(row.benchPointsGw);
-      const needSeason = !Number.isFinite(season);
-      const needGw = !gwChanged && !Number.isFinite(gw);
-      if (!needSeason && !needGw && !(gwChanged && !Number.isFinite(gw))) return row;
+      // null/undefined must not become Number(null)===0 (that blocked season preserve).
+      const seasonMissing = !Object.prototype.hasOwnProperty.call(row, "benchPoints")
+        || row.benchPoints == null
+        || !Number.isFinite(Number(row.benchPoints));
+      const gwMissing = !Object.prototype.hasOwnProperty.call(row, "benchPointsGw")
+        || row.benchPointsGw == null
+        || !Number.isFinite(Number(row.benchPointsGw));
+      const needSeason = seasonMissing;
+      const needGw = !gwChanged && gwMissing;
+      if (!needSeason && !needGw && !(gwChanged && gwMissing)) return row;
       const next = { ...row };
-      // Season is cumulative — keep last good total when a poll omits history
-      // (including across GW reset before FPL history/picks settle).
       if (needSeason && kept.benchPoints != null) next.benchPoints = kept.benchPoints;
       if (needGw && kept.benchPointsGw != null) next.benchPointsGw = kept.benchPointsGw;
-      if (gwChanged && !Number.isFinite(gw)) next.benchPointsGw = 0;
+      if (gwChanged && gwMissing) next.benchPointsGw = 0;
       return next;
     });
   }
