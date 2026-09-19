@@ -2336,7 +2336,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .page-tray-btn:hover,
   .page-tray-btn:active {
     background: transparent;
-    color: hsl(var(--blue-hsl));
+    color: var(--text-dim);
   }
   .page-nav .icon-only-btn {
     width: 32px;
@@ -18733,7 +18733,7 @@ html[data-theme="dark"] .home-dashboard {
 }
 .home-pitch-mode-btn:hover,
 .home-pitch-mode-btn:active {
-  color: hsl(var(--blue-hsl));
+  color: var(--text-dim);
   background: transparent;
 }
 .home-pitch-mode-btn:focus-visible {
@@ -18741,7 +18741,7 @@ html[data-theme="dark"] .home-dashboard {
   box-shadow: var(--focus-ring);
 }
 .home-pitch-mode-btn[aria-expanded="true"] {
-  color: hsl(var(--blue-hsl));
+  color: var(--text-dim);
 }
 #home-pitch-mode-label {
   min-width: 0;
@@ -19986,7 +19986,7 @@ img.home-pitch-photo {
   height: 20px;
   min-height: 20px;
   max-height: 20px;
-  padding: 0 1px;
+  padding: 0;
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
@@ -20002,14 +20002,15 @@ img.home-pitch-photo {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   width: 100%;
   /* Fixed height across Current / Next 3 / Last 3 / Price so the pitch
      (and mode control above it) does not jump when switching modes. */
   height: 20px;
   min-height: 20px;
   max-height: 20px;
-  padding: 0 4px;
+  /* No extra L/R pad — meta already insets; keep sides equal to bottom. */
+  padding: 0;
   /* Square top; bottom nests into meta radius (outer − pad). */
   --home-pitch-strip-bottom-radius: max(
     0px,
@@ -20024,8 +20025,8 @@ img.home-pitch-photo {
 }
 .home-pitch-fx-strip,
 .home-pitch-form-strip {
-  gap: 3px;
-  padding: 0 3px;
+  gap: 2px;
+  padding: 0;
   background: hsl(0 0% 100% / 0.04);
 }
 .home-pitch-fx-cell,
@@ -20038,7 +20039,7 @@ img.home-pitch-photo {
   align-self: stretch;
   min-height: 0;
   height: auto;
-  padding: 0 2px;
+  padding: 0;
   /* Square top; only soften the bottom outer corners of the strip. */
   border-radius: 0;
   font-size: 8.5px;
@@ -20270,7 +20271,7 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     min-height: 18px;
     max-height: 18px;
     font-size: 9px;
-    padding: 0 3px;
+    padding: 0;
   }
   .home-pitch-pts {
     font-size: 10px;
