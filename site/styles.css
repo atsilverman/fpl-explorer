@@ -12505,7 +12505,7 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .mobile-sheet-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   padding: 4px 14px 10px;
   flex: none;
   touch-action: none;
@@ -12567,10 +12567,10 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .home-player-open-x {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex: none;
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.01em;
@@ -12591,12 +12591,12 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .home-player-compare-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex: none;
   width: auto;
   height: auto;
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.01em;
@@ -12611,7 +12611,7 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .home-player-modal-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   flex: none;
 }
 
@@ -15695,12 +15695,19 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   color: var(--text);
 }
 .home-player-flag-banner-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-top: 6px;
   font-size: 12px;
   font-weight: 650;
   color: hsl(var(--primary));
   text-decoration: none;
+}
+.home-player-flag-banner-link .home-player-flag-banner-link-icon {
+  width: 0.95em;
+  height: 0.95em;
+  flex: 0 0 auto;
 }
 .home-player-flag-banner-link:hover {
   text-decoration: underline;

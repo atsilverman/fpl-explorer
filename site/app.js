@@ -10739,7 +10739,7 @@
       ? escapeHtml(avail.news)
       : escapeHtml(avail.statusLabel || "Flagged");
     const link = avail.newsUrl
-      ? `<a class="home-player-flag-banner-link" href="${escapeHtml(avail.newsUrl)}" target="_blank" rel="noopener noreferrer">Team news</a>`
+      ? `<a class="home-player-flag-banner-link" href="${escapeHtml(avail.newsUrl)}" target="_blank" rel="noopener noreferrer">Team news${iconHTML("arrow-up-right", "home-player-flag-banner-link-icon")}</a>`
       : "";
     return `<div class="home-player-flag-banner is-chance-${avail.chanceBucket}" role="status">
       <div class="home-player-flag-banner-top">
