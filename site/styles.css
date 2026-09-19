@@ -15068,10 +15068,29 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
+.home-player-modal.is-gw-pts .home-player-modal-backdrop {
+  background: hsl(var(--foreground) / 0.22);
+}
 .home-player-modal.is-gw-pts .home-player-modal-panel {
   position: relative;
   width: min(360px, calc(100vw - 32px));
   max-height: min(80vh, 560px);
+  background: var(--home-glass-bg-strong, var(--glass-bg));
+  border-color: var(--home-glass-border, var(--glass-border));
+  box-shadow: var(--home-glass-shadow, var(--shadow-lg));
+  backdrop-filter: blur(var(--home-glass-blur, var(--glass-blur)))
+    saturate(var(--home-glass-saturate, var(--glass-saturate)));
+  -webkit-backdrop-filter: blur(var(--home-glass-blur, var(--glass-blur)))
+    saturate(var(--home-glass-saturate, var(--glass-saturate)));
+}
+@media (prefers-reduced-transparency: reduce) {
+  .home-player-modal.is-gw-pts .home-player-modal-panel {
+    background: hsl(var(--card));
+    border-color: var(--border);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 .home-player-modal.is-gw-pts .home-player-modal-body {
   padding: 14px 16px 16px;
@@ -15111,10 +15130,10 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid hsl(var(--border-hsl));
+  border: 1px solid var(--home-glass-border, hsl(var(--border-hsl)));
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
-  background: hsl(var(--card));
+  background: var(--home-glass-bg, hsl(var(--card) / 0.55));
 }
 .home-gw-pts-row {
   display: grid;
