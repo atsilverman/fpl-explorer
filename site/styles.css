@@ -16995,7 +16995,7 @@ html[data-theme="dark"][data-home-surface="solid"] .home-view-chip {
   align-items: center;
   text-align: center;
   margin: 0 calc(-1 * var(--home-hero-bleed-x, var(--main-pad-x, 20px)));
-  padding: 14px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 56px;
+  padding: 10px var(--home-hero-pad-x, var(--main-pad-x, 20px)) 56px;
   color: transparent;
   background: transparent;
   border-radius: var(--home-hero-radius, 0px);
@@ -17159,7 +17159,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin: 0 0 10px;
+  margin: 0 0 7px;
   min-height: 24px;
 }
 .home-summary-hero-chip {
@@ -17252,7 +17252,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
 }
 .home-summary-hero-value {
   margin: 0;
-  font-size: clamp(2.85rem, 10vw, 4rem);
+  font-size: clamp(2.55rem, 9vw, 3.55rem);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.045em;
@@ -17275,12 +17275,12 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   height: 1em;
 }
 .home-summary-hero-delta {
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 5px 11px 5px 8px;
+  padding: 4px 10px 4px 7px;
   border-radius: 999px;
   /* Light: quiet white pill on pale wash. */
   border: 1px solid hsl(var(--border-hsl));
