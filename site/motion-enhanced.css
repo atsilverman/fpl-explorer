@@ -349,7 +349,7 @@ html.motion-enhanced .stat-roll-digit {
   transition: filter var(--duration-fast) var(--ease-smooth-out);
 }
 
-/* —— Segmented / tab hover lift —— */
+/* —— Segmented / tab hover lift (desktop fine pointer only) —— */
 html.motion-enhanced .segmented button,
 html.motion-enhanced .tabs .tab-btn,
 html.motion-enhanced .page-tab-btn {
@@ -360,16 +360,19 @@ html.motion-enhanced .page-tab-btn {
     transform var(--avatar-dur) var(--avatar-ease-in);
 }
 
-html.motion-enhanced .segmented button:hover,
-html.motion-enhanced .tabs .tab-btn:hover,
-html.motion-enhanced .page-tab-btn:hover {
-  transform: translateY(var(--avatar-lift)) scale(var(--avatar-scale));
-}
+/* Skip on mobile / narrow — desktop cursor in mobile viewport still has hover:hover. */
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
+  html.motion-enhanced:not(.is-mobile-layout) .segmented button:hover,
+  html.motion-enhanced:not(.is-mobile-layout) .tabs .tab-btn:hover,
+  html.motion-enhanced:not(.is-mobile-layout) .page-tab-btn:hover {
+    transform: translateY(var(--avatar-lift)) scale(var(--avatar-scale));
+  }
 
-html.motion-enhanced .segmented button:active,
-html.motion-enhanced .tabs .tab-btn:active,
-html.motion-enhanced .page-tab-btn:active {
-  transform: translateY(0) scale(1);
+  html.motion-enhanced:not(.is-mobile-layout) .segmented button:active,
+  html.motion-enhanced:not(.is-mobile-layout) .tabs .tab-btn:active,
+  html.motion-enhanced:not(.is-mobile-layout) .page-tab-btn:active {
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* —— Dock / chrome fade —— */

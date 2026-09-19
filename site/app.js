@@ -16807,6 +16807,22 @@
     return !!tipEl.closest(".player-cell, .barbell-label, .barbell-group-identity");
   }
 
+  /** Tips that only restate on-screen copy — no tip sheet on touch. */
+  function isRedundantPlainTipTarget(tipEl) {
+    if (!tipEl) return false;
+    // Home overall / league / standings rank Δ — caret + places already visible.
+    if (tipEl.closest(".home-rank-delta")) return true;
+    // "Updated …" footers — same timestamp already shown (Prices clears tip entirely).
+    if (
+      tipEl.closest(
+        ".home-updated-footer, .page-updated-text, .page-data-footer, #home-count-label"
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   // Touch: tap non-conflicting [data-tip] targets → mobile sheet.
   // Capture phase so identity icons still open even when a parent row handler
   // would otherwise consume the tap (and so we can stopPropagation before
@@ -16822,6 +16838,7 @@
         return;
       }
       if (target.closest(".rankings-row")) return;
+      if (isRedundantPlainTipTarget(target)) return;
       // xData player identity sets a whole-label tip ("Name — TEAM, POS"). On
       // touch that must open full Player Details, not the plain tip sheet —
       // defer to bindPlayerDetailsRowClicks (bubble). Nested icon tips inside
@@ -18121,7 +18138,7 @@
       const note = isActual
         ? "Actual log starts empty on deploy and fills as daily/hourly fetches detect changes."
         : "Refreshed hourly via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
-      return `${spitHead("pound-sterling-circle", "How Prices works")}
+      return `${spitHead("pound-sterling-circle", "How Price Change works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
@@ -18983,7 +19000,7 @@
       schedule: "How Matchups works",
       fixtures: "How Fixtures works",
       ownership: "How Ownership works",
-      prices: "How Prices works",
+      prices: "How Price Change works",
       markets: "How Markets works",
       team: "How Planner works",
     };

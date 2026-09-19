@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
 <link rel="stylesheet" href="styles.css?v=1407" />
-<link rel="stylesheet" href="motion-enhanced.css?v=6" />
+<link rel="stylesheet" href="motion-enhanced.css?v=7" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
 (() => {
@@ -445,7 +445,7 @@
     </button>
     <button id="page-prices" class="page-tab-btn" type="button">
       <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
-      Prices
+      Price Change
     </button>
     <button id="page-team" class="page-tab-btn" type="button" hidden>
       <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
@@ -1333,7 +1333,7 @@
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Prices<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Prices works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Price Change<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Price Change works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Official FPL price-change predictor — players very likely or likely to rise or fall before the next daily price update. Refreshed hourly from bootstrap-static.</p>
           </div>
         </div>
@@ -1349,7 +1349,7 @@
             <span class="prices-mover-kind-label">Fallers</span>
           </button>
         </div>
-        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Prices view">
+        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Price Change view">
           <button type="button" data-prices-view="prediction" class="active">
             Predicted
           </button>
@@ -1946,7 +1946,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1363"></script>
+<script src="app.js?v=1366"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
