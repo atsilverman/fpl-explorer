@@ -17016,7 +17016,8 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
-  z-index: 45;
+  /* Above .mobile-chrome-fade (40) and docks (44); lives at body level. */
+  z-index: 50;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -17147,7 +17148,7 @@ html[data-theme="dark"][data-home-surface="solid"] .home-view-chip {
     font-size: 12px;
   }
 }
-/* Only show while Home is the active page (chip lives under #home-page). */
+/* Only show while Home is the active page (chip is a body-level fixed node). */
 html:not([data-page="home"]) .home-view-chip {
   display: none !important;
 }
@@ -19802,6 +19803,35 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   width: 100%;
   pointer-events: none;
 }
+/* Mobile: pin Bench to Starting XI Y; pitch shrinks into the space above. */
+.home-squad-page-pitch.is-bench-locked {
+  position: relative;
+}
+.home-squad-page-pitch.is-bench-locked .home-pitch-page-spacer {
+  display: none;
+}
+.home-squad-page-pitch.is-bench-locked .home-squad-pitch {
+  transform-origin: top center;
+}
+.home-squad-page-pitch.is-bench-locked .home-pitch-bench {
+  position: absolute;
+  top: var(--home-bench-lock-top, auto);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--home-pitch-col-max, 400px);
+  margin-inline: 0;
+  box-sizing: border-box;
+}
+tr.home-bench-lock-spacer > th {
+  height: var(--home-bench-lock-pad, 0px);
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  line-height: 0;
+  font-size: 0;
+  overflow: hidden;
+}
 .home-pitch-bench-divider {
   display: flex;
   align-items: center;
@@ -20004,8 +20034,8 @@ img.home-pitch-photo {
   justify-content: center;
   gap: 2px;
   width: 100%;
-  /* Fixed height across Current / Next 3 / Last 3 / Price so the pitch
-     (and mode control above it) does not jump when switching modes. */
+  /* Fixed height across Current / Next 3 / Last 3 / Importance / Price so the
+     pitch (and mode control above it) does not jump when switching modes. */
   height: 20px;
   min-height: 20px;
   max-height: 20px;
@@ -20108,11 +20138,99 @@ img.home-pitch-photo {
   letter-spacing: -0.01em;
   color: var(--home-pitch-card-fg);
   background: hsl(0 0% 100% / 0.08);
+  gap: 2px;
 }
 .home-pitch-price.is-idle {
   font-weight: 600;
   color: var(--home-pitch-card-muted);
   background: hsl(0 0% 100% / 0.05);
+}
+.home-pitch-price-val {
+  min-width: 0;
+}
+.home-pitch-price-arrow {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.home-pitch-price-arrow .icon,
+.home-pitch-price-arrow-icon {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.5;
+}
+.home-pitch-price-arrow.is-rise,
+.home-pitch-price.is-vl-rise {
+  color: hsl(142 72% 42%);
+}
+.home-pitch-price-arrow.is-fall,
+.home-pitch-price.is-vl-fall {
+  color: hsl(0 72% 52%);
+}
+.home-pitch-price.is-vl-rise {
+  background: hsl(142 45% 38% / 0.22);
+}
+.home-pitch-price.is-vl-fall {
+  background: hsl(0 55% 42% / 0.2);
+}
+.home-pitch-imp {
+  position: relative;
+  justify-content: flex-start;
+  background: hsl(0 0% 100% / 0.06);
+  color: var(--home-pitch-card-muted);
+  overflow: hidden;
+}
+.home-pitch-imp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--imp-pct, 0%);
+  max-width: 100%;
+  background: var(--imp-fill, hsl(var(--muted-foreground) / 0.35));
+  pointer-events: none;
+  border-radius: inherit;
+}
+.home-pitch-imp-val {
+  position: absolute;
+  left: var(--imp-pct, 0%);
+  top: 50%;
+  z-index: 1;
+  transform: translate(3px, -50%);
+  font-weight: 800;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--home-pitch-card-fg);
+  pointer-events: none;
+}
+/* Not enough room past the fill — sit just inside the trailing edge. */
+.home-pitch-imp.is-label-inside .home-pitch-imp-val {
+  transform: translate(calc(-100% - 3px), -50%);
+}
+.home-pitch-imp.is-pos .home-pitch-imp-val {
+  color: var(--imp-fg, hsl(142 65% 42%));
+}
+.home-pitch-imp.is-neg .home-pitch-imp-val {
+  color: var(--imp-fg, hsl(0 70% 52%));
+}
+.home-pitch-imp.is-flat .home-pitch-imp-val {
+  left: 0;
+  transform: translate(3px, -50%);
+  color: var(--home-pitch-card-muted);
+  font-weight: 650;
+}
+html[data-theme="light"] .home-dashboard .home-pitch-imp {
+  background: hsl(215 20% 20% / 0.08);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-price.is-vl-rise {
+  background: hsl(142 40% 88%);
+  color: hsl(142 72% 26%);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-price.is-vl-fall {
+  background: hsl(0 50% 92%);
+  color: hsl(0 72% 32%);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-photo-wrap {
   box-shadow:
@@ -20406,29 +20524,33 @@ html.home-squad-wide .home-squad-pitch-xi {
   line-height: var(--data-pill-line-height);
   box-sizing: border-box;
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs {
-  min-width: 1.55em;
-  min-height: 1.55em;
-  padding: 3px 4px;
+  /* Match Pts / G / A badge footprint — check fills the same pill. */
+  min-width: var(--data-pill-min-height);
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--data-pill-pad-x);
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill .check-mark-icon {
-  width: 12px;
-  height: 12px;
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs .live-defcon-check-slot {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon circle,
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs .check-mark-icon {
+  width: 14px;
+  height: 14px;
+}
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs .check-mark-icon circle {
   fill: #fff;
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon .check-mark-icon path,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs .check-mark-icon path {
   stroke: hsl(142 55% 32%);
 }
-/* Home squad DC pills — static check (no Live enter fade). */
+/* Home squad CS check — static (no Live enter fade). */
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-defcon-check-slot {
   flex: none;
-  width: auto;
-  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill .live-dc-check-enter {
   opacity: 1;
@@ -20483,7 +20605,6 @@ html.home-squad-wide .home-squad-pitch-xi {
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-bonus-1 {
   background: hsl(38 55% 68%);
 }
-.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon,
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-cs {
   background: hsl(142 55% 32%);
   color: #fff;
@@ -20505,6 +20626,10 @@ html.home-squad-wide .home-squad-pitch-xi {
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-thr {
   color: var(--text-faint);
   font-weight: 500;
+}
+.home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num {
+  color: hsl(142 55% 38%);
+  font-weight: 700;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-warn {
   background: hsl(var(--yc-pill-bg));
@@ -23652,26 +23777,27 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill .live-defcon-check-slot {
   flex: none;
-  width: auto;
-  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
 }
-/* Points DC pills — check visible with pill (no DefCon-track enter fade). */
+/* Points CS pills — check visible with pill (no DefCon-track enter fade). */
 #live-page .live-points-table tbody td.col-num .live-points-pill .live-dc-check-enter {
   opacity: 1;
   transform: none;
   transition: none;
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill .check-mark-icon {
-  width: 12px;
-  height: 12px;
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-cs .check-mark-icon {
+  width: 14px;
+  height: 14px;
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon circle,
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-cs .check-mark-icon circle {
   fill: #fff;
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon .check-mark-icon path,
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-cs .check-mark-icon path {
-  stroke: hsl(142 55% 32%);
+  stroke: hsl(142 55% 38%);
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-pts {
   --pill-pad-x: var(--data-pill-pad-x);
@@ -23721,10 +23847,11 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     color: hsl(40 40% 92%);
   }
 }
-#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon,
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-cs {
   background: hsl(142 55% 38%);
   color: #fff;
+  min-width: var(--data-pill-min-height);
+  min-height: var(--data-pill-min-height);
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress {
   --pill-pad-x: 5px;
@@ -23742,6 +23869,10 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-thr {
   color: var(--text-faint);
   font-weight: 500;
+}
+#live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num {
+  color: hsl(142 55% 42%);
+  font-weight: 700;
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-warn {
   background: hsl(var(--yc-pill-bg));

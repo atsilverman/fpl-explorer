@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1400" />
+<link rel="stylesheet" href="styles.css?v=1405" />
 <link rel="stylesheet" href="motion-enhanced.css?v=6" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
@@ -958,6 +958,7 @@
                 <button type="button" role="option" class="home-pitch-mode-option active" data-pitch-mode="gw" aria-selected="true">Current</button>
                 <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="fixtures" aria-selected="false">Next 3</button>
                 <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="form" aria-selected="false">Last 3</button>
+                <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="imp" aria-selected="false">Importance</button>
                 <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="price" aria-selected="false">Price</button>
               </div>
             </span>
@@ -1195,14 +1196,6 @@
         </div>
       </div>
       <p id="home-updated-footer" class="home-updated-footer" hidden></p>
-      <div id="home-view-banner" class="home-view-chip" hidden>
-        <svg class="icon home-view-chip-icon" aria-hidden="true"><use href="#i-eye"/></svg>
-        <strong class="home-view-chip-name" id="home-view-banner-name"></strong>
-        <button type="button" class="home-view-chip-clear icon-only-btn" id="home-view-banner-clear"
-          aria-label="Back to your team" title="Back to your team">
-          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-        </button>
-      </div>
     </div>
 
     <div id="live-page" class="page-pane" style="display:none;">
@@ -1798,6 +1791,15 @@
 <div id="page-info-tooltip" class="fixture-tooltip page-info-tooltip" role="tooltip" style="display:none;"></div>
 <div id="team-row-menu" class="dropdown-panel settings-panel team-row-menu" role="menu" aria-labelledby="team-row-menu-title" aria-hidden="true" tabindex="-1"></div>
 <div id="mobile-chrome-fade" class="mobile-chrome-fade" hidden aria-hidden="true"></div>
+<!-- Outside .main so fixed stacking clears the bottom chrome fade / docks. -->
+<div id="home-view-banner" class="home-view-chip" hidden>
+  <svg class="icon home-view-chip-icon" aria-hidden="true"><use href="#i-eye"/></svg>
+  <strong class="home-view-chip-name" id="home-view-banner-name"></strong>
+  <button type="button" class="home-view-chip-clear icon-only-btn" id="home-view-banner-clear"
+    aria-label="Back to your team" title="Back to your team">
+    <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+  </button>
+</div>
 <div id="mobile-view-dock" class="mobile-view-dock" hidden aria-hidden="true"></div>
 <div id="mobile-filter-dock" class="mobile-filter-dock" hidden aria-hidden="true"></div>
 <div id="mobile-sheet" class="mobile-sheet" hidden aria-hidden="true">
@@ -1944,7 +1946,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1355"></script>
+<script src="app.js?v=1361"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

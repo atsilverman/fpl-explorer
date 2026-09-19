@@ -6772,6 +6772,7 @@
     gw: "Current",
     fixtures: "Next 3",
     form: "Last 3",
+    imp: "Importance",
     price: "Price",
   };
 
@@ -6920,31 +6921,111 @@
     }
   }
 
+  function clearHomeBenchDividerLock() {
+    if (!el.homeSquadTrack) return;
+    el.homeSquadTrack.querySelectorAll("tr.home-bench-lock-spacer").forEach((tr) => tr.remove());
+    el.homeSquadTrack.querySelectorAll(".home-squad-page").forEach((page) => {
+      page.style.minHeight = "";
+      page.style.removeProperty("--home-bench-lock-top");
+      page.style.removeProperty("--home-bench-lock-pad");
+      page.classList.remove("is-bench-locked");
+    });
+    const pitch = document.getElementById("home-squad-pitch");
+    if (pitch) {
+      pitch.style.maxHeight = "";
+      pitch.style.transform = "";
+      pitch.style.marginBottom = "";
+    }
+  }
+
+  function ensureHomeBenchLockSpacer(dividerTr, heightPx) {
+    if (!dividerTr || !dividerTr.parentNode) return;
+    let spacer = dividerTr.previousElementSibling;
+    if (!spacer || !spacer.classList.contains("home-bench-lock-spacer")) {
+      spacer = document.createElement("tr");
+      spacer.className = "home-bench-divider home-bench-lock-spacer";
+      spacer.setAttribute("aria-hidden", "true");
+      const th = document.createElement("th");
+      const colTh = dividerTr.querySelector("th[colspan], th");
+      const span = colTh && colTh.colSpan > 0 ? colTh.colSpan : 99;
+      th.scope = "rowgroup";
+      th.colSpan = span;
+      spacer.appendChild(th);
+      dividerTr.parentNode.insertBefore(spacer, dividerTr);
+    }
+    const pad = Math.max(0, Math.round(heightPx));
+    spacer.style.setProperty("--home-bench-lock-pad", `${pad}px`);
+    spacer.hidden = pad <= 0;
+  }
+
   function syncHomePitchPageMinHeight() {
     const pitchPage = document.getElementById("home-squad-page-pitch");
+    const pitch = document.getElementById("home-squad-pitch");
     if (!pitchPage || !el.homeSquadTrack) return;
-    if (homeSquadIsDesktopLayout()) {
-      pitchPage.style.minHeight = "";
-      return;
-    }
+
+    clearHomeBenchDividerLock();
+
+    if (homeSquadIsDesktopLayout()) return;
+
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
-    // Physical page 1 is Starting XI (pitch is 0).
-    const xiPage = pages[1];
-    if (!xiPage) {
-      pitchPage.style.minHeight = "";
-      return;
+    if (!pages.length) return;
+
+    // Natural divider tops (after clearing prior lock artifacts).
+    const measured = pages.map((page) => {
+      const isPitch = page.classList.contains("home-squad-page-pitch");
+      const divider = isPitch
+        ? page.querySelector(".home-pitch-bench-divider")
+        : page.querySelector("tr.home-bench-divider:not(.home-bench-divider-spacer):not(.home-bench-lock-spacer)");
+      if (!divider || (isPitch && el.homeSquadPitchBench && el.homeSquadPitchBench.hidden)) {
+        return { page, isPitch, divider: null, top: 0 };
+      }
+      return { page, isPitch, divider, top: Math.round(divider.offsetTop) };
+    }).filter((m) => m.divider);
+
+    if (!measured.length) return;
+
+    const tableTops = measured.filter((m) => !m.isPitch).map((m) => m.top);
+    // Anchor to the lowest table Bench (Starting XI / Points / …). Pitch
+    // scales up into that slot instead of pushing every page down.
+    const lockTop = tableTops.length
+      ? Math.max(...tableTops)
+      : Math.max(...measured.map((m) => m.top));
+    if (!(lockTop > 0)) return;
+
+    measured.forEach(({ page, isPitch, divider, top }) => {
+      if (isPitch) {
+        page.classList.add("is-bench-locked");
+        page.style.setProperty("--home-bench-lock-top", `${lockTop}px`);
+        if (pitch) {
+          const gap = parseFloat(getComputedStyle(page).gap) || 0;
+          const naturalH = Math.ceil(pitch.getBoundingClientRect().height);
+          const maxH = Math.max(48, lockTop - Math.round(gap));
+          if (naturalH > maxH) {
+            const scale = maxH / naturalH;
+            pitch.style.transform = `scale(${scale})`;
+            pitch.style.transformOrigin = "top center";
+            pitch.style.marginBottom = `${-Math.round(naturalH * (1 - scale))}px`;
+          } else {
+            pitch.style.transform = "";
+            pitch.style.marginBottom = "";
+          }
+        }
+        return;
+      }
+      const delta = lockTop - top;
+      if (delta > 0) ensureHomeBenchLockSpacer(divider, delta);
+    });
+
+    // Shared page height so the track doesn't jump while swiping.
+    void pitchPage.offsetHeight;
+    const pageH = Math.max(
+      ...pages.map((page) => Math.ceil(Math.max(page.scrollHeight, page.offsetHeight)))
+    );
+    if (pageH > 0) {
+      pages.forEach((page) => {
+        page.style.minHeight = `${pageH}px`;
+      });
     }
-    // Match Starting XI height so the Bench divider stays put while swiping.
-    // Mode buttons live in the Team heading (outside the track), so they no
-    // longer steal space above the pitch.
-    const prevMin = pitchPage.style.minHeight;
-    pitchPage.style.minHeight = "";
-    const xiH = Math.ceil(Math.max(xiPage.scrollHeight, xiPage.offsetHeight));
-    if (!(xiH > 0)) {
-      pitchPage.style.minHeight = prevMin;
-      return;
-    }
-    pitchPage.style.minHeight = `${xiH}px`;
   }
 
   function syncHomeSquadTrackHeight(activeIndex, { animate = true, allowShrink = true } = {}) {
@@ -7082,6 +7163,9 @@
       syncHomeSquadRowHeights();
     }
     syncHomeSquadTrackHeight(activeIndex, { animate, allowShrink });
+    if (homePitchStripMode === "imp") {
+      requestAnimationFrame(() => syncHomePitchImpLabels());
+    }
     if (wide && !animate) {
       syncHomeTablesGridHeight();
       syncHomeSquadRowHeights();
@@ -7089,6 +7173,7 @@
       requestAnimationFrame(() => {
         syncHomeTablesGridHeight();
         if (wide) syncHomeSquadRowHeights();
+        if (homePitchStripMode === "imp") syncHomePitchImpLabels();
       });
     }
   }
@@ -8310,7 +8395,7 @@
     return { label, ha, home: ha === "H", fx, fdr };
   }
 
-  /** Pitch card strip mode: gw (default) | fixtures | form */
+  /** Pitch card strip mode: gw (default) | fixtures | form | imp | price */
   let homePitchStripMode = "gw";
 
   function homeSquadPitchFormPts(row) {
@@ -8404,17 +8489,80 @@
     return Number.isFinite(price) && price > 0 ? price : null;
   }
 
+  function homeSquadPitchImpStripHTML(row) {
+    const impRaw = row.imp != null ? Number(row.imp) : (row.impMock != null ? Number(row.impMock) : 0);
+    const vis = homeImpBarVisual(impRaw);
+    const label = `${Math.abs(vis.imp)}%`;
+    const tip =
+      vis.imp === 0
+        ? "Importance 0%"
+        : `Importance ${vis.imp > 0 ? "+" : "−"}${Math.abs(vis.imp)}%`;
+    return `<span class="home-pitch-strip home-pitch-imp ${vis.sign}" style="${vis.fillStyle}"${tipAttr(tip)} aria-label="${escapeHtml(tip)}">
+      <span class="home-pitch-imp-fill" aria-hidden="true"></span>
+      <span class="home-pitch-imp-val">${escapeHtml(label)}</span>
+    </span>`;
+  }
+
+  /** Sit IMP % just past the fill; tuck inside when the trailing gap is too tight. */
+  function syncHomePitchImpLabels(root) {
+    const scopes = root
+      ? [root]
+      : [el.homeSquadPitchXi, el.homeSquadPitchBench].filter(Boolean);
+    scopes.forEach((scope) => {
+      scope.querySelectorAll(".home-pitch-imp").forEach(placeHomePitchImpLabel);
+    });
+  }
+
+  function placeHomePitchImpLabel(strip) {
+    if (!strip || strip.classList.contains("is-flat")) {
+      if (strip) strip.classList.remove("is-label-inside");
+      return;
+    }
+    const val = strip.querySelector(".home-pitch-imp-val");
+    if (!val) return;
+    strip.classList.remove("is-label-inside");
+    const stripW = strip.clientWidth;
+    if (!(stripW > 0)) return;
+    const rawPct = parseFloat(String(strip.style.getPropertyValue("--imp-pct") || "").replace("%", ""));
+    const fillPct = Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : 0;
+    const fillW = (stripW * fillPct) / 100;
+    const labelW = val.offsetWidth;
+    const gap = 3;
+    if (stripW - fillW - gap < labelW) {
+      strip.classList.add("is-label-inside");
+    }
+  }
+
+  function homeSquadPitchPriceRow(row) {
+    const code = Number(row && row.code);
+    if (!Number.isFinite(code)) return null;
+    for (const p of PRICES.players || []) {
+      if (p && Number(p.code) === code) return p;
+    }
+    return null;
+  }
+
   function homeSquadPitchPriceStripHTML(row) {
     const price = homeSquadPitchPrice(row);
     if (price == null) {
       return `<span class="home-pitch-strip home-pitch-price is-idle">–</span>`;
     }
-    return `<span class="home-pitch-strip home-pitch-price">£${escapeHtml(Number(price).toFixed(1))}</span>`;
+    const priceRow = homeSquadPitchPriceRow(row);
+    let arrow = "";
+    let moverCls = "";
+    if (priceRow && pricesIsVeryLikelyMover(priceRow)) {
+      const rise = priceRow.statusKey === "very_likely_rise";
+      moverCls = rise ? " is-vl-rise" : " is-vl-fall";
+      const tip = rise ? "Very likely to rise" : "Very likely to fall";
+      arrow = `<span class="home-pitch-price-arrow ${rise ? "is-rise" : "is-fall"}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${iconHTML(rise ? "trending-up" : "trending-down", "home-pitch-price-arrow-icon")}</span>`;
+    }
+    return `<span class="home-pitch-strip home-pitch-price${moverCls}">${arrow}<span class="home-pitch-price-val">£${escapeHtml(Number(price).toFixed(1))}</span></span>`;
   }
 
   function homeSquadPitchStripHTML(row) {
     if (homePitchStripMode === "fixtures") return homeSquadPitchFixturesStripHTML(row);
     if (homePitchStripMode === "form") return homeSquadPitchFormStripHTML(row);
+    if (homePitchStripMode === "imp") return homeSquadPitchImpStripHTML(row);
     if (homePitchStripMode === "price") return homeSquadPitchPriceStripHTML(row);
     return homeSquadPitchGwStripHTML(row);
   }
@@ -8436,7 +8584,9 @@
 
   function setHomePitchStripMode(mode) {
     const next =
-      mode === "fixtures" || mode === "form" || mode === "price" ? mode : "gw";
+      mode === "fixtures" || mode === "form" || mode === "imp" || mode === "price"
+        ? mode
+        : "gw";
     if (homePitchStripMode === next) {
       closeHomePitchModePicker();
       return;
@@ -8603,6 +8753,7 @@
     syncHomeBenchCollapsedUI();
     syncHomePitchModeUI();
     syncHomeHeroAutosubNotice(squad);
+    requestAnimationFrame(() => syncHomePitchImpLabels());
   }
 
   function homeSquadRowHTML(row, opts = {}) {
@@ -8743,7 +8894,6 @@
     { key: "cleanSheets", label: "CS", title: "Clean sheets" },
     { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
     { key: "bonus", label: "B", title: "Bonus points" },
-    { key: "saves", label: "Sv", title: "Saves (GK)", flexible: true },
   ];
 
   const HOME_SQUAD_PTS_FALLBACKS = [
@@ -26981,8 +27131,8 @@
       if (entry.pos === "GK" || entry.threshold == null) return "";
       const thr = entry.threshold || (entry.pos === "DEF" ? 10 : 12);
       const acts = Number.isFinite(Number(entry.actions)) ? Math.max(0, Number(entry.actions)) : 0;
-      if (entry.eg.defConHit || acts >= thr) return "1";
-      return `${acts}/${thr}`;
+      const hit = entry.eg.defConHit || acts >= thr;
+      return `${hit ? "hit:" : ""}${acts}/${thr}`;
     }
     if (col.key === "cleanSheets") {
       if (entry.pos === "FWD") return "";
@@ -26996,10 +27146,13 @@
 
   function livePointsCellSignatureFromTd(td, col) {
     if (col.key === "defConHit") {
-      if (td.querySelector(".live-defcon-achieved")) return "1";
       const frac = td.querySelector(".live-points-dc-frac");
-      if (!frac) return "";
-      return (frac.textContent || "").replace(/\s+/g, "");
+      if (!frac) {
+        if (td.querySelector(".live-defcon-achieved")) return "1";
+        return "";
+      }
+      const text = (frac.textContent || "").replace(/\s+/g, "");
+      return frac.classList.contains("is-hit") ? `hit:${text}` : text;
     }
     if (col.key === "cleanSheets") return td.querySelector(".live-cs-achieved") ? "1" : "";
     const roll = td.querySelector(".live-stat-roll[data-count-to]");
@@ -27200,14 +27353,10 @@
       const thr = entry.threshold || (pos === "DEF" ? 10 : 12);
       const acts = Number.isFinite(Number(entry.actions)) ? Math.max(0, Number(entry.actions)) : 0;
       const hit = !!eg.defConHit || acts >= thr;
-      if (hit) {
-        return livePointsPillHTML(
-          col.key,
-          `<span class="live-defcon-check-slot">${liveAchievedDotHTML(Math.max(acts, thr), thr, pos)}</span>`
-        );
-      }
-      const tip = `DefCon — ${acts} / ${thr} ${pos} actions (+2 at threshold)`;
-      const frac = `<span class="live-points-dc-frac"${tipAttr(tip)}>${acts}<span class="live-points-dc-thr">/${thr}</span></span>`;
+      const tip = hit
+        ? `DefCon achieved — ${acts} ≥ ${thr} ${pos} actions (+2 pts)`
+        : `DefCon — ${acts} / ${thr} ${pos} actions (+2 at threshold)`;
+      const frac = `<span class="live-points-dc-frac${hit ? " is-hit" : ""}"${tipAttr(tip)}><span class="live-points-dc-num">${acts}</span><span class="live-points-dc-thr">/${thr}</span></span>`;
       return livePointsPillHTML(col.key, frac, { tone: "is-defcon-progress" });
     }
     if (col.key === "cleanSheets") {
