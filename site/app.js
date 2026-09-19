@@ -7887,7 +7887,9 @@
       const ptsN = pts != null && Number.isFinite(Number(pts)) ? Math.round(Number(pts)) : 0;
       const mins = Number(row.minutes) || 0;
       const idle = ptsN === 0 && mins <= 0;
-      return `<span class="home-pitch-strip home-pitch-pts${idle ? " is-idle" : ""}">${escapeHtml(String(ptsN))}</span>`;
+      const live = homeSquadRowIsInPlay(row);
+      const cls = `home-pitch-strip home-pitch-pts${idle ? " is-idle" : ""}${live ? " is-live" : ""}`;
+      return `<span class="${cls}">${escapeHtml(String(ptsN))}</span>`;
     }
     const opp = homeSquadPitchOppMeta(row);
     const homeIcon = opp.home
@@ -7997,7 +7999,7 @@
       badgeHTML(team, "home-pitch-crest") ||
       teamCrestFallbackHTML(team, "home-pitch-crest home-crest-fallback");
     const photoHTML = photo
-      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="lazy" decoding="async" data-team="${escapeHtml(team)}" />`
+      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}" />`
       : `<span class="home-pitch-photo home-pitch-photo-crest" aria-hidden="true">${crest}</span>`;
     const badges = [];
     if (row.isCaptain) {
@@ -9881,7 +9883,7 @@
       );
     }
     const photoBlock = photo
-      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-initials="${escapeHtml(initials)}" />`
+      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-initials="${escapeHtml(initials)}" />`
       : `<span class="home-lookup-photo home-lookup-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
@@ -24021,9 +24023,15 @@
   function feedPlayerPhotoUrl(code) {
     if (code == null || code === "") return "";
     // FPL bootstrap `photo` is "{code}.jpg"; current PL CDN path (25/26) is
-    // premierleague25/…/{code}.png (no "p" prefix). Older p{code} 250x250
-    // URLs 403 for many new/promoted players (e.g. Igor Jesus).
+    // premierleague25/…/{code}.png (no "p" prefix). Some players 403 here
+    // (e.g. Konsa) but still exist on the legacy p{code} path — see
+    // feedPlayerPhotoFallbackUrl + replaceBrokenPlayerPhoto.
     return `https://resources.premierleague.com/premierleague25/photos/players/110x140/${code}.png`;
+  }
+
+  function feedPlayerPhotoFallbackUrl(code) {
+    if (code == null || code === "") return "";
+    return `https://resources.premierleague.com/premierleague/photos/players/110x140/p${code}.png`;
   }
 
   function detectLocaleClockFormat() {
@@ -27890,6 +27898,25 @@
     ) {
       return;
     }
+    // Capture + per-img listeners can both see the same error — ignore re-entry.
+    if (img.dataset.photoRepairing === "1") return;
+    img.dataset.photoRepairing = "1";
+
+    // Some players 403 on premierleague25/{code}.png but resolve on legacy p{code}.
+    if (img.dataset.photoAltTried !== "1") {
+      const code = img.dataset.code || "";
+      const alt = feedPlayerPhotoFallbackUrl(code);
+      if (alt && img.src !== alt) {
+        img.dataset.photoAltTried = "1";
+        img.src = alt;
+        queueMicrotask(() => {
+          if (img.isConnected) delete img.dataset.photoRepairing;
+        });
+        return;
+      }
+      img.dataset.photoAltTried = "1";
+    }
+
     img.dataset.photoFallback = "1";
     img.replaceWith(ownershipPhotoFallbackElement(img));
   }
@@ -27901,11 +27928,14 @@
     ).forEach((img) => {
       if (img.dataset.photoFallbackBound === "1") return;
       img.dataset.photoFallbackBound = "1";
+      img.addEventListener("error", () => replaceBrokenPlayerPhoto(img), { once: false });
+      // Only sync-replace when a load already finished broken. Skip lazy
+      // placeholders — they often report complete + naturalWidth 0 before
+      // loading, which wrongly swapped pitch photos for crests (flicker).
       if (img.complete && img.naturalWidth === 0) {
+        if (img.loading === "lazy") return;
         replaceBrokenPlayerPhoto(img);
-        return;
       }
-      img.addEventListener("error", () => replaceBrokenPlayerPhoto(img), { once: true });
     });
   }
 
@@ -27927,7 +27957,7 @@
       return `<span class="ownership-photo ownership-photo-fallback is-photo-icon${ring.className}" aria-hidden="true"${ring.attr}>${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     }
     const loading = eager ? "eager" : "lazy";
-    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
+    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
   }
 
   function ownershipIdCellHTML(row, _rank, { hidePrice = false } = {}) {
