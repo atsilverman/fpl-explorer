@@ -4509,6 +4509,8 @@
   // Home league table — fixed sort: total pts desc, rank asc tiebreak.
   // Mobile Home player lookup (search FAB → profile + club matchups).
   let homeLookupPlayer = null;
+  /** Home tap → GW points card (before full Player Details). */
+  let homeGwPtsLookupRow = null;
   let homeLookupStatMode = 0;
   let homeLookupFormMode = 0;
   /** Ownership details chart window: 7d → 14d → 30d (live point stays right). */
@@ -7443,6 +7445,10 @@
       if (!tr || (!inSquad && !inFeed)) return;
       const eid = Number(tr.dataset.element);
       if (!Number.isFinite(eid)) return;
+      if (homeGwPtsLookupRow && homeLookupElementId(homeGwPtsLookupRow) === eid) {
+        closeHomePlayerGwPointsOverlay();
+        return;
+      }
       if (homeLookupPlayer && homeLookupElementId(homeLookupPlayer) === eid) {
         clearHomePlayerLookup();
         return;
@@ -7454,6 +7460,11 @@
         homeOwnerPin = null;
         homeRenderQueued = false;
         renderHome({ animateView: true });
+      }
+      // Home only: if they've played this GW, show points breakdown first.
+      if (homePlayerGwHasPlayed(row)) {
+        openHomePlayerGwPointsOverlay(row);
+        return;
       }
       setHomePlayerLookup(row);
     }
@@ -7814,7 +7825,13 @@
     const xi = list.filter((r) => r && !r.onBench && !(Number(r.position) > 11));
     const bench = list
       .filter((r) => r && (r.onBench || Number(r.position) > 11))
-      .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+      .sort((a, b) => {
+        // Always GK leftmost, then remaining bench by squad slot.
+        const aGk = Number(a.elementType) === 1 ? 0 : 1;
+        const bGk = Number(b.elementType) === 1 ? 0 : 1;
+        if (aGk !== bGk) return aGk - bGk;
+        return (Number(a.position) || 0) - (Number(b.position) || 0);
+      });
     const byType = { 4: [], 3: [], 2: [], 1: [] };
     for (const row of xi) {
       const et = Number(row.elementType) || 0;
@@ -7835,6 +7852,24 @@
     ];
   }
 
+  function homeSquadPitchBenchCardsHTML(benchRows) {
+    if (!benchRows.length) return "";
+    const parts = [];
+    let sawOutfield = false;
+    for (const row of benchRows) {
+      const isGk = Number(row.elementType) === 1;
+      if (!isGk && !sawOutfield) {
+        // Subtle split after the leftmost GK (if present).
+        if (parts.length) {
+          parts.push(`<span class="home-pitch-bench-split" aria-hidden="true"></span>`);
+        }
+        sawOutfield = true;
+      }
+      parts.push(homeSquadPitchCardHTML(row, { bench: true }));
+    }
+    return parts.join("");
+  }
+
   /** Show GW points once the fixture has started or finished; else next opponent. */
   function homeSquadPitchPlayed(row) {
     if (!row) return false;
@@ -7847,6 +7882,244 @@
     const pts = homeSquadRowGwPoints(row);
     if (pts != null && Number.isFinite(Number(pts)) && Number(pts) !== 0) return true;
     return false;
+  }
+
+  /** True when the player has minutes (or non-zero pts) in the current GW. */
+  function homePlayerGwHasPlayed(row) {
+    if (!row) return false;
+    const eg = homeElementGwRecord(row.element);
+    const mins = Math.max(Number(row.minutes) || 0, Number(eg.minutes) || 0);
+    if (mins > 0) return true;
+    const pts = homeSquadRowGwPoints(row, eg);
+    return pts != null && Number.isFinite(Number(pts)) && Number(pts) !== 0;
+  }
+
+  function homePlayerGwFixtureTitle(row) {
+    const fx = (homeSquadFixtures(row) || [])[0] || null;
+    const oppCode = (fx && fx.opp) || row.opp || "";
+    const ha = (fx && (fx.oppHa || fx.ha)) || row.oppHa || "";
+    if (!oppCode || oppCode === "—") {
+      const gw = Number(HOME && HOME.gw);
+      return Number.isFinite(gw) ? `Gameweek ${gw}` : "This gameweek";
+    }
+    const name = teamNameForSeason(oppCode) || oppCode;
+    if (ha === "H") return `vs ${name} · Home`;
+    if (ha === "A") return `vs ${name} · Away`;
+    return `vs ${name}`;
+  }
+
+  function homeGwPtsFormatPts(pts) {
+    const n = Number(pts) || 0;
+    if (n > 0) return `+${n}`;
+    return String(n);
+  }
+
+  function homeGwPtsPillHTML(pts, { signed = true } = {}) {
+    const n = Number(pts) || 0;
+    const text = signed ? homeGwPtsFormatPts(n) : String(n);
+    const tone = n > 0 ? "is-pos" : n < 0 ? "is-neg" : "is-pts-idle";
+    return livePointsPillHTML("pts", escapeHtml(text), { tone });
+  }
+
+  /**
+   * Build GW event → FPL pts rows for the Home points popup.
+   * Each row: event name, supporting detail (count / minutes / BPS), pts.
+   */
+  function homePlayerGwPointsExplain(row) {
+    const eg = homeElementGwRecord(row.element);
+    const etype = Number(eg.elementType) || Number(row.elementType) || 0;
+    const pos = LIVE_POS_BY_TYPE[etype] || null;
+    const lines = [];
+    const push = (event, detail, pts) => {
+      lines.push({ event, detail: detail || "", pts: Number(pts) || 0 });
+    };
+
+    const mins = Math.max(Number(eg.minutes) || 0, Number(row.minutes) || 0);
+    if (mins > 0) {
+      push("Minutes played", `${mins}′`, mins >= 60 ? 2 : 1);
+    }
+
+    const goals = Number(eg.goals) || 0;
+    if (goals > 0) {
+      push("Goals", `×${goals}`, goals * liveFeedGoalPts(pos));
+    }
+    const assists = Number(eg.assists) || 0;
+    if (assists > 0) {
+      push("Assists", `×${assists}`, assists * 3);
+    }
+    const cs = Number(eg.cleanSheets) || 0;
+    const csPts = liveFeedCleanSheetPts(pos);
+    if (cs > 0 && csPts) {
+      push("Clean sheet", cs > 1 ? `×${cs}` : "", cs * csPts);
+    }
+    const gc = Number(eg.goalsConceded) || 0;
+    const gcDock = liveFeedGoalsConcededDockPts(pos);
+    if (gc > 0 && gcDock) {
+      push("Goals conceded", `×${gc}`, -Math.floor(gc / 2) * gcDock);
+    }
+    const saves = Number(eg.saves) || 0;
+    if (saves > 0) {
+      push("Saves", `×${saves}`, Math.floor(saves / 3));
+    }
+    const penSaved = Number(eg.penaltiesSaved) || 0;
+    if (penSaved > 0) {
+      push("Penalties saved", `×${penSaved}`, penSaved * 5);
+    }
+    const penMiss = Number(eg.penaltiesMissed) || 0;
+    if (penMiss > 0) {
+      push("Penalties missed", `×${penMiss}`, penMiss * -2);
+    }
+    const yc = Number(eg.yellowCards) || 0;
+    if (yc > 0) {
+      push("Yellow cards", yc > 1 ? `×${yc}` : "", yc * -1);
+    }
+    const rc = Number(eg.redCards) || 0;
+    if (rc > 0) {
+      push("Red cards", rc > 1 ? `×${rc}` : "", rc * -3);
+    }
+    const og = Number(eg.ownGoals) || 0;
+    if (og > 0) {
+      push("Own goals", og > 1 ? `×${og}` : "", og * -2);
+    }
+
+    if (pos && pos !== "GK") {
+      const actions = liveDefconActions(eg, pos);
+      const acts = Number.isFinite(Number(actions)) ? Number(actions) : 0;
+      const threshold = (DEFCON_RULES[pos] && DEFCON_RULES[pos].threshold) || null;
+      if (acts > 0 || eg.defConHit) {
+        const detail =
+          threshold != null ? `${acts}/${threshold}` : `${acts} actions`;
+        push("Defensive contributions", detail, eg.defConHit ? 2 : 0);
+      }
+    }
+
+    const bps = Number(eg.bps) || 0;
+    let bonusPts = Number(eg.bonus) || 0;
+    if (bonusPts <= 0 && bps > 0) {
+      try {
+        const gw = Number(HOME && HOME.gw);
+        const egMap = homeElementGwMap();
+        const matchups = liveMatchupsForGw(gw);
+        const byElement = livePlayerByElement();
+        const matchupByTeam = new Map();
+        for (const m of matchups || []) {
+          matchupByTeam.set(m.home, m.id);
+          matchupByTeam.set(m.away, m.id);
+        }
+        const eligible = liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement);
+        const ranks = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, eligible);
+        const meta = ranks.get(String(row.element)) || ranks.get(row.element);
+        if (meta && meta.effectiveBonus > 0) bonusPts = meta.effectiveBonus;
+      } catch (_) {
+        /* keep api bonus */
+      }
+    }
+    if (bonusPts > 0 || bps !== 0) {
+      push("Bonus points", `${bps} BPS`, bonusPts);
+    }
+
+    const totalRaw = homeSquadRowGwPoints(row, eg);
+    const total =
+      totalRaw != null && Number.isFinite(Number(totalRaw))
+        ? Math.round(Number(totalRaw))
+        : lines.reduce((sum, line) => sum + (Number(line.pts) || 0), 0);
+
+    return {
+      fixture: homePlayerGwFixtureTitle(row),
+      lines,
+      total,
+      name: row.name || "Player",
+    };
+  }
+
+  function homePlayerGwPosLabel(row) {
+    const raw = String((row && row.position) || "").toUpperCase();
+    if (raw === "GKP" || raw === "GK") return "GK";
+    if (raw === "DEF" || raw === "MID" || raw === "FWD") return raw;
+    const et =
+      Number(row && row.elementType) ||
+      Number(homeElementGwRecord(row && row.element).elementType) ||
+      0;
+    return LIVE_POS_BY_TYPE[et] || "";
+  }
+
+  /** Shared player identity strip (photo + crest + name + pos/£/TSB) — details + GW pts popup. */
+  function homePlayerIdentityHeadHTML(row) {
+    if (!row) return "";
+    const initials = String(row.name || "?")
+      .split(/[\s.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase() || "?";
+    const photo = feedPlayerPhotoUrl(row.code);
+    const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
+    const metaBits = [];
+    const pos = homePlayerGwPosLabel(row);
+    if (pos) metaBits.push(posBadgeHTML(pos));
+    const price = effectivePrice(row);
+    if (price) {
+      metaBits.push(
+        `<span class="home-lookup-price">£${escapeHtml(Number(price).toFixed(1))}m</span>`
+      );
+    }
+    const tsb = currentOwnership(row.code);
+    if (tsb != null && Number.isFinite(Number(tsb))) {
+      metaBits.push(
+        `<span class="home-lookup-tsb" title="Selected by">${escapeHtml(Number(tsb).toFixed(1))}% TSB</span>`
+      );
+    }
+    const photoBlock = photo
+      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-initials="${escapeHtml(initials)}" />`
+      : `<span class="home-lookup-photo home-lookup-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
+    const photoRing = teamRingAttrs(row.team);
+    return `<div class="home-lookup-head">
+      <div class="home-lookup-photo-wrap${photoRing.className}"${photoRing.attr}>
+        <div class="home-lookup-photo-clip">${photoBlock}</div>
+        ${badge}
+      </div>
+      <div class="home-lookup-id">
+        <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}${playerFlagHTML(row, { className: "home-lookup-flag-icon" })}</h3>
+        ${metaBits.length ? `<p class="home-lookup-meta">${metaBits.join('<span class="home-lookup-meta-dot" aria-hidden="true"></span>')}</p>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function homePlayerGwPointsHTML(row) {
+    const explain = homePlayerGwPointsExplain(row);
+    const rows = (explain.lines.length
+      ? explain.lines
+      : [{ event: "No scoring events yet", detail: "", pts: 0 }]
+    )
+      .map((line) => {
+        const detail = line.detail
+          ? `<span class="home-gw-pts-detail">${escapeHtml(line.detail)}</span>`
+          : `<span class="home-gw-pts-detail" aria-hidden="true"></span>`;
+        return (
+          `<li class="home-gw-pts-row">` +
+          `<span class="home-gw-pts-event">${escapeHtml(line.event)}</span>` +
+          detail +
+          `<span class="home-gw-pts-pts">${homeGwPtsPillHTML(line.pts)}</span>` +
+          `</li>`
+        );
+      })
+      .join("");
+    const totalRow =
+      `<li class="home-gw-pts-row is-total">` +
+      `<span class="home-gw-pts-event">Total</span>` +
+      `<span class="home-gw-pts-detail" aria-hidden="true"></span>` +
+      `<span class="home-gw-pts-pts">${homeGwPtsPillHTML(explain.total, { signed: false })}</span>` +
+      `</li>`;
+    return (
+      `<div class="home-gw-pts">` +
+      homePlayerIdentityHeadHTML(row) +
+      `<ul class="home-gw-pts-list">${rows}${totalRow}</ul>` +
+      `<button type="button" class="ghost-btn home-gw-pts-details-btn" data-home-gw-pts-details>` +
+      `Player Details` +
+      `</button>` +
+      `</div>`
+    );
   }
 
   function homeSquadPitchOppMeta(row) {
@@ -7995,12 +8268,9 @@
   function homeSquadPitchCardHTML(row, { bench = false } = {}) {
     const team = row.team || "";
     const photo = feedPlayerPhotoUrl(row.code);
-    const crest =
-      badgeHTML(team, "home-pitch-crest") ||
-      teamCrestFallbackHTML(team, "home-pitch-crest home-crest-fallback");
     const photoHTML = photo
       ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}" />`
-      : `<span class="home-pitch-photo home-pitch-photo-crest" aria-hidden="true">${crest}</span>`;
+      : `<span class="home-pitch-photo home-pitch-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const badges = [];
     if (row.isCaptain) {
       badges.push(`<span class="home-role-tag home-role-c" title="Captain">C</span>`);
@@ -8047,14 +8317,15 @@
       const benchRows = (benchGroup && benchGroup.rows) || [];
       if (benchRows.length) {
         const benchPts = homeSquadBenchPointsTotal(squad);
-        const cards = benchRows.map((row) => homeSquadPitchCardHTML(row, { bench: true })).join("");
+        const cards = homeSquadPitchBenchCardsHTML(benchRows);
+        const nCards = benchRows.length;
         el.homeSquadPitchBench.innerHTML = `
           <div class="home-pitch-bench-divider">
             <div class="home-bench-divider-inner">
               ${homeBenchToggleHTML(benchPts)}
             </div>
           </div>
-          <div class="home-pitch-row is-bench" style="--home-pitch-n:${benchRows.length}">${cards}</div>`;
+          <div class="home-pitch-row is-bench" style="--home-pitch-n:${nCards}">${cards}</div>`;
         el.homeSquadPitchBench.hidden = false;
         bindOwnershipPhotoFallback(el.homeSquadPitchBench);
       } else {
@@ -9859,48 +10130,12 @@
 
   function homePlayerProfileHTML(row) {
     if (!row) return "";
-    const initials = String(row.name || "?")
-      .split(/[\s.]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p[0])
-      .join("")
-      .toUpperCase() || "?";
-    const photo = feedPlayerPhotoUrl(row.code);
-    const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
-    const metaBits = [];
-    if (row.position) metaBits.push(posBadgeHTML(row.position));
-    const price = effectivePrice(row);
-    if (price) {
-      metaBits.push(
-        `<span class="home-lookup-price">£${escapeHtml(Number(price).toFixed(1))}m</span>`
-      );
-    }
-    const tsb = currentOwnership(row.code);
-    if (tsb != null && Number.isFinite(Number(tsb))) {
-      metaBits.push(
-        `<span class="home-lookup-tsb" title="Selected by">${escapeHtml(Number(tsb).toFixed(1))}% TSB</span>`
-      );
-    }
-    const photoBlock = photo
-      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-initials="${escapeHtml(initials)}" />`
-      : `<span class="home-lookup-photo home-lookup-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const teamAccent = TEAM_SCATTER_ACCENT[row.team] || "";
     const accentStyle = teamAccent ? `--home-lookup-accent:${teamAccent};` : "";
-    const photoRing = teamRingAttrs(row.team);
     const mode = homeLookupStatModeMeta();
     return `<article class="home-lookup-card${mode.className ? ` ${mode.className}` : ""}" data-rank-mode="${escapeHtml(mode.key)}"${accentStyle ? ` style="${accentStyle}"` : ""}>
       <div class="home-lookup-top">
-        <div class="home-lookup-head">
-          <div class="home-lookup-photo-wrap${photoRing.className}"${photoRing.attr}>
-            <div class="home-lookup-photo-clip">${photoBlock}</div>
-            ${badge}
-          </div>
-          <div class="home-lookup-id">
-            <h3 class="home-lookup-name">${escapeHtml(row.name || "—")}${playerFlagHTML(row, { className: "home-lookup-flag-icon" })}</h3>
-            ${metaBits.length ? `<p class="home-lookup-meta">${metaBits.join('<span class="home-lookup-meta-dot" aria-hidden="true"></span>')}</p>` : ""}
-          </div>
-        </div>
+        ${homePlayerIdentityHeadHTML(row)}
         ${homeLookupModeHeadingHTML(mode)}
       </div>
       <div class="home-lookup-stats">${homePlayerProfileCardsHTML(row, mode.key)}</div>
@@ -11546,6 +11781,7 @@
   function closeHomePlayerModal() {
     if (!el.homePlayerModal || el.homePlayerModal.hidden) return;
     unbindHomePlayerDetailCardMetrics();
+    el.homePlayerModal.classList.remove("is-gw-pts");
     el.homePlayerModal.hidden = true;
     el.homePlayerModal.setAttribute("aria-hidden", "true");
     document.documentElement.classList.remove("home-player-modal-open");
@@ -11690,7 +11926,12 @@
     if (preferMobileSheet()) {
       closeHomePlayerModal();
       if (el.homeBento) el.homeBento.classList.remove("is-search-open");
-      if (mobileSheetOpen && mobileSheetKey === "home-player" && el.mobileSheetBody) {
+      if (
+        mobileSheetOpen
+        && mobileSheetKey === "home-player"
+        && el.mobileSheetBody
+      ) {
+        homeGwPtsLookupRow = null;
         if (el.mobileSheetTitle) {
           el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
           el.mobileSheetTitle.textContent = "Player Details";
@@ -11699,10 +11940,12 @@
         el.mobileSheetBody.innerHTML = homePlayerDetailHTML(row);
         syncHomePlayerOpenXBtn(row);
         bindHomeLookupCard();
+        bindHomePlayerDetailEvents(el.mobileSheetBody);
         upgradeNativeTitles(el.mobileSheetBody);
         bindOwnershipPhotoFallback(el.mobileSheetBody);
         return;
       }
+      homeGwPtsLookupRow = null;
       // Sheet slide is 0.28s — hold form bar grow until the tray lands.
       openMobileSheet({
         title: "Player Details",
@@ -11719,15 +11962,80 @@
       return;
     }
     if (mobileSheetOpen) closeMobileSheet();
+    homeGwPtsLookupRow = null;
+    if (el.homePlayerModal) el.homePlayerModal.classList.remove("is-gw-pts");
     openHomePlayerModal(row);
+  }
+
+  function closeHomePlayerGwPointsOverlay({ keepRow = false } = {}) {
+    if (!keepRow) homeGwPtsLookupRow = null;
+    if (
+      el.homePlayerModal
+      && !el.homePlayerModal.hidden
+      && el.homePlayerModal.classList.contains("is-gw-pts")
+    ) {
+      el.homePlayerModal.classList.remove("is-gw-pts");
+      closeHomePlayerModal();
+    }
+  }
+
+  function bindHomeGwPtsEvents(root) {
+    const card = root && root.querySelector(".home-gw-pts");
+    if (!card || card.dataset.homeGwPtsBound === "1") return;
+    card.dataset.homeGwPtsBound = "1";
+    card.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-home-gw-pts-details]");
+      if (!btn || !card.contains(btn)) return;
+      e.preventDefault();
+      const row = homeGwPtsLookupRow;
+      if (!row) return;
+      setHomePlayerLookup(row);
+    });
+  }
+
+  function openHomePlayerGwPointsOverlay(row) {
+    if (!row) return;
+    homeGwPtsLookupRow = row;
+    if (homeLookupPlayer) {
+      homeLookupPlayer = null;
+      homeLookupStatMode = 0;
+      homeLookupFormMode = 0;
+      homeOwnChartWindowIdx = 0;
+      syncHomeSearchBtn();
+    }
+    clearHomeCompareState();
+    clearHomeTeamCompareState();
+    if (teamDetailsCode) {
+      teamDetailsCode = null;
+      teamDetailsStatMode = 0;
+    }
+    // Popup only — leave the mobile sheet for Player Details.
+    if (mobileSheetOpen) closeMobileSheet();
+    if (!el.homePlayerModal || !el.homePlayerModalBody) return;
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "";
+    unbindHomePlayerDetailCardMetrics();
+    el.homePlayerModalBody.innerHTML = homePlayerGwPointsHTML(row);
+    el.homePlayerModal.classList.add("is-gw-pts");
+    el.homePlayerModal.hidden = false;
+    el.homePlayerModal.setAttribute("aria-hidden", "false");
+    document.documentElement.classList.add("home-player-modal-open");
+    syncHomePlayerOpenXBtn(null);
+    bindHomeGwPtsEvents(el.homePlayerModalBody);
+    bindOwnershipPhotoFallback(el.homePlayerModalBody);
   }
 
   function closeHomePlayerDetailOverlay({ clearState = false } = {}) {
     if (mobileSheetOpen && mobileSheetKey === "home-player") {
       closeMobileSheet();
     }
-    closeHomePlayerModal();
-    if (clearState && homeLookupPlayer) {
+    // Leave the GW points card alone — Home live refresh syncs lookup UI often.
+    if (el.homePlayerModal && !el.homePlayerModal.classList.contains("is-gw-pts")) {
+      closeHomePlayerModal();
+    }
+    if (!clearState) return;
+    homeGwPtsLookupRow = null;
+    closeHomePlayerGwPointsOverlay({ keepRow: true });
+    if (homeLookupPlayer) {
       homeLookupPlayer = null;
       homeLookupStatMode = 0;
       homeLookupFormMode = 0;
@@ -12077,6 +12385,7 @@
 
   function clearHomePlayerLookup({ rerender = true } = {}) {
     homeLookupPlayer = null;
+    homeGwPtsLookupRow = null;
     homeLookupStatMode = 0;
     homeLookupFormMode = 0;
     homeOwnChartWindowIdx = 0;
@@ -12090,6 +12399,7 @@
     }
     hideHomeDesktopSearchResults();
     syncHomeSearchBtn();
+    closeHomePlayerGwPointsOverlay({ keepRow: true });
     closeHomePlayerDetailOverlay();
     if (teamDetailsCode) clearTeamDetails();
     if (rerender) syncHomeLookupUI();
@@ -15979,7 +16289,8 @@
     if (event.key !== "Escape") return;
     if (el.homePlayerModal && !el.homePlayerModal.hidden) {
       event.preventDefault();
-      clearHomePlayerLookup();
+      if (homeGwPtsLookupRow) closeHomePlayerGwPointsOverlay();
+      else clearHomePlayerLookup();
       return;
     }
     if (mobileSheetOpen) closeMobileSheet();
@@ -27862,13 +28173,10 @@
 
   function ownershipPhotoFallbackElement(img) {
     if (img.classList.contains("home-pitch-photo")) {
-      const team = img.dataset.team || "";
       const wrap = document.createElement("span");
-      wrap.className = "home-pitch-photo home-pitch-photo-crest";
+      wrap.className = "home-pitch-photo home-pitch-photo-fallback is-photo-icon";
       wrap.setAttribute("aria-hidden", "true");
-      wrap.innerHTML =
-        badgeHTML(team, "home-pitch-crest") ||
-        teamCrestFallbackHTML(team, "home-pitch-crest home-crest-fallback");
+      wrap.innerHTML = iconHTML("user", "player-photo-fallback-icon");
       return wrap;
     }
     const fallback = document.createElement("span");
@@ -31362,7 +31670,8 @@
     el.homePlayerModal.addEventListener("click", (e) => {
       if (e.target.closest("[data-home-player-dismiss]")) {
         e.preventDefault();
-        if (teamDetailsCode) clearTeamDetails();
+        if (homeGwPtsLookupRow) closeHomePlayerGwPointsOverlay();
+        else if (teamDetailsCode) clearTeamDetails();
         else clearHomePlayerLookup();
       }
     });
