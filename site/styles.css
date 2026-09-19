@@ -20154,6 +20154,7 @@ img.home-pitch-photo {
   align-items: center;
   justify-content: center;
   line-height: 0;
+  color: inherit;
 }
 .home-pitch-price-arrow .icon,
 .home-pitch-price-arrow-icon {
@@ -20161,19 +20162,23 @@ img.home-pitch-photo {
   height: 10px;
   stroke-width: 2.5;
 }
-.home-pitch-price-arrow.is-rise,
 .home-pitch-price.is-vl-rise {
-  color: hsl(142 72% 42%);
-}
-.home-pitch-price-arrow.is-fall,
-.home-pitch-price.is-vl-fall {
-  color: hsl(0 72% 52%);
-}
-.home-pitch-price.is-vl-rise {
-  background: hsl(142 45% 38% / 0.22);
+  background: hsl(142 55% 36%);
+  color: #fff;
 }
 .home-pitch-price.is-vl-fall {
-  background: hsl(0 55% 42% / 0.2);
+  background: hsl(0 62% 42%);
+  color: #fff;
+}
+html[data-theme="light"] .home-dashboard .home-pitch-price.is-vl-rise,
+html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-vl-rise {
+  background: hsl(142 55% 36%);
+  color: #fff;
+}
+html[data-theme="light"] .home-dashboard .home-pitch-price.is-vl-fall,
+html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-vl-fall {
+  background: hsl(0 62% 42%);
+  color: #fff;
 }
 .home-pitch-imp {
   position: relative;
@@ -20224,21 +20229,13 @@ img.home-pitch-photo {
 html[data-theme="light"] .home-dashboard .home-pitch-imp {
   background: hsl(215 20% 20% / 0.08);
 }
-html[data-theme="light"] .home-dashboard .home-pitch-price.is-vl-rise {
-  background: hsl(142 40% 88%);
-  color: hsl(142 72% 26%);
-}
-html[data-theme="light"] .home-dashboard .home-pitch-price.is-vl-fall {
-  background: hsl(0 50% 92%);
-  color: hsl(0 72% 32%);
-}
 html[data-theme="light"] .home-dashboard .home-pitch-photo-wrap {
   box-shadow:
     inset 0 0 0 1px var(--home-pitch-card-border),
     0 1px 3px hsl(215 25% 20% / 0.08);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-pts,
-html[data-theme="light"] .home-dashboard .home-pitch-price,
+html[data-theme="light"] .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
 html[data-theme="light"] .home-dashboard .home-pitch-form-cell {
   background: hsl(215 20% 20% / 0.06);
 }
@@ -20270,7 +20267,7 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
       0 1px 3px hsl(215 25% 20% / 0.08);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts,
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-price,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell {
     background: hsl(215 20% 20% / 0.06);
   }

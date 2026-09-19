@@ -4545,12 +4545,12 @@
   let homeSquadPagerTarget = null;
   let homeFeedPagerReady = false;
   let homeFeedPagerTarget = null;
-  // Physical pager: 0 Pitch · 1 Starting XI · 2 Points · 3 Ownership · 4 Schedule.
+  // Physical pager: 0 Pitch · 1 List · 2 Points · 3 Ownership · 4 Schedule.
   // Wide desktop hides Points (merged beside the XI table) — skip physical index 2.
   const HOME_SQUAD_PTS_PAGE = 2;
   const HOME_SQUAD_OWNERSHIP_PAGE = 3;
-  const HOME_SQUAD_VIEW_LABELS = ["Pitch", "Starting XI", "Points", "Ownership", "Schedule"];
-  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Pitch", "Starting XI", "Ownership", "Schedule"];
+  const HOME_SQUAD_VIEW_LABELS = ["Pitch", "List", "Points", "Ownership", "Schedule"];
+  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Pitch", "List", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips", "Bench Points"];
   const HOME_STANDINGS_TRANSFERS_PAGE = 1;
   const HOME_STANDINGS_CAPTAINS_PAGE = 2;
@@ -8892,8 +8892,8 @@
     { key: "goals", label: "G", title: "Goals scored" },
     { key: "assists", label: "A", title: "Assists" },
     { key: "cleanSheets", label: "CS", title: "Clean sheets" },
-    { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
     { key: "bonus", label: "B", title: "Bonus points" },
+    { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
   ];
 
   const HOME_SQUAD_PTS_FALLBACKS = [
