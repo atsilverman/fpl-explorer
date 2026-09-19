@@ -336,6 +336,91 @@ def merge_fixture_final_flags(live_home: dict, local_home: dict | None) -> dict:
     return out
 
 
+def merge_autosub_flags(live_home: dict, local_home: dict | None) -> dict:
+    """Copy projected autosub icon flags from local fetch_home onto live payload.
+
+    Live droplet may still gate autosubs on final-only fixtures; local cache
+    lights icons at provisional FT. Prefer live when it already has flags.
+    """
+    if not local_home or not isinstance(live_home, dict):
+        return live_home
+
+    AUTOSUB_KEYS = ("autoSubIn", "autoSubOut", "autoSubWith", "autoSubWithName")
+
+    def index_autosubs(home: dict) -> dict[str, dict]:
+        out: dict[str, dict] = {}
+
+        def ingest(entry_key: str, rows: list | None) -> None:
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if not (row.get("autoSubIn") or row.get("autoSubOut")):
+                    continue
+                eid = row.get("element")
+                if eid is None:
+                    continue
+                out[f"{entry_key}|{eid}"] = {k: row.get(k) for k in AUTOSUB_KEYS}
+
+        ingest("_", home.get("squad") if isinstance(home.get("squad"), list) else None)
+        by_entry = home.get("squadsByEntry") or {}
+        if isinstance(by_entry, dict):
+            for entry_id, rows in by_entry.items():
+                ingest(str(entry_id), rows if isinstance(rows, list) else None)
+        return out
+
+    local_flags = index_autosubs(local_home)
+    if not local_flags:
+        return live_home
+
+    def apply_rows(entry_key: str, rows: list | None) -> list | None:
+        if not isinstance(rows, list):
+            return rows
+        next_rows = []
+        changed = False
+        for row in rows:
+            if not isinstance(row, dict):
+                next_rows.append(row)
+                continue
+            if row.get("autoSubIn") or row.get("autoSubOut"):
+                next_rows.append(row)
+                continue
+            eid = row.get("element")
+            flags = local_flags.get(f"{entry_key}|{eid}")
+            if flags is None and entry_key != "_":
+                flags = local_flags.get(f"_|{eid}")
+            if not flags:
+                next_rows.append(row)
+                continue
+            changed = True
+            next_rows.append({**row, **flags})
+        return next_rows if changed else rows
+
+    squad = apply_rows("_", live_home.get("squad"))
+    by_entry = live_home.get("squadsByEntry")
+    next_by = by_entry
+    if isinstance(by_entry, dict):
+        rebuilt = {}
+        entry_changed = False
+        for key, rows in by_entry.items():
+            applied = apply_rows(str(key), rows if isinstance(rows, list) else None)
+            rebuilt[key] = applied if applied is not None else rows
+            if applied is not rows:
+                entry_changed = True
+        if entry_changed:
+            next_by = rebuilt
+
+    if squad is live_home.get("squad") and next_by is by_entry:
+        return live_home
+    out = dict(live_home)
+    if squad is not live_home.get("squad"):
+        out["squad"] = squad
+    if next_by is not by_entry:
+        out["squadsByEntry"] = next_by
+    return out
+
+
 def home_api_response():
     if HOME_LOCAL_CACHE:
         home = read_local_home_cache()
@@ -346,7 +431,9 @@ def home_api_response():
     if status == 200 and isinstance(body, dict) and isinstance(body.get("home"), dict):
         local = read_local_home_cache()
         if local:
-            body = {**body, "home": merge_fixture_final_flags(body["home"], local)}
+            merged = merge_fixture_final_flags(body["home"], local)
+            merged = merge_autosub_flags(merged, local)
+            body = {**body, "home": merged}
     return status, body
 
 

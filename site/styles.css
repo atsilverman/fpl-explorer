@@ -16812,7 +16812,7 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
 }
 html[data-theme="light"] .home-dashboard {
-  --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 28%, hsl(var(--background)));
+  --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
   --home-pitch-card-bg: hsl(0 0% 100%);
   --home-pitch-card-border: hsl(215 20% 20% / 0.28);
   --home-pitch-card-fg: hsl(222 28% 12%);
@@ -16820,7 +16820,7 @@ html[data-theme="light"] .home-dashboard {
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-dashboard {
-    --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 28%, hsl(var(--background)));
+    --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
     --home-pitch-card-bg: hsl(0 0% 100%);
     --home-pitch-card-border: hsl(215 20% 20% / 0.28);
     --home-pitch-card-fg: hsl(222 28% 12%);
@@ -17005,28 +17005,38 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
     overflow: hidden;
   }
 }
-/* Viewing another manager — glass chip in the hero (not a card strip). */
+/* Viewing another manager — floating eye chip (fixed bottom; scroll stays free). */
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
+  /* Clearance so last rows aren't covered by the floating chip. */
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 .home-view-chip {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 45;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: min(100%, 22rem);
-  margin: 0 0 10px;
-  padding: 4px 5px 4px 9px;
+  max-width: min(calc(100vw - 32px), 22rem);
+  margin: 0;
+  padding: 6px 6px 6px 12px;
   border-radius: 999px;
   border: 1px solid hsl(var(--blue-hsl) / 0.28);
-  background: hsl(210 40% 99% / 0.72);
+  background: hsl(210 40% 99% / 0.82);
   color: hsl(220 16% 26%);
   line-height: 1;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    0 8px 28px hsl(215 35% 20% / 0.14),
+    0 2px 8px hsl(215 35% 20% / 0.08);
   box-sizing: border-box;
   flex-wrap: nowrap;
   min-width: 0;
-  z-index: 2;
+  pointer-events: auto;
 }
 .home-view-chip[hidden] {
   display: none !important;
@@ -17041,7 +17051,7 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
 .home-view-chip-name {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -17053,8 +17063,8 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
 }
 .home-view-chip-clear {
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -17080,9 +17090,12 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
   transform: translateY(0.5px);
 }
 html[data-theme="dark"] .home-view-chip {
-  border-color: hsl(var(--blue-hsl) / 0.4);
-  background: hsl(0 0% 100% / 0.1);
+  border-color: hsl(var(--blue-hsl) / 0.42);
+  background: hsl(215 28% 14% / 0.82);
   color: hsl(210 14% 90%);
+  box-shadow:
+    0 10px 32px hsl(0 0% 0% / 0.36),
+    0 2px 8px hsl(0 0% 0% / 0.2);
 }
 html[data-theme="dark"] .home-view-chip-clear {
   color: hsl(210 12% 72%);
@@ -17093,9 +17106,12 @@ html[data-theme="dark"] .home-view-chip-clear:hover {
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-view-chip {
-    border-color: hsl(var(--blue-hsl) / 0.4);
-    background: hsl(0 0% 100% / 0.1);
+    border-color: hsl(var(--blue-hsl) / 0.42);
+    background: hsl(215 28% 14% / 0.82);
     color: hsl(210 14% 90%);
+    box-shadow:
+      0 10px 32px hsl(0 0% 0% / 0.36),
+      0 2px 8px hsl(0 0% 0% / 0.2);
   }
   html:not([data-theme="light"]) .home-view-chip-clear {
     color: hsl(210 12% 72%);
@@ -17108,28 +17124,32 @@ html[data-theme="dark"] .home-view-chip-clear:hover {
 html[data-home-surface="solid"] .home-view-chip {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: hsl(220 16% 94%);
+  background: hsl(220 16% 96%);
   border-color: hsl(var(--blue-hsl) / 0.32);
 }
 html[data-theme="dark"][data-home-surface="solid"] .home-view-chip {
-  background: hsl(0 0% 100% / 0.1);
+  background: hsl(215 22% 16%);
   border-color: hsl(var(--blue-hsl) / 0.42);
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"])[data-home-surface="solid"] .home-view-chip {
-    background: hsl(0 0% 100% / 0.1);
+    background: hsl(215 22% 16%);
     border-color: hsl(var(--blue-hsl) / 0.42);
   }
 }
 @media (max-width: 900px) {
   .home-view-chip {
-    max-width: 100%;
-    margin-bottom: 8px;
-    padding: 3px 4px 3px 8px;
+    max-width: min(calc(100vw - 24px), 22rem);
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    padding: 5px 5px 5px 11px;
   }
   .home-view-chip-name {
-    font-size: 11.5px;
+    font-size: 12px;
   }
+}
+/* Only show while Home is the active page (chip lives under #home-page). */
+html:not([data-page="home"]) .home-view-chip {
+  display: none !important;
 }
 .home-summary {
   display: flex;
@@ -17366,6 +17386,54 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
 }
 .home-summary-hero-chip[hidden] {
   display: none !important;
+}
+.home-summary-hero-autosub {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(50% - 4.5em);
+  margin: 0;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--amber-hsl) / 0.42);
+  background: hsl(var(--amber-hsl) / 0.16);
+  color: hsl(38 92% 36%);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: help;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.home-summary-hero-autosub .icon {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  stroke-width: 2.25;
+}
+.home-summary-hero-autosub[hidden] {
+  display: none !important;
+}
+html[data-theme="dark"] .home-summary-hero-autosub {
+  border-color: hsl(var(--amber-hsl) / 0.5);
+  background: hsl(var(--amber-hsl) / 0.22);
+  color: hsl(40 96% 68%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero-autosub {
+    border-color: hsl(var(--amber-hsl) / 0.5);
+    background: hsl(var(--amber-hsl) / 0.22);
+    color: hsl(40 96% 68%);
+  }
 }
 .home-summary-hero-label {
   margin: 0;
@@ -18605,6 +18673,144 @@ html[data-theme="dark"] .home-dashboard {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.home-squad-heading-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(55%, 12rem);
+  min-height: 30px;
+  position: relative;
+}
+.home-squad-heading-end .home-panel-heading-meta {
+  max-width: 100%;
+}
+.home-squad-heading-end .home-panel-heading-meta:not(:empty)::before {
+  content: none;
+}
+.home-pitch-mode-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  height: 30px;
+  margin: 0;
+  padding: 0 2px 0 6px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.home-pitch-mode-btn[hidden] {
+  display: none !important;
+}
+.home-pitch-mode-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+.home-pitch-mode-btn .page-tab-caret {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+  color: inherit;
+}
+.home-pitch-mode-btn:hover,
+.home-pitch-mode-btn:active {
+  color: hsl(var(--blue-hsl));
+  background: transparent;
+}
+.home-pitch-mode-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.home-pitch-mode-btn[aria-expanded="true"] {
+  color: hsl(var(--blue-hsl));
+}
+#home-pitch-mode-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-pitch-mode-menu {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 10.5rem;
+  padding: 6px;
+  border-radius: calc(var(--radius) + 2px);
+  border: 1px solid var(--border);
+  background: hsl(var(--card));
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+}
+.home-pitch-mode-menu.is-open {
+  display: flex;
+  position: fixed;
+  z-index: 80;
+}
+.home-pitch-mode-menu[hidden]:not(.mobile-sheet-hosted) {
+  display: none !important;
+}
+.home-pitch-mode-option {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-pitch-mode-option:hover {
+  background: hsl(var(--muted) / 0.55);
+}
+.home-pitch-mode-option.active {
+  background: hsl(var(--blue-hsl) / 0.12);
+  color: hsl(var(--blue-hsl));
+}
+.mobile-sheet-body > .home-pitch-mode-menu.mobile-sheet-hosted {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 0 8px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  position: static;
+}
+.mobile-sheet-body > .home-pitch-mode-menu.mobile-sheet-hosted .home-pitch-mode-option {
+  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 12px;
+}
 .home-panel-heading-meta:not(:empty)::before {
   content: none;
 }
@@ -18631,6 +18837,10 @@ html[data-theme="dark"] .home-dashboard {
     content: "·";
     margin-right: 8px;
     color: var(--text-faint);
+  }
+  #home-squad-panel > .home-panel-heading .home-squad-heading-end {
+    margin-left: auto;
+    max-width: min(60%, 24rem);
   }
 }
 @media (max-width: 720px) {
@@ -18873,6 +19083,7 @@ html[data-theme="dark"] .home-dashboard {
 #home-standings-panel.home-table-panel {
   padding-left: 0;
   padding-right: 0;
+  padding-bottom: 4px;
   overflow: hidden;
 }
 #home-squad-panel > .home-panel-heading,
@@ -19361,6 +19572,11 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     align-self: stretch;
     min-height: 0;
   }
+  /* Pitch matches other pages via min-height + spacer (Bench divider aligned). */
+  #home-squad-panel .home-squad-page-pitch {
+    height: 100% !important;
+    align-self: stretch;
+  }
   #home-squad-panel .home-squad-page .home-table-wrap,
   #home-standings-panel .home-standings-page .home-table-wrap {
     height: 100%;
@@ -19418,7 +19634,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   }
   #home-squad-panel .home-squad-dots,
   #home-standings-panel .home-standings-dots {
-    margin-top: auto;
+    margin-top: 0;
   }
 }
 .home-squad-pager {
@@ -19477,31 +19693,6 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   /* Desktop Team card can be wide — keep the pitch column phone-narrow so
      SVG lines never stretch with the panel. Side whitespace is intentional. */
   --home-pitch-col-max: 400px;
-}
-.home-pitch-mode-seg {
-  display: flex;
-  /* Match SVG pitch outline (x=3 / width=94), not the full card edge. */
-  width: 94%;
-  max-width: min(94%, calc(var(--home-pitch-col-max, 400px) * 0.94));
-  margin-inline: auto;
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  /* Match .home-squad-pitch corner (12px); inner thumb/buttons sit inside padding. */
-  border-radius: 12px;
-  padding: 3px;
-}
-.home-pitch-mode-seg > button {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 0 4px;
-  height: 30px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  border-radius: 9px;
-}
-.home-pitch-mode-seg > .seg-thumb {
-  border-radius: 9px;
 }
 .home-squad-pitch {
   position: relative;
@@ -19579,7 +19770,7 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 0 6px 2px;
+  padding: 0 6px 0;
   gap: 18px;
   justify-content: space-evenly;
   background: transparent;
@@ -19604,8 +19795,11 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   display: none !important;
 }
 .home-pitch-page-spacer {
+  display: block;
   flex: 1 1 auto;
   min-height: 0;
+  align-self: stretch;
+  width: 100%;
   pointer-events: none;
 }
 .home-pitch-bench-divider {
@@ -19746,6 +19940,27 @@ img.home-pitch-photo {
   right: 3px;
   z-index: 2;
 }
+.home-pitch-photo-wrap .home-autosub-tag {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 2;
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+}
+.home-pitch-card.is-autosub-out .home-pitch-photo-wrap {
+  opacity: 0.78;
+  box-shadow:
+    inset 0 0 0 1px hsl(0 72% 48% / 0.5),
+    0 0 0 1px hsl(0 72% 48% / 0.22);
+}
+.home-pitch-card.is-autosub-in .home-pitch-photo-wrap {
+  box-shadow:
+    inset 0 0 0 1px hsl(142 55% 38% / 0.45),
+    0 0 0 1px hsl(142 55% 38% / 0.2);
+}
 /* Dark name + full-width pts/opp bar (reference fixture strip). */
 .home-pitch-meta {
   --home-pitch-meta-pad: 3px;
@@ -19762,19 +19977,26 @@ img.home-pitch-photo {
   box-sizing: border-box;
 }
 .home-pitch-name {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   max-width: 100%;
+  /* Match .home-pitch-strip so name + pts/schedule rows share one height. */
+  height: 20px;
+  min-height: 20px;
+  max-height: 20px;
   padding: 0 1px;
   font-size: 9px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1;
   letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--home-pitch-card-fg);
   text-align: center;
+  box-sizing: border-box;
 }
 .home-pitch-strip {
   display: flex;
@@ -19782,8 +20004,12 @@ img.home-pitch-photo {
   justify-content: center;
   gap: 3px;
   width: 100%;
-  min-height: 16px;
-  padding: 2px 4px;
+  /* Fixed height across Current / Next 3 / Last 3 / Price so the pitch
+     (and mode control above it) does not jump when switching modes. */
+  height: 20px;
+  min-height: 20px;
+  max-height: 20px;
+  padding: 0 4px;
   /* Square top; bottom nests into meta radius (outer − pad). */
   --home-pitch-strip-bottom-radius: max(
     0px,
@@ -19791,7 +20017,7 @@ img.home-pitch-photo {
   );
   border-radius: 0 0 var(--home-pitch-strip-bottom-radius) var(--home-pitch-strip-bottom-radius);
   font-size: 10px;
-  line-height: 1.1;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   box-sizing: border-box;
   overflow: hidden;
@@ -19799,7 +20025,7 @@ img.home-pitch-photo {
 .home-pitch-fx-strip,
 .home-pitch-form-strip {
   gap: 3px;
-  padding: 2px 3px;
+  padding: 0 3px;
   background: hsl(0 0% 100% / 0.04);
 }
 .home-pitch-fx-cell,
@@ -19809,8 +20035,10 @@ img.home-pitch-photo {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 15px;
-  padding: 2px 2px;
+  align-self: stretch;
+  min-height: 0;
+  height: auto;
+  padding: 0 2px;
   /* Square top; only soften the bottom outer corners of the strip. */
   border-radius: 0;
   font-size: 8.5px;
@@ -19990,10 +20218,6 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     padding: 8px 3px 10px;
     gap: 8px;
   }
-  .home-pitch-mode-seg > button {
-    height: 28px;
-    font-size: 11px;
-  }
   .home-pitch-row {
     gap: 8px;
   }
@@ -20011,7 +20235,7 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
   .home-pitch-row.is-bench {
     width: 100%;
     max-width: none;
-    padding: 0 4px 2px;
+    padding: 0 4px 0;
     gap: 14px;
     border: none;
     border-radius: 0;
@@ -20036,12 +20260,17 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     gap: 2px;
   }
   .home-pitch-name {
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
     font-size: 8px;
   }
   .home-pitch-strip {
-    min-height: 14px;
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
     font-size: 9px;
-    padding: 1px 3px;
+    padding: 0 3px;
   }
   .home-pitch-pts {
     font-size: 10px;
@@ -20099,7 +20328,9 @@ html.home-squad-wide .home-squad-pitch-xi {
   justify-content: center;
   gap: 7px;
   flex: none;
+  /* Space between bench / last content and the dots — not below the dots. */
   padding: 10px 0 2px;
+  margin-top: 0;
 }
 .home-squad-dot {
   width: 7px;
@@ -20956,12 +21187,36 @@ html[data-theme="dark"] .home-role-a {
   stroke: none;
 }
 .home-autosub-tag.is-in {
-  background: hsl(142 55% 38% / 0.16);
-  color: hsl(142 55% 32%);
+  background: hsl(142 55% 38% / 0.22);
+  color: hsl(142 55% 30%);
+  box-shadow: inset 0 0 0 1px hsl(142 55% 38% / 0.28);
 }
 .home-autosub-tag.is-out {
-  background: hsl(var(--muted));
-  color: var(--text-faint);
+  background: hsl(0 72% 48% / 0.2);
+  color: hsl(0 72% 40%);
+  box-shadow: inset 0 0 0 1px hsl(0 72% 48% / 0.32);
+}
+html[data-theme="dark"] .home-autosub-tag.is-in {
+  background: hsl(142 55% 48% / 0.28);
+  color: hsl(142 60% 68%);
+  box-shadow: inset 0 0 0 1px hsl(142 55% 48% / 0.36);
+}
+html[data-theme="dark"] .home-autosub-tag.is-out {
+  background: hsl(0 72% 55% / 0.28);
+  color: hsl(0 85% 72%);
+  box-shadow: inset 0 0 0 1px hsl(0 72% 55% / 0.38);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-autosub-tag.is-in {
+    background: hsl(142 55% 48% / 0.28);
+    color: hsl(142 60% 68%);
+    box-shadow: inset 0 0 0 1px hsl(142 55% 48% / 0.36);
+  }
+  html:not([data-theme="light"]) .home-autosub-tag.is-out {
+    background: hsl(0 72% 55% / 0.28);
+    color: hsl(0 85% 72%);
+    box-shadow: inset 0 0 0 1px hsl(0 72% 55% / 0.38);
+  }
 }
 .home-player-name .home-autosub-tag {
   flex: none;

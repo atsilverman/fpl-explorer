@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1384" />
+<link rel="stylesheet" href="styles.css?v=1396" />
 <link rel="stylesheet" href="motion-enhanced.css?v=6" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
@@ -888,17 +888,14 @@
         </div>
         <div class="home-summary" id="home-summary" data-home-summary="hero">
           <div class="home-summary-hero" id="home-summary-hero">
-            <div id="home-view-banner" class="home-view-chip" hidden>
-              <svg class="icon home-view-chip-icon" aria-hidden="true"><use href="#i-eye"/></svg>
-              <strong class="home-view-chip-name" id="home-view-banner-name"></strong>
-              <button type="button" class="home-view-chip-clear icon-only-btn" id="home-view-banner-clear"
-                aria-label="Back to your team" title="Back to your team">
-                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-              </button>
-            </div>
             <div class="home-summary-hero-head">
               <span class="home-summary-hero-chip" id="home-hero-chip" hidden></span>
               <p class="home-summary-hero-label">Overall Rank</p>
+              <button type="button" class="home-summary-hero-autosub" id="home-hero-autosub" hidden
+                aria-label="Auto-subs may still update official points">
+                <svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"/></svg>
+                <span>Auto-subs</span>
+              </button>
             </div>
             <p class="home-summary-hero-value" id="home-hero-overall-rank"></p>
             <p class="home-summary-hero-delta home-rank-delta" id="home-hero-overall-rank-delta" hidden></p>
@@ -946,7 +943,24 @@
               <span class="home-panel-heading-kicker">Team</span>
               <span class="home-panel-heading-view" id="home-squad-view-label">Pitch</span>
             </span>
-            <span class="home-panel-heading-meta" id="home-squad-gw-label"></span>
+            <span class="home-squad-heading-end">
+              <span class="home-panel-heading-meta" id="home-squad-gw-label"></span>
+              <button type="button" class="home-pitch-mode-btn" id="home-pitch-mode-btn"
+                hidden
+                aria-haspopup="listbox" aria-expanded="false"
+                aria-controls="home-pitch-mode-menu" aria-label="Pitch card data, Current">
+                <span class="home-pitch-mode-current">
+                  <span id="home-pitch-mode-label">Current</span>
+                  <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevrons-up-down"/></svg>
+                </span>
+              </button>
+              <div id="home-pitch-mode-menu" class="home-pitch-mode-menu" hidden role="listbox" aria-label="Pitch card data">
+                <button type="button" role="option" class="home-pitch-mode-option active" data-pitch-mode="gw" aria-selected="true">Current</button>
+                <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="fixtures" aria-selected="false">Next 3</button>
+                <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="form" aria-selected="false">Last 3</button>
+                <button type="button" role="option" class="home-pitch-mode-option" data-pitch-mode="price" aria-selected="false">Price</button>
+              </div>
+            </span>
           </h3>
           <div class="home-squad-pager">
             <div class="home-squad-track" id="home-squad-track">
@@ -966,15 +980,9 @@
                   </svg>
                   <div class="home-squad-pitch-xi" id="home-squad-pitch-xi"></div>
                 </div>
-                <div class="segmented home-pitch-mode-seg" id="home-pitch-mode-seg" role="tablist" aria-label="Pitch card data">
-                  <button type="button" role="tab" data-pitch-mode="gw" aria-selected="true" class="active">Current</button>
-                  <button type="button" role="tab" data-pitch-mode="fixtures" aria-selected="false">Next 3</button>
-                  <button type="button" role="tab" data-pitch-mode="form" aria-selected="false">Last 3</button>
-                  <button type="button" role="tab" data-pitch-mode="price" aria-selected="false">Price</button>
-                </div>
-                <div class="home-pitch-bench" id="home-squad-pitch-bench" hidden></div>
-                <!-- Leftover page height sits below the bench so the divider stays glued under the pitch. -->
+                <!-- Flex grow so Bench divider lines up with Starting XI / other pages. -->
                 <div class="home-pitch-page-spacer" aria-hidden="true"></div>
+                <div class="home-pitch-bench" id="home-squad-pitch-bench" hidden></div>
               </div>
               <div class="home-squad-page">
                 <div class="home-squad-split" id="home-squad-split">
@@ -1187,6 +1195,14 @@
         </div>
       </div>
       <p id="home-updated-footer" class="home-updated-footer" hidden></p>
+      <div id="home-view-banner" class="home-view-chip" hidden>
+        <svg class="icon home-view-chip-icon" aria-hidden="true"><use href="#i-eye"/></svg>
+        <strong class="home-view-chip-name" id="home-view-banner-name"></strong>
+        <button type="button" class="home-view-chip-clear icon-only-btn" id="home-view-banner-clear"
+          aria-label="Back to your team" title="Back to your team">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
     </div>
 
     <div id="live-page" class="page-pane" style="display:none;">
@@ -1905,7 +1921,7 @@
 <script src="ownership_data.js?v=80"></script>
 <script src="price_changes_data.js?v=121"></script>
 <script src="leagues_data.js?v=5"></script>
-<script src="home_data.js?v=48"></script>
+<script src="home_data.js?v=49"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1928,7 +1944,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1348"></script>
+<script src="app.js?v=1355"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

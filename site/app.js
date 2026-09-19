@@ -1186,6 +1186,7 @@
     homeSummary: $("#home-summary"),
     homeSummaryHero: $("#home-summary-hero"),
     homeHeroChip: $("#home-hero-chip"),
+    homeHeroAutosub: $("#home-hero-autosub"),
     homeHeroOverallRank: $("#home-hero-overall-rank"),
     homeHeroOverallRankDelta: $("#home-hero-overall-rank-delta"),
     homeOverallRank: $("#home-overall-rank"),
@@ -1205,7 +1206,9 @@
     homeSquadBody: $("#home-squad-body"),
     homeSquadPitchXi: $("#home-squad-pitch-xi"),
     homeSquadPitchBench: $("#home-squad-pitch-bench"),
-    homePitchModeSeg: $("#home-pitch-mode-seg"),
+    homePitchModeBtn: $("#home-pitch-mode-btn"),
+    homePitchModeLabel: $("#home-pitch-mode-label"),
+    homePitchModeMenu: $("#home-pitch-mode-menu"),
     homeSquadSplit: $("#home-squad-split"),
     homeSquadPtsMount: $("#home-squad-pts-mount"),
     homeSquadPagePts: $("#home-squad-page-pts"),
@@ -2523,6 +2526,7 @@
       el.homeHeroChip.textContent = "";
       el.homeHeroChip.removeAttribute("title");
     }
+    syncHomeHeroAutosubNotice([]);
     const overallRankEl = el.homeOverallRankNum || el.homeOverallRank;
     if (overallRankEl) overallRankEl.textContent = "—";
     if (el.homeHeroOverallRank) el.homeHeroOverallRank.textContent = "";
@@ -3004,6 +3008,47 @@
     return out;
   }
 
+  /**
+   * Keep projected autosub icons when a live poll (older droplet) clears them.
+   * Prefer incoming flags when present; otherwise restore prior for the same element.
+   */
+  function homeMergeAutosubFlags(squad, priorSquad) {
+    const prior = new Map();
+    for (const row of Array.isArray(priorSquad) ? priorSquad : []) {
+      if (!row || row.element == null) continue;
+      if (!(row.autoSubIn || row.autoSubOut)) continue;
+      prior.set(Number(row.element), {
+        autoSubIn: !!row.autoSubIn,
+        autoSubOut: !!row.autoSubOut,
+        autoSubWith: row.autoSubWith ?? null,
+        autoSubWithName: row.autoSubWithName ?? null,
+      });
+    }
+    if (!prior.size) return Array.isArray(squad) ? squad : [];
+    return (Array.isArray(squad) ? squad : []).map((row) => {
+      if (!row || row.element == null) return row;
+      if (row.autoSubIn || row.autoSubOut) return row;
+      const flags = prior.get(Number(row.element));
+      if (!flags) return row;
+      return { ...row, ...flags };
+    });
+  }
+
+  function homeMergeAutosubByEntry(byEntry, priorByEntry) {
+    const src = byEntry && typeof byEntry === "object" ? byEntry : {};
+    const prior = priorByEntry && typeof priorByEntry === "object" ? priorByEntry : {};
+    const out = {};
+    const keys = new Set([...Object.keys(src), ...Object.keys(prior)]);
+    keys.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(src, key)) {
+        out[key] = homeMergeAutosubFlags(src[key], prior[key] || []);
+      } else {
+        out[key] = prior[key];
+      }
+    });
+    return out;
+  }
+
   function applyHomePayload(payload, { skipFeedIngest = false, fromSessionSnapshot = false, fromLivePoll = false } = {}) {
     if (!payload || typeof payload !== "object") return false;
     const priorHome = {
@@ -3078,14 +3123,22 @@
       const gwRankEl = el.homeGwRankNum || el.homeGwRank;
       if (gwRankEl) delete gwRankEl.dataset.lastGwRank;
     }
-    HOME.squad = homeNormalizeSquadFixtureFinal(
-      Array.isArray(payload.squad) ? payload.squad : [],
+    HOME.squad = homeMergeAutosubFlags(
+      homeNormalizeSquadFixtureFinal(
+        Array.isArray(payload.squad) ? payload.squad : [],
+        Array.isArray(priorHome.squad) ? priorHome.squad : []
+      ),
       Array.isArray(priorHome.squad) ? priorHome.squad : []
     );
-    HOME.squadsByEntry = homeNormalizeSquadsByEntryFinal(
-      payload.squadsByEntry && typeof payload.squadsByEntry === "object"
-        ? payload.squadsByEntry
-        : {},
+    HOME.squadsByEntry = homeMergeAutosubByEntry(
+      homeNormalizeSquadsByEntryFinal(
+        payload.squadsByEntry && typeof payload.squadsByEntry === "object"
+          ? payload.squadsByEntry
+          : {},
+        priorHome.squadsByEntry && typeof priorHome.squadsByEntry === "object"
+          ? priorHome.squadsByEntry
+          : {}
+      ),
       priorHome.squadsByEntry && typeof priorHome.squadsByEntry === "object"
         ? priorHome.squadsByEntry
         : {}
@@ -4699,7 +4752,7 @@
     if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
     const banner = el.homeViewBanner;
     if (!banner) return;
-    // In-flow top banner (all viewports). Prefer viewing over ownership pin.
+    // Floating bottom chip (all viewports). Prefer viewing over ownership pin.
     if (viewingOther) {
       hideHomeOwnerBannerToast();
       if (el.homeViewBannerName) {
@@ -6697,6 +6750,97 @@
     if (el.homeSquadViewLabel) {
       el.homeSquadViewLabel.textContent = labels[logical] || labels[0];
     }
+    syncHomePitchModeSegVisibility(logical);
+  }
+
+  function syncHomePitchModeSegVisibility(logicalIndex) {
+    const onPitch = logicalIndex === 0;
+    if (el.homePitchModeBtn) {
+      el.homePitchModeBtn.hidden = !onPitch;
+      if (!onPitch) {
+        el.homePitchModeBtn.setAttribute("aria-expanded", "false");
+        closeHomePitchModePicker();
+      }
+    }
+    if (el.homeSquadGwLabel) {
+      // Mode picker replaces the GW meta on Pitch so the heading stays one row.
+      el.homeSquadGwLabel.hidden = onPitch;
+    }
+  }
+
+  const HOME_PITCH_MODE_LABELS = {
+    gw: "Current",
+    fixtures: "Next 3",
+    form: "Last 3",
+    price: "Price",
+  };
+
+  function homePitchModeLabel(mode = homePitchStripMode) {
+    return HOME_PITCH_MODE_LABELS[mode] || HOME_PITCH_MODE_LABELS.gw;
+  }
+
+  function homePitchModePickerIsOpen() {
+    return !!(mobileSheetOpen && mobileSheetKey === "home-pitch-mode")
+      || !!(el.homePitchModeMenu && el.homePitchModeMenu.classList.contains("is-open"));
+  }
+
+  function closeHomePitchModePicker() {
+    if (mobileSheetOpen && mobileSheetKey === "home-pitch-mode") {
+      closeMobileSheet();
+    }
+    if (el.homePitchModeMenu) {
+      el.homePitchModeMenu.classList.remove("is-open");
+      el.homePitchModeMenu.hidden = true;
+      el.homePitchModeMenu.style.top = "";
+      el.homePitchModeMenu.style.right = "";
+      el.homePitchModeMenu.style.left = "";
+    }
+    if (el.homePitchModeBtn) {
+      el.homePitchModeBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function openHomePitchModePicker() {
+    if (!el.homePitchModeBtn || !el.homePitchModeMenu) return;
+    if (homePitchModePickerIsOpen()) {
+      closeHomePitchModePicker();
+      return;
+    }
+    syncHomePitchModeUI();
+    if (preferMobileSheet()) {
+      openMobileSheetHost({
+        title: "Pitch data",
+        key: "home-pitch-mode",
+        hostEl: el.homePitchModeMenu,
+        prepare: (node) => {
+          node.hidden = false;
+          node.classList.remove("is-open");
+        },
+        cleanup: (node) => {
+          node.hidden = true;
+          node.classList.remove("is-open");
+        },
+      });
+      el.homePitchModeBtn.setAttribute(
+        "aria-expanded",
+        homePitchModePickerIsOpen() ? "true" : "false"
+      );
+      return;
+    }
+    // Desktop: fixed menu (Team card uses overflow:hidden).
+    const rect = el.homePitchModeBtn.getBoundingClientRect();
+    const menu = el.homePitchModeMenu;
+    menu.hidden = false;
+    menu.classList.add("is-open");
+    menu.style.top = `${Math.round(rect.bottom + 6)}px`;
+    menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
+    menu.style.left = "auto";
+    el.homePitchModeBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function toggleHomePitchModePicker() {
+    if (homePitchModePickerIsOpen()) closeHomePitchModePicker();
+    else openHomePitchModePicker();
   }
 
   function homeSquadLogicalPageIndex(physicalIndex) {
@@ -6790,7 +6934,9 @@
       pitchPage.style.minHeight = "";
       return;
     }
-    // Measure XI at its natural height (ignore any prior pitch min-height).
+    // Match Starting XI height so the Bench divider stays put while swiping.
+    // Mode buttons live in the Team heading (outside the track), so they no
+    // longer steal space above the pitch.
     const prevMin = pitchPage.style.minHeight;
     pitchPage.style.minHeight = "";
     const xiH = Math.ceil(Math.max(xiPage.scrollHeight, xiPage.offsetHeight));
@@ -7481,13 +7627,6 @@
     bindHomeRowTap(el.homeStandingsTrack, "tr[data-entry]", toggleStandingOwner);
 
     el.homeSquadTrack.addEventListener("click", (e) => {
-      const modeBtn = e.target.closest("[data-pitch-mode]");
-      if (modeBtn && el.homeSquadTrack.contains(modeBtn)) {
-        e.preventDefault();
-        e.stopPropagation();
-        setHomePitchStripMode(modeBtn.getAttribute("data-pitch-mode"));
-        return;
-      }
       const btn = e.target.closest(".home-bench-toggle");
       if (!btn || !el.homeSquadTrack.contains(btn)) return;
       e.preventDefault();
@@ -7495,6 +7634,44 @@
       if (homeSquadIsDesktopLayout()) return;
       setHomeBenchCollapsed(!homeBenchCollapsed());
     });
+
+    if (el.homeSquadPanel) {
+      el.homeSquadPanel.addEventListener("click", (e) => {
+        const modeBtn = e.target.closest("#home-pitch-mode-btn");
+        if (!modeBtn || !el.homeSquadPanel.contains(modeBtn)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleHomePitchModePicker();
+      });
+    }
+    if (el.homePitchModeMenu) {
+      el.homePitchModeMenu.addEventListener("click", (e) => {
+        const option = e.target.closest("[data-pitch-mode]");
+        if (!option || !el.homePitchModeMenu.contains(option)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setHomePitchStripMode(option.getAttribute("data-pitch-mode"));
+      });
+    }
+    document.addEventListener("click", (e) => {
+      if (!el.homePitchModeMenu || !el.homePitchModeMenu.classList.contains("is-open")) return;
+      if (e.target.closest("#home-pitch-mode-btn, #home-pitch-mode-menu")) return;
+      closeHomePitchModePicker();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (!el.homePitchModeMenu || !el.homePitchModeMenu.classList.contains("is-open")) return;
+      closeHomePitchModePicker();
+    });
+    window.addEventListener(
+      "resize",
+      () => {
+        if (el.homePitchModeMenu && el.homePitchModeMenu.classList.contains("is-open")) {
+          closeHomePitchModePicker();
+        }
+      },
+      { passive: true }
+    );
 
     el.homeSquadTrack.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -8242,26 +8419,107 @@
     return homeSquadPitchGwStripHTML(row);
   }
 
-  function syncHomePitchModeSegUI(mode = homePitchStripMode) {
-    if (!el.homePitchModeSeg) return;
-    el.homePitchModeSeg.querySelectorAll("[data-pitch-mode]").forEach((btn) => {
-      const on = btn.getAttribute("data-pitch-mode") === mode;
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    if (typeof syncSegThumb === "function") syncSegThumb(el.homePitchModeSeg);
+  function syncHomePitchModeUI(mode = homePitchStripMode) {
+    const label = homePitchModeLabel(mode);
+    if (el.homePitchModeLabel) el.homePitchModeLabel.textContent = label;
+    if (el.homePitchModeBtn) {
+      el.homePitchModeBtn.setAttribute("aria-label", `Pitch card data, ${label}`);
+    }
+    if (el.homePitchModeMenu) {
+      el.homePitchModeMenu.querySelectorAll("[data-pitch-mode]").forEach((btn) => {
+        const on = btn.getAttribute("data-pitch-mode") === mode;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+    }
   }
 
   function setHomePitchStripMode(mode) {
     const next =
       mode === "fixtures" || mode === "form" || mode === "price" ? mode : "gw";
-    if (homePitchStripMode === next) return;
+    if (homePitchStripMode === next) {
+      closeHomePitchModePicker();
+      return;
+    }
     homePitchStripMode = next;
-    syncHomePitchModeSegUI(next);
+    syncHomePitchModeUI(next);
+    closeHomePitchModePicker();
     renderHomeSquadPitch(homeSquadForEntry(homeActiveViewEntryId()) || []);
     requestAnimationFrame(() => {
       syncHomeSquadLayout(undefined, { animate: false, allowShrink: true });
     });
+  }
+
+  function homeSquadAutosubPairs(squad) {
+    const rows = Array.isArray(squad) ? squad : [];
+    const outs = [];
+    const ins = [];
+    for (const row of rows) {
+      if (!row) continue;
+      if (row.autoSubOut) outs.push(row);
+      if (row.autoSubIn) ins.push(row);
+    }
+    return { outs, ins, hasAny: outs.length > 0 || ins.length > 0 };
+  }
+
+  /**
+   * True when we have projected/applied autosubs and FPL totals may still catch up
+   * (live fixtures, or finished-but-not-final). No point recalculation — flags only.
+   */
+  function homeAutosubOfficialMayLag(squad) {
+    const { hasAny } = homeSquadAutosubPairs(squad);
+    if (!hasAny) return false;
+    if (typeof liveGwHasActiveGames === "function" && liveGwHasActiveGames()) return true;
+    for (const row of squad || []) {
+      for (const fx of homeSquadFixtures(row)) {
+        if (fx && fx.finished && fx.final !== true) return true;
+      }
+    }
+    return false;
+  }
+
+  function homeAutosubNoticeTip(squad) {
+    const { outs, ins } = homeSquadAutosubPairs(squad);
+    const bits = [];
+    for (const out of outs) {
+      const to = out.autoSubWithName || "bench";
+      bits.push(`${out.name || "Starter"} → ${to}`);
+    }
+    if (!bits.length) {
+      for (const inn of ins) {
+        const from = inn.autoSubWithName || "starter";
+        bits.push(`${from} → ${inn.name || "Bench"}`);
+      }
+    }
+    const swaps = bits.length ? bits.join(" · ") : "Bench cover for blank starters";
+    return `Auto-subs detected (${swaps}). Official GW points and ranks update when FPL settles — usually by 09:00 UK the day after the last match.`;
+  }
+
+  function syncHomeHeroAutosubNotice(squad) {
+    if (!el.homeHeroAutosub) return;
+    const pending = homeAutosubOfficialMayLag(squad);
+    el.homeHeroAutosub.hidden = !pending;
+    if (!pending) {
+      el.homeHeroAutosub.removeAttribute("title");
+      el.homeHeroAutosub.removeAttribute("data-tip");
+      return;
+    }
+    const tip = homeAutosubNoticeTip(squad);
+    el.homeHeroAutosub.title = tip;
+    el.homeHeroAutosub.setAttribute("data-tip", tip);
+    el.homeHeroAutosub.setAttribute("aria-label", tip);
+  }
+
+  function homePitchAutosubBadgeHTML(row) {
+    if (row.autoSubIn) {
+      const from = row.autoSubWithName || "starter";
+      return `<span class="home-autosub-tag is-in"${tipAttr(`Auto-sub on for ${from}`)} aria-label="Auto-sub on for ${escapeHtml(from)}">${iconHTML("caret-up", "home-autosub-icon")}</span>`;
+    }
+    if (row.autoSubOut) {
+      const to = row.autoSubWithName || "bench";
+      return `<span class="home-autosub-tag is-out"${tipAttr(`Auto-subbed off — ${to} on`)} aria-label="Auto-subbed off for ${escapeHtml(to)}">${iconHTML("caret-down", "home-autosub-icon")}</span>`;
+    }
+    return "";
   }
 
   function homeSquadPitchCardHTML(row, { bench = false } = {}) {
@@ -8276,8 +8534,18 @@
     } else if (row.isVice) {
       badges.push(`<span class="home-role-tag home-role-a" title="Vice-captain">A</span>`);
     }
+    const autosub = homePitchAutosubBadgeHTML(row);
+    if (autosub) badges.push(autosub);
     const strip = homeSquadPitchStripHTML(row);
-    return `<button type="button" class="home-pitch-card${bench ? " is-bench" : ""}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
+    const cardCls = [
+      "home-pitch-card",
+      bench ? "is-bench" : "",
+      row.autoSubIn ? "is-autosub-in" : "",
+      row.autoSubOut ? "is-autosub-out" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return `<button type="button" class="${cardCls}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
       <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}</span>
       <span class="home-pitch-meta">
         <span class="home-pitch-name">${escapeHtml(row.name || "—")}</span>
@@ -8333,7 +8601,8 @@
       }
     }
     syncHomeBenchCollapsedUI();
-    syncHomePitchModeSegUI();
+    syncHomePitchModeUI();
+    syncHomeHeroAutosubNotice(squad);
   }
 
   function homeSquadRowHTML(row, opts = {}) {
@@ -13383,6 +13652,7 @@
         el.homeHeroChip.removeAttribute("aria-label");
       }
     }
+    syncHomeHeroAutosubNotice(homeSquadForEntry(viewEntry) || []);
     if (el.homeSquadGwLabel) {
       el.homeSquadGwLabel.textContent = HOME.gw != null ? `Gameweek ${HOME.gw}` : "";
     }
@@ -16021,6 +16291,9 @@
     if (el.prefsBtn && closingKey === "prefs") el.prefsBtn.setAttribute("aria-expanded", "false");
     if (el.pageTrayBtn && closingKey === "pages") {
       el.pageTrayBtn.setAttribute("aria-expanded", "false");
+    }
+    if (el.homePitchModeBtn && closingKey === "home-pitch-mode") {
+      el.homePitchModeBtn.setAttribute("aria-expanded", "false");
     }
     if (el.sidebarToggle && closingKey === "filters") {
       el.sidebarToggle.classList.remove("on");

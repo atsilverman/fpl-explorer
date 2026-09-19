@@ -32,6 +32,7 @@ from fpl_gameweeks import (
 from gw_element_stats import normalize_element_gw_record
 from player_availability import player_availability_fields
 from live_scoring import (
+    apply_auto_substitution,
     build_match_status_by_element,
     calculate_manager_points_from_live,
     effective_element_multipliers,
@@ -871,6 +872,27 @@ def active_pick_progress(
     return in_play, to_play
 
 
+def projected_auto_subs_for_ui(
+    picks: list[dict],
+    stats: dict[int, dict],
+    match_status: dict[int, str],
+    etypes: dict[int, int],
+    chip: str | None,
+) -> list[dict]:
+    """Auto-subs for pitch/list icons once fixtures are provisionally finished.
+
+    Scoring still uses final-only fixture status so GW totals don't jump before
+    FPL stamps auto-subs. Icons can light up earlier (blank starter + FT).
+    """
+    chip_l = (chip or "").lower()
+    if chip_l in {"bboost", "benchboost", "bench_boost"}:
+        return []
+    if not picks:
+        return []
+    _active, subs = apply_auto_substitution(picks, stats, match_status, etypes)
+    return subs
+
+
 def resolve_manager_gw_points(
     picks: list[dict],
     stats: dict,
@@ -933,13 +955,17 @@ def build_squad_rows(
     fixtures: list[dict],
     our_mults: dict[int, int],
     top_third_mult_maps: list[dict[int, int]],
+    *,
+    ui_auto_subs: list[dict] | None = None,
 ) -> list[dict]:
     rows = []
     ordered = sorted(picks, key=lambda p: int(p.get("position") or 0))
-    auto_sub_in = {int(s["in"]) for s in (auto_subs or []) if s.get("in") is not None}
-    auto_sub_out = {int(s["out"]) for s in (auto_subs or []) if s.get("out") is not None}
+    # Icons use projected (provisional FT) subs; scoring active_ids stay final-only.
+    flag_subs = ui_auto_subs if ui_auto_subs is not None else auto_subs
+    auto_sub_in = {int(s["in"]) for s in (flag_subs or []) if s.get("in") is not None}
+    auto_sub_out = {int(s["out"]) for s in (flag_subs or []) if s.get("out") is not None}
     partner_for: dict[int, int] = {}
-    for s in auto_subs or []:
+    for s in flag_subs or []:
         try:
             out_id = int(s["out"])
             in_id = int(s["in"])
@@ -1392,6 +1418,9 @@ def main() -> int:
                 "picks": focus_picks,
                 "active": focus_active,
                 "subs": focus_subs,
+                "ui_subs": projected_auto_subs_for_ui(
+                    focus_picks, stats, match_status, etypes, focus_chip
+                ),
                 "chip": focus_chip,
                 "live_gw": focus_pts,
                 "mults": focus_mults,
@@ -1478,6 +1507,9 @@ def main() -> int:
                         "picks": other_picks,
                         "active": active,
                         "subs": subs,
+                        "ui_subs": projected_auto_subs_for_ui(
+                            other_picks, stats, match_status, etypes, chip
+                        ),
                         "chip": chip,
                         "live_gw": live_gw_pts,
                         "mults": other_mults,
@@ -1648,6 +1680,7 @@ def main() -> int:
                 fixtures,
                 ed.get("mults") or {},
                 top_third_mult_maps,
+                ui_auto_subs=ed.get("ui_subs"),
             )
         squad = squads_by_entry.get(str(manager_id), [])
 
