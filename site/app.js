@@ -1186,7 +1186,6 @@
     homeSummary: $("#home-summary"),
     homeSummaryHero: $("#home-summary-hero"),
     homeHeroChip: $("#home-hero-chip"),
-    homeHeroLive: $("#home-hero-live"),
     homeHeroOverallRank: $("#home-hero-overall-rank"),
     homeHeroOverallRankDelta: $("#home-hero-overall-rank-delta"),
     homeOverallRank: $("#home-overall-rank"),
@@ -25229,24 +25228,12 @@
 
   function syncLiveNavChrome() {
     document.documentElement.classList.toggle("has-gw-live", liveGwHasActiveGames());
-    syncHomeHeroLiveBadge();
     syncPageLiveBadges();
-  }
-
-  function homeHeroShouldShowLive() {
-    return homeSummaryLayout() === "hero" && liveGwHasActiveGames();
-  }
-
-  function syncHomeHeroLiveBadge() {
-    if (!el.homeHeroLive) return;
-    const on = homeHeroShouldShowLive();
-    el.homeHeroLive.hidden = !on;
-    el.homeHeroLive.setAttribute("aria-hidden", on ? "false" : "true");
   }
 
   function syncPageLiveBadges() {
     const on = liveGwHasActiveGames();
-    document.querySelectorAll(".page-header .page-live-badge").forEach((node) => {
+    document.querySelectorAll(".page-live-badge").forEach((node) => {
       node.hidden = !on;
       node.setAttribute("aria-hidden", on ? "false" : "true");
     });
@@ -25254,12 +25241,14 @@
       node.hidden = !on;
       node.setAttribute("aria-hidden", on ? "false" : "true");
     });
-    const nav = document.getElementById("page-nav-live");
-    if (!nav) return;
-    // Mobile nav i-button badge — skip Home (hero already has Live).
-    const navOn = on && state.page !== "home";
-    nav.hidden = !navOn;
-    nav.setAttribute("aria-hidden", navOn ? "false" : "true");
+  }
+
+  function openLiveFromBadge(e) {
+    const badge = e.target.closest(".page-live-badge");
+    if (!badge || badge.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setPage("live");
   }
 
   function liveElementMapForGw(gw) {
@@ -31594,6 +31583,7 @@
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
   if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
+  document.addEventListener("click", openLiveFromBadge);
   if (el.pageReport) {
     el.pageReport.addEventListener("click", () => {
       if (!REPORT_NAV_ENABLED) return;
@@ -34062,7 +34052,6 @@
     const gwRankCard = el.homeSummary && el.homeSummary.querySelector('[data-home-summary-card="gw-rank"]');
     if (overallCard) overallCard.hidden = true;
     if (gwRankCard) gwRankCard.hidden = false;
-    syncHomeHeroLiveBadge();
   }
 
   syncHomeSummaryLayout();

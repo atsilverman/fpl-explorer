@@ -143,7 +143,6 @@ html.motion-enhanced .page-pane.is-entering tbody tr {
 
 html.motion-enhanced .home-rank-delta:not([hidden]):not(.is-flat),
 html.motion-enhanced .page-live-badge:not([hidden]),
-html.motion-enhanced .home-hero-live:not([hidden]),
 html.motion-enhanced .is-motion-pop {
   animation: motion-delta-pop var(--digit-dur) var(--digit-ease) both;
 }
@@ -392,7 +391,6 @@ html.motion-enhanced .mobile-scroll-top-fade {
   html.motion-enhanced .team-row-menu.open,
   html.motion-enhanced .home-rank-delta:not([hidden]),
   html.motion-enhanced .page-live-badge:not([hidden]),
-  html.motion-enhanced .home-hero-live:not([hidden]),
   html.motion-enhanced .is-motion-pop,
   html.motion-enhanced .page-tab-live-dot:not([hidden]),
   html.motion-enhanced #page-nav-live:not([hidden]),
