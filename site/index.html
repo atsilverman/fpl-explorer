@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1322" />
-<link rel="stylesheet" href="motion-enhanced.css?v=4" />
+<link rel="stylesheet" href="styles.css?v=1362" />
+<link rel="stylesheet" href="motion-enhanced.css?v=5" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
 (() => {
@@ -948,12 +948,38 @@
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
               <span class="home-panel-heading-kicker">Team</span>
-              <span class="home-panel-heading-view" id="home-squad-view-label">Starting XI</span>
+              <span class="home-panel-heading-view" id="home-squad-view-label">Pitch</span>
             </span>
             <span class="home-panel-heading-meta" id="home-squad-gw-label"></span>
           </h3>
           <div class="home-squad-pager">
             <div class="home-squad-track" id="home-squad-track">
+              <div class="home-squad-page home-squad-page-pitch" id="home-squad-page-pitch">
+                <div class="home-squad-pitch" id="home-squad-pitch" aria-label="Squad pitch">
+                  <!-- Compact pitch framed around the XI (bench sits below, like the list). -->
+                  <svg class="home-squad-pitch-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <rect x="3" y="3" width="94" height="94" rx="2.2" fill="none" />
+                    <line x1="3" y1="52" x2="37.6" y2="52" />
+                    <line x1="62.4" y1="52" x2="97" y2="52" />
+                    <circle cx="50" cy="52" r="11" fill="none" />
+                    <circle class="home-squad-pitch-spot" cx="50" cy="52" r="0.85" />
+                    <path d="M 22 2.85 L 22 22 L 78 22 L 78 2.85" fill="none" />
+                    <path d="M 36 2.85 L 36 11 L 64 11 L 64 2.85" fill="none" />
+                    <path d="M 38 22 Q 50 29 62 22" fill="none" />
+                    <path d="M 44 2.85 L 44 5.2 L 56 5.2 L 56 2.85" fill="none" />
+                  </svg>
+                  <div class="home-squad-pitch-xi" id="home-squad-pitch-xi"></div>
+                </div>
+                <div class="segmented home-pitch-mode-seg" id="home-pitch-mode-seg" role="tablist" aria-label="Pitch card data">
+                  <button type="button" role="tab" data-pitch-mode="gw" aria-selected="true" class="active">Current</button>
+                  <button type="button" role="tab" data-pitch-mode="fixtures" aria-selected="false">Next 3</button>
+                  <button type="button" role="tab" data-pitch-mode="form" aria-selected="false">Last 3</button>
+                  <button type="button" role="tab" data-pitch-mode="price" aria-selected="false">Price</button>
+                </div>
+                <div class="home-pitch-bench" id="home-squad-pitch-bench" hidden></div>
+                <!-- Leftover page height sits below the bench so the divider stays glued under the pitch. -->
+                <div class="home-pitch-page-spacer" aria-hidden="true"></div>
+              </div>
               <div class="home-squad-page">
                 <div class="home-squad-split" id="home-squad-split">
                   <div class="home-table-wrap home-squad-live-wrap">
@@ -1014,10 +1040,11 @@
               </div>
             </div>
             <div class="home-squad-dots" id="home-squad-dots" role="tablist" aria-label="Team views">
-              <button type="button" class="home-squad-dot is-active" role="tab" aria-selected="true" aria-label="Starting XI" data-page="0"></button>
-              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Points" data-page="1"></button>
-              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Ownership" data-page="2"></button>
-              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Schedule" data-page="3"></button>
+              <button type="button" class="home-squad-dot is-active" role="tab" aria-selected="true" aria-label="Pitch" data-page="0"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Starting XI" data-page="1"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Points" data-page="2"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Ownership" data-page="3"></button>
+              <button type="button" class="home-squad-dot" role="tab" aria-selected="false" aria-label="Schedule" data-page="4"></button>
             </div>
           </div>
         </article>
@@ -1905,7 +1932,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1323"></script>
+<script src="app.js?v=1336"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -1204,6 +1204,9 @@
     homeLeagueTitle: $("#home-league-title"),
     homeStandingsViewLabel: $("#home-standings-view-label"),
     homeSquadBody: $("#home-squad-body"),
+    homeSquadPitchXi: $("#home-squad-pitch-xi"),
+    homeSquadPitchBench: $("#home-squad-pitch-bench"),
+    homePitchModeSeg: $("#home-pitch-mode-seg"),
     homeSquadSplit: $("#home-squad-split"),
     homeSquadPtsMount: $("#home-squad-pts-mount"),
     homeSquadPagePts: $("#home-squad-page-pts"),
@@ -2537,6 +2540,11 @@
     if (el.homeSquadGwLabel) el.homeSquadGwLabel.textContent = "";
     if (el.homeLeagueTitle) el.homeLeagueTitle.textContent = "";
     if (el.homeSquadBody) el.homeSquadBody.innerHTML = "";
+    if (el.homeSquadPitchXi) el.homeSquadPitchXi.innerHTML = "";
+    if (el.homeSquadPitchBench) {
+      el.homeSquadPitchBench.innerHTML = "";
+      el.homeSquadPitchBench.hidden = true;
+    }
     if (el.homeSquadFixturesBody) el.homeSquadFixturesBody.innerHTML = "";
     if (el.homeSquadFixturesHead) el.homeSquadFixturesHead.innerHTML = "";
     if (el.homeSquadFixturesCols) el.homeSquadFixturesCols.innerHTML = "";
@@ -4485,8 +4493,12 @@
   let homeSquadPagerTarget = null;
   let homeFeedPagerReady = false;
   let homeFeedPagerTarget = null;
-  const HOME_SQUAD_VIEW_LABELS = ["Starting XI", "Points", "Ownership", "Schedule"];
-  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Starting XI", "Ownership", "Schedule"];
+  // Physical pager: 0 Pitch · 1 Starting XI · 2 Points · 3 Ownership · 4 Schedule.
+  // Wide desktop hides Points (merged beside the XI table) — skip physical index 2.
+  const HOME_SQUAD_PTS_PAGE = 2;
+  const HOME_SQUAD_OWNERSHIP_PAGE = 3;
+  const HOME_SQUAD_VIEW_LABELS = ["Pitch", "Starting XI", "Points", "Ownership", "Schedule"];
+  const HOME_SQUAD_VIEW_LABELS_WIDE = ["Pitch", "Starting XI", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips", "Bench Points"];
   const HOME_STANDINGS_TRANSFERS_PAGE = 1;
   const HOME_STANDINGS_CAPTAINS_PAGE = 2;
@@ -6180,14 +6192,14 @@
     if (!el.homeSquadTrack) return 0;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     if (!homeSquadIsWideLayout()) return pages.length;
-    return pages.filter((_, i) => i !== 1).length;
+    return pages.filter((_, i) => i !== HOME_SQUAD_PTS_PAGE).length;
   }
 
-  /** Next/prev physical squad index, skipping the wide-layout Points slot (page 1). */
+  /** Next/prev physical squad index, skipping the wide-layout Points slot. */
   function homeSquadPagerStep(fromIdx, dir) {
     if (!el.homeSquadTrack) return fromIdx;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
-    const skip = homeSquadIsWideLayout() ? 1 : -1;
+    const skip = homeSquadIsWideLayout() ? HOME_SQUAD_PTS_PAGE : -1;
     let i = fromIdx;
     for (let step = 0; step < pages.length; step += 1) {
       i += dir;
@@ -6676,8 +6688,8 @@
     el.homeSquadDots.querySelectorAll(".home-squad-dot").forEach((dot) => {
       const page = Number(dot.dataset.page);
       if (!Number.isFinite(page)) return;
-      const dotLogical = wide ? (page === 1 ? -1 : page <= 0 ? 0 : page - 1) : page;
-      const on = dotLogical === logical;
+      const dotLogical = homeSquadLogicalPageIndex(page);
+      const on = dotLogical === logical && dotLogical >= 0;
       dot.classList.toggle("is-active", on);
       dot.setAttribute("aria-selected", on ? "true" : "false");
     });
@@ -6688,8 +6700,8 @@
 
   function homeSquadLogicalPageIndex(physicalIndex) {
     if (!homeSquadIsWideLayout()) return physicalIndex;
-    if (physicalIndex <= 0) return 0;
-    if (physicalIndex === 1) return -1;
+    if (physicalIndex === HOME_SQUAD_PTS_PAGE) return -1;
+    if (physicalIndex < HOME_SQUAD_PTS_PAGE) return physicalIndex;
     return physicalIndex - 1;
   }
 
@@ -6697,7 +6709,8 @@
     if (!el.homeSquadTrack) return 0;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     let idx = physicalIndex;
-    if (homeSquadIsWideLayout() && idx === 1) idx = 0;
+    // Wide layout: Points lives beside Starting XI — snap to the XI table page.
+    if (homeSquadIsWideLayout() && idx === HOME_SQUAD_PTS_PAGE) idx = 1;
     const page = pages[idx];
     return page ? page.offsetLeft : 0;
   }
@@ -6714,7 +6727,7 @@
     if (!el.homeSquadTrack) return 0;
     const allPages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     const candidates = homeSquadIsWideLayout()
-      ? allPages.filter((_, i) => i !== 1)
+      ? allPages.filter((_, i) => i !== HOME_SQUAD_PTS_PAGE)
       : allPages;
     if (!candidates.length) return 0;
     const scrollLeft = el.homeSquadTrack.scrollLeft;
@@ -6762,13 +6775,41 @@
     }
   }
 
+  function syncHomePitchPageMinHeight() {
+    const pitchPage = document.getElementById("home-squad-page-pitch");
+    if (!pitchPage || !el.homeSquadTrack) return;
+    if (homeSquadIsDesktopLayout()) {
+      pitchPage.style.minHeight = "";
+      return;
+    }
+    const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
+    // Physical page 1 is Starting XI (pitch is 0).
+    const xiPage = pages[1];
+    if (!xiPage) {
+      pitchPage.style.minHeight = "";
+      return;
+    }
+    // Measure XI at its natural height (ignore any prior pitch min-height).
+    const prevMin = pitchPage.style.minHeight;
+    pitchPage.style.minHeight = "";
+    const xiH = Math.ceil(Math.max(xiPage.scrollHeight, xiPage.offsetHeight));
+    if (!(xiH > 0)) {
+      pitchPage.style.minHeight = prevMin;
+      return;
+    }
+    pitchPage.style.minHeight = `${xiH}px`;
+  }
+
   function syncHomeSquadTrackHeight(activeIndex, { animate = true, allowShrink = true } = {}) {
     if (!el.homeSquadTrack) return;
     // Desktop: CSS flex-stretches the track; don't pin content height.
     if (homeSquadIsDesktopLayout()) {
       el.homeSquadTrack.style.height = "";
+      const pitchPage = document.getElementById("home-squad-page-pitch");
+      if (pitchPage) pitchPage.style.minHeight = "";
       return;
     }
+    syncHomePitchPageMinHeight();
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     if (!pages.length) {
       el.homeSquadTrack.style.height = "";
@@ -6909,7 +6950,7 @@
     if (!el.homeSquadTrack) return;
     const pages = [...el.homeSquadTrack.querySelectorAll(".home-squad-page")];
     let idx = physicalIndex;
-    if (homeSquadIsWideLayout() && idx === 1) idx = 0;
+    if (homeSquadIsWideLayout() && idx === HOME_SQUAD_PTS_PAGE) idx = 1;
     if (!pages[idx]) return;
     homeSquadPagerTarget = idx;
     el.homeSquadTrack.scrollTo({
@@ -6918,7 +6959,10 @@
     });
     syncHomeSquadPagerDots(idx);
     syncHomeSquadLayout(idx);
-    if (homeSquadLogicalPageIndex(idx) === (homeSquadIsWideLayout() ? 1 : 2)) {
+    if (
+      homeSquadLogicalPageIndex(idx) ===
+      homeSquadLogicalPageIndex(HOME_SQUAD_OWNERSHIP_PAGE)
+    ) {
       scheduleHomeOwnershipPricesSync();
     }
     if (!smooth) homeSquadPagerTarget = null;
@@ -6969,7 +7013,7 @@
         homeSquadWideLayoutActive = wide;
         const idx = homeSquadActivePageIndex();
         renderHome({ deferDuringEnter: true });
-        if (wide && idx === 1) setHomeSquadPage(0, { smooth: false });
+        if (wide && idx === HOME_SQUAD_PTS_PAGE) setHomeSquadPage(1, { smooth: false });
         else if (state.page === "home") settleHomeTablesLayout();
         else syncHomeSquadLayout(idx, { animate: false });
         return;
@@ -7422,10 +7466,18 @@
     }
 
     bindHomeRowTap(el.homeSquadTrack, "tr.home-squad-row", openHomePlayerLookupFromRow);
+    bindHomeRowTap(el.homeSquadTrack, ".home-pitch-card", openHomePlayerLookupFromRow);
     bindHomeRowTap(el.homeFeedTrack, "tr.home-feed-row", openHomePlayerLookupFromRow);
     bindHomeRowTap(el.homeStandingsTrack, "tr[data-entry]", toggleStandingOwner);
 
     el.homeSquadTrack.addEventListener("click", (e) => {
+      const modeBtn = e.target.closest("[data-pitch-mode]");
+      if (modeBtn && el.homeSquadTrack.contains(modeBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        setHomePitchStripMode(modeBtn.getAttribute("data-pitch-mode"));
+        return;
+      }
       const btn = e.target.closest(".home-bench-toggle");
       if (!btn || !el.homeSquadTrack.contains(btn)) return;
       e.preventDefault();
@@ -7444,7 +7496,7 @@
         setHomeBenchCollapsed(!homeBenchCollapsed());
         return;
       }
-      const tr = e.target.closest("tr.home-squad-row");
+      const tr = e.target.closest("tr.home-squad-row, .home-pitch-card");
       if (!tr || !el.homeSquadTrack.contains(tr)) return;
       e.preventDefault();
       openHomePlayerLookupFromRow(tr);
@@ -7617,11 +7669,7 @@
     });
   }
 
-  function homeBenchDividerHTML(colspan, { spacer = false, benchPts = null } = {}) {
-    if (!(colspan > 0)) return "";
-    if (spacer) {
-      return `<tr class="home-bench-divider home-bench-divider-spacer" aria-hidden="true"><th scope="rowgroup" colspan="${colspan}"></th></tr>`;
-    }
+  function homeBenchToggleHTML(benchPts = null) {
     const collapsed = homeBenchCollapsed();
     const chevron = collapsed ? "#i-chevron-right" : "#i-chevron-down";
     const ariaExp = collapsed ? "false" : "true";
@@ -7634,13 +7682,21 @@
       ptsN != null
         ? `<span class="home-bench-pts" aria-hidden="true">(${escapeHtml(String(ptsN))}&nbsp;Pts)</span>`
         : "";
+    return `<button type="button" class="home-bench-toggle" aria-expanded="${ariaExp}" aria-label="${escapeHtml(ariaLabel)}">
+      <span class="home-bench-toggle-label">Bench</span>${ptsHTML}
+      <svg class="icon home-bench-toggle-icon" aria-hidden="true"><use href="${chevron}"></use></svg>
+    </button>`;
+  }
+
+  function homeBenchDividerHTML(colspan, { spacer = false, benchPts = null } = {}) {
+    if (!(colspan > 0)) return "";
+    if (spacer) {
+      return `<tr class="home-bench-divider home-bench-divider-spacer" aria-hidden="true"><th scope="rowgroup" colspan="${colspan}"></th></tr>`;
+    }
     return `<tr class="home-bench-divider">
       <th scope="rowgroup" colspan="${colspan}">
         <div class="home-bench-divider-inner">
-          <button type="button" class="home-bench-toggle" aria-expanded="${ariaExp}" aria-label="${escapeHtml(ariaLabel)}">
-            <span class="home-bench-toggle-label">Bench</span>${ptsHTML}
-            <svg class="icon home-bench-toggle-icon" aria-hidden="true"><use href="${chevron}"></use></svg>
-          </button>
+          ${homeBenchToggleHTML(benchPts)}
         </div>
       </th>
     </tr>`;
@@ -7751,6 +7807,261 @@
       sign,
       fillStyle: `--imp-pct:${barPct}%;--imp-fill:${fill};--imp-fg:${fg}`,
     };
+  }
+
+  function homeSquadPitchPlayers(squad) {
+    const list = squad || [];
+    const xi = list.filter((r) => r && !r.onBench && !(Number(r.position) > 11));
+    const bench = list
+      .filter((r) => r && (r.onBench || Number(r.position) > 11))
+      .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    const byType = { 4: [], 3: [], 2: [], 1: [] };
+    for (const row of xi) {
+      const et = Number(row.elementType) || 0;
+      if (byType[et]) byType[et].push(row);
+      else if (et > 4) byType[4].push(row);
+      else byType[3].push(row);
+    }
+    for (const group of Object.values(byType)) {
+      group.sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    }
+    // GK → DEF → MID → FWD → Bench (goal at top).
+    return [
+      { key: "gk", rows: byType[1] },
+      { key: "def", rows: byType[2] },
+      { key: "mid", rows: byType[3] },
+      { key: "fwd", rows: byType[4] },
+      { key: "bench", rows: bench },
+    ];
+  }
+
+  /** Show GW points once the fixture has started or finished; else next opponent. */
+  function homeSquadPitchPlayed(row) {
+    if (!row) return false;
+    const mins = Number(row.minutes) || 0;
+    if (mins > 0) return true;
+    if (homeSquadRowIsInPlay(row)) return true;
+    if (row.matchStatus === "live" || row.matchStatus === "finished") return true;
+    const fx = homeSquadFixtures(row);
+    if (fx.some((f) => homeSquadFixtureIsInPlay(f) || f.finished)) return true;
+    const pts = homeSquadRowGwPoints(row);
+    if (pts != null && Number.isFinite(Number(pts)) && Number(pts) !== 0) return true;
+    return false;
+  }
+
+  function homeSquadPitchOppMeta(row) {
+    const fx = homeSquadFixtures(row)[0] || null;
+    const opp = (fx && fx.opp) || row.opp || "";
+    const ha = (fx && (fx.oppHa || fx.ha)) || row.oppHa || "";
+    if (!opp || opp === "—") {
+      return { label: "—", ha: "", home: false, fx: null, fdr: null };
+    }
+    const label = ha === "A" ? String(opp).toLowerCase() : String(opp).toUpperCase();
+    const fdr = fx ? resolveFixtureDifficulty(fx, "all") : null;
+    return { label, ha, home: ha === "H", fx, fdr };
+  }
+
+  /** Pitch card strip mode: gw (default) | fixtures | form */
+  let homePitchStripMode = "gw";
+
+  function homeSquadPitchFormPts(row) {
+    const cur = Number(HOME && HOME.gw);
+    // Last 3 = prior weeks only (end at current − 1), not the in-progress GW.
+    const end = Number.isFinite(cur) && cur >= 2 ? cur - 1 : 0;
+    const out = [];
+    for (let gw = end - 2; gw <= end; gw++) {
+      if (gw < 1) {
+        out.push(null);
+        continue;
+      }
+      const eg = (liveElementMapForGw(gw) || {})[String(row.element)];
+      const pts = eg != null && Number.isFinite(Number(eg.pts)) ? Math.round(Number(eg.pts)) : null;
+      out.push(pts);
+    }
+    return out;
+  }
+
+  function homeSquadPitchGwStripHTML(row) {
+    if (homeSquadPitchPlayed(row)) {
+      const pts = homeSquadRowGwPoints(row);
+      const ptsN = pts != null && Number.isFinite(Number(pts)) ? Math.round(Number(pts)) : 0;
+      const mins = Number(row.minutes) || 0;
+      const idle = ptsN === 0 && mins <= 0;
+      return `<span class="home-pitch-strip home-pitch-pts${idle ? " is-idle" : ""}">${escapeHtml(String(ptsN))}</span>`;
+    }
+    const opp = homeSquadPitchOppMeta(row);
+    const homeIcon = opp.home
+      ? `<svg class="home-pitch-ha" viewBox="0 0 24 24" width="8" height="8" aria-hidden="true"><path fill="currentColor" d="M11.47 3.84a.75.75 0 0 1 1.06 0l8.25 7.8a.75.75 0 0 1-1.03 1.09l-.75-.71V19.5A1.5 1.5 0 0 1 17.5 21h-3.75a.75.75 0 0 1-.75-.75V15.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v4.75a.75.75 0 0 1-.75.75H6.5A1.5 1.5 0 0 1 5 19.5v-7.48l-.75.71a.75.75 0 1 1-1.03-1.09l8.25-7.8Z"/></svg>`
+      : "";
+    const ramp =
+      opp.fdr != null
+        ? fdrRampInlineStyle(opp.fdr, { schedulePalette: true })
+        : { className: "", styleAttr: "", strongClass: "" };
+    return `<span class="home-pitch-strip home-pitch-opp${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(opp.label)}${homeIcon}</span>`;
+  }
+
+  function homeSquadPitchFixturesStripHTML(row) {
+    const list = planningFixturesForTeam(row.team, 3);
+    const cells = [];
+    for (let i = 0; i < 3; i++) {
+      const fx = list[i];
+      if (!fx || !fx.opp) {
+        cells.push(`<span class="home-pitch-fx-cell is-blank">–</span>`);
+        continue;
+      }
+      const label = teamHeatOppLabel(fx);
+      const fdr = resolveFixtureDifficulty(fx, "all");
+      const ramp =
+        fdr != null
+          ? fdrRampInlineStyle(fdr, { schedulePalette: true })
+          : { className: "", styleAttr: "", strongClass: "" };
+      cells.push(
+        `<span class="home-pitch-fx-cell${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(label)}</span>`
+      );
+    }
+    return `<span class="home-pitch-strip home-pitch-fx-strip">${cells.join("")}</span>`;
+  }
+
+  function homeSquadPitchFormStripHTML(row) {
+    const pts = homeSquadPitchFormPts(row);
+    const cells = pts.map((p) => {
+      if (p == null) return `<span class="home-pitch-form-cell is-blank">–</span>`;
+      const zero = p === 0;
+      return `<span class="home-pitch-form-cell${zero ? " is-zero" : ""}">${escapeHtml(String(p))}</span>`;
+    });
+    return `<span class="home-pitch-strip home-pitch-form-strip">${cells.join("")}</span>`;
+  }
+
+  function homeSquadPitchPrice(row) {
+    const code = Number(row && row.code);
+    if (Number.isFinite(code)) {
+      const live = latestOwnershipPriceByCode.get(code);
+      if (Number.isFinite(live) && live > 0) return live;
+    }
+    const combined = (DATA.players && DATA.players.combined) || [];
+    let catalog = null;
+    if (Number.isFinite(code)) {
+      catalog = combined.find((p) => Number(p.code) === code) || null;
+    }
+    if (!catalog && row && row.element != null) {
+      const eid = Number(row.element);
+      catalog =
+        combined.find((p) => Number(p.element) === eid || Number(p.id) === eid) || null;
+    }
+    if (!catalog) return null;
+    const price = effectivePrice(catalog);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  }
+
+  function homeSquadPitchPriceStripHTML(row) {
+    const price = homeSquadPitchPrice(row);
+    if (price == null) {
+      return `<span class="home-pitch-strip home-pitch-price is-idle">–</span>`;
+    }
+    return `<span class="home-pitch-strip home-pitch-price">£${escapeHtml(Number(price).toFixed(1))}</span>`;
+  }
+
+  function homeSquadPitchStripHTML(row) {
+    if (homePitchStripMode === "fixtures") return homeSquadPitchFixturesStripHTML(row);
+    if (homePitchStripMode === "form") return homeSquadPitchFormStripHTML(row);
+    if (homePitchStripMode === "price") return homeSquadPitchPriceStripHTML(row);
+    return homeSquadPitchGwStripHTML(row);
+  }
+
+  function syncHomePitchModeSegUI(mode = homePitchStripMode) {
+    if (!el.homePitchModeSeg) return;
+    el.homePitchModeSeg.querySelectorAll("[data-pitch-mode]").forEach((btn) => {
+      const on = btn.getAttribute("data-pitch-mode") === mode;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (typeof syncSegThumb === "function") syncSegThumb(el.homePitchModeSeg);
+  }
+
+  function setHomePitchStripMode(mode) {
+    const next =
+      mode === "fixtures" || mode === "form" || mode === "price" ? mode : "gw";
+    if (homePitchStripMode === next) return;
+    homePitchStripMode = next;
+    syncHomePitchModeSegUI(next);
+    renderHomeSquadPitch(homeSquadForEntry(homeActiveViewEntryId()) || []);
+    requestAnimationFrame(() => {
+      syncHomeSquadLayout(undefined, { animate: false, allowShrink: true });
+    });
+  }
+
+  function homeSquadPitchCardHTML(row, { bench = false } = {}) {
+    const team = row.team || "";
+    const photo = feedPlayerPhotoUrl(row.code);
+    const crest =
+      badgeHTML(team, "home-pitch-crest") ||
+      teamCrestFallbackHTML(team, "home-pitch-crest home-crest-fallback");
+    const photoHTML = photo
+      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="lazy" decoding="async" data-team="${escapeHtml(team)}" />`
+      : `<span class="home-pitch-photo home-pitch-photo-crest" aria-hidden="true">${crest}</span>`;
+    const badges = [];
+    if (row.isCaptain) {
+      badges.push(`<span class="home-role-tag home-role-c" title="Captain">C</span>`);
+    } else if (row.isVice) {
+      badges.push(`<span class="home-role-tag home-role-a" title="Vice-captain">A</span>`);
+    }
+    const strip = homeSquadPitchStripHTML(row);
+    return `<button type="button" class="home-pitch-card${bench ? " is-bench" : ""}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
+      <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}</span>
+      <span class="home-pitch-meta">
+        <span class="home-pitch-name">${escapeHtml(row.name || "—")}</span>
+        ${strip}
+      </span>
+    </button>`;
+  }
+
+  function renderHomeSquadPitch(squad) {
+    if (!el.homeSquadPitchXi) return;
+    const groups = homeSquadPitchPlayers(squad);
+    const xiGroups = groups.filter((g) => g.key !== "bench" && g.rows.length);
+    const benchGroup = groups.find((g) => g.key === "bench");
+    const hasXi = xiGroups.length > 0;
+    if (!hasXi) {
+      el.homeSquadPitchXi.innerHTML = `<div class="home-pitch-empty">${
+        homeSquadShowLoading(homeActiveViewEntryId())
+          ? "Loading squad…"
+          : "No Starting XI."
+      }</div>`;
+      if (el.homeSquadPitchBench) {
+        el.homeSquadPitchBench.innerHTML = "";
+        el.homeSquadPitchBench.hidden = true;
+      }
+      return;
+    }
+    el.homeSquadPitchXi.innerHTML = xiGroups
+      .map((g) => {
+        const cards = g.rows.map((row) => homeSquadPitchCardHTML(row)).join("");
+        return `<div class="home-pitch-row is-${g.key}" style="--home-pitch-n:${g.rows.length}">${cards}</div>`;
+      })
+      .join("");
+    bindOwnershipPhotoFallback(el.homeSquadPitchXi);
+
+    if (el.homeSquadPitchBench) {
+      const benchRows = (benchGroup && benchGroup.rows) || [];
+      if (benchRows.length) {
+        const benchPts = homeSquadBenchPointsTotal(squad);
+        const cards = benchRows.map((row) => homeSquadPitchCardHTML(row, { bench: true })).join("");
+        el.homeSquadPitchBench.innerHTML = `
+          <div class="home-pitch-bench-divider">
+            <div class="home-bench-divider-inner">
+              ${homeBenchToggleHTML(benchPts)}
+            </div>
+          </div>
+          <div class="home-pitch-row is-bench" style="--home-pitch-n:${benchRows.length}">${cards}</div>`;
+        el.homeSquadPitchBench.hidden = false;
+        bindOwnershipPhotoFallback(el.homeSquadPitchBench);
+      } else {
+        el.homeSquadPitchBench.innerHTML = "";
+        el.homeSquadPitchBench.hidden = true;
+      }
+    }
+    syncHomeBenchCollapsedUI();
+    syncHomePitchModeSegUI();
   }
 
   function homeSquadRowHTML(row, opts = {}) {
@@ -12813,6 +13124,7 @@
             ? homeSquadLoadingHTML(5)
             : homeSquadEmptyHTML(5));
       }
+      renderHomeSquadPitch(rows);
       const gws = homeSquadFixtureGwList();
       if (el.homeSquadFixturesCols) {
         el.homeSquadFixturesCols.innerHTML =
@@ -27541,6 +27853,16 @@
   }
 
   function ownershipPhotoFallbackElement(img) {
+    if (img.classList.contains("home-pitch-photo")) {
+      const team = img.dataset.team || "";
+      const wrap = document.createElement("span");
+      wrap.className = "home-pitch-photo home-pitch-photo-crest";
+      wrap.setAttribute("aria-hidden", "true");
+      wrap.innerHTML =
+        badgeHTML(team, "home-pitch-crest") ||
+        teamCrestFallbackHTML(team, "home-pitch-crest home-crest-fallback");
+      return wrap;
+    }
     const fallback = document.createElement("span");
     const classes = String(img.className || "")
       .split(/\s+/)
@@ -27564,6 +27886,7 @@
     if (
       !img.classList.contains("ownership-photo")
       && !img.classList.contains("home-lookup-photo")
+      && !img.classList.contains("home-pitch-photo")
     ) {
       return;
     }
@@ -27573,7 +27896,9 @@
 
   function bindOwnershipPhotoFallback(root) {
     if (!root) return;
-    root.querySelectorAll("img.ownership-photo, img.home-lookup-photo").forEach((img) => {
+    root.querySelectorAll(
+      "img.ownership-photo, img.home-lookup-photo, img.home-pitch-photo"
+    ).forEach((img) => {
       if (img.dataset.photoFallbackBound === "1") return;
       img.dataset.photoFallbackBound = "1";
       if (img.complete && img.naturalWidth === 0) {
@@ -33566,7 +33891,7 @@
     if (state.page !== "home") return;
     const idx = homeSquadActivePageIndex();
     renderHome({ deferDuringEnter: true });
-    if (wide && idx === 1) setHomeSquadPage(0, { smooth: false });
+    if (wide && idx === HOME_SQUAD_PTS_PAGE) setHomeSquadPage(1, { smooth: false });
   });
   bindMqChange(COLUMNS_IN_FILTERS_MQ, () => {
     scheduleViewportLayoutSync({ immediate: true });

@@ -16628,6 +16628,28 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   --home-glass-blur: 32px;
   --home-glass-saturate: 1.95;
   --home-glass-shadow: 0 8px 28px hsl(215 35% 20% / 0.1);
+  /* Pitch Starting XI — opaque line color so joins don't darken from alpha stacking. */
+  --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 42%, hsl(var(--background)));
+  --home-pitch-card-bg: hsl(0 0% 10%);
+  --home-pitch-card-border: hsl(0 0% 100% / 0.14);
+  --home-pitch-card-fg: hsl(0 0% 96%);
+  --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
+}
+html[data-theme="light"] .home-dashboard {
+  --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 58%, hsl(var(--background)));
+  --home-pitch-card-bg: hsl(0 0% 100%);
+  --home-pitch-card-border: hsl(215 20% 20% / 0.14);
+  --home-pitch-card-fg: hsl(222 28% 12%);
+  --home-pitch-card-muted: hsl(215 12% 32%);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-dashboard {
+    --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 58%, hsl(var(--background)));
+    --home-pitch-card-bg: hsl(0 0% 100%);
+    --home-pitch-card-border: hsl(215 20% 20% / 0.14);
+    --home-pitch-card-fg: hsl(222 28% 12%);
+    --home-pitch-card-muted: hsl(215 12% 32%);
+  }
 }
 html[data-theme="dark"] .home-dashboard {
   --home-glass-bg: hsl(215 28% 14% / 0.4);
@@ -18236,9 +18258,23 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   padding: 10px 12px;
   min-width: 0;
 }
+/* Team / League / Feed: opaque glass composite — live Home (rolls, pulses,
+   height sync) under a real backdrop-filter made the card headers band/flicker. */
+.home-dashboard .home-table-panel.home-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background:
+    linear-gradient(
+      var(--home-glass-bg-strong, hsl(var(--card))),
+      var(--home-glass-bg-strong, hsl(var(--card)))
+    ),
+    var(--bg);
+  isolation: isolate;
+}
 @media (prefers-reduced-transparency: reduce) {
   .home-panel,
-  .home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel {
+  .home-summary[data-home-summary="hero"] .home-summary-cards > .home-stat-panel,
+  .home-dashboard .home-table-panel.home-panel {
     background: hsl(var(--card));
     border-color: var(--border);
     box-shadow: var(--shadow-sm);
@@ -18718,10 +18754,10 @@ html.home-squad-wide #home-feed-panel {
     min-height: 0;
   }
 }
-html.home-squad-wide .home-squad-page:nth-child(2) {
+html.home-squad-wide .home-squad-page:nth-child(3) {
   display: none;
 }
-html.home-squad-wide .home-squad-dot[data-page="1"] {
+html.home-squad-wide .home-squad-dot[data-page="2"] {
   display: none;
 }
 .home-squad-split {
@@ -19251,6 +19287,544 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 }
 .home-squad-page .home-table-wrap {
   margin: 0;
+}
+.home-squad-page-pitch {
+  align-self: flex-start;
+  height: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  box-sizing: border-box;
+}
+.home-pitch-mode-seg {
+  display: flex;
+  /* Match SVG pitch outline (x=3 / width=94), not the full card edge. */
+  width: 94%;
+  max-width: 94%;
+  margin-inline: auto;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  /* Match .home-squad-pitch corner (12px); inner thumb/buttons sit inside padding. */
+  border-radius: 12px;
+  padding: 3px;
+}
+.home-pitch-mode-seg > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 4px;
+  height: 30px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 9px;
+}
+.home-pitch-mode-seg > .seg-thumb {
+  border-radius: 9px;
+}
+.home-squad-pitch {
+  position: relative;
+  /* Content-sized only — never flex-grow. Growing the card stretched the SVG
+     pitch lines; leftover page height goes to .home-pitch-page-spacer instead
+     so the bench divider stays locked under the XI. */
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: auto;
+  max-height: none;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: transparent;
+  color: var(--home-pitch-line);
+}
+.home-squad-pitch-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.55;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+  stroke-opacity: 1;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
+}
+.home-squad-pitch-lines .home-squad-pitch-spot {
+  fill: currentColor;
+  stroke: none;
+}
+.home-squad-pitch-xi {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  height: auto;
+  min-height: 0;
+  padding: 8px 4px 10px;
+  gap: 10px;
+  box-sizing: border-box;
+}
+.home-pitch-row {
+  position: relative;
+  left: auto;
+  right: auto;
+  top: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+/* Drop absolute zone tops — flex distributes GK→bench across the full pitch. */
+.home-pitch-row.is-gk,
+.home-pitch-row.is-def,
+.home-pitch-row.is-mid,
+.home-pitch-row.is-fwd {
+  top: auto;
+}
+.home-pitch-row.is-bench {
+  top: auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 4px 2px;
+  gap: 10px;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  align-items: center;
+}
+.home-pitch-bench {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  /* Glued under the pitch — leftover height is .home-pitch-page-spacer below. */
+  padding: 0 2px;
+  box-sizing: border-box;
+}
+.home-pitch-bench[hidden] {
+  display: none !important;
+}
+.home-pitch-page-spacer {
+  flex: 1 1 auto;
+  min-height: 0;
+  pointer-events: none;
+}
+.home-pitch-bench-divider {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 6px 0;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.home-pitch-bench-divider .home-bench-divider-inner {
+  width: 100%;
+}
+/* Same collapse as Starting XI list — hide pitch bench cards when collapsed. */
+#home-squad-panel.is-bench-collapsed .home-pitch-row.is-bench {
+  display: none;
+}
+@media (min-width: 901px) {
+  #home-squad-panel.is-bench-collapsed .home-pitch-row.is-bench {
+    display: flex;
+  }
+}
+.home-pitch-row.is-bench .home-pitch-card {
+  width: min(72px, calc((100% - (var(--home-pitch-n, 1) - 1) * 10px) / var(--home-pitch-n, 1)));
+  max-width: 76px;
+}
+.home-pitch-card {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 3px;
+  width: min(72px, calc((100% - (var(--home-pitch-n, 1) - 1) * 10px) / var(--home-pitch-n, 1)));
+  max-width: 76px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--home-pitch-card-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+.home-pitch-card.is-bench {
+  opacity: 0.92;
+}
+.home-pitch-photo-wrap {
+  position: relative;
+  /* Match meta / pts strip width — one continuous card column. */
+  width: 100%;
+  /* Slightly shorter frame; bottom crop still applied on the img. */
+  aspect-ratio: 1 / 0.98;
+  height: auto;
+  max-height: none;
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--home-pitch-card-bg);
+  box-shadow:
+    inset 0 0 0 1px var(--home-pitch-card-border),
+    0 2px 6px hsl(0 0% 0% / 0.28);
+}
+.home-pitch-photo {
+  display: block;
+  width: 82%;
+  height: 100%;
+  flex: 0 0 auto;
+  /* contain = no L/R shoulder crop; wrap overflow + translate still crops bottom. */
+  object-fit: contain;
+  object-position: center top;
+}
+img.home-pitch-photo {
+  /* Narrower than wrap; bottom chest crop only (not left/right). */
+  width: 82%;
+  height: 118%;
+  object-fit: contain;
+  object-position: center top;
+  transform: translateY(14%);
+}
+.home-pitch-photo-crest {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: hsl(0 0% 100% / 0.04);
+}
+.home-pitch-crest,
+.home-pitch-photo-crest .badge-img,
+.home-pitch-photo-crest img,
+.home-pitch-photo-crest svg {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+/* Same C / A chips as Starting XI list; pin to the photo corner. */
+.home-pitch-photo-wrap .home-role-tag {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 2;
+}
+/* Dark name + full-width pts/opp bar (reference fixture strip). */
+.home-pitch-meta {
+  --home-pitch-meta-pad: 3px;
+  --home-pitch-meta-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  padding: var(--home-pitch-meta-pad);
+  border-radius: var(--home-pitch-meta-radius);
+  background: var(--home-pitch-card-bg);
+  box-shadow: inset 0 0 0 1px var(--home-pitch-card-border);
+  box-sizing: border-box;
+}
+.home-pitch-name {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 1px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--home-pitch-card-fg);
+  text-align: center;
+}
+.home-pitch-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 16px;
+  padding: 2px 4px;
+  /* Nested radius = outer − pad (minus 1px so corner gap doesn't pinch). */
+  border-radius: max(0px, calc(var(--home-pitch-meta-radius, 8px) - var(--home-pitch-meta-pad, 3px) - 1px));
+  font-size: 10px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.home-pitch-fx-strip,
+.home-pitch-form-strip {
+  gap: 3px;
+  padding: 2px 3px;
+  background: hsl(0 0% 100% / 0.04);
+}
+.home-pitch-fx-cell,
+.home-pitch-form-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 15px;
+  padding: 2px 2px;
+  border-radius: 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-pitch-fx-cell {
+  /* Inherit card fg — pastel FDR washes need dark text in light mode.
+     highlight-strong / inline color:#fff covers the darkest washes. */
+  color: var(--home-pitch-card-fg);
+}
+.home-pitch-fx-cell.highlight-strong,
+.home-pitch-opp.highlight-strong {
+  color: #fff;
+}
+.home-pitch-fx-cell.is-blank,
+.home-pitch-form-cell.is-blank {
+  color: var(--home-pitch-card-muted);
+  background: hsl(0 0% 100% / 0.04);
+  font-weight: 600;
+}
+.home-pitch-form-cell {
+  color: var(--home-pitch-card-fg);
+  background: hsl(0 0% 100% / 0.08);
+}
+.home-pitch-form-cell.is-zero {
+  color: var(--home-pitch-card-muted);
+  background: hsl(0 0% 100% / 0.05);
+  font-weight: 600;
+}
+.home-pitch-pts {
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--home-pitch-card-fg);
+  background: hsl(0 0% 100% / 0.08);
+}
+.home-pitch-pts.is-idle {
+  font-weight: 600;
+  color: var(--home-pitch-card-muted);
+  background: hsl(0 0% 100% / 0.05);
+}
+.home-pitch-price {
+  font-weight: 800;
+  font-size: 10.5px;
+  letter-spacing: -0.01em;
+  color: var(--home-pitch-card-fg);
+  background: hsl(0 0% 100% / 0.08);
+}
+.home-pitch-price.is-idle {
+  font-weight: 600;
+  color: var(--home-pitch-card-muted);
+  background: hsl(0 0% 100% / 0.05);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-photo-wrap {
+  box-shadow:
+    inset 0 0 0 1px var(--home-pitch-card-border),
+    0 1px 3px hsl(215 25% 20% / 0.08);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-pts,
+html[data-theme="light"] .home-dashboard .home-pitch-price,
+html[data-theme="light"] .home-dashboard .home-pitch-form-cell {
+  background: hsl(215 20% 20% / 0.06);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-pts.is-idle,
+html[data-theme="light"] .home-dashboard .home-pitch-price.is-idle,
+html[data-theme="light"] .home-dashboard .home-pitch-form-cell.is-zero,
+html[data-theme="light"] .home-dashboard .home-pitch-fx-cell.is-blank,
+html[data-theme="light"] .home-dashboard .home-pitch-form-cell.is-blank {
+  background: hsl(215 20% 20% / 0.04);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-fx-strip,
+html[data-theme="light"] .home-dashboard .home-pitch-form-strip,
+html[data-theme="light"] .home-dashboard .home-pitch-opp:not([class*="fdr-"]) {
+  background: hsl(215 20% 20% / 0.05);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-photo-crest {
+  background: hsl(215 20% 20% / 0.04);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-photo-wrap {
+    box-shadow:
+      inset 0 0 0 1px var(--home-pitch-card-border),
+      0 1px 3px hsl(215 25% 20% / 0.08);
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-price,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell {
+    background: hsl(215 20% 20% / 0.06);
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-idle,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-idle,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell.is-zero,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-fx-cell.is-blank,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell.is-blank {
+    background: hsl(215 20% 20% / 0.04);
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-fx-strip,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-strip,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-opp:not([class*="fdr-"]) {
+    background: hsl(215 20% 20% / 0.05);
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-photo-crest {
+    background: hsl(215 20% 20% / 0.04);
+  }
+}
+.home-pitch-opp {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--home-pitch-card-muted);
+  text-transform: none;
+  background: hsl(0 0% 100% / 0.06);
+}
+/* FDR wash from schedule palette (when not yet played). */
+.home-pitch-opp[class*="fdr-"] {
+  color: var(--home-pitch-card-fg);
+}
+.home-pitch-ha {
+  display: block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  overflow: hidden;
+  color: currentColor;
+  fill: currentColor;
+  stroke: none;
+  opacity: 0.95;
+}
+  .home-pitch-empty {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 120px;
+  padding: 24px;
+  color: var(--home-pitch-card-muted);
+  font-size: 13px;
+}
+@media (max-width: 900px) {
+  .home-squad-pitch {
+    max-height: none;
+    min-height: 0;
+  }
+  .home-squad-pitch-xi {
+    min-height: 0;
+    padding: 8px 3px 10px;
+    gap: 8px;
+  }
+  .home-pitch-mode-seg > button {
+    height: 28px;
+    font-size: 11px;
+  }
+  .home-pitch-row {
+    gap: 8px;
+  }
+  .home-pitch-card {
+    width: min(68px, calc((100% - (var(--home-pitch-n, 1) - 1) * 8px) / var(--home-pitch-n, 1)));
+    max-width: 72px;
+    gap: 2px;
+  }
+  .home-pitch-photo-wrap {
+    width: 100%;
+    aspect-ratio: 1 / 0.98;
+    height: auto;
+    max-height: none;
+  }
+  .home-pitch-row.is-bench {
+    width: 100%;
+    max-width: none;
+    padding: 0 2px 2px;
+    gap: 8px;
+    border: none;
+    border-radius: 0;
+  }
+  .home-pitch-bench {
+    width: 100%;
+    max-width: none;
+    gap: 4px;
+    padding: 0;
+  }
+  .home-pitch-row.is-bench .home-pitch-card {
+    width: min(68px, calc((100% - (var(--home-pitch-n, 1) - 1) * 8px) / var(--home-pitch-n, 1)));
+    max-width: 72px;
+  }
+  .home-pitch-meta {
+    --home-pitch-meta-pad: 2px;
+    --home-pitch-meta-radius: 7px;
+    gap: 2px;
+  }
+  .home-pitch-name {
+    font-size: 8px;
+  }
+  .home-pitch-strip {
+    min-height: 14px;
+    font-size: 9px;
+    padding: 1px 3px;
+  }
+  .home-pitch-pts {
+    font-size: 10px;
+  }
+  .home-pitch-ha {
+    width: 6px;
+    height: 6px;
+    flex-basis: 6px;
+  }
+  .home-pitch-crest,
+  .home-pitch-photo-crest .badge-img,
+  .home-pitch-photo-crest img,
+  .home-pitch-photo-crest svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+html.home-squad-wide .home-squad-page-pitch {
+  height: 100%;
+  align-self: stretch;
+}
+html.home-squad-wide .home-squad-pitch {
+  flex: 0 0 auto;
+  height: auto;
+  max-height: none;
+  aspect-ratio: auto;
+  min-height: 0;
+}
+html.home-squad-wide .home-squad-pitch-xi {
+  min-height: 0;
+  height: auto;
+  justify-content: flex-start;
+  gap: 10px;
 }
 .home-squad-track::-webkit-scrollbar {
   display: none;
