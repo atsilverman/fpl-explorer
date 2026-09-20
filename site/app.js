@@ -1207,6 +1207,7 @@
     homeSquadBody: $("#home-squad-body"),
     homeSquadPitchXi: $("#home-squad-pitch-xi"),
     homeSquadPitchBench: $("#home-squad-pitch-bench"),
+    homeSquadPitchFormation: $("#home-squad-pitch-formation"),
     homePitchModeBtn: $("#home-pitch-mode-btn"),
     homePitchModeLabel: $("#home-pitch-mode-label"),
     homePitchModeMenu: $("#home-pitch-mode-menu"),
@@ -2660,6 +2661,10 @@
     if (el.homeLeagueTitle) el.homeLeagueTitle.textContent = "";
     if (el.homeSquadBody) el.homeSquadBody.innerHTML = "";
     if (el.homeSquadPitchXi) el.homeSquadPitchXi.innerHTML = "";
+    if (el.homeSquadPitchFormation) {
+      el.homeSquadPitchFormation.hidden = true;
+      el.homeSquadPitchFormation.textContent = "";
+    }
     if (el.homeSquadPitchBench) {
       el.homeSquadPitchBench.innerHTML = "";
       el.homeSquadPitchBench.hidden = true;
@@ -4876,6 +4881,7 @@
   function syncHomeViewBanner() {
     const viewingOther = homeIsViewingOtherManager();
     if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
+    if (el.homePage) el.homePage.classList.toggle("is-viewing-manager", viewingOther);
     const banner = el.homeViewBanner;
     if (!banner) return;
     // Floating bottom chip (all viewports). Prefer viewing over ownership pin.
@@ -4884,9 +4890,15 @@
       if (el.homeViewBannerName) {
         el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
       }
+      // Search is own-team only — close any open sheet / results.
+      if (mobileSheetOpen && mobileSheetKey === "home-search") {
+        closeMobileSheet();
+      }
+      hideHomeDesktopSearchResults();
     }
     banner.hidden = !viewingOther;
     banner.classList.remove("is-visible", "is-leaving");
+    syncHomeSearchBtn();
   }
 
   function syncHomeOwnerBanner() {
@@ -8255,6 +8267,33 @@
     ];
   }
 
+  /** Outfield shape from XI counts — e.g. "3-4-3". Empty when incomplete. */
+  function homeSquadFormationLabel(squad) {
+    const groups = homeSquadPitchPlayers(squad);
+    const def = (groups.find((g) => g.key === "def") || {}).rows || [];
+    const mid = (groups.find((g) => g.key === "mid") || {}).rows || [];
+    const fwd = (groups.find((g) => g.key === "fwd") || {}).rows || [];
+    if (!def.length && !mid.length && !fwd.length) return "";
+    return `${def.length}-${mid.length}-${fwd.length}`;
+  }
+
+  function syncHomeSquadPitchFormation(squad) {
+    const node = el.homeSquadPitchFormation;
+    if (!node) return;
+    const label = homeSquadFormationLabel(squad);
+    if (!label) {
+      node.hidden = true;
+      node.textContent = "";
+      node.removeAttribute("title");
+      node.removeAttribute("aria-label");
+      return;
+    }
+    node.hidden = false;
+    node.textContent = label;
+    node.title = `Formation ${label}`;
+    node.setAttribute("aria-label", `Formation ${label}`);
+  }
+
   function homeSquadPitchBenchCardsHTML(benchRows) {
     if (!benchRows.length) return "";
     const parts = [];
@@ -8912,7 +8951,7 @@
       : `<span class="home-pitch-photo home-pitch-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const hasRole = !!(row.isCaptain || row.isVice);
     const badges = [];
-    // Autosub prefers top-left; C/A takes the opposite corner when both exist.
+    // Prefer upper-right for every chip; only use left when C/A already owns TR.
     if (hasRole) {
       const role = row.isCaptain
         ? `<span class="home-role-tag home-role-c home-badge-tr" title="Captain">C</span>`
@@ -8921,7 +8960,8 @@
     }
     const autosub = homePitchAutosubBadgeHTML(row);
     if (autosub) {
-      badges.push(autosub.replace('class="home-autosub-tag', 'class="home-autosub-tag home-badge-tl'));
+      const corner = hasRole ? "home-badge-tl" : "home-badge-tr";
+      badges.push(autosub.replace('class="home-autosub-tag', `class="home-autosub-tag ${corner}`));
     }
     const strip = homeSquadPitchStripHTML(row);
     const fullName = row.name || "—";
@@ -8952,6 +8992,7 @@
           ? "Loading squad…"
           : "No Starting XI."
       }</div>`;
+      syncHomeSquadPitchFormation(null);
       if (el.homeSquadPitchBench) {
         el.homeSquadPitchBench.innerHTML = "";
         el.homeSquadPitchBench.hidden = true;
@@ -8965,6 +9006,7 @@
       })
       .join("");
     bindOwnershipPhotoFallback(el.homeSquadPitchXi);
+    syncHomeSquadPitchFormation(squad);
 
     if (el.homeSquadPitchBench) {
       const benchRows = (benchGroup && benchGroup.rows) || [];
@@ -12949,6 +12991,7 @@
   }
 
   function openHomeSearchSheet() {
+    if (homeIsViewingOtherManager()) return;
     if (homeLookupPlayer) clearHomePlayerLookup({ rerender: true });
     if (NARROW_MQ.matches && el.homeBento) el.homeBento.classList.add("is-search-open");
     openMobileSheet({
@@ -12968,8 +13011,9 @@
     if (!wrap) return;
     const onHome = state.page === "home";
     const desktop = !NARROW_MQ.matches;
-    wrap.hidden = !(onHome && desktop);
-    if (!onHome || !desktop) {
+    const viewingOther = homeIsViewingOtherManager();
+    wrap.hidden = !(onHome && desktop && !viewingOther);
+    if (!onHome || !desktop || viewingOther) {
       if (results) {
         results.hidden = true;
         results.innerHTML = "";
@@ -15500,7 +15544,11 @@
       el.scheduleSlidersToggle,
     ].filter(Boolean);
     if (!dock) return;
-    const showHomeSearch = mobileDocksActive() && state.page === "home" && !!el.homeSearchBtn;
+    const showHomeSearch =
+      mobileDocksActive() &&
+      state.page === "home" &&
+      !!el.homeSearchBtn &&
+      !homeIsViewingOtherManager();
     if (!mobileDocksActive()) {
       restoreAllMobileFilterButtons();
       dock.hidden = true;
@@ -16059,7 +16107,7 @@
       if (id) {
         const idCs = getComputedStyle(id);
         const gap = parseFloat(idCs.columnGap || idCs.gap) || 0;
-        const thumb = id.querySelector(".ownership-photo, .ownership-crest");
+        const thumb = id.querySelector(".ownership-photo-frame, .ownership-photo, .ownership-crest");
         const text = id.querySelector(".ownership-id-text");
         let content = 0;
         let parts = 0;
@@ -19893,7 +19941,7 @@
     if (!id) return Math.ceil(cell.scrollWidth);
     const idCs = getComputedStyle(id);
     const gap = parseFloat(idCs.columnGap || idCs.gap) || 0;
-    const thumb = id.querySelector(".ownership-photo, .ownership-crest");
+    const thumb = id.querySelector(".ownership-photo-frame, .ownership-photo, .ownership-crest");
     const text = id.querySelector(".ownership-id-text");
     let content = 0;
     let parts = 0;
@@ -29004,11 +29052,13 @@
     const pos = row.newPosition || row.position || "";
     const et = row.elementType != null ? row.elementType : row.element_type != null ? row.element_type : "";
     const ring = teamRingAttrs(team);
+    // Frame owns size + team ring so kit mode can overscale/crop the shirt
+    // (same idea as Home pitch cards) without spilling into the name column.
     if (!photo) {
-      return `<span class="ownership-photo ownership-photo-fallback is-photo-icon${ring.className}" aria-hidden="true"${ring.attr}>${iconHTML("user", "player-photo-fallback-icon")}</span>`;
+      return `<span class="ownership-photo-frame${ring.className}"${ring.attr} aria-hidden="true"><span class="ownership-photo ownership-photo-fallback is-photo-icon">${iconHTML("user", "player-photo-fallback-icon")}</span></span>`;
     }
     const loading = eager ? "eager" : "lazy";
-    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(team || ""))}" data-pos="${escapeHtml(String(pos))}" data-element-type="${escapeHtml(String(et))}" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
+    return `<span class="ownership-photo-frame${ring.className}"${ring.attr}><img class="ownership-photo" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(team || ""))}" data-pos="${escapeHtml(String(pos))}" data-element-type="${escapeHtml(String(et))}" data-initials="${escapeHtml(initials)}" /></span>`;
   }
 
   function ownershipIdCellHTML(row, _rank, { hidePrice = false } = {}) {
@@ -34710,11 +34760,12 @@
   function currentPlayerThumbMode() {
     try {
       const stored = localStorage.getItem(PLAYER_THUMB_KEY);
-      if (PLAYER_THUMB_ORDER.includes(stored)) return stored;
+      if (stored === "photo") return "photo";
+      if (stored === "kit") return "kit";
     } catch {
       /* private browsing */
     }
-    return "photo";
+    return "kit";
   }
 
   function syncPlayerThumbSeg(mode = currentPlayerThumbMode()) {
@@ -34738,9 +34789,9 @@
   }
 
   function applyPlayerThumbMode(mode, { repaint = true } = {}) {
-    const next = PLAYER_THUMB_ORDER.includes(mode) ? mode : "photo";
+    const next = PLAYER_THUMB_ORDER.includes(mode) ? mode : "kit";
     try {
-      if (next === "photo") localStorage.removeItem(PLAYER_THUMB_KEY);
+      if (next === "kit") localStorage.removeItem(PLAYER_THUMB_KEY);
       else localStorage.setItem(PLAYER_THUMB_KEY, next);
     } catch {
       /* private browsing */

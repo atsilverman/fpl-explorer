@@ -407,6 +407,7 @@ html[data-page="opta"] {
 }
 /* Constant air around identity photos/crests so the circle never kisses the
    row rule — does not shrink with --name-collapse. */
+.ownership-photo-frame.has-team-ring,
 .ownership-photo.has-team-ring,
 .ownership-crest.has-team-ring,
 .player-cell-crest.has-team-ring,
@@ -423,6 +424,7 @@ html[data-page="opta"] {
   background: transparent;
 }
 /* Solid disc behind cutout PNGs so treemap / row color doesn't show through. */
+.ownership-photo-frame.has-team-ring,
 .ownership-photo.has-team-ring {
   background: #fff;
 }
@@ -3978,11 +3980,17 @@ tbody td {
   padding-top: 6px;
   padding-bottom: 6px;
 }
-#opta-page .table-wrap .ownership-photo,
+#opta-page .table-wrap .ownership-photo-frame,
 #opta-page .table-wrap .ownership-crest {
   width: var(--own-photo, 30px);
   height: var(--own-photo, 30px);
   flex: 0 0 var(--own-photo, 30px);
+}
+#opta-page .table-wrap .ownership-photo-frame .ownership-photo,
+#opta-page .table-wrap .ownership-photo-frame .ownership-photo-fallback {
+  width: 100%;
+  height: 100%;
+  flex: none;
 }
 tbody td.zero-val { color: var(--text-faint); }
 tbody td.highlight-top,
@@ -4002,6 +4010,7 @@ tbody td.is-enhanced::before {
   z-index: -1;
 }
 /* Statistics enter — photo rings + team abbr saturate with highlight cells (--hl-sat 0→1). */
+#opta-page.is-hl-entering .ownership-photo-frame.has-team-ring,
 #opta-page.is-hl-entering .ownership-photo.has-team-ring {
   border-color: color-mix(in srgb, var(--team-accent) calc(var(--hl-sat, 0) * 100%), transparent);
 }
@@ -4227,17 +4236,17 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   max-height: calc(var(--own-photo, 36px) + 8px);
   overflow: hidden;
 }
-#ownership-table-wrap.name-simplify-ready .ownership-photo,
+#ownership-table-wrap.name-simplify-ready .ownership-photo-frame,
 #ownership-table-wrap.name-simplify-ready .ownership-crest,
-#prices-page .prices-table-wrap.name-simplify-ready .ownership-photo,
+#prices-page .prices-table-wrap.name-simplify-ready .ownership-photo-frame,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-crest,
-#opta-page .table-wrap.name-simplify-ready .ownership-photo,
+#opta-page .table-wrap.name-simplify-ready .ownership-photo-frame,
 #opta-page .table-wrap.name-simplify-ready .ownership-crest,
-#team-page .table-wrap.name-simplify-ready .ownership-photo,
+#team-page .table-wrap.name-simplify-ready .ownership-photo-frame,
 #team-page .table-wrap.name-simplify-ready .ownership-crest,
-#fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-photo,
+#fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-photo-frame,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-crest,
-#live-page .live-table-wrap.name-simplify-ready .ownership-photo,
+#live-page .live-table-wrap.name-simplify-ready .ownership-photo-frame,
 #live-page .live-table-wrap.name-simplify-ready .ownership-crest {
   flex: 0 0 var(--own-photo);
   width: var(--own-photo);
@@ -6266,6 +6275,13 @@ html[data-page="prices"] .layout .main {
   background: #fff;
   margin-bottom: auto;
 }
+.ownership-treemap-cell > .ownership-photo-frame {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  margin-bottom: auto;
+}
 .ownership-treemap-crest {
   border-radius: 6px;
   object-fit: contain;
@@ -6386,6 +6402,27 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+.ownership-photo-frame {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #fff;
+}
+.ownership-photo-frame .ownership-photo,
+.ownership-photo-frame .ownership-photo-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
 }
 .ownership-photo,
 .ownership-crest {
@@ -7312,6 +7349,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   overflow: hidden;
 }
 
+.rankings-identity .ownership-photo-frame,
 .rankings-identity .ownership-photo,
 .rankings-identity .ownership-crest {
   width: 36px;
@@ -7482,6 +7520,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     gap: 6px;
   }
 
+  .rankings-identity .ownership-photo-frame,
   .rankings-identity .ownership-photo,
   .rankings-identity .ownership-crest {
     width: 32px;
@@ -7518,6 +7557,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     font-size: 11.5px;
   }
 
+  .rankings-identity .ownership-photo-frame,
   .rankings-identity .ownership-photo,
   .rankings-identity .ownership-crest {
     width: 30px;
@@ -7843,8 +7883,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   flex: 1;
   overflow: hidden;
 }
+.barbell-group-identity .ownership-photo-frame,
 .barbell-group-identity .ownership-photo,
 .barbell-group-identity .ownership-crest,
+.barbell-label .ownership-photo-frame,
 .barbell-label .ownership-photo,
 .barbell-label .ownership-crest {
   width: 36px;
@@ -8359,8 +8401,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   .barbell-label .player-cell {
     --crest-gap: 6px;
   }
+  .barbell-group-identity .ownership-photo-frame,
   .barbell-group-identity .ownership-photo,
   .barbell-group-identity .ownership-crest,
+  .barbell-label .ownership-photo-frame,
   .barbell-label .ownership-photo,
   .barbell-label .ownership-crest {
     width: 30px;
@@ -17025,31 +17069,38 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
 .home-dashboard.is-viewing-manager {
   --home-view-accent: hsl(var(--blue-hsl));
   /* Clearance so last rows aren't covered by the floating chip. */
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+/* Own-team search only — hide desktop field + mobile FAB while viewing. */
+#home-page.is-viewing-manager #home-desktop-search,
+#home-page.is-viewing-manager #home-search-btn {
+  display: none !important;
 }
 .home-view-chip {
   position: fixed;
   left: 50%;
-  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   /* Above .mobile-chrome-fade (40) and docks (44); lives at body level. */
   z-index: 50;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: min(calc(100vw - 32px), 22rem);
+  gap: 12px;
+  /* Fixed width so short/long manager names share the same card footprint. */
+  width: 75vw;
+  max-width: 75vw;
   margin: 0;
-  padding: 6px 6px 6px 12px;
-  border-radius: 999px;
-  border: 1px solid hsl(var(--blue-hsl) / 0.28);
-  background: hsl(210 40% 99% / 0.82);
-  color: hsl(220 16% 26%);
+  padding: 14px 10px 14px 20px;
+  border-radius: var(--mobile-dock-radius, 12px);
+  border: 1.5px solid hsl(var(--blue-hsl) / 0.32);
+  background: hsl(210 40% 99% / 0.9);
+  color: hsl(220 16% 22%);
   line-height: 1;
   backdrop-filter: blur(12px) saturate(1.4);
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
   box-shadow:
-    0 8px 28px hsl(215 35% 20% / 0.14),
-    0 2px 8px hsl(215 35% 20% / 0.08);
+    0 12px 36px hsl(215 35% 20% / 0.18),
+    0 2px 12px hsl(215 35% 20% / 0.1);
   box-sizing: border-box;
   flex-wrap: nowrap;
   min-width: 0;
@@ -17060,18 +17111,18 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
 }
 .home-view-chip-icon {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   color: var(--home-view-accent, hsl(var(--blue-hsl)));
-  opacity: 0.9;
+  opacity: 0.95;
 }
 .home-view-chip-name {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
   color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -17080,11 +17131,11 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
 }
 .home-view-chip-clear {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: calc(var(--mobile-dock-radius, 12px) - 3px);
   background: transparent;
   color: hsl(220 10% 40%);
   cursor: pointer;
@@ -17092,8 +17143,8 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
   transition: background 0.12s ease, color 0.12s ease;
 }
 .home-view-chip-clear .icon {
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
 }
 .home-view-chip-clear:hover {
   background: hsl(var(--blue-hsl) / 0.12);
@@ -17156,12 +17207,26 @@ html[data-theme="dark"][data-home-surface="solid"] .home-view-chip {
 }
 @media (max-width: 900px) {
   .home-view-chip {
-    max-width: min(calc(100vw - 24px), 22rem);
-    bottom: max(14px, env(safe-area-inset-bottom, 0px));
-    padding: 5px 5px 5px 11px;
+    width: 75vw;
+    max-width: 75vw;
+    bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    padding: 13px 9px 13px 18px;
+    gap: 11px;
   }
   .home-view-chip-name {
-    font-size: 12px;
+    font-size: 16px;
+  }
+  .home-view-chip-icon {
+    width: 20px;
+    height: 20px;
+  }
+  .home-view-chip-clear {
+    width: 40px;
+    height: 40px;
+  }
+  .home-view-chip-clear .icon {
+    width: 19px;
+    height: 19px;
   }
 }
 /* Only show while Home is the active page (chip is a body-level fixed node). */
@@ -19846,6 +19911,49 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   fill: currentColor;
   stroke: none;
 }
+.home-squad-pitch-formation {
+  position: absolute;
+  /* Clear of pitch border / endline — inset from upper-right corner. */
+  top: 26px;
+  right: 26px;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--home-pitch-card-muted, hsl(215 12% 32%));
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+  pointer-events: none;
+  user-select: none;
+}
+.home-squad-pitch-formation[hidden] {
+  display: none !important;
+}
+html[data-theme="light"] .home-squad-pitch-formation {
+  color: hsl(215 14% 38%);
+  opacity: 0.78;
+}
+html[data-theme="dark"] .home-squad-pitch-formation {
+  color: hsl(210 14% 78%);
+  opacity: 0.55;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-squad-pitch-formation {
+    color: hsl(210 14% 78%);
+    opacity: 0.55;
+  }
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-squad-pitch-formation {
+    color: hsl(215 14% 38%);
+    opacity: 0.78;
+  }
+}
 .home-squad-pitch-xi {
   position: relative;
   z-index: 1;
@@ -20135,7 +20243,7 @@ img.home-pitch-photo {
   line-height: 1;
   letter-spacing: 0;
 }
-/* Autosub prefers top-left; C/A takes the opposite corner when both exist. */
+/* Autosub prefers top-right; C/A keeps TR and pushes autosub to TL when both exist. */
 .home-pitch-photo-wrap .home-autosub-tag {
   top: var(--home-pitch-badge-inset);
 }
@@ -20234,9 +20342,7 @@ html[data-home-surface="solid"] .home-pitch-nameplate {
   --home-pitch-frame: hsl(142 55% 34%);
   box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
 }
-.home-pitch-card.is-live {
-  --home-pitch-frame: hsl(var(--delta-rise));
-}
+/* Live: pulse aura only — no solid green frame (that reads as autosub-in). */
 .home-dashboard .home-pitch-card.is-live,
 html[data-theme="light"] .home-dashboard .home-pitch-card.is-live,
 html[data-theme="dark"] .home-dashboard .home-pitch-card.is-live {
@@ -20420,6 +20526,17 @@ html[data-theme="dark"] .home-dashboard .home-pitch-card.is-live {
   color: var(--home-pitch-card-muted);
   background: hsl(0 0% 100% / 0.05);
 }
+/* Live: solid --delta-rise (same green as the old live frame), white pts. */
+.home-pitch-pts.is-live {
+  color: #fff;
+  background: hsl(var(--delta-rise));
+  font-weight: 800;
+}
+.home-pitch-pts.is-live.is-idle {
+  color: hsl(0 0% 100% / 0.88);
+  background: hsl(var(--delta-rise) / 0.82);
+  font-weight: 700;
+}
 .home-pitch-price {
   font-weight: 800;
   font-size: 10.5px;
@@ -20521,12 +20638,26 @@ html[data-theme="light"] .home-dashboard .home-pitch-card {
   --home-pitch-lift: 0 1px 3px hsl(215 25% 20% / 0.08);
   box-shadow: var(--home-pitch-lift);
 }
-html[data-theme="light"] .home-dashboard .home-pitch-pts,
+html[data-theme="light"] .home-dashboard .home-pitch-pts {
+  background: hsl(220 18% 12%);
+  color: #fff;
+}
 html[data-theme="light"] .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
 html[data-theme="light"] .home-dashboard .home-pitch-form-cell {
   background: hsl(215 20% 20% / 0.06);
 }
-html[data-theme="light"] .home-dashboard .home-pitch-pts.is-idle,
+html[data-theme="light"] .home-dashboard .home-pitch-pts.is-live {
+  color: #fff;
+  background: hsl(var(--delta-rise));
+}
+html[data-theme="light"] .home-dashboard .home-pitch-pts.is-live.is-idle {
+  color: hsl(0 0% 100% / 0.88);
+  background: hsl(var(--delta-rise) / 0.82);
+}
+html[data-theme="light"] .home-dashboard .home-pitch-pts.is-idle {
+  background: hsl(220 14% 16%);
+  color: hsl(210 12% 78%);
+}
 html[data-theme="light"] .home-dashboard .home-pitch-price.is-idle,
 html[data-theme="light"] .home-dashboard .home-pitch-form-cell.is-zero,
 html[data-theme="light"] .home-dashboard .home-pitch-fx-cell.is-blank,
@@ -20547,12 +20678,26 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     --home-pitch-lift: 0 1px 3px hsl(215 25% 20% / 0.08);
     box-shadow: var(--home-pitch-lift);
   }
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts {
+    background: hsl(220 18% 12%);
+    color: #fff;
+  }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell {
     background: hsl(215 20% 20% / 0.06);
   }
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-idle,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-live {
+    color: #fff;
+    background: hsl(var(--delta-rise));
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-live.is-idle {
+    color: hsl(0 0% 100% / 0.88);
+    background: hsl(var(--delta-rise) / 0.82);
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-idle {
+    background: hsl(220 14% 16%);
+    color: hsl(210 12% 78%);
+  }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-idle,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell.is-zero,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-fx-cell.is-blank,
@@ -26848,6 +26993,10 @@ html.is-mobile-layout #report-page .page-data-footer:not([hidden]) {
 }
 
 /* Player thumb mode: Kit (club shirts from Fantasy PL) */
+html.player-thumbs-kit .ownership-photo-frame {
+  border-radius: 8px;
+  background: hsl(var(--card));
+}
 html.player-thumbs-kit .ownership-photo,
 html.player-thumbs-kit .ownership-photo.has-team-ring,
 html.player-thumbs-kit .ownership-treemap-photo,
@@ -26865,18 +27014,85 @@ html.player-thumbs-kit #fixtures-page .ownership-photo,
 html.player-thumbs-kit .rankings-identity .ownership-photo,
 html.player-thumbs-kit .barbell-label .ownership-photo,
 html.player-thumbs-kit .barbell-group-identity .ownership-photo {
-  object-fit: contain;
-  object-position: center center;
-  border-radius: 8px;
-  padding: 1px;
+  /* Match Home pitch: overscale padded shirt art and bias it down into the tile. */
+  object-fit: cover;
+  object-position: center 18%;
+  padding: 0;
   box-sizing: border-box;
-  background: hsl(var(--card));
+  background: transparent;
+  border-radius: 0;
+}
+/* Table / identity tiles — frame clips the overscaled shirt (pitch-card treatment). */
+html.player-thumbs-kit .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit .ownership-photo-frame > .ownership-treemap-photo,
+html.player-thumbs-kit #opta-page .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit #ownership-table-wrap .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit #prices-page .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit #team-page .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit #fixtures-page .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit #live-page .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit .rankings-identity .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit .barbell-label .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit .barbell-group-identity .ownership-photo-frame > .ownership-photo {
+  position: absolute;
+  width: 145%;
+  max-width: none;
+  height: auto;
+  left: -22.5%;
+  top: 10%;
+  bottom: auto;
+  object-fit: cover;
+  object-position: center 18%;
 }
 html.player-thumbs-kit .home-lookup-photo-wrap,
 html.player-thumbs-kit .home-lookup-photo-clip,
 html.player-thumbs-kit .home-compare-photo {
   border-radius: 8px;
 }
+html.player-thumbs-kit .home-lookup-photo-clip {
+  position: relative;
+}
+html.player-thumbs-kit .home-lookup-photo-clip > .home-lookup-photo {
+  position: absolute;
+  width: 145%;
+  max-width: none;
+  height: auto;
+  left: -22.5%;
+  top: 10%;
+  object-fit: cover;
+  object-position: center 18%;
+}
+html.player-thumbs-kit .home-compare-photo-wrap {
+  overflow: hidden;
+  border-radius: 999px;
+}
+html.player-thumbs-kit .home-compare-photo-wrap > .home-compare-photo {
+  position: absolute;
+  width: 145%;
+  max-width: none;
+  height: auto;
+  left: -22.5%;
+  top: 10%;
+  object-fit: cover;
+  object-position: center 18%;
+  border-radius: 0;
+}
+html.player-thumbs-kit .feed-player-photo-wrap {
+  overflow: hidden;
+  border-radius: 12px;
+}
+html.player-thumbs-kit .feed-player-photo-wrap > .feed-player-photo {
+  position: absolute;
+  width: 145%;
+  max-width: none;
+  height: auto;
+  left: -22.5%;
+  top: 10%;
+  object-fit: cover;
+  object-position: center 18%;
+  border-radius: 0;
+}
+html.player-thumbs-kit[data-theme="dark"] .ownership-photo-frame,
 html.player-thumbs-kit[data-theme="dark"] .ownership-photo,
 html.player-thumbs-kit[data-theme="dark"] .ownership-photo.has-team-ring,
 html.player-thumbs-kit[data-theme="dark"] .ownership-treemap-photo,
@@ -26885,7 +27101,13 @@ html.player-thumbs-kit[data-theme="dark"] .home-compare-photo,
 html.player-thumbs-kit[data-theme="dark"] .feed-player-photo {
   background: hsl(var(--card));
 }
+html.player-thumbs-kit[data-theme="dark"] .ownership-photo-frame > .ownership-photo,
+html.player-thumbs-kit[data-theme="dark"] .home-lookup-photo-clip > .home-lookup-photo,
+html.player-thumbs-kit[data-theme="dark"] .home-compare-photo-wrap > .home-compare-photo {
+  background: transparent;
+}
 @media (prefers-color-scheme: dark) {
+  html.player-thumbs-kit:not([data-theme="light"]) .ownership-photo-frame,
   html.player-thumbs-kit:not([data-theme="light"]) .ownership-photo,
   html.player-thumbs-kit:not([data-theme="light"]) .ownership-photo.has-team-ring,
   html.player-thumbs-kit:not([data-theme="light"]) .ownership-treemap-photo,
@@ -26893,6 +27115,11 @@ html.player-thumbs-kit[data-theme="dark"] .feed-player-photo {
   html.player-thumbs-kit:not([data-theme="light"]) .home-compare-photo,
   html.player-thumbs-kit:not([data-theme="light"]) .feed-player-photo {
     background: hsl(var(--card));
+  }
+  html.player-thumbs-kit:not([data-theme="light"]) .ownership-photo-frame > .ownership-photo,
+  html.player-thumbs-kit:not([data-theme="light"]) .home-lookup-photo-clip > .home-lookup-photo,
+  html.player-thumbs-kit:not([data-theme="light"]) .home-compare-photo-wrap > .home-compare-photo {
+    background: transparent;
   }
 }
 /* Kit wrap: card surface in light; black only in dark (matches shirt PNG pad). */

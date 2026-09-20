@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1466" />
+<link rel="stylesheet" href="styles.css?v=1477" />
 <link rel="stylesheet" href="motion-enhanced.css?v=7" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
@@ -29,7 +29,7 @@
     if (localStorage.getItem("fpl-explorer-odometer") === "sfi") {
       root.classList.add("odometer-sfi");
     }
-    if (localStorage.getItem("fpl-explorer-player-thumb") === "kit") {
+    if (localStorage.getItem("fpl-explorer-player-thumb") !== "photo") {
       root.classList.add("player-thumbs-kit");
     }
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
@@ -529,8 +529,8 @@
               <span class="prefs-field-label" id="player-thumb-seg-label">Player images</span>
               <p class="prefs-field-hint">Headshots from the PL photo CDN, or club shirts mirrored from Fantasy PL (GK vs outfield).</p>
               <div class="segmented segmented-block" id="player-thumb-seg" role="group" aria-labelledby="player-thumb-seg-label">
-                <button type="button" data-player-thumb="photo" class="active" title="Player headshots">Photo</button>
-                <button type="button" data-player-thumb="kit" title="Club kit / shirt">Kit</button>
+                <button type="button" data-player-thumb="photo" title="Player headshots">Photo</button>
+                <button type="button" data-player-thumb="kit" class="active" title="Club kit / shirt">Kit</button>
               </div>
             </div>
           </section>
@@ -994,6 +994,7 @@
                     <path d="M 38 22 Q 50 29 62 22" fill="none" />
                     <path d="M 44 3 L 44 4.5 Q 44 5.2 44.7 5.2 L 55.3 5.2 Q 56 5.2 56 4.5 L 56 3" fill="none" />
                   </svg>
+                  <span class="home-squad-pitch-formation" id="home-squad-pitch-formation" hidden></span>
                   <div class="home-squad-pitch-xi" id="home-squad-pitch-xi"></div>
                 </div>
                 <!-- Flex grow so Bench divider lines up with Starting XI / other pages. -->
@@ -1961,7 +1962,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1391"></script>
+<script src="app.js?v=1394"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
