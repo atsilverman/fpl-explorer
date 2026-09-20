@@ -16814,24 +16814,29 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   /* Pitch Starting XI — soft lines into the page bg (opaque so joins don't stack). */
   --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 22%, hsl(var(--background)));
   --home-pitch-card-bg: hsl(0 0% 10%);
-  --home-pitch-card-border: hsl(0 0% 100% / 0.28);
+  /* Opaque frame — no alpha so borders don't stack / layer. */
+  --home-pitch-card-border: color-mix(in srgb, hsl(0 0% 100%) 32%, hsl(0 0% 10%));
+  --home-pitch-card-border-w: 1.5px;
   --home-pitch-card-fg: hsl(0 0% 96%);
   --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
+  --home-pitch-nameplate-bg: color-mix(in srgb, hsl(210 14% 16%) 72%, hsl(0 0% 10%));
 }
 html[data-theme="light"] .home-dashboard {
   --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
   --home-pitch-card-bg: hsl(0 0% 100%);
-  --home-pitch-card-border: hsl(215 20% 20% / 0.28);
+  --home-pitch-card-border: color-mix(in srgb, hsl(215 20% 20%) 22%, hsl(0 0% 100%));
   --home-pitch-card-fg: hsl(222 28% 12%);
   --home-pitch-card-muted: hsl(215 12% 32%);
+  --home-pitch-nameplate-bg: color-mix(in srgb, hsl(210 18% 94%) 82%, hsl(0 0% 100%));
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-dashboard {
     --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
     --home-pitch-card-bg: hsl(0 0% 100%);
-    --home-pitch-card-border: hsl(215 20% 20% / 0.28);
+    --home-pitch-card-border: color-mix(in srgb, hsl(215 20% 20%) 22%, hsl(0 0% 100%));
     --home-pitch-card-fg: hsl(222 28% 12%);
     --home-pitch-card-muted: hsl(215 12% 32%);
+    --home-pitch-nameplate-bg: color-mix(in srgb, hsl(210 18% 94%) 82%, hsl(0 0% 100%));
   }
 }
 html[data-theme="dark"] .home-dashboard {
@@ -16871,6 +16876,7 @@ html[data-theme="dark"][data-home-surface="solid"] .home-dashboard {
 }
 /* Hero chrome: no frosted blur on Solid — keep theme chip/Δ colors. */
 html[data-home-surface="solid"] .home-summary-hero-chip,
+html[data-home-surface="solid"] .home-summary-hero-top-pct,
 html[data-home-surface="solid"] .home-summary-hero-live,
 html[data-home-surface="solid"] .home-summary-hero-delta,
 html[data-home-surface="solid"] .home-view-chip {
@@ -17211,6 +17217,7 @@ html[data-page="home"] .home-dashboard.is-player-lookup .home-summary-hero {
   padding-left: 14px;
   padding-right: 14px;
   border-radius: var(--radius);
+  --home-hero-pad-x: 14px;
 }
 .home-summary-hero.is-rank-ready {
   color: color-mix(
@@ -17395,6 +17402,48 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
 .home-summary-hero-chip[hidden] {
   display: none !important;
 }
+.home-summary-hero-badges {
+  position: relative;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 8px 0 0;
+  min-height: 22px;
+}
+.home-summary-hero-badges:has(> :not([hidden])) {
+  display: flex;
+}
+.home-summary-hero-top-pct {
+  /* Right edge matches Auto-subs (absolute right: 0 on the hero head). */
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  max-width: calc(50% - 4.5em);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--blue-hsl) / 0.32);
+  background: hsl(var(--blue-hsl) / 0.14);
+  color: hsl(var(--blue-hsl));
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.home-summary-hero-top-pct[hidden] {
+  display: none !important;
+}
 .home-summary-hero-autosub {
   position: absolute;
   right: 0;
@@ -17407,7 +17456,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   gap: 5px;
   max-width: calc(50% - 4.5em);
   margin: 0;
-  padding: 3px 8px 3px 6px;
+  padding: 2px 7px 2px 6px;
   border-radius: 999px;
   border: 1px solid hsl(var(--amber-hsl) / 0.42);
   background: hsl(var(--amber-hsl) / 0.16);
@@ -17415,9 +17464,9 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   font-family: inherit;
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  line-height: 1;
+  line-height: 1.15;
   cursor: help;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -17527,7 +17576,7 @@ html[data-theme="dark"] .home-summary-hero-autosub {
   height: 1em;
 }
 .home-summary-hero-delta {
-  margin: 8px 0 0;
+  margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -17547,6 +17596,9 @@ html[data-theme="dark"] .home-summary-hero-autosub {
   line-height: 1;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+.home-summary-hero-delta[hidden] {
+  display: none !important;
 }
 .home-summary-hero-delta:not([hidden]) {
   display: inline-flex;
@@ -17604,6 +17656,22 @@ html[data-theme="dark"] .home-summary-hero-autosub {
   font-weight: 700;
   letter-spacing: -0.01em;
   color: inherit;
+}
+html[data-home-surface="solid"] .home-summary-hero-autosub {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-theme="dark"] .home-summary-hero-top-pct {
+  border-color: hsl(var(--blue-hsl) / 0.42);
+  background: hsl(var(--blue-hsl) / 0.22);
+  color: hsl(213 94% 78%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero-top-pct {
+    border-color: hsl(var(--blue-hsl) / 0.42);
+    background: hsl(var(--blue-hsl) / 0.22);
+    color: hsl(213 94% 78%);
+  }
 }
 /* Dark hero chrome — frost chip + Δ pills on charcoal. */
 html[data-theme="dark"] .home-summary-hero-chip {
@@ -19057,6 +19125,37 @@ html[data-theme="dark"] .home-dashboard {
   color: var(--text-faint);
   line-height: 1.2;
 }
+.home-overall-pct {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--blue-hsl) / 0.32);
+  background: hsl(var(--blue-hsl) / 0.14);
+  color: hsl(var(--blue-hsl));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.15;
+}
+.home-overall-pct[hidden] {
+  display: none !important;
+}
+html[data-theme="dark"] .home-overall-pct {
+  border-color: hsl(var(--blue-hsl) / 0.42);
+  background: hsl(var(--blue-hsl) / 0.22);
+  color: hsl(213 94% 78%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-overall-pct {
+    border-color: hsl(var(--blue-hsl) / 0.42);
+    background: hsl(var(--blue-hsl) / 0.22);
+    color: hsl(213 94% 78%);
+  }
+}
 .home-stat-gw .home-stat-value {
   font-size: 34px;
   line-height: 1;
@@ -19730,8 +19829,9 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   fill: none;
   stroke: currentColor;
   stroke-width: 0.55;
+  /* Butt caps keep T-joins flush with the endline (round caps overshoot). */
   stroke-linecap: butt;
-  stroke-linejoin: miter;
+  stroke-linejoin: round;
   stroke-opacity: 1;
   vector-effect: non-scaling-stroke;
   shape-rendering: geometricPrecision;
@@ -19820,6 +19920,12 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
 .home-squad-page-pitch.is-bench-locked .home-squad-pitch {
   transform-origin: top center;
 }
+.home-squad-page-pitch.is-bench-locked .home-squad-pitch-xi {
+  height: 100%;
+  justify-content: space-between;
+  /* Min gap — leftover height spreads between rows into the bench lock. */
+  gap: 6px;
+}
 .home-squad-page-pitch.is-bench-locked .home-pitch-bench {
   position: absolute;
   top: var(--home-bench-lock-top, auto);
@@ -19880,71 +19986,101 @@ tr.home-bench-lock-spacer > th {
   max-width: 76px;
 }
 .home-pitch-card {
+  --home-pitch-card-radius: 8px;
+  --home-pitch-badge-size: 15px;
+  --home-pitch-badge-inset: 3px;
+  --home-pitch-badge-radius: max(2px, calc(var(--home-pitch-card-radius) - var(--home-pitch-badge-inset)));
+  /* Clear air around the pts/fixtures strip (inside the outer frame). */
+  --home-pitch-strip-gap: 2.5px;
   appearance: none;
   -webkit-appearance: none;
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 3px;
+  gap: 0;
   width: min(72px, calc((100% - (var(--home-pitch-n, 1) - 1) * 10px) / var(--home-pitch-n, 1)));
   max-width: 76px;
   margin: 0;
   padding: 0;
   border: none;
-  background: transparent;
+  border-radius: var(--home-pitch-card-radius);
+  overflow: hidden;
+  background: var(--home-pitch-card-bg);
   color: var(--home-pitch-card-fg);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
   text-align: center;
+  box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
+}
+/* Single outer frame — always above photo, name, strip, badges. */
+.home-pitch-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 20;
+  box-shadow: inset 0 0 0 var(--home-pitch-card-border-w, 1.5px)
+    var(--home-pitch-frame, var(--home-pitch-card-border));
 }
 .home-pitch-card.is-bench {
   opacity: 0.92;
 }
 .home-pitch-photo-wrap {
+  --home-pitch-nameplate-h: 18px;
   position: relative;
-  /* Match meta / pts strip width — one continuous card column. */
   width: 100%;
-  /* Slightly shorter frame; bottom crop still applied on the img. */
-  aspect-ratio: 1 / 0.98;
+  /* Slightly tall frame — head-focused; nameplate covers the lower band. */
+  aspect-ratio: 1 / 1.12;
   height: auto;
   max-height: none;
   flex: 0 0 auto;
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
-  border-radius: 7px;
+  display: block;
+  border-radius: 0;
   overflow: hidden;
+  isolation: isolate;
+  /* Side gutters when a scaled photo crops — matches card surface, not jersey. */
   background: var(--home-pitch-card-bg);
-  box-shadow:
-    inset 0 0 0 1px var(--home-pitch-card-border),
-    0 2px 6px hsl(0 0% 0% / 0.28);
+  box-shadow: none;
 }
 .home-pitch-photo {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  flex: 0 0 auto;
-  /* contain = no L/R shoulder crop; wrap overflow + translate still crops bottom. */
-  object-fit: contain;
+  object-fit: cover;
   object-position: center top;
 }
 img.home-pitch-photo {
-  /* Full wrap width; bottom chest crop only (not left/right). */
-  width: 100%;
-  height: 118%;
-  object-fit: contain;
+  /*
+    Side crop + top clearance, and never paint under the nameplate:
+    - wider wrap + negative left → equal L/R crop
+    - top offset → heads clear the frame
+    - bottom pinned to nameplate top → no kit leaking under/past the name band
+  */
+  position: absolute;
+  width: 120%;
+  max-width: none;
+  left: -10%;
+  top: 7%;
+  bottom: var(--home-pitch-nameplate-h, 18px);
+  height: auto;
+  object-fit: cover;
   object-position: center top;
-  transform: translateY(10%);
+  transform: none;
+  z-index: 0;
 }
 .home-pitch-photo-crest,
 .home-pitch-photo-fallback {
   display: grid;
   place-items: center;
-  width: 100%;
-  height: 100%;
-  background: hsl(0 0% 100% / 0.04);
+  transform: none;
+  background: color-mix(in srgb, var(--home-pitch-card-bg) 92%, hsl(var(--muted-foreground)) 8%);
 }
 .home-pitch-photo-fallback.is-photo-icon {
   color: var(--home-pitch-card-muted);
@@ -19958,7 +20094,7 @@ img.home-pitch-photo {
   border-radius: 50%;
   padding: 18%;
   box-sizing: content-box;
-  background: color-mix(in srgb, hsl(var(--muted-foreground)) 14%, transparent);
+  background: color-mix(in srgb, hsl(var(--muted-foreground)) 14%, var(--home-pitch-card-bg));
   stroke-width: 1.75;
   opacity: 0.78;
 }
@@ -19970,70 +20106,136 @@ img.home-pitch-photo {
   height: 30px;
   object-fit: contain;
 }
-/* Same C / A chips as Starting XI list; pin to the photo corner. */
-.home-pitch-photo-wrap .home-role-tag {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  z-index: 2;
-}
+/* C / A / autosub chips — same size; radius tracks the card corner. */
+.home-pitch-photo-wrap .home-role-tag,
 .home-pitch-photo-wrap .home-autosub-tag {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  z-index: 2;
-  margin: 0;
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-}
-.home-pitch-card.is-autosub-out .home-pitch-photo-wrap {
-  opacity: 0.78;
-  box-shadow:
-    inset 0 0 0 1px hsl(0 72% 48% / 0.5),
-    0 0 0 1px hsl(0 72% 48% / 0.22);
-}
-.home-pitch-card.is-autosub-in .home-pitch-photo-wrap {
-  box-shadow:
-    inset 0 0 0 1px hsl(142 55% 38% / 0.45),
-    0 0 0 1px hsl(142 55% 38% / 0.2);
-}
-/* Dark name + full-width pts/opp bar (reference fixture strip). */
-.home-pitch-meta {
-  --home-pitch-meta-pad: 3px;
-  --home-pitch-meta-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  width: 100%;
-  padding: var(--home-pitch-meta-pad);
-  border-radius: var(--home-pitch-meta-radius);
-  background: var(--home-pitch-card-bg);
-  box-shadow: inset 0 0 0 1px var(--home-pitch-card-border);
+  z-index: 4;
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--home-pitch-badge-size);
+  height: var(--home-pitch-badge-size);
+  min-width: var(--home-pitch-badge-size);
+  margin: 0;
+  padding: 0;
+  border-radius: var(--home-pitch-badge-radius);
 }
-.home-pitch-name {
+.home-pitch-photo-wrap .home-role-tag {
+  top: var(--home-pitch-badge-inset);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+}
+/* Autosub prefers top-left; C/A takes the opposite corner when both exist. */
+.home-pitch-photo-wrap .home-autosub-tag {
+  top: var(--home-pitch-badge-inset);
+}
+.home-pitch-photo-wrap .home-badge-tl {
+  left: var(--home-pitch-badge-inset);
+  right: auto;
+}
+.home-pitch-photo-wrap .home-badge-tr {
+  right: var(--home-pitch-badge-inset);
+  left: auto;
+}
+.home-pitch-photo-wrap .home-autosub-tag .home-autosub-icon,
+.home-pitch-photo-wrap .home-autosub-tag .icon {
+  width: 10px;
+  height: 10px;
+}
+/* Name plate — full-bleed under the photo; opaque so kit can't show through. */
+.home-pitch-nameplate {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  max-width: 100%;
-  /* Match .home-pitch-strip so name + pts/schedule rows share one height. */
-  height: 20px;
-  min-height: 20px;
-  max-height: 20px;
-  padding: 0;
-  font-size: 9px;
+  height: var(--home-pitch-nameplate-h, 18px);
+  min-height: var(--home-pitch-nameplate-h, 18px);
+  max-height: var(--home-pitch-nameplate-h, 18px);
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: var(--home-pitch-nameplate-bg);
+  color: var(--home-pitch-card-fg);
+  font-size: 10.5px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--home-pitch-card-fg);
   text-align: center;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+html[data-theme="light"] .home-pitch-nameplate {
+  color: hsl(222 28% 12%);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-pitch-nameplate {
+    color: hsl(222 28% 12%);
+  }
+}
+html[data-home-surface="solid"] .home-pitch-nameplate {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--home-pitch-card-bg) 82%, hsl(var(--muted-foreground)) 18%);
+  box-shadow: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .home-pitch-nameplate {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: color-mix(in srgb, var(--home-pitch-card-bg) 78%, hsl(var(--muted-foreground)) 22%);
+    box-shadow: none;
+  }
+}
+.home-pitch-card.is-autosub-out {
+  --home-pitch-frame: hsl(0 72% 42%);
+  opacity: 0.78;
+  box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
+}
+.home-pitch-card.is-autosub-in {
+  --home-pitch-frame: hsl(142 55% 34%);
+  box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
+}
+/*
+  Pts / fixtures tray — attached under photo+name, separate surface.
+  Clear air around the strip matches on every side *visually*:
+  top clears the name by --home-pitch-strip-gap; L/R/B clear the
+  inner edge of the overlay frame by the same amount (pad includes
+  border-w so the frame can sit on top without eating the gap).
+*/
+.home-pitch-meta {
+  --home-pitch-meta-pad: calc(
+    var(--home-pitch-strip-gap, 2.5px) + var(--home-pitch-card-border-w, 1.5px)
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  margin: 0;
+  padding: var(--home-pitch-strip-gap, 2.5px) var(--home-pitch-meta-pad)
+    var(--home-pitch-meta-pad);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   box-sizing: border-box;
+}
+.home-pitch-name {
+  display: none;
 }
 .home-pitch-strip {
   display: flex;
@@ -20041,17 +20243,16 @@ img.home-pitch-photo {
   justify-content: center;
   gap: 2px;
   width: 100%;
-  /* Fixed height across Current / Next 3 / Last 3 / Importance / Price so the
-     pitch (and mode control above it) does not jump when switching modes. */
-  height: 20px;
-  min-height: 20px;
-  max-height: 20px;
-  /* No extra L/R pad — meta already insets; keep sides equal to bottom. */
+  height: 18px;
+  min-height: 18px;
+  max-height: 18px;
   padding: 0;
-  /* Square top; bottom nests into meta radius (outer − pad). */
+  /* Square top L/R; only bottom corners nest into the card radius. */
   --home-pitch-strip-bottom-radius: max(
     0px,
-    calc(var(--home-pitch-meta-radius, 8px) - var(--home-pitch-meta-pad, 3px))
+    calc(
+      var(--home-pitch-card-radius, 8px) - var(--home-pitch-meta-pad, 4px)
+    )
   );
   border-radius: 0 0 var(--home-pitch-strip-bottom-radius) var(--home-pitch-strip-bottom-radius);
   font-size: 10px;
@@ -20077,7 +20278,6 @@ img.home-pitch-photo {
   min-height: 0;
   height: auto;
   padding: 0;
-  /* Square top; only soften the bottom outer corners of the strip. */
   border-radius: 0;
   font-size: 8.5px;
   font-weight: 700;
@@ -20089,11 +20289,15 @@ img.home-pitch-photo {
 }
 .home-pitch-fx-cell:first-child,
 .home-pitch-form-cell:first-child {
-  border-bottom-left-radius: max(0px, calc(var(--home-pitch-strip-bottom-radius, 0px) - 2px));
+  border-bottom-left-radius: var(--home-pitch-strip-bottom-radius, 0);
 }
 .home-pitch-fx-cell:last-child,
 .home-pitch-form-cell:last-child {
-  border-bottom-right-radius: max(0px, calc(var(--home-pitch-strip-bottom-radius, 0px) - 2px));
+  border-bottom-right-radius: var(--home-pitch-strip-bottom-radius, 0);
+}
+.home-pitch-fx-cell:only-child,
+.home-pitch-form-cell:only-child {
+  border-radius: 0 0 var(--home-pitch-strip-bottom-radius, 0) var(--home-pitch-strip-bottom-radius, 0);
 }
 .home-pitch-fx-cell {
   /* Inherit card fg — pastel FDR washes need dark text in light mode.
@@ -20236,10 +20440,8 @@ html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-vl-fall {
 html[data-theme="light"] .home-dashboard .home-pitch-imp {
   background: hsl(215 20% 20% / 0.08);
 }
-html[data-theme="light"] .home-dashboard .home-pitch-photo-wrap {
-  box-shadow:
-    inset 0 0 0 1px var(--home-pitch-card-border),
-    0 1px 3px hsl(215 25% 20% / 0.08);
+html[data-theme="light"] .home-dashboard .home-pitch-card {
+  box-shadow: 0 1px 3px hsl(215 25% 20% / 0.08);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-pts,
 html[data-theme="light"] .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
@@ -20268,10 +20470,8 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
   background: hsl(215 20% 20% / 0.04);
 }
 @media (prefers-color-scheme: light) {
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-photo-wrap {
-    box-shadow:
-      inset 0 0 0 1px var(--home-pitch-card-border),
-      0 1px 3px hsl(215 25% 20% / 0.08);
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-card {
+    box-shadow: 0 1px 3px hsl(215 25% 20% / 0.08);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
@@ -20345,13 +20545,15 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     gap: 8px;
   }
   .home-pitch-card {
+    --home-pitch-card-radius: 7px;
     width: min(68px, calc((100% - (var(--home-pitch-n, 1) - 1) * 8px) / var(--home-pitch-n, 1)));
     max-width: 72px;
-    gap: 2px;
+    gap: 0;
   }
   .home-pitch-photo-wrap {
+    --home-pitch-nameplate-h: 17px;
     width: 100%;
-    aspect-ratio: 1 / 0.98;
+    aspect-ratio: 1 / 1.12;
     height: auto;
     max-height: none;
   }
@@ -20378,20 +20580,18 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     max-width: 72px;
   }
   .home-pitch-meta {
-    --home-pitch-meta-pad: 2px;
-    --home-pitch-meta-radius: 7px;
-    gap: 2px;
+    --home-pitch-meta-pad: calc(
+      var(--home-pitch-strip-gap, 2.5px) + var(--home-pitch-card-border-w, 1.5px)
+    );
+    gap: 0;
   }
-  .home-pitch-name {
-    height: 18px;
-    min-height: 18px;
-    max-height: 18px;
-    font-size: 8px;
+  .home-pitch-nameplate {
+    font-size: 9.5px;
   }
   .home-pitch-strip {
-    height: 18px;
-    min-height: 18px;
-    max-height: 18px;
+    height: 17px;
+    min-height: 17px;
+    max-height: 17px;
     font-size: 9px;
     padding: 0;
   }

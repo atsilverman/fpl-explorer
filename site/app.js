@@ -1187,6 +1187,7 @@
     homeSummaryHero: $("#home-summary-hero"),
     homeHeroChip: $("#home-hero-chip"),
     homeHeroAutosub: $("#home-hero-autosub"),
+    homeHeroTopPct: $("#home-hero-top-pct"),
     homeHeroOverallRank: $("#home-hero-overall-rank"),
     homeHeroOverallRankDelta: $("#home-hero-overall-rank-delta"),
     homeOverallRank: $("#home-overall-rank"),
@@ -2540,6 +2541,7 @@
     setHomeRankDelta(el.homeHeroOverallRankDelta, null);
     setHomeRankDelta(el.homeLeagueRankDelta, null);
     setHomeOverallPct(el.homeOverallPct, null, null);
+    setHomeOverallPct(el.homeHeroTopPct, null, null);
     if (el.homeSquadGwLabel) el.homeSquadGwLabel.textContent = "";
     if (el.homeLeagueTitle) el.homeLeagueTitle.textContent = "";
     if (el.homeSquadBody) el.homeSquadBody.innerHTML = "";
@@ -4161,9 +4163,13 @@
 
   function setHomeRankDelta(elDelta, places, { muted = false, animateRoll = false, fullDigits = false } = {}) {
     if (!elDelta) return;
-    if (places == null || !Number.isFinite(places) || places === 0) {
+    const nPlaces = Number(places);
+    // No badge when unchanged / unknown — avoid empty flat pill shells at GW start.
+    if (places == null || !Number.isFinite(nPlaces) || nPlaces === 0) {
       elDelta.hidden = true;
+      elDelta.setAttribute("hidden", "");
       elDelta.className = elDelta.classList.contains("home-summary-hero-delta")
+        || elDelta.id === "home-hero-overall-rank-delta"
         ? "home-summary-hero-delta home-rank-delta"
         : "home-rank-delta";
       elDelta.innerHTML = "";
@@ -4171,15 +4177,16 @@
       elDelta.removeAttribute("aria-label");
       return;
     }
-    const up = places > 0;
+    const up = nPlaces > 0;
     const cls = up ? "is-up" : "is-down";
     const icon = up ? "caret-up" : "caret-down";
     const n = fullDigits && !animateRoll
-      ? formatHomeRankDeltaGrouped(places)
-      : homeRankDeltaValueHTML(places, { animateRoll, fullDigits });
-    const labelN = fullDigits ? formatHomeRankDeltaGrouped(places) : formatHomeRankDelta(places);
+      ? formatHomeRankDeltaGrouped(nPlaces)
+      : homeRankDeltaValueHTML(nPlaces, { animateRoll, fullDigits });
+    const labelN = fullDigits ? formatHomeRankDeltaGrouped(nPlaces) : formatHomeRankDelta(nPlaces);
     const label = `${up ? "Up" : "Down"} ${labelN} places vs last gameweek`;
     elDelta.hidden = false;
+    elDelta.removeAttribute("hidden");
     const base = elDelta.classList.contains("home-summary-hero-delta")
       || elDelta.id === "home-hero-overall-rank-delta"
       ? "home-summary-hero-delta home-rank-delta"
@@ -4195,10 +4202,9 @@
     const n = Number(totalPlayers);
     if (!Number.isFinite(r) || !Number.isFinite(n) || r <= 0 || n <= 0) return "";
     const pct = (r / n) * 100;
+    if (pct <= 0.01) return "Top 0.01%";
     if (pct <= 0.1) return "Top 0.1%";
     if (pct <= 1) return "Top 1%";
-    if (pct <= 5) return "Top 5%";
-    if (pct <= 10) return "Top 10%";
     return "";
   }
 
@@ -4207,11 +4213,17 @@
     const label = homeTopPercentLabel(rank, totalPlayers);
     if (!label) {
       elPct.hidden = true;
+      elPct.setAttribute("hidden", "");
       elPct.textContent = "";
+      elPct.removeAttribute("title");
+      elPct.removeAttribute("aria-label");
       return;
     }
     elPct.hidden = false;
+    elPct.removeAttribute("hidden");
     elPct.textContent = label;
+    elPct.title = `${label} of all managers`;
+    elPct.setAttribute("aria-label", `${label} of all managers`);
   }
 
   function homeSquadFixtures(row) {
@@ -5083,6 +5095,7 @@
     setHomeRankDelta(el.homeOverallRankDelta, null);
     setHomeRankDelta(el.homeLeagueRankDelta, null);
     setHomeOverallPct(el.homeOverallPct, null, null);
+    setHomeOverallPct(el.homeHeroTopPct, null, null);
     const overallPanel = el.homeOverallRank && el.homeOverallRank.closest(".home-stat-panel");
     const leaguePanel = el.homeLeagueRank && el.homeLeagueRank.closest(".home-stat-panel");
     [overallPanel, leaguePanel].forEach((panel) => {
@@ -5115,8 +5128,13 @@
     );
     setHomeOverallPct(
       el.homeOverallPct,
-      viewingOther || hero ? null : summary.overallRank,
-      viewingOther || hero ? null : summary.totalPlayers
+      hero ? null : summary.overallRank,
+      hero ? null : summary.totalPlayers
+    );
+    setHomeOverallPct(
+      el.homeHeroTopPct,
+      !hero ? null : summary.overallRank,
+      !hero ? null : summary.totalPlayers
     );
     setHomeRankDelta(
       el.homeLeagueRankDelta,
@@ -6769,9 +6787,9 @@
   }
 
   const HOME_PITCH_MODE_LABELS = {
-    gw: "Current",
-    fixtures: "Next 3",
-    form: "Last 3",
+    gw: "Points",
+    fixtures: "Fixtures",
+    form: "Form",
     imp: "Importance",
     price: "Price",
   };
@@ -6933,6 +6951,7 @@
     const pitch = document.getElementById("home-squad-pitch");
     if (pitch) {
       pitch.style.maxHeight = "";
+      pitch.style.height = "";
       pitch.style.transform = "";
       pitch.style.marginBottom = "";
     }
@@ -6998,6 +7017,11 @@
         page.style.setProperty("--home-bench-lock-top", `${lockTop}px`);
         if (pitch) {
           const gap = parseFloat(getComputedStyle(page).gap) || 0;
+          // Measure natural XI height before stretching into the locked slot.
+          pitch.style.height = "";
+          pitch.style.maxHeight = "";
+          pitch.style.transform = "";
+          pitch.style.marginBottom = "";
           const naturalH = Math.ceil(pitch.getBoundingClientRect().height);
           const maxH = Math.max(48, lockTop - Math.round(gap));
           if (naturalH > maxH) {
@@ -7005,9 +7029,9 @@
             pitch.style.transform = `scale(${scale})`;
             pitch.style.transformOrigin = "top center";
             pitch.style.marginBottom = `${-Math.round(naturalH * (1 - scale))}px`;
-          } else {
-            pitch.style.transform = "";
-            pitch.style.marginBottom = "";
+          } else if (naturalH > 0 && maxH > naturalH) {
+            // Elongate pitch into the empty space above the fixed bench.
+            pitch.style.height = `${maxH}px`;
           }
         }
         return;
@@ -8400,7 +8424,7 @@
 
   function homeSquadPitchFormPts(row) {
     const cur = Number(HOME && HOME.gw);
-    // Last 3 = prior weeks only (end at current − 1), not the in-progress GW.
+    // Form = prior weeks only (end at current − 1), not the in-progress GW.
     const end = Number.isFinite(cur) && cur >= 2 ? cur - 1 : 0;
     const out = [];
     for (let gw = end - 2; gw <= end; gw++) {
@@ -8575,7 +8599,10 @@
     }
     if (el.homePitchModeMenu) {
       el.homePitchModeMenu.querySelectorAll("[data-pitch-mode]").forEach((btn) => {
-        const on = btn.getAttribute("data-pitch-mode") === mode;
+        const modeKey = btn.getAttribute("data-pitch-mode");
+        const on = modeKey === mode;
+        const optLabel = homePitchModeLabel(modeKey);
+        if (optLabel) btn.textContent = optLabel;
         btn.classList.toggle("active", on);
         btn.setAttribute("aria-selected", on ? "true" : "false");
       });
@@ -8678,14 +8705,19 @@
     const photoHTML = photo
       ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}" />`
       : `<span class="home-pitch-photo home-pitch-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
+    const hasRole = !!(row.isCaptain || row.isVice);
     const badges = [];
-    if (row.isCaptain) {
-      badges.push(`<span class="home-role-tag home-role-c" title="Captain">C</span>`);
-    } else if (row.isVice) {
-      badges.push(`<span class="home-role-tag home-role-a" title="Vice-captain">A</span>`);
+    // Autosub prefers top-left; C/A takes the opposite corner when both exist.
+    if (hasRole) {
+      const role = row.isCaptain
+        ? `<span class="home-role-tag home-role-c home-badge-tr" title="Captain">C</span>`
+        : `<span class="home-role-tag home-role-a home-badge-tr" title="Vice-captain">A</span>`;
+      badges.push(role);
     }
     const autosub = homePitchAutosubBadgeHTML(row);
-    if (autosub) badges.push(autosub);
+    if (autosub) {
+      badges.push(autosub.replace('class="home-autosub-tag', 'class="home-autosub-tag home-badge-tl'));
+    }
     const strip = homeSquadPitchStripHTML(row);
     const cardCls = [
       "home-pitch-card",
@@ -8696,11 +8728,8 @@
       .filter(Boolean)
       .join(" ");
     return `<button type="button" class="${cardCls}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
-      <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}</span>
-      <span class="home-pitch-meta">
-        <span class="home-pitch-name">${escapeHtml(row.name || "—")}</span>
-        ${strip}
-      </span>
+      <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}<span class="home-pitch-nameplate">${escapeHtml(row.name || "—")}</span></span>
+      <span class="home-pitch-meta">${strip}</span>
     </button>`;
   }
 
