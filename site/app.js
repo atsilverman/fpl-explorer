@@ -8621,10 +8621,31 @@
     homePitchStripMode = next;
     syncHomePitchModeUI(next);
     closeHomePitchModePicker();
-    renderHomeSquadPitch(homeSquadForEntry(homeActiveViewEntryId()) || []);
+    // Update strips only — rebuilding cards reloads every photo and flickers
+    // missing-image icons while primary/legacy CDNs are retried.
+    syncHomePitchCardStrips(homeSquadForEntry(homeActiveViewEntryId()) || []);
     requestAnimationFrame(() => {
       syncHomeSquadLayout(undefined, { animate: false, allowShrink: true });
     });
+  }
+
+  function syncHomePitchCardStrips(squad) {
+    const byEl = new Map();
+    for (const row of squad || []) {
+      if (row && row.element != null) byEl.set(String(row.element), row);
+    }
+    const roots = [el.homeSquadPitchXi, el.homeSquadPitchBench].filter(Boolean);
+    for (const root of roots) {
+      root.querySelectorAll(".home-pitch-card").forEach((card) => {
+        const row = byEl.get(String(card.getAttribute("data-element") || ""));
+        if (!row) return;
+        const meta = card.querySelector(".home-pitch-meta");
+        if (meta) meta.innerHTML = homeSquadPitchStripHTML(row);
+        card.classList.toggle("is-autosub-in", !!row.autoSubIn);
+        card.classList.toggle("is-autosub-out", !!row.autoSubOut);
+      });
+    }
+    if (homePitchStripMode === "imp") syncHomePitchImpLabels();
   }
 
   function homeSquadAutosubPairs(squad) {
@@ -8701,9 +8722,14 @@
 
   function homeSquadPitchCardHTML(row, { bench = false } = {}) {
     const team = row.team || "";
-    const photo = feedPlayerPhotoUrl(row.code);
+    const photo = feedPlayerPhotoSrc(row.code);
     const photoHTML = photo
-      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}" />`
+      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}"${
+          playerPhotoResolvedByCode.has(String(row.code ?? "")) &&
+          String(photo).includes("/p")
+            ? ' data-photo-alt-tried="1"'
+            : ""
+        } />`
       : `<span class="home-pitch-photo home-pitch-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const hasRole = !!(row.isCaptain || row.isVice);
     const badges = [];
@@ -24813,6 +24839,22 @@
     return `https://resources.premierleague.com/premierleague/photos/players/110x140/p${code}.png`;
   }
 
+  /** Resolved photo URL per code: string URL, or "" when both CDNs failed (icon). */
+  const playerPhotoResolvedByCode = new Map();
+
+  function rememberPlayerPhotoUrl(code, url) {
+    if (code == null || code === "") return;
+    playerPhotoResolvedByCode.set(String(code), url == null ? "" : String(url));
+  }
+
+  /** Preferred src for renders — skips known-bad primary URLs after a prior resolve. */
+  function feedPlayerPhotoSrc(code) {
+    if (code == null || code === "") return "";
+    const key = String(code);
+    if (playerPhotoResolvedByCode.has(key)) return playerPhotoResolvedByCode.get(key);
+    return feedPlayerPhotoUrl(code);
+  }
+
   function detectLocaleClockFormat() {
     try {
       const parts = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).formatToParts(
@@ -28667,11 +28709,12 @@
     if (img.dataset.photoRepairing === "1") return;
     img.dataset.photoRepairing = "1";
 
+    const code = img.dataset.code || "";
+
     // Some players 403 on premierleague25/{code}.png but resolve on legacy p{code}.
     if (img.dataset.photoAltTried !== "1") {
-      const code = img.dataset.code || "";
       const alt = feedPlayerPhotoFallbackUrl(code);
-      if (alt && img.src !== alt) {
+      if (alt && img.src !== alt && !img.src.endsWith(`/p${code}.png`)) {
         img.dataset.photoAltTried = "1";
         img.src = alt;
         queueMicrotask(() => {
@@ -28682,6 +28725,7 @@
       img.dataset.photoAltTried = "1";
     }
 
+    rememberPlayerPhotoUrl(code, "");
     img.dataset.photoFallback = "1";
     img.replaceWith(ownershipPhotoFallbackElement(img));
   }
@@ -28694,12 +28738,21 @@
       if (img.dataset.photoFallbackBound === "1") return;
       img.dataset.photoFallbackBound = "1";
       img.addEventListener("error", () => replaceBrokenPlayerPhoto(img), { once: false });
+      img.addEventListener(
+        "load",
+        () => {
+          if (img.naturalWidth > 0) rememberPlayerPhotoUrl(img.dataset.code, img.currentSrc || img.src);
+        },
+        { once: true }
+      );
       // Only sync-replace when a load already finished broken. Skip lazy
       // placeholders — they often report complete + naturalWidth 0 before
       // loading, which wrongly swapped pitch photos for crests (flicker).
       if (img.complete && img.naturalWidth === 0) {
         if (img.loading === "lazy") return;
         replaceBrokenPlayerPhoto(img);
+      } else if (img.complete && img.naturalWidth > 0) {
+        rememberPlayerPhotoUrl(img.dataset.code, img.currentSrc || img.src);
       }
     });
   }

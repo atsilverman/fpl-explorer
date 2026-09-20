@@ -16819,7 +16819,7 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   --home-pitch-card-border-w: 1.5px;
   --home-pitch-card-fg: hsl(0 0% 96%);
   --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
-  --home-pitch-nameplate-bg: color-mix(in srgb, hsl(210 14% 16%) 72%, hsl(0 0% 10%));
+  --home-pitch-nameplate-bg: hsl(210 16% 12% / 0.55);
 }
 html[data-theme="light"] .home-dashboard {
   --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
@@ -16827,7 +16827,7 @@ html[data-theme="light"] .home-dashboard {
   --home-pitch-card-border: color-mix(in srgb, hsl(215 20% 20%) 22%, hsl(0 0% 100%));
   --home-pitch-card-fg: hsl(222 28% 12%);
   --home-pitch-card-muted: hsl(215 12% 32%);
-  --home-pitch-nameplate-bg: color-mix(in srgb, hsl(210 18% 94%) 82%, hsl(0 0% 100%));
+  --home-pitch-nameplate-bg: hsl(210 24% 98% / 0.62);
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-dashboard {
@@ -16836,7 +16836,7 @@ html[data-theme="light"] .home-dashboard {
     --home-pitch-card-border: color-mix(in srgb, hsl(215 20% 20%) 22%, hsl(0 0% 100%));
     --home-pitch-card-fg: hsl(222 28% 12%);
     --home-pitch-card-muted: hsl(215 12% 32%);
-    --home-pitch-nameplate-bg: color-mix(in srgb, hsl(210 18% 94%) 82%, hsl(0 0% 100%));
+    --home-pitch-nameplate-bg: hsl(210 24% 98% / 0.62);
   }
 }
 html[data-theme="dark"] .home-dashboard {
@@ -20058,17 +20058,15 @@ tr.home-bench-lock-spacer > th {
 }
 img.home-pitch-photo {
   /*
-    Side crop + top clearance, and never paint under the nameplate:
-    - wider wrap + negative left → equal L/R crop
-    - top offset → heads clear the frame
-    - bottom pinned to nameplate top → no kit leaking under/past the name band
+    Side crop + top clearance. Photo runs under the nameplate so glass can
+    frost the kit; wrap overflow clips so nothing leaks into the points strip.
   */
   position: absolute;
   width: 120%;
   max-width: none;
   left: -10%;
   top: 7%;
-  bottom: var(--home-pitch-nameplate-h, 18px);
+  bottom: 0;
   height: auto;
   object-fit: cover;
   object-position: center top;
@@ -20146,7 +20144,7 @@ img.home-pitch-photo {
   width: 10px;
   height: 10px;
 }
-/* Name plate — full-bleed under the photo; opaque so kit can't show through. */
+/* Name plate — frosted glass over the photo; wrap overflow keeps kit in-bounds. */
 .home-pitch-nameplate {
   position: absolute;
   left: 0;
@@ -20174,16 +20172,18 @@ img.home-pitch-photo {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
+  backdrop-filter: blur(14px) saturate(1.45);
+  -webkit-backdrop-filter: blur(14px) saturate(1.45);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.14);
 }
 html[data-theme="light"] .home-pitch-nameplate {
   color: hsl(222 28% 12%);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.55);
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-pitch-nameplate {
     color: hsl(222 28% 12%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.55);
   }
 }
 html[data-home-surface="solid"] .home-pitch-nameplate {
