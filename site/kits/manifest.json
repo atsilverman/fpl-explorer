@@ -1,0 +1,327 @@
+{
+  "generatedAt": "2026-09-20T01:13:49Z",
+  "source": "https://fantasy.premierleague.com/dist/img/shirts/standard",
+  "size": 220,
+  "kits": [
+    {
+      "team": "ARS",
+      "fplCode": 3,
+      "kind": "of",
+      "file": "ARS_of.png",
+      "bytes": 25807,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_3-220.png"
+    },
+    {
+      "team": "ARS",
+      "fplCode": 3,
+      "kind": "gk",
+      "file": "ARS_gk.png",
+      "bytes": 37676,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_3_1-220.png"
+    },
+    {
+      "team": "AVL",
+      "fplCode": 7,
+      "kind": "of",
+      "file": "AVL_of.png",
+      "bytes": 31390,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_7-220.png"
+    },
+    {
+      "team": "AVL",
+      "fplCode": 7,
+      "kind": "gk",
+      "file": "AVL_gk.png",
+      "bytes": 33515,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_7_1-220.png"
+    },
+    {
+      "team": "BOU",
+      "fplCode": 91,
+      "kind": "of",
+      "file": "BOU_of.png",
+      "bytes": 28891,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_91-220.png"
+    },
+    {
+      "team": "BOU",
+      "fplCode": 91,
+      "kind": "gk",
+      "file": "BOU_gk.png",
+      "bytes": 31498,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_91_1-220.png"
+    },
+    {
+      "team": "BRE",
+      "fplCode": 94,
+      "kind": "of",
+      "file": "BRE_of.png",
+      "bytes": 24915,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_94-220.png"
+    },
+    {
+      "team": "BRE",
+      "fplCode": 94,
+      "kind": "gk",
+      "file": "BRE_gk.png",
+      "bytes": 39425,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_94_1-220.png"
+    },
+    {
+      "team": "BHA",
+      "fplCode": 36,
+      "kind": "of",
+      "file": "BHA_of.png",
+      "bytes": 34703,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_36-220.png"
+    },
+    {
+      "team": "BHA",
+      "fplCode": 36,
+      "kind": "gk",
+      "file": "BHA_gk.png",
+      "bytes": 37748,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_36_1-220.png"
+    },
+    {
+      "team": "CHE",
+      "fplCode": 8,
+      "kind": "of",
+      "file": "CHE_of.png",
+      "bytes": 32641,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_8-220.png"
+    },
+    {
+      "team": "CHE",
+      "fplCode": 8,
+      "kind": "gk",
+      "file": "CHE_gk.png",
+      "bytes": 43035,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_8_1-220.png"
+    },
+    {
+      "team": "COV",
+      "fplCode": 9,
+      "kind": "of",
+      "file": "COV_of.png",
+      "bytes": 27018,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_9-220.png"
+    },
+    {
+      "team": "COV",
+      "fplCode": 9,
+      "kind": "gk",
+      "file": "COV_gk.png",
+      "bytes": 38422,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_9_1-220.png"
+    },
+    {
+      "team": "CRY",
+      "fplCode": 31,
+      "kind": "of",
+      "file": "CRY_of.png",
+      "bytes": 27427,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_31-220.png"
+    },
+    {
+      "team": "CRY",
+      "fplCode": 31,
+      "kind": "gk",
+      "file": "CRY_gk.png",
+      "bytes": 42986,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_31_1-220.png"
+    },
+    {
+      "team": "EVE",
+      "fplCode": 11,
+      "kind": "of",
+      "file": "EVE_of.png",
+      "bytes": 28586,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_11-220.png"
+    },
+    {
+      "team": "EVE",
+      "fplCode": 11,
+      "kind": "gk",
+      "file": "EVE_gk.png",
+      "bytes": 37760,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_11_1-220.png"
+    },
+    {
+      "team": "FUL",
+      "fplCode": 54,
+      "kind": "of",
+      "file": "FUL_of.png",
+      "bytes": 30481,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_54-220.png"
+    },
+    {
+      "team": "FUL",
+      "fplCode": 54,
+      "kind": "gk",
+      "file": "FUL_gk.png",
+      "bytes": 32966,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_54_1-220.png"
+    },
+    {
+      "team": "HUL",
+      "fplCode": 88,
+      "kind": "of",
+      "file": "HUL_of.png",
+      "bytes": 26921,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_88-220.png"
+    },
+    {
+      "team": "HUL",
+      "fplCode": 88,
+      "kind": "gk",
+      "file": "HUL_gk.png",
+      "bytes": 36917,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_88_1-220.png"
+    },
+    {
+      "team": "IPS",
+      "fplCode": 40,
+      "kind": "of",
+      "file": "IPS_of.png",
+      "bytes": 30620,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_40-220.png"
+    },
+    {
+      "team": "IPS",
+      "fplCode": 40,
+      "kind": "gk",
+      "file": "IPS_gk.png",
+      "bytes": 36180,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_40_1-220.png"
+    },
+    {
+      "team": "LEE",
+      "fplCode": 2,
+      "kind": "of",
+      "file": "LEE_of.png",
+      "bytes": 21260,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_2-220.png"
+    },
+    {
+      "team": "LEE",
+      "fplCode": 2,
+      "kind": "gk",
+      "file": "LEE_gk.png",
+      "bytes": 34572,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_2_1-220.png"
+    },
+    {
+      "team": "LIV",
+      "fplCode": 14,
+      "kind": "of",
+      "file": "LIV_of.png",
+      "bytes": 30802,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_14-220.png"
+    },
+    {
+      "team": "LIV",
+      "fplCode": 14,
+      "kind": "gk",
+      "file": "LIV_gk.png",
+      "bytes": 36744,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_14_1-220.png"
+    },
+    {
+      "team": "MCI",
+      "fplCode": 43,
+      "kind": "of",
+      "file": "MCI_of.png",
+      "bytes": 20683,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_43-220.png"
+    },
+    {
+      "team": "MCI",
+      "fplCode": 43,
+      "kind": "gk",
+      "file": "MCI_gk.png",
+      "bytes": 33589,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_43_1-220.png"
+    },
+    {
+      "team": "MUN",
+      "fplCode": 1,
+      "kind": "of",
+      "file": "MUN_of.png",
+      "bytes": 30676,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_1-220.png"
+    },
+    {
+      "team": "MUN",
+      "fplCode": 1,
+      "kind": "gk",
+      "file": "MUN_gk.png",
+      "bytes": 32291,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_1_1-220.png"
+    },
+    {
+      "team": "NEW",
+      "fplCode": 4,
+      "kind": "of",
+      "file": "NEW_of.png",
+      "bytes": 29930,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_4-220.png"
+    },
+    {
+      "team": "NEW",
+      "fplCode": 4,
+      "kind": "gk",
+      "file": "NEW_gk.png",
+      "bytes": 30502,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_4_1-220.png"
+    },
+    {
+      "team": "NFO",
+      "fplCode": 17,
+      "kind": "of",
+      "file": "NFO_of.png",
+      "bytes": 31101,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_17-220.png"
+    },
+    {
+      "team": "NFO",
+      "fplCode": 17,
+      "kind": "gk",
+      "file": "NFO_gk.png",
+      "bytes": 33630,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_17_1-220.png"
+    },
+    {
+      "team": "TOT",
+      "fplCode": 6,
+      "kind": "of",
+      "file": "TOT_of.png",
+      "bytes": 30567,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_6-220.png"
+    },
+    {
+      "team": "TOT",
+      "fplCode": 6,
+      "kind": "gk",
+      "file": "TOT_gk.png",
+      "bytes": 36253,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_6_1-220.png"
+    },
+    {
+      "team": "SUN",
+      "fplCode": 56,
+      "kind": "of",
+      "file": "SUN_of.png",
+      "bytes": 29389,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_56-220.png"
+    },
+    {
+      "team": "SUN",
+      "fplCode": 56,
+      "kind": "gk",
+      "file": "SUN_gk.png",
+      "bytes": 38378,
+      "url": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_56_1-220.png"
+    }
+  ]
+}

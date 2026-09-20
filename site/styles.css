@@ -20202,7 +20202,6 @@ html[data-home-surface="solid"] .home-pitch-nameplate {
 }
 .home-pitch-card.is-autosub-out {
   --home-pitch-frame: hsl(0 72% 42%);
-  opacity: 0.78;
   box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
 }
 .home-pitch-card.is-autosub-in {
@@ -26716,4 +26715,41 @@ html:not(.is-mobile-layout) .mobile-scroll-top-fade {
 }
 html.is-mobile-layout #report-page .page-data-footer:not([hidden]) {
   padding-bottom: calc(var(--mobile-dock-clearance, 80px) + 4px);
+}
+
+/* Player thumb mode: Kit (club shirts from Fantasy PL) */
+html.player-thumbs-kit .ownership-photo,
+html.player-thumbs-kit .home-lookup-photo,
+html.player-thumbs-kit .home-compare-photo {
+  object-fit: contain;
+  object-position: center bottom;
+  border-radius: 8px;
+  background: transparent;
+}
+/* Kit wrap: card surface in light; black only in dark (matches shirt PNG pad). */
+html.player-thumbs-kit .home-pitch-photo-wrap {
+  background: var(--home-pitch-card-bg);
+}
+html.player-thumbs-kit[data-theme="dark"] .home-pitch-photo-wrap {
+  background: #000;
+}
+@media (prefers-color-scheme: dark) {
+  html.player-thumbs-kit:not([data-theme="light"]) .home-pitch-photo-wrap {
+    background: #000;
+  }
+}
+html.player-thumbs-kit img.home-pitch-photo {
+  /*
+    Same treatment as headshots (overscale + top nudge + under nameplate).
+    Extra top clearance keeps C/A corner badges clear of the collar.
+  */
+  width: 125%;
+  max-width: none;
+  left: -12.5%;
+  top: 16%;
+  bottom: 0;
+  height: auto;
+  object-fit: cover;
+  object-position: center 18%;
+  transform: none;
 }

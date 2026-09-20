@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1441" />
+<link rel="stylesheet" href="styles.css?v=1451" />
 <link rel="stylesheet" href="motion-enhanced.css?v=7" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
@@ -28,6 +28,9 @@
     root.classList.add("motion-enhanced");
     if (localStorage.getItem("fpl-explorer-odometer") === "sfi") {
       root.classList.add("odometer-sfi");
+    }
+    if (localStorage.getItem("fpl-explorer-player-thumb") === "kit") {
+      root.classList.add("player-thumbs-kit");
     }
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
     // keeps the title row clear of the iOS status blur (unlike black-translucent).
@@ -520,6 +523,14 @@
               <div class="segmented segmented-block" id="odometer-seg" role="group" aria-labelledby="odometer-seg-label">
                 <button type="button" data-odometer="classic" class="active" title="Current FPL.db drum roll">Ours</button>
                 <button type="button" data-odometer="sfi" title="SFI-inspired roll — numbers.sfinterface.com">SFI</button>
+              </div>
+            </div>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="player-thumb-seg-label">Player images</span>
+              <p class="prefs-field-hint">Headshots from the PL photo CDN, or club shirts mirrored from Fantasy PL (GK vs outfield).</p>
+              <div class="segmented segmented-block" id="player-thumb-seg" role="group" aria-labelledby="player-thumb-seg-label">
+                <button type="button" data-player-thumb="photo" class="active" title="Player headshots">Photo</button>
+                <button type="button" data-player-thumb="kit" title="Club kit / shirt">Kit</button>
               </div>
             </div>
           </section>
@@ -1950,7 +1961,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1377"></script>
+<script src="app.js?v=1381"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -1457,6 +1457,7 @@
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
     odometerSeg: $("#odometer-seg"),
+    playerThumbSeg: $("#player-thumb-seg"),
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
     fontPairSelect: $("#font-pair-select"),
@@ -2212,14 +2213,35 @@
 
   function saveTeamDifficultyStore() {
     try {
-      localStorage.setItem(TEAM_DIFFICULTY_KEY, JSON.stringify(teamDifficultyStore));
+      const payload = JSON.stringify(teamDifficultyStore);
+      localStorage.setItem(TEAM_DIFFICULTY_KEY, payload);
+      // Confirm the write — private mode / quota can no-op or throw after setItem.
+      const raw = localStorage.getItem(TEAM_DIFFICULTY_KEY);
+      if (raw !== payload) return false;
+      return true;
     } catch {
-      /* private browsing */
+      return false;
     }
   }
 
   function teamDifficultyHasCustomRatings() {
     return Object.keys(teamDifficultyStore.ratings || {}).length > 0;
+  }
+
+  /** Pull live range values into the draft. Sliders can move without an `input`
+   *  event on some mobile browsers; commit/axis-switch must not trust draft alone. */
+  function syncDifficultyDraftFromDom() {
+    if (!el.difficultyWizard) return;
+    ensureTeamDifficultyDraftFromSeed();
+    el.difficultyWizard.querySelectorAll("input.diff-slider").forEach((slider) => {
+      const team = slider.getAttribute("data-team");
+      if (!team) return;
+      const venue = slider.getAttribute("data-venue") === "A" ? "A" : "H";
+      const key = slider.getAttribute("data-axis") === "def" ? "def" : "atk";
+      const val = clampDifficultyRating(slider.value);
+      if (!teamDifficultyDraft[team]) teamDifficultyDraft[team] = emptyTeamRatings();
+      teamDifficultyDraft[team][venue][key] = val;
+    });
   }
 
   function teamDifficultyUsesFixtures() {
@@ -2329,13 +2351,105 @@
   }
 
   function refreshTeamDifficultyConsumers() {
+    syncTeamDifficultyTogglesUI();
+    syncScheduleEdgeMinChrome();
+    document.documentElement.classList.toggle("custom-fdr-on", teamDifficultyUsesFixtures());
+    // Soft re-paint every FDR consumer. Avoid settleQuiet — that skips Home
+    // pitch/squad rebuilds so custom colors look like they never applied.
     if (state.page === "fixtures") renderFixturesPage();
     if (state.page === "schedule") renderSchedule();
     if (state.page === "team") renderTeam();
-    if (state.page === "home") renderHome({ settleQuiet: true, deferDuringEnter: true });
+    if (state.page === "home") {
+      renderHome({ deferDuringEnter: true });
+      try {
+        syncHomePitchCardStrips(homeSquadForEntry(homeActiveViewEntryId()) || []);
+      } catch {
+        /* pitch helpers may be unavailable during boot */
+      }
+    }
+    if (state.page === "live") renderLive({ quiet: true });
+    if (state.page === "opta") renderTable();
     refreshOpenHomeScheduleCards();
-    syncTeamDifficultyTogglesUI();
-    syncScheduleEdgeMinChrome();
+  }
+
+  /** Persist current draft (or FPL seed) and soft-refresh FDR surfaces. */
+  function applyDifficultyDraftAndRefresh({
+    enableFixtures = null,
+    toast = true,
+    closeWizard = true,
+  } = {}) {
+    const onboarding = !!teamDifficultyWizardFirstRun;
+    syncDifficultyDraftFromDom();
+    ensureTeamDifficultyDraftFromSeed();
+    teamDifficultyStore.ratings = cloneTeamDifficultyRatings(teamDifficultyDraft);
+    teamDifficultyStore.advanced = true;
+    if (enableFixtures != null) teamDifficultyStore.useOnFixtures = !!enableFixtures;
+    else teamDifficultyStore.useOnFixtures = true;
+    teamDifficultyStore.useOnMatchups = false;
+    teamDifficultyStore.completedOnce = true;
+    const saved = saveTeamDifficultyStore();
+    if (!saved) {
+      showToast({
+        title: "Couldn’t save difficulties",
+        message: "This browser blocked local storage (private mode or full). Ratings won’t stick after refresh.",
+        icon: "info",
+      });
+      return false;
+    }
+    loadTeamDifficultyStore();
+    if (closeWizard) {
+      setDifficultyWizardOpen(false);
+      finishOnboardingHomeReveal();
+    } else {
+      // Keep draft in sync with what we just persisted.
+      teamDifficultyDraft = cloneTeamDifficultyRatings(teamDifficultyStore.ratings);
+    }
+    refreshTeamDifficultyConsumers();
+    if (!toast) return true;
+    if (onboarding && closeWizard) {
+      showManagerConfiguredToast({ skipped: false });
+      return true;
+    }
+    showToast({
+      title: "Team difficulties saved",
+      message: teamDifficultyStore.useOnFixtures
+        ? "Custom fixture colors are on — Fixtures and Home Schedule use your ratings."
+        : "Stored in this browser. Turn on Custom fixture colors in Preferences to apply them (Matchups keep OPTA/FPL ranks).",
+      icon: "circle-check",
+      animateCheck: true,
+    });
+    return true;
+  }
+
+  function commitDifficultyWizard({ enableFixtures = null } = {}) {
+    applyDifficultyDraftAndRefresh({ enableFixtures, toast: true, closeWizard: true });
+  }
+
+  function resetDifficultyDraftToFpl() {
+    teamDifficultyDraft = buildFplDifficultySeedRatings();
+    renderDifficultyWizardList();
+    // Persist FPL seeds + soft-refresh; keep Custom fixture colors toggle as-is.
+    teamDifficultyStore.ratings = cloneTeamDifficultyRatings(teamDifficultyDraft);
+    teamDifficultyStore.completedOnce = true;
+    const saved = saveTeamDifficultyStore();
+    if (!saved) {
+      showToast({
+        title: "Couldn’t reset difficulties",
+        message: "This browser blocked local storage (private mode or full).",
+        icon: "info",
+      });
+      return;
+    }
+    loadTeamDifficultyStore();
+    teamDifficultyDraft = cloneTeamDifficultyRatings(teamDifficultyStore.ratings);
+    refreshTeamDifficultyConsumers();
+    showToast({
+      title: "Reset to FPL defaults",
+      message: teamDifficultyStore.useOnFixtures
+        ? "Custom fixture colors still on — using official FPL difficulty seeds."
+        : "Ratings restored to FPL defaults.",
+      icon: "info",
+    });
   }
   async function fetchManagerSquad(managerId) {
     const url = `/api/fpl/squad?id=${encodeURIComponent(managerId)}`;
@@ -8338,7 +8452,7 @@
       .map((p) => p[0])
       .join("")
       .toUpperCase() || "?";
-    const photo = feedPlayerPhotoUrl(row.code);
+    const photo = feedPlayerPhotoUrl(row.code, row);
     const badge = row.team ? badgeHTML(row.team, "home-lookup-badge") : "";
     const metaBits = [];
     const pos = homePlayerGwPosLabel(row);
@@ -8356,7 +8470,7 @@
       );
     }
     const photoBlock = photo
-      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-initials="${escapeHtml(initials)}" />`
+      ? `<img class="home-lookup-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(row.team || ""))}" data-pos="${escapeHtml(String(row.position || ""))}" data-element-type="${escapeHtml(String(row.elementType ?? row.element_type ?? ""))}" data-initials="${escapeHtml(initials)}" />`
       : `<span class="home-lookup-photo home-lookup-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const photoRing = teamRingAttrs(row.team);
     return `<div class="home-lookup-head">
@@ -8722,9 +8836,12 @@
 
   function homeSquadPitchCardHTML(row, { bench = false } = {}) {
     const team = row.team || "";
-    const photo = feedPlayerPhotoSrc(row.code);
+    const pos = row.position || "";
+    const et = row.elementType != null ? row.elementType : "";
+    const photo = feedPlayerPhotoSrc(row.code, row);
     const photoHTML = photo
-      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}"${
+      ? `<img class="home-pitch-photo" src="${escapeHtml(photo)}" alt="" width="56" height="70" loading="eager" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(team)}" data-pos="${escapeHtml(String(pos))}" data-element-type="${escapeHtml(String(et))}"${
+          !playerThumbsUseKit() &&
           playerPhotoResolvedByCode.has(String(row.code ?? "")) &&
           String(photo).includes("/p")
             ? ' data-photo-alt-tried="1"'
@@ -11645,9 +11762,9 @@
       .map((p) => p[0])
       .join("")
       .toUpperCase() || "?";
-    const photo = feedPlayerPhotoUrl(row.code);
+    const photo = feedPlayerPhotoUrl(row.code, row);
     const photoBlock = photo
-      ? `<img class="home-compare-photo" src="${escapeHtml(photo)}" alt="" width="48" height="48" loading="lazy" data-initials="${escapeHtml(initials)}" />`
+      ? `<img class="home-compare-photo" src="${escapeHtml(photo)}" alt="" width="48" height="48" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(row.team || ""))}" data-pos="${escapeHtml(String(row.position || ""))}" data-element-type="${escapeHtml(String(row.elementType ?? row.element_type ?? ""))}" data-initials="${escapeHtml(initials)}" />`
       : `<span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("user")}</span>`;
     const badge = row.team ? badgeHTML(row.team, "home-compare-badge") : "";
     const meta = [row.position, row.team].filter(Boolean).join(" · ");
@@ -23346,6 +23463,7 @@
   function setDifficultyWizardOpen(open, { firstRun = false, step = null } = {}) {
     if (!el.difficultyWizard) return;
     if (open) {
+      loadTeamDifficultyStore();
       teamDifficultyWizardFirstRun = !!firstRun;
       teamDifficultyWizardStep = step || (firstRun ? "intro" : "edit");
       teamDifficultyWizardAxis = "atk";
@@ -23387,38 +23505,6 @@
         icon: "info",
       });
     }
-  }
-
-  function resetDifficultyDraftToFpl() {
-    teamDifficultyDraft = buildFplDifficultySeedRatings();
-    renderDifficultyWizardList();
-  }
-
-  function commitDifficultyWizard({ enableFixtures = null } = {}) {
-    const onboarding = !!teamDifficultyWizardFirstRun;
-    ensureTeamDifficultyDraftFromSeed();
-    teamDifficultyStore.ratings = cloneTeamDifficultyRatings(teamDifficultyDraft);
-    teamDifficultyStore.advanced = true;
-    // Saving ratings does not flip the apply toggle — Preferences controls that.
-    if (enableFixtures != null) teamDifficultyStore.useOnFixtures = !!enableFixtures;
-    teamDifficultyStore.useOnMatchups = false;
-    teamDifficultyStore.completedOnce = true;
-    saveTeamDifficultyStore();
-    setDifficultyWizardOpen(false);
-    finishOnboardingHomeReveal();
-    refreshTeamDifficultyConsumers();
-    if (onboarding) {
-      showManagerConfiguredToast({ skipped: false });
-      return;
-    }
-    showToast({
-      title: "Team difficulties saved",
-      message: teamDifficultyStore.useOnFixtures
-        ? "Custom fixture colors are on — Fixtures and Home Schedule use your ratings."
-        : "Stored in this browser. Turn on Custom fixture colors in Preferences to apply them (Matchups keep OPTA/FPL ranks).",
-      icon: "circle-check",
-      animateCheck: true,
-    });
   }
 
   function syncTeamDifficultyTogglesUI() {
@@ -24825,7 +24911,20 @@
 
   // ---------------------------------------------------------------------
   // Shared player photo / stat helpers (formerly Feed; also Home + Ownership)
-  function feedPlayerPhotoUrl(code) {
+  function playerThumbsUseKit() {
+    return document.documentElement.classList.contains("player-thumbs-kit");
+  }
+
+  function feedPlayerPhotoUrl(code, row = null) {
+    if (playerThumbsUseKit()) {
+      const team = row
+        ? currentTeamCode(row) || row.team || row.newTeam
+        : null;
+      const pos = row ? row.newPosition || row.position : null;
+      const et = row ? row.elementType || row.element_type : null;
+      const kit = feedPlayerKitUrl(team, pos, et);
+      if (kit) return kit;
+    }
     if (code == null || code === "") return "";
     // FPL bootstrap `photo` is "{code}.jpg"; current PL CDN path (25/26) is
     // premierleague25/…/{code}.png (no "p" prefix). Some players 403 here
@@ -24839,20 +24938,50 @@
     return `https://resources.premierleague.com/premierleague/photos/players/110x140/p${code}.png`;
   }
 
+  function feedPlayerKitKind(position, elementType) {
+    const et = Number(elementType);
+    if (et === 1) return "gk";
+    const pos = String(position || "").toUpperCase();
+    // GKP/GK labels from Statistics/Ownership — not bare "1" (Home pitch slot).
+    if (pos === "GKP" || pos === "GK") return "gk";
+    return "of";
+  }
+
+  function feedPlayerKitUrl(teamCode, position, elementType) {
+    const team = String(teamCode || "").toUpperCase();
+    if (!team) return "";
+    return `kits/${team}_${feedPlayerKitKind(position, elementType)}.png`;
+  }
+
+  function feedPlayerKitCdnUrl(teamCode, position, elementType) {
+    const team = String(teamCode || "").toUpperCase();
+    const map = (DATA.fplIdentity && DATA.fplIdentity.teamCodeByShort) || {};
+    const fplCode = map[team];
+    if (fplCode == null) return "";
+    const mid =
+      feedPlayerKitKind(position, elementType) === "gk"
+        ? `shirt_${fplCode}_1`
+        : `shirt_${fplCode}`;
+    return `https://fantasy.premierleague.com/dist/img/shirts/standard/${mid}-220.png`;
+  }
+
   /** Resolved photo URL per code: string URL, or "" when both CDNs failed (icon). */
   const playerPhotoResolvedByCode = new Map();
 
   function rememberPlayerPhotoUrl(code, url) {
     if (code == null || code === "") return;
+    // Kit mode keys include team+pos — don't poison the photo cache.
+    if (playerThumbsUseKit()) return;
     playerPhotoResolvedByCode.set(String(code), url == null ? "" : String(url));
   }
 
   /** Preferred src for renders — skips known-bad primary URLs after a prior resolve. */
-  function feedPlayerPhotoSrc(code) {
+  function feedPlayerPhotoSrc(code, row = null) {
+    if (playerThumbsUseKit()) return feedPlayerPhotoUrl(code, row);
     if (code == null || code === "") return "";
     const key = String(code);
     if (playerPhotoResolvedByCode.has(key)) return playerPhotoResolvedByCode.get(key);
-    return feedPlayerPhotoUrl(code);
+    return feedPlayerPhotoUrl(code, row);
   }
 
   function detectLocaleClockFormat() {
@@ -28702,6 +28831,7 @@
       !img.classList.contains("ownership-photo")
       && !img.classList.contains("home-lookup-photo")
       && !img.classList.contains("home-pitch-photo")
+      && !img.classList.contains("home-compare-photo")
     ) {
       return;
     }
@@ -28710,6 +28840,36 @@
     img.dataset.photoRepairing = "1";
 
     const code = img.dataset.code || "";
+
+    // Kit mode: try FPL CDN shirt, then fall back to headshot, then icon.
+    if (playerThumbsUseKit()) {
+      if (img.dataset.kitCdnTried !== "1") {
+        const cdn = feedPlayerKitCdnUrl(img.dataset.team, img.dataset.pos, img.dataset.elementType);
+        img.dataset.kitCdnTried = "1";
+        if (cdn && img.src !== cdn) {
+          img.src = cdn;
+          queueMicrotask(() => {
+            if (img.isConnected) delete img.dataset.photoRepairing;
+          });
+          return;
+        }
+      }
+      if (img.dataset.kitPhotoTried !== "1" && code) {
+        img.dataset.kitPhotoTried = "1";
+        const head = `https://resources.premierleague.com/premierleague25/photos/players/110x140/${code}.png`;
+        if (img.src !== head) {
+          img.src = head;
+          queueMicrotask(() => {
+            if (img.isConnected) delete img.dataset.photoRepairing;
+          });
+          return;
+        }
+      }
+      rememberPlayerPhotoUrl(code, "");
+      img.dataset.photoFallback = "1";
+      img.replaceWith(ownershipPhotoFallbackElement(img));
+      return;
+    }
 
     // Some players 403 on premierleague25/{code}.png but resolve on legacy p{code}.
     if (img.dataset.photoAltTried !== "1") {
@@ -28733,7 +28893,7 @@
   function bindOwnershipPhotoFallback(root) {
     if (!root) return;
     root.querySelectorAll(
-      "img.ownership-photo, img.home-lookup-photo, img.home-pitch-photo"
+      "img.ownership-photo, img.home-lookup-photo, img.home-pitch-photo, img.home-compare-photo"
     ).forEach((img) => {
       if (img.dataset.photoFallbackBound === "1") return;
       img.dataset.photoFallbackBound = "1";
@@ -28768,14 +28928,16 @@
 
   function ownershipPhotoHTML(row, teamCode, { eager = false } = {}) {
     const initials = ownershipInitials(row.name);
-    const photo = feedPlayerPhotoUrl(row.code);
+    const photo = feedPlayerPhotoSrc(row.code, row);
     const team = teamCode || currentTeamCode(row) || row.team;
+    const pos = row.newPosition || row.position || "";
+    const et = row.elementType != null ? row.elementType : row.element_type != null ? row.element_type : "";
     const ring = teamRingAttrs(team);
     if (!photo) {
       return `<span class="ownership-photo ownership-photo-fallback is-photo-icon${ring.className}" aria-hidden="true"${ring.attr}>${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     }
     const loading = eager ? "eager" : "lazy";
-    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
+    return `<img class="ownership-photo${ring.className}" src="${escapeHtml(photo)}" alt="" width="36" height="36" loading="${loading}" decoding="async" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(team || ""))}" data-pos="${escapeHtml(String(pos))}" data-element-type="${escapeHtml(String(et))}" data-initials="${escapeHtml(initials)}"${ring.attr} />`;
   }
 
   function ownershipIdCellHTML(row, _rank, { hidePrice = false } = {}) {
@@ -32620,13 +32782,14 @@
       const axisBtn = e.target.closest("#difficulty-axis-seg button[data-axis]");
       if (axisBtn) {
         e.preventDefault();
+        syncDifficultyDraftFromDom();
         teamDifficultyWizardAxis = axisBtn.dataset.axis === "def" ? "def" : "atk";
         syncDifficultyAxisSeg();
         syncDifficultyEditCopy();
         renderDifficultyWizardList();
       }
     });
-    el.difficultyWizard.addEventListener("input", (e) => {
+    const onDifficultySliderEdit = (e) => {
       const slider = e.target.closest("input.diff-slider");
       if (!slider || !el.difficultyWizard.contains(slider)) return;
       const team = slider.getAttribute("data-team");
@@ -32648,7 +32811,9 @@
         } else pill.removeAttribute("style");
         pill.textContent = String(val);
       }
-    });
+    };
+    el.difficultyWizard.addEventListener("input", onDifficultySliderEdit);
+    el.difficultyWizard.addEventListener("change", onDifficultySliderEdit);
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (!el.difficultyWizard || el.difficultyWizard.hidden) return;
@@ -34467,6 +34632,67 @@
     });
   }
   applyOdometerMode(currentOdometerMode(), { preview: false });
+
+  const PLAYER_THUMB_KEY = "fpl-explorer-player-thumb";
+  const PLAYER_THUMB_ORDER = ["photo", "kit"];
+
+  function currentPlayerThumbMode() {
+    try {
+      const stored = localStorage.getItem(PLAYER_THUMB_KEY);
+      if (PLAYER_THUMB_ORDER.includes(stored)) return stored;
+    } catch {
+      /* private browsing */
+    }
+    return "photo";
+  }
+
+  function syncPlayerThumbSeg(mode = currentPlayerThumbMode()) {
+    if (!el.playerThumbSeg) return;
+    Array.from(el.playerThumbSeg.querySelectorAll("button[data-player-thumb]")).forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.playerThumb === mode);
+    });
+    if (typeof syncSegThumb === "function") syncSegThumb(el.playerThumbSeg, { animate: false });
+  }
+
+  function refreshPlayerThumbConsumers() {
+    // Avoid settleQuiet — Home skips squad/pitch rebuild when tables are unchanged.
+    if (state.page === "home") renderHome({ deferDuringEnter: true });
+    else if (state.page === "ownership") renderOwnership();
+    else if (state.page === "live") renderLive({ quiet: true });
+    else if (state.page === "rankings") renderRankings({ skipBarDraw: true });
+    else if (state.page === "prices") renderPrices();
+    else if (state.page === "opta") renderTable();
+    else if (state.page === "expected") renderExpected();
+    else if (state.page === "team") renderTeam();
+  }
+
+  function applyPlayerThumbMode(mode, { repaint = true } = {}) {
+    const next = PLAYER_THUMB_ORDER.includes(mode) ? mode : "photo";
+    try {
+      if (next === "photo") localStorage.removeItem(PLAYER_THUMB_KEY);
+      else localStorage.setItem(PLAYER_THUMB_KEY, next);
+    } catch {
+      /* private browsing */
+    }
+    document.documentElement.classList.toggle("player-thumbs-kit", next === "kit");
+    try {
+      playerPhotoResolvedByCode.clear();
+    } catch {
+      /* helpers not ready */
+    }
+    syncPlayerThumbSeg(next);
+    if (repaint) refreshPlayerThumbConsumers();
+  }
+
+  if (el.playerThumbSeg) {
+    el.playerThumbSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-player-thumb]");
+      if (!btn || !el.playerThumbSeg.contains(btn)) return;
+      applyPlayerThumbMode(btn.dataset.playerThumb || "photo", { repaint: true });
+      btn.blur();
+    });
+  }
+  applyPlayerThumbMode(currentPlayerThumbMode(), { repaint: false });
 
   function motionEnhancedOn() {
     return true;
