@@ -567,7 +567,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    host, port = "127.0.0.1", 8000
+    host = os.environ.get("FPL_SERVE_HOST", "0.0.0.0")
+    port = int(os.environ.get("FPL_SERVE_PORT", "8000"))
     httpd = ThreadingHTTPServer((host, port), Handler)
     home_mode = "local cache" if HOME_LOCAL_CACHE else f"live proxy → {LIVE_ORIGIN}/api/home"
     print(

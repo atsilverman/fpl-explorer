@@ -5775,6 +5775,10 @@
     "3xc": "Triple Captain",
   };
 
+  function homeChipToneAttr(name) {
+    return HOME_CHIP_ABBR[name] ? ` data-chip="${escapeHtml(name)}"` : "";
+  }
+
   function homeActiveChipName(row) {
     const active = row.activeChip ? String(row.activeChip).trim() : "";
     if (active && HOME_CHIP_ABBR[active]) return active;
@@ -5795,7 +5799,7 @@
     const title = chip && chip.label
       ? `${chip.label} active this gameweek`
       : `${abbr} active this gameweek`;
-    return `<span class="home-standings-chip-badge"${tipAttr(title)} aria-label="${escapeHtml(title)}">${escapeHtml(abbr)}</span>`;
+    return `<span class="home-standings-chip-badge"${homeChipToneAttr(name)}${tipAttr(title)} aria-label="${escapeHtml(title)}">${escapeHtml(abbr)}</span>`;
   }
 
   function homeChipCellHTML(chip) {
@@ -8834,6 +8838,64 @@
     return "";
   }
 
+  /** True when name glyphs run under the card's inset frame. */
+  function homePitchNameOverlapsCardFrame(plate) {
+    const card = plate.closest(".home-pitch-card");
+    const text = plate.querySelector(".home-pitch-nameplate-text");
+    if (!card || !text) return false;
+    if (!String(text.textContent || "").trim()) return false;
+    const frameW = parseFloat(
+      getComputedStyle(card).getPropertyValue("--home-pitch-card-border-w")
+    );
+    const inset = Number.isFinite(frameW) ? frameW : 1.5;
+    const cardBox = card.getBoundingClientRect();
+    if (!(cardBox.width > 0)) return false;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const rects = range.getClientRects();
+    if (typeof range.detach === "function") range.detach();
+    let left = Infinity;
+    let right = -Infinity;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r.width <= 0) continue;
+      if (r.left < left) left = r.left;
+      if (r.right > right) right = r.right;
+    }
+    if (!Number.isFinite(left)) return false;
+    // Hairline / antialias overlap isn't "covered" — Gibbs-White was fine.
+    const slack = 1;
+    return left < cardBox.left + inset - slack || right > cardBox.right - inset + slack;
+  }
+
+  function syncHomePitchNameplates(root) {
+    const scopes = root
+      ? [root]
+      : [el.homeSquadPitchXi, el.homeSquadPitchBench].filter(Boolean);
+    scopes.forEach((scope) => {
+      scope.querySelectorAll(".home-pitch-nameplate").forEach((plate) => {
+        const text = plate.querySelector(".home-pitch-nameplate-text");
+        if (!text) return;
+        plate.classList.remove("is-truncated");
+        plate.removeAttribute("title");
+        if (!homePitchNameOverlapsCardFrame(plate)) return;
+        plate.classList.add("is-truncated");
+        const full = String(text.textContent || "").trim();
+        if (full) plate.setAttribute("title", full);
+      });
+    });
+  }
+
+  let homePitchNameplateRo = null;
+  function ensureHomePitchNameplateObserver() {
+    if (homePitchNameplateRo || typeof ResizeObserver === "undefined") return;
+    homePitchNameplateRo = new ResizeObserver(() => {
+      syncHomePitchNameplates();
+    });
+    if (el.homeSquadPitchXi) homePitchNameplateRo.observe(el.homeSquadPitchXi);
+    if (el.homeSquadPitchBench) homePitchNameplateRo.observe(el.homeSquadPitchBench);
+  }
+
   function homeSquadPitchCardHTML(row, { bench = false } = {}) {
     const team = row.team || "";
     const pos = row.position || "";
@@ -8862,16 +8924,18 @@
       badges.push(autosub.replace('class="home-autosub-tag', 'class="home-autosub-tag home-badge-tl'));
     }
     const strip = homeSquadPitchStripHTML(row);
+    const fullName = row.name || "—";
     const cardCls = [
       "home-pitch-card",
       bench ? "is-bench" : "",
       row.autoSubIn ? "is-autosub-in" : "",
       row.autoSubOut ? "is-autosub-out" : "",
+      homeSquadRowIsInPlay(row) ? "is-live" : "",
     ]
       .filter(Boolean)
       .join(" ");
-    return `<button type="button" class="${cardCls}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(row.name))}">
-      <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}<span class="home-pitch-nameplate">${escapeHtml(row.name || "—")}</span></span>
+    return `<button type="button" class="${cardCls}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(fullName))}">
+      <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}<span class="home-pitch-nameplate"><span class="home-pitch-nameplate-text">${escapeHtml(fullName)}</span></span></span>
       <span class="home-pitch-meta">${strip}</span>
     </button>`;
   }
@@ -8925,7 +8989,11 @@
     syncHomeBenchCollapsedUI();
     syncHomePitchModeUI();
     syncHomeHeroAutosubNotice(squad);
-    requestAnimationFrame(() => syncHomePitchImpLabels());
+    ensureHomePitchNameplateObserver();
+    requestAnimationFrame(() => {
+      syncHomePitchImpLabels();
+      syncHomePitchNameplates();
+    });
   }
 
   function homeSquadRowHTML(row, opts = {}) {
@@ -13967,11 +14035,14 @@
         el.homeHeroChip.textContent = label;
         el.homeHeroChip.title = `${label} active this gameweek`;
         el.homeHeroChip.setAttribute("aria-label", `${label} active this gameweek`);
+        if (HOME_CHIP_ABBR[chipKey]) el.homeHeroChip.setAttribute("data-chip", chipKey);
+        else el.homeHeroChip.removeAttribute("data-chip");
       } else {
         el.homeHeroChip.hidden = true;
         el.homeHeroChip.textContent = "";
         el.homeHeroChip.removeAttribute("title");
         el.homeHeroChip.removeAttribute("aria-label");
+        el.homeHeroChip.removeAttribute("data-chip");
       }
     }
     syncHomeHeroAutosubNotice(homeSquadForEntry(viewEntry) || []);
@@ -34693,6 +34764,7 @@
     });
   }
   applyPlayerThumbMode(currentPlayerThumbMode(), { repaint: false });
+  try { localStorage.removeItem("fpl-explorer-mock-live"); } catch { /* private browsing */ }
 
   function motionEnhancedOn() {
     return true;

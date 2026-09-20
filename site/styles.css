@@ -2682,9 +2682,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     pointer-events: none;
     background: linear-gradient(
       to top,
-      hsl(var(--background) / 0.72) 0%,
-      hsl(var(--background) / 0.34) 46%,
-      hsl(var(--background) / 0) 100%
+      color-mix(in srgb, var(--bg) 88%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 40%, transparent) 46%,
+      transparent 100%
     );
   }
   .mobile-chrome-fade:not([hidden]) {
@@ -2693,18 +2693,18 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   :root[data-theme="dark"] .mobile-chrome-fade:not([hidden]) {
     background: linear-gradient(
       to top,
-      hsl(var(--background) / 0.84) 0%,
-      hsl(var(--background) / 0.42) 48%,
-      hsl(var(--background) / 0) 100%
+      color-mix(in srgb, var(--bg) 90%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 45%, transparent) 48%,
+      transparent 100%
     );
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .mobile-chrome-fade:not([hidden]) {
       background: linear-gradient(
         to top,
-        hsl(var(--background) / 0.84) 0%,
-        hsl(var(--background) / 0.42) 48%,
-        hsl(var(--background) / 0) 100%
+        color-mix(in srgb, var(--bg) 90%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 45%, transparent) 48%,
+        transparent 100%
       );
     }
   }
@@ -16883,12 +16883,14 @@ html[data-home-surface="solid"] .home-view-chip {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-html[data-home-surface="solid"] .home-summary-hero-chip {
+html[data-home-surface="solid"] .home-summary-hero-chip:not([data-chip]),
+html[data-home-surface="solid"] .home-summary-hero-top-pct {
   background: hsl(220 16% 94%);
   border-color: hsl(220 14% 48% / 0.28);
   color: hsl(220 16% 26%);
 }
-html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-chip {
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-chip:not([data-chip]),
+html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero-top-pct {
   border-color: hsl(0 0% 100% / 0.16);
   background: hsl(0 0% 100% / 0.1);
   color: hsl(210 14% 88%);
@@ -16917,7 +16919,8 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
   background: hsl(var(--home-hero-delta-down) / 0.18);
 }
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-chip {
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-chip:not([data-chip]),
+  html:not([data-theme="light"])[data-home-surface="solid"] .home-summary-hero-top-pct {
     border-color: hsl(0 0% 100% / 0.16);
     background: hsl(0 0% 100% / 0.1);
     color: hsl(210 14% 88%);
@@ -17415,7 +17418,7 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   display: flex;
 }
 .home-summary-hero-top-pct {
-  /* Right edge matches Auto-subs (absolute right: 0 on the hero head). */
+  /* Same grey/white frost the chip used before type colors. */
   position: absolute;
   right: 0;
   top: 50%;
@@ -17427,9 +17430,9 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   max-width: calc(50% - 4.5em);
   padding: 2px 7px;
   border-radius: 999px;
-  border: 1px solid hsl(var(--blue-hsl) / 0.32);
-  background: hsl(var(--blue-hsl) / 0.14);
-  color: hsl(var(--blue-hsl));
+  border: 1px solid hsl(220 14% 48% / 0.28);
+  background: hsl(220 16% 94% / 0.88);
+  color: hsl(220 16% 26%);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -17662,19 +17665,19 @@ html[data-home-surface="solid"] .home-summary-hero-autosub {
   -webkit-backdrop-filter: none;
 }
 html[data-theme="dark"] .home-summary-hero-top-pct {
-  border-color: hsl(var(--blue-hsl) / 0.42);
-  background: hsl(var(--blue-hsl) / 0.22);
-  color: hsl(213 94% 78%);
+  border-color: hsl(0 0% 100% / 0.16);
+  background: hsl(0 0% 100% / 0.1);
+  color: hsl(210 14% 88%);
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-summary-hero-top-pct {
-    border-color: hsl(var(--blue-hsl) / 0.42);
-    background: hsl(var(--blue-hsl) / 0.22);
-    color: hsl(213 94% 78%);
+    border-color: hsl(0 0% 100% / 0.16);
+    background: hsl(0 0% 100% / 0.1);
+    color: hsl(210 14% 88%);
   }
 }
 /* Dark hero chrome — frost chip + Δ pills on charcoal. */
-html[data-theme="dark"] .home-summary-hero-chip {
+html[data-theme="dark"] .home-summary-hero-chip:not([data-chip]) {
   border-color: hsl(0 0% 100% / 0.16);
   background: hsl(0 0% 100% / 0.1);
   color: hsl(210 14% 88%);
@@ -17712,7 +17715,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   );
 }
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .home-summary-hero-chip {
+  html:not([data-theme="light"]) .home-summary-hero-chip:not([data-chip]) {
     border-color: hsl(0 0% 100% / 0.16);
     background: hsl(0 0% 100% / 0.1);
     color: hsl(210 14% 88%);
@@ -17766,7 +17769,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
 /* Keep hero card values on one baseline — GW was oversized vs rank. */
 .home-summary[data-home-summary="hero"] .home-stat-value,
 .home-summary[data-home-summary="hero"] .home-stat-gw .home-stat-value {
-  font-size: 28px;
+  font-size: 26px;
 }
 .home-summary[data-home-summary="hero"] .home-stat-meta:empty {
   display: none;
@@ -18931,8 +18934,11 @@ html[data-theme="dark"] .home-dashboard {
 .home-stat-panel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 96px;
+  gap: 3px;
+  min-height: 84px;
+}
+.home-summary-cards > .home-stat-panel {
+  padding: 8px 12px;
 }
 .home-stat-panel .home-panel-heading {
   margin-bottom: 2px;
@@ -19861,7 +19867,8 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  gap: 10px;
+  --home-pitch-gap: 10px;
+  gap: var(--home-pitch-gap);
   min-height: 0;
   flex: 0 0 auto;
 }
@@ -19992,6 +19999,7 @@ tr.home-bench-lock-spacer > th {
   --home-pitch-badge-radius: max(2px, calc(var(--home-pitch-card-radius) - var(--home-pitch-badge-inset)));
   /* Clear air around the pts/fixtures strip (inside the outer frame). */
   --home-pitch-strip-gap: 2.5px;
+  --home-pitch-lift: 0 2px 6px hsl(0 0% 0% / 0.28);
   appearance: none;
   -webkit-appearance: none;
   position: relative;
@@ -20001,7 +20009,7 @@ tr.home-bench-lock-spacer > th {
   align-items: stretch;
   justify-content: flex-start;
   gap: 0;
-  width: min(72px, calc((100% - (var(--home-pitch-n, 1) - 1) * 10px) / var(--home-pitch-n, 1)));
+  width: min(72px, calc((100% - (var(--home-pitch-n, 1) - 1) * var(--home-pitch-gap, 10px)) / var(--home-pitch-n, 1)));
   max-width: 76px;
   margin: 0;
   padding: 0;
@@ -20014,7 +20022,7 @@ tr.home-bench-lock-spacer > th {
   font: inherit;
   font-size: 11px;
   text-align: center;
-  box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
+  box-shadow: var(--home-pitch-lift);
 }
 /* Single outer frame — always above photo, name, strip, badges. */
 .home-pitch-card::after {
@@ -20158,7 +20166,7 @@ img.home-pitch-photo {
   height: var(--home-pitch-nameplate-h, 18px);
   min-height: var(--home-pitch-nameplate-h, 18px);
   max-height: var(--home-pitch-nameplate-h, 18px);
-  padding: 0 4px;
+  padding: 0 calc(var(--home-pitch-card-border-w, 1.5px) + 1px);
   border: 0;
   border-radius: 0;
   outline: none;
@@ -20170,11 +20178,29 @@ img.home-pitch-photo {
   letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   text-align: center;
   backdrop-filter: blur(14px) saturate(1.45);
   -webkit-backdrop-filter: blur(14px) saturate(1.45);
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.14);
+}
+.home-pitch-nameplate-text {
+  display: block;
+  flex: 0 0 auto;
+  min-width: max-content;
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  text-align: center;
+}
+.home-pitch-nameplate.is-truncated .home-pitch-nameplate-text {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 html[data-theme="light"] .home-pitch-nameplate {
   color: hsl(222 28% 12%);
@@ -20207,6 +20233,67 @@ html[data-home-surface="solid"] .home-pitch-nameplate {
 .home-pitch-card.is-autosub-in {
   --home-pitch-frame: hsl(142 55% 34%);
   box-shadow: 0 2px 6px hsl(0 0% 0% / 0.28);
+}
+.home-pitch-card.is-live {
+  --home-pitch-frame: hsl(var(--delta-rise));
+}
+.home-dashboard .home-pitch-card.is-live,
+html[data-theme="light"] .home-dashboard .home-pitch-card.is-live,
+html[data-theme="dark"] .home-dashboard .home-pitch-card.is-live {
+  animation: home-pitch-live-aura 3.6s ease-in-out infinite;
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-card.is-live {
+    animation: home-pitch-live-aura 3.6s ease-in-out infinite;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-card.is-live {
+    animation: home-pitch-live-aura 3.6s ease-in-out infinite;
+  }
+}
+.home-pitch-row .home-pitch-card.is-live:nth-child(2) {
+  animation-delay: 0.45s;
+}
+.home-pitch-row .home-pitch-card.is-live:nth-child(3) {
+  animation-delay: 0.9s;
+}
+.home-pitch-row .home-pitch-card.is-live:nth-child(4) {
+  animation-delay: 1.35s;
+}
+.home-pitch-row .home-pitch-card.is-live:nth-child(5) {
+  animation-delay: 1.8s;
+}
+@keyframes home-pitch-live-aura {
+  0% {
+    box-shadow:
+      var(--home-pitch-lift, 0 2px 6px hsl(0 0% 0% / 0.28)),
+      0 0 0 0 hsl(var(--delta-rise) / 0.16),
+      0 0 4px 0 hsl(var(--delta-rise) / 0.08);
+  }
+  42% {
+    box-shadow:
+      var(--home-pitch-lift, 0 2px 6px hsl(0 0% 0% / 0.28)),
+      0 0 8px 6px hsl(var(--delta-rise) / 0),
+      0 0 7px 1px hsl(var(--delta-rise) / 0.14);
+  }
+  100% {
+    box-shadow:
+      var(--home-pitch-lift, 0 2px 6px hsl(0 0% 0% / 0.28)),
+      0 0 8px 6px hsl(var(--delta-rise) / 0),
+      0 0 4px 0 hsl(var(--delta-rise) / 0.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-dashboard .home-pitch-card.is-live,
+  html[data-theme="light"] .home-dashboard .home-pitch-card.is-live,
+  html[data-theme="dark"] .home-dashboard .home-pitch-card.is-live {
+    animation: none;
+  }
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-card.is-live,
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-card.is-live {
+    animation: none;
+  }
 }
 /*
   Pts / fixtures tray — attached under photo+name, separate surface.
@@ -20333,15 +20420,6 @@ html[data-home-surface="solid"] .home-pitch-nameplate {
   color: var(--home-pitch-card-muted);
   background: hsl(0 0% 100% / 0.05);
 }
-.home-pitch-pts.is-live {
-  color: #fff;
-  background: hsl(var(--delta-rise));
-}
-.home-pitch-pts.is-live.is-idle {
-  color: #fff;
-  background: hsl(var(--delta-rise) / 0.72);
-  font-weight: 700;
-}
 .home-pitch-price {
   font-weight: 800;
   font-size: 10.5px;
@@ -20440,7 +20518,8 @@ html[data-theme="light"] .home-dashboard .home-pitch-imp {
   background: hsl(215 20% 20% / 0.08);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-card {
-  box-shadow: 0 1px 3px hsl(215 25% 20% / 0.08);
+  --home-pitch-lift: 0 1px 3px hsl(215 25% 20% / 0.08);
+  box-shadow: var(--home-pitch-lift);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-pts,
 html[data-theme="light"] .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
@@ -20454,11 +20533,6 @@ html[data-theme="light"] .home-dashboard .home-pitch-fx-cell.is-blank,
 html[data-theme="light"] .home-dashboard .home-pitch-form-cell.is-blank {
   background: hsl(215 20% 20% / 0.04);
 }
-html[data-theme="light"] .home-dashboard .home-pitch-pts.is-live,
-html[data-theme="light"] .home-dashboard .home-pitch-pts.is-live.is-idle {
-  color: #fff;
-  background: hsl(var(--delta-rise));
-}
 html[data-theme="light"] .home-dashboard .home-pitch-fx-strip,
 html[data-theme="light"] .home-dashboard .home-pitch-form-strip,
 html[data-theme="light"] .home-dashboard .home-pitch-opp:not([class*="fdr-"]) {
@@ -20470,7 +20544,8 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-card {
-    box-shadow: 0 1px 3px hsl(215 25% 20% / 0.08);
+    --home-pitch-lift: 0 1px 3px hsl(215 25% 20% / 0.08);
+    box-shadow: var(--home-pitch-lift);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-price:not(.is-vl-rise):not(.is-vl-fall),
@@ -20483,11 +20558,6 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-fx-cell.is-blank,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-cell.is-blank {
     background: hsl(215 20% 20% / 0.04);
-  }
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-live,
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-live.is-idle {
-    color: #fff;
-    background: hsl(var(--delta-rise));
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-fx-strip,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-strip,
@@ -20541,11 +20611,20 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     gap: 8px;
   }
   .home-pitch-row {
-    gap: 8px;
+    --home-pitch-gap: 8px;
+  }
+  /* Real phones only. Cursor Simple Browser is Electron (is-embedded-browser)
+     and often a wider emulated viewport — leave that preview on 8px. */
+  html:not(.is-embedded-browser) .home-pitch-row {
+    --home-pitch-gap: 14px;
+  }
+  html:not(.is-embedded-browser) .home-squad-pitch-xi {
+    padding-left: 8px;
+    padding-right: 8px;
   }
   .home-pitch-card {
     --home-pitch-card-radius: 7px;
-    width: min(68px, calc((100% - (var(--home-pitch-n, 1) - 1) * 8px) / var(--home-pitch-n, 1)));
+    width: min(68px, calc((100% - (var(--home-pitch-n, 1) - 1) * var(--home-pitch-gap, 8px)) / var(--home-pitch-n, 1)));
     max-width: 72px;
     gap: 0;
   }
@@ -22150,9 +22229,58 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   font-weight: 750;
   letter-spacing: 0.04em;
   line-height: 1.2;
-  color: var(--red);
-  background: hsl(var(--semantic-red) / 0.14);
-  border: 1px solid hsl(var(--semantic-red) / 0.42);
+  color: hsl(var(--chip-fg, 220 16% 26%));
+  background: hsl(var(--chip-h, 220) var(--chip-s, 16%) var(--chip-l, 40%) / 0.14);
+  border: 1px solid hsl(var(--chip-h, 220) var(--chip-s, 16%) var(--chip-l, 40%) / 0.42);
+}
+.home-summary-hero-chip[data-chip="wildcard"],
+.home-standings-chip-badge[data-chip="wildcard"] {
+  --chip-h: 274;
+  --chip-s: 62%;
+  --chip-l: 46%;
+  --chip-fg: 274 55% 32%;
+}
+.home-summary-hero-chip[data-chip="freehit"],
+.home-standings-chip-badge[data-chip="freehit"] {
+  --chip-h: 198;
+  --chip-s: 78%;
+  --chip-l: 40%;
+  --chip-fg: 198 72% 28%;
+}
+.home-summary-hero-chip[data-chip="bboost"],
+.home-standings-chip-badge[data-chip="bboost"] {
+  --chip-h: 148;
+  --chip-s: 52%;
+  --chip-l: 34%;
+  --chip-fg: 148 50% 24%;
+}
+.home-summary-hero-chip[data-chip="3xc"],
+.home-standings-chip-badge[data-chip="3xc"] {
+  --chip-h: 34;
+  --chip-s: 88%;
+  --chip-l: 42%;
+  --chip-fg: 32 78% 28%;
+}
+.home-summary-hero-chip[data-chip] {
+  border-color: hsl(var(--chip-h) var(--chip-s) var(--chip-l) / 0.42);
+  background: hsl(var(--chip-h) var(--chip-s) var(--chip-l) / 0.16);
+  color: hsl(var(--chip-fg));
+}
+html[data-theme="dark"] .home-summary-hero-chip[data-chip],
+html[data-theme="dark"] .home-standings-chip-badge[data-chip] {
+  --chip-fg: var(--chip-h) calc(var(--chip-s) * 0.7) 80%;
+  border-color: hsl(var(--chip-h) var(--chip-s) 62% / 0.5);
+  background: hsl(var(--chip-h) var(--chip-s) 52% / 0.22);
+  color: hsl(var(--chip-fg));
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-summary-hero-chip[data-chip],
+  html:not([data-theme="light"]) .home-standings-chip-badge[data-chip] {
+    --chip-fg: var(--chip-h) calc(var(--chip-s) * 0.7) 80%;
+    border-color: hsl(var(--chip-h) var(--chip-s) 62% / 0.5);
+    background: hsl(var(--chip-h) var(--chip-s) 52% / 0.22);
+    color: hsl(var(--chip-fg));
+  }
 }
 .home-standings-entry {
   display: block;
@@ -26282,11 +26410,13 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   box-sizing: border-box;
   height: 44px;
   opacity: 0;
+  /* color-mix against --bg (a full color) — hsl(var(--background) / α) can
+     fall back to black when the relative-alpha form doesn't apply. */
   background: linear-gradient(
     to bottom,
-    hsl(var(--background) / 0.72) 0%,
-    hsl(var(--background) / 0.34) 46%,
-    hsl(var(--background) / 0) 100%
+    color-mix(in srgb, var(--bg) 88%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 40%, transparent) 46%,
+    transparent 100%
   );
   will-change: opacity;
 }
@@ -26296,18 +26426,18 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
 :root[data-theme="dark"] .mobile-scroll-top-fade {
   background: linear-gradient(
     to bottom,
-    hsl(var(--background) / 0.84) 0%,
-    hsl(var(--background) / 0.42) 48%,
-    hsl(var(--background) / 0) 100%
+    color-mix(in srgb, var(--bg) 90%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 45%, transparent) 48%,
+    transparent 100%
   );
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .mobile-scroll-top-fade {
     background: linear-gradient(
       to bottom,
-      hsl(var(--background) / 0.84) 0%,
-      hsl(var(--background) / 0.42) 48%,
-      hsl(var(--background) / 0) 100%
+      color-mix(in srgb, var(--bg) 90%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 45%, transparent) 48%,
+      transparent 100%
     );
   }
 }
@@ -26719,12 +26849,51 @@ html.is-mobile-layout #report-page .page-data-footer:not([hidden]) {
 
 /* Player thumb mode: Kit (club shirts from Fantasy PL) */
 html.player-thumbs-kit .ownership-photo,
+html.player-thumbs-kit .ownership-photo.has-team-ring,
+html.player-thumbs-kit .ownership-treemap-photo,
 html.player-thumbs-kit .home-lookup-photo,
-html.player-thumbs-kit .home-compare-photo {
+html.player-thumbs-kit .home-compare-photo,
+html.player-thumbs-kit .feed-player-photo,
+html.player-thumbs-kit #live-page .ownership-photo,
+html.player-thumbs-kit #live-page .live-points-table .ownership-photo,
+html.player-thumbs-kit #live-page .live-feed-table .ownership-photo,
+html.player-thumbs-kit #opta-page .ownership-photo,
+html.player-thumbs-kit #ownership-table-wrap .ownership-photo,
+html.player-thumbs-kit #prices-page .ownership-photo,
+html.player-thumbs-kit #team-page .ownership-photo,
+html.player-thumbs-kit #fixtures-page .ownership-photo,
+html.player-thumbs-kit .rankings-identity .ownership-photo,
+html.player-thumbs-kit .barbell-label .ownership-photo,
+html.player-thumbs-kit .barbell-group-identity .ownership-photo {
   object-fit: contain;
-  object-position: center bottom;
+  object-position: center center;
   border-radius: 8px;
-  background: transparent;
+  padding: 1px;
+  box-sizing: border-box;
+  background: hsl(var(--card));
+}
+html.player-thumbs-kit .home-lookup-photo-wrap,
+html.player-thumbs-kit .home-lookup-photo-clip,
+html.player-thumbs-kit .home-compare-photo {
+  border-radius: 8px;
+}
+html.player-thumbs-kit[data-theme="dark"] .ownership-photo,
+html.player-thumbs-kit[data-theme="dark"] .ownership-photo.has-team-ring,
+html.player-thumbs-kit[data-theme="dark"] .ownership-treemap-photo,
+html.player-thumbs-kit[data-theme="dark"] .home-lookup-photo,
+html.player-thumbs-kit[data-theme="dark"] .home-compare-photo,
+html.player-thumbs-kit[data-theme="dark"] .feed-player-photo {
+  background: hsl(var(--card));
+}
+@media (prefers-color-scheme: dark) {
+  html.player-thumbs-kit:not([data-theme="light"]) .ownership-photo,
+  html.player-thumbs-kit:not([data-theme="light"]) .ownership-photo.has-team-ring,
+  html.player-thumbs-kit:not([data-theme="light"]) .ownership-treemap-photo,
+  html.player-thumbs-kit:not([data-theme="light"]) .home-lookup-photo,
+  html.player-thumbs-kit:not([data-theme="light"]) .home-compare-photo,
+  html.player-thumbs-kit:not([data-theme="light"]) .feed-player-photo {
+    background: hsl(var(--card));
+  }
 }
 /* Kit wrap: card surface in light; black only in dark (matches shirt PNG pad). */
 html.player-thumbs-kit .home-pitch-photo-wrap {
