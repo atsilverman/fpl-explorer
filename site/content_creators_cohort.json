@@ -1,0 +1,652 @@
+{
+  "id": "content_creators",
+  "name": "Content Creators",
+  "kind": "cohort",
+  "source": {
+    "site": "fplgameweek.com",
+    "specialLeagueId": "special_10002",
+    "url": "https://www.fplgameweek.com/#/26/team/296817/league/special_10002",
+    "collectedAt": "2026-09-20T16:11:37Z",
+    "pages": 2,
+    "notes": [
+      "Curated fplgameweek special league — not an official FPL classic league.",
+      "Entry IDs from fplgameweek standings (same IDs as fantasy.premierleague.com/entry/{id}/).",
+      "playerName and teamName verified via FPL entry API.",
+      "displayName is fplgameweek’s creator/channel label.",
+      "fplgameweek UI noted sorting for top 89 teams; viewer row excluded from managers."
+    ]
+  },
+  "count": 89,
+  "managers": [
+    {
+      "id": 3304,
+      "displayName": "FPL Marcello",
+      "playerName": "Marcello C",
+      "teamName": "FPL Marcello",
+      "fplUrl": "https://fantasy.premierleague.com/entry/3304/"
+    },
+    {
+      "id": 12949,
+      "displayName": "FPL Paz (All About FPL)",
+      "playerName": "Placido Antuan Zambrano",
+      "teamName": "Viva PAZ",
+      "fplUrl": "https://fantasy.premierleague.com/entry/12949/"
+    },
+    {
+      "id": 120,
+      "displayName": "Dan (FPL Mate)",
+      "playerName": "Dan FPL Mate",
+      "teamName": "FPL Mate on YouTube",
+      "fplUrl": "https://fantasy.premierleague.com/entry/120/"
+    },
+    {
+      "id": 3449,
+      "displayName": "FPL Éire",
+      "playerName": "Niall Crossan",
+      "teamName": "FPL Éire",
+      "fplUrl": "https://fantasy.premierleague.com/entry/3449/"
+    },
+    {
+      "id": 3333334,
+      "displayName": "Sertalp Çay (Solio Analytics)",
+      "playerName": "Sertalp Cay",
+      "teamName": "Solio Optimized FC",
+      "fplUrl": "https://fantasy.premierleague.com/entry/3333334/"
+    },
+    {
+      "id": 2230,
+      "displayName": "Ben (FPL Graduates)",
+      "playerName": "Ben Brown",
+      "teamName": "Graduates FC",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2230/"
+    },
+    {
+      "id": 1735,
+      "displayName": "Josh (FPL Graduates)",
+      "playerName": "Joshua Scott",
+      "teamName": "Saving Private Bryan",
+      "fplUrl": "https://fantasy.premierleague.com/entry/1735/"
+    },
+    {
+      "id": 70,
+      "displayName": "Fpl_Salah (FF Hub)",
+      "playerName": "Abdul Rehman",
+      "teamName": "Attock Athletic",
+      "fplUrl": "https://fantasy.premierleague.com/entry/70/"
+    },
+    {
+      "id": 148,
+      "displayName": "Flapjack FPL",
+      "playerName": "Rich D",
+      "teamName": "It’s Kolarov Time",
+      "fplUrl": "https://fantasy.premierleague.com/entry/148/"
+    },
+    {
+      "id": 344050,
+      "displayName": "Nathan Bacon FC FPL",
+      "playerName": "Nathan Bacon FC",
+      "teamName": "Klich Bate",
+      "fplUrl": "https://fantasy.premierleague.com/entry/344050/"
+    },
+    {
+      "id": 84298,
+      "displayName": "Sujan (Planet FPL)",
+      "playerName": "Sujan Shah",
+      "teamName": "Suj - Planet FPL",
+      "fplUrl": "https://fantasy.premierleague.com/entry/84298/"
+    },
+    {
+      "id": 5133,
+      "displayName": "BigManBakar (FF Hub)",
+      "playerName": "BigMan Bakar",
+      "teamName": "The Malouda Triangle",
+      "fplUrl": "https://fantasy.premierleague.com/entry/5133/"
+    },
+    {
+      "id": 8781,
+      "displayName": "FPL Calle",
+      "playerName": "Calle Jonsson",
+      "teamName": "Saltsjöbolaget",
+      "fplUrl": "https://fantasy.premierleague.com/entry/8781/"
+    },
+    {
+      "id": 61059,
+      "displayName": "FPl Matt",
+      "playerName": "Matt Withers",
+      "teamName": "FPL Matt",
+      "fplUrl": "https://fantasy.premierleague.com/entry/61059/"
+    },
+    {
+      "id": 660,
+      "displayName": "FPL Joe",
+      "playerName": "Joe Wood",
+      "teamName": "FPL Joe",
+      "fplUrl": "https://fantasy.premierleague.com/entry/660/"
+    },
+    {
+      "id": 2913,
+      "displayName": "Lee (FPL Family)",
+      "playerName": "Lee Bonfield",
+      "teamName": "Little Beauties",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2913/"
+    },
+    {
+      "id": 5406,
+      "displayName": "FPL Tom",
+      "playerName": "Tom L",
+      "teamName": "FPL TOM",
+      "fplUrl": "https://fantasy.premierleague.com/entry/5406/"
+    },
+    {
+      "id": 41,
+      "displayName": "Andy (Let's Talk FPL)",
+      "playerName": "Andy LTFPL",
+      "teamName": "Let's Talk FPL",
+      "fplUrl": "https://fantasy.premierleague.com/entry/41/"
+    },
+    {
+      "id": 31703,
+      "displayName": "David (Dayvy FPL)",
+      "playerName": "David (@DayvyFPL)",
+      "teamName": "Dit Kom Huis Toe.",
+      "fplUrl": "https://fantasy.premierleague.com/entry/31703/"
+    },
+    {
+      "id": 22728,
+      "displayName": "Tom (FPLCruyff74)",
+      "playerName": "Tom Freeman",
+      "teamName": "Cruyff74",
+      "fplUrl": "https://fantasy.premierleague.com/entry/22728/"
+    },
+    {
+      "id": 2325,
+      "displayName": "Andy (FPLMode)",
+      "playerName": "Andy North",
+      "teamName": "Nordi By Nature",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2325/"
+    },
+    {
+      "id": 174,
+      "displayName": "Jonas (ASC_FPL)",
+      "playerName": "Jonas Sand Låbakk",
+      "teamName": "Onkel Blaa",
+      "fplUrl": "https://fantasy.premierleague.com/entry/174/"
+    },
+    {
+      "id": 199,
+      "displayName": "Ross (FPL Raptor)",
+      "playerName": "FPL Raptor",
+      "teamName": "Eggspected Goals",
+      "fplUrl": "https://fantasy.premierleague.com/entry/199/"
+    },
+    {
+      "id": 21,
+      "displayName": "FPL Fran (The FPL Script)",
+      "playerName": "Francisco MW",
+      "teamName": "FPL Fran",
+      "fplUrl": "https://fantasy.premierleague.com/entry/21/"
+    },
+    {
+      "id": 125,
+      "displayName": "FPL Pricey (WGTA)",
+      "playerName": "Sam Price",
+      "teamName": "Insert Football Pun",
+      "fplUrl": "https://fantasy.premierleague.com/entry/125/"
+    },
+    {
+      "id": 327213,
+      "displayName": "FPL MV",
+      "playerName": "Angel Arshev",
+      "teamName": "FPL MV",
+      "fplUrl": "https://fantasy.premierleague.com/entry/327213/"
+    },
+    {
+      "id": 17739,
+      "displayName": "Hamza (FPL Pattern)",
+      "playerName": "Hamza Siddiqui",
+      "teamName": "Hamza's XI",
+      "fplUrl": "https://fantasy.premierleague.com/entry/17739/"
+    },
+    {
+      "id": 16,
+      "displayName": "Tom (FF Scout)",
+      "playerName": "Tom Johnson",
+      "teamName": "Cold Palmer FC",
+      "fplUrl": "https://fantasy.premierleague.com/entry/16/"
+    },
+    {
+      "id": 194497,
+      "displayName": "BlackWolf (FPLUSA)",
+      "playerName": "Dan (BlackWolf)",
+      "teamName": "BORUSSIA TEETH",
+      "fplUrl": "https://fantasy.premierleague.com/entry/194497/"
+    },
+    {
+      "id": 1890,
+      "displayName": "FPL Toni",
+      "playerName": "FPL Toni",
+      "teamName": "How I Met Your Moder",
+      "fplUrl": "https://fantasy.premierleague.com/entry/1890/"
+    },
+    {
+      "id": 1932,
+      "displayName": "FPL_Pig",
+      "playerName": "FPL Pig",
+      "teamName": "van Hecke of a team",
+      "fplUrl": "https://fantasy.premierleague.com/entry/1932/"
+    },
+    {
+      "id": 3315,
+      "displayName": "Pras (The FPL Wire)",
+      "playerName": "Pras United",
+      "teamName": "Pras United",
+      "fplUrl": "https://fantasy.premierleague.com/entry/3315/"
+    },
+    {
+      "id": 4226,
+      "displayName": "Siva (FPL Banger)",
+      "playerName": "Sivaram Prasad",
+      "teamName": "Calafiorication",
+      "fplUrl": "https://fantasy.premierleague.com/entry/4226/"
+    },
+    {
+      "id": 15764,
+      "displayName": "Emma (Jumpthewave)",
+      "playerName": "Em - Ellia",
+      "teamName": "Em's Team",
+      "fplUrl": "https://fantasy.premierleague.com/entry/15764/"
+    },
+    {
+      "id": 16745,
+      "displayName": "Rob (FPL Haul)",
+      "playerName": "Rob Haul",
+      "teamName": "Quantum of Tzolis",
+      "fplUrl": "https://fantasy.premierleague.com/entry/16745/"
+    },
+    {
+      "id": 405,
+      "displayName": "Ash (FPL Hints)",
+      "playerName": "Ash FPLHints",
+      "teamName": "Ash, @FPLHINTS",
+      "fplUrl": "https://fantasy.premierleague.com/entry/405/"
+    },
+    {
+      "id": 53517,
+      "displayName": "Ben Crellin (FF Hub)",
+      "playerName": "Ben Crellin",
+      "teamName": "ƃuᴉʞuᴉɥʇuʍopǝpᴉsdn",
+      "fplUrl": "https://fantasy.premierleague.com/entry/53517/"
+    },
+    {
+      "id": 176749,
+      "displayName": "FPLGeneral (59th Minute pod)",
+      "playerName": "Mark McGettigan",
+      "teamName": "@FPLGeneral",
+      "fplUrl": "https://fantasy.premierleague.com/entry/176749/"
+    },
+    {
+      "id": 298,
+      "displayName": "Oscar (FPL Focal)",
+      "playerName": "Oscar -",
+      "teamName": "Focal Point",
+      "fplUrl": "https://fantasy.premierleague.com/entry/298/"
+    },
+    {
+      "id": 4470,
+      "displayName": "Baker343 (Above Average)",
+      "playerName": "Martin Baker",
+      "teamName": "Baker’s Beauties",
+      "fplUrl": "https://fantasy.premierleague.com/entry/4470/"
+    },
+    {
+      "id": 222160,
+      "displayName": "FPL Brandon",
+      "playerName": "FPL Brandon",
+      "teamName": "Szoboptimal",
+      "fplUrl": "https://fantasy.premierleague.com/entry/222160/"
+    },
+    {
+      "id": 19518,
+      "displayName": "FPL Goat",
+      "playerName": "Shaad Shaikh",
+      "teamName": "FPL GOAT",
+      "fplUrl": "https://fantasy.premierleague.com/entry/19518/"
+    },
+    {
+      "id": 918,
+      "displayName": "FPL Nima (FPL Meets)",
+      "playerName": "Nima Kafai",
+      "teamName": "Gangsta’s Allardyce",
+      "fplUrl": "https://fantasy.premierleague.com/entry/918/"
+    },
+    {
+      "id": 7241,
+      "displayName": "Paul (FPL Addict)",
+      "playerName": "Paul McFarlane",
+      "teamName": "FPL Addict",
+      "fplUrl": "https://fantasy.premierleague.com/entry/7241/"
+    },
+    {
+      "id": 850,
+      "displayName": "FPL Pickle",
+      "playerName": "FPL Pickle",
+      "teamName": "Jota Pad",
+      "fplUrl": "https://fantasy.premierleague.com/entry/850/"
+    },
+    {
+      "id": 2177,
+      "displayName": "Zophar (FPL Wire)",
+      "playerName": "Utkarsh D",
+      "teamName": "Z",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2177/"
+    },
+    {
+      "id": 2977,
+      "displayName": "Sam (FPL Family)",
+      "playerName": "Sam Bonfield",
+      "teamName": "Best in Alderweireld",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2977/"
+    },
+    {
+      "id": 129818,
+      "displayName": "Walsh (FML FPL)",
+      "playerName": "Adam Walsh",
+      "teamName": "walsh",
+      "fplUrl": "https://fantasy.premierleague.com/entry/129818/"
+    },
+    {
+      "id": 16021,
+      "displayName": "FPL Plug",
+      "playerName": "Tom Jones",
+      "teamName": "FPL Plug XI",
+      "fplUrl": "https://fantasy.premierleague.com/entry/16021/"
+    },
+    {
+      "id": 362,
+      "displayName": "FPL Olympian",
+      "playerName": "Adrian I",
+      "teamName": "RutterWokeNonSenesi",
+      "fplUrl": "https://fantasy.premierleague.com/entry/362/"
+    },
+    {
+      "id": 1600,
+      "displayName": "FPL Architect",
+      "playerName": "Gustav Stenberg",
+      "teamName": "Stonemountain FC",
+      "fplUrl": "https://fantasy.premierleague.com/entry/1600/"
+    },
+    {
+      "id": 28410,
+      "displayName": "Alon (FML FPL)",
+      "playerName": "Alon Shapiro",
+      "teamName": "alon",
+      "fplUrl": "https://fantasy.premierleague.com/entry/28410/"
+    },
+    {
+      "id": 70063,
+      "displayName": "Holly Shand (FPL Show)",
+      "playerName": "Holly Shand",
+      "teamName": "HollyGunnarSolskjær",
+      "fplUrl": "https://fantasy.premierleague.com/entry/70063/"
+    },
+    {
+      "id": 157,
+      "displayName": "Adam (Above Average FPL)",
+      "playerName": "Adam Currier",
+      "teamName": "Sensible Calm Robust",
+      "fplUrl": "https://fantasy.premierleague.com/entry/157/"
+    },
+    {
+      "id": 42,
+      "displayName": "Hibbo FPL (FFScout)",
+      "playerName": "Sean Jackson",
+      "teamName": "Bloemfontein Celtic",
+      "fplUrl": "https://fantasy.premierleague.com/entry/42/"
+    },
+    {
+      "id": 107881,
+      "displayName": "Srini (All About FPL)",
+      "playerName": "Srinivasan Srini",
+      "teamName": "Cancelo Culture",
+      "fplUrl": "https://fantasy.premierleague.com/entry/107881/"
+    },
+    {
+      "id": 116170,
+      "displayName": "FPL The English Aussie",
+      "playerName": "Youtube: The English Aussie",
+      "teamName": "Ballon D'orgu",
+      "fplUrl": "https://fantasy.premierleague.com/entry/116170/"
+    },
+    {
+      "id": 3054,
+      "displayName": "FPL Harry",
+      "playerName": "Harry Daniels",
+      "teamName": "DANIELS XI",
+      "fplUrl": "https://fantasy.premierleague.com/entry/3054/"
+    },
+    {
+      "id": 209763,
+      "displayName": "Rich Clarke (FF Hub)",
+      "playerName": "Richard Clarke",
+      "teamName": "Corsano United",
+      "fplUrl": "https://fantasy.premierleague.com/entry/209763/"
+    },
+    {
+      "id": 494355,
+      "displayName": "FPL Rookie (FPL Updates & Tips)",
+      "playerName": "Adam Wolff",
+      "teamName": "Wolffo Wanderers",
+      "fplUrl": "https://fantasy.premierleague.com/entry/494355/"
+    },
+    {
+      "id": 14891,
+      "displayName": "Surya (All About FPL)",
+      "playerName": "surya shanmugam",
+      "teamName": "Sesko Meal Deal",
+      "fplUrl": "https://fantasy.premierleague.com/entry/14891/"
+    },
+    {
+      "id": 117406,
+      "displayName": "FPL Physio",
+      "playerName": "Jeppe Skov",
+      "teamName": "FPL Physio",
+      "fplUrl": "https://fantasy.premierleague.com/entry/117406/"
+    },
+    {
+      "id": 739,
+      "displayName": "FPL Prem Tipster",
+      "playerName": "Prem Tipster",
+      "teamName": "⭐ PREM TIPSTER",
+      "fplUrl": "https://fantasy.premierleague.com/entry/739/"
+    },
+    {
+      "id": 225,
+      "displayName": "Tom (Golden Goal Fantasy Football)",
+      "playerName": "Thomas Hartnell",
+      "teamName": "Golden Goal FF",
+      "fplUrl": "https://fantasy.premierleague.com/entry/225/"
+    },
+    {
+      "id": 334289,
+      "displayName": "Brian (FPLUSA)",
+      "playerName": "-FPLUSA Brian",
+      "teamName": "Red Arrow Pharaoh",
+      "fplUrl": "https://fantasy.premierleague.com/entry/334289/"
+    },
+    {
+      "id": 71,
+      "displayName": "Luke (Inspected Goals)",
+      "playerName": "Luke Williams",
+      "teamName": "Super Puzzle Fighter",
+      "fplUrl": "https://fantasy.premierleague.com/entry/71/"
+    },
+    {
+      "id": 1194,
+      "displayName": "James (Planet FPL)",
+      "playerName": "James Linden",
+      "teamName": "Ledley's Kings",
+      "fplUrl": "https://fantasy.premierleague.com/entry/1194/"
+    },
+    {
+      "id": 15753,
+      "displayName": "Seb Wassell (FF Scout)",
+      "playerName": "Seb Wassell",
+      "teamName": "PabloHeskeyVAR",
+      "fplUrl": "https://fantasy.premierleague.com/entry/15753/"
+    },
+    {
+      "id": 5911,
+      "displayName": "FPL Mo",
+      "playerName": "Mohamed Team",
+      "teamName": "Mo",
+      "fplUrl": "https://fantasy.premierleague.com/entry/5911/"
+    },
+    {
+      "id": 185594,
+      "displayName": "Sam (FPL Banger)",
+      "playerName": "Sam Chew",
+      "teamName": "My Hits Don't Lie",
+      "fplUrl": "https://fantasy.premierleague.com/entry/185594/"
+    },
+    {
+      "id": 454,
+      "displayName": "Tom (WGTA)",
+      "playerName": "Tom C (WGTA)",
+      "teamName": "Dalot's Humour",
+      "fplUrl": "https://fantasy.premierleague.com/entry/454/"
+    },
+    {
+      "id": 18135,
+      "displayName": "David Hunter (Planet FPL)",
+      "playerName": "David Hunter",
+      "teamName": "Bayer Daverkusen",
+      "fplUrl": "https://fantasy.premierleague.com/entry/18135/"
+    },
+    {
+      "id": 325538,
+      "displayName": "Fpltips__ (Anshuman Deswal)",
+      "playerName": "Anshuman Deswal",
+      "teamName": "Vibes FC",
+      "fplUrl": "https://fantasy.premierleague.com/entry/325538/"
+    },
+    {
+      "id": 15716,
+      "displayName": "Alex Vollo",
+      "playerName": "Alex Vollo",
+      "teamName": "Vollo Variance FC",
+      "fplUrl": "https://fantasy.premierleague.com/entry/15716/"
+    },
+    {
+      "id": 19233,
+      "displayName": "FPLFella",
+      "playerName": "Dan H",
+      "teamName": "Fella's XI",
+      "fplUrl": "https://fantasy.premierleague.com/entry/19233/"
+    },
+    {
+      "id": 19663,
+      "displayName": "FPL Rockstar",
+      "playerName": "FPL Rockstar",
+      "teamName": "Rock★",
+      "fplUrl": "https://fantasy.premierleague.com/entry/19663/"
+    },
+    {
+      "id": 6816,
+      "displayName": "Lateriser12 (FPL Wire)",
+      "playerName": "Pranil Sheth",
+      "teamName": "Bad Team On Paper",
+      "fplUrl": "https://fantasy.premierleague.com/entry/6816/"
+    },
+    {
+      "id": 2129,
+      "displayName": "Midnight Mule FPL",
+      "playerName": "Midnight Mule",
+      "teamName": "Time and Chance",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2129/"
+    },
+    {
+      "id": 13162,
+      "displayName": "FPL JimmyG",
+      "playerName": "James Glaze",
+      "teamName": "James's Team",
+      "fplUrl": "https://fantasy.premierleague.com/entry/13162/"
+    },
+    {
+      "id": 17314,
+      "displayName": "FPL Osama",
+      "playerName": "Muhammed Osama",
+      "teamName": "Sherlock",
+      "fplUrl": "https://fantasy.premierleague.com/entry/17314/"
+    },
+    {
+      "id": 4282,
+      "displayName": "Charlie (FPL Meerkat)",
+      "playerName": "Charlie Noakes",
+      "teamName": "Project Hail Miraola",
+      "fplUrl": "https://fantasy.premierleague.com/entry/4282/"
+    },
+    {
+      "id": 47742,
+      "displayName": "FPL Cim",
+      "playerName": "Cim Diesel",
+      "teamName": "fpl cim",
+      "fplUrl": "https://fantasy.premierleague.com/entry/47742/"
+    },
+    {
+      "id": 36474,
+      "displayName": "FPL Updates & Tips (FF Scout)",
+      "playerName": "Haythem IlBanney",
+      "teamName": "Haythem's Team",
+      "fplUrl": "https://fantasy.premierleague.com/entry/36474/"
+    },
+    {
+      "id": 2157,
+      "displayName": "FPL_Chai (FFScout)",
+      "playerName": "Chai -",
+      "teamName": "Chai's Team",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2157/"
+    },
+    {
+      "id": 11859,
+      "displayName": "Leon (FPL Consult)",
+      "playerName": "Leon Sim",
+      "teamName": "FPL Consult YouTube",
+      "fplUrl": "https://fantasy.premierleague.com/entry/11859/"
+    },
+    {
+      "id": 1420249,
+      "displayName": "Clayton (Planet FPL)",
+      "playerName": "Clayton Fernandes",
+      "teamName": "clayton",
+      "fplUrl": "https://fantasy.premierleague.com/entry/1420249/"
+    },
+    {
+      "id": 15489,
+      "displayName": "Jian Batra (FF Hub)",
+      "playerName": "Jian Batra",
+      "teamName": "FPLJianBatra",
+      "fplUrl": "https://fantasy.premierleague.com/entry/15489/"
+    },
+    {
+      "id": 5784,
+      "displayName": "Andy (FPL Tactician)",
+      "playerName": "Andrew Martin",
+      "teamName": "Maurice Dancers",
+      "fplUrl": "https://fantasy.premierleague.com/entry/5784/"
+    },
+    {
+      "id": 2472,
+      "displayName": "Nick (FPL Juice)",
+      "playerName": "Nick Turner -FPL JUiCE-",
+      "teamName": "Fiorentina Turner",
+      "fplUrl": "https://fantasy.premierleague.com/entry/2472/"
+    }
+  ],
+  "viewerAtCollect": {
+    "id": 296817,
+    "displayName": "SD Spurs",
+    "playerName": "Adam Silverman",
+    "teamName": "SD Spurs",
+    "fplUrl": "https://fantasy.premierleague.com/entry/296817/"
+  }
+}

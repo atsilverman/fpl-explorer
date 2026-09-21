@@ -2064,7 +2064,6 @@
   const FPL_LEAGUE_KEY = "fpl-explorer-league-id";
   const HOME_LEAGUE_ID = "954157";
   const HOME_LEAGUE_NAME = "SoCal Big Guy FPL";
-  const TRACKED_MANAGER_IDS = [296817, 1404383, 5497737, 185072];
   const TEAM_ACTUAL_KEY = "fpl-explorer-team-actual";
   const TEAM_DIFFICULTY_KEY = "fpl-explorer-team-difficulty-v1";
   let ownedCodes = new Set();
@@ -2539,8 +2538,47 @@
 
   function trackedManagerById(id) {
     const n = Number(id);
-    if (!TRACKED_MANAGER_IDS.includes(n)) return null;
-    return (LEAGUES.managers || []).find((m) => Number(m.id) === n) || null;
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const fromLeagues = (LEAGUES.managers || []).find((m) => Number(m.id) === n);
+    if (fromLeagues) return fromLeagues;
+    // Fallback: Home standings cover the full classic league before leagues_data refresh.
+    const row = ((HOME && HOME.standings) || []).find((r) => Number(r.entry) === n);
+    if (!row) return null;
+    return {
+      id: n,
+      name: row.playerName || `Manager ${n}`,
+      teamName: row.entryName || "",
+      leagueIds: [Number(HOME_LEAGUE_ID)],
+    };
+  }
+
+  function isTrackedManagerId(id) {
+    return !!trackedManagerById(id);
+  }
+
+  function leagueManagerOptionsList() {
+    const byId = new Map();
+    for (const m of LEAGUES.managers || []) {
+      const id = Number(m.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      byId.set(id, {
+        id,
+        name: m.name || `Manager ${id}`,
+        teamName: m.teamName || "",
+      });
+    }
+    for (const row of (HOME && HOME.standings) || []) {
+      const id = Number(row.entry);
+      if (!Number.isFinite(id) || id <= 0 || byId.has(id)) continue;
+      byId.set(id, {
+        id,
+        name: row.playerName || `Manager ${id}`,
+        teamName: row.entryName || "",
+      });
+    }
+    return [...byId.values()].sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" })
+    );
   }
 
   function trackedLeagueById(id) {
@@ -2572,9 +2610,7 @@
 
   function trackedManagerOptionsHTML() {
     const opts = ['<option value="">Select manager…</option>'];
-    const allowed = new Set(TRACKED_MANAGER_IDS.map(String));
-    for (const m of LEAGUES.managers || []) {
-      if (!allowed.has(String(m.id))) continue;
+    for (const m of leagueManagerOptionsList()) {
       const label = m.teamName ? `${m.name} — ${m.teamName}` : m.name;
       opts.push(
         `<option value="${escapeHtml(String(m.id))}">${escapeHtml(label)}</option>`
@@ -3641,7 +3677,7 @@
   function homeLivePayloadMatchesPrefs(home) {
     if (!home || !home.managerId) return false;
     if (String(home.leagueId) !== HOME_LEAGUE_ID) return false;
-    return TRACKED_MANAGER_IDS.map(String).includes(String(home.managerId));
+    return isTrackedManagerId(home.managerId);
   }
 
   function homeSquadFingerprint(squad) {
@@ -3710,7 +3746,7 @@
     if (!homeLiveApiUrl() || !savedLeagueId) return false;
     if (savedManagerId) return true;
     const baked = HOME && HOME.managerId;
-    return !!(baked && TRACKED_MANAGER_IDS.map(String).includes(String(baked)));
+    return !!(baked && isTrackedManagerId(baked));
   }
 
   function homeStandingsFingerprint(rows) {
@@ -8195,26 +8231,12 @@
 
   const HOME_IMP_BAR_MAX = 200;
 
-  /** Classic green (+) / red (−) IMP fill — soft near 0, saturated near ±200. */
-  function homeImpToneColors(imp, abs) {
-    const mag = Math.min(1, abs / HOME_IMP_BAR_MAX);
-    // Ease so mid values stay readable; punch hard near captain / TC levels.
-    const tone = Math.pow(mag, 0.72);
-    const dark = themePrefersDark();
+  /** Classic green (+) / red (−) IMP — full delta-rise/fall (same as live GW pts banner). */
+  function homeImpToneColors(imp) {
     const isPos = imp > 0;
-    const hue = isPos ? 142 : 0;
-    const sat = Math.round(26 + tone * (isPos ? 44 : 52)); // ~26 → 70/78
-    const light = dark
-      ? Math.round(56 - tone * 14) // soft pale → deeper
-      : Math.round(46 - tone * 16);
-    const alpha = (0.28 + tone * 0.72).toFixed(3); // ~0.28 → 1.0
-    const fill = `hsl(${hue} ${sat}% ${light}% / ${alpha})`;
-    const fgSat = Math.round(40 + tone * 32);
-    const fgLight = dark
-      ? Math.round(64 - tone * 10)
-      : Math.round(28 + (1 - tone) * 10);
-    const fg = `hsl(${hue} ${fgSat}% ${fgLight}%)`;
-    return { fill, fg, tone };
+    const fill = isPos ? "hsl(var(--delta-rise))" : "hsl(var(--delta-fall))";
+    const fg = fill;
+    return { fill, fg };
   }
 
   function homeImpBarVisual(impRaw) {
@@ -8226,7 +8248,7 @@
       return { imp: 0, barPct: 0, sign: "is-flat", fillStyle: "--imp-pct:0%" };
     }
     const sign = imp > 0 ? "is-pos" : "is-neg";
-    const { fill, fg } = homeImpToneColors(imp, abs);
+    const { fill, fg } = homeImpToneColors(imp);
     return {
       imp,
       barPct,
@@ -13997,7 +14019,7 @@
     const prefsMatch =
       hasPayload
       && String(HOME.leagueId) === HOME_LEAGUE_ID
-      && TRACKED_MANAGER_IDS.map(String).includes(String(savedManagerId));
+      && isTrackedManagerId(savedManagerId);
     const showEmpty = !linked || !hasPayload;
     if (noManager) {
       renderHomeUnlinked();
@@ -18196,12 +18218,12 @@
           "60–75′ — after FT, or live once minutes stay frozen while the match clock keeps moving"
         ),
         spitRow(
-          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
+          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(var(--delta-rise));--imp-fg:hsl(var(--delta-rise))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
           "IMP ahead of league top third",
           "spit-symbol-wide"
         ),
         spitRow(
-          `<span class="home-imp is-neg spit-home-swatch" style="--imp-pct:55%;--imp-fill:hsl(0 70% 46% / 0.75);--imp-fg:hsl(0 70% 42%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-neg is-drawn"></span></span><span class="home-imp-pct">55%</span></span>`,
+          `<span class="home-imp is-neg spit-home-swatch" style="--imp-pct:55%;--imp-fill:hsl(var(--delta-fall));--imp-fg:hsl(var(--delta-fall))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-neg is-drawn"></span></span><span class="home-imp-pct">55%</span></span>`,
           "IMP behind league top third",
           "spit-symbol-wide"
         ),
@@ -18449,7 +18471,7 @@
           "spit-symbol-wide"
         ),
         spitRow(
-          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(142 65% 36% / 0.85);--imp-fg:hsl(142 65% 32%)" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span></span>`,
+          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(var(--delta-rise));--imp-fg:hsl(var(--delta-rise))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span></span>`,
           "DefCon progress — solid blue fill when threshold hit (+2 pts).",
           "spit-symbol-wide"
         ),

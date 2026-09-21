@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Tracked FPL managers + classic leagues → site/leagues_data.js.
+Tracked FPL classic league(s) → site/leagues_data.js.
 
-Reads site/tracked_ids.json, fetches entry + standings from the FPL API,
-and writes a slim cache for Preferences dropdowns (and later league UI).
+Reads site/tracked_ids.json, fetches classic-league standings + each member
+entry from the FPL API, and writes a slim cache for Preferences dropdowns
+(and later league UI). Explicit `managers` in the config are fetched first;
+every standing entry in tracked leagues is then included automatically.
 
 Run:
     python3 site/fetch_leagues.py
@@ -119,15 +121,7 @@ def main() -> int:
     leagues: list[dict] = []
     errors: list[str] = []
 
-    for mid in manager_ids:
-        try:
-            print(f"Fetching entry/{mid}/")
-            entry = fpl_get(f"/entry/{mid}/")
-            managers.append(slim_manager(mid, entry, tracked_league_list))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
-            errors.append(f"manager {mid}: {exc}")
-            print(f"  failed: {exc}", file=sys.stderr)
-
+    # Fetch leagues first so every classic-league member can appear in Preferences.
     for lid in league_ids:
         try:
             print(f"Fetching leagues-classic/{lid}/standings/")
@@ -137,12 +131,37 @@ def main() -> int:
             errors.append(f"league {lid}: {exc}")
             print(f"  failed: {exc}", file=sys.stderr)
 
+    entry_ids: list[int] = []
+    seen: set[int] = set()
+    for mid in manager_ids:
+        if mid not in seen:
+            seen.add(mid)
+            entry_ids.append(mid)
+    for league in leagues:
+        for row in league.get("standings") or []:
+            try:
+                mid = int(row.get("entry"))
+            except (TypeError, ValueError):
+                continue
+            if mid > 0 and mid not in seen:
+                seen.add(mid)
+                entry_ids.append(mid)
+
+    for mid in entry_ids:
+        try:
+            print(f"Fetching entry/{mid}/")
+            entry = fpl_get(f"/entry/{mid}/")
+            managers.append(slim_manager(mid, entry, tracked_league_list))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as exc:
+            errors.append(f"manager {mid}: {exc}")
+            print(f"  failed: {exc}", file=sys.stderr)
+
     if not managers and not leagues:
         print("No managers or leagues fetched.", file=sys.stderr)
         return 1
 
-    # Stable order matching config
-    managers.sort(key=lambda m: manager_ids.index(m["id"]) if m["id"] in manager_ids else 999)
+    # Prefer config order, then standings order for newly discovered entries.
+    managers.sort(key=lambda m: entry_ids.index(m["id"]) if m["id"] in entry_ids else 999)
     leagues.sort(key=lambda L: league_ids.index(L["id"]) if L["id"] in league_ids else 999)
 
     payload = {

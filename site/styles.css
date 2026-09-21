@@ -20620,10 +20620,10 @@ html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-vl-fall {
   transform: translate(calc(-100% - 3px), -50%);
 }
 .home-pitch-imp.is-pos .home-pitch-imp-val {
-  color: var(--imp-fg, hsl(142 65% 42%));
+  color: var(--imp-fg, hsl(var(--delta-rise)));
 }
 .home-pitch-imp.is-neg .home-pitch-imp-val {
-  color: var(--imp-fg, hsl(0 70% 52%));
+  color: var(--imp-fg, hsl(var(--delta-fall)));
 }
 .home-pitch-imp.is-flat .home-pitch-imp-val {
   left: 0;
@@ -22318,27 +22318,23 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   font-variant-numeric: tabular-nums;
 }
 .home-imp.is-pos .home-imp-pct {
-  color: var(--imp-fg, hsl(142 65% 34%));
+  color: var(--imp-fg, hsl(var(--delta-rise)));
 }
 .home-imp.is-neg .home-imp-pct {
-  color: var(--imp-fg, hsl(0 70% 46%));
+  color: var(--imp-fg, hsl(var(--delta-fall)));
 }
-/* Home IMP — grey → green/red with --home-rank-sat (same bloom as league Δ). */
-#home-page .home-imp-fill.is-pos,
+/* Home IMP — solid delta-rise/fall (same green/red as live GW pts banner). */
+#home-page .home-imp-fill.is-pos {
+  background: var(--imp-fill, hsl(var(--delta-rise)));
+}
 #home-page .home-imp-fill.is-neg {
-  background: color-mix(
-    in srgb,
-    var(--imp-fill, hsl(142 65% 34%)) calc(var(--home-rank-sat, 1) * 100%),
-    hsl(var(--muted-foreground) / 0.45)
-  );
+  background: var(--imp-fill, hsl(var(--delta-fall)));
 }
-#home-page .home-imp.is-pos .home-imp-pct,
+#home-page .home-imp.is-pos .home-imp-pct {
+  color: var(--imp-fg, hsl(var(--delta-rise)));
+}
 #home-page .home-imp.is-neg .home-imp-pct {
-  color: color-mix(
-    in srgb,
-    var(--imp-fg, var(--imp-fill, hsl(142 65% 34%))) calc(var(--home-rank-sat, 1) * 100%),
-    var(--text-faint)
-  );
+  color: var(--imp-fg, hsl(var(--delta-fall)));
 }
 @media (prefers-reduced-motion: reduce) {
   .home-imp-fill {
