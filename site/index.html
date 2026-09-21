@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1478" />
+<link rel="stylesheet" href="styles.css?v=1484" />
 <link rel="stylesheet" href="motion-enhanced.css?v=7" />
 <link rel="stylesheet" href="odometer-sfi.css?v=1" />
 <script>
@@ -26,9 +26,9 @@
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
     root.classList.add("motion-enhanced");
-    if (localStorage.getItem("fpl-explorer-odometer") === "sfi") {
-      root.classList.add("odometer-sfi");
-    }
+    const odometer = localStorage.getItem("fpl-explorer-odometer");
+    if (odometer === "sfi") root.classList.add("odometer-sfi");
+    if (odometer === "off") root.classList.add("odometer-off");
     if (localStorage.getItem("fpl-explorer-player-thumb") !== "photo") {
       root.classList.add("player-thumbs-kit");
     }
@@ -400,7 +400,7 @@
         FPL.db
       </h1>
     </a>
-    <div class="page-nav-center">
+    <div class="page-nav-center page-tray-dropdown" id="page-tray-wrap">
       <span class="page-nav-brand-divider" aria-hidden="true"></span>
       <button type="button" class="page-tray-btn" id="page-tray-btn"
         aria-haspopup="true" aria-expanded="false" aria-controls="page-tabs" aria-label="Pages, Home">
@@ -409,6 +409,59 @@
           <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevrons-up-down"/></svg>
         </span>
       </button>
+      <div class="page-tabs-clip" id="page-tabs-clip">
+        <nav class="page-tabs" id="page-tabs" aria-label="Pages">
+          <button id="page-home" class="page-tab-btn active" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-house"/></svg>
+            Home
+          </button>
+          <button id="page-live" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-circle-play"/></svg>
+            Gameweek
+            <span class="page-tab-live-dot" hidden aria-hidden="true"></span>
+          </button>
+          <button id="page-report" class="page-tab-btn" type="button" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg>
+            Report
+          </button>
+          <button id="page-opta" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-table"/></svg>
+            Statistics
+          </button>
+          <button id="page-rankings" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-podium"/></svg>
+            Rankings
+          </button>
+          <button id="page-ownership" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
+            Ownership
+          </button>
+          <button id="page-prices" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
+            Price Change
+          </button>
+          <button id="page-team" class="page-tab-btn" type="button" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
+            Planner
+          </button>
+          <button id="page-expected" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
+            xData
+          </button>
+          <button id="page-schedule" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>
+            Matchups
+          </button>
+          <button id="page-fixtures" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
+            Fixtures
+          </button>
+          <button id="page-markets" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
+            Markets
+          </button>
+        </nav>
+      </div>
     </div>
     <!-- Data season UI removed — app defaults to 2026/27. Keep 2025/26 data + setSeason() for a future restore.
     <label class="sr-only" for="season-select">Data season</label>
@@ -419,65 +472,28 @@
     -->
   </div>
 
-  <div class="page-tabs-clip" id="page-tabs-clip">
-  <nav class="page-tabs" id="page-tabs" aria-label="Pages">
-    <button id="page-home" class="page-tab-btn active" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-house"/></svg>
-      Home
-    </button>
-    <button id="page-live" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-circle-play"/></svg>
-      Gameweek
-      <span class="page-tab-live-dot" hidden aria-hidden="true"></span>
-    </button>
-    <button id="page-report" class="page-tab-btn" type="button" hidden>
-      <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg>
-      Report
-    </button>
-    <button id="page-opta" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-table"/></svg>
-      Statistics
-    </button>
-    <button id="page-rankings" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-podium"/></svg>
-      Rankings
-    </button>
-    <button id="page-ownership" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
-      Ownership
-    </button>
-    <button id="page-prices" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
-      Price Change
-    </button>
-    <button id="page-team" class="page-tab-btn" type="button" hidden>
-      <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
-      Planner
-    </button>
-    <button id="page-expected" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
-      xData
-    </button>
-    <button id="page-schedule" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>
-      Matchups
-    </button>
-    <button id="page-fixtures" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
-      Fixtures
-    </button>
-    <button id="page-markets" class="page-tab-btn" type="button">
-      <svg class="icon" aria-hidden="true"><use href="#i-candlestick"/></svg>
-      Markets
-    </button>
-  </nav>
-  </div>
-
   <div class="page-nav-actions">
     <button id="theme-cycle-btn" class="icon-btn icon-only-btn" type="button"
       title="Theme: Device" aria-label="Theme: Device">
       <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
     </button>
+    <div class="home-nav-cluster" id="home-nav-cluster" hidden>
+      <p class="home-nav-identity" id="home-nav-identity" hidden></p>
+      <div class="home-desktop-search" id="home-desktop-search" hidden>
+        <div class="home-desktop-search-field">
+          <svg class="icon home-desktop-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <input id="home-desktop-search-input" class="home-desktop-search-input" type="search"
+            placeholder="Search players or teams" autocomplete="off" enterkeyhint="search"
+            aria-label="Search players or teams" aria-autocomplete="list"
+            aria-controls="home-desktop-search-results" />
+          <button type="button" class="home-desktop-search-clear icon-only-btn" id="home-desktop-search-clear"
+            hidden aria-label="Clear search" title="Clear search">
+            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+          </button>
+        </div>
+        <div class="home-desktop-search-results" id="home-desktop-search-results" hidden role="listbox"></div>
+      </div>
+    </div>
     <button id="home-search-btn" class="icon-btn icon-only-btn home-search-btn" type="button"
       title="Search players" aria-label="Search players" aria-pressed="false" hidden>
       <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -519,10 +535,11 @@
             </div>
             <div class="prefs-field">
               <span class="prefs-field-label" id="odometer-seg-label">Number roll</span>
-              <p class="prefs-field-hint">A/B compare our odometer with an SFI-style roll (directional turn, soft window, mid-spin blur). Affects Home ranks and other digit rolls.</p>
+              <p class="prefs-field-hint">Digit drum for Home ranks and other number rolls. Off shows final values immediately.</p>
               <div class="segmented segmented-block" id="odometer-seg" role="group" aria-labelledby="odometer-seg-label">
                 <button type="button" data-odometer="classic" class="active" title="Current FPL.db drum roll">Ours</button>
                 <button type="button" data-odometer="sfi" title="SFI-inspired roll — numbers.sfinterface.com">SFI</button>
+                <button type="button" data-odometer="off" title="Show final values with no roll animation">Off</button>
               </div>
             </div>
             <div class="prefs-field">
@@ -856,28 +873,15 @@
 
   <main class="main">
     <div id="home-page" class="page-pane">
-      <div class="page-header opta-header home-header">
+      <!-- Desktop: team/manager + search live in .page-nav-actions. Mobile hides this too. -->
+      <div class="page-header opta-header home-header" hidden>
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-house"/></svg>Home<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle" id="home-page-subtitle">SoCal Big Guy FPL — pick your manager for live Home data.</p>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-house"/></svg>Home</h2>
+            <p class="page-subtitle" id="home-page-subtitle"></p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="home-count-label"></span>
-            <div class="home-desktop-search" id="home-desktop-search" hidden>
-              <div class="home-desktop-search-field">
-                <svg class="icon home-desktop-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
-                <input id="home-desktop-search-input" class="home-desktop-search-input" type="search"
-                  placeholder="Search players or teams" autocomplete="off" enterkeyhint="search"
-                  aria-label="Search players or teams" aria-autocomplete="list"
-                  aria-controls="home-desktop-search-results" />
-                <button type="button" class="home-desktop-search-clear icon-only-btn" id="home-desktop-search-clear"
-                  hidden aria-label="Clear search" title="Clear search">
-                  <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-                </button>
-              </div>
-              <div class="home-desktop-search-results" id="home-desktop-search-results" hidden role="listbox"></div>
-            </div>
           </div>
         </div>
       </div>
@@ -1962,7 +1966,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1396"></script>
+<script src="app.js?v=1400"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

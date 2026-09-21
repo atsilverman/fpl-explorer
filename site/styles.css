@@ -479,13 +479,15 @@ html[data-page="opta"] {
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 32;
+  /* Above page headers (home header is z-index 60) so the page tray menu
+     isn't covered by title / subtitle text. Sheets/modals stay higher. */
+  z-index: 70;
   flex-wrap: nowrap;
   box-shadow: var(--shadow-sm);
 }
 
 .page-nav-center {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 0;
   flex: none;
@@ -495,7 +497,7 @@ html[data-page="opta"] {
 }
 
 .page-nav-brand-divider {
-  display: none;
+  display: block;
   width: 1px;
   height: 14px;
   margin: 0 8px;
@@ -505,13 +507,13 @@ html[data-page="opta"] {
 }
 
 .page-tray-btn {
-  display: none;
+  display: inline-flex;
   appearance: none;
   align-items: center;
   gap: 4px;
   flex: none;
   min-width: 0;
-  max-width: min(42vw, 160px);
+  max-width: min(42vw, 200px);
   height: 32px;
   padding: 0 2px 0 0;
   border: none;
@@ -551,144 +553,142 @@ html[data-page="opta"] {
   text-overflow: ellipsis;
 }
 
-/* Tabs sit in the middle band between brand and actions. */
+/* Tabs nest under the tray trigger — desktop hover menu / mobile sheet host. */
 .page-tabs-clip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1 1 0;
-  min-width: 0;
-  position: relative;
-  align-self: center;
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: auto;
+  min-width: 200px;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow: var(--shadow-lg);
+  /* Within .page-nav stacking context — keep above other nav children. */
+  z-index: 5;
+  overflow: visible;
 }
-.page-tabs-clip::before,
-.page-tabs-clip::after {
+/* Invisible bridge so the pointer can travel into the menu without closing. */
+.page-tabs-clip::before {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 28px;
-  pointer-events: none;
-  z-index: 3;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-.page-tabs-clip::before {
   left: 0;
-  background: linear-gradient(
-    to right,
-    hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.55) 55%,
-    hsl(var(--card) / 0) 100%
-  );
+  right: 0;
+  bottom: 100%;
+  height: 10px;
 }
 .page-tabs-clip::after {
-  right: 0;
-  background: linear-gradient(
-    to left,
-    hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.55) 55%,
-    hsl(var(--card) / 0) 100%
-  );
-}
-.page-tabs-clip.has-more-left::before,
-.page-tabs-clip.has-more-right::after {
-  opacity: 1;
-}
-/* Desktop: no edge wash — the linear tab row should read clean when it
-   overflows slightly beside brand / actions. */
-@media (min-width: 721px) {
-  .page-tabs-clip::before,
-  .page-tabs-clip::after {
-    content: none;
-    display: none;
-  }
+  content: none;
+  display: none;
 }
 .page-tabs {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: flex-start;
-  align-self: center;
-  gap: 8px;
-  flex: none;
-  width: max-content;
-  max-width: 100%;
+  gap: 2px;
+  width: 100%;
   min-width: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  padding-inline: 0;
-  scroll-padding-inline: 12px;
-  touch-action: pan-x;
+  max-width: none;
+  overflow: visible;
+  padding: 0;
+  touch-action: manipulation;
 }
 .page-tabs::-webkit-scrollbar {
   display: none;
 }
 .page-tabs .page-tab-btn {
   touch-action: manipulation;
+  width: 100%;
+  justify-content: flex-start;
+  height: auto;
+  min-height: 36px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: calc(var(--radius) - 4px);
+  font-size: 13px;
+  font-weight: 500;
+}
+.page-tabs .page-tab-btn.active {
+  background: hsl(var(--accent-hsl));
+  color: var(--text);
+  box-shadow: none;
+}
+.page-tabs .page-tab-btn.active .icon {
+  color: inherit;
 }
 .page-tabs.is-wheel {
-  gap: 20px;
+  gap: 2px;
   padding-inline: 0;
   scroll-padding-inline: 0;
 }
 .page-tabs.is-wheel .page-tab-btn {
-  padding: 8px 6px;
-  gap: 5px;
+  padding: 8px 10px;
+  gap: 7px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .page-tabs-clip.is-wheel {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  transform: none;
   flex: none;
-  width: min(760px, calc(100vw - 380px));
-  max-width: min(760px, calc(100vw - 380px));
-  overflow: hidden;
-  z-index: 3;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
+  overflow: visible;
+  z-index: 45;
 }
 .page-tabs-clip.is-wheel:not(.is-ready) {
-  visibility: hidden;
+  visibility: visible;
 }
 .page-tabs-clip.is-wheel::before,
 .page-tabs-clip.is-wheel::after {
-  width: 72px;
+  width: auto;
   opacity: 1;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: none;
 }
 .page-tabs-clip.is-wheel::before {
-  background: linear-gradient(
-    to right,
-    hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.92) 28%,
-    hsl(var(--card) / 0.55) 58%,
-    hsl(var(--card) / 0)
-  );
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 22%, transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 22%, transparent 100%);
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 10px;
+  background: none;
 }
 .page-tabs-clip.is-wheel::after {
-  background: linear-gradient(
-    to left,
-    hsl(var(--card)) 0%,
-    hsl(var(--card) / 0.92) 28%,
-    hsl(var(--card) / 0.55) 58%,
-    hsl(var(--card) / 0)
-  );
-  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 22%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 0%, #000 22%, transparent 100%);
+  content: none;
+  display: none;
 }
 .page-tab-clone {
   cursor: pointer;
 }
 
+/* Desktop: open page list on hover / focus / pinned .open (click). */
+@media (min-width: 721px) {
+  .page-tray-dropdown.open .page-tabs-clip,
+  .page-tray-dropdown:focus-within .page-tabs-clip {
+    display: block;
+  }
+}
+@media (min-width: 721px) and (hover: hover) and (pointer: fine) {
+  .page-tray-dropdown:hover .page-tabs-clip {
+    display: block;
+  }
+}
+
 @media (max-width: 560px) {
   .page-tabs {
-    gap: 4px;
+    gap: 2px;
   }
   /* Only when a non-fixed menu is actually open. Do NOT key off :hover —
      sticky hover on touch resets overflow/scrollLeft and makes the
@@ -1536,23 +1536,29 @@ html[data-theme="dark"] .page-tab-live-dot {
   box-shadow: none;
 }
 
-/* Desktop: tray/info live in page headers — keep nav center out of the flex
-   math so the tab group can sit truly between brand and actions. */
+/* Desktop: page tray + hover menu beside brand (no horizontal tab strip). */
 @media (min-width: 721px) {
-  .page-nav-center {
-    display: none;
-  }
   .page-nav {
     gap: 16px;
   }
-  .page-tabs-clip {
-    /* Extra inset from brand / actions so the cluster reads as centered. */
-    margin-inline: 12px;
-  }
-  .page-tab-btn {
+  .page-tray-btn {
+    max-width: 220px;
     height: 36px;
-    padding: 0 12px;
-    box-sizing: border-box;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-dim);
+  }
+  .page-tray-btn:hover,
+  .page-tray-dropdown.open .page-tray-btn,
+  .page-tray-dropdown:focus-within .page-tray-btn {
+    color: var(--text);
+  }
+  .page-nav.is-page-tray-open .page-tray-btn .page-tab-caret,
+  .page-tray-btn[aria-expanded="true"] .page-tab-caret,
+  .page-tray-dropdown:hover .page-tab-caret,
+  .page-tray-dropdown.open .page-tab-caret,
+  .page-tray-btn:focus-visible .page-tab-caret {
+    opacity: 1;
   }
 }
 
@@ -2228,7 +2234,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     top: var(--vv-offset-top, 0px);
     left: 0;
     right: 0;
-    z-index: 32;
+    z-index: 70;
     flex-shrink: 0;
     padding:
       calc(var(--page-nav-pad-y) + env(safe-area-inset-top, 0px))
@@ -3621,12 +3627,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html[data-page="expected"] #expected-page .barbell-scroll {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
     overflow-y: auto;
     max-height: none;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-y;
   }
 
   .table-wrap > table {
@@ -4863,6 +4869,13 @@ html[data-theme="dark"] .player-flag-icon.is-chance-75 {
   }
   .page-nav-actions .page-live-badge {
     display: none !important;
+  }
+  /* Home has no page-header chrome — keep info + live in the top bar. */
+  html[data-page="home"] .page-info-btn.page-info-nav-btn {
+    display: inline-flex !important;
+  }
+  html[data-page="home"] .page-nav-actions .page-live-badge:not([hidden]) {
+    display: inline-flex !important;
   }
 }
 .page-live-badge {
@@ -8229,8 +8242,8 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   color: var(--text-dim);
 }
 
-/* Narrow: keep the desktop column layout and swipe horizontally instead
-   of restacking the track under Diff (which caused overlap). */
+/* Narrow: fit Player + track + xG/Goals/Diff in the viewport — no
+   horizontal pan. Track shrinks; player £ is dropped to free width. */
 @media (max-width: 720px) {
   .barbell-wrap {
     position: relative;
@@ -8240,26 +8253,54 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     min-width: 0;
     max-width: 100%;
     max-height: none;
-    --barbell-name-w: 140px;
-    --barbell-name-w-compare: 128px;
-    --barbell-loc-w-compare: 44px;
+    --barbell-name-w: 112px;
+    --barbell-name-w-compare: 108px;
+    --barbell-loc-w-compare: 36px;
     --barbell-head-h: 32px;
     --crest-size: 26px;
     --badge-size: 26px;
-    /* Keep head / scale / rows on the same width — mismatched min-widths
-       left a blank strip past Diff when scrolled right. Give the track
-       more length; xG / Goals / Diff sit off to the right. */
-    --barbell-min-w: 680px;
-    --barbell-track-min: 280px;
-    --barbell-num-w: 52px;
-    --barbell-gap: 6px;
-    --barbell-cols: var(--barbell-name-w) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
-    --barbell-cols-compare: var(--barbell-name-w-compare) var(--barbell-loc-w-compare) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
-    --barbell-cols-compare-row: var(--barbell-loc-w-compare) minmax(var(--barbell-track-min), 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    /* Viewport-width grid: track absorbs leftover space. */
+    --barbell-min-w: 0px;
+    --barbell-min-w-compare: 0px;
+    --barbell-track-min: 0px;
+    --barbell-track-min-compare: 0px;
+    --barbell-num-w: 42px;
+    --barbell-gap: 4px;
+    --barbell-cols: var(--barbell-name-w) minmax(0, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    --barbell-cols-compare: var(--barbell-name-w-compare) var(--barbell-loc-w-compare) minmax(0, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+    --barbell-cols-compare-row: var(--barbell-loc-w-compare) minmax(0, 1fr) var(--barbell-num-w) var(--barbell-num-w) var(--barbell-num-w);
+  }
+  /* Drop £ so TEAM|POS fits; sep after price goes with it. */
+  #expected-page .ownership-id-price,
+  #expected-page .ownership-id-price + .ownership-id-sep {
+    display: none;
+  }
+  .barbell-head,
+  .barbell-scale,
+  .barbell-row,
+  .barbell-group.is-compare {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .barbell-wrap.is-compare-mode .barbell-head,
+  .barbell-wrap.is-compare-mode .barbell-scale,
+  .barbell-wrap.is-compare-mode .barbell-group.is-compare {
+    min-width: 0;
+  }
+  .barbell-track {
+    min-width: 0;
+  }
+  .barbell-label .player-name,
+  .barbell-group-identity .player-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .barbell-wrap.name-simplify-ready {
-    --barbell-name-w-full: 140px;
-    --barbell-name-w-compare-full: 128px;
+    --barbell-name-w-full: 112px;
+    --barbell-name-w-compare-full: 108px;
     --barbell-name-w-compact: 50px;
     --barbell-name-w: calc(
       var(--barbell-name-w-full) -
@@ -8341,12 +8382,12 @@ html[data-page="expected"] #expected-page .barbell-scroll {
     flex: none;
   }
   .barbell-scroll {
-    overflow: auto;
+    overflow-x: hidden;
     overflow-y: auto;
     max-height: none;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-y;
   }
   .barbell-head {
     padding: 7px 10px;
@@ -17847,7 +17888,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
 .home-search-btn[hidden] {
   display: none !important;
 }
-/* Home search is a floating FAB on mobile; desktop uses the header field. */
+/* Home search is a floating FAB on mobile; desktop uses the nav field. */
 .page-nav-actions .home-search-btn {
   display: none !important;
 }
@@ -17856,16 +17897,47 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   color: hsl(var(--blue-hsl));
 }
 
-/* Desktop Home: expanded search under the Updated timestamp. */
+/* Desktop Home: team · manager + search sit in the top bar (left of settings). */
+.home-nav-cluster {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  margin-right: 2px;
+}
+.home-nav-cluster[hidden] {
+  display: none !important;
+}
+.home-nav-identity {
+  margin: 0;
+  min-width: 0;
+  max-width: min(280px, 28vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--text-dim);
+  text-align: right;
+  line-height: 1.2;
+}
+.home-nav-identity[hidden] {
+  display: none !important;
+}
+
+/* Desktop Home: expanded search in the page-nav actions cluster. */
 .home-desktop-search {
   display: none;
   position: relative;
-  width: min(400px, 46vw);
+  width: min(240px, 22vw);
   flex: none;
-  margin-top: 2px;
+  margin-top: 0;
 }
 .home-desktop-search.is-open {
-  z-index: 2;
+  z-index: 8;
 }
 .home-desktop-search-field {
   display: flex;
@@ -17926,8 +17998,9 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  left: 0;
-  z-index: 3;
+  left: auto;
+  width: max(100%, 280px);
+  z-index: 8;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -17957,26 +18030,32 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   display: none !important;
 }
 @media (min-width: 721px) {
-  html[data-page="home"] .home-desktop-search {
+  html[data-page="home"] .home-nav-cluster:not([hidden]) {
+    display: inline-flex;
+  }
+  html[data-page="home"] .home-desktop-search:not([hidden]) {
     display: block;
   }
-  /* Dropdown extends over summary cards — keep header above dashboard content. */
-  html[data-page="home"] #home-page > .home-header {
-    position: relative;
-    z-index: 60;
-    overflow: visible;
+  /* Title row removed — hero sits flush under page-nav (same as mobile). */
+  html[data-page="home"] .home-header {
+    display: none !important;
   }
-  html[data-page="home"] .home-header .opta-header-top,
-  html[data-page="home"] .home-header .page-header-meta {
-    overflow: visible;
-  }
-  html[data-page="home"] .home-header .page-header-meta {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-  }
-  html[data-page="home"] .home-header .count-label {
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)) .main {
     padding-top: 0;
+  }
+  html[data-page="home"]:has(#home-summary[data-home-summary="hero"]):not(:has(.home-dashboard.is-player-lookup)) .home-dashboard {
+    margin-top: 0;
+  }
+  html[data-page="home"] .home-summary[data-home-summary="hero"] {
+    margin-top: 0;
+  }
+}
+@media (max-width: 720px) {
+  .home-nav-cluster {
+    display: none !important;
+  }
+  .home-desktop-search {
+    display: none !important;
   }
 }
 @media (max-width: 720px) {

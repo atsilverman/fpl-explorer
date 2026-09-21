@@ -1116,6 +1116,7 @@
     pageNav: document.querySelector(".page-nav"),
     pageNavCenter: $(".page-nav-center"),
     pageInfoNavBtn: $("#page-info-nav-btn"),
+    pageTrayWrap: $("#page-tray-wrap"),
     pageTrayBtn: $("#page-tray-btn"),
     pageTrayLabel: $("#page-tray-label"),
     pageTrayIconUse: $("#page-tray-icon-use"),
@@ -1161,6 +1162,8 @@
     liveStatusSeg: $("#live-status-seg"),
     homePageSubtitle: $("#home-page-subtitle"),
     homeCountLabel: $("#home-count-label"),
+    homeNavCluster: $("#home-nav-cluster"),
+    homeNavIdentity: $("#home-nav-identity"),
     homeDesktopSearch: $("#home-desktop-search"),
     homeDesktopSearchInput: $("#home-desktop-search-input"),
     homeDesktopSearchClear: $("#home-desktop-search-clear"),
@@ -13030,10 +13033,12 @@
     const input = el.homeDesktopSearchInput;
     const clearBtn = el.homeDesktopSearchClear;
     const results = el.homeDesktopSearchResults;
-    if (!wrap) return;
+    const cluster = el.homeNavCluster;
     const onHome = state.page === "home";
     const desktop = !NARROW_MQ.matches;
     const viewingOther = homeIsViewingOtherManager();
+    if (cluster) cluster.hidden = !(onHome && desktop);
+    if (!wrap) return;
     wrap.hidden = !(onHome && desktop && !viewingOther);
     if (!onHome || !desktop || viewingOther) {
       if (results) {
@@ -13052,6 +13057,17 @@
     } else if (input && !homeLookupPlayer) {
       input.placeholder = "Search players or teams";
     }
+  }
+
+  function syncHomeNavIdentity(text) {
+    const label = String(text || "").trim();
+    if (el.homeNavIdentity) {
+      el.homeNavIdentity.textContent = label;
+      el.homeNavIdentity.hidden = !label;
+      if (label) setTip(el.homeNavIdentity, label);
+      else setTip(el.homeNavIdentity, "");
+    }
+    if (el.homePageSubtitle) el.homePageSubtitle.textContent = label;
   }
 
   function renderHomeDesktopSearchResults(query) {
@@ -13824,7 +13840,7 @@
   }
 
   function mountHomeSummaryRollsAtStart(root) {
-    if (!root || prefersReducedMotion()) return;
+    if (!root || statRollsDisabled()) return;
     root.querySelectorAll(".home-summary .home-stat-roll[data-count-to]").forEach((node) => {
       const to = Number(node.dataset.countTo);
       if (!Number.isFinite(to)) return;
@@ -13952,7 +13968,7 @@
       const summary = homeSummaryForView(homeActiveViewEntryId());
       applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
     };
-    if (!pane || prefersReducedMotion()) {
+    if (!pane || statRollsDisabled()) {
       finishAll();
       return;
     }
@@ -13995,10 +14011,7 @@
     if (el.homeEmpty) el.homeEmpty.hidden = true;
     if (el.homeBento) el.homeBento.hidden = true;
     clearHomeDashboardStats();
-    if (el.homePageSubtitle) {
-      el.homePageSubtitle.textContent =
-        "Link a manager to personalize Home live scoring and standings.";
-    }
+    syncHomeNavIdentity("Link a manager to personalize Home");
     setHomeManagerModalOpen(true);
   }
 
@@ -14040,25 +14053,24 @@
       }
     }
     if (el.homeCountLabel) syncHomeCountLabel();
-    if (el.homePageSubtitle) {
-      if (!linked) {
-        el.homePageSubtitle.textContent = "Link a manager and league in Preferences to personalize Home.";
-      } else if (!prefsMatch && hasPayload) {
-        el.homePageSubtitle.textContent = "Cached Home data is for a different manager/league — run refresh home.";
-      } else {
-        const viewEntry = homeActiveViewEntryId();
-        const viewingOther = homeIsViewingOtherManager();
-        const s = viewingOther
-          ? homeSummaryForView(viewEntry)
-          : (HOME.summary || {});
-        const bits = [s.teamName, s.managerName].filter(Boolean);
-        el.homePageSubtitle.textContent = bits.length
-          ? viewingOther
-            ? `${bits.join(" · ")} — viewing another manager's team.`
-            : bits.join(" · ")
-          : "Your manager team and mini-league gameweek standings from the last refresh.";
-      }
+    if (!linked) {
+      syncHomeNavIdentity("Link a manager and league in Preferences");
+    } else if (!prefsMatch && hasPayload) {
+      syncHomeNavIdentity("Run refresh home — cache is for another manager");
+    } else {
+      const viewEntry = homeActiveViewEntryId();
+      const viewingOther = homeIsViewingOtherManager();
+      const s = viewingOther
+        ? homeSummaryForView(viewEntry)
+        : (HOME.summary || {});
+      const bits = [s.teamName, s.managerName].filter(Boolean);
+      syncHomeNavIdentity(
+        bits.length
+          ? bits.join(" · ")
+          : ""
+      );
     }
+    syncHomeDesktopSearchUI();
     if (showEmpty) {
       if (el.homeDeadline) el.homeDeadline.hidden = true;
       if (el.homeViewBanner) el.homeViewBanner.hidden = true;
@@ -16754,6 +16766,8 @@
     if (el.prefsBtn && closingKey === "prefs") el.prefsBtn.setAttribute("aria-expanded", "false");
     if (el.pageTrayBtn && closingKey === "pages") {
       el.pageTrayBtn.setAttribute("aria-expanded", "false");
+      if (el.pageNav) el.pageNav.classList.remove("is-page-tray-open");
+      if (el.pageTrayWrap) el.pageTrayWrap.classList.remove("open");
     }
     if (el.homePitchModeBtn && closingKey === "home-pitch-mode") {
       el.homePitchModeBtn.setAttribute("aria-expanded", "false");
@@ -19942,17 +19956,18 @@
   }
 
   const BARBELL_NAME_MIN_W = 168;
-  const BARBELL_NAME_MIN_W_MOBILE = 140;
+  const BARBELL_NAME_MIN_W_MOBILE = 96;
   const BARBELL_NAME_MAX_FRAC = 0.42;
-  const BARBELL_NAME_MAX_FRAC_MOBILE = 0.5;
+  /* Leave room for track + xG/Goals/Diff on a fitted mobile row. */
+  const BARBELL_NAME_MAX_FRAC_MOBILE = 0.34;
   const BARBELL_NAME_SLACK = 8;
-  const BARBELL_NAME_SLACK_MOBILE = 6;
+  const BARBELL_NAME_SLACK_MOBILE = 4;
   const BARBELL_COMPARE_NAME_MIN_W = 176;
-  const BARBELL_COMPARE_NAME_MIN_W_MOBILE = 124;
+  const BARBELL_COMPARE_NAME_MIN_W_MOBILE = 96;
   const BARBELL_COMPARE_NAME_MAX_FRAC = 0.34;
-  const BARBELL_COMPARE_NAME_MAX_FRAC_MOBILE = 0.4;
+  const BARBELL_COMPARE_NAME_MAX_FRAC_MOBILE = 0.3;
   const BARBELL_COMPARE_NAME_SLACK = 8;
-  const BARBELL_COMPARE_NAME_SLACK_MOBILE = 6;
+  const BARBELL_COMPARE_NAME_SLACK_MOBILE = 4;
 
   function measureBarbellIdentityWidth(cell) {
     if (!cell) return 0;
@@ -20222,7 +20237,10 @@
       const extraBits = locSuffix
         ? [`<span class="loc-tag">${locSuffix === "Home" ? "H" : "A"}</span>`]
         : [];
-      label.innerHTML = `<div class="rankings-identity ownership-style-id">${ownershipStyleIdentityHTML(row, { extraBits })}</div>`;
+      label.innerHTML = `<div class="rankings-identity ownership-style-id">${ownershipStyleIdentityHTML(row, {
+        extraBits,
+        omitPrice: NARROW_MQ.matches,
+      })}</div>`;
       setTip(label, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
       div.appendChild(label);
     }
@@ -20325,7 +20343,9 @@
     if (row.team) identity.dataset.team = String(currentTeamCode(row) || row.team);
     identity.dataset.rowName = row.name || "";
     identity.dataset.rowKey = String(rowKey(row));
-    identity.innerHTML = `<div class="rankings-identity ownership-style-id">${ownershipStyleIdentityHTML(row)}</div>`;
+    identity.innerHTML = `<div class="rankings-identity ownership-style-id">${ownershipStyleIdentityHTML(row, {
+      omitPrice: NARROW_MQ.matches,
+    })}</div>`;
     setTip(identity, state.view === "players" ? `${row.name} — ${row.team}, ${row.position}` : row.name);
     return identity;
   }
@@ -27577,7 +27597,7 @@
       if (onSettled) onSettled();
     };
 
-    if (prefersReducedMotion()) {
+    if (statRollsDisabled()) {
       finish();
       return;
     }
@@ -29648,7 +29668,7 @@
 
   function startOwnershipEnterMotion(pane) {
     if (!pane) return;
-    if (prefersReducedMotion()) {
+    if (statRollsDisabled()) {
       pane.classList.remove("is-enter-pending");
       finishOwnershipStatRolls(pane);
       return;
@@ -31600,6 +31620,10 @@
   function animateStatRollNode(node, opts = {}) {
     const to = Number(node.dataset.countTo);
     if (!Number.isFinite(to)) return;
+    if (statRollsDisabled()) {
+      finishStatRollNode(node);
+      return;
+    }
     const from =
       node.dataset.countFrom != null && Number.isFinite(Number(node.dataset.countFrom))
         ? Number(node.dataset.countFrom)
@@ -31645,7 +31669,7 @@
     const run = () => {
       const nodes = [...root.querySelectorAll(selector)];
       if (!nodes.length) return;
-      if (prefersReducedMotion()) {
+      if (statRollsDisabled()) {
         nodes.forEach(finishStatRollNode);
         return;
       }
@@ -31656,6 +31680,15 @@
 
   function prefersReducedMotion() {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  /** Number-roll prefs Off, or OS reduced-motion — skip digit drums. */
+  function odometerModeIsOff() {
+    return document.documentElement.classList.contains("odometer-off");
+  }
+
+  function statRollsDisabled() {
+    return prefersReducedMotion() || odometerModeIsOff();
   }
 
 
@@ -32074,6 +32107,9 @@
   }
 
   function pageTrayIsOpen() {
+    if (!NARROW_MQ.matches) {
+      return !!(el.pageTrayWrap && el.pageTrayWrap.classList.contains("open"));
+    }
     return !!(mobileSheetOpen && mobileSheetKey === "pages");
   }
 
@@ -32081,7 +32117,9 @@
     if (!el.pageTrayBtn || !el.pageTabs) return;
     if (!NARROW_MQ.matches) {
       if (mobileSheetOpen && mobileSheetKey === "pages") closeMobileSheet();
-      el.pageTrayBtn.setAttribute("aria-expanded", "false");
+      if (el.pageTrayWrap) el.pageTrayWrap.classList.toggle("open", !!open);
+      if (el.pageNav) el.pageNav.classList.toggle("is-page-tray-open", !!open);
+      el.pageTrayBtn.setAttribute("aria-expanded", open ? "true" : "false");
       return;
     }
     if (open) {
@@ -32094,10 +32132,18 @@
         "aria-expanded",
         mobileSheetOpen && mobileSheetKey === "pages" ? "true" : "false"
       );
+      if (el.pageNav) {
+        el.pageNav.classList.toggle(
+          "is-page-tray-open",
+          mobileSheetOpen && mobileSheetKey === "pages"
+        );
+      }
     } else if (mobileSheetKey === "pages") {
       closeMobileSheet();
     } else {
       el.pageTrayBtn.setAttribute("aria-expanded", "false");
+      if (el.pageNav) el.pageNav.classList.remove("is-page-tray-open");
+      if (el.pageTrayWrap) el.pageTrayWrap.classList.remove("open");
     }
   }
 
@@ -32805,6 +32851,17 @@
       setPageTrayOpen(!pageTrayIsOpen());
     });
   }
+  document.addEventListener("click", (e) => {
+    if (NARROW_MQ.matches) return;
+    if (!pageTrayIsOpen()) return;
+    if (el.pageTrayWrap?.contains(e.target)) return;
+    setPageTrayOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (NARROW_MQ.matches || !pageTrayIsOpen()) return;
+    setPageTrayOpen(false);
+  });
   if (el.pageMarkets) {
     el.pageMarkets.addEventListener("click", () => setPage("markets"));
   }
@@ -32985,8 +33042,7 @@
   let pageTabWheelBooted = false;
 
   function pageTabWheelEnabled() {
-    // Desktop uses a linear Home→…→Markets row. Horizontal scroll + edge fades
-    // only appear when the window is too narrow to fit every tab.
+    // Desktop + mobile both use the page tray dropdown / sheet — no wheel strip.
     return false;
   }
 
@@ -34647,7 +34703,7 @@
   };
 
   const ODOMETER_KEY = "fpl-explorer-odometer";
-  const ODOMETER_ORDER = ["classic", "sfi"];
+  const ODOMETER_ORDER = ["classic", "sfi", "off"];
 
   function odometerModeIsSfi() {
     return document.documentElement.classList.contains("odometer-sfi");
@@ -34687,6 +34743,7 @@
       /* ignore quota */
     }
     document.documentElement.classList.toggle("odometer-sfi", next === "sfi");
+    document.documentElement.classList.toggle("odometer-off", next === "off");
     syncOdometerSeg(next);
     if (preview) previewOdometerModeOnHome();
   }
