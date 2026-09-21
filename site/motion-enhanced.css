@@ -344,6 +344,10 @@ html.motion-enhanced #page-nav-live:not([hidden]) {
 html.motion-enhanced .stat-roll-strip.is-rolling {
   filter: blur(0 var(--reel-spin-blur));
 }
+/* SFI brings its own softer mid-spin blur — skip the classic reel smear. */
+html.motion-enhanced.odometer-sfi .stat-roll-strip.is-rolling {
+  filter: none;
+}
 
 html.motion-enhanced .stat-roll-digit {
   transition: filter var(--duration-fast) var(--ease-smooth-out);

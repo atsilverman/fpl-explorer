@@ -5,7 +5,7 @@
 html.odometer-sfi {
   --sfi-numbers-roll: 520ms;
   --sfi-numbers-cell: 1.15em;
-  --sfi-numbers-blur: 0.09em;
+  --sfi-numbers-blur: 0.025em;
   --sfi-numbers-fade: 1;
   --sfi-numbers-fade-roll: 1.9;
   --sfi-numbers-softness: 0;

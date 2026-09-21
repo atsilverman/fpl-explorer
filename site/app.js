@@ -846,7 +846,7 @@
     scheduleMatchups: true,
     scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
     scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
-    matchupsSeason: "2526", // 2526 prior OPTA (default) | 2627 current FPL season-to-date
+    matchupsSeason: "2627", // locked to 2026/27 FPL season-to-date ranks
     fixturesWindowStart: null,
     fixturesWindowLen: 7,
     fixturesMonthStart: null, // index into fixturesSeasonMonthKeys()
@@ -886,8 +886,6 @@
     pricesActualSortKey: "default", // default | changedAt | name | change | before | after
     pricesActualSortDir: "desc",
     pricesActualSortTouched: false,
-    pricesActualShowAll: false,
-    pricesPredictionScope: "all", // all | owned
     pricesMoverKind: "risers", // risers | fallers (mobile ↑↓ toggle)
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
@@ -1289,8 +1287,6 @@
     pricesCountdownValue: $("#prices-countdown-value"),
     pricesViewSeg: $("#prices-view-seg"),
     pricesMoverKindSeg: $("#prices-mover-kind-seg"),
-    pricesActualScopeSeg: $("#prices-actual-scope-seg"),
-    pricesPredictionScopeSeg: $("#prices-prediction-scope-seg"),
     pricesCountdownBar: $("#prices-countdown-bar"),
     pricesCountLabel: $("#prices-count-label"),
     pricesPredictionWrap: $("#prices-prediction-wrap"),
@@ -1380,8 +1376,6 @@
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
     prefsDifficultyBtn: $("#prefs-difficulty-btn"),
-    scheduleSeasonSeg: $("#schedule-season-seg"),
-    scheduleSeasonHint: $("#schedule-season-hint"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
     marketsAttribution: $("#markets-attribution"),
@@ -1460,8 +1454,7 @@
     pageInfoTooltip: $("#page-info-tooltip"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
-    odometerSeg: $("#odometer-seg"),
-    playerThumbSeg: $("#player-thumb-seg"),
+    prefsAnimations: $("#prefs-animations"),
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
     fontPairSelect: $("#font-pair-select"),
@@ -2190,7 +2183,7 @@
     if (!raw || typeof raw !== "object") return base;
     const prevVersion = Number(raw.version) || 1;
     base.useOnFixtures = !!raw.useOnFixtures;
-    base.useOnMatchups = false; // Matchups uses 2025/26 vs 2026/27 strength basis, not custom ratings.
+    base.useOnMatchups = false; // Matchups uses locked 2026/27 FPL ranks, not custom ratings.
     base.completedOnce = !!raw.completedOnce;
     base.advanced = !!raw.advanced;
     base.ratings = cloneTeamDifficultyRatings(raw.ratings || {});
@@ -2264,28 +2257,19 @@
   const MATCHUPS_SEASON_PRIOR = "2526";
   const MATCHUPS_SEASON_CURRENT = "2627";
 
+  /** Matchups strength locked to 2026/27 FPL season-to-date ranks. */
   function loadMatchupsSeason() {
+    state.matchupsSeason = MATCHUPS_SEASON_CURRENT;
     try {
-      const raw = localStorage.getItem(MATCHUPS_SEASON_KEY);
-      if (raw === MATCHUPS_SEASON_CURRENT || raw === MATCHUPS_SEASON_PRIOR) {
-        state.matchupsSeason = raw;
-      }
+      localStorage.removeItem(MATCHUPS_SEASON_KEY);
     } catch {
       /* private browsing */
     }
     return state.matchupsSeason;
   }
 
-  function saveMatchupsSeason() {
-    try {
-      localStorage.setItem(MATCHUPS_SEASON_KEY, state.matchupsSeason);
-    } catch {
-      /* private browsing */
-    }
-  }
-
   function matchupsUsesCurrentSeason() {
-    return state.matchupsSeason === MATCHUPS_SEASON_CURRENT;
+    return true;
   }
 
   function teamStatsDictFromLists(lists) {
@@ -2417,7 +2401,7 @@
       title: "Team difficulties saved",
       message: teamDifficultyStore.useOnFixtures
         ? "Custom fixture colors are on — Fixtures and Home Schedule use your ratings."
-        : "Stored in this browser. Turn on Custom fixture colors in Preferences to apply them (Matchups keep OPTA/FPL ranks).",
+        : "Stored in this browser. Turn on Custom fixture colors in Preferences to apply them (Strength of Schedule keeps OPTA/FPL ranks).",
       icon: "circle-check",
       animateCheck: true,
     });
@@ -11579,16 +11563,14 @@
     teamDetailsCode = code;
     teamDetailsStatMode = 0;
     homeOwnChartWindowIdx = 0;
-    const row = teamDetailsRow(code);
     const title = "Team Details";
-    const label = (row && row.name) || teamNameForSeason(code) || code;
 
     if (preferMobileSheet()) {
       closeHomePlayerModal();
       if (mobileSheetOpen && mobileSheetKey === "team-details" && el.mobileSheetBody) {
         if (el.mobileSheetTitle) {
-          el.mobileSheetTitle.classList.add("mobile-sheet-title-rich");
-          el.mobileSheetTitle.innerHTML = `${badgeHTML(code)}<span>${escapeHtml(label)}</span>`;
+          el.mobileSheetTitle.classList.remove("mobile-sheet-title-rich");
+          el.mobileSheetTitle.textContent = title;
         }
         el.mobileSheetBody.innerHTML = teamDetailsHTML(code);
         syncHomePlayerOpenXBtn(null);
@@ -11599,7 +11581,6 @@
       }
       openMobileSheet({
         title,
-        titleHtml: `${badgeHTML(code)}<span>${escapeHtml(label)}</span>`,
         html: teamDetailsHTML(code),
         key: "team-details",
       });
@@ -15637,6 +15618,7 @@
     const hideSubtoolbar =
       page === "schedule" ||
       page === "fixtures" ||
+      (page === "prices" && preferMobileSheet()) ||
       (isMarkets && preferMobileSheet()) ||
       isHome ||
       page === "report" ||
@@ -16783,8 +16765,8 @@
     if (el.scheduleSlidersToggle && closingKey === "schedule-filters") {
       el.scheduleSlidersToggle.classList.remove("on");
       el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
-      setTip(el.scheduleSlidersToggle, "Show matchup filters");
-      el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup filters");
+      setTip(el.scheduleSlidersToggle, "Show filters");
+      el.scheduleSlidersToggle.setAttribute("aria-label", "Show filters");
     }
     if (el.marketsSlidersToggle && closingKey === "markets-filters") {
       el.marketsSlidersToggle.classList.remove("on");
@@ -18164,22 +18146,19 @@
 
   function matchupPageInfoHTML() {
     const mobile = pageInfoIsMobile();
-    const basis = matchupsUsesCurrentSeason()
-      ? "Strength basis is 2026/27 FPL season-to-date ranks."
-      : "Strength basis is 2025/26 OPTA ranks (default). Switch to 2026/27 when enough gameweeks have settled.";
     const iconRows = [
       spitRow(
         `${iconHTML("swords", "ftt-attack-icon")} ${iconHTML("shield-half", "ftt-defence-icon")}`,
         "Attack / defence edge when Advantage ≥ Flag threshold."
       ),
-      spitRow(iconHTML("funnel"), "Gameweek range, Highlight Ranks, Expected/Actual blend, Flag threshold, and Strength basis (2025/26 vs 2026/27)."),
-      spitRow(iconHTML("sliders-horizontal"), basis),
+      spitRow(iconHTML("funnel"), "Gameweek range, Highlight Ranks, Expected/Actual blend, and Flag threshold."),
+      spitRow(iconHTML("sliders-horizontal"), "Strength ranks use 2026/27 FPL season-to-date."),
     ];
     if (!mobile) {
       iconRows.push(spitRow(iconHTML("info"), "On a card — that club’s own home/away attack &amp; defence ranks."));
     }
     // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
-    return `${spitHead("calendar-days", "How Matchups works")}
+    return `${spitHead("calendar-days", "How Strength of Schedule works")}
       ${spitIntro("Find clubs with a soft upcoming run for attack and/or defence.")}
       ${spitSection("Legend", iconRows)}
       <div class="spit-annotate">
@@ -18203,11 +18182,7 @@
           <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
         </ol>
       </div>
-      ${spitNote(
-        matchupsUsesCurrentSeason()
-          ? "Scatter averages every fixture (not only flagged). Ranks use 2026/27 FPL season-to-date."
-          : "Scatter averages every fixture (not only flagged). Promoted clubs use provisional ranks 18–20 on 2025/26 OPTA."
-      )}`;
+      ${spitNote("Scatter averages every fixture (not only flagged). Ranks use 2026/27 FPL season-to-date.")}`;
   }
 
   function pageInfoTooltipHTML() {
@@ -18370,7 +18345,7 @@
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
-        ${spitNote("Blue/orange here is over/under vs expectation — not Matchups fixture difficulty. Soft blue is quieter in dark mode.")}`;
+        ${spitNote("Blue/orange here is over/under vs expectation — not Strength of Schedule fixture difficulty. Soft blue is quieter in dark mode.")}`;
     }
 
     if (state.page === "ownership") {
@@ -18434,10 +18409,6 @@
         : [
             spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
             spitRow(
-              spitRank("All / Owned"),
-              "All shows every mover matching filters. Owned limits to your FPL squad (Preferences → Manager)."
-            ),
-            spitRow(
               spitRank("Status"),
               mobile
                 ? "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop."
@@ -18446,8 +18417,8 @@
             spitRow(
               spitRank("Risers / Fallers"),
               mobile
-                ? "Use the ↑ / ↓ toggle (or swipe the table) to switch Risers and Fallers."
-                : "Two side-by-side tables when the window is wide enough — otherwise stacked. Ranked by status tier then |progress|."
+                ? "Use the Risers / Fallers toggle to switch tables. Owned players show a pin next to their name."
+                : "Two side-by-side tables when the window is wide enough — otherwise stacked. Ranked by status tier then |progress|. Owned players show a pin next to their name."
             ),
             spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of hourly check-ins. Line colour follows 3d Δ (green up, red down)."),
             spitRow(
@@ -18465,7 +18436,7 @@
       const note = isActual
         ? "Actual log starts empty on deploy and fills as daily/hourly fetches detect changes."
         : "Refreshed hourly via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
-      return `${spitHead("pound-sterling-circle", "How Price Change works")}
+      return `${spitHead("pound-sterling-circle", "How Price Changes works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
@@ -18680,8 +18651,8 @@
       spitRow(
         spitRank("Fixtures"),
         mobile
-          ? "Tap a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Matchups pink/blue wash)."
-          : "Click a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Matchups pink/blue wash)."
+          ? "Tap a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Strength of Schedule pink/blue wash)."
+          : "Click a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Strength of Schedule pink/blue wash)."
       ),
       spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
     ];
@@ -19324,10 +19295,10 @@
       opta: "How Statistics works",
       rankings: "How Rankings works",
       expected: "How Expected Data works",
-      schedule: "How Matchups works",
+      schedule: "How Strength of Schedule works",
       fixtures: "How Fixtures works",
       ownership: "How Ownership works",
-      prices: "How Price Change works",
+      prices: "How Price Changes works",
       markets: "How Markets works",
       team: "How Planner works",
     };
@@ -23623,6 +23594,10 @@
 
   function setDifficultyWizardOpen(open, { firstRun = false, step = null } = {}) {
     if (!el.difficultyWizard) return;
+    if (el.difficultyWizard._sheetCloseTimer) {
+      clearTimeout(el.difficultyWizard._sheetCloseTimer);
+      el.difficultyWizard._sheetCloseTimer = 0;
+    }
     if (open) {
       loadTeamDifficultyStore();
       teamDifficultyWizardFirstRun = !!firstRun;
@@ -23631,15 +23606,38 @@
       teamDifficultyDraft = teamDifficultyHasCustomRatings()
         ? cloneTeamDifficultyRatings(teamDifficultyStore.ratings)
         : buildFplDifficultySeedRatings();
+      // Settings edit on mobile → bottom tray; onboarding stays full-screen/modal.
+      const asSheet = !firstRun && NARROW_MQ.matches;
+      el.difficultyWizard.classList.toggle("is-sheet", asSheet);
+      el.difficultyWizard.classList.remove("is-open");
       el.difficultyWizard.hidden = false;
       el.difficultyWizard.setAttribute("aria-hidden", "false");
       syncDifficultyWizardSteps();
       setPrefsOpen(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!el.difficultyWizard || el.difficultyWizard.hidden) return;
+          el.difficultyWizard.classList.add("is-open");
+        });
+      });
     } else {
-      el.difficultyWizard.hidden = true;
-      el.difficultyWizard.setAttribute("aria-hidden", "true");
-      teamDifficultyDraft = null;
-      teamDifficultyWizardFirstRun = false;
+      const finishClose = () => {
+        el.difficultyWizard.hidden = true;
+        el.difficultyWizard.setAttribute("aria-hidden", "true");
+        el.difficultyWizard.classList.remove("is-sheet", "is-open");
+        teamDifficultyDraft = null;
+        teamDifficultyWizardFirstRun = false;
+      };
+      if (
+        el.difficultyWizard.classList.contains("is-sheet") &&
+        el.difficultyWizard.classList.contains("is-open") &&
+        !el.difficultyWizard.hidden
+      ) {
+        el.difficultyWizard.classList.remove("is-open");
+        el.difficultyWizard._sheetCloseTimer = setTimeout(finishClose, 280);
+        return;
+      }
+      finishClose();
     }
   }
 
@@ -23679,7 +23677,10 @@
       if (row) row.classList.toggle("is-disabled", !has);
     }
     if (el.prefsDifficultyBtn) {
-      el.prefsDifficultyBtn.textContent = has ? "Edit team difficulties" : "Set team difficulties";
+      const label = el.prefsDifficultyBtn.querySelector(".settings-switch-label");
+      const affordance = el.prefsDifficultyBtn.querySelector(".prefs-diff-edit-affordance");
+      if (label) label.textContent = has ? "Edit ratings" : "Set ratings";
+      if (affordance) affordance.textContent = has ? "Edit" : "Set";
     }
     document.documentElement.classList.toggle("custom-fdr-on", teamDifficultyUsesFixtures());
   }
@@ -23716,8 +23717,8 @@
     showToast({
       title: next ? "Custom fixture colors on" : "Custom fixture colors off",
       message: next
-        ? "Fixtures and Home Schedule (squad + player/team cards) use your ratings. Matchups page stays on OPTA/FPL ranks."
-        : "Back to official FPL FDR / opponent-rank washes. Matchups page was never using custom ratings.",
+        ? "Fixtures and Home Schedule (squad + player/team cards) use your ratings. Strength of Schedule stays on OPTA/FPL ranks."
+        : "Back to official FPL FDR / opponent-rank washes. Strength of Schedule was never using custom ratings.",
       icon: "info",
     });
   }
@@ -23726,39 +23727,15 @@
     if (typeof updateScheduleEdgeMinSlider === "function") {
       updateScheduleEdgeMinSlider();
     }
-    if (scheduleEdgeMinInfoEl) {
-      scheduleEdgeMinInfoEl.setAttribute(
-        "data-tip-html",
-        `Minimum rank gap to flag attack ${iconHTML("swords", "ftt-attack-icon")} or defence ${iconHTML("shield-half", "ftt-defence-icon")} edges on fixture cells.`
-      );
-    }
   }
 
   function syncMatchupsSeasonUI() {
-    if (el.scheduleSeasonSeg) {
-      el.scheduleSeasonSeg.querySelectorAll("button[data-matchups-season]").forEach((btn) => {
-        btn.classList.toggle("active", btn.getAttribute("data-matchups-season") === state.matchupsSeason);
-      });
-      syncAllSegThumbs({ animate: false });
-    }
-    if (el.scheduleSeasonHint) {
-      el.scheduleSeasonHint.textContent = matchupsUsesCurrentSeason()
-        ? "2026/27 FPL season-to-date ranks · switch back until enough gameweeks if edges look noisy"
-        : "Prior-season OPTA ranks · provisional 18–20 for promoted clubs";
-    }
+    /* Strength basis UI removed — locked to 2026/27. */
   }
 
-  function setMatchupsSeason(season) {
-    const next =
-      season === MATCHUPS_SEASON_CURRENT ? MATCHUPS_SEASON_CURRENT : MATCHUPS_SEASON_PRIOR;
-    if (state.matchupsSeason === next) {
-      syncMatchupsSeasonUI();
-      return;
-    }
-    state.matchupsSeason = next;
-    saveMatchupsSeason();
-    syncMatchupsSeasonUI();
-    if (state.page === "schedule") renderSchedule();
+  function setMatchupsSeason(_season) {
+    state.matchupsSeason = MATCHUPS_SEASON_CURRENT;
+    loadMatchupsSeason();
   }
 
   function teamPlayerCellHTML(row, slot) {
@@ -28572,7 +28549,7 @@
       const row = catalog.get(Number(p.code));
       if (excludeDepartedPlayer(row)) return false;
     }
-    const q = state.search.trim().toLowerCase();
+    const q = state.page === "prices" ? "" : state.search.trim().toLowerCase();
     if (q) {
       if (KNOWN_TEAM_CODES_LOWER.has(q)) {
         if (String(p.team || "").toLowerCase() !== q) return false;
@@ -28586,7 +28563,7 @@
 
   function ownershipTeamPassesDisplayFilters(team, name) {
     if (state.teamFilter.size && !state.teamFilter.has(team)) return false;
-    const q = state.search.trim().toLowerCase();
+    const q = state.page === "prices" ? "" : state.search.trim().toLowerCase();
     if (q) {
       const code = String(team || "").toLowerCase();
       if (KNOWN_TEAM_CODES_LOWER.has(q)) {
@@ -29797,16 +29774,12 @@
       syncPricesPredictionColumns();
       syncPricesActualLayout();
       syncSegThumb(el.pricesViewSeg);
-      syncSegThumb(el.pricesPredictionScopeSeg);
-      syncSegThumb(el.pricesActualScopeSeg);
       requestAnimationFrame(() => {
         clampPricesScrollAfterUpdate();
         syncPricesMoverPagerUI();
         syncPricesPredictionColumns();
         syncPricesActualLayout();
         syncSegThumb(el.pricesViewSeg);
-        syncSegThumb(el.pricesPredictionScopeSeg);
-        syncSegThumb(el.pricesActualScopeSeg);
       });
     });
   }
@@ -30199,62 +30172,13 @@
     );
   }
 
-  const PRICES_SCOPE_TOP_N = 5;
-
-  function limitPricesScopeRows(rows, catalog) {
-    const byOwned = (list) =>
-      list.slice().sort((a, b) => {
-        const ownA = pricesActualOwnedPct(a, catalog);
-        const ownB = pricesActualOwnedPct(b, catalog);
-        if (ownA !== ownB) return ownB - ownA;
-        return String(a.name || "").localeCompare(String(b.name || ""));
-      });
-    const keep = new Set(byOwned(rows).slice(0, PRICES_SCOPE_TOP_N));
-    return rows.filter((row) => keep.has(row));
+  /** Actual always shows every change; default sort keeps high-owned first within each day. */
+  function limitPricesActualRows(rows) {
+    return rows;
   }
 
   function limitPricesPredictionMovers(rows) {
-    if (state.pricesPredictionScope !== "owned") return rows;
-    return rows.filter((row) => {
-      const code = Number(row && row.code);
-      return Number.isFinite(code) && (ownedCodes.has(code) || ownedCodes.has(row.code));
-    });
-  }
-
-  function limitPricesActualDayRows(rows, catalog) {
-    const rises = rows.filter((row) => row.direction === "rise");
-    const falls = rows.filter((row) => row.direction !== "rise");
-    const byOwned = (list) =>
-      list.slice().sort((a, b) => {
-        const ownA = pricesActualOwnedPct(a, catalog);
-        const ownB = pricesActualOwnedPct(b, catalog);
-        if (ownA !== ownB) return ownB - ownA;
-        return String(a.name || "").localeCompare(String(b.name || ""));
-      });
-    const keep = new Set([
-      ...byOwned(rises).slice(0, PRICES_SCOPE_TOP_N),
-      ...byOwned(falls).slice(0, PRICES_SCOPE_TOP_N),
-    ]);
-    return rows.filter((row) => keep.has(row));
-  }
-
-  function limitPricesActualRows(rows) {
-    if (state.pricesActualShowAll) return rows;
-    const catalog = ownershipCatalogByCode();
-    if (pricesActualUseDayGroups()) {
-      const buckets = new Map();
-      const order = [];
-      rows.forEach((row) => {
-        const day = pricesActualDayKey(row);
-        if (!buckets.has(day)) {
-          buckets.set(day, []);
-          order.push(day);
-        }
-        buckets.get(day).push(row);
-      });
-      return order.flatMap((day) => limitPricesActualDayRows(buckets.get(day), catalog));
-    }
-    return limitPricesActualDayRows(rows, catalog);
+    return rows;
   }
 
   function pricesActualVisibleRows() {
@@ -30315,6 +30239,9 @@
       const ownA = pricesActualOwnedPct(a, catalog);
       const ownB = pricesActualOwnedPct(b, catalog);
       if (ownA !== ownB) return ownB - ownA;
+      const tA = Date.parse(a.changedAt || "");
+      const tB = Date.parse(b.changedAt || "");
+      if (Number.isFinite(tA) && Number.isFinite(tB) && tA !== tB) return tB - tA;
       return String(a.name || "").localeCompare(String(b.name || ""));
     });
   }
@@ -30402,6 +30329,12 @@
   function fmtPricesProgressPct(value) {
     if (value == null || !Number.isFinite(Number(value))) return "—";
     const n = Number(value);
+    // Mobile: whole % only; desktop keeps one decimal.
+    if (NARROW_MQ.matches) {
+      const rounded = Math.round(n);
+      const signed = rounded > 0 ? `+${rounded}` : String(rounded);
+      return `${signed}%`;
+    }
     const signed = n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
     return `${signed}%`;
   }
@@ -30729,18 +30662,6 @@
     });
   }
 
-  function syncPricesScopeSeg(seg, { show, activeScope, titles = {} }) {
-    if (!seg) return;
-    seg.hidden = !show;
-    seg.querySelectorAll("button[data-prices-scope]").forEach((btn) => {
-      const key = btn.dataset.pricesScope;
-      if (titles[key]) btn.title = titles[key];
-      const active = key === activeScope;
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-  }
-
   function syncPricesViewUI() {
     const mode = pricesViewMode();
     if (el.pricesViewSeg) {
@@ -30761,32 +30682,9 @@
       el.pricesProgressFilterGroup.style.display =
         state.page === "prices" && mode === "prediction" ? "" : "none";
     }
-    if (el.pricesPredictionScopeSeg) {
-      const predScope = state.pricesPredictionScope === "owned" ? "owned" : "all";
-      syncPricesScopeSeg(el.pricesPredictionScopeSeg, {
-        show: state.page === "prices" && mode === "prediction" && isNextSeason(),
-        activeScope: predScope,
-        titles: {
-          all: "Every price mover matching filters",
-          owned: "Only players in your FPL squad (Preferences → Manager)",
-        },
-      });
-    }
-    if (el.pricesActualScopeSeg) {
-      syncPricesScopeSeg(el.pricesActualScopeSeg, {
-        show: state.page === "prices" && mode === "actual" && isNextSeason(),
-        activeScope: state.pricesActualShowAll ? "all" : "top",
-        titles: {
-          top: "Top 5 risers and fallers by ownership per day",
-          all: "Every recorded price change",
-        },
-      });
-    }
     syncPricesMoverKindUI();
     requestAnimationFrame(() => {
       syncSegThumb(el.pricesViewSeg);
-      syncSegThumb(el.pricesPredictionScopeSeg);
-      syncSegThumb(el.pricesActualScopeSeg);
     });
   }
 
@@ -30921,21 +30819,16 @@
       if (!pool.length) {
         el.pricesCountLabel.textContent = "No data";
       } else {
-        const scopeHint =
-          state.pricesPredictionScope === "owned" ? " · owned" : "";
         el.pricesCountLabel.textContent =
           totalShown === totalBase
-            ? `${totalShown} movers${scopeHint}`
-            : `${totalShown} of ${totalBase} movers${scopeHint}`;
+            ? `${totalShown} movers`
+            : `${totalShown} of ${totalBase} movers`;
       }
     }
 
     const emptyPoolMsg =
       "No price data yet. Run <code>python3 site/fetch_ownership.py</code> to refresh bootstrap.";
-    const emptyFilterMsg =
-      state.pricesPredictionScope === "owned"
-        ? "No owned players match the current price filters."
-        : "No price movers match the current filters.";
+    const emptyFilterMsg = "No price movers match the current filters.";
 
     if (!pool.length) {
       renderPricesPredictionTable(
@@ -31020,16 +30913,7 @@
         el.pricesCountLabel.textContent = "No changes match filters";
       } else {
         const noun = filtered.length === 1 ? "change" : "changes";
-        const scopeHint = state.pricesActualShowAll
-          ? ""
-          : pricesActualUseDayGroups()
-            ? " · top 5/day"
-            : " · top 5";
-        if (visible.length === filtered.length) {
-          el.pricesCountLabel.textContent = `${filtered.length} ${noun}${scopeHint}`;
-        } else {
-          el.pricesCountLabel.textContent = `${visible.length} of ${filtered.length} ${noun}${scopeHint}`;
-        }
+        el.pricesCountLabel.textContent = `${filtered.length} ${noun}`;
       }
     }
 
@@ -31112,7 +30996,7 @@
     if (!isNextSeason()) {
       if (el.pricesCountLabel) el.pricesCountLabel.textContent = "2026/27 only";
       const msg =
-        "Price Change Predictor is available in 2026/27 season mode.";
+        "Price Changes Predictor is available in 2026/27 season mode.";
       if (el.pricesRisersHead) el.pricesRisersHead.innerHTML = pricesHeadHTML();
       if (el.pricesFallersHead) el.pricesFallersHead.innerHTML = pricesHeadHTML();
       if (el.pricesRisersBody) {
@@ -31371,8 +31255,8 @@
     const deepestRaw = getComputedStyle(document.documentElement).getPropertyValue("--sfi-numbers-blur").trim();
     const fontSize = parseFloat(getComputedStyle(wheel).fontSize) || 16;
     const deepest = deepestRaw.includes("em")
-      ? (parseFloat(deepestRaw) || 0.09) * fontSize
-      : parseFloat(deepestRaw) || fontSize * 0.09;
+      ? (parseFloat(deepestRaw) || 0.025) * fontSize
+      : parseFloat(deepestRaw) || fontSize * 0.025;
 
     const start = () => {
       strip.style.transition = "none";
@@ -31679,16 +31563,15 @@
   }
 
   function prefersReducedMotion() {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return (
+      document.documentElement.classList.contains("animations-off") ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
   }
 
-  /** Number-roll prefs Off, or OS reduced-motion — skip digit drums. */
-  function odometerModeIsOff() {
-    return document.documentElement.classList.contains("odometer-off");
-  }
-
+  /** Animations Off (or OS reduced-motion) — skip digit drums. */
   function statRollsDisabled() {
-    return prefersReducedMotion() || odometerModeIsOff();
+    return prefersReducedMotion();
   }
 
 
@@ -31803,6 +31686,7 @@
     pane._enterGen = (pane._enterGen || 0) + 1;
     const enterGen = pane._enterGen;
     if (prefersReducedMotion()) {
+      pane.classList.remove("is-enter-pending", "is-entering", "is-live-entering");
       if (pane.id === "home-page") {
         homePageEnterArmed = false;
         finishHighlightSatEnter(pane);
@@ -32355,6 +32239,8 @@
         el.tabPlayers.classList.add("active");
         el.tabTeams.classList.remove("active");
       }
+      state.search = "";
+      if (el.search) el.search.value = "";
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
@@ -32763,40 +32649,6 @@
     });
   }
   bindPricesMoverPager();
-  function bindPricesScopeSeg(seg, { scopes, getScope, setScope, rerender }) {
-    if (!seg) return;
-    const allowed = new Set(scopes);
-    seg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-prices-scope]");
-      if (!btn || !seg.contains(btn)) return;
-      const scope = btn.dataset.pricesScope;
-      if (!allowed.has(scope)) return;
-      if (scope === getScope()) return;
-      setScope(scope);
-      syncPricesViewUI();
-      if (state.page === "prices") rerender({ preserveScroll: false });
-    });
-  }
-  bindPricesScopeSeg(el.pricesPredictionScopeSeg, {
-    scopes: ["all", "owned"],
-    getScope: () => (state.pricesPredictionScope === "owned" ? "owned" : "all"),
-    setScope: (v) => {
-      state.pricesPredictionScope = v === "owned" ? "owned" : "all";
-    },
-    rerender: () => {
-      if (pricesViewMode() === "prediction") renderPricesPrediction({ preserveScroll: false });
-    },
-  });
-  bindPricesScopeSeg(el.pricesActualScopeSeg, {
-    scopes: ["top", "all"],
-    getScope: () => (state.pricesActualShowAll ? "all" : "top"),
-    setScope: (v) => {
-      state.pricesActualShowAll = v === "all";
-    },
-    rerender: () => {
-      if (pricesViewMode() === "actual") renderPricesActual({ preserveScroll: false });
-    },
-  });
   pricesActualTableWraps().forEach((wrap) => {
     if (!wrap) return;
     wrap.addEventListener("click", (e) => {
@@ -32931,14 +32783,6 @@
       if (t.matches && t.matches("input[type='checkbox']")) {
         motionMarkSwitchInit(t);
       }
-    });
-  }
-  if (el.scheduleSeasonSeg) {
-    el.scheduleSeasonSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-matchups-season]");
-      if (!btn || !el.scheduleSeasonSeg.contains(btn)) return;
-      e.preventDefault();
-      setMatchupsSeason(btn.getAttribute("data-matchups-season"));
     });
   }
   if (el.prefsDifficultyBtn) {
@@ -33546,7 +33390,6 @@
       !preferMobileSheet() &&
       (state.page === "opta" ||
         state.page === "ownership" ||
-        state.page === "prices" ||
         state.page === "expected")
     );
   }
@@ -33555,7 +33398,6 @@
     return (
       preferMobileSheet() &&
       (state.page === "ownership" ||
-        state.page === "prices" ||
         state.page === "expected" ||
         state.page === "opta" ||
         (state.page === "team" && !!state.teamPickerSlot))
@@ -33574,11 +33416,12 @@
     } else if (home && el.searchWrap.parentElement !== home) {
       home.appendChild(el.searchWrap);
     }
-    // Rankings: no search — hide the control entirely.
+    // Rankings / Live / Prices: no search — hide the control entirely.
     // Team squad view: search only while picking a player.
     const hideSearch =
       state.page === "rankings" ||
       state.page === "live" ||
+      state.page === "prices" ||
       (state.page === "team" && !state.teamPickerSlot);
     el.searchWrap.style.display = hideSearch ? "none" : "";
     el.searchWrap.classList.toggle("team-search-always-open", teamSearchAlwaysOpen());
@@ -33587,7 +33430,7 @@
       mainSearchAlwaysOpen() && state.page !== "team"
     );
     el.searchWrap.classList.toggle("mobile-search-always-open", mobileSearchAlwaysOpen());
-    if (state.page === "rankings" || state.page === "live") {
+    if (state.page === "rankings" || state.page === "live" || state.page === "prices") {
       el.searchWrap.classList.remove("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     } else if (
@@ -34113,15 +33956,6 @@
     onInput: renderSchedule,
   });
 
-  const scheduleEdgeMinInfo = $("#schedule-edge-min-info");
-  let scheduleEdgeMinInfoEl = scheduleEdgeMinInfo;
-  if (scheduleEdgeMinInfo) {
-    scheduleEdgeMinInfo.setAttribute(
-      "data-tip-html",
-      `Minimum rank gap to flag attack ${iconHTML("swords", "ftt-attack-icon")} or defence ${iconHTML("shield-half", "ftt-defence-icon")} edges on fixture cells.`
-    );
-  }
-
   let updateScheduleEdgeMinSlider = () => {};
   updateScheduleEdgeMinSlider = setupSingleSlider({
     input: el.scheduleEdgeMin,
@@ -34268,8 +34102,8 @@
         });
         el.scheduleSlidersToggle.classList.add("on");
         el.scheduleSlidersToggle.setAttribute("aria-expanded", "true");
-        setTip(el.scheduleSlidersToggle, "Hide matchup filters");
-        el.scheduleSlidersToggle.setAttribute("aria-label", "Hide matchup filters");
+        setTip(el.scheduleSlidersToggle, "Hide filters");
+        el.scheduleSlidersToggle.setAttribute("aria-label", "Hide filters");
         requestAnimationFrame(() => {
           updateScheduleGwSlider();
           updateScheduleEnhancePctSlider();
@@ -34283,8 +34117,8 @@
         el.scheduleControls.classList.add("is-collapsed");
         el.scheduleSlidersToggle.classList.remove("on");
         el.scheduleSlidersToggle.setAttribute("aria-expanded", "false");
-        setTip(el.scheduleSlidersToggle, "Show matchup filters");
-        el.scheduleSlidersToggle.setAttribute("aria-label", "Show matchup filters");
+        setTip(el.scheduleSlidersToggle, "Show filters");
+        el.scheduleSlidersToggle.setAttribute("aria-label", "Show filters");
       }
       return;
     }
@@ -34294,9 +34128,9 @@
     el.scheduleSlidersToggle.setAttribute("aria-expanded", open ? "true" : "false");
     setTip(
       el.scheduleSlidersToggle,
-      open ? "Hide matchup filters" : "Show matchup filters"
+      open ? "Hide filters" : "Show filters"
     );
-    el.scheduleSlidersToggle.setAttribute("aria-label", open ? "Hide matchup filters" : "Show matchup filters");
+    el.scheduleSlidersToggle.setAttribute("aria-label", open ? "Hide filters" : "Show filters");
     if (open) {
       // Fills were measured while collapsed — refresh now that layout is visible.
       requestAnimationFrame(() => {
@@ -34702,28 +34536,26 @@
     dark: { icon: "moon", label: "Dark" },
   };
 
-  const ODOMETER_KEY = "fpl-explorer-odometer";
-  const ODOMETER_ORDER = ["classic", "sfi", "off"];
+  const ANIMATIONS_KEY = "fpl-explorer-animations";
 
   function odometerModeIsSfi() {
     return document.documentElement.classList.contains("odometer-sfi");
   }
 
-  function currentOdometerMode() {
-    const stored = localStorage.getItem(ODOMETER_KEY);
-    return ODOMETER_ORDER.includes(stored) ? stored : "classic";
+  function animationsEnabled() {
+    try {
+      return localStorage.getItem(ANIMATIONS_KEY) === "on";
+    } catch {
+      return false;
+    }
   }
 
-  function syncOdometerSeg(mode = currentOdometerMode()) {
-    if (!el.odometerSeg) return;
-    Array.from(el.odometerSeg.querySelectorAll("button[data-odometer]")).forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.odometer === mode);
-    });
-    if (typeof syncSegThumb === "function") syncSegThumb(el.odometerSeg, { animate: false });
+  function syncAnimationsToggle(on = animationsEnabled()) {
+    if (el.prefsAnimations) el.prefsAnimations.checked = !!on;
   }
 
-  /** Replay Home summary rolls so the A/B mode is obvious without a full reload. */
-  function previewOdometerModeOnHome() {
+  /** Replay Home summary rolls so turning Animations on is obvious without a reload. */
+  function previewAnimationsOnHome() {
     if (state.page !== "home" || !el.homePage) return;
     try {
       prepareHomeStatRolls();
@@ -34734,18 +34566,29 @@
     }
   }
 
-  function applyOdometerMode(mode, { preview = true } = {}) {
-    const next = ODOMETER_ORDER.includes(mode) ? mode : "classic";
+  function applyAnimationsEnabled(on, { preview = true } = {}) {
+    const enabled = !!on;
     try {
-      if (next === "classic") localStorage.removeItem(ODOMETER_KEY);
-      else localStorage.setItem(ODOMETER_KEY, next);
+      if (enabled) localStorage.setItem(ANIMATIONS_KEY, "on");
+      else localStorage.removeItem(ANIMATIONS_KEY);
+      localStorage.removeItem("fpl-explorer-odometer");
     } catch {
       /* ignore quota */
     }
-    document.documentElement.classList.toggle("odometer-sfi", next === "sfi");
-    document.documentElement.classList.toggle("odometer-off", next === "off");
-    syncOdometerSeg(next);
-    if (preview) previewOdometerModeOnHome();
+    const root = document.documentElement;
+    root.classList.toggle("animations-off", !enabled);
+    root.classList.toggle("motion-enhanced", enabled);
+    root.classList.toggle("odometer-sfi", enabled);
+    root.classList.remove("odometer-off");
+    syncAnimationsToggle(enabled);
+    if (preview && enabled) previewAnimationsOnHome();
+    else if (preview && !enabled && state.page === "home") {
+      try {
+        renderHome({ settleQuiet: true, deferDuringEnter: true });
+      } catch {
+        /* best-effort settle */
+      }
+    }
   }
 
   function currentThemeMode() {
@@ -34823,84 +34666,25 @@
 
   applyTheme(currentThemeMode());
 
-  if (el.odometerSeg) {
-    el.odometerSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-odometer]");
-      if (!btn || !el.odometerSeg.contains(btn)) return;
-      applyOdometerMode(btn.dataset.odometer || "classic", { preview: true });
-      btn.blur();
+  if (el.prefsAnimations) {
+    el.prefsAnimations.addEventListener("change", () => {
+      applyAnimationsEnabled(el.prefsAnimations.checked, { preview: true });
     });
   }
-  applyOdometerMode(currentOdometerMode(), { preview: false });
+  applyAnimationsEnabled(animationsEnabled(), { preview: false });
 
-  const PLAYER_THUMB_KEY = "fpl-explorer-player-thumb";
-  const PLAYER_THUMB_ORDER = ["photo", "kit"];
-
-  function currentPlayerThumbMode() {
-    try {
-      const stored = localStorage.getItem(PLAYER_THUMB_KEY);
-      if (stored === "photo") return "photo";
-      if (stored === "kit") return "kit";
-    } catch {
-      /* private browsing */
-    }
-    return "kit";
-  }
-
-  function syncPlayerThumbSeg(mode = currentPlayerThumbMode()) {
-    if (!el.playerThumbSeg) return;
-    Array.from(el.playerThumbSeg.querySelectorAll("button[data-player-thumb]")).forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.playerThumb === mode);
-    });
-    if (typeof syncSegThumb === "function") syncSegThumb(el.playerThumbSeg, { animate: false });
-  }
-
-  function refreshPlayerThumbConsumers() {
-    // Avoid settleQuiet — Home skips squad/pitch rebuild when tables are unchanged.
-    if (state.page === "home") renderHome({ deferDuringEnter: true });
-    else if (state.page === "ownership") renderOwnership();
-    else if (state.page === "live") renderLive({ quiet: true });
-    else if (state.page === "rankings") renderRankings({ skipBarDraw: true });
-    else if (state.page === "prices") renderPrices();
-    else if (state.page === "opta") renderTable();
-    else if (state.page === "expected") renderExpected();
-    else if (state.page === "team") renderTeam();
-  }
-
-  function applyPlayerThumbMode(mode, { repaint = true } = {}) {
-    const next = PLAYER_THUMB_ORDER.includes(mode) ? mode : "kit";
-    try {
-      if (next === "kit") localStorage.removeItem(PLAYER_THUMB_KEY);
-      else localStorage.setItem(PLAYER_THUMB_KEY, next);
-    } catch {
-      /* private browsing */
-    }
-    document.documentElement.classList.toggle("player-thumbs-kit", next === "kit");
-    try {
-      playerPhotoResolvedByCode.clear();
-    } catch {
-      /* helpers not ready */
-    }
-    syncPlayerThumbSeg(next);
-    if (repaint) refreshPlayerThumbConsumers();
-  }
-
-  if (el.playerThumbSeg) {
-    el.playerThumbSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-player-thumb]");
-      if (!btn || !el.playerThumbSeg.contains(btn)) return;
-      applyPlayerThumbMode(btn.dataset.playerThumb || "photo", { repaint: true });
-      btn.blur();
-    });
-  }
-  applyPlayerThumbMode(currentPlayerThumbMode(), { repaint: false });
+  // Player thumbs locked to kit — prefs UI removed.
+  document.documentElement.classList.add("player-thumbs-kit");
+  try { localStorage.removeItem("fpl-explorer-player-thumb"); } catch { /* private browsing */ }
   try { localStorage.removeItem("fpl-explorer-mock-live"); } catch { /* private browsing */ }
 
   function motionEnhancedOn() {
-    return true;
+    return (
+      document.documentElement.classList.contains("motion-enhanced") &&
+      !document.documentElement.classList.contains("animations-off")
+    );
   }
 
-  document.documentElement.classList.add("motion-enhanced");
   try { localStorage.removeItem("fpl-explorer-motion-enhanced"); } catch { /* private browsing */ }
 
   function motionPulseNode(node) {

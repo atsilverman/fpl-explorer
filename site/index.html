@@ -16,22 +16,36 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1484" />
-<link rel="stylesheet" href="motion-enhanced.css?v=7" />
-<link rel="stylesheet" href="odometer-sfi.css?v=1" />
+<link rel="stylesheet" href="styles.css?v=1497" />
+<link rel="stylesheet" href="motion-enhanced.css?v=8" />
+<link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
 (() => {
   try {
     const root = document.documentElement;
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
-    root.classList.add("motion-enhanced");
-    const odometer = localStorage.getItem("fpl-explorer-odometer");
-    if (odometer === "sfi") root.classList.add("odometer-sfi");
-    if (odometer === "off") root.classList.add("odometer-off");
-    if (localStorage.getItem("fpl-explorer-player-thumb") !== "photo") {
-      root.classList.add("player-thumbs-kit");
+    // Animations master switch (default off). Migrates legacy number-roll prefs.
+    const ANIM_KEY = "fpl-explorer-animations";
+    try {
+      const legacyOdo = localStorage.getItem("fpl-explorer-odometer");
+      if (legacyOdo != null) {
+        if (legacyOdo === "sfi" || legacyOdo === "classic") {
+          localStorage.setItem(ANIM_KEY, "on");
+        } else {
+          localStorage.removeItem(ANIM_KEY);
+        }
+        localStorage.removeItem("fpl-explorer-odometer");
+      }
+    } catch (_) {}
+    const animationsOn = localStorage.getItem(ANIM_KEY) === "on";
+    if (animationsOn) {
+      root.classList.add("motion-enhanced");
+      root.classList.add("odometer-sfi");
+    } else {
+      root.classList.add("animations-off");
     }
+    root.classList.add("player-thumbs-kit");
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
     // keeps the title row clear of the iOS status blur (unlike black-translucent).
     const standalone = !!(
@@ -56,6 +70,7 @@
       localStorage.removeItem("fpl-explorer-home-summary");
       localStorage.removeItem("fpl-explorer-home-surface");
       localStorage.removeItem("fpl-explorer-motion-enhanced");
+      localStorage.removeItem("fpl-explorer-player-thumb");
     } catch (_) {}
     root.setAttribute("data-font-pair", "figtree");
     // Cursor Simple Browser is Electron — cheaper frost tokens, still real blur.
@@ -105,6 +120,7 @@
       'html[data-page="report"] #subtoolbar,' +
       'html[data-page="schedule"] #subtoolbar,' +
       'html[data-page="fixtures"] #subtoolbar{display:none!important}' +
+      'html.is-mobile-layout[data-page="prices"] #subtoolbar{display:none!important}' +
       'html.is-mobile-layout[data-page="markets"] #subtoolbar{display:none!important}' +
       'html[data-page="markets"] #stats-toolbar-start,' +
       'html[data-page="markets"] #search-wrap,' +
@@ -438,7 +454,7 @@
           </button>
           <button id="page-prices" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
-            Price Change
+            Price Changes
           </button>
           <button id="page-team" class="page-tab-btn" type="button" hidden>
             <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
@@ -450,7 +466,7 @@
           </button>
           <button id="page-schedule" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>
-            Matchups
+            Strength of Schedule
           </button>
           <button id="page-fixtures" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
@@ -533,23 +549,14 @@
                 <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
               </div>
             </div>
-            <div class="prefs-field">
-              <span class="prefs-field-label" id="odometer-seg-label">Number roll</span>
-              <p class="prefs-field-hint">Digit drum for Home ranks and other number rolls. Off shows final values immediately.</p>
-              <div class="segmented segmented-block" id="odometer-seg" role="group" aria-labelledby="odometer-seg-label">
-                <button type="button" data-odometer="classic" class="active" title="Current FPL.db drum roll">Ours</button>
-                <button type="button" data-odometer="sfi" title="SFI-inspired roll — numbers.sfinterface.com">SFI</button>
-                <button type="button" data-odometer="off" title="Show final values with no roll animation">Off</button>
-              </div>
-            </div>
-            <div class="prefs-field">
-              <span class="prefs-field-label" id="player-thumb-seg-label">Player images</span>
-              <p class="prefs-field-hint">Headshots from the PL photo CDN, or club shirts mirrored from Fantasy PL (GK vs outfield).</p>
-              <div class="segmented segmented-block" id="player-thumb-seg" role="group" aria-labelledby="player-thumb-seg-label">
-                <button type="button" data-player-thumb="photo" title="Player headshots">Photo</button>
-                <button type="button" data-player-thumb="kit" class="active" title="Club kit / shirt">Kit</button>
-              </div>
-            </div>
+            <label class="settings-switch-row" for="prefs-animations">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Animations</span>
+                <span class="settings-switch-hint">Page enters, number rolls, and motion polish across the site. Off shows content immediately.</span>
+              </span>
+              <input type="checkbox" id="prefs-animations" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
           </section>
           <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
@@ -565,16 +572,17 @@
           -->
           <section class="settings-section">
             <div class="settings-section-label">Team difficulties</div>
-            <div class="prefs-field">
-              <p class="prefs-field-hint">Manually set each club’s attacking and defending difficulty (home &amp; away).</p>
-              <div class="prefs-action-row">
-                <button type="button" class="ghost-btn prefs-action-btn" id="prefs-difficulty-btn">Set team difficulties</button>
-              </div>
-            </div>
+            <button type="button" class="settings-switch-row prefs-diff-edit-row" id="prefs-difficulty-btn">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Edit ratings</span>
+                <span class="settings-switch-hint">Attack &amp; defence for each club (home &amp; away)</span>
+              </span>
+              <span class="prefs-diff-edit-affordance" aria-hidden="true">Edit</span>
+            </button>
             <label class="settings-switch-row prefs-fixtures-diff-toggle" for="prefs-fixtures-custom-colors">
               <span class="settings-switch-text">
                 <span class="settings-switch-label">Custom fixture colors</span>
-                <span class="settings-switch-hint">Replace default FPL difficulty with your ratings on Fixtures &amp; Home Schedule</span>
+                <span class="settings-switch-hint">Use your ratings on Fixtures &amp; Home Schedule</span>
               </span>
               <input type="checkbox" id="prefs-fixtures-custom-colors" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
@@ -1353,10 +1361,16 @@
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Price Change<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Price Change works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Price Changes<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Price Changes works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Official FPL price-change predictor — players very likely or likely to rise or fall before the next daily price update. Refreshed hourly from bootstrap-static.</p>
           </div>
         </div>
+      </div>
+      <div class="prices-countdown-bar" id="prices-countdown-bar">
+        <p class="prices-countdown-main">
+          <span class="prices-countdown-label">Next price changes in</span>
+          <span class="prices-countdown-value" id="prices-countdown-value">—</span>
+        </p>
       </div>
       <div class="ownership-mover-bar prices-mover-bar">
         <div class="segmented ownership-mover-seg prices-mover-kind-seg" id="prices-mover-kind-seg" role="group" aria-label="Risers or fallers" hidden>
@@ -1369,7 +1383,7 @@
             <span class="prices-mover-kind-label">Fallers</span>
           </button>
         </div>
-        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Price Change view">
+        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Price Changes view">
           <button type="button" data-prices-view="prediction" class="active">
             Predicted
           </button>
@@ -1377,26 +1391,9 @@
             Actual
           </button>
         </div>
-        <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-prediction-scope-seg" role="group" aria-label="Prediction movers scope" hidden>
-          <button type="button" data-prices-scope="all" class="active" title="Every price mover matching filters">All</button>
-          <button type="button" data-prices-scope="owned" title="Only players in your FPL squad">Owned</button>
-        </div>
-        <div class="segmented ownership-mover-seg prices-scope-seg" id="prices-actual-scope-seg" role="group" aria-label="Actual changes scope" hidden>
-          <button type="button" data-prices-scope="top" title="Top 5 risers and fallers by ownership per day">
-            <span class="prices-scope-label-full">Top 5</span>
-            <span class="prices-scope-label-short" aria-hidden="true">Top</span>
-          </button>
-          <button type="button" data-prices-scope="all" title="Every recorded price change">All</button>
-        </div>
         <div class="ownership-mover-end">
           <span class="count-label" id="prices-count-label"></span>
         </div>
-      </div>
-      <div class="prices-countdown-bar" id="prices-countdown-bar">
-        <p class="prices-countdown-main">
-          <span class="prices-countdown-label">Next price changes in</span>
-          <span class="prices-countdown-value" id="prices-countdown-value">—</span>
-        </p>
       </div>
       <div id="prices-prediction-wrap" class="prices-prediction-wrap">
         <div class="prices-mover-pager">
@@ -1564,12 +1561,12 @@
         <div class="schedule-header-top">
           <div class="schedule-header-text">
             <div class="schedule-title-row">
-              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>Matchups<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Matchups works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>Strength of Schedule<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Strength of Schedule works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             </div>
             <p class="page-subtitle">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
           </div>
           <button id="schedule-sliders-toggle" class="ghost-btn icon-only-btn" type="button"
-            title="Show matchup filters" aria-label="Show matchup filters" aria-expanded="false" aria-controls="schedule-controls">
+            title="Show filters" aria-label="Show filters" aria-expanded="false" aria-controls="schedule-controls">
             <svg class="icon" aria-hidden="true"><use href="#i-funnel"/></svg>
             <span class="mobile-dock-label">Filters</span>
           </button>
@@ -1595,13 +1592,7 @@
 
           <div class="schedule-control">
             <div class="schedule-control-head">
-              <strong>Highlight Ranks
-                <span class="schedule-control-info" tabindex="0"
-                  data-tip="Top and bottom ranks get soft blue / tough pink cell tint on each venue split."
-                  aria-label="How Highlight Ranks works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
+              <strong>Highlight Ranks</strong>
               <span id="schedule-enhance-pct-label">Top/Bottom 6</span>
             </div>
             <div class="dual-slider single-slider">
@@ -1617,13 +1608,7 @@
 
           <div class="schedule-control" id="schedule-expected-weight-group">
             <div class="schedule-control-head">
-              <strong>Expected / Actual
-                <span class="schedule-control-info" tabindex="0"
-                  data-tip="Blends expected and actual ranks for attack (xG + goals) and defence (xGC + conceded + CS). Edges, flags, and scatter all use this mix."
-                  aria-label="How Expected / Actual blend works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
+              <strong>Expected / Actual</strong>
               <span id="schedule-expected-weight-label">50 / 50</span>
             </div>
             <div class="dual-slider single-slider">
@@ -1637,31 +1622,9 @@
             </div>
           </div>
 
-          <div class="schedule-control" id="schedule-season-basis-group">
-            <div class="schedule-control-head">
-              <strong>Strength basis
-                <span class="schedule-control-info" tabindex="0"
-                  data-tip="2025/26 uses prior-season OPTA ranks (default). 2026/27 uses this season’s FPL team stats and ranks — switch when enough gameweeks have settled."
-                  aria-label="How Strength basis works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
-            </div>
-            <div class="segmented" id="schedule-season-seg" role="group" aria-label="Team strength season">
-              <button type="button" data-matchups-season="2526" class="active">2025/26</button>
-              <button type="button" data-matchups-season="2627">2026/27</button>
-            </div>
-            <p class="schedule-control-hint" id="schedule-season-hint">Prior-season OPTA ranks · provisional 18–20 for promoted clubs</p>
-          </div>
-
           <div class="schedule-control" id="schedule-edge-min-group">
             <div class="schedule-control-head">
-              <strong>Flag threshold
-                <span id="schedule-edge-min-info" class="schedule-control-info" tabindex="0"
-                  aria-label="How Flag threshold works">
-                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                </span>
-              </strong>
+              <strong>Flag threshold</strong>
               <span id="schedule-edge-min-label">≥ 4 ranks better</span>
             </div>
             <div class="dual-slider single-slider">
@@ -1874,6 +1837,9 @@
 <div id="difficulty-wizard" class="difficulty-wizard" hidden aria-hidden="true">
   <div class="difficulty-wizard-backdrop" data-diff-dismiss aria-hidden="true"></div>
   <div class="difficulty-wizard-panel" role="dialog" aria-modal="true" aria-labelledby="difficulty-wizard-title">
+    <div class="difficulty-wizard-grab" aria-hidden="true">
+      <span class="difficulty-wizard-handle"></span>
+    </div>
     <button type="button" class="ghost-btn icon-only-btn difficulty-wizard-close" data-diff-dismiss aria-label="Close">
       <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
     </button>
@@ -1966,7 +1932,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1400"></script>
+<script src="app.js?v=1415"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

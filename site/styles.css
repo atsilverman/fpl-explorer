@@ -4,8 +4,8 @@
    Tokens are bare HSL channels so they compose with alpha the way Tailwind
    does: hsl(var(--primary) / 0.1). Chrome uses --primary; Matchups/FDR use
    --positive/--negative (blue/orange); Statistics top/bottom cell washes use
-   green/red via page-scoped remaps of those tokens; Ownership Δ pills / sparks
-   use --delta-rise/--delta-fall (green/red, same as Prices).
+   blue/red via page-scoped remaps (top = --blue-hsl, bottom = --delta-fall);
+   Ownership Δ pills / sparks use --delta-rise/--delta-fall (green/red, same as Prices).
    ========================================================================== */
 
 :root {
@@ -344,12 +344,13 @@ body {
 
 a { color: var(--blue); }
 
-/* Statistics heatmap — green (good) / red (bad), same Tokens as Ownership Δ. */
+/* Statistics heatmap — blue (good) / red (bad). Top matches site --blue-hsl
+   in light and dark; bottom stays Prices Δ red (not Ownership orange). */
 html[data-page="opta"] {
-  --spectrum-rise: var(--delta-rise);
+  --spectrum-rise: var(--blue-hsl);
   --spectrum-fall: var(--delta-fall);
-  --positive: var(--delta-rise);
-  --positive-highlight: var(--delta-rise);
+  --positive: var(--blue-hsl);
+  --positive-highlight: var(--blue-hsl);
   --negative: var(--delta-fall);
 }
 
@@ -1289,6 +1290,27 @@ html[data-theme="dark"] .page-tab-live-dot {
 }
 .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
   background: transparent;
+}
+
+/* Players / Teams — solid brand blue (same as .brand-icon), white label. */
+#stats-toolbar-start .tabs .seg-thumb,
+.mobile-view-dock .tabs .seg-thumb {
+  background: hsl(var(--blue-hsl));
+}
+#stats-toolbar-start .tabs .tab-btn.active,
+.mobile-view-dock .tabs .tab-btn.active {
+  background: hsl(var(--blue-hsl));
+  color: #fff;
+  box-shadow: none;
+}
+#stats-toolbar-start .tabs .tab-btn.active .icon,
+.mobile-view-dock .tabs .tab-btn.active .icon {
+  color: #fff;
+}
+#stats-toolbar-start .tabs:has(.seg-thumb.is-ready) .tab-btn.active,
+.mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
+  background: transparent;
+  color: #fff;
 }
 
 .segmented {
@@ -2448,6 +2470,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html[data-page="prices"] #stats-toolbar-start {
     display: none !important;
   }
+  /* Prices: no search row — collapse the empty subtoolbar on mobile. */
+  html[data-page="prices"] #subtoolbar {
+    display: none !important;
+  }
   html[data-page="ownership"] #subtoolbar #stats-toolbar-actions,
   html[data-page="prices"] #subtoolbar #stats-toolbar-actions {
     display: flex;
@@ -2467,9 +2493,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 0;
   }
   html[data-page="ownership"] #subtoolbar #search-wrap,
-  html[data-page="ownership"] #subtoolbar #search-wrap.search-open,
-  html[data-page="prices"] #subtoolbar #search-wrap,
-  html[data-page="prices"] #subtoolbar #search-wrap.search-open {
+  html[data-page="ownership"] #subtoolbar #search-wrap.search-open {
     flex: 1 1 auto;
     width: auto;
     max-width: none;
@@ -2717,15 +2741,20 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     }
   }
   :root {
-    --mobile-dock-size: 40px;
+    --mobile-dock-size: 48px;
     --mobile-dock-bottom: max(14px, env(safe-area-inset-bottom, 0px));
     --mobile-dock-clearance: calc(var(--mobile-dock-size) + var(--mobile-dock-bottom) + 12px);
   }
   .mobile-view-dock,
   .mobile-filter-dock {
-    --mobile-dock-size: 40px;
+    --mobile-dock-size: 48px;
     --mobile-dock-btn-size: auto;
-    --mobile-dock-radius: 12px;
+    --mobile-dock-radius: 14px;
+    --mobile-dock-icon: 18px;
+    --mobile-dock-icon-search: 20px;
+    --mobile-dock-font: 13.5px;
+    --mobile-dock-pad-x: 14px;
+    --mobile-dock-gap: 7px;
     --mobile-dock-fg: hsl(var(--foreground));
     --mobile-dock-fg-muted: hsl(var(--foreground) / 0.72);
     --mobile-dock-border: hsl(var(--foreground) / 0.26);
@@ -2761,7 +2790,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-view-dock .mobile-dock-label,
   .mobile-filter-fab .mobile-dock-label {
     display: inline;
-    font-size: 12.5px;
+    font-size: var(--mobile-dock-font);
     font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -2801,7 +2830,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   .mobile-view-dock .tabs .seg-thumb {
     border-radius: calc(var(--mobile-dock-radius) - 3px);
-    background: hsl(var(--blue-hsl) / 0.14);
+    background: hsl(var(--blue-hsl));
   }
   .mobile-view-dock .tab-btn {
     position: relative;
@@ -2810,9 +2839,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     min-width: 0;
     height: auto;
     min-height: 0;
-    padding: 0 12px;
-    gap: 6px;
-    font-size: 12.5px;
+    padding: 0 var(--mobile-dock-pad-x);
+    gap: var(--mobile-dock-gap);
+    font-size: var(--mobile-dock-font);
     font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -2827,29 +2856,34 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       transform 0.14s var(--ease-out);
   }
   .mobile-view-dock .tab-btn .icon {
-    width: 16px;
-    height: 16px;
-    font-size: 16px;
+    width: var(--mobile-dock-icon);
+    height: var(--mobile-dock-icon);
+    font-size: var(--mobile-dock-icon);
     color: inherit;
     flex: none;
   }
   .mobile-view-dock .tab-btn.active {
-    background: transparent;
-    color: var(--mobile-dock-fg);
+    background: hsl(var(--blue-hsl));
+    color: #fff;
     box-shadow: none;
   }
   .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
     background: transparent;
-    color: var(--mobile-dock-fg);
+    color: #fff;
     box-shadow: none;
+  }
+  .mobile-view-dock .tab-btn.active .icon {
+    color: #fff;
   }
   :root[data-theme="dark"] .mobile-view-dock .tab-btn.active,
   :root[data-theme="dark"] .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
+    color: #fff;
     box-shadow: none;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .mobile-view-dock .tab-btn.active,
     :root:not([data-theme="light"]) .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active {
+      color: #fff;
       box-shadow: none;
     }
   }
@@ -2870,19 +2904,19 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: var(--mobile-dock-gap);
     box-sizing: border-box;
     width: auto;
     min-width: var(--mobile-dock-size);
     height: var(--mobile-dock-size);
     min-height: var(--mobile-dock-size);
-    padding: 0 12px;
+    padding: 0 var(--mobile-dock-pad-x);
     border-radius: var(--mobile-dock-radius);
     background: hsl(var(--card));
     border: 1px solid var(--mobile-dock-border);
     box-shadow: var(--mobile-dock-shadow);
     color: var(--mobile-dock-fg);
-    font-size: 12.5px;
+    font-size: var(--mobile-dock-font);
     font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -2894,8 +2928,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       box-shadow 0.16s ease,
       transform 0.14s var(--ease-out);
   }
-  /* Beat ID/toolbar height:32 + icon:15 rules so Filters matches Players/Teams
-     glyph size and type, while keeping the 40px shell. */
+  /* Beat ID/toolbar height:32 + icon:15 rules so Filters matches Players/Teams. */
   #sidebar-toggle.mobile-filter-fab,
   #sidebar-toggle.icon-label-btn.mobile-filter-fab,
   #schedule-sliders-toggle.mobile-filter-fab,
@@ -2911,11 +2944,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     min-width: var(--mobile-dock-size);
     height: var(--mobile-dock-size);
     min-height: var(--mobile-dock-size);
-    padding: 0 12px;
-    gap: 6px;
+    padding: 0 var(--mobile-dock-pad-x);
+    gap: var(--mobile-dock-gap);
     justify-content: center;
     color: var(--mobile-dock-fg);
-    font-size: 12.5px;
+    font-size: var(--mobile-dock-font);
     font-weight: 650;
     letter-spacing: 0.01em;
     line-height: 1;
@@ -2928,9 +2961,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-filter-fab .icon,
   .mobile-filter-dock .icon-label-btn.mobile-filter-fab .icon,
   .mobile-filter-dock .icon-only-btn.mobile-filter-fab .icon {
-    width: 16px;
-    height: 16px;
-    font-size: 16px;
+    width: var(--mobile-dock-icon);
+    height: var(--mobile-dock-icon);
+    font-size: var(--mobile-dock-icon);
     color: inherit;
     flex: none;
   }
@@ -2955,7 +2988,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-filter-fab:active:not(:disabled) {
     transform: scale(0.96);
   }
-  /* Home search — icon-only FAB, same 40px shell as Filters. */
+  /* Home search — icon-only FAB, same shell height as Filters. */
   #home-search-btn.mobile-filter-fab.is-fab-icon,
   .mobile-filter-dock .home-search-btn.mobile-filter-fab.is-fab-icon {
     width: var(--mobile-dock-size);
@@ -2966,9 +2999,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   #home-search-btn.mobile-filter-fab.is-fab-icon .icon,
   .mobile-filter-dock .home-search-btn.mobile-filter-fab.is-fab-icon .icon {
-    width: 18px;
-    height: 18px;
-    font-size: 18px;
+    width: var(--mobile-dock-icon-search);
+    height: var(--mobile-dock-icon-search);
+    font-size: var(--mobile-dock-icon-search);
   }
   html.has-mobile-filter-fab #feed-toolbar-start,
   html.has-mobile-filter-fab #schedule-page .page-header,
@@ -3308,6 +3341,35 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #home-page.is-entering .home-feed-table tbody tr > * {
     animation: none;
   }
+}
+
+/* Prefs → Animations Off — kill CSS motion site-wide (JS also treats this like reduced-motion). */
+html.animations-off *,
+html.animations-off *::before,
+html.animations-off *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+html.animations-off .page-pane.is-enter-pending > .page-header,
+html.animations-off .page-pane.is-enter-pending > .table-wrap,
+html.animations-off .page-pane.is-enter-pending > .compare-wrap,
+html.animations-off .page-pane.is-enter-pending > .rankings-pin-bar,
+html.animations-off .page-pane.is-enter-pending > .rankings-grid,
+html.animations-off .page-pane.is-enter-pending > .barbell-wrap,
+html.animations-off .page-pane.is-enter-pending > .schedule-scatter,
+html.animations-off .page-pane.is-enter-pending > .schedule-grid,
+html.animations-off .page-pane.is-enter-pending > .feed-treemap,
+html.animations-off .page-pane.is-enter-pending > .feed-trending,
+html.animations-off .page-pane.is-enter-pending > .markets-grid,
+html.animations-off .page-pane.is-enter-pending > .ownership-mover-bar,
+html.animations-off .page-pane.is-enter-pending > .team-budget-bar,
+html.animations-off .page-pane.is-enter-pending > #team-squad-view,
+html.animations-off .page-pane.is-enter-pending > #team-picker-view,
+html.animations-off .page-pane.is-enter-pending > .home-dashboard,
+html.animations-off .page-pane.is-enter-pending > .home-empty,
+html.animations-off .page-pane.is-enter-pending > .report-article {
+  opacity: 1;
 }
 
 .toolbar-row {
@@ -5447,10 +5509,11 @@ html[data-page="prices"] .layout .main {
 }
 #prices-page .prices-header {
   flex: none;
+  margin-bottom: 8px;
 }
 .prices-countdown-bar {
   flex: none;
-  margin: 0 0 14px;
+  margin: 0 0 8px;
   padding: 0;
   border: none;
   border-radius: 0;
@@ -5536,6 +5599,29 @@ html[data-page="prices"] .layout .main {
 }
 .prices-mover-kind-seg .icon {
   font-size: 14px;
+}
+.prices-mover-kind-seg button[data-prices-mover-kind="risers"] {
+  color: hsl(var(--delta-rise) / 0.78);
+}
+.prices-mover-kind-seg button[data-prices-mover-kind="risers"].active {
+  color: hsl(var(--delta-rise));
+}
+.prices-mover-kind-seg button[data-prices-mover-kind="fallers"] {
+  color: hsl(var(--delta-fall) / 0.78);
+}
+.prices-mover-kind-seg button[data-prices-mover-kind="fallers"].active {
+  color: hsl(var(--delta-fall));
+}
+.prices-mover-kind-seg button.active .icon,
+.prices-mover-kind-seg button[data-prices-mover-kind="risers"] .icon,
+.prices-mover-kind-seg button[data-prices-mover-kind="fallers"] .icon {
+  color: inherit;
+}
+.prices-mover-kind-seg:has(button[data-prices-mover-kind="risers"].active) .seg-thumb {
+  background: hsl(var(--delta-rise) / 0.16);
+}
+.prices-mover-kind-seg:has(button[data-prices-mover-kind="fallers"].active) .seg-thumb {
+  background: hsl(var(--delta-fall) / 0.16);
 }
 .prices-mover-kind-label {
   display: none;
@@ -5659,12 +5745,6 @@ html[data-page="prices"] .layout .main {
 }
 .prices-mover-bar .segmented button.active {
   font-weight: 650;
-}
-.prices-scope-seg button {
-  min-width: 3.6em;
-}
-.prices-scope-label-short {
-  display: none;
 }
 #prices-prediction-wrap {
   flex: 1 1 auto;
@@ -6211,8 +6291,7 @@ html[data-page="prices"] .layout .main {
 .ownership-treemap[hidden],
 .ownership-mover-seg[hidden],
 .ownership-window-seg[hidden],
-.prices-mover-kind-seg[hidden],
-.prices-scope-seg[hidden] {
+.prices-mover-kind-seg[hidden] {
   display: none !important;
 }
 .ownership-treemap {
@@ -6359,19 +6438,16 @@ html[data-page="prices"] .layout .main {
 
 /* Ownership / Prices desktop: keep Filters / Players·Teams / Search on one row. */
 @media (min-width: 721px) {
-  html[data-page="ownership"] #subtoolbar,
-  html[data-page="prices"] #subtoolbar {
+  html[data-page="ownership"] #subtoolbar {
     flex-wrap: nowrap;
   }
-  html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
-  html[data-page="prices"] #subtoolbar .topbar-end-cluster {
+  html[data-page="ownership"] #subtoolbar .topbar-end-cluster {
     flex: 1 1 auto;
     min-width: 0;
     justify-content: flex-end;
     gap: 8px;
   }
-  html[data-page="ownership"] #subtoolbar #search-wrap,
-  html[data-page="prices"] #subtoolbar #search-wrap {
+  html[data-page="ownership"] #subtoolbar #search-wrap {
     flex: 0 1 280px;
     min-width: 140px;
     max-width: 320px;
@@ -6620,6 +6696,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     /* Edge-to-edge tables; toolbar/footers keep a small inset below. */
     padding-left: 0;
     padding-right: 0;
+    padding-top: 4px;
     padding-bottom: var(--main-pad-x, 8px);
   }
   html[data-page="prices"] #prices-page {
@@ -6636,7 +6713,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
     margin-top: 0;
-    margin-bottom: 12px;
+    margin-bottom: 6px;
   }
   .prices-mover-bar {
     flex-wrap: nowrap;
@@ -6644,8 +6721,8 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     justify-content: flex-start;
     width: 100%;
     box-sizing: border-box;
-    margin-top: 4px;
-    margin-bottom: 8px;
+    margin-top: 0;
+    margin-bottom: 6px;
     padding-left: var(--mobile-gutter-x, 8px);
     padding-right: var(--mobile-gutter-x, 8px);
   }
@@ -6658,7 +6735,7 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     display: flex;
   }
   .prices-mover-bar .prices-mover-kind-seg:not([hidden]) {
-    flex: 0 0 auto;
+    flex: 1 1 0;
   }
   .prices-mover-bar .segmented button {
     flex: 1 1 0;
@@ -6668,16 +6745,17 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     font-size: 12px;
   }
   .prices-mover-kind-seg button {
-    flex: 0 0 auto;
-    min-width: 2.15em;
-    padding-left: 7px;
-    padding-right: 7px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 6px;
   }
-  .prices-scope-label-full {
-    display: none;
-  }
-  .prices-scope-label-short {
+  .prices-mover-kind-label {
     display: inline;
+  }
+  .prices-mover-kind-seg .icon {
+    font-size: 15px;
   }
   .prices-mover-pager {
     min-width: 0;
@@ -6709,14 +6787,9 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   .prices-mover-dots {
     display: none !important;
   }
-  .prices-prediction-panel .prices-section-divider,
-  .prices-actual-panel .prices-section-divider,
-  #prices-page .prices-prediction-panel:first-child .prices-section-divider,
-  #prices-page .prices-actual-panel:first-child .prices-section-divider,
-  #prices-page .prices-prediction-panel:not(:first-child) .prices-section-divider,
-  #prices-page .prices-actual-panel:not(:first-child) .prices-section-divider {
-    margin-top: 14px;
-    margin-bottom: 10px;
+  /* Risers/Fallers toggle already labels the view — drop section titles + rules. */
+  #prices-page .prices-section-divider {
+    display: none !important;
   }
   html[data-page="prices"] #prices-page[data-prices-view="prediction"] #prices-prediction-wrap {
     display: block;
@@ -16303,24 +16376,48 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 .home-player-detail-form {
   min-width: 0;
 }
-/* Team Details — compact rounded crest tile, flush to the accent ring. */
+/* Team Details — compact rounded crest tile, flush to the accent ring.
+   Contain + pad like Statistics teams crests (not kit/photo cover crop). */
 .home-team-lookup-card .home-lookup-photo-wrap,
 .home-team-lookup-card .home-lookup-photo-clip,
 .home-team-lookup-card .home-lookup-photo,
 .home-team-lookup-card .home-lookup-photo-fallback {
   width: 44px;
   height: 44px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
-.home-lookup-photo-clip .home-lookup-team-crest.badge-img {
+.home-team-lookup-card .home-lookup-photo-clip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: hsl(var(--muted) / 0.55);
+}
+.home-team-lookup-card .home-lookup-photo-clip .home-lookup-team-crest.badge-img {
+  position: static;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  max-width: 100%;
+  left: auto;
+  top: auto;
+  object-fit: contain;
   object-position: center;
-  border-radius: 5px;
-  padding: 0;
+  border-radius: 0;
+  padding: 5px;
   box-sizing: border-box;
   background: transparent;
+}
+html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lookup-team-crest {
+  position: static;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  left: auto;
+  top: auto;
+  object-fit: contain;
+  object-position: center;
+  padding: 5px;
+  box-sizing: border-box;
 }
 .home-team-strength-card {
   min-height: 0;
@@ -25575,7 +25672,7 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   top: -1px;
   bottom: auto;
   border-top: none;
-  border-bottom: 6px solid hsl(var(--delta-rise) / 0.9);
+  border-bottom: 6px solid hsl(var(--delta-fall) / 0.9);
 }
 .fixtures-table-wrap {
   flex: 1 1 auto;
@@ -26174,28 +26271,79 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   box-shadow: var(--shadow-lg);
 }
 /* Intro: hug content (not a tall empty sheet). Edit/sliders: tall panel. */
-.difficulty-wizard:has([data-diff-step="intro"]:not([hidden])) .difficulty-wizard-panel {
+.difficulty-wizard:not(.is-sheet):has([data-diff-step="intro"]:not([hidden])) .difficulty-wizard-panel {
   height: auto;
   max-height: min(80dvh, calc(100dvh - 48px));
 }
-.difficulty-wizard:has([data-diff-step="edit"]:not([hidden])) .difficulty-wizard-panel {
+.difficulty-wizard:not(.is-sheet):has([data-diff-step="edit"]:not([hidden])) .difficulty-wizard-panel {
   height: min(720px, calc(100dvh - 24px));
   max-height: calc(100dvh - 24px);
 }
 @media (max-width: 720px) {
-  .difficulty-wizard:has([data-diff-step="intro"]:not([hidden])) {
+  .difficulty-wizard:not(.is-sheet):has([data-diff-step="intro"]:not([hidden])) {
     align-items: center;
     padding: 20px 14px;
   }
-  .difficulty-wizard:has([data-diff-step="intro"]:not([hidden])) .difficulty-wizard-panel {
+  .difficulty-wizard:not(.is-sheet):has([data-diff-step="intro"]:not([hidden])) .difficulty-wizard-panel {
     height: auto;
     max-height: min(70dvh, calc(100dvh - 64px));
   }
-  .difficulty-wizard:has([data-diff-step="edit"]:not([hidden])) .difficulty-wizard-panel {
+  .difficulty-wizard:not(.is-sheet):has([data-diff-step="edit"]:not([hidden])) .difficulty-wizard-panel {
     height: min(720px, calc(100dvh - 16px));
     max-height: calc(100dvh - 16px);
     width: min(560px, 100%);
   }
+}
+
+/* Settings-launched edit on mobile → bottom tray (not onboarding). */
+.difficulty-wizard-grab {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0 2px;
+  flex: none;
+}
+.difficulty-wizard-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+.difficulty-wizard.is-sheet {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+.difficulty-wizard.is-sheet .difficulty-wizard-grab {
+  display: flex;
+}
+.difficulty-wizard.is-sheet .difficulty-wizard-backdrop {
+  opacity: 0;
+  transition: opacity 0.22s var(--ease-out);
+}
+.difficulty-wizard.is-sheet.is-open .difficulty-wizard-backdrop {
+  opacity: 1;
+}
+.difficulty-wizard.is-sheet .difficulty-wizard-panel {
+  width: 100%;
+  max-width: 560px;
+  height: min(82dvh, 720px);
+  max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 8px));
+  border-radius: 18px 18px 0 0;
+  border-bottom: none;
+  padding: 0 14px max(12px, env(safe-area-inset-bottom, 0px));
+  transform: translateY(108%);
+  transition: transform 0.28s var(--ease-out);
+  will-change: transform;
+}
+.difficulty-wizard.is-sheet.is-open .difficulty-wizard-panel {
+  transform: translateY(0);
+}
+.difficulty-wizard.is-sheet .difficulty-wizard-close {
+  top: 18px;
+}
+.difficulty-wizard.is-sheet .difficulty-edit-title-row {
+  padding-right: 40px;
 }
 .difficulty-wizard-close {
   position: absolute;
@@ -26416,7 +26564,7 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   line-height: 1.1;
 }
 .diff-slider-wrap {
-  --diff-thumb: 18px;
+  --diff-thumb: 20px;
   --diff-pct: 0%;
   position: relative;
   flex: 1 1 auto;
@@ -26456,31 +26604,38 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
 .diff-tick {
   position: absolute;
   top: 0;
-  width: 1px;
-  height: 8px;
-  margin-left: -0.5px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
   transform: translateY(-50%);
-  border-radius: 1px;
+  border-radius: 50%;
   background: hsl(var(--muted-foreground) / 0.35);
 }
 .diff-ghost {
   position: absolute;
   top: 0;
-  width: 2px;
-  height: 10px;
-  margin-left: -1px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
   transform: translateY(-50%);
-  border-radius: 1px;
-  background: hsl(var(--muted-foreground) / 0.55);
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: hsl(var(--card));
+  box-shadow: inset 0 0 0 1.5px hsl(var(--muted-foreground) / 0.45);
 }
 .diff-ghost.is-fpl {
-  height: 12px;
-  background: hsl(var(--blue-hsl) / 0.75);
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  background: hsl(var(--card));
+  box-shadow: inset 0 0 0 2px hsl(var(--blue-hsl) / 0.85);
   z-index: 1;
 }
 .diff-ghost.is-opta {
-  height: 8px;
-  background: hsl(var(--muted-foreground) / 0.45);
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  box-shadow: inset 0 0 0 1.5px hsl(var(--muted-foreground) / 0.5);
 }
 .diff-slider {
   position: relative;
@@ -26512,18 +26667,14 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   -webkit-appearance: none;
   appearance: none;
   width: var(--diff-thumb);
-  height: 22px;
-  margin-top: -9px;
-  border-radius: 999px;
-  border: 1px solid hsl(var(--border-hsl) / 0.9);
-  background:
-    linear-gradient(
-      hsl(var(--blue-hsl)),
-      hsl(var(--blue-hsl))
-    )
-    center / 2px 12px no-repeat,
-    hsl(var(--card));
-  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.12);
+  height: var(--diff-thumb);
+  margin-top: calc((4px - var(--diff-thumb)) / 2);
+  border-radius: 50%;
+  border: 2px solid hsl(var(--card));
+  background: hsl(var(--blue-hsl));
+  box-shadow:
+    0 0 0 1px hsl(var(--blue-hsl) / 0.28),
+    0 1px 3px hsl(0 0% 0% / 0.16);
   cursor: grab;
 }
 .diff-slider:active::-webkit-slider-thumb {
@@ -26536,17 +26687,13 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
 }
 .diff-slider::-moz-range-thumb {
   width: var(--diff-thumb);
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid hsl(var(--border-hsl) / 0.9);
-  background:
-    linear-gradient(
-      hsl(var(--blue-hsl)),
-      hsl(var(--blue-hsl))
-    )
-    center / 2px 12px no-repeat,
-    hsl(var(--card));
-  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.12);
+  height: var(--diff-thumb);
+  border-radius: 50%;
+  border: 2px solid hsl(var(--card));
+  background: hsl(var(--blue-hsl));
+  box-shadow:
+    0 0 0 1px hsl(var(--blue-hsl) / 0.28),
+    0 1px 3px hsl(0 0% 0% / 0.16);
   cursor: grab;
 }
 @media (max-width: 720px), (hover: none), (pointer: coarse) {
@@ -26580,22 +26727,37 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   line-height: 1.35;
   color: var(--text-faint);
 }
-#schedule-season-seg {
-  width: 100%;
-}
-#schedule-season-seg button {
-  flex: 1 1 0;
-}
 .prefs-fixtures-diff-toggle.is-disabled {
   opacity: 0.55;
   pointer-events: none;
 }
+button.settings-switch-row.prefs-diff-edit-row {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.prefs-diff-edit-affordance {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+}
+button.settings-switch-row.prefs-diff-edit-row:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
 @media (max-width: 720px) {
-  .difficulty-wizard {
+  .difficulty-wizard:not(.is-sheet) {
     padding: 0;
     align-items: stretch;
   }
-  .difficulty-wizard-panel {
+  .difficulty-wizard:not(.is-sheet) .difficulty-wizard-panel {
     width: 100%;
     height: 100%;
     max-height: none;
