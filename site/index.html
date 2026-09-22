@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1546" />
+<link rel="stylesheet" href="styles.css?v=1549" />
 <link rel="stylesheet" href="motion-enhanced.css?v=11" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -566,6 +566,14 @@
                 <span class="settings-switch-hint">On phone, pitch cards and overall rank gently track device tilt (asks for motion access once).</span>
               </span>
               <input type="checkbox" id="prefs-home-tilt" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
+            <label class="settings-switch-row" for="prefs-home-tilt-kit">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Kit tilt</span>
+                <span class="settings-switch-hint">Only the player kit inside each pitch card tracks tilt — frame, name, and pts stay still.</span>
+              </span>
+              <input type="checkbox" id="prefs-home-tilt-kit" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
             <label class="settings-switch-row" for="prefs-mock-live">
@@ -1952,7 +1960,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1430"></script>
+<script src="app.js?v=1431"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

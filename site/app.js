@@ -1456,6 +1456,7 @@
     themeSeg: $("#theme-seg"),
     prefsAnimations: $("#prefs-animations"),
     prefsHomeTilt: $("#prefs-home-tilt"),
+    prefsHomeTiltKit: $("#prefs-home-tilt-kit"),
     prefsMockLive: $("#prefs-mock-live"),
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
@@ -35176,12 +35177,29 @@
   try { localStorage.removeItem("fpl-explorer-autosub-preview"); } catch { /* ignore */ }
 
   const HOME_TILT_KEY = "fpl-explorer-home-tilt";
+  const HOME_TILT_KIT_KEY = "fpl-explorer-home-tilt-kit";
+
+  function homeTiltNeedsPermissionStatic() {
+    try {
+      return (
+        typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function"
+      );
+    } catch {
+      return false;
+    }
+  }
+
   let homeTiltListening = false;
   let homeTiltRaf = 0;
   let homeTiltBaseline = null;
   let homeTiltLatest = { beta: 0, gamma: 0 };
+  let homeTiltDemoTimer = 0;
+  /* iOS requires a user gesture for motion permission — track grant so we
+     don't pretend tilt is live after a cold reload with the pref still on. */
+  let homeTiltPermissionGranted = !homeTiltNeedsPermissionStatic();
 
-  function homeTiltEnabled() {
+  function homeTiltCardEnabled() {
     try {
       return localStorage.getItem(HOME_TILT_KEY) === "on";
     } catch {
@@ -35189,15 +35207,29 @@
     }
   }
 
+  function homeTiltKitEnabled() {
+    try {
+      return localStorage.getItem(HOME_TILT_KIT_KEY) === "on";
+    } catch {
+      return false;
+    }
+  }
+
+  function homeTiltAnyEnabled() {
+    return homeTiltCardEnabled() || homeTiltKitEnabled();
+  }
+
+  /** @deprecated use homeTiltCardEnabled — kept for older call sites */
+  function homeTiltEnabled() {
+    return homeTiltCardEnabled();
+  }
+
   function homeTiltSupported() {
     return typeof window.DeviceOrientationEvent !== "undefined";
   }
 
   function homeTiltNeedsPermission() {
-    return (
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function"
-    );
+    return homeTiltNeedsPermissionStatic();
   }
 
   function homeTiltReducedMotion() {
@@ -35208,8 +35240,19 @@
     }
   }
 
-  function syncHomeTiltToggle(on = homeTiltEnabled()) {
+  function syncHomeTiltToggle(on = homeTiltCardEnabled()) {
     if (el.prefsHomeTilt) el.prefsHomeTilt.checked = !!on;
+  }
+
+  function syncHomeTiltKitToggle(on = homeTiltKitEnabled()) {
+    if (el.prefsHomeTiltKit) el.prefsHomeTiltKit.checked = !!on;
+  }
+
+  function syncHomeTiltClasses() {
+    const root = document.documentElement;
+    const live = homeTiltListening && !homeTiltReducedMotion();
+    root.classList.toggle("home-tilt-on", live && homeTiltCardEnabled());
+    root.classList.toggle("home-tilt-kit-on", live && homeTiltKitEnabled());
   }
 
   function clearHomeTiltVars() {
@@ -35225,8 +35268,8 @@
     root.style.setProperty("--home-tilt-rx", rx.toFixed(2));
     root.style.setProperty("--home-tilt-ry", ry.toFixed(2));
     /* Shadow slides opposite the tilt so cards feel counterbalanced. */
-    root.style.setProperty("--home-tilt-sx", `${(-ry * 0.4).toFixed(2)}px`);
-    root.style.setProperty("--home-tilt-sy", `${(rx * 0.4).toFixed(2)}px`);
+    root.style.setProperty("--home-tilt-sx", `${(-ry * 0.45).toFixed(2)}px`);
+    root.style.setProperty("--home-tilt-sy", `${(rx * 0.45).toFixed(2)}px`);
   }
 
   function onHomeTiltOrientation(e) {
@@ -35241,89 +35284,206 @@
     if (homeTiltRaf) return;
     homeTiltRaf = requestAnimationFrame(() => {
       homeTiltRaf = 0;
-      const rx = Math.max(-1, Math.min(1, homeTiltLatest.beta / 40)) * 6;
-      const ry = Math.max(-1, Math.min(1, homeTiltLatest.gamma / 40)) * 6;
+      /* Slightly stronger than before so phone tilt is obvious when testing. */
+      const rx = Math.max(-1, Math.min(1, homeTiltLatest.beta / 28)) * 10;
+      const ry = Math.max(-1, Math.min(1, homeTiltLatest.gamma / 28)) * 10;
       applyHomeTiltVars(rx, ry);
     });
   }
 
+  function playHomeTiltDemo() {
+    if (homeTiltReducedMotion()) return;
+    if (homeTiltDemoTimer) {
+      clearTimeout(homeTiltDemoTimer);
+      homeTiltDemoTimer = 0;
+    }
+    const steps = [
+      [8, -6],
+      [-6, 8],
+      [5, 4],
+      [0, 0],
+    ];
+    let i = 0;
+    const tick = () => {
+      if (i >= steps.length) {
+        homeTiltDemoTimer = 0;
+        homeTiltBaseline = null;
+        return;
+      }
+      const [rx, ry] = steps[i++];
+      applyHomeTiltVars(rx, ry);
+      homeTiltDemoTimer = setTimeout(tick, 180);
+    };
+    tick();
+  }
+
   function startHomeTiltListening() {
-    if (homeTiltListening || !homeTiltSupported() || homeTiltReducedMotion()) return;
+    if (homeTiltListening || !homeTiltSupported() || homeTiltReducedMotion()) {
+      syncHomeTiltClasses();
+      return;
+    }
+    if (homeTiltNeedsPermission() && !homeTiltPermissionGranted) {
+      syncHomeTiltClasses();
+      return;
+    }
     homeTiltBaseline = null;
     window.addEventListener("deviceorientation", onHomeTiltOrientation, { passive: true });
     homeTiltListening = true;
-    document.documentElement.classList.add("home-tilt-on");
+    syncHomeTiltClasses();
   }
 
   function stopHomeTiltListening() {
-    if (!homeTiltListening) {
-      document.documentElement.classList.remove("home-tilt-on");
-      clearHomeTiltVars();
-      return;
+    if (homeTiltListening) {
+      window.removeEventListener("deviceorientation", onHomeTiltOrientation);
+      homeTiltListening = false;
     }
-    window.removeEventListener("deviceorientation", onHomeTiltOrientation);
-    homeTiltListening = false;
     if (homeTiltRaf) {
       cancelAnimationFrame(homeTiltRaf);
       homeTiltRaf = 0;
     }
+    if (homeTiltDemoTimer) {
+      clearTimeout(homeTiltDemoTimer);
+      homeTiltDemoTimer = 0;
+    }
     homeTiltBaseline = null;
     clearHomeTiltVars();
-    document.documentElement.classList.remove("home-tilt-on");
+    syncHomeTiltClasses();
   }
 
   function syncHomeTiltRuntime() {
     const want =
-      homeTiltEnabled() &&
+      homeTiltAnyEnabled() &&
       state.page === "home" &&
       !homeTiltReducedMotion() &&
       !document.hidden;
     if (want) startHomeTiltListening();
     else stopHomeTiltListening();
+    syncHomeTiltClasses();
   }
 
   async function requestHomeTiltPermission() {
-    if (!homeTiltNeedsPermission()) return true;
+    if (!homeTiltNeedsPermission()) {
+      homeTiltPermissionGranted = true;
+      return true;
+    }
     try {
       const permission = await DeviceOrientationEvent.requestPermission();
-      return permission === "granted";
+      homeTiltPermissionGranted = permission === "granted";
+      return homeTiltPermissionGranted;
     } catch {
+      homeTiltPermissionGranted = false;
       return false;
     }
   }
 
-  async function applyHomeTiltEnabled(on) {
-    const enabled = !!on;
-    if (enabled) {
+  async function applyHomeTiltMode({ card, kit }, { demo = true } = {}) {
+    const wantCard = card != null ? !!card : homeTiltCardEnabled();
+    const wantKit = kit != null ? !!kit : homeTiltKitEnabled();
+    const enabling = (wantCard && !homeTiltCardEnabled()) || (wantKit && !homeTiltKitEnabled());
+    const anyOn = wantCard || wantKit;
+
+    if (anyOn) {
       if (!homeTiltSupported()) {
         syncHomeTiltToggle(false);
-        return;
-      }
-      const ok = await requestHomeTiltPermission();
-      if (!ok) {
+        syncHomeTiltKitToggle(false);
         try {
           localStorage.removeItem(HOME_TILT_KEY);
+          localStorage.removeItem(HOME_TILT_KIT_KEY);
         } catch {
           /* ignore */
         }
-        syncHomeTiltToggle(false);
+        if (typeof showToast === "function") {
+          showToast({
+            title: "Tilt unavailable",
+            message: "This browser doesn’t expose device orientation.",
+            icon: "info",
+          });
+        }
         stopHomeTiltListening();
         return;
       }
-      try {
-        localStorage.setItem(HOME_TILT_KEY, "on");
-      } catch {
-        /* ignore */
+      if (homeTiltReducedMotion()) {
+        syncHomeTiltToggle(false);
+        syncHomeTiltKitToggle(false);
+        try {
+          localStorage.removeItem(HOME_TILT_KEY);
+          localStorage.removeItem(HOME_TILT_KIT_KEY);
+        } catch {
+          /* ignore */
+        }
+        if (typeof showToast === "function") {
+          showToast({
+            title: "Reduce Motion is on",
+            message: "Turn off Reduce Motion in iOS Accessibility to use tilt.",
+            icon: "info",
+          });
+        }
+        stopHomeTiltListening();
+        return;
       }
-    } else {
-      try {
-        localStorage.removeItem(HOME_TILT_KEY);
-      } catch {
-        /* ignore */
+      if (enabling || (homeTiltNeedsPermission() && !homeTiltPermissionGranted)) {
+        const ok = await requestHomeTiltPermission();
+        if (!ok) {
+          if (card != null) {
+            try {
+              localStorage.removeItem(HOME_TILT_KEY);
+            } catch {
+              /* ignore */
+            }
+            syncHomeTiltToggle(false);
+          }
+          if (kit != null) {
+            try {
+              localStorage.removeItem(HOME_TILT_KIT_KEY);
+            } catch {
+              /* ignore */
+            }
+            syncHomeTiltKitToggle(false);
+          }
+          if (!homeTiltAnyEnabled()) stopHomeTiltListening();
+          if (typeof showToast === "function") {
+            showToast({
+              title: "Motion access denied",
+              message:
+                "Allow Motion & Orientation for this site (Safari → aA → Website Settings), then toggle again.",
+              icon: "info",
+            });
+          }
+          syncHomeTiltRuntime();
+          return;
+        }
       }
     }
-    syncHomeTiltToggle(homeTiltEnabled());
+
+    try {
+      if (wantCard) localStorage.setItem(HOME_TILT_KEY, "on");
+      else localStorage.removeItem(HOME_TILT_KEY);
+      if (wantKit) localStorage.setItem(HOME_TILT_KIT_KEY, "on");
+      else localStorage.removeItem(HOME_TILT_KIT_KEY);
+    } catch {
+      /* ignore */
+    }
+    syncHomeTiltToggle(homeTiltCardEnabled());
+    syncHomeTiltKitToggle(homeTiltKitEnabled());
     syncHomeTiltRuntime();
+    if (anyOn && demo && homeTiltListening) {
+      playHomeTiltDemo();
+      if (typeof showToast === "function" && enabling) {
+        showToast({
+          title: wantKit && !wantCard ? "Kit tilt on" : wantCard && !wantKit ? "Home tilt on" : "Tilt on",
+          message: "You should see a short wiggle — then tilt the phone on Home.",
+          icon: "circle-check",
+        });
+      }
+    }
+  }
+
+  async function applyHomeTiltEnabled(on) {
+    await applyHomeTiltMode({ card: !!on, kit: homeTiltKitEnabled() });
+  }
+
+  async function applyHomeTiltKitEnabled(on) {
+    await applyHomeTiltMode({ card: homeTiltCardEnabled(), kit: !!on });
   }
 
   if (el.prefsHomeTilt) {
@@ -35331,8 +35491,28 @@
       applyHomeTiltEnabled(el.prefsHomeTilt.checked);
     });
   }
+  if (el.prefsHomeTiltKit) {
+    el.prefsHomeTiltKit.addEventListener("change", () => {
+      applyHomeTiltKitEnabled(el.prefsHomeTiltKit.checked);
+    });
+  }
   syncHomeTiltToggle();
-  syncHomeTiltRuntime();
+  syncHomeTiltKitToggle();
+  /* Saved “on” without iOS permission yet — keep prefs checked, don’t fake live tilt. */
+  if (homeTiltAnyEnabled() && homeTiltNeedsPermission() && !homeTiltPermissionGranted) {
+    setTimeout(() => {
+      if (typeof showToast !== "function") return;
+      if (homeTiltPermissionGranted || !homeTiltAnyEnabled()) return;
+      showToast({
+        title: "Tilt needs a tap",
+        message: "iOS blocks motion until you toggle Home tilt or Kit tilt off and on again (Allow when prompted).",
+        icon: "info",
+        duration: 6500,
+      });
+    }, 1200);
+  } else {
+    syncHomeTiltRuntime();
+  }
   document.addEventListener("visibilitychange", () => {
     syncHomeTiltRuntime();
   });
