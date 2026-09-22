@@ -15389,8 +15389,29 @@ html.is-team-landscape #team-page .team-add-slot .icon {
   color: var(--text-faint);
   font-weight: 500;
 }
-.home-gw-pts-details-btn {
+.home-gw-pts-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
+}
+.home-gw-pts-pin-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  color: var(--text-dim);
+}
+.home-gw-pts-pin-btn:hover {
+  color: hsl(var(--blue-hsl));
+}
+.home-gw-pts-pin-btn .icon {
+  width: 15px;
+  height: 15px;
+}
+.home-gw-pts-details-btn {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
   height: 36px;
   font-weight: 600;
   background: hsl(var(--primary));
@@ -16154,7 +16175,7 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 }
 .home-form-chart {
   position: relative;
-  min-height: 148px;
+  min-height: 156px;
 }
 .home-form-opp-row {
   display: grid;
@@ -16181,6 +16202,20 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   height: 14px;
   object-fit: contain;
   flex: none;
+}
+@media (min-width: 721px) {
+  .home-form-opp {
+    min-height: 24px;
+    gap: 3px;
+  }
+  .home-form-opp-badge.badge-img,
+  .home-form-opp .badge-img {
+    width: 22px;
+    height: 22px;
+  }
+  .home-form-opp-code {
+    font-size: 10px;
+  }
 }
 .home-form-opp-code {
   font-size: 8px;
@@ -16307,6 +16342,32 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+.home-form-val {
+  pointer-events: none;
+}
+.home-form-val rect {
+  fill: hsl(var(--card));
+  stroke: hsl(var(--foreground) / 0.22);
+  stroke-width: 1;
+}
+.home-form-val text {
+  fill: hsl(var(--foreground) / 0.88);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.home-form-svg.is-enter .home-form-val {
+  opacity: 0;
+  animation: home-form-avg-in 0.32s ease forwards;
+  animation-delay: calc(var(--form-enter-delay, 0ms) + var(--bar-i, 0) * 48ms + 0.36s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-form-svg.is-enter .home-form-val {
+    animation: none;
+    opacity: 1;
+  }
 }
 .home-form-legend-slot:empty {
   display: none;
@@ -16515,9 +16576,15 @@ html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lo
     overflow: auto;
   }
 }
-/* Player tray/modal embeds a schedule matchup card — no hover lift (Schedule keeps it). */
+/* Player tray/modal embeds — no card hover lift (Schedule / Rankings keep it). */
 .home-player-detail-matchup .schedule-card:hover,
-.home-player-detail-matchup .home-lookup-schedule-card:hover {
+.home-player-detail-matchup .home-lookup-schedule-card:hover,
+.home-player-detail .home-form-card:hover,
+.home-player-detail .home-own-card:hover,
+.home-player-detail .home-lookup-card:hover,
+.home-player-detail .home-player-owners:hover,
+.home-player-detail .schedule-card:hover,
+.home-player-detail .home-lookup-schedule-card:hover {
   position: static;
   z-index: auto;
   transform: none;
@@ -17160,7 +17227,6 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
     align-items: stretch;
   }
   .home-dashboard:not(.is-player-lookup) > .home-deadline,
-  .home-dashboard:not(.is-player-lookup) > .home-owner-banner,
   .home-dashboard:not(.is-player-lookup) > .home-player-profile,
   .home-dashboard:not(.is-player-lookup) > .home-player-matchup {
     grid-column: 1 / -1;
@@ -17204,10 +17270,14 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
   }
 }
 /* Viewing another manager — floating eye chip (fixed bottom; scroll stays free). */
-.home-dashboard.is-viewing-manager {
+.home-dashboard.is-viewing-manager,
+.home-dashboard.is-owner-pinning {
   --home-view-accent: hsl(var(--blue-hsl));
   /* Clearance so last rows aren't covered by the floating chip. */
   padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+#home-page.is-owner-pinning {
+  --home-view-accent: hsl(var(--blue-hsl));
 }
 /* Own-team search only — hide desktop field + mobile FAB while viewing. */
 #home-page.is-viewing-manager #home-desktop-search,
@@ -17685,6 +17755,32 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
 }
 .home-summary-hero-autosub[hidden] {
   display: none !important;
+}
+.home-autosub-pts-delta {
+  display: inline;
+  margin-left: 0.28em;
+  /* Fixed px so GW / Total / League suffixes match (em scaled with parent). */
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  vertical-align: 0.12em;
+  color: hsl(38 92% 36%);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.home-stat-rank .home-autosub-pts-delta.is-league-places {
+  flex: none;
+  align-self: flex-end;
+  margin-bottom: 0.2em;
+}
+html[data-theme="dark"] .home-autosub-pts-delta {
+  color: hsl(40 96% 68%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-autosub-pts-delta {
+    color: hsl(40 96% 68%);
+  }
 }
 html[data-theme="dark"] .home-summary-hero-autosub {
   border-color: hsl(var(--amber-hsl) / 0.5);
@@ -19521,6 +19617,7 @@ html.home-squad-wide .home-squad-split {
    html.is-mobile-layout. */
 html:not(.is-mobile-layout) .home-squad-split,
 html:not(.is-mobile-layout) #home-squad-panel .home-table-wrap,
+html:not(.is-mobile-layout) #home-squad-panel .home-squad-page-pitch,
 html:not(.is-mobile-layout) #home-standings-panel .home-table-wrap,
 html:not(.is-mobile-layout) .home-transfers-table-wrap,
 html:not(.is-mobile-layout) .home-captains-table-wrap,
@@ -19529,6 +19626,7 @@ html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll {
 }
 html:not(.is-mobile-layout) .home-squad-split::-webkit-scrollbar,
 html:not(.is-mobile-layout) #home-squad-panel .home-table-wrap::-webkit-scrollbar,
+html:not(.is-mobile-layout) #home-squad-panel .home-squad-page-pitch::-webkit-scrollbar,
 html:not(.is-mobile-layout) #home-standings-panel .home-table-wrap::-webkit-scrollbar,
 html:not(.is-mobile-layout) .home-transfers-table-wrap::-webkit-scrollbar,
 html:not(.is-mobile-layout) .home-captains-table-wrap::-webkit-scrollbar,
@@ -19926,10 +20024,23 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
     align-self: stretch;
     min-height: 0;
   }
-  /* Pitch matches other pages via min-height + spacer (Bench divider aligned). */
+  /* Pitch: fill the Team card and scroll when XI + bench exceed the panel
+     (same pattern as .home-table-wrap on other squad pages). */
   #home-squad-panel .home-squad-page-pitch {
     height: 100% !important;
     align-self: stretch;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for bench card shadows past the last row. */
+    padding-bottom: 10px;
+    box-sizing: border-box;
+  }
+  /* Spacer only aligns Bench on mobile lock; on desktop it would pad the
+     scroll range with empty space above the bench. */
+  #home-squad-panel .home-squad-page-pitch .home-pitch-page-spacer {
+    display: none;
   }
   #home-squad-panel .home-squad-page .home-table-wrap,
   #home-standings-panel .home-standings-page .home-table-wrap {
@@ -20061,7 +20172,8 @@ html.home-squad-wide #home-feed-panel .home-feed-table tbody tr.home-feed-row {
   max-height: none;
   min-height: 0;
   border-radius: 12px;
-  overflow: hidden;
+  /* visible so .home-pitch-card drop shadows aren't clipped */
+  overflow: visible;
   background: transparent;
   color: var(--home-pitch-line);
 }
@@ -20283,7 +20395,8 @@ tr.home-bench-lock-spacer > th {
   --home-pitch-badge-radius: max(2px, calc(var(--home-pitch-card-radius) - var(--home-pitch-badge-inset)));
   /* Clear air around the pts/fixtures strip (inside the outer frame). */
   --home-pitch-strip-gap: 2.5px;
-  --home-pitch-lift: 0 2px 6px hsl(0 0% 0% / 0.28);
+  /* Very soft lift — kept subtle in both themes. */
+  --home-pitch-lift: 0 1px 3px hsl(0 0% 0% / 0.22), 0 2px 8px hsl(0 0% 0% / 0.14);
   appearance: none;
   -webkit-appearance: none;
   position: relative;
@@ -20307,6 +20420,68 @@ tr.home-bench-lock-spacer > th {
   font-size: 11px;
   text-align: center;
   box-shadow: var(--home-pitch-lift);
+}
+/* Desktop: whole-card lift + scale (photo, type, frame, strip) in one transform.
+   Blue frame + soft blue shadow match feed/squad cross-hover wash. */
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
+  .home-pitch-card {
+    transform-origin: center bottom;
+    transition:
+      transform 0.22s var(--ease-out),
+      box-shadow 0.22s var(--ease-out),
+      opacity 0.22s var(--ease-out),
+      filter 0.22s var(--ease-out);
+  }
+  .home-pitch-card:hover,
+  .home-pitch-card.is-home-cross-hover,
+  .home-pitch-card.is-owner-pinned {
+    z-index: 4;
+    --home-pitch-frame: hsl(var(--blue-hsl));
+    --home-pitch-lift:
+      0 0 0 1px hsl(var(--blue-hsl) / 0.35),
+      0 4px 14px hsl(var(--blue-hsl) / 0.28),
+      0 2px 5px hsl(var(--blue-hsl) / 0.16);
+    box-shadow: var(--home-pitch-lift);
+    animation: none;
+    opacity: 1;
+    filter: none;
+  }
+  .home-pitch-card:hover {
+    transform: translateY(-2px) scale(1.04);
+  }
+  /* Demote everyone else so the blue focus reads clearly. */
+  #home-page:not(.is-scroll-interaction)
+    .home-squad-page-pitch:has(.home-pitch-card:is(:hover, .is-home-cross-hover, .is-owner-pinned))
+    .home-pitch-card:not(:hover):not(.is-home-cross-hover):not(.is-owner-pinned) {
+    opacity: 0.42;
+    filter: saturate(0.55) brightness(0.92);
+  }
+  html[data-theme="light"] .home-dashboard .home-pitch-card:hover,
+  html[data-theme="light"] .home-dashboard .home-pitch-card.is-home-cross-hover,
+  html[data-theme="light"] .home-dashboard .home-pitch-card.is-owner-pinned {
+    --home-pitch-lift:
+      0 0 0 1px hsl(var(--blue-hsl) / 0.28),
+      0 5px 16px hsl(var(--blue-hsl) / 0.22),
+      0 2px 5px hsl(var(--blue-hsl) / 0.12);
+  }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) and (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-card:hover,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-card.is-home-cross-hover,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-card.is-owner-pinned {
+    --home-pitch-lift:
+      0 0 0 1px hsl(var(--blue-hsl) / 0.28),
+      0 5px 16px hsl(var(--blue-hsl) / 0.22),
+      0 2px 5px hsl(var(--blue-hsl) / 0.12);
+  }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .home-pitch-card {
+    transition: box-shadow 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
+  }
+  .home-pitch-card:hover {
+    transform: none;
+  }
 }
 /* Single outer frame — always above photo, name, strip, badges. */
 .home-pitch-card::after {
@@ -20811,7 +20986,7 @@ html[data-theme="light"] .home-dashboard .home-pitch-imp {
   background: hsl(215 20% 20% / 0.08);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-card {
-  --home-pitch-lift: 0 1px 3px hsl(215 25% 20% / 0.08);
+  --home-pitch-lift: 0 1px 2px hsl(215 25% 20% / 0.07), 0 2px 6px hsl(215 25% 18% / 0.08);
   box-shadow: var(--home-pitch-lift);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-pts {
@@ -20834,6 +21009,24 @@ html[data-theme="light"] .home-dashboard .home-pitch-pts.is-idle {
   background: hsl(220 14% 16%);
   color: hsl(210 12% 78%);
 }
+/* Dark: points strip = light cool slate + dark type (inverse contrast of light,
+   not pure white — sits with --ring / zinc family). */
+html[data-theme="dark"] .home-dashboard .home-pitch-pts {
+  background: hsl(240 6% 84%);
+  color: hsl(240 10% 10%);
+}
+html[data-theme="dark"] .home-dashboard .home-pitch-pts.is-idle {
+  background: hsl(240 5% 72%);
+  color: hsl(240 6% 22%);
+}
+html[data-theme="dark"] .home-dashboard .home-pitch-pts.is-live {
+  color: #fff;
+  background: hsl(var(--delta-rise));
+}
+html[data-theme="dark"] .home-dashboard .home-pitch-pts.is-live.is-idle {
+  color: hsl(0 0% 100% / 0.88);
+  background: hsl(var(--delta-rise) / 0.82);
+}
 html[data-theme="light"] .home-dashboard .home-pitch-price.is-idle,
 html[data-theme="light"] .home-dashboard .home-pitch-form-cell.is-zero,
 html[data-theme="light"] .home-dashboard .home-pitch-fx-cell.is-blank,
@@ -20851,7 +21044,7 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-card {
-    --home-pitch-lift: 0 1px 3px hsl(215 25% 20% / 0.08);
+    --home-pitch-lift: 0 1px 2px hsl(215 25% 20% / 0.07), 0 2px 6px hsl(215 25% 18% / 0.08);
     box-shadow: var(--home-pitch-lift);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts {
@@ -20888,6 +21081,24 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-photo-crest,
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-photo-fallback {
     background: hsl(215 20% 20% / 0.04);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-pts {
+    background: hsl(240 6% 84%);
+    color: hsl(240 10% 10%);
+  }
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-pts.is-idle {
+    background: hsl(240 5% 72%);
+    color: hsl(240 6% 22%);
+  }
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-pts.is-live {
+    color: #fff;
+    background: hsl(var(--delta-rise));
+  }
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-pts.is-live.is-idle {
+    color: hsl(0 0% 100% / 0.88);
+    background: hsl(var(--delta-rise) / 0.82);
   }
 }
 .home-pitch-opp {
@@ -22722,11 +22933,22 @@ html[data-theme="dark"] .home-standings-chip-badge[data-chip] {
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  margin-top: 2px;
-  padding-top: 4px;
-  border-top: 1px solid hsl(var(--border) / 0.75);
+  margin-top: 3px;
+  padding: 4px 6px;
+  border-top: none;
+  border-radius: 5px;
+  background: hsl(var(--muted-foreground) / 0.07);
+  box-sizing: border-box;
   font-size: 11px;
   line-height: 1.25;
+}
+html[data-theme="dark"] .home-transfer-net {
+  background: hsl(var(--muted-foreground) / 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-transfer-net {
+    background: hsl(var(--muted-foreground) / 0.14);
+  }
 }
 .home-transfer-net-label {
   flex: none;
@@ -23550,7 +23772,9 @@ html[data-page="home"] #subtoolbar {
   }
   html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-squad-table tbody tr.home-squad-row.is-home-cross-hover > td,
   html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-standings-table tbody tr[data-entry].is-home-cross-hover > td,
-  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-feed-table tbody tr.home-feed-row.is-home-cross-hover > td {
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-feed-table tbody tr.home-feed-row.is-home-cross-hover > td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-squad-table tbody tr.home-squad-row.is-owner-pinned > td,
+  html.home-squad-wide #home-page:not(.is-scroll-interaction) .home-feed-table tbody tr.home-feed-row.is-owner-pinned > td {
     --home-row-bg: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, hsl(var(--card)));
     background: var(--home-row-bg);
   }

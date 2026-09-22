@@ -4875,6 +4875,7 @@
 
   function homeOwnerBannerPlayerName() {
     if (!homeOwnerPin || homeOwnerPin.type !== "element") return "";
+    if (homeOwnerPin.name) return String(homeOwnerPin.name);
     const eid = Number(homeOwnerPin.id);
     let name = "";
     forEachHomeSquadRow((tr) => {
@@ -4886,7 +4887,9 @@
     if (name) return name;
     const squad = homeSquadForEntry(homeActiveViewEntryId()) || [];
     const row = squad.find((r) => Number(r.element) === eid);
-    return (row && row.name) || "Player";
+    if (row && row.name) return row.name;
+    const lookup = homeLookupRowForElement(eid);
+    return (lookup && lookup.name) || "Player";
   }
 
   function clearHomeOwnerPin() {
@@ -4896,7 +4899,25 @@
     }
     if (!homeOwnerPin) return false;
     homeOwnerPin = null;
+    clearHomeCrossHover();
     syncHomeOwnerHighlights();
+    syncHomeOwnerBanner();
+    return true;
+  }
+
+  /** Desktop: pin owners highlight, close GW pts / details, show bottom chip. */
+  function pinHomePlayerOwnership(row = homeGwPtsLookupRow || homeLookupPlayer) {
+    if (!row || preferMobileSheet()) return false;
+    const eid = Number(homeLookupElementId(row));
+    if (!Number.isFinite(eid)) return false;
+    homeOwnerPin = {
+      type: "element",
+      id: eid,
+      name: row.name || "",
+    };
+    clearHomeCrossHover();
+    homeGwPtsLookupRow = null;
+    clearHomePlayerLookup({ keepOwnerPin: true });
     syncHomeOwnerBanner();
     return true;
   }
@@ -4926,12 +4947,14 @@
 
   function syncHomeOwnerBanner() {
     const banner = el.homeOwnerBanner;
-    if (!banner) return;
-    // Lookup mode uses the player detail card — skip the ownership toast.
     const pinOn =
       !!(homeOwnerPin && homeOwnerPin.type === "element") &&
       !homeIsViewingOtherManager() &&
       !homeLookupPlayer;
+    if (el.homeBento) el.homeBento.classList.toggle("is-owner-pinning", pinOn);
+    if (el.homePage) el.homePage.classList.toggle("is-owner-pinning", pinOn);
+    if (!banner) return;
+    // Lookup mode uses the player detail card — skip the ownership chip.
     if (!pinOn) {
       hideHomeOwnerBannerToast();
       return;
@@ -5006,6 +5029,20 @@
       tr.classList.remove("is-owner-match", "is-owner-source");
       tr.classList.toggle("is-owner-pinned", isPinned);
     });
+    document.querySelectorAll("#home-page .home-pitch-card").forEach((card) => {
+      const eid = Number(card.dataset.element);
+      const isPinned =
+        elementPin && Number.isFinite(eid) && Number(elementPin.id) === eid;
+      card.classList.toggle("is-owner-pinned", !!isPinned);
+    });
+    if (el.homeFeedPanel) {
+      el.homeFeedPanel.querySelectorAll("tr.home-feed-row").forEach((tr) => {
+        const eid = Number(tr.dataset.element);
+        const isPinned =
+          elementPin && Number.isFinite(eid) && Number(elementPin.id) === eid;
+        tr.classList.toggle("is-owner-pinned", !!isPinned);
+      });
+    }
     if (el.homeStandingsBody) el.homeStandingsBody.classList.remove("has-owner-filter");
     if (el.homeStandingsTransfersBody) {
       el.homeStandingsTransfersBody.classList.remove("has-owner-filter");
@@ -7566,6 +7603,7 @@
       state.page === "home"
       && homeSquadIsWideLayout()
       && homeSquadIsDesktopLayout()
+      && !(homeOwnerPin && homeOwnerPin.type === "element")
       && typeof window.matchMedia === "function"
       && window.matchMedia("(hover: hover) and (pointer: fine)").matches
     );
@@ -7597,6 +7635,10 @@
       if (Number(tr.dataset.element) === eid) tr.classList.add("is-home-cross-hover");
     });
 
+    document.querySelectorAll("#home-page .home-pitch-card").forEach((card) => {
+      if (Number(card.dataset.element) === eid) card.classList.add("is-home-cross-hover");
+    });
+
     const owners = homeOwnersForElement(eid);
     forEachHomeStandingsRow((tr) => {
       const entry = Number(tr.dataset.entry);
@@ -7613,7 +7655,7 @@
   function bindHomeCrossHover() {
     if (!el.homeSquadTrack || !el.homeTablesGrid) return;
 
-    const hoverRowSelector = "tr.home-squad-row, tr.home-feed-row";
+    const hoverRowSelector = "tr.home-squad-row, tr.home-feed-row, .home-pitch-card";
 
     function bindHomeCrossHoverSource(container) {
       if (!container) return;
@@ -8566,11 +8608,28 @@
       `<div class="home-gw-pts">` +
       homePlayerIdentityHeadHTML(row) +
       `<ul class="home-gw-pts-list">${rows}${totalRow}</ul>` +
+      `<div class="home-gw-pts-actions">` +
+      (homeGwPtsPinAvailable(row)
+        ? (
+          `<button type="button" class="ghost-btn icon-only-btn home-gw-pts-pin-btn" data-home-gw-pts-pin` +
+          ` aria-label="Pin owners of ${escapeHtml(row.name || "player")}"` +
+          ` title="Pin owners in league">` +
+          `<svg class="icon" aria-hidden="true"><use href="#i-map-pin"></use></svg>` +
+          `</button>`
+        )
+        : "") +
       `<button type="button" class="ghost-btn home-gw-pts-details-btn" data-home-gw-pts-details>` +
       `Player Details` +
       `</button>` +
+      `</div>` +
       `</div>`
     );
+  }
+
+  /** Desktop only — pin owners from the GW points popup (before full details). */
+  function homeGwPtsPinAvailable(row) {
+    if (!row || preferMobileSheet()) return false;
+    return Number.isFinite(Number(homeLookupElementId(row)));
   }
 
   function homeSquadPitchOppMeta(row) {
@@ -8826,9 +8885,10 @@
     return { outs, ins, hasAny: outs.length > 0 || ins.length > 0 };
   }
 
+
   /**
    * True when we have projected/applied autosubs and FPL totals may still catch up
-   * (live fixtures, or finished-but-not-final). No point recalculation — flags only.
+   * (live fixtures, or finished-but-not-final).
    */
   function homeAutosubOfficialMayLag(squad) {
     const { hasAny } = homeSquadAutosubPairs(squad);
@@ -8842,7 +8902,160 @@
     return false;
   }
 
+  /** Points that should land once FPL stamps projected autosubs, vs current GW total. */
+  function homeAutosubPendingGwDelta(squad) {
+    if (!homeAutosubOfficialMayLag(squad)) return 0;
+    return homeAutosubPendingGwDeltaFromSquad(squad);
+  }
+
+  function homeAutosubPendingGwDeltaFromSquad(squad) {
+    const { outs, ins, hasAny } = homeSquadAutosubPairs(squad);
+    if (!hasAny) return 0;
+    let lost = 0;
+    for (const out of outs) {
+      const n = Number(out.gwPoints);
+      if (Number.isFinite(n)) lost += n;
+    }
+    let gained = 0;
+    for (const inn of ins) {
+      const baseRaw =
+        inn.basePoints != null ? Number(inn.basePoints) : Number(inn.gwPoints);
+      const base = Number.isFinite(baseRaw) ? baseRaw : 0;
+      let mult = Number(inn.multiplier) || 0;
+      if (mult <= 0) mult = 1;
+      gained += base * mult;
+    }
+    const delta = Math.round(gained - lost);
+    return Number.isFinite(delta) ? delta : 0;
+  }
+
+  function homeAutosubPtsDeltaHTML(delta, { title = "Pending auto-sub points" } = {}) {
+    const n = Number(delta);
+    if (!Number.isFinite(n) || n === 0) return "";
+    const sign = n > 0 ? "+" : "";
+    return (
+      `<span class="home-autosub-pts-delta" title="${escapeHtml(title)}">` +
+      `(${sign}${n})` +
+      `</span>`
+    );
+  }
+
+  function appendHomeAutosubPtsDelta(host, delta, opts) {
+    if (!host) return;
+    host.querySelectorAll(".home-autosub-pts-delta:not(.is-league-places)").forEach((node) => {
+      node.remove();
+    });
+    const html = homeAutosubPtsDeltaHTML(delta, opts);
+    if (!html) return;
+    host.insertAdjacentHTML("beforeend", html);
+  }
+
+  /** True when provisional autosubs in the league could still reshape standings. */
+  function homeAutosubLeagueReshufflePending() {
+    const standings = (HOME && HOME.standings) || [];
+    for (const row of standings) {
+      const sq = homeSquadForEntry(row.entry) || [];
+      if (!homeSquadAutosubPairs(sq).hasAny) continue;
+      if (typeof liveGwHasActiveGames === "function" && liveGwHasActiveGames()) return true;
+      for (const p of sq) {
+        for (const fx of homeSquadFixtures(p)) {
+          if (fx && fx.finished && fx.final !== true) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * League places gained/lost once projected autosubs stamp for everyone.
+   * Positive = climb (rank number drops); negative = someone jumps you.
+   */
+  function homeAutosubPendingLeaguePlaces(entryId = homeActiveViewEntryId()) {
+    const focus = Number(entryId);
+    if (!Number.isFinite(focus) || focus <= 0) return 0;
+    if (!homeAutosubLeagueReshufflePending()) return 0;
+
+    const standings = (HOME && HOME.standings) || [];
+    if (!standings.length) return 0;
+
+    const rows = standings.map((row) => {
+      const eid = Number(row.entry);
+      const total = Number(row.total);
+      const totalN = Number.isFinite(total) ? total : 0;
+      const sq = homeSquadForEntry(eid) || [];
+      const bonus = homeAutosubPendingGwDeltaFromSquad(sq);
+      const curRank =
+        homePositiveRank(row.rankOfficial) ??
+        homePositiveRank(row.rankLive) ??
+        9999;
+      return {
+        entry: eid,
+        total: totalN,
+        bonus,
+        projected: totalN + bonus,
+        currentRank: curRank,
+      };
+    });
+
+    const currentOrder = [...rows].sort((a, b) => {
+      if (a.currentRank !== b.currentRank) return a.currentRank - b.currentRank;
+      return b.total - a.total;
+    });
+    const currentRankOf = new Map();
+    currentOrder.forEach((r, i) => currentRankOf.set(r.entry, i + 1));
+
+    const projectedOrder = [...rows].sort((a, b) => {
+      if (b.projected !== a.projected) return b.projected - a.projected;
+      return (currentRankOf.get(a.entry) || 9999) - (currentRankOf.get(b.entry) || 9999);
+    });
+    const projectedRankOf = new Map();
+    projectedOrder.forEach((r, i) => projectedRankOf.set(r.entry, i + 1));
+
+    const cur = currentRankOf.get(focus);
+    const proj = projectedRankOf.get(focus);
+    if (!cur || !proj) return 0;
+    return cur - proj;
+  }
+
+  function appendHomeAutosubLeaguePlacesDelta(places) {
+    const host = el.homeLeagueRank;
+    const num = el.homeLeagueRankNum;
+    if (!host) return;
+    host.querySelectorAll(".home-autosub-pts-delta.is-league-places").forEach((node) => {
+      node.remove();
+    });
+    const n = Number(places);
+    if (!Number.isFinite(n) || n === 0) return;
+    if (!num || !host.contains(num)) return;
+    const sign = n > 0 ? "+" : "";
+    const title =
+      n > 0
+        ? `Projected +${n} league place${n === 1 ? "" : "s"} after auto-subs`
+        : `Projected ${n} league place${n === -1 ? "" : "s"} after auto-subs`;
+    num.insertAdjacentHTML(
+      "afterend",
+      `<span class="home-autosub-pts-delta is-league-places" title="${escapeHtml(title)}">(${sign}${n})</span>`
+    );
+  }
+
+  function syncHomeAutosubPtsDeltas(squad) {
+    const rows = squad || homeSquadForEntry(homeActiveViewEntryId()) || [];
+    const delta = homeAutosubPendingGwDelta(rows);
+    [el.homeGwPoints, el.homeTotalPoints].forEach((host) => {
+      if (!host) return;
+      if (!host.querySelector(".home-stat-roll")) {
+        host.querySelectorAll(".home-autosub-pts-delta:not(.is-league-places)").forEach((node) => {
+          node.remove();
+        });
+        return;
+      }
+      appendHomeAutosubPtsDelta(host, delta);
+    });
+    appendHomeAutosubLeaguePlacesDelta(homeAutosubPendingLeaguePlaces());
+  }
+
   function homeAutosubNoticeTip(squad) {
+    const leaguePlaces = homeAutosubPendingLeaguePlaces();
     const { outs, ins } = homeSquadAutosubPairs(squad);
     const bits = [];
     for (const out of outs) {
@@ -8856,7 +9069,14 @@
       }
     }
     const swaps = bits.length ? bits.join(" · ") : "Bench cover for blank starters";
-    return `Auto-subs detected (${swaps}). Official GW points and ranks update when FPL settles — usually by 09:00 UK the day after the last match.`;
+    const delta = homeAutosubPendingGwDeltaFromSquad(squad);
+    const parts = [];
+    if (delta !== 0) parts.push(`${delta > 0 ? "+" : ""}${delta} GW pts`);
+    if (leaguePlaces !== 0) {
+      parts.push(`${leaguePlaces > 0 ? "+" : ""}${leaguePlaces} league place${Math.abs(leaguePlaces) === 1 ? "" : "s"}`);
+    }
+    const deltaBit = parts.length ? ` About ${parts.join(", ")} once FPL stamps them.` : "";
+    return `Auto-subs detected (${swaps}). Official GW points and ranks update when FPL settles — usually by 09:00 UK the day after the last match.${deltaBit}`;
   }
 
   function syncHomeHeroAutosubNotice(squad) {
@@ -10257,10 +10477,10 @@
 
   function homeFormChartSvg(series, spec, { accent = "", average = null, enter = true, enterDelayMs = 0 } = {}) {
     const W = 320;
-    const H = 148;
+    const H = 156;
     const padL = 28;
     const padR = 8;
-    const padT = 12;
+    const padT = 18;
     const padB = 22;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
@@ -10336,16 +10556,38 @@
       })
       .join("");
 
+    // Value badges last so they sit above grid / avg / threshold lines.
+    const vals = series
+      .map((s, i) => {
+        if (s.empty || s.value == null || !(Number(s.value) > 0)) return "";
+        const cx = padL + slot * i + slot / 2;
+        const h = Math.max(2, (Math.max(0, s.value) / maxVal) * plotH);
+        const y = padT + plotH - h;
+        const text =
+          spec.decimals > 0 ? Number(s.value).toFixed(spec.decimals) : String(Math.round(s.value));
+        const pillW = Math.max(14, 6 + String(text).length * 5.4);
+        const pillH = 12;
+        const pillX = cx - pillW / 2;
+        const pillY = Math.max(1, y - pillH - 3);
+        const textY = pillY + pillH / 2 + 3.1;
+        return `<g class="home-form-val" style="--bar-i:${i}">
+          <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH}" rx="6" ry="6" />
+          <text x="${cx.toFixed(1)}" y="${textY.toFixed(1)}" text-anchor="middle">${escapeHtml(text)}</text>
+        </g>`;
+      })
+      .join("");
+
     const enterCls = prefersReducedMotion() || enter === false ? "" : " is-enter";
     const delayMs = Math.max(0, Number(enterDelayMs) || 0);
     const delayStyle = delayMs > 0 ? `--form-enter-delay:${delayMs}ms;` : "";
-    // Paint order: grid → threshold → bars → avg line/pill on top (z).
+    // Paint order: grid → threshold → bars → avg → value badges (top z).
     return `<svg class="home-form-svg${enterCls}" style="--form-bar-n:${series.length};${delayStyle}" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="${escapeHtml(spec.label)} by gameweek">
       ${grid}
       ${thrSvg}
       <line class="home-form-axis" x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" />
       ${bars}
       ${avgSvg}
+      ${vals}
     </svg>`;
   }
 
@@ -12690,6 +12932,13 @@
     if (!card || card.dataset.homeGwPtsBound === "1") return;
     card.dataset.homeGwPtsBound = "1";
     card.addEventListener("click", (e) => {
+      const pinBtn = e.target.closest("[data-home-gw-pts-pin]");
+      if (pinBtn && card.contains(pinBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        pinHomePlayerOwnership(homeGwPtsLookupRow);
+        return;
+      }
       const btn = e.target.closest("[data-home-gw-pts-details]");
       if (!btn || !card.contains(btn)) return;
       e.preventDefault();
@@ -13104,14 +13353,14 @@
     syncMobileFilterDock();
   }
 
-  function clearHomePlayerLookup({ rerender = true } = {}) {
+  function clearHomePlayerLookup({ rerender = true, keepOwnerPin = false } = {}) {
     homeLookupPlayer = null;
     homeGwPtsLookupRow = null;
     homeLookupStatMode = 0;
     homeLookupFormMode = 0;
     homeOwnChartWindowIdx = 0;
     clearHomeCompareState();
-    if (homeOwnerPin && homeOwnerPin.type === "element") {
+    if (!keepOwnerPin && homeOwnerPin && homeOwnerPin.type === "element") {
       homeOwnerPin = null;
     }
     if (el.homeDesktopSearchInput) {
@@ -13123,8 +13372,13 @@
     closeHomePlayerGwPointsOverlay({ keepRow: true });
     closeHomePlayerDetailOverlay();
     if (teamDetailsCode) clearTeamDetails();
-    if (rerender) syncHomeLookupUI();
-    else syncHomeOwnerHighlights();
+    if (rerender) {
+      syncHomeLookupUI();
+      syncHomeOwnerBanner();
+    } else {
+      syncHomeOwnerHighlights();
+      syncHomeOwnerBanner();
+    }
   }
 
   function setHomePlayerLookup(row) {
@@ -13740,6 +13994,8 @@
       : summary.gwPoints != null && Number.isFinite(Number(summary.gwPoints))
         ? Number(summary.gwPoints)
         : null;
+    const autosubSquad = homeSquadForEntry(homeActiveViewEntryId()) || [];
+    const autosubDelta = homeAutosubPendingGwDelta(autosubSquad);
     if (el.homeGwPoints) {
       if (gwVal == null) {
         el.homeGwPoints.textContent = "—";
@@ -13749,6 +14005,7 @@
           decimals: 0,
           className: "home-stat-roll",
         });
+        appendHomeAutosubPtsDelta(el.homeGwPoints, autosubDelta);
       }
     }
     const overallRankEl = el.homeOverallRankNum || el.homeOverallRank;
@@ -13789,6 +14046,7 @@
         el.homeTotalPoints.textContent = "—";
       } else {
         el.homeTotalPoints.innerHTML = homeRankStatRollHTML(Number(summary.overallPoints), 0);
+        appendHomeAutosubPtsDelta(el.homeTotalPoints, autosubDelta);
       }
     }
     const leagueRankEl = el.homeLeagueRankNum || el.homeLeagueRank;
@@ -13801,6 +14059,13 @@
         });
       }
     }
+    appendHomeAutosubLeaguePlacesDelta(
+      summary.leagueRank != null
+        && Number.isFinite(Number(summary.leagueRank))
+        && Number(summary.leagueRank) > 0
+        ? homeAutosubPendingLeaguePlaces()
+        : 0
+    );
   }
 
   function finishHomeStatRolls(root, { summary = true, tables = true } = {}) {
@@ -13894,6 +14159,7 @@
         className: "home-stat-roll",
       });
     });
+    syncHomeAutosubPtsDeltas();
   }
 
   function animateHomeImpBars(root, { animate = true } = {}) {
@@ -34538,6 +34804,7 @@
 
   const ANIMATIONS_KEY = "fpl-explorer-animations";
 
+
   function odometerModeIsSfi() {
     return document.documentElement.classList.contains("odometer-sfi");
   }
@@ -34672,6 +34939,8 @@
     });
   }
   applyAnimationsEnabled(animationsEnabled(), { preview: false });
+  try { localStorage.removeItem("fpl-explorer-autosub-preview"); } catch { /* ignore */ }
+
 
   // Player thumbs locked to kit — prefs UI removed.
   document.documentElement.classList.add("player-thumbs-kit");

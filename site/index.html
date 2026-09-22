@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1497" />
+<link rel="stylesheet" href="styles.css?v=1511" />
 <link rel="stylesheet" href="motion-enhanced.css?v=8" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -899,16 +899,6 @@
       </div>
       <div id="home-bento" class="home-dashboard" hidden>
         <p class="home-deadline" id="home-deadline" hidden></p>
-        <div id="home-owner-banner" class="home-view-banner home-owner-banner" hidden>
-          <div class="home-view-banner-copy">
-            <span class="home-view-banner-label">Owners</span>
-            <strong class="home-view-banner-name" id="home-owner-banner-name"></strong>
-          </div>
-          <button type="button" class="home-view-banner-clear icon-only-btn" id="home-owner-banner-clear"
-            aria-label="Clear ownership highlight" title="Clear ownership highlight">
-            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-          </button>
-        </div>
         <div class="home-summary" id="home-summary" data-home-summary="hero">
           <div class="home-summary-hero" id="home-summary-hero">
             <div class="home-summary-hero-head">
@@ -1783,6 +1773,14 @@
     <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
   </button>
 </div>
+<div id="home-owner-banner" class="home-view-chip home-owner-chip" hidden>
+  <svg class="icon home-view-chip-icon" aria-hidden="true"><use href="#i-map-pin"/></svg>
+  <strong class="home-view-chip-name" id="home-owner-banner-name"></strong>
+  <button type="button" class="home-view-chip-clear icon-only-btn" id="home-owner-banner-clear"
+    aria-label="Clear ownership highlight" title="Clear ownership highlight">
+    <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+  </button>
+</div>
 <div id="mobile-view-dock" class="mobile-view-dock" hidden aria-hidden="true"></div>
 <div id="mobile-filter-dock" class="mobile-filter-dock" hidden aria-hidden="true"></div>
 <div id="mobile-sheet" class="mobile-sheet" hidden aria-hidden="true">
@@ -1932,7 +1930,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1415"></script>
+<script src="app.js?v=1421"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
