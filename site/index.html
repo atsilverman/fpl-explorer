@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1511" />
-<link rel="stylesheet" href="motion-enhanced.css?v=8" />
+<link rel="stylesheet" href="styles.css?v=1546" />
+<link rel="stylesheet" href="motion-enhanced.css?v=11" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
 (() => {
@@ -78,6 +78,9 @@
       root.classList.add("is-embedded-browser");
     }
     root.setAttribute("data-home-surface", "glass");
+    try {
+      localStorage.removeItem("fpl-explorer-nameplate-edges");
+    } catch (_) {}
     const PAGE_KEY = "fpl-explorer-page";
     // Keep in sync with app.js PAGES / PLANNER_NAV_ENABLED / REPORT_NAV_ENABLED —
     // missing entries flash the wrong shell before JS loads (e.g. omitting "live"
@@ -557,6 +560,22 @@
               <input type="checkbox" id="prefs-animations" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
+            <label class="settings-switch-row" for="prefs-home-tilt">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Home tilt</span>
+                <span class="settings-switch-hint">On phone, pitch cards and overall rank gently track device tilt (asks for motion access once).</span>
+              </span>
+              <input type="checkbox" id="prefs-home-tilt" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
+            <label class="settings-switch-row" for="prefs-mock-live">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Mock live</span>
+                <span class="settings-switch-hint">Preview live chrome: in-play players, Live badge, chips, autosubs, and pending ± pts / places. Does not write to FPL.</span>
+              </span>
+              <input type="checkbox" id="prefs-mock-live" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
           </section>
           <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
@@ -985,11 +1004,14 @@
                 <div class="home-squad-pitch" id="home-squad-pitch" aria-label="Squad pitch">
                   <!-- Compact pitch framed around the XI (bench sits below, like the list). -->
                   <svg class="home-squad-pitch-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                    <rect x="3" y="3" width="94" height="94" rx="2.2" fill="none" />
-                    <!-- Full halfway line through the centre circle (drawn under the circle stroke). -->
-                    <line x1="3" y1="52" x2="97" y2="52" />
-                    <circle cx="50" cy="52" r="11" fill="none" />
-                    <circle class="home-squad-pitch-spot" cx="50" cy="52" r="0.85" />
+                    <!-- Open bottom: L/R sidelines terminate (no far endline). -->
+                    <path d="M 3 97 L 3 5.2 Q 3 3 5.2 3 L 94.8 3 Q 97 3 97 5.2 L 97 97" fill="none" />
+                    <!-- Halfway + centre sit lower so the top half (GK→MID) reads larger.
+                         Circle is an ellipse; rx/ry are corrected in JS so non-square
+                         pitch boxes don't stretch it into an oval. -->
+                    <line x1="3" y1="69" x2="97" y2="69" />
+                    <ellipse class="home-squad-pitch-circle" cx="50" cy="69" rx="11" ry="11" fill="none" />
+                    <ellipse class="home-squad-pitch-spot" cx="50" cy="69" rx="0.85" ry="0.85" />
                     <!-- Penalty / 6-yard / goal — flush to endline (y=3); soft inner corners. -->
                     <path d="M 22 3 L 22 20 Q 22 22 24 22 L 76 22 Q 78 22 78 20 L 78 3" fill="none" />
                     <path d="M 36 3 L 36 9.6 Q 36 11 37.4 11 L 62.6 11 Q 64 11 64 9.6 L 64 3" fill="none" />
@@ -1930,7 +1952,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1421"></script>
+<script src="app.js?v=1430"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

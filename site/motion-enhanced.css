@@ -19,9 +19,14 @@ html.motion-enhanced {
   --modal-scale: 0.96;
   --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --panel-open-dur: 400ms;
+  --panel-close-dur: 350ms;
   --panel-translate-y: 100px;
   --panel-blur: 2px;
   --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Toast — bottom floating docks (Filters / Search / view) */
+  --toast-open: 350ms;
+  --toast-close: 250ms;
+  --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --digit-dur: 500ms;
   --digit-distance: 8px;
   --digit-blur: 2px;
@@ -64,6 +69,11 @@ html.motion-enhanced {
 
   /* Remap site-wide ease used by sheets / enters / docks */
   --ease-out: var(--ease-smooth-out);
+  /* Mobile chrome scroll hide / show — one stable clock (changing
+     transition* in the same frame as transform skips the tween in WebKit). */
+  --chrome-nav-dur: 420ms;
+  --chrome-dock-dur: 420ms;
+  --chrome-ease: var(--ease-smooth-out);
 }
 
 /* —— Dropdowns / prefs (menu-dropdown) —— */
@@ -379,16 +389,27 @@ html.motion-enhanced .page-tab-btn {
   }
 }
 
-/* —— Dock / chrome fade —— */
-html.motion-enhanced .mobile-view-dock,
-html.motion-enhanced .mobile-filter-dock {
-  transition:
-    transform var(--duration-medium) var(--ease-smooth-out),
-    opacity var(--duration-medium) var(--ease-smooth-out);
+/* —— Mobile chrome scroll hide / show ——
+   Transform-only slides with a single unchanging transition declaration.
+   (Re-declaring transition on the hidden state + animating from `none`
+   caused instant snaps in embedded mobile previews / WebKit.) */
+html.motion-enhanced.is-mobile-layout .page-nav,
+html.motion-enhanced.is-mobile-layout .topbar,
+html.motion-enhanced.is-mobile-layout #subtoolbar {
+  transition: transform var(--chrome-nav-dur) var(--chrome-ease);
+  will-change: transform;
 }
-
-html.motion-enhanced .mobile-scroll-top-fade {
-  transition: opacity var(--duration-fast) var(--ease-smooth-out);
+html.motion-enhanced.is-mobile-layout .layout {
+  transition: padding-top var(--chrome-nav-dur) var(--chrome-ease);
+}
+html.motion-enhanced .mobile-view-dock,
+html.motion-enhanced .mobile-filter-dock,
+html.motion-enhanced .fixtures-sos-fab {
+  transition: transform var(--chrome-dock-dur) var(--chrome-ease);
+  will-change: transform;
+}
+html.motion-enhanced .mobile-chrome-fade {
+  transition: opacity var(--chrome-dock-dur) var(--chrome-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -423,5 +444,16 @@ html.motion-enhanced .mobile-scroll-top-fade {
     filter: none !important;
     transform: none !important;
     scroll-behavior: auto !important;
+  }
+  /* Chrome still hides/shows via transform — just skip the tween. */
+  html.motion-enhanced.is-mobile-layout .page-nav,
+  html.motion-enhanced.is-mobile-layout .topbar,
+  html.motion-enhanced.is-mobile-layout #subtoolbar,
+  html.motion-enhanced.is-mobile-layout .layout,
+  html.motion-enhanced .mobile-view-dock,
+  html.motion-enhanced .mobile-filter-dock,
+  html.motion-enhanced .fixtures-sos-fab,
+  html.motion-enhanced .mobile-chrome-fade {
+    transition: none !important;
   }
 }

@@ -1455,6 +1455,8 @@
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
     prefsAnimations: $("#prefs-animations"),
+    prefsHomeTilt: $("#prefs-home-tilt"),
+    prefsMockLive: $("#prefs-mock-live"),
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
     fontPairSelect: $("#font-pair-select"),
@@ -3877,6 +3879,7 @@
 
   /** Baked HOME can retain stale live flags between refreshes — wait for live poll or session snapshot. */
   function homeTrustLiveMatchState() {
+    if (mockLiveEnabled()) return true;
     return homeCanShowVolatileStats();
   }
 
@@ -4757,7 +4760,187 @@
   function homeStandingForEntry(entryId) {
     const id = Number(entryId);
     if (!Number.isFinite(id)) return null;
-    return (HOME.standings || []).find((r) => Number(r.entry) === id) || null;
+    const row = (HOME.standings || []).find((r) => Number(r.entry) === id) || null;
+    if (!row) return null;
+    return mockLiveEnabled() ? applyMockLiveStanding(row) : row;
+  }
+
+  function homeStandingsRows() {
+    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    if (!mockLiveEnabled()) return rows;
+    return rows.map((row) => applyMockLiveStanding(row));
+  }
+
+  function mockLiveEnabled() {
+    try {
+      return localStorage.getItem("fpl-explorer-mock-live") === "on";
+    } catch {
+      return false;
+    }
+  }
+
+  /** Deterministic mock chip / autosub buckets from entry id. */
+  function mockLiveEntryBucket(entryId) {
+    const n = Number(entryId);
+    if (!Number.isFinite(n)) return 0;
+    return Math.abs(Math.trunc(n)) % 5;
+  }
+
+  function applyMockLiveStanding(row) {
+    if (!row || typeof row !== "object") return row;
+    const eid = Number(row.entry);
+    const gw = Number(HOME && HOME.gw);
+    const event = Number.isFinite(gw) && gw > 0 ? gw : 1;
+    const configured = homeConfiguredEntryId();
+    const bucket = mockLiveEntryBucket(eid);
+    const chipsIn = row.chips && typeof row.chips === "object" ? row.chips : {};
+    const chips = { ...chipsIn };
+    const out = { ...row, chips };
+    if (eid === configured || bucket === 1) {
+      out.activeChip = "wildcard";
+      chips.wildcard = { status: "active", event, label: "Wildcard" };
+    } else if (bucket === 2) {
+      out.activeChip = "bboost";
+      chips.bboost = { status: "active", event, label: "Bench Boost" };
+    } else if (bucket === 3) {
+      out.activeChip = "";
+      chips.wildcard = {
+        status: "used",
+        event: Math.max(1, event - 1),
+        label: "Wildcard",
+      };
+    } else if (bucket === 4) {
+      out.activeChip = "freehit";
+      chips.freehit = { status: "active", event, label: "Free Hit" };
+    }
+    return out;
+  }
+
+  function mockLiveAutosubPlan(entryId) {
+    const configured = homeConfiguredEntryId();
+    const eid = Number(entryId);
+    if (eid === configured) return "gain";
+    const bucket = mockLiveEntryBucket(eid);
+    if (bucket === 0 || bucket === 2) return "gain-small";
+    if (bucket === 1 || bucket === 4) return "loss";
+    return null;
+  }
+
+  function applyMockLiveSquad(squad, entryId) {
+    if (!Array.isArray(squad) || !squad.length) return squad;
+    const eid = Number(entryId) || 0;
+    const rows = squad.map((r) => ({
+      ...r,
+      fixtures: Array.isArray(r.fixtures)
+        ? r.fixtures.map((fx) => (fx && typeof fx === "object" ? { ...fx } : fx))
+        : [],
+    }));
+    const starters = rows.filter((r) => r && r.starter && !r.onBench);
+    const bench = rows.filter((r) => r && (r.onBench || !r.starter));
+
+    // Mark several starters in play (skip every 3rd for mixed finished look).
+    const liveN = Math.min(5, starters.length);
+    for (let i = 0; i < liveN; i++) {
+      if (i > 0 && (eid + i) % 3 === 0) continue;
+      const row = starters[i];
+      if (!row) continue;
+      if (row.autoSubOut) continue;
+      row.live = true;
+      row.matchStatus = "live";
+      const mins = 32 + ((eid + i * 11) % 48);
+      row.minutes = Math.max(Number(row.minutes) || 0, mins);
+      if (!(Number(row.gwPoints) > 0)) {
+        row.gwPoints = 2 + ((eid + i * 3) % 7);
+      }
+      if (!row.fixtures.length) {
+        row.fixtures.push({
+          opp: row.opp || "TBD",
+          oppHa: row.oppHa || "H",
+        });
+      }
+      for (const fx of row.fixtures) {
+        if (!fx || typeof fx !== "object") continue;
+        fx.live = true;
+        fx.finished = false;
+        fx.final = false;
+        fx.minutes = row.minutes;
+        fx.clock = `${Math.min(90, row.minutes)}'`;
+      }
+    }
+
+    const plan = mockLiveAutosubPlan(eid);
+    if (plan && starters.length && bench.length) {
+      const outRow =
+        starters.find((r) => r && !r.isCaptain && !r.isVice) ||
+        starters.find((r) => r && !r.isCaptain) ||
+        starters[0];
+      const inRow =
+        (outRow &&
+          bench.find(
+            (r) => r && r.element !== outRow.element && r.pos && r.pos === outRow.pos
+          )) ||
+        bench.find((r) => r && (!outRow || r.element !== outRow.element)) ||
+        bench[0];
+      if (outRow && inRow && outRow.element !== inRow.element) {
+        const outPts =
+          plan === "loss"
+            ? Math.max(4, Number(outRow.gwPoints) || 5)
+            : plan === "gain"
+              ? 1
+              : 2;
+        const inBase =
+          plan === "loss"
+            ? 0
+            : plan === "gain"
+              ? 6 + (eid % 4)
+              : 3 + (eid % 3);
+
+        outRow.autoSubOut = true;
+        outRow.autoSubIn = false;
+        outRow.autoSubWith = inRow.element;
+        outRow.autoSubWithName = inRow.name || "bench";
+        outRow.gwPoints = outPts;
+        outRow.live = false;
+        outRow.matchStatus = "finished";
+        outRow.minutes = Math.max(Number(outRow.minutes) || 0, 46);
+        if (!outRow.fixtures.length) {
+          outRow.fixtures.push({ opp: outRow.opp || "TBD", oppHa: outRow.oppHa || "H" });
+        }
+        for (const fx of outRow.fixtures) {
+          if (!fx || typeof fx !== "object") continue;
+          fx.live = false;
+          fx.finished = true;
+          fx.final = false;
+          fx.minutes = outRow.minutes;
+          fx.clock = "FT";
+        }
+
+        inRow.autoSubIn = true;
+        inRow.autoSubOut = false;
+        inRow.autoSubWith = outRow.element;
+        inRow.autoSubWithName = outRow.name || "starter";
+        inRow.basePoints = inBase;
+        let mult = Number(inRow.multiplier) || 0;
+        if (mult <= 0) mult = 1;
+        inRow.multiplier = mult;
+        inRow.gwPoints = inBase * mult;
+        inRow.live = true;
+        inRow.matchStatus = "live";
+        inRow.minutes = Math.max(Number(inRow.minutes) || 0, 28 + (eid % 20));
+        if (!inRow.fixtures.length) {
+          inRow.fixtures.push({ opp: inRow.opp || "TBD", oppHa: inRow.oppHa || "A" });
+        }
+        for (const fx of inRow.fixtures) {
+          if (!fx || typeof fx !== "object") continue;
+          fx.live = true;
+          fx.finished = false;
+          fx.final = false;
+          fx.minutes = inRow.minutes;
+          fx.clock = `${Math.min(90, inRow.minutes)}'`;
+        }
+      }
+    }
+    return rows;
   }
 
   function homeSquadForEntry(entryId) {
@@ -4765,9 +4948,13 @@
     if (!Number.isFinite(id)) return [];
     const map = (HOME && HOME.squadsByEntry) || {};
     const cached = map[String(id)] || map[id];
-    if (Array.isArray(cached) && cached.length) return cached;
-    if (id === homeConfiguredEntryId()) return Array.isArray(HOME.squad) ? HOME.squad : [];
-    return [];
+    let squad = [];
+    if (Array.isArray(cached) && cached.length) squad = cached;
+    else if (id === homeConfiguredEntryId()) {
+      squad = Array.isArray(HOME.squad) ? HOME.squad : [];
+    }
+    if (!squad.length) return [];
+    return mockLiveEnabled() ? applyMockLiveSquad(squad, id) : squad;
   }
 
   function homePositiveRank(value) {
@@ -4814,7 +5001,16 @@
         activeChip: row.activeChip,
       };
     }
-    if (id === configured && HOME.summary) return HOME.summary;
+    if (id === configured && HOME.summary) {
+      if (mockLiveEnabled() && !HOME.summary.activeChip) {
+        return { ...HOME.summary, activeChip: "wildcard" };
+      }
+      return HOME.summary;
+    }
+    if (mockLiveEnabled()) {
+      const base = HOME.summary || {};
+      return { ...base, activeChip: base.activeChip || "wildcard" };
+    }
     return HOME.summary || {};
   }
 
@@ -5229,13 +5425,32 @@
    * even if other league fixtures remain this GW (toPlay may still be > 0).
    */
   function homeStandingsRowInPlayCount(row) {
-    if (!homeCanShowVolatileStats()) return 0;
+    if (!homeTrustLiveMatchState()) return 0;
+    if (mockLiveEnabled()) {
+      const squad = homeSquadForEntry(row && row.entry) || [];
+      let n = 0;
+      for (const p of squad) {
+        if (p && p.starter && !p.onBench && homeSquadRowIsInPlay(p)) n += 1;
+      }
+      return n;
+    }
     const n = Number(row && row.inPlay);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
   function homeStandingsRowToPlayCount(row) {
-    if (!homeCanShowVolatileStats()) return null;
+    if (!homeTrustLiveMatchState()) return null;
+    if (mockLiveEnabled()) {
+      const squad = homeSquadForEntry(row && row.entry) || [];
+      let n = 0;
+      for (const p of squad) {
+        if (!p || !p.starter || p.onBench) continue;
+        if (homeSquadRowIsInPlay(p)) continue;
+        if (p.matchStatus === "finished") continue;
+        n += 1;
+      }
+      return n;
+    }
     const n = Number(row && row.toPlay);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
@@ -5521,8 +5736,8 @@
 
   /** True when any league manager has active picks in a live fixture. */
   function homeLeagueHasLivePicks() {
-    if (!homeCanShowVolatileStats()) return false;
-    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    if (!homeTrustLiveMatchState()) return false;
+    const rows = homeStandingsRows();
     return rows.some((r) => homeStandingsRowInPlayCount(r) > 0);
   }
 
@@ -5744,7 +5959,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const rows = homeStandingsRows();
     const medals = homeBenchPointsMedalMap(rows);
     const seasonScale = rows.reduce((m, r) => {
       const n = homeStandingsBenchPointsSeason(r);
@@ -5770,7 +5985,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const rows = homeStandingsRows();
     const compact = homeLeagueCompactCaptains();
     const topCaptainPts = homeLeagueMaxCaptainPts();
     const opts = { configuredEntry, viewEntry, viewingOther, topCaptainPts };
@@ -5791,7 +6006,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const rows = homeStandingsRows();
     const sorted = sortedHomeStandingsRows(rows);
     const topMaps = buildHomeStandingsTopMaps(rows);
     const opts = { configuredEntry, viewEntry, viewingOther, topMaps };
@@ -7377,16 +7592,19 @@
       syncHomeSquadRowHeights();
     }
     syncHomeSquadTrackHeight(activeIndex, { animate, allowShrink });
+    syncHomePitchLineAspect();
     if (homePitchStripMode === "imp") {
       requestAnimationFrame(() => syncHomePitchImpLabels());
     }
     if (wide && !animate) {
       syncHomeTablesGridHeight();
       syncHomeSquadRowHeights();
+      syncHomePitchLineAspect();
     } else {
       requestAnimationFrame(() => {
         syncHomeTablesGridHeight();
         if (wide) syncHomeSquadRowHeights();
+        syncHomePitchLineAspect();
         if (homePitchStripMode === "imp") syncHomePitchImpLabels();
       });
     }
@@ -8328,6 +8546,44 @@
     return `${def.length}-${mid.length}-${fwd.length}`;
   }
 
+  /**
+   * Pitch SVG uses preserveAspectRatio="none" so the box fills the XI.
+   * Correct centre ellipse rx/ry so it stays round in pixel space.
+   */
+  function syncHomePitchLineAspect() {
+    const pitch = document.getElementById("home-squad-pitch");
+    const svg = pitch && pitch.querySelector(".home-squad-pitch-lines");
+    if (!pitch || !svg) return;
+    const w = pitch.clientWidth;
+    const h = pitch.clientHeight;
+    if (!(w > 2 && h > 2)) return;
+    // Geometric mean keeps r≈11 when the pitch is square.
+    const R = 0.11 * Math.sqrt(w * h);
+    const rx = (R * 100) / w;
+    const ry = (R * 100) / h;
+    const circle = svg.querySelector(".home-squad-pitch-circle");
+    if (circle) {
+      circle.setAttribute("rx", rx.toFixed(3));
+      circle.setAttribute("ry", ry.toFixed(3));
+    }
+    const spotScale = 0.85 / 11;
+    const spot = svg.querySelector(".home-squad-pitch-spot");
+    if (spot) {
+      spot.setAttribute("rx", (rx * spotScale).toFixed(3));
+      spot.setAttribute("ry", (ry * spotScale).toFixed(3));
+    }
+  }
+
+  let homePitchLineAspectRo = null;
+  function ensureHomePitchLineAspectObserver() {
+    if (homePitchLineAspectRo || typeof ResizeObserver === "undefined") return;
+    homePitchLineAspectRo = new ResizeObserver(() => {
+      syncHomePitchLineAspect();
+    });
+    const pitch = document.getElementById("home-squad-pitch");
+    if (pitch) homePitchLineAspectRo.observe(pitch);
+  }
+
   function syncHomeSquadPitchFormation(squad) {
     const node = el.homeSquadPitchFormation;
     if (!node) return;
@@ -8866,8 +9122,37 @@
         if (!row) return;
         const meta = card.querySelector(".home-pitch-meta");
         if (meta) meta.innerHTML = homeSquadPitchStripHTML(row);
+        const live = homeSquadRowIsInPlay(row);
+        const mins = homePitchLiveMinutes(row);
+        card.classList.toggle("is-live", live);
+        card.classList.toggle("has-live-mp", mins != null);
         card.classList.toggle("is-autosub-in", !!row.autoSubIn);
         card.classList.toggle("is-autosub-out", !!row.autoSubOut);
+
+        let mp = card.querySelector(".home-pitch-mp-badge");
+        if (mins != null) {
+          const label = `${mins}'`;
+          const tip = `${mins} minutes played`;
+          if (!mp) {
+            mp = document.createElement("span");
+            mp.className = "home-pitch-mp-badge";
+            card.insertBefore(mp, card.firstChild);
+          }
+          if (mp.textContent !== label) mp.textContent = label;
+          mp.title = tip;
+          mp.setAttribute("aria-label", tip);
+        } else if (mp) {
+          mp.remove();
+        }
+
+        const hasRole = !!card.querySelector(".home-role-tag");
+        const autosub = card.querySelector(".home-autosub-tag");
+        if (autosub) {
+          autosub.classList.remove("home-badge-tl", "home-badge-tr", "home-badge-tr-below");
+          if (hasRole && mins != null) autosub.classList.add("home-badge-tr-below");
+          else if (hasRole) autosub.classList.add("home-badge-tl");
+          else autosub.classList.add("home-badge-tr");
+        }
       });
     }
     if (homePitchStripMode === "imp") syncHomePitchImpLabels();
@@ -8952,7 +9237,7 @@
 
   /** True when provisional autosubs in the league could still reshape standings. */
   function homeAutosubLeagueReshufflePending() {
-    const standings = (HOME && HOME.standings) || [];
+    const standings = homeStandingsRows();
     for (const row of standings) {
       const sq = homeSquadForEntry(row.entry) || [];
       if (!homeSquadAutosubPairs(sq).hasAny) continue;
@@ -8975,7 +9260,7 @@
     if (!Number.isFinite(focus) || focus <= 0) return 0;
     if (!homeAutosubLeagueReshufflePending()) return 0;
 
-    const standings = (HOME && HOME.standings) || [];
+    const standings = homeStandingsRows();
     if (!standings.length) return 0;
 
     const rows = standings.map((row) => {
@@ -9106,6 +9391,39 @@
     return "";
   }
 
+  /** Live clock minutes for the pitch MP chip (null when not in play). */
+  function homePitchLiveMinutes(row) {
+    if (!homeSquadRowIsInPlay(row)) return null;
+    let mins = Number(row.minutes);
+    if (!Number.isFinite(mins) || mins < 0) mins = NaN;
+    for (const fx of homeSquadFixtures(row) || []) {
+      if (!fx || typeof fx !== "object") continue;
+      if (!(homeSquadFixtureIsInPlay(fx) || (fx.live && !fx.finished))) continue;
+      const fxMins = Number(fx.minutes);
+      if (Number.isFinite(fxMins)) {
+        mins = Number.isFinite(mins) ? Math.max(mins, fxMins) : fxMins;
+      }
+      const clockMins = parseInt(String(fx.clock || ""), 10);
+      if (Number.isFinite(clockMins)) {
+        mins = Number.isFinite(mins) ? Math.max(mins, clockMins) : clockMins;
+      }
+    }
+    const eg = homeElementGwRecord(row.element);
+    const egMins = eg != null ? Number(eg.minutes) : NaN;
+    if (Number.isFinite(egMins)) {
+      mins = Number.isFinite(mins) ? Math.max(mins, egMins) : egMins;
+    }
+    if (!Number.isFinite(mins) || mins < 0) mins = 0;
+    return Math.min(120, Math.round(mins));
+  }
+
+  function homePitchMpBadgeHTML(row) {
+    const mins = homePitchLiveMinutes(row);
+    if (mins == null) return "";
+    const label = `${mins}'`;
+    return `<span class="home-pitch-mp-badge" title="${escapeHtml(`${mins} minutes played`)}" aria-label="${escapeHtml(`${mins} minutes played`)}">${escapeHtml(label)}</span>`;
+  }
+
   /** True when name glyphs run under the card's inset frame. */
   function homePitchNameOverlapsCardFrame(plate) {
     const card = plate.closest(".home-pitch-card");
@@ -9178,9 +9496,12 @@
             : ""
         } />`
       : `<span class="home-pitch-photo home-pitch-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
+    const live = homeSquadRowIsInPlay(row);
+    const mpBadge = homePitchMpBadgeHTML(row);
     const hasRole = !!(row.isCaptain || row.isVice);
     const badges = [];
     // Prefer upper-right for every chip; only use left when C/A already owns TR.
+    // Live MP owns TL (overhang) — any TL chip stacks under the rightmost badge.
     if (hasRole) {
       const role = row.isCaptain
         ? `<span class="home-role-tag home-role-c home-badge-tr" title="Captain">C</span>`
@@ -9189,7 +9510,9 @@
     }
     const autosub = homePitchAutosubBadgeHTML(row);
     if (autosub) {
-      const corner = hasRole ? "home-badge-tl" : "home-badge-tr";
+      let corner = "home-badge-tr";
+      if (hasRole && live) corner = "home-badge-tr-below";
+      else if (hasRole) corner = "home-badge-tl";
       badges.push(autosub.replace('class="home-autosub-tag', `class="home-autosub-tag ${corner}`));
     }
     const strip = homeSquadPitchStripHTML(row);
@@ -9199,12 +9522,13 @@
       bench ? "is-bench" : "",
       row.autoSubIn ? "is-autosub-in" : "",
       row.autoSubOut ? "is-autosub-out" : "",
-      homeSquadRowIsInPlay(row) ? "is-live" : "",
+      live ? "is-live" : "",
+      mpBadge ? "has-live-mp" : "",
     ]
       .filter(Boolean)
       .join(" ");
     return `<button type="button" class="${cardCls}" data-element="${escapeHtml(String(row.element ?? ""))}" aria-label="${escapeHtml(homeSquadRowAriaLabel(fullName))}">
-      <span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}<span class="home-pitch-nameplate"><span class="home-pitch-nameplate-text">${escapeHtml(fullName)}</span></span></span>
+      ${mpBadge}<span class="home-pitch-photo-wrap">${photoHTML}${badges.join("")}<span class="home-pitch-nameplate"><span class="home-pitch-nameplate-text">${escapeHtml(fullName)}</span></span></span>
       <span class="home-pitch-meta">${strip}</span>
     </button>`;
   }
@@ -9261,9 +9585,11 @@
     syncHomePitchModeUI();
     syncHomeHeroAutosubNotice(squad);
     ensureHomePitchNameplateObserver();
+    ensureHomePitchLineAspectObserver();
     requestAnimationFrame(() => {
       syncHomePitchImpLabels();
       syncHomePitchNameplates();
+      syncHomePitchLineAspect();
     });
   }
 
@@ -14541,7 +14867,7 @@
     }
     if (el.homeStandingsTransfersBody) {
       const configuredEntry = homeConfiguredEntryId();
-      let rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+      let rows = homeStandingsRows();
       const opts = { configuredEntry, viewEntry, viewingOther };
       const statusLabel = homeTransfersStatusLabel();
       if (el.homeTransfersStatus) {
@@ -14565,7 +14891,7 @@
     }
     if (el.homeStandingsChipsBody) {
       const configuredEntry = homeConfiguredEntryId();
-      const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+      const rows = homeStandingsRows();
       const opts = { configuredEntry, viewEntry, viewingOther };
       el.homeStandingsChipsBody.innerHTML = homeStandingsShowLoading()
         ? homeSquadLoadingHTML(6, 8)
@@ -15237,139 +15563,25 @@
     if (typeof syncMobileScrollTopFade === "function") syncMobileScrollTopFade();
   }
 
-  // Soft top wash when a mobile scroller has content above the fold (replaces
-  // the old chevron "scroll more" hints). Opacity tracks scrollTop.
-  const SCROLL_TOP_FADE_OVERFLOW = 40;
-  const SCROLL_TOP_FADE_RANGE = 56;
-  let mobileScrollTopFadeEl = null;
-  let mobileScrollTopFadeTarget = null;
-  let mobileScrollTopFadeRaf = 0;
-  let mobileScrollTopFadeReady = false;
-
+  // Soft top wash removed — top page-nav chrome auto-hides on scroll instead.
   function mobileScrollTopFadeNode() {
-    if (mobileScrollTopFadeEl && mobileScrollTopFadeEl.isConnected) return mobileScrollTopFadeEl;
-    mobileScrollTopFadeEl = document.getElementById("mobile-scroll-top-fade");
-    return mobileScrollTopFadeEl;
+    return document.getElementById("mobile-scroll-top-fade");
   }
 
-  function mobileScrollTopFadeCanTrack(node) {
-    if (!node || node.nodeType !== 1) return false;
-    if (node === document.body || node === document.documentElement) return false;
-    const style = window.getComputedStyle(node);
-    const oy = style.overflowY;
-    if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return false;
-    return node.scrollHeight - node.clientHeight >= SCROLL_TOP_FADE_OVERFLOW;
-  }
-
-  function mobileScrollTopFadeProbe(node) {
-    if (!mobileScrollTopFadeCanTrack(node)) return null;
-    return { node, scrollTop: Math.max(0, node.scrollTop || 0) };
-  }
-
-  function mobileScrollTopFadePickTarget(fromNode) {
-    let node = fromNode;
-    while (node && node !== document && node !== document.documentElement) {
-      const hit = mobileScrollTopFadeProbe(node);
-      if (hit) return hit;
-      node = node.parentElement;
-    }
-    const main = document.querySelector("main.main");
-    return mobileScrollTopFadeProbe(main);
-  }
-
-  function hideMobileScrollTopFade({ keepTarget = false } = {}) {
+  function hideMobileScrollTopFade() {
     const fade = mobileScrollTopFadeNode();
     if (!fade) return;
     fade.hidden = true;
     fade.setAttribute("aria-hidden", "true");
     fade.style.opacity = "0";
-    if (!keepTarget) mobileScrollTopFadeTarget = null;
   }
 
-  function mobileScrollTopFadeOpacity(scrollTop) {
-    const t = Math.min(1, Math.max(0, Number(scrollTop) / SCROLL_TOP_FADE_RANGE));
-    // Smoothstep so the wash eases in with the first finger of scroll.
-    return t * t * (3 - 2 * t);
-  }
-
-  function paintMobileScrollTopFade(state) {
-    const fade = mobileScrollTopFadeNode();
-    if (!fade) return;
-    if (!NARROW_MQ.matches || !state) {
-      hideMobileScrollTopFade();
-      return;
-    }
-    const opacity = mobileScrollTopFadeOpacity(state.scrollTop);
-    if (opacity < 0.02) {
-      hideMobileScrollTopFade({ keepTarget: true });
-      mobileScrollTopFadeTarget = state.node;
-      return;
-    }
-    const rect = state.node.getBoundingClientRect();
-    if (!(rect.width > 24 && rect.height > 80)) {
-      hideMobileScrollTopFade();
-      return;
-    }
-    mobileScrollTopFadeTarget = state.node;
-    fade.hidden = false;
-    fade.setAttribute("aria-hidden", "true");
-    fade.style.top = `${Math.round(rect.top)}px`;
-    fade.style.left = `${Math.round(rect.left)}px`;
-    fade.style.width = `${Math.round(rect.width)}px`;
-    fade.style.opacity = String(opacity);
-  }
-
-  function syncMobileScrollTopFade(fromNode) {
-    if (!mobileScrollTopFadeReady) return;
-    if (mobileScrollTopFadeRaf) cancelAnimationFrame(mobileScrollTopFadeRaf);
-    mobileScrollTopFadeRaf = requestAnimationFrame(() => {
-      mobileScrollTopFadeRaf = 0;
-      try {
-        if (!NARROW_MQ.matches) {
-          hideMobileScrollTopFade();
-          return;
-        }
-        let state = null;
-        if (fromNode) state = mobileScrollTopFadePickTarget(fromNode);
-        if (!state && mobileScrollTopFadeTarget && mobileScrollTopFadeTarget.isConnected) {
-          state = mobileScrollTopFadeProbe(mobileScrollTopFadeTarget);
-        }
-        if (!state) {
-          const main = document.querySelector("main.main");
-          state = mobileScrollTopFadeProbe(main);
-        }
-        const sheetOpen = !!(el.mobileSheet && el.mobileSheet.classList.contains("is-open"));
-        if (sheetOpen && el.mobileSheetBody) {
-          const sheetState = mobileScrollTopFadeProbe(el.mobileSheetBody);
-          if (sheetState && sheetState.scrollTop > 0) state = sheetState;
-        }
-        paintMobileScrollTopFade(state);
-      } catch (err) {
-        console.warn("scroll top fade failed", err);
-        hideMobileScrollTopFade();
-      }
-    });
+  function syncMobileScrollTopFade() {
+    hideMobileScrollTopFade();
   }
 
   function bindMobileScrollTopFade() {
-    if (document.documentElement.dataset.scrollTopFadeBound === "1") return;
-    document.documentElement.dataset.scrollTopFadeBound = "1";
-    mobileScrollTopFadeReady = true;
-    document.addEventListener(
-      "scroll",
-      (e) => {
-        if (!NARROW_MQ.matches) return;
-        const t = e.target;
-        if (t && t.nodeType === 1) syncMobileScrollTopFade(t);
-        else syncMobileScrollTopFade();
-      },
-      { passive: true, capture: true }
-    );
-    window.addEventListener("resize", () => syncMobileScrollTopFade(), { passive: true });
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", () => syncMobileScrollTopFade(), { passive: true });
-      window.visualViewport.addEventListener("scroll", () => syncMobileScrollTopFade(), { passive: true });
-    }
+    hideMobileScrollTopFade();
   }
 
   syncMobileLayoutClass();
@@ -15506,7 +15718,7 @@
       fade.setAttribute("aria-hidden", show ? "false" : "true");
     }
     document.documentElement.classList.toggle("has-mobile-bottom-dock", show);
-    if (!show) resetMobileChromeScrollHide();
+    if (!NARROW_MQ.matches) resetMobileChromeScrollHide();
     syncMobileScrollportHeight();
     scheduleOptaMobileNameColWidth();
   }
@@ -15560,19 +15772,33 @@
   let mobileChromeScrollHidden = false;
 
   function mobileChromeScrollActive() {
-    if (state.page === "ownership" && ownershipIsTreemap()) return false;
-    return (
-      mobileDocksActive() &&
-      (document.documentElement.classList.contains("has-mobile-bottom-dock") ||
-        document.documentElement.classList.contains("has-mobile-filter-fab") ||
-        document.documentElement.classList.contains("has-mobile-view-dock"))
-    );
+    if (!NARROW_MQ.matches) return false;
+    try {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+    } catch {
+      /* ignore */
+    }
+    return true;
+  }
+
+  function mobileChromeScrollBlocked() {
+    if (mobileSheetOpen) return true;
+    if (el.pageNav && el.pageNav.classList.contains("is-page-tray-open")) return true;
+    if (el.prefsPanel && el.prefsPanel.classList.contains("open")) return true;
+    return false;
   }
 
   function setMobileChromeScrollHidden(hidden) {
+    if (hidden && mobileChromeScrollBlocked()) hidden = false;
     if (mobileChromeScrollHidden === hidden) return;
     mobileChromeScrollHidden = hidden;
-    document.documentElement.classList.toggle("mobile-chrome-scroll-hidden", hidden);
+    const root = document.documentElement;
+    // Two frames: paint the resting translate3d(0,0,0), then flip state so
+    // WebKit / embedded mobile previews always run the transform tween.
+    requestAnimationFrame(() => {
+      if (mobileChromeScrollHidden !== hidden) return;
+      root.classList.toggle("mobile-chrome-scroll-hidden", hidden);
+    });
   }
 
   function resetMobileChromeScrollHide() {
@@ -15631,6 +15857,10 @@
   function onMobileChromeScroll(source) {
     if (!mobileChromeScrollActive()) {
       resetMobileChromeScrollHide();
+      return;
+    }
+    if (mobileChromeScrollBlocked()) {
+      setMobileChromeScrollHidden(false);
       return;
     }
     const node = source || document.querySelector("main.main");
@@ -17205,6 +17435,7 @@
 
   function openMobileSheetHost({ title = "", titleHtml = "", key = null, hostEl, prepare = null, cleanup = null } = {}) {
     if (!hostEl) return;
+    resetMobileChromeScrollHide();
     if (!beginMobileSheetShell({ title, titleHtml, key })) return;
     sheetHost = {
       el: hostEl,
@@ -26244,6 +26475,7 @@
 
   /** True when at least one fixture in the current GW is in play. */
   function liveGwHasActiveGames() {
+    if (mockLiveEnabled()) return true;
     const gw = liveDefaultGw();
     const homeGw = Number(HOME && HOME.gw);
     const trustHomeLive = homeTrustLiveMatchState();
@@ -32265,6 +32497,7 @@
 
   function setPageTrayOpen(open) {
     if (!el.pageTrayBtn || !el.pageTabs) return;
+    if (open) resetMobileChromeScrollHide();
     if (!NARROW_MQ.matches) {
       if (mobileSheetOpen && mobileSheetKey === "pages") closeMobileSheet();
       if (el.pageTrayWrap) el.pageTrayWrap.classList.toggle("open", !!open);
@@ -32602,6 +32835,7 @@
     syncMobileTopChromeInset();
     requestAnimationFrame(syncMobileTopChromeInset);
     syncHomeLivePolling();
+    syncHomeTiltRuntime();
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
@@ -34941,11 +35175,209 @@
   applyAnimationsEnabled(animationsEnabled(), { preview: false });
   try { localStorage.removeItem("fpl-explorer-autosub-preview"); } catch { /* ignore */ }
 
+  const HOME_TILT_KEY = "fpl-explorer-home-tilt";
+  let homeTiltListening = false;
+  let homeTiltRaf = 0;
+  let homeTiltBaseline = null;
+  let homeTiltLatest = { beta: 0, gamma: 0 };
+
+  function homeTiltEnabled() {
+    try {
+      return localStorage.getItem(HOME_TILT_KEY) === "on";
+    } catch {
+      return false;
+    }
+  }
+
+  function homeTiltSupported() {
+    return typeof window.DeviceOrientationEvent !== "undefined";
+  }
+
+  function homeTiltNeedsPermission() {
+    return (
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function"
+    );
+  }
+
+  function homeTiltReducedMotion() {
+    try {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {
+      return false;
+    }
+  }
+
+  function syncHomeTiltToggle(on = homeTiltEnabled()) {
+    if (el.prefsHomeTilt) el.prefsHomeTilt.checked = !!on;
+  }
+
+  function clearHomeTiltVars() {
+    const root = document.documentElement;
+    root.style.removeProperty("--home-tilt-rx");
+    root.style.removeProperty("--home-tilt-ry");
+    root.style.removeProperty("--home-tilt-sx");
+    root.style.removeProperty("--home-tilt-sy");
+  }
+
+  function applyHomeTiltVars(rx, ry) {
+    const root = document.documentElement;
+    root.style.setProperty("--home-tilt-rx", rx.toFixed(2));
+    root.style.setProperty("--home-tilt-ry", ry.toFixed(2));
+    /* Shadow slides opposite the tilt so cards feel counterbalanced. */
+    root.style.setProperty("--home-tilt-sx", `${(-ry * 0.4).toFixed(2)}px`);
+    root.style.setProperty("--home-tilt-sy", `${(rx * 0.4).toFixed(2)}px`);
+  }
+
+  function onHomeTiltOrientation(e) {
+    if (e.beta == null || e.gamma == null) return;
+    if (!homeTiltBaseline) {
+      homeTiltBaseline = { beta: e.beta, gamma: e.gamma };
+    }
+    homeTiltLatest = {
+      beta: e.beta - homeTiltBaseline.beta,
+      gamma: e.gamma - homeTiltBaseline.gamma,
+    };
+    if (homeTiltRaf) return;
+    homeTiltRaf = requestAnimationFrame(() => {
+      homeTiltRaf = 0;
+      const rx = Math.max(-1, Math.min(1, homeTiltLatest.beta / 40)) * 6;
+      const ry = Math.max(-1, Math.min(1, homeTiltLatest.gamma / 40)) * 6;
+      applyHomeTiltVars(rx, ry);
+    });
+  }
+
+  function startHomeTiltListening() {
+    if (homeTiltListening || !homeTiltSupported() || homeTiltReducedMotion()) return;
+    homeTiltBaseline = null;
+    window.addEventListener("deviceorientation", onHomeTiltOrientation, { passive: true });
+    homeTiltListening = true;
+    document.documentElement.classList.add("home-tilt-on");
+  }
+
+  function stopHomeTiltListening() {
+    if (!homeTiltListening) {
+      document.documentElement.classList.remove("home-tilt-on");
+      clearHomeTiltVars();
+      return;
+    }
+    window.removeEventListener("deviceorientation", onHomeTiltOrientation);
+    homeTiltListening = false;
+    if (homeTiltRaf) {
+      cancelAnimationFrame(homeTiltRaf);
+      homeTiltRaf = 0;
+    }
+    homeTiltBaseline = null;
+    clearHomeTiltVars();
+    document.documentElement.classList.remove("home-tilt-on");
+  }
+
+  function syncHomeTiltRuntime() {
+    const want =
+      homeTiltEnabled() &&
+      state.page === "home" &&
+      !homeTiltReducedMotion() &&
+      !document.hidden;
+    if (want) startHomeTiltListening();
+    else stopHomeTiltListening();
+  }
+
+  async function requestHomeTiltPermission() {
+    if (!homeTiltNeedsPermission()) return true;
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      return permission === "granted";
+    } catch {
+      return false;
+    }
+  }
+
+  async function applyHomeTiltEnabled(on) {
+    const enabled = !!on;
+    if (enabled) {
+      if (!homeTiltSupported()) {
+        syncHomeTiltToggle(false);
+        return;
+      }
+      const ok = await requestHomeTiltPermission();
+      if (!ok) {
+        try {
+          localStorage.removeItem(HOME_TILT_KEY);
+        } catch {
+          /* ignore */
+        }
+        syncHomeTiltToggle(false);
+        stopHomeTiltListening();
+        return;
+      }
+      try {
+        localStorage.setItem(HOME_TILT_KEY, "on");
+      } catch {
+        /* ignore */
+      }
+    } else {
+      try {
+        localStorage.removeItem(HOME_TILT_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+    syncHomeTiltToggle(homeTiltEnabled());
+    syncHomeTiltRuntime();
+  }
+
+  if (el.prefsHomeTilt) {
+    el.prefsHomeTilt.addEventListener("change", () => {
+      applyHomeTiltEnabled(el.prefsHomeTilt.checked);
+    });
+  }
+  syncHomeTiltToggle();
+  syncHomeTiltRuntime();
+  document.addEventListener("visibilitychange", () => {
+    syncHomeTiltRuntime();
+  });
+  try {
+    const reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onReduce = () => syncHomeTiltRuntime();
+    if (reduceMq.addEventListener) reduceMq.addEventListener("change", onReduce);
+    else if (reduceMq.addListener) reduceMq.addListener(onReduce);
+  } catch {
+    /* ignore */
+  }
+
 
   // Player thumbs locked to kit — prefs UI removed.
   document.documentElement.classList.add("player-thumbs-kit");
   try { localStorage.removeItem("fpl-explorer-player-thumb"); } catch { /* private browsing */ }
-  try { localStorage.removeItem("fpl-explorer-mock-live"); } catch { /* private browsing */ }
+
+  function syncMockLiveToggle(on = mockLiveEnabled()) {
+    if (el.prefsMockLive) el.prefsMockLive.checked = !!on;
+  }
+
+  function applyMockLiveEnabled(on) {
+    const enabled = !!on;
+    try {
+      if (enabled) localStorage.setItem("fpl-explorer-mock-live", "on");
+      else localStorage.removeItem("fpl-explorer-mock-live");
+    } catch {
+      /* private browsing */
+    }
+    syncMockLiveToggle(enabled);
+    syncLiveNavChrome();
+    if (state.page === "home") {
+      renderHome({ settleQuiet: true, deferDuringEnter: true });
+    }
+  }
+
+  if (el.prefsMockLive) {
+    syncMockLiveToggle();
+    el.prefsMockLive.addEventListener("change", () => {
+      applyMockLiveEnabled(el.prefsMockLive.checked);
+    });
+  }
+  if (mockLiveEnabled()) {
+    syncLiveNavChrome();
+  }
 
   function motionEnhancedOn() {
     return (
