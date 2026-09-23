@@ -1420,6 +1420,15 @@ html[data-theme="dark"] .page-tab-live-dot {
   flex: 1;
   padding: 0 8px;
 }
+.prefs-theme-field .prefs-theme-seg button {
+  padding: 0;
+  min-height: 32px;
+}
+.prefs-theme-field .prefs-theme-seg button .icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
 /* Expected Data Fixture Location: 2×2 in the left sidebar
    (Total | Compare / Home | Away). */
 .segmented-grid {
@@ -21267,7 +21276,11 @@ html[data-theme="light"] .home-dashboard .home-pitch-imp {
   background: hsl(215 20% 20% / 0.08);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-card {
-  --home-pitch-lift: 0 1px 2px hsl(215 25% 20% / 0.06), 0 3px 10px hsl(215 25% 18% / 0.1);
+  /* White frame on light pitch — stronger lift so cards read as floating. */
+  --home-pitch-lift:
+    0 1px 2px hsl(215 25% 18% / 0.1),
+    0 3px 8px hsl(215 22% 16% / 0.12),
+    0 8px 18px hsl(215 20% 14% / 0.1);
   box-shadow: var(--home-pitch-frame-ring), var(--home-pitch-lift);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-pts.is-live {
@@ -21304,7 +21317,10 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
 }
 @media (prefers-color-scheme: light) {
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-card {
-    --home-pitch-lift: 0 1px 2px hsl(215 25% 20% / 0.06), 0 3px 10px hsl(215 25% 18% / 0.1);
+    --home-pitch-lift:
+      0 1px 2px hsl(215 25% 18% / 0.1),
+      0 3px 8px hsl(215 22% 16% / 0.12),
+      0 8px 18px hsl(215 20% 14% / 0.1);
     box-shadow: var(--home-pitch-frame-ring), var(--home-pitch-lift);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-pts.is-live {

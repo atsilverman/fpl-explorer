@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1549" />
+<link rel="stylesheet" href="styles.css?v=1551" />
 <link rel="stylesheet" href="motion-enhanced.css?v=11" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -344,6 +344,10 @@
     <rect width="20" height="14" x="2" y="3" rx="2"/>
     <line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>
   </symbol>
+  <symbol id="i-smartphone" viewBox="0 0 24 24">
+    <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+    <path d="M12 18h.01"/>
+  </symbol>
   <symbol id="i-user" viewBox="0 0 24 24">
     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
@@ -546,10 +550,16 @@
             <div class="settings-section-label">Appearance</div>
             <div class="prefs-field prefs-theme-field">
               <span class="prefs-field-label" id="theme-seg-label">Theme</span>
-              <div class="segmented segmented-block" id="theme-seg" role="group" aria-labelledby="theme-seg-label">
-                <button type="button" data-theme-mode="system" class="active" title="Match device light/dark setting">Device</button>
-                <button type="button" data-theme-mode="light" title="Always light">Light</button>
-                <button type="button" data-theme-mode="dark" title="Always dark">Dark</button>
+              <div class="segmented segmented-block prefs-theme-seg" id="theme-seg" role="group" aria-labelledby="theme-seg-label">
+                <button type="button" data-theme-mode="system" class="active" title="Match device light/dark setting" aria-label="Theme: Device">
+                  <svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg>
+                </button>
+                <button type="button" data-theme-mode="light" title="Always light" aria-label="Theme: Light">
+                  <svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg>
+                </button>
+                <button type="button" data-theme-mode="dark" title="Always dark" aria-label="Theme: Dark">
+                  <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
+                </button>
               </div>
             </div>
             <label class="settings-switch-row" for="prefs-animations">
@@ -563,7 +573,7 @@
             <label class="settings-switch-row" for="prefs-home-tilt">
               <span class="settings-switch-text">
                 <span class="settings-switch-label">Home tilt</span>
-                <span class="settings-switch-hint">On phone, pitch cards and overall rank gently track device tilt (asks for motion access once).</span>
+                <span class="settings-switch-hint">Drag a finger or move the cursor over a pitch card — the card tips toward your pointer (no motion permission).</span>
               </span>
               <input type="checkbox" id="prefs-home-tilt" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
@@ -571,7 +581,7 @@
             <label class="settings-switch-row" for="prefs-home-tilt-kit">
               <span class="settings-switch-text">
                 <span class="settings-switch-label">Kit tilt</span>
-                <span class="settings-switch-hint">Only the player kit inside each pitch card tracks tilt — frame, name, and pts stay still.</span>
+                <span class="settings-switch-hint">Same pointer tracking, but only the kit photo tips — frame, name, and pts stay still.</span>
               </span>
               <input type="checkbox" id="prefs-home-tilt-kit" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
@@ -1960,7 +1970,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1431"></script>
+<script src="app.js?v=1433"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
