@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1578" />
-<link rel="stylesheet" href="motion-enhanced.css?v=11" />
+<link rel="stylesheet" href="styles.css?v=1587" />
+<link rel="stylesheet" href="motion-enhanced.css?v=13" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
 (() => {
@@ -530,7 +530,7 @@
       title="Search players" aria-label="Search players" aria-pressed="false" hidden>
       <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
     </button>
-    <button type="button" class="page-live-badge page-live-badge-nav" id="page-nav-live" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button>
+    <button type="button" class="page-live-badge page-live-badge-nav" id="page-nav-live" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button>
     <button type="button" id="home-view-status" class="home-view-status" hidden>
       <svg class="icon home-view-status-icon" aria-hidden="true"><use href="#i-eye"/></svg>
       <span class="home-view-status-copy">
@@ -542,7 +542,7 @@
       </span>
     </button>
     <button class="icon-btn icon-only-btn page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
-      aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false">
+      aria-label="How Home works" aria-controls="page-info-tooltip" aria-expanded="false">
       <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
     </button>
     <div class="dropdown-wrap" id="prefs-wrap">
@@ -1263,7 +1263,7 @@
       <div class="page-header live-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-circle-play"/></svg>Gameweek<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Gameweek works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-circle-play"/></svg>Gameweek<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Gameweek works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle" id="live-page-subtitle">Event feed — FPL-relevant actions from live fixtures in chronological order, with points and league impact for your manager.</p>
           </div>
           <div class="page-header-meta">
@@ -1295,7 +1295,7 @@
       <div class="page-header report-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-file-text"/></svg>Report<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Report works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-file-text"/></svg>Report<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Report works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle" id="report-page-subtitle">Weekly post-gameweek brief for your linked manager.</p>
           </div>
           <div class="page-header-meta">
@@ -1316,7 +1316,7 @@
       <div class="page-header opta-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Statistics works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-table"/></svg>Statistics<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Statistics works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle" id="opta-page-subtitle">2026/27 FPL season stats for players or teams — filter, sort, rank, and compare.</p>
           </div>
           <div class="page-header-meta">
@@ -1354,7 +1354,7 @@
       <div class="page-header opta-header ownership-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-trending-up"/></svg>Ownership<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Ownership works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-trending-up"/></svg>Ownership<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Ownership works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Biggest 14-day TSB% movers — 20 risers or fallers, with 7d / 3d / 1d change and a 14-day sparkline.</p>
           </div>
         </div>
@@ -1394,7 +1394,7 @@
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Price Changes<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Price Changes works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>Price Changes<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Price Changes works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Official FPL price-change predictor — players very likely or likely to rise or fall before the next daily price update. Refreshed hourly from bootstrap-static.</p>
           </div>
         </div>
@@ -1490,7 +1490,7 @@
     <div id="rankings-page" class="page-pane" style="display:none;">
       <div class="page-header">
         <div>
-          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-podium"/></svg>Rankings<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Rankings works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+          <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-podium"/></svg>Rankings<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Rankings works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
           <p class="page-subtitle" id="rankings-page-subtitle">Top 10 leaderboards for FPL season stats, grouped into Key Stats, Attacking, and Defending.</p>
         </div>
         <span class="count-label" id="rankings-count-label"></span>
@@ -1506,7 +1506,7 @@
       <div class="page-header team-header">
         <div class="team-header-text">
           <div class="team-header-title-row">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Planner<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Planner works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Planner<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Planner works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <div class="team-header-inline-actions" id="team-header-inline-actions"></div>
           </div>
           <p class="page-subtitle" id="team-page-subtitle">Plan transfers and lineups by gameweek — synced from your linked FPL manager. Your live squad is on Home.</p>
@@ -1570,7 +1570,7 @@
       <div class="page-header opta-header expected-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">xData</span><button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How xData works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">xData</span><button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How xData works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p id="expected-sub" class="page-subtitle">Compare expected (x) stats with what actually happened — who overperformed or underperformed.</p>
           </div>
         </div>
@@ -1594,7 +1594,7 @@
         <div class="schedule-header-top">
           <div class="schedule-header-text">
             <div class="schedule-title-row">
-              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>Strength of Schedule<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Strength of Schedule works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+              <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>Strength of Schedule<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Strength of Schedule works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             </div>
             <p class="page-subtitle">Find teams with a soft upcoming run for attack and/or defence — edges, ranks, and schedule balance.</p>
           </div>
@@ -1682,7 +1682,7 @@
       <div class="page-header fixtures-header">
         <div class="fixtures-header-top">
           <div class="fixtures-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Fixtures<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Fixtures works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>Fixtures<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Fixtures works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Season ticker by club — tap a row to demote it to the bottom.</p>
           </div>
         </div>
@@ -1757,7 +1757,7 @@
       <div class="page-header markets-header">
         <div class="markets-header-top">
           <div class="markets-header-text">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Markets works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-candlestick"/></svg>Markets<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Markets works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p class="page-subtitle">Upcoming Premier League fixtures with projected goals, clean-sheet chances, and the most likely scorelines — derived from bookmaker odds.</p>
           </div>
           <button id="markets-sliders-toggle" class="ghost-btn icon-only-btn markets-sliders-toggle" type="button"
@@ -1804,7 +1804,15 @@
 <div id="team-rank-tooltip" class="fixture-tooltip team-rank-tooltip" role="tooltip" style="display:none;"></div>
 <div id="matchup-edge-tooltip" class="fixture-tooltip matchup-edge-tooltip" role="tooltip" style="display:none;"></div>
 <div id="schedule-scatter-tooltip" class="fixture-tooltip schedule-scatter-tooltip" role="tooltip" style="display:none;"></div>
-<div id="page-info-tooltip" class="fixture-tooltip page-info-tooltip" role="tooltip" style="display:none;"></div>
+<div id="page-info-tooltip" class="page-info-panel" role="dialog" aria-modal="false" aria-labelledby="page-info-panel-title" hidden>
+  <div class="page-info-panel-head">
+    <h3 id="page-info-panel-title" class="page-info-panel-title"></h3>
+    <button type="button" class="icon-btn icon-only-btn page-info-panel-close" id="page-info-panel-close" aria-label="Close">
+      <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="page-info-panel-body" id="page-info-panel-body"></div>
+</div>
 <div id="team-row-menu" class="dropdown-panel settings-panel team-row-menu" role="menu" aria-labelledby="team-row-menu-title" aria-hidden="true" tabindex="-1"></div>
 <div id="mobile-chrome-fade" class="mobile-chrome-fade" hidden aria-hidden="true"></div>
 <!-- Outside .main so fixed stacking clears the bottom chrome fade / docks. -->
@@ -1989,7 +1997,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1458"></script>
+<script src="app.js?v=1460"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

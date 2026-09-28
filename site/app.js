@@ -1456,6 +1456,9 @@
     sidebarToggle: $("#sidebar-toggle"),
     sidebarColumnsHost: $("#sidebar-columns-host"),
     pageInfoTooltip: $("#page-info-tooltip"),
+    pageInfoPanelTitle: $("#page-info-panel-title"),
+    pageInfoPanelBody: $("#page-info-panel-body"),
+    pageInfoPanelClose: $("#page-info-panel-close"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
     prefsAnimations: $("#prefs-animations"),
@@ -16224,6 +16227,7 @@
   let mobileChromeScrollLast = 0;
   let mobileChromeScrollTicking = false;
   let mobileChromeScrollHidden = false;
+  let mobileChromeDirStreak = 0;
 
   function mobileChromeScrollActive() {
     if (!NARROW_MQ.matches) return false;
@@ -16247,17 +16251,20 @@
     if (mobileChromeScrollHidden === hidden) return;
     mobileChromeScrollHidden = hidden;
     const root = document.documentElement;
-    // Two frames: paint the resting translate3d(0,0,0), then flip state so
+    // Double rAF: paint resting translate3d(0,0,0) + opacity, then flip so
     // WebKit / embedded mobile previews always run the transform tween.
     requestAnimationFrame(() => {
-      if (mobileChromeScrollHidden !== hidden) return;
-      root.classList.toggle("mobile-chrome-scroll-hidden", hidden);
+      requestAnimationFrame(() => {
+        if (mobileChromeScrollHidden !== hidden) return;
+        root.classList.toggle("mobile-chrome-scroll-hidden", hidden);
+      });
     });
   }
 
   function resetMobileChromeScrollHide() {
     const main = document.querySelector("main.main");
     mobileChromeScrollLast = main ? main.scrollTop : 0;
+    mobileChromeDirStreak = 0;
     setMobileChromeScrollHidden(false);
   }
 
@@ -16321,12 +16328,19 @@
     if (!node) return;
     const y = node.scrollTop;
     const dy = y - mobileChromeScrollLast;
-    if (y <= 16) {
+    // Hysteresis: need two coherent deltas before flipping so mid-tween
+    // scroll jitter doesn't restart the chrome animation.
+    if (y <= 24) {
+      mobileChromeDirStreak = 0;
       setMobileChromeScrollHidden(false);
-    } else if (dy > 10) {
-      setMobileChromeScrollHidden(true);
-    } else if (dy < -6) {
-      setMobileChromeScrollHidden(false);
+    } else if (dy > 12) {
+      mobileChromeDirStreak = mobileChromeDirStreak > 0 ? mobileChromeDirStreak + 1 : 1;
+      if (mobileChromeDirStreak >= 2) setMobileChromeScrollHidden(true);
+    } else if (dy < -8) {
+      mobileChromeDirStreak = mobileChromeDirStreak < 0 ? mobileChromeDirStreak - 1 : -1;
+      if (mobileChromeDirStreak <= -2) setMobileChromeScrollHidden(false);
+    } else {
+      mobileChromeDirStreak = 0;
     }
     mobileChromeScrollLast = y;
   }
@@ -17815,9 +17829,12 @@
       matchupEdgeActiveCell = null;
     }
     if (el.pageInfoTooltip) {
-      el.pageInfoTooltip.style.display = "none";
-      el.pageInfoTooltip.innerHTML = "";
-      el.pageInfoTooltip.classList.remove("page-info-annotate");
+      el.pageInfoTooltip.classList.remove("is-open", "is-annotate");
+      el.pageInfoTooltip.hidden = true;
+      if (el.pageInfoPanelBody) el.pageInfoPanelBody.innerHTML = "";
+      if (el.pageInfoPanelTitle) el.pageInfoPanelTitle.textContent = "";
+      clearPageInfoExpanded();
+      pageInfoAnchor = null;
     }
     if (el.scheduleScatterTooltip) {
       el.scheduleScatterTooltip.style.display = "none";
@@ -17973,6 +17990,11 @@
       event.preventDefault();
       if (homeGwPtsLookupRow) closeHomePlayerGwPointsOverlay();
       else clearHomePlayerLookup();
+      return;
+    }
+    if (pageInfoPanelOpen()) {
+      event.preventDefault();
+      hidePageInfoTooltip();
       return;
     }
     if (mobileSheetOpen) closeMobileSheet();
@@ -19075,8 +19097,8 @@
   }
 
   function spitHead(icon, title) {
-    if (pageInfoIsMobile()) return "";
-    return `<div class="spit-head">${iconHTML(icon)}<span>${title}</span></div>`;
+    // Title lives in mobile-sheet / desktop page-info panel chrome.
+    return "";
   }
 
   function spitIntro(text) {
@@ -20208,6 +20230,7 @@
   });
 
   let pageInfoAnchor = null;
+  let pageInfoCloseTimer = null;
 
   function pageInfoButtons() {
     return $$(".page-info-btn");
@@ -20231,38 +20254,34 @@
     pageInfoButtons().forEach((btn) => btn.setAttribute("aria-expanded", "false"));
   }
 
-  let pageInfoHoverTimer = null;
+  function pageInfoPanelOpen() {
+    return !!(el.pageInfoTooltip && el.pageInfoTooltip.classList.contains("is-open"));
+  }
 
   function hidePageInfoTooltip() {
-    clearTimeout(pageInfoHoverTimer);
-    pageInfoHoverTimer = null;
+    clearTimeout(pageInfoCloseTimer);
+    pageInfoCloseTimer = null;
     if (!el.pageInfoTooltip) return;
-    el.pageInfoTooltip.style.display = "none";
-    el.pageInfoTooltip.innerHTML = "";
-    el.pageInfoTooltip.classList.remove("page-info-annotate");
+    const wasOpen = pageInfoPanelOpen();
+    el.pageInfoTooltip.classList.remove("is-open");
     clearPageInfoExpanded();
     pageInfoAnchor = null;
+    const finish = () => {
+      if (!el.pageInfoTooltip || pageInfoPanelOpen()) return;
+      el.pageInfoTooltip.hidden = true;
+      el.pageInfoTooltip.classList.remove("is-annotate");
+      if (el.pageInfoPanelBody) el.pageInfoPanelBody.innerHTML = "";
+      if (el.pageInfoPanelTitle) el.pageInfoPanelTitle.textContent = "";
+    };
+    if (wasOpen && !preferMobileSheet()) {
+      pageInfoCloseTimer = setTimeout(finish, 360);
+    } else {
+      finish();
+    }
   }
 
   function positionPageInfoTooltip() {
-    const tip = el.pageInfoTooltip;
-    const anchor = pageInfoAnchor || activePageInfoBtn();
-    if (!tip || !anchor) return;
-    // Size class before measuring so annotate width/height are correct on first paint.
-    tip.classList.toggle("page-info-annotate", !!tip.querySelector(".spit-annotate"));
-    tip.style.visibility = "hidden";
-    tip.style.display = "block";
-    const tipW = tip.offsetWidth;
-    const tipH = tip.offsetHeight;
-    const rect = anchor.getBoundingClientRect();
-    let left = Math.min(rect.left, window.innerWidth - tipW - 8);
-    let top = rect.bottom + 10;
-    if (top + tipH > window.innerHeight - 8) {
-      top = Math.max(8, rect.top - tipH - 10);
-    }
-    tip.style.left = `${Math.max(8, left)}px`;
-    tip.style.top = `${top}px`;
-    tip.style.visibility = "visible";
+    // Desktop page-info is a fixed right panel — no anchor positioning.
   }
 
   function syncPageInfoButton() {
@@ -20301,14 +20320,15 @@
       btn.removeAttribute("title");
       btn.removeAttribute("data-tip");
       btn.setAttribute("aria-label", label);
+      btn.setAttribute("aria-controls", "page-info-tooltip");
     });
   }
 
   function showPageInfoTooltip(anchor) {
     const btn = anchor || activePageInfoBtn();
     if (!btn || !el.pageInfoTooltip) return;
-    pageInfoAnchor = btn;
     if (preferMobileSheet()) {
+      pageInfoAnchor = btn;
       const title = btn.getAttribute("aria-label") || "How this page works";
       const key = `page-info:${state.page}`;
       if (mobileSheetOpen && mobileSheetKey === key) {
@@ -20324,51 +20344,51 @@
       btn.setAttribute("aria-expanded", "true");
       return;
     }
+    clearTimeout(pageInfoCloseTimer);
+    pageInfoCloseTimer = null;
     hideUiTooltip();
     hideTeamRankTooltip();
     hideMatchupEdgeTooltip();
     hideScheduleScatterTooltip();
     clearPageInfoExpanded();
+    pageInfoAnchor = btn;
     btn.setAttribute("aria-expanded", "true");
-    el.pageInfoTooltip.innerHTML = pageInfoTooltipHTML();
-    positionPageInfoTooltip();
+    const title = btn.getAttribute("aria-label") || "How this page works";
+    if (el.pageInfoPanelTitle) el.pageInfoPanelTitle.textContent = title;
+    if (el.pageInfoPanelBody) el.pageInfoPanelBody.innerHTML = pageInfoTooltipHTML();
+    el.pageInfoTooltip.classList.toggle(
+      "is-annotate",
+      !!(el.pageInfoPanelBody && el.pageInfoPanelBody.querySelector(".spit-annotate"))
+    );
+    el.pageInfoTooltip.hidden = false;
+    requestAnimationFrame(() => {
+      if (!el.pageInfoTooltip || pageInfoAnchor !== btn) return;
+      el.pageInfoTooltip.classList.add("is-open");
+    });
   }
 
-  document.addEventListener("mouseover", (event) => {
-    const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || preferMobileSheet()) return;
-    clearTimeout(pageInfoHoverTimer);
-    pageInfoHoverTimer = setTimeout(() => {
-      if (!btn.isConnected) return;
-      showPageInfoTooltip(btn);
-    }, popupDelayMs());
-  });
-  document.addEventListener("mouseout", (event) => {
-    const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || preferMobileSheet()) return;
-    if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
-    clearTimeout(pageInfoHoverTimer);
-    hidePageInfoTooltip();
-  });
   document.addEventListener("click", (event) => {
+    const closeBtn = event.target.closest && event.target.closest("#page-info-panel-close");
+    if (closeBtn) {
+      event.preventDefault();
+      hidePageInfoTooltip();
+      return;
+    }
     const btn = event.target.closest && event.target.closest(".page-info-btn");
     if (!btn) return;
-    if (!preferMobileSheet()) return;
     event.preventDefault();
+    // Same-button toggle on desktop when already open.
+    if (!preferMobileSheet() && btn.getAttribute("aria-expanded") === "true" && pageInfoPanelOpen()) {
+      hidePageInfoTooltip();
+      return;
+    }
     showPageInfoTooltip(btn);
   });
-  document.addEventListener("focusin", (event) => {
-    const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || preferMobileSheet()) return;
-    showPageInfoTooltip(btn);
-  });
-  document.addEventListener("focusout", (event) => {
-    const btn = event.target.closest && event.target.closest(".page-info-btn");
-    if (!btn || preferMobileSheet()) return;
-    if (event.relatedTarget && btn.contains(event.relatedTarget)) return;
+  document.addEventListener("pointerdown", (event) => {
+    if (preferMobileSheet() || !pageInfoPanelOpen()) return;
+    if (event.target.closest && event.target.closest("#page-info-tooltip, .page-info-btn")) return;
     hidePageInfoTooltip();
   });
-
   let scheduleScatterPointer = { x: 0, y: 0 };
   let scatterHoverTimer = null;
 

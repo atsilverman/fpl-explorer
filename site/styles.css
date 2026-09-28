@@ -2433,8 +2433,13 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     letter-spacing: 0.08em;
   }
   .page-nav-actions .page-live-badge-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
+  }
+  .page-nav-actions .page-live-badge-dot-ping {
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
   }
   /* Tab scroller stays out of the nav; the tray button opens the bottom sheet. */
   .page-tabs-clip {
@@ -2771,6 +2776,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     z-index: 40;
     height: calc(var(--mobile-dock-clearance, 66px) + 20px);
     pointer-events: none;
+    opacity: 1;
+    transition: opacity var(--chrome-fade-dur, var(--chrome-dock-dur, 420ms))
+      var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
     background: linear-gradient(
       to top,
       color-mix(in srgb, var(--bg) 88%, transparent) 0%,
@@ -3108,7 +3116,6 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html.mobile-chrome-scroll-hidden .mobile-chrome-fade:not([hidden]) {
     opacity: 0;
-    transition: opacity var(--chrome-dock-dur, 420ms) var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
   }
   /* Title row vacates; subtoolbar stays and parks under the safe area.
      Transform-only (no opacity) so the slide stays visible end-to-end. */
@@ -3455,6 +3462,15 @@ html.animations-off *::after {
   animation: none !important;
   transition: none !important;
   scroll-behavior: auto !important;
+}
+/* Live status pulse is signal, not chrome polish — always runs, even when
+   Prefs → Animations is off (overrides the blanket animation:none above). */
+html.animations-off .page-live-badge-dot-ping {
+  animation: page-live-dot-ping 1.75s cubic-bezier(0, 0, 0.2, 1) infinite !important;
+}
+html.animations-off .page-tab-live-dot:not([hidden]),
+html.animations-off .home-status-dot.is-live {
+  animation: home-live-pulse 1.6s ease-out infinite !important;
 }
 html.animations-off .page-pane.is-enter-pending > .page-header,
 html.animations-off .page-pane.is-enter-pending > .table-wrap,
@@ -5084,13 +5100,31 @@ html[data-theme="dark"] .player-flag-icon.is-chance-75 {
   display: none !important;
 }
 .page-live-badge-dot {
-  width: 6px;
-  height: 6px;
+  --live-dot: 142 55% 38%;
+  position: relative;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex: none;
+  background: hsl(var(--live-dot));
+  /* Must stay visible — ping scales outside this box. */
+  overflow: visible;
+}
+/* Expanding wash behind the solid core (not clipped to the 7px face). */
+.page-live-badge-dot-ping {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
   background: hsl(142 55% 38%);
-  box-shadow: 0 0 0 0 hsl(142 55% 38% / 0.45);
-  animation: home-live-pulse 1.6s ease-out infinite;
+  opacity: 0.55;
+  transform: scale(1);
+  animation: page-live-dot-ping 1.75s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
 }
 html[data-theme="dark"] .page-live-badge {
   border: none;
@@ -5103,8 +5137,11 @@ html[data-theme="dark"] .page-live-badge:hover {
   opacity: 0.85;
 }
 html[data-theme="dark"] .page-live-badge-dot {
+  --live-dot: 142 48% 52%;
+  background: hsl(var(--live-dot));
+}
+html[data-theme="dark"] .page-live-badge-dot-ping {
   background: hsl(142 48% 52%);
-  box-shadow: 0 0 0 0 hsl(142 48% 52% / 0.45);
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .page-live-badge {
@@ -5113,17 +5150,42 @@ html[data-theme="dark"] .page-live-badge-dot {
     color: hsl(142 48% 62%);
   }
   html:not([data-theme="light"]) .page-live-badge-dot {
-    background: hsl(142 48% 52%);
-    box-shadow: 0 0 0 0 hsl(142 48% 52% / 0.45);
+    --live-dot: 142 48% 52%;
+    background: hsl(var(--live-dot));
   }
+  html:not([data-theme="light"]) .page-live-badge-dot-ping {
+    background: hsl(142 48% 52%);
+  }
+}
+.page-live-badge,
+.page-nav-actions .page-live-badge {
+  overflow: visible;
 }
 .page-nav-actions .page-live-badge {
   align-self: center;
   margin-right: -2px;
 }
+.page-nav-actions {
+  overflow: visible;
+}
+@keyframes page-live-dot-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  75% {
+    transform: scale(3.1);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(3.1);
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .page-live-badge-dot {
+  .page-live-badge-dot-ping {
     animation: none;
+    opacity: 0;
   }
 }
 .page-info-btn {
@@ -9235,11 +9297,105 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   max-width: 360px;
 }
 
+.page-info-panel {
+  position: fixed;
+  /* Sit just under the page-nav chrome; stay clear of the top safe area. */
+  top: max(12px, calc(env(safe-area-inset-top, 0px) + 52px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  z-index: 320;
+  display: flex;
+  flex-direction: column;
+  width: min(400px, calc(100vw - 24px));
+  max-height: calc(
+    100dvh - 64px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+  );
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+  /* Solid card — one elevation above glass tooltips (x-level). */
+  background: hsl(var(--card));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  transform: translate3d(10px, 0, 0);
+  opacity: 0;
+  filter: blur(2px);
+  /* Stable transition list — only values change on .is-open (WebKit-safe). */
+  transition:
+    transform var(--panel-open-dur, 400ms) var(--panel-ease, cubic-bezier(0.22, 1, 0.36, 1)),
+    opacity var(--panel-open-dur, 400ms) var(--panel-ease, cubic-bezier(0.22, 1, 0.36, 1)),
+    filter var(--panel-open-dur, 400ms) var(--panel-ease, cubic-bezier(0.22, 1, 0.36, 1));
+  will-change: transform, opacity, filter;
+}
+.page-info-panel.is-open {
+  pointer-events: auto;
+  visibility: visible;
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  filter: blur(0);
+}
+.page-info-panel.is-annotate {
+  width: min(460px, calc(100vw - 24px));
+}
+.page-info-panel[hidden] {
+  display: none !important;
+}
+.page-info-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 12px 10px 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.page-info-panel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.page-info-panel-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.page-info-panel-close .icon {
+  width: 16px;
+  height: 16px;
+}
+.page-info-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.page-info-panel-body .spit-intro {
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-info-panel,
+  .page-info-panel.is-open {
+    transition: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+}
+
+/* Legacy tooltip selector kept as alias during panel migration. */
 .page-info-tooltip {
   min-width: 340px;
   max-width: 410px;
   padding: 14px;
-  /* Appear in place — no fade/slide inherited from other tip styles. */
   transition: none;
   opacity: 1;
   transform: none;
@@ -17587,8 +17743,8 @@ html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lo
   --home-pitch-ink-fg: hsl(240 10% 10%);
   --home-pitch-ink-idle-bg: hsl(240 5% 72%);
   --home-pitch-ink-idle-fg: hsl(240 6% 22%);
-  /* Opaque frame — soft silver edge, a step above muted pitch lines. */
-  --home-pitch-card-border: color-mix(in srgb, #fff 38%, #1a1a1a);
+  /* Opaque frame — near-black edge, just a step above the card face. */
+  --home-pitch-card-border: color-mix(in srgb, #fff 10%, #0a0a0a);
   --home-pitch-card-border-w: 3px;
   --home-pitch-card-fg: hsl(0 0% 96%);
   --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
@@ -18584,7 +18740,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   color: hsl(var(--blue-hsl));
 }
 
-/* Desktop Home: team · manager + search sit in the top bar (left of settings). */
+/* Desktop Home: identity + search wrappers (flattened via display:contents on home). */
 .home-nav-cluster {
   display: none;
   align-items: center;
@@ -18717,11 +18873,38 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   display: none !important;
 }
 @media (min-width: 721px) {
+  /* Flatten cluster so LIVE can sit with identity, then search + chrome right. */
+  html[data-page="home"] .page-nav-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 10px;
+  }
   html[data-page="home"] .home-nav-cluster:not([hidden]) {
-    display: inline-flex;
+    display: contents;
+  }
+  html[data-page="home"] .home-nav-identity {
+    order: 1;
+    text-align: left;
+    flex: 0 1 auto;
+  }
+  html[data-page="home"] #page-nav-live {
+    order: 2;
+    flex: none;
   }
   html[data-page="home"] .home-desktop-search:not([hidden]) {
     display: block;
+    order: 3;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  html[data-page="home"] #home-view-status {
+    order: 4;
+  }
+  html[data-page="home"] #page-info-nav-btn {
+    order: 5;
+  }
+  html[data-page="home"] #prefs-wrap {
+    order: 6;
   }
   /* Title row removed — hero sits flush under page-nav (same as mobile). */
   html[data-page="home"] .home-header {

@@ -60,20 +60,22 @@ html.motion-enhanced {
   --toggle-travel: 13px;
   --toggle-ov1: 1.5px;
   --toggle-ease: cubic-bezier(0.34, 1.35, 0.64, 1);
-  --badge-slide-dur: 260ms;
-  --badge-pop-dur: 500ms;
-  --badge-blur: 2px;
-  --badge-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --badge-pop-ease: cubic-bezier(0.34, 1.36, 0.64, 1);
   --reel-spin-blur: 2.5px;
 
   /* Remap site-wide ease used by sheets / enters / docks */
   --ease-out: var(--ease-smooth-out);
-  /* Mobile chrome scroll hide / show — one stable clock (changing
-     transition* in the same frame as transform skips the tween in WebKit). */
-  --chrome-nav-dur: 420ms;
-  --chrome-dock-dur: 420ms;
-  --chrome-ease: var(--ease-smooth-out);
+  /* Mobile chrome scroll hide / show — toast-inspired clocks.
+     Transition *declarations* stay identical on rest ↔ hidden (WebKit
+     drops the tween if transition* is rewritten in the flip frame).
+     Only transform / opacity / filter *values* change. */
+  --chrome-nav-dur: 560ms;
+  --chrome-dock-dur: 520ms;
+  --chrome-fade-dur: 480ms;
+  --chrome-dock-stagger: 40ms;
+  --chrome-dock-scale: 0.94;
+  --chrome-dock-blur: 2px;
+  /* Expo-out: starts decisive, lands soft — reads well both hide + show. */
+  --chrome-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* —— Dropdowns / prefs (menu-dropdown) —— */
@@ -152,7 +154,6 @@ html.motion-enhanced .page-pane.is-entering tbody tr {
 }
 
 html.motion-enhanced .home-rank-delta:not([hidden]):not(.is-flat),
-html.motion-enhanced .page-live-badge:not([hidden]),
 html.motion-enhanced .is-motion-pop {
   animation: motion-delta-pop var(--digit-dur) var(--digit-ease) both;
 }
@@ -329,26 +330,8 @@ html.motion-enhanced .settings-switch-row.is-motion-init input:not(:checked) + .
   animation: motion-toggle-off var(--toggle-dur) var(--toggle-ease) both;
 }
 
-/* —— Live notification badge —— */
-@keyframes motion-badge-slide-in {
-  from {
-    transform: translate(-6px, 8px) scale(0.6);
-    opacity: 0;
-    filter: blur(var(--badge-blur));
-  }
-  to {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-    filter: blur(0);
-  }
-}
-
-html.motion-enhanced .page-tab-live-dot:not([hidden]),
-html.motion-enhanced #page-nav-live:not([hidden]) {
-  animation:
-    motion-badge-slide-in var(--badge-slide-dur) var(--badge-slide-ease) both,
-    home-live-pulse 1.6s ease-out 0.4s infinite;
-}
+/* Live status chrome (nav LIVE + tray dots) uses base signal pulses only —
+   not entrance pop / slide stacks from the Animations toggle. */
 
 /* —— Stat roll / spinning counter polish —— */
 html.motion-enhanced .stat-roll-strip.is-rolling {
@@ -390,14 +373,16 @@ html.motion-enhanced .page-tab-btn {
 }
 
 /* —— Mobile chrome scroll hide / show ——
-   Transform-only slides with a single unchanging transition declaration.
-   (Re-declaring transition on the hidden state + animating from `none`
-   caused instant snaps in embedded mobile previews / WebKit.) */
+   Stable transition declarations + toast-like dock dissolve (opacity /
+   scale / blur). Never redeclare transition on the hidden state. */
 html.motion-enhanced.is-mobile-layout .page-nav,
 html.motion-enhanced.is-mobile-layout .topbar,
 html.motion-enhanced.is-mobile-layout #subtoolbar {
-  transition: transform var(--chrome-nav-dur) var(--chrome-ease);
-  will-change: transform;
+  opacity: 1;
+  transition:
+    transform var(--chrome-nav-dur) var(--chrome-ease),
+    opacity var(--chrome-nav-dur) var(--chrome-ease);
+  will-change: transform, opacity;
 }
 html.motion-enhanced.is-mobile-layout .layout {
   transition: padding-top var(--chrome-nav-dur) var(--chrome-ease);
@@ -405,11 +390,35 @@ html.motion-enhanced.is-mobile-layout .layout {
 html.motion-enhanced .mobile-view-dock,
 html.motion-enhanced .mobile-filter-dock,
 html.motion-enhanced .fixtures-sos-fab {
-  transition: transform var(--chrome-dock-dur) var(--chrome-ease);
-  will-change: transform;
+  opacity: 1;
+  filter: blur(0);
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+    opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+    filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger);
+  will-change: transform, opacity, filter;
 }
 html.motion-enhanced .mobile-chrome-fade {
-  transition: opacity var(--chrome-dock-dur) var(--chrome-ease);
+  opacity: 1;
+  transition: opacity var(--chrome-fade-dur) var(--chrome-ease);
+}
+
+/* Hidden targets — values only (transition list unchanged). */
+html.motion-enhanced.mobile-chrome-scroll-hidden.is-mobile-layout .page-nav,
+html.motion-enhanced.mobile-chrome-scroll-hidden.is-mobile-layout .topbar {
+  opacity: 0;
+}
+html.motion-enhanced.mobile-chrome-scroll-hidden .mobile-view-dock:not([hidden]),
+html.motion-enhanced.mobile-chrome-scroll-hidden .mobile-filter-dock:not([hidden]),
+html.motion-enhanced.mobile-chrome-scroll-hidden .fixtures-sos-fab:not([hidden]) {
+  opacity: 0;
+  filter: blur(var(--chrome-dock-blur));
+  transform: translate3d(
+    0,
+    calc(var(--mobile-dock-clearance, 66px) + 28px + env(safe-area-inset-bottom, 0px)),
+    0
+  ) scale(var(--chrome-dock-scale));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -418,10 +427,7 @@ html.motion-enhanced .mobile-chrome-fade {
   html.motion-enhanced .page-tab-menu.open,
   html.motion-enhanced .team-row-menu.open,
   html.motion-enhanced .home-rank-delta:not([hidden]),
-  html.motion-enhanced .page-live-badge:not([hidden]),
   html.motion-enhanced .is-motion-pop,
-  html.motion-enhanced .page-tab-live-dot:not([hidden]),
-  html.motion-enhanced #page-nav-live:not([hidden]),
   html.motion-enhanced #home-squad-panel:not(.is-bench-collapsed) .home-squad-table tbody tr.home-row-bench,
   html.motion-enhanced .home-squad-table tbody tr.is-motion-reveal,
   html.motion-enhanced .home-standings-table tbody tr.is-motion-reveal,
