@@ -2250,11 +2250,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     align-items: center;
     transform: translate3d(0, 0, 0);
-    opacity: 1;
-    transition:
-      transform var(--chrome-nav-dur) var(--chrome-ease),
-      opacity var(--chrome-nav-dur) var(--chrome-ease);
-    will-change: transform, opacity;
+    /* Transform-only — fading the title chrome leaves a blank padding gap. */
+    transition: transform var(--chrome-nav-dur) var(--chrome-ease);
+    will-change: transform;
     backface-visibility: hidden;
   }
   /* Keep the button row intact; expanded search covers this same row. */
@@ -2302,11 +2300,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     overflow: visible;
     transform: translate3d(0, 0, 0);
-    opacity: 1;
-    transition:
-      transform var(--chrome-nav-dur) var(--chrome-ease),
-      opacity var(--chrome-nav-dur) var(--chrome-ease);
-    will-change: transform, opacity;
+    /* Transform-only — fading the title chrome leaves a blank padding gap. */
+    transition: transform var(--chrome-nav-dur) var(--chrome-ease);
+    will-change: transform;
     backface-visibility: hidden;
   }
   /* Add-to-Home-Screen / installed PWA only — not normal Safari browsing.
@@ -3138,11 +3134,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.mobile-chrome-scroll-hidden .mobile-chrome-fade:not([hidden]) {
     opacity: 0;
   }
-  /* Title row vacates; subtoolbar stays and parks under the safe area. */
-  html.mobile-chrome-scroll-hidden .page-nav,
-  html.mobile-chrome-scroll-hidden .topbar {
-    opacity: 0;
-  }
+  /* Title row vacates; subtoolbar stays and parks under the safe area.
+     Transform-only on top chrome (no opacity) so the slide stays visible
+     end-to-end and doesn't leave an empty padding gap. */
   html.mobile-chrome-scroll-hidden .page-nav {
     transform: translate3d(
       0,
@@ -3500,9 +3494,7 @@ html.animations-off .home-status-dot.is-live {
 html.animations-off.is-mobile-layout .page-nav,
 html.animations-off.is-mobile-layout .topbar,
 html.animations-off.is-mobile-layout #subtoolbar {
-  transition:
-    transform var(--chrome-nav-dur) var(--chrome-ease),
-    opacity var(--chrome-nav-dur) var(--chrome-ease) !important;
+  transition: transform var(--chrome-nav-dur) var(--chrome-ease) !important;
 }
 html.animations-off.is-mobile-layout .layout {
   transition: padding-top var(--chrome-nav-dur) var(--chrome-ease) !important;
