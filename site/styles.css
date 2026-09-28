@@ -79,14 +79,16 @@
   --shadow-lg: 0 10px 15px -3px hsl(240 6% 10% / 0.1), 0 4px 6px -4px hsl(240 6% 10% / 0.1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   /* Mobile chrome scroll hide / show — always on (not Prefs → Animations).
-     Long expo-out so title + docks glide rather than snap away. */
+     Directional easings: show settles (ease-out); hide eases away (ease-in)
+     so both directions feel equally smooth. Expo-out alone rockets the hide. */
   --chrome-nav-dur: 880ms;
   --chrome-dock-dur: 820ms;
   --chrome-fade-dur: 760ms;
-  --chrome-dock-stagger: 70ms;
-  --chrome-dock-scale: 0.94;
-  --chrome-dock-blur: 2px;
-  --chrome-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --chrome-dock-stagger: 0ms;
+  --chrome-dock-scale: 0.96;
+  --chrome-ease-show: cubic-bezier(0.22, 1, 0.36, 1);
+  --chrome-ease-hide: cubic-bezier(0.4, 0, 0.68, 0.2);
+  --chrome-ease: var(--chrome-ease-show);
   /* Keyboard focus ring — cleared on touch (html[data-pointer="coarse"]). */
   --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
 
@@ -334,7 +336,7 @@ html, body {
     min-height: 0;
     overflow: hidden;
     padding-top: var(--mobile-top-chrome-h, 52px);
-    transition: padding-top var(--chrome-nav-dur) var(--chrome-ease);
+    transition: padding-top var(--chrome-nav-dur) var(--chrome-ease-show);
   }
   :root {
     --badge-size: 26px;
@@ -2841,13 +2843,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     /* Stable resting transform — animating to/from `none` skips the tween in
        some WebKit / embedded mobile previews. */
     opacity: 1;
-    filter: blur(0);
     transform: translate3d(0, 0, 0) scale(1);
+    /* Transform + opacity only — filter:blur janks hard on iOS Safari mid-tween. */
     transition:
-      transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
-      opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
-      filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger);
-    will-change: transform, opacity, filter;
+      transform var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger),
+      opacity var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger);
+    will-change: transform, opacity;
     backface-visibility: hidden;
   }
   :root[data-theme="dark"] .mobile-view-dock,
@@ -3123,16 +3124,19 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.mobile-chrome-scroll-hidden .fixtures-sos-fab:not([hidden]) {
     /* Pixel travel (not %) so the tween always has a resolvable from/to. */
     opacity: 0;
-    filter: blur(var(--chrome-dock-blur));
     transform: translate3d(
       0,
       calc(var(--mobile-dock-clearance, 66px) + 28px + env(safe-area-inset-bottom, 0px)),
       0
     ) scale(var(--chrome-dock-scale));
     pointer-events: none;
+    /* Ease-in on hide — soft start so it doesn't rocket off (esp. iOS). */
+    transition-timing-function: var(--chrome-ease-hide);
+    transition-delay: 0ms;
   }
   html.mobile-chrome-scroll-hidden .mobile-chrome-fade:not([hidden]) {
     opacity: 0;
+    transition-timing-function: var(--chrome-ease-hide);
   }
   /* Title row vacates; subtoolbar stays and parks under the safe area.
      Transform-only on top chrome (no opacity) so the slide stays visible
@@ -3144,6 +3148,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       0
     );
     pointer-events: none;
+    transition-timing-function: var(--chrome-ease-hide);
   }
   html.mobile-chrome-scroll-hidden #subtoolbar {
     transform: translate3d(
@@ -3152,12 +3157,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       0
     );
     pointer-events: auto;
+    transition-timing-function: var(--chrome-ease-hide);
   }
   html.mobile-chrome-scroll-hidden .layout {
     padding-top: calc(
       var(--mobile-top-chrome-h, 52px) - var(--mobile-page-nav-h, 48px) +
         env(safe-area-inset-top, 0px)
     );
+    transition-timing-function: var(--chrome-ease-hide);
   }
   @media (prefers-reduced-motion: reduce) {
     html.is-mobile-layout .layout,
@@ -3503,12 +3510,24 @@ html.animations-off .mobile-view-dock,
 html.animations-off .mobile-filter-dock,
 html.animations-off .fixtures-sos-fab {
   transition:
-    transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
-    opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
-    filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger) !important;
+    transform var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger),
+    opacity var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger) !important;
 }
 html.animations-off .mobile-chrome-fade {
-  transition: opacity var(--chrome-fade-dur) var(--chrome-ease) !important;
+  transition: opacity var(--chrome-fade-dur) var(--chrome-ease-show) !important;
+}
+html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden .page-nav,
+html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden .topbar,
+html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden #subtoolbar,
+html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden .layout {
+  transition-timing-function: var(--chrome-ease-hide) !important;
+}
+html.animations-off.mobile-chrome-scroll-hidden .mobile-view-dock,
+html.animations-off.mobile-chrome-scroll-hidden .mobile-filter-dock,
+html.animations-off.mobile-chrome-scroll-hidden .fixtures-sos-fab,
+html.animations-off.mobile-chrome-scroll-hidden .mobile-chrome-fade {
+  transition-timing-function: var(--chrome-ease-hide) !important;
+  transition-delay: 0ms !important;
 }
 html.animations-off .page-pane.is-enter-pending > .page-header,
 html.animations-off .page-pane.is-enter-pending > .table-wrap,
@@ -22190,6 +22209,10 @@ html.home-squad-wide .home-squad-pitch-xi {
   color: hsl(142 55% 38%);
   font-weight: 700;
 }
+:root[data-theme="dark"] .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num,
+:root:not([data-theme="light"]) .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num {
+  color: hsl(142 55% 48%);
+}
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-warn {
   background: hsl(var(--yc-pill-bg));
   color: hsl(var(--yc-pill-fg));
@@ -25035,6 +25058,18 @@ html[data-page="live"] #team-filters .chip.team-chip {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+/* Achieved DefCon — bold green numerator; threshold stays muted. */
+.live-defcon-frac.is-hit .live-stat-roll,
+.live-defcon-frac.is-hit .stat-roll-digit {
+  color: hsl(142 55% 42%);
+  font-weight: 700;
+}
+:root[data-theme="dark"] .live-defcon-frac.is-hit .live-stat-roll,
+:root[data-theme="dark"] .live-defcon-frac.is-hit .stat-roll-digit,
+:root:not([data-theme="light"]) .live-defcon-frac.is-hit .live-stat-roll,
+:root:not([data-theme="light"]) .live-defcon-frac.is-hit .stat-roll-digit {
+  color: hsl(142 55% 48%);
+}
 .live-bonus-track .rankings-value .live-stat-roll {
   display: inline-flex;
   font: inherit;
@@ -25348,34 +25383,38 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 }
 #live-page .live-points-table thead th.col-num,
 #live-page .live-points-table tbody td.col-num {
+  /* Override global --metric-col-w lock so pills can actually center. */
   width: auto;
-  min-width: 3.1em;
-  padding-left: 12px;
-  padding-right: 12px;
+  max-width: none;
+  /* Pill min (~2ch + pad-x) + cell pad must fit; else text-align can't center. */
+  min-width: calc(2ch + 2 * var(--data-pill-pad-x, 6px) + 16px);
+  padding-left: 8px;
+  padding-right: 8px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
 }
 #live-page .live-points-table thead th.col-num-narrow,
 #live-page .live-points-table tbody td.col-num-narrow {
-  min-width: 2.5em;
-  padding-left: 8px;
-  padding-right: 8px;
+  min-width: calc(2ch + 2 * var(--data-pill-pad-x, 6px) + 12px);
+  padding-left: 6px;
+  padding-right: 6px;
   font-size: 11px;
   color: var(--text-muted);
 }
 @media (max-width: 720px) {
-  /* Extra runway after name-compact so the PS edge doesn't fight morph. */
+  /* Name-compact runway — keep pad modest so badge + header stay centered. */
   #live-page .live-points-table thead th.col-num,
   #live-page .live-points-table tbody td.col-num {
-    min-width: 3.45em;
-    padding-left: 14px;
-    padding-right: 14px;
+    min-width: calc(2ch + 2 * var(--data-pill-pad-x, 6px) + 20px);
+    padding-left: 10px;
+    padding-right: 10px;
   }
   #live-page .live-points-table thead th.col-num-narrow,
   #live-page .live-points-table tbody td.col-num-narrow {
-    min-width: 2.85em;
-    padding-left: 10px;
-    padding-right: 10px;
+    min-width: calc(2ch + 2 * var(--data-pill-pad-x, 6px) + 16px);
+    padding-left: 8px;
+    padding-right: 8px;
   }
 }
 #live-page .live-points-table tbody td.col-num {
@@ -25490,6 +25529,10 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num {
   color: hsl(142 55% 42%);
   font-weight: 700;
+}
+:root[data-theme="dark"] #live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num,
+:root:not([data-theme="light"]) #live-page .live-points-table tbody td.col-num .live-points-pill.is-defcon-progress .live-points-dc-frac.is-hit .live-points-dc-num {
+  color: hsl(142 55% 48%);
 }
 #live-page .live-points-table tbody td.col-num .live-points-pill.is-warn {
   background: hsl(var(--yc-pill-bg));
@@ -25816,16 +25859,20 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   /* Match body Points col padding — generic sticky th padding is tighter and
      drifts header labels off the pills when tables size independently. */
   #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-num {
-    padding-left: 14px;
-    padding-right: 14px;
-    min-width: 3.45em;
-    font-size: 10px;
-  }
-  #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-num-narrow {
+    max-width: none;
+    min-width: calc(2ch + 2 * var(--data-pill-pad-x, 6px) + 20px);
     padding-left: 10px;
     padding-right: 10px;
-    min-width: 2.85em;
     font-size: 10px;
+    text-align: center;
+  }
+  #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-num-narrow {
+    max-width: none;
+    min-width: calc(2ch + 2 * var(--data-pill-pad-x, 6px) + 16px);
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 10px;
+    text-align: center;
   }
   #live-page .live-sticky-head-inner > table.live-points-table > thead tr:not(.section-row) th.col-player {
     /* Keep vertical padding from the taller sticky header; horizontal from morph. */
@@ -27112,12 +27159,10 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     0 0 0 1px hsl(var(--foreground) / 0.05);
   transform: translate3d(0, 0, 0) scale(1);
   opacity: 1;
-  filter: blur(0);
   transition:
-    transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
-    opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
-    filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger);
-  will-change: transform, opacity, filter;
+    transform var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger),
+    opacity var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger);
+  will-change: transform, opacity;
   backface-visibility: hidden;
 }
 :root[data-theme="dark"] .fixtures-sos-fab {

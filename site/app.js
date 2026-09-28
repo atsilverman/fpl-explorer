@@ -28776,6 +28776,7 @@
     const achieved = liveAchievedDotHTML(actions, thr, pos);
     const acts = Number.isFinite(Number(actions)) ? Math.max(0, Number(actions)) : 0;
     const completeCls = bar.complete ? " is-complete" : "";
+    const hitCls = bar.complete ? " is-hit" : "";
     const roll = statRollSpan(acts, {
       from: 0,
       decimals: 0,
@@ -28789,7 +28790,7 @@
             <span class="live-defcon-track"><span class="live-defcon-fill"></span></span>
           </span>
           <span class="live-defcon-count">
-            <span class="live-defcon-frac">${roll}<span class="live-defcon-thr">/${escapeHtml(String(thr))}</span></span>
+            <span class="live-defcon-frac${hitCls}">${roll}<span class="live-defcon-thr">/${escapeHtml(String(thr))}</span></span>
             <span class="live-defcon-check-slot">${achieved}</span>
           </span>
         </div>
