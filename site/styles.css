@@ -9391,24 +9391,26 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 }
 
 .spit-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 7.25rem minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
   color: var(--text-dim);
   font-size: 11.5px;
   line-height: 1.4;
 }
 .spit-row > span:last-child {
   min-width: 0;
-  flex: 1 1 auto;
 }
 
 .spit-symbol {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 22px;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 100%;
   min-height: 18px;
+  box-sizing: border-box;
   font-family: var(--mono);
   font-weight: 700;
   gap: 2px;
@@ -9420,8 +9422,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .spit-symbol:has(.live-bonus-status),
 .spit-symbol:has(.home-chip-cell),
 .spit-symbol:has(.ownership-pill) {
-  flex: 0 0 auto;
-  align-self: flex-start;
+  align-self: start;
 }
 .spit-symbol .icon {
   font-size: 14px;
@@ -9432,14 +9433,15 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .spit-symbol.spit-medals,
 .spit-symbol.spit-scatter-key,
 .spit-symbol:has(.icon + .icon) {
-  flex-basis: auto;
-  min-width: 20px;
   gap: 3px;
 }
 
 .spit-rank {
   color: var(--text);
   font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
 }
 
 .spit-tough {
@@ -12853,8 +12855,30 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   font-size: 13px;
 }
 .home-player-open-x[hidden],
-.home-player-compare-btn[hidden] {
+.home-player-compare-btn[hidden],
+.home-compare-viz-seg[hidden] {
   display: none !important;
+}
+.home-compare-viz-seg.segmented {
+  flex: none;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 2px;
+  gap: 0;
+}
+.home-compare-viz-seg button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 28px;
+  padding: 0 7px;
+}
+.home-compare-viz-seg button .icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
 }
 .home-player-compare-btn {
   display: inline-flex;
@@ -12892,44 +12916,74 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   border-radius: var(--radius);
   background: hsl(var(--card));
   box-shadow: var(--shadow-sm);
+  --home-compare-val-ch: 3;
 }
 .home-compare-heads {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 8px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
   margin: 0 0 12px;
 }
 .home-compare-side {
+  appearance: none;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
-  padding: 10px 8px;
+  padding: 8px 10px;
   border-radius: calc(var(--radius) - 2px);
+  border: 1px solid color-mix(in srgb, var(--home-compare-accent, hsl(var(--border-hsl))) 32%, var(--border));
   background:
     linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--home-compare-accent, hsl(var(--muted))) 22%, transparent),
-      transparent 70%
+      105deg,
+      color-mix(in srgb, var(--home-compare-accent, hsl(var(--muted))) 18%, transparent),
+      transparent 72%
     ),
-    hsl(var(--muted) / 0.35);
-  text-align: center;
+    hsl(var(--muted) / 0.28);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.home-compare-side:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.home-compare-side.is-b {
+  flex-direction: row-reverse;
+  text-align: right;
+  background:
+    linear-gradient(
+      255deg,
+      color-mix(in srgb, var(--home-compare-accent, hsl(var(--muted))) 18%, transparent),
+      transparent 72%
+    ),
+    hsl(var(--muted) / 0.28);
 }
 .home-compare-side.is-empty {
-  justify-content: center;
+  justify-content: flex-start;
   color: var(--text-faint);
+}
+.home-compare-side.is-empty .home-compare-name {
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0;
 }
 .home-compare-photo-wrap {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   flex: none;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--home-compare-accent, hsl(var(--border-hsl))) 45%, transparent);
 }
 .home-compare-photo {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 999px;
   object-fit: cover;
   background: hsl(var(--muted));
@@ -12947,6 +13001,7 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 }
 .home-compare-badge.badge-img,
 .home-compare-badge {
+  /* Legacy corner crest — unused on player sides; kept for team crest-only wrap */
   position: absolute;
   right: -4px;
   bottom: -2px;
@@ -12956,32 +13011,72 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .home-compare-id {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
-  width: 100%;
+  flex: 1 1 auto;
+}
+.home-compare-side.is-b .home-compare-id {
+  align-items: flex-end;
 }
 .home-compare-name {
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 .home-compare-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
   font-size: 11px;
-  font-weight: 550;
-  color: var(--text-faint);
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--home-compare-accent, var(--text-dim));
+}
+.home-compare-side.is-b .home-compare-meta {
+  flex-direction: row-reverse;
+}
+.home-compare-meta-crest.badge-img,
+.home-compare-meta-crest {
+  display: none;
+}
+.home-compare-meta-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  color: inherit;
+}
+html[data-theme="light"] .home-compare-meta {
+  color: color-mix(in srgb, var(--home-compare-accent, var(--text-dim)) 82%, #111);
+}
+html:not([data-theme="light"]) .home-compare-meta {
+  color: color-mix(in srgb, var(--home-compare-accent, var(--text-dim)) 78%, #fff);
 }
 .home-compare-vs {
   align-self: center;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: hsl(var(--card));
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--text-dim);
+  flex: none;
+  z-index: 1;
 }
 .home-compare-mode-seg.segmented {
   width: 100%;
@@ -12999,15 +13094,93 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .home-compare-sections {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
+}
+.home-compare-section {
+  --home-compare-acc-expand: 250ms;
+  --home-compare-acc-collapse: 250ms;
+  --home-compare-acc-chevron: 250ms;
+  --home-compare-acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  min-width: 0;
+}
+.home-compare-section-head {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 2px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+}
+.home-compare-section-head:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: calc(var(--radius) - 4px);
 }
 .home-compare-section-title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-dim);
+}
+.home-compare-section-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--text-faint);
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--home-compare-acc-chevron) var(--home-compare-acc-ease);
+}
+.home-compare-section-chevron .icon {
+  width: 14px;
+  height: 14px;
+}
+.home-compare-section[data-open="true"] .home-compare-section-chevron {
+  transform: scaleY(-1);
+}
+.home-compare-section-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--home-compare-acc-collapse) var(--home-compare-acc-ease);
+}
+.home-compare-section[data-open="true"] .home-compare-section-panel {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--home-compare-acc-expand) var(--home-compare-acc-ease);
+}
+.home-compare-section-panel-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--home-compare-acc-collapse) var(--home-compare-acc-ease),
+    filter var(--home-compare-acc-collapse) var(--home-compare-acc-ease);
+}
+.home-compare-section[data-open="true"] .home-compare-section-panel-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--home-compare-acc-expand) var(--home-compare-acc-ease),
+    filter var(--home-compare-acc-expand) var(--home-compare-acc-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-compare-section-panel,
+  .home-compare-section-panel-inner,
+  .home-compare-section-chevron {
+    transition: none !important;
+  }
 }
 .home-compare-table {
   display: flex;
@@ -13023,21 +13196,44 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
+.home-compare-row.is-bars {
+  grid-template-columns: minmax(0, 1fr) 4.75em minmax(0, 1fr);
+  column-gap: 10px;
+  min-height: 44px;
+}
 .home-compare-lab {
   font-size: 11.5px;
-  font-weight: 550;
-  color: var(--text-faint);
+  font-weight: 600;
+  color: var(--text-dim);
   text-align: center;
   white-space: nowrap;
   min-width: 3.2em;
 }
+.home-compare-row.is-bars .home-compare-lab {
+  width: 4.75em;
+  min-width: 4.75em;
+  max-width: 4.75em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .home-compare-val {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--home-compare-val-ch, 3) * 1ch + 1.1rem);
+  min-width: calc(var(--home-compare-val-ch, 3) * 1ch + 1.1rem);
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1.5px solid hsl(var(--border-hsl) / 0.9);
+  background: hsl(var(--muted) / 0.65);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   color: var(--text);
   line-height: 1.2;
+  flex: none;
 }
 .home-compare-row.is-text .home-compare-val.is-a {
   text-align: left;
@@ -13048,29 +13244,27 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   justify-self: end;
 }
 .home-compare-metric {
+  --compare-bar: hsl(var(--foreground) / 0.55);
   display: grid;
-  gap: 6px;
   align-items: center;
+  gap: 8px;
   min-width: 0;
+  width: 100%;
 }
+/* Outer pill + bar growing into the center label. */
 .home-compare-metric.is-a {
   grid-template-columns: auto minmax(0, 1fr);
-  --compare-bar: var(--compare-accent-a, hsl(210 70% 46%));
-}
-.home-compare-metric.is-a .home-compare-val {
-  text-align: right;
+  --compare-bar: var(--compare-accent-a, hsl(210 70% 52%));
 }
 .home-compare-metric.is-b {
   grid-template-columns: minmax(0, 1fr) auto;
-  --compare-bar: var(--compare-accent-b, hsl(12 75% 48%));
-}
-.home-compare-metric.is-b .home-compare-val {
-  text-align: left;
+  --compare-bar: var(--compare-accent-b, hsl(12 75% 52%));
 }
 .home-compare-bar-rail {
-  height: 9px;
+  width: 100%;
+  height: 12px;
   border-radius: 999px;
-  background: hsl(var(--muted) / 0.55);
+  background: hsl(var(--foreground) / 0.12);
   overflow: hidden;
   min-width: 0;
 }
@@ -13083,31 +13277,234 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   height: 100%;
   border-radius: inherit;
   max-width: 100%;
-  background: color-mix(
-    in srgb,
-    var(--compare-bar, hsl(var(--foreground) / 0.45)) 70%,
-    hsl(var(--muted))
-  );
+  background: var(--compare-bar);
   opacity: 0.55;
-  transition: width 0.2s var(--ease-out, ease), opacity 0.15s ease;
+  transition: width 0.22s var(--ease-out, ease), opacity 0.15s ease;
 }
 .home-compare-metric.is-better .home-compare-bar {
-  opacity: 1;
+  opacity: 0.92;
 }
+/* Compare-row winner only: accent border on the value pill (no fill). */
 .home-compare-metric.is-better .home-compare-val {
+  border-color: var(--compare-bar);
+  color: var(--text);
+  font-weight: 750;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--compare-bar) 40%, transparent);
+}
+.home-compare-metric:not(.is-better) .home-compare-val {
+  color: var(--text-dim);
+}
+html[data-theme="light"] .home-compare-bar-rail {
+  background: hsl(var(--foreground) / 0.1);
+}
+html:not([data-theme="light"]) .home-compare-bar-rail {
+  background: hsl(var(--foreground) / 0.16);
+}
+/* ---- Axis (dots) compare layout ---- */
+.home-compare-row.is-axis {
+  grid-template-columns: 4.75em minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  min-height: 36px;
+}
+.home-compare-row.is-axis.is-axis-split {
+  min-height: 48px;
+}
+.home-compare-lab.is-axis-lab {
+  width: 4.75em;
+  min-width: 4.75em;
+  max-width: 4.75em;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-compare-axis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 5px;
+  align-items: center;
+  min-width: 0;
+}
+.home-compare-axis-plot {
+  position: relative;
+  grid-column: 1;
+  min-width: 0;
+  /* Room for value labels above the rail (and below when split). */
+  padding-top: 14px;
+  padding-bottom: 0;
+}
+.home-compare-row.is-axis-split .home-compare-axis-plot {
+  padding-bottom: 14px;
+}
+.home-compare-axis-rail {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: hsl(var(--foreground) / 0.12);
+  overflow: visible;
+}
+.home-compare-axis-dot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  border: 2px solid hsl(var(--card));
+  box-shadow: 0 0 0 1px hsl(var(--foreground) / 0.18);
+  background: var(--compare-bar, hsl(var(--foreground) / 0.55));
+  z-index: 1;
+  transition: left 0.22s var(--ease-out, ease);
+}
+.home-compare-axis-dot.is-a {
+  --compare-bar: var(--compare-accent-a, hsl(210 70% 52%));
+  z-index: 2;
+}
+.home-compare-axis-dot.is-b {
+  --compare-bar: var(--compare-accent-b, hsl(12 75% 52%));
+  z-index: 2;
+}
+/* Matchup winner: slight ring only — no category-leader halo. */
+.home-compare-axis-dot.is-better {
+  box-shadow:
+    0 0 0 1px var(--compare-bar),
+    0 0 0 2.5px color-mix(in srgb, var(--compare-bar) 28%, transparent);
+  z-index: 3;
+}
+.home-compare-axis-leader-tick {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 2px;
+  height: calc(100% + 4px);
+  border-radius: 1px;
+  background: hsl(var(--foreground) / 0.35);
+  z-index: 0;
+}
+.home-compare-axis-leader-val {
+  grid-column: 2;
+  align-self: center;
+  min-width: 2.4ch;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.home-compare-axis-leader-val.is-empty {
+  visibility: hidden;
+}
+.home-compare-axis-plot > .home-compare-val {
+  position: absolute;
+  left: 0;
+  transform: translateX(-50%);
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: left 0.22s var(--ease-out, ease);
+  z-index: 1;
+}
+.home-compare-axis-plot > .home-compare-val.is-above {
+  top: 0;
+}
+.home-compare-axis-plot > .home-compare-val.is-below {
+  bottom: 0;
+  top: auto;
+}
+.home-compare-axis-plot > .home-compare-val.is-a {
+  --compare-bar: var(--compare-accent-a, hsl(210 70% 52%));
+}
+.home-compare-axis-plot > .home-compare-val.is-b {
+  --compare-bar: var(--compare-accent-b, hsl(12 75% 52%));
+}
+.home-compare-axis-plot > .home-compare-val.is-better {
+  color: var(--text);
   font-weight: 750;
 }
+.home-compare-axis-plot > .home-compare-val:not(.is-better) {
+  color: var(--text-dim);
+}
+html[data-theme="light"] .home-compare-axis-rail {
+  background: hsl(var(--foreground) / 0.1);
+}
+html:not([data-theme="light"]) .home-compare-axis-rail {
+  background: hsl(var(--foreground) / 0.16);
+}
+@media (max-width: 420px) {
+  .home-compare-row.is-axis {
+    grid-template-columns: 3.6em minmax(0, 1fr);
+    column-gap: 6px;
+  }
+  .home-compare-lab.is-axis-lab {
+    width: 3.6em;
+    min-width: 3.6em;
+    max-width: 3.6em;
+    font-size: 10.5px;
+  }
+  .home-compare-axis-dot {
+    width: 10px;
+    height: 10px;
+  }
+  .home-compare-row.is-bars {
+    grid-template-columns: minmax(0, 1fr) 3.6em minmax(0, 1fr);
+    column-gap: 6px;
+  }
+  .home-compare-row.is-bars .home-compare-lab {
+    width: 3.6em;
+    min-width: 3.6em;
+    max-width: 3.6em;
+    font-size: 10.5px;
+  }
+  .home-compare-metric {
+    gap: 5px;
+  }
+  .home-compare-bar-rail {
+    height: 10px;
+  }
+  .home-compare-val {
+    width: calc(var(--home-compare-val-ch, 3) * 1ch + 0.9rem);
+    min-width: calc(var(--home-compare-val-ch, 3) * 1ch + 0.9rem);
+    padding: 2px 6px;
+    font-size: 11.5px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-compare-axis-dot,
+  .home-compare-axis-plot > .home-compare-val {
+    transition: none !important;
+  }
+}
 .home-compare-photo-wrap.is-crest-only {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
+  box-shadow: none;
+  border-radius: 10px;
 }
 .home-compare-photo-wrap.is-crest-only .home-compare-team-crest.badge-img,
 .home-compare-photo-wrap.is-crest-only .badge-img {
-  width: 44px;
-  height: 44px;
+  position: static;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 .home-compare-side.is-team .home-compare-photo-wrap.is-crest-only {
@@ -13186,7 +13583,7 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 .mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-dropdown {
@@ -13196,12 +13593,20 @@ html[data-page="markets"] #subtoolbar .topbar-end-cluster {
 .mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-btn {
   width: 100%;
   justify-content: flex-start;
-  padding: 12px 10px;
-  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+}
+.mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-btn:hover {
+  background: hsl(var(--muted) / 0.55);
+  color: var(--text);
 }
 .mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-btn.active {
-  background: hsl(var(--accent-hsl));
-  color: var(--text);
+  background: hsl(var(--blue-hsl) / 0.12);
+  color: hsl(var(--blue-hsl));
 }
 .mobile-sheet-body > .page-tabs.mobile-sheet-hosted .page-tab-clone {
   display: none !important;
@@ -16301,34 +16706,34 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-height: 16px;
+  min-height: 20px;
 }
 .home-form-opp.is-blank {
   visibility: hidden;
 }
 .home-form-opp-badge.badge-img,
 .home-form-opp .badge-img {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   flex: none;
 }
 @media (min-width: 721px) {
   .home-form-opp {
-    min-height: 24px;
+    min-height: 30px;
     gap: 3px;
   }
   .home-form-opp-badge.badge-img,
   .home-form-opp .badge-img {
-    width: 22px;
-    height: 22px;
+    width: 28px;
+    height: 28px;
   }
   .home-form-opp-code {
-    font-size: 10px;
+    font-size: 11px;
   }
 }
 .home-form-opp-code {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--text-faint);
@@ -16686,16 +17091,17 @@ html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lo
     overflow: auto;
   }
 }
-/* Player tray/modal embeds — no card hover lift (Schedule / Rankings keep it). */
+/* Player tray/modal embeds — no card hover lift (Schedule / Rankings keep it).
+   Keep position:relative so .home-lookup-card::before (team wash) stays clipped
+   to the card; position:static made the wash paint the whole tray on hover. */
 .home-player-detail-matchup .schedule-card:hover,
 .home-player-detail-matchup .home-lookup-schedule-card:hover,
 .home-player-detail .home-form-card:hover,
 .home-player-detail .home-own-card:hover,
 .home-player-detail .home-lookup-card:hover,
-.home-player-detail .home-player-owners:hover,
 .home-player-detail .schedule-card:hover,
 .home-player-detail .home-lookup-schedule-card:hover {
-  position: static;
+  position: relative;
   z-index: auto;
   transform: none;
   border-color: var(--border);
@@ -17181,8 +17587,8 @@ html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lo
   --home-pitch-ink-fg: hsl(240 10% 10%);
   --home-pitch-ink-idle-bg: hsl(240 5% 72%);
   --home-pitch-ink-idle-fg: hsl(240 6% 22%);
-  /* Opaque frame — soft light edge in dark (not harsh white). */
-  --home-pitch-card-border: color-mix(in srgb, #fff 22%, #1a1a1a);
+  /* Opaque frame — soft silver edge, a step above muted pitch lines. */
+  --home-pitch-card-border: color-mix(in srgb, #fff 38%, #1a1a1a);
   --home-pitch-card-border-w: 3px;
   --home-pitch-card-fg: hsl(0 0% 96%);
   --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
@@ -17255,8 +17661,7 @@ html[data-theme="dark"][data-home-surface="solid"] .home-dashboard {
 html[data-home-surface="solid"] .home-summary-hero-chip,
 html[data-home-surface="solid"] .home-summary-hero-top-pct,
 html[data-home-surface="solid"] .home-summary-hero-live,
-html[data-home-surface="solid"] .home-summary-hero-delta,
-html[data-home-surface="solid"] .home-view-chip {
+html[data-home-surface="solid"] .home-summary-hero-delta {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -17397,178 +17802,129 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
     overflow: hidden;
   }
 }
-/* Viewing another manager — floating eye chip (fixed bottom; scroll stays free). */
+/* Viewing manager / pinned player — accent token + nav status (replaces i/settings).
+   No dashboard inset stripe: it read as stray blue badges between summary cards. */
 .home-dashboard.is-viewing-manager,
 .home-dashboard.is-owner-pinning {
   --home-view-accent: hsl(var(--blue-hsl));
-  /* Clearance so last rows aren't covered by the floating chip. */
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
 }
 #home-page.is-owner-pinning {
   --home-view-accent: hsl(var(--blue-hsl));
 }
-/* Own-team search only — hide desktop field + mobile FAB while viewing. */
 #home-page.is-viewing-manager #home-desktop-search,
 #home-page.is-viewing-manager #home-search-btn {
   display: none !important;
 }
-.home-view-chip {
-  position: fixed;
-  left: 50%;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  /* Above .mobile-chrome-fade (40) and docks (44); lives at body level. */
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  /* Fixed width so short/long manager names share the same card footprint. */
-  width: 75vw;
-  max-width: 75vw;
-  margin: 0;
-  padding: 14px 10px 14px 20px;
-  border-radius: var(--mobile-dock-radius, 12px);
-  border: 1.5px solid hsl(var(--blue-hsl) / 0.32);
-  background: hsl(210 40% 99% / 0.9);
-  color: hsl(220 16% 22%);
-  line-height: 1;
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-  box-shadow:
-    0 12px 36px hsl(215 35% 20% / 0.18),
-    0 2px 12px hsl(215 35% 20% / 0.1);
-  box-sizing: border-box;
-  flex-wrap: nowrap;
-  min-width: 0;
-  pointer-events: auto;
+.home-dashboard.is-viewing-manager .home-standings-table tr.is-view-active td {
+  background: color-mix(in srgb, hsl(var(--blue-hsl)) 14%, transparent);
 }
-.home-view-chip[hidden] {
+.home-dashboard.is-owner-pinning .home-squad-row.is-owner-pinned > td,
+.home-dashboard.is-owner-pinning .home-pitch-card.is-owner-pinned {
+  outline: 2px solid var(--home-view-accent, hsl(var(--blue-hsl)));
+  outline-offset: 1px;
+}
+.home-dashboard.is-owner-pinning .home-pitch-card.is-owner-pinned {
+  --home-pitch-frame: var(--home-view-accent, hsl(var(--blue-hsl)));
+}
+/* Legacy floating chips retired — tint status lives in page-nav. */
+.home-view-chip {
   display: none !important;
 }
-.home-view-chip-icon {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  color: var(--home-view-accent, hsl(var(--blue-hsl)));
-  opacity: 0.95;
+html:not([data-page="home"]) .home-view-status {
+  display: none !important;
 }
-.home-view-chip-name {
-  flex: 1 1 auto;
+.home-view-status {
+  appearance: none;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  max-width: min(220px, 46vw);
+  margin: 0;
+  padding: 5px 6px 5px 8px;
+  border: 1px solid hsl(var(--blue-hsl) / 0.35);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--blue-hsl) / 0.1);
+  color: var(--text);
+  cursor: pointer;
+  flex: 0 1 auto;
   min-width: 0;
-  font-size: 17px;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-  color: inherit;
+  text-align: left;
+  font: inherit;
+  line-height: 1.15;
+  touch-action: manipulation;
+}
+.home-view-status:not([hidden]) {
+  display: inline-flex;
+}
+html[data-page="home"].is-home-view-status-on .page-info-btn.page-info-nav-btn,
+html[data-page="home"].is-home-view-status-on #prefs-wrap {
+  display: none !important;
+}
+.home-view-status-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: hsl(var(--blue-hsl));
+}
+.home-view-status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.home-view-status-kicker {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--blue-hsl));
+}
+.home-view-status-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
 }
-.home-view-chip-clear {
-  flex: none;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border: 0;
-  border-radius: calc(var(--mobile-dock-radius, 12px) - 3px);
-  background: transparent;
-  color: hsl(220 10% 40%);
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-.home-view-chip-clear .icon {
+.home-view-status-clear-affordance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
+  flex: none;
+  border-radius: calc(var(--radius) - 4px);
+  color: var(--text-dim);
 }
-.home-view-chip-clear:hover {
+.home-view-status-clear-affordance .icon {
+  width: 13px;
+  height: 13px;
+}
+.home-view-status:hover {
+  background: hsl(var(--blue-hsl) / 0.16);
+  border-color: hsl(var(--blue-hsl) / 0.5);
+}
+.home-view-status:hover .home-view-status-clear-affordance {
   background: hsl(var(--blue-hsl) / 0.12);
-  color: hsl(220 16% 18%);
+  color: var(--text);
 }
-.home-view-chip-clear:focus-visible {
-  outline: 2px solid hsl(var(--blue-hsl) / 0.45);
-  outline-offset: 1px;
+.home-view-status:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
-.home-view-chip-clear:active {
-  transform: translateY(0.5px);
-}
-html[data-theme="dark"] .home-view-chip {
-  border-color: hsl(var(--blue-hsl) / 0.42);
-  background: hsl(215 28% 14% / 0.82);
-  color: hsl(210 14% 90%);
-  box-shadow:
-    0 10px 32px hsl(0 0% 0% / 0.36),
-    0 2px 8px hsl(0 0% 0% / 0.2);
-}
-html[data-theme="dark"] .home-view-chip-clear {
-  color: hsl(210 12% 72%);
-}
-html[data-theme="dark"] .home-view-chip-clear:hover {
-  background: hsl(var(--blue-hsl) / 0.22);
-  color: hsl(0 0% 98%);
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .home-view-chip {
-    border-color: hsl(var(--blue-hsl) / 0.42);
-    background: hsl(215 28% 14% / 0.82);
-    color: hsl(210 14% 90%);
-    box-shadow:
-      0 10px 32px hsl(0 0% 0% / 0.36),
-      0 2px 8px hsl(0 0% 0% / 0.2);
+@media (max-width: 720px) {
+  .home-view-status {
+    max-width: min(168px, 40vw);
+    padding: 4px 5px 4px 7px;
+    gap: 5px;
   }
-  html:not([data-theme="light"]) .home-view-chip-clear {
-    color: hsl(210 12% 72%);
-  }
-  html:not([data-theme="light"]) .home-view-chip-clear:hover {
-    background: hsl(var(--blue-hsl) / 0.22);
-    color: hsl(0 0% 98%);
+  .home-view-status-name {
+    font-size: 11px;
   }
 }
-html[data-home-surface="solid"] .home-view-chip {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: hsl(220 16% 96%);
-  border-color: hsl(var(--blue-hsl) / 0.32);
-}
-html[data-theme="dark"][data-home-surface="solid"] .home-view-chip {
-  background: hsl(215 22% 16%);
-  border-color: hsl(var(--blue-hsl) / 0.42);
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"])[data-home-surface="solid"] .home-view-chip {
-    background: hsl(215 22% 16%);
-    border-color: hsl(var(--blue-hsl) / 0.42);
-  }
-}
-@media (max-width: 900px) {
-  .home-view-chip {
-    width: 75vw;
-    max-width: 75vw;
-    bottom: max(18px, env(safe-area-inset-bottom, 0px));
-    padding: 13px 9px 13px 18px;
-    gap: 11px;
-  }
-  .home-view-chip-name {
-    font-size: 16px;
-  }
-  .home-view-chip-icon {
-    width: 20px;
-    height: 20px;
-  }
-  .home-view-chip-clear {
-    width: 40px;
-    height: 40px;
-  }
-  .home-view-chip-clear .icon {
-    width: 19px;
-    height: 19px;
-  }
-}
-/* Only show while Home is the active page (chip is a body-level fixed node). */
-html:not([data-page="home"]) .home-view-chip {
-  display: none !important;
-}
+
 .home-summary {
   display: flex;
   flex-direction: column;
@@ -18012,7 +18368,7 @@ html[data-theme="dark"] .home-summary-hero-autosub {
   justify-content: center;
   gap: 4px;
   padding: 4px 10px 4px 7px;
-  border-radius: 999px;
+  border-radius: 8px;
   /* Light: quiet white pill on pale wash. */
   border: 1px solid hsl(var(--border-hsl));
   background: hsl(0 0% 100% / 0.72);
@@ -18882,7 +19238,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
 }
 /* Home player lookup embeds a schedule matchup card — no hover lift (Schedule keeps it). */
 .home-player-matchup .schedule-card:hover {
-  position: static;
+  position: relative;
   z-index: auto;
   transform: none;
   border-color: var(--border);
@@ -19254,8 +19610,8 @@ html[data-theme="dark"] .home-dashboard {
   max-width: 100%;
   height: 30px;
   margin: 0;
-  padding: 0 2px 0 6px;
-  border: none;
+  padding: 0 4px 0 8px;
+  border: 1px solid hsl(var(--border-hsl) / 0.9);
   border-radius: calc(var(--radius) - 2px);
   background: transparent;
   color: var(--text-dim);
@@ -20554,11 +20910,6 @@ tr.home-bench-lock-spacer > th {
   /* Outer frame ring — grows outside the card (not clipped by overflow). */
   --home-pitch-frame-ring: 0 0 0 var(--home-pitch-card-border-w, 3px)
     var(--home-pitch-frame, var(--home-pitch-card-border));
-  /* Gyro tilt (Settings → Home tilt) — set by JS as degrees / px offsets. */
-  --home-tilt-rx: 0;
-  --home-tilt-ry: 0;
-  --home-tilt-sx: 0px;
-  --home-tilt-sy: 0px;
   appearance: none;
   -webkit-appearance: none;
   position: relative;
@@ -20585,64 +20936,6 @@ tr.home-bench-lock-spacer > th {
 }
 html[data-home-surface="solid"] .home-pitch-card {
   background: var(--home-pitch-card-bg);
-}
-/* Device tilt — pitch cards + hero rank (Settings → Home tilt). */
-html.home-tilt-on .home-squad-pitch-xi,
-html.home-tilt-on .home-pitch-bench,
-html.home-tilt-on .home-summary-hero {
-  perspective: 900px;
-}
-html.home-tilt-on .home-pitch-card {
-  transform: rotateX(calc(var(--home-tilt-rx, 0) * 1deg))
-    rotateY(calc(var(--home-tilt-ry, 0) * 1deg));
-  transform-style: preserve-3d;
-  will-change: transform, box-shadow;
-  transition:
-    transform 0.1s linear,
-    box-shadow 0.1s linear;
-  /* Subtle tilt cast — leave strength as-is; frame ring stays on top. */
-  box-shadow:
-    var(--home-pitch-frame-ring),
-    var(--home-tilt-sx, 0px) calc(2px + var(--home-tilt-sy, 0px)) 12px hsl(0 0% 0% / 0.16),
-    var(--home-pitch-lift);
-}
-html.home-tilt-on .home-dashboard .home-pitch-card,
-html[data-theme="light"].home-tilt-on .home-dashboard .home-pitch-card,
-html[data-theme="dark"].home-tilt-on .home-dashboard .home-pitch-card {
-  box-shadow:
-    var(--home-pitch-frame-ring),
-    var(--home-tilt-sx, 0px) calc(2px + var(--home-tilt-sy, 0px)) 12px hsl(0 0% 0% / 0.16),
-    var(--home-pitch-lift);
-}
-html.home-tilt-on .home-summary-hero-value {
-  display: inline-block;
-  transform-origin: center bottom;
-  transform: rotateX(calc(var(--home-tilt-rx, 0) * 0.45deg))
-    rotateY(calc(var(--home-tilt-ry, 0) * 0.45deg));
-  transition: transform 0.1s linear;
-  will-change: transform;
-}
-@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
-  html.home-tilt-on .home-pitch-card:hover,
-  html.home-tilt-on .home-pitch-card.is-home-cross-hover,
-  html.home-tilt-on .home-pitch-card.is-owner-pinned {
-    box-shadow:
-      var(--home-pitch-frame-ring),
-      var(--home-tilt-sx, 0px) calc(2px + var(--home-tilt-sy, 0px)) 14px hsl(0 0% 0% / 0.18),
-      var(--home-pitch-lift);
-  }
-  html.home-tilt-on .home-pitch-card:hover {
-    transform: translateY(-2px) scale(1.04)
-      rotateX(calc(var(--home-tilt-rx, 0) * 1deg))
-      rotateY(calc(var(--home-tilt-ry, 0) * 1deg));
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  html.home-tilt-on .home-pitch-card,
-  html.home-tilt-on .home-summary-hero-value {
-    transform: none !important;
-    transition: none !important;
-  }
 }
 /* Desktop: whole-card lift + scale (photo, type, frame, strip) in one transform.
    Blue frame + soft blue shadow match feed/squad cross-hover wash. */
@@ -20767,30 +21060,6 @@ img.home-pitch-photo {
   place-items: center;
   transform: none;
   background: color-mix(in srgb, var(--home-pitch-card-bg) 92%, hsl(var(--muted-foreground)) 8%);
-}
-/* Kit-only tilt — after base transform:none so it wins; frame/name stay still. */
-html.home-tilt-kit-on .home-pitch-photo-wrap {
-  perspective: 700px;
-  transform-style: preserve-3d;
-  overflow: hidden;
-}
-html.home-tilt-kit-on img.home-pitch-photo,
-html.home-tilt-kit-on .home-pitch-photo-crest,
-html.home-tilt-kit-on .home-pitch-photo-fallback {
-  transform: rotateX(calc(var(--home-tilt-rx, 0) * 1.35deg))
-    rotateY(calc(var(--home-tilt-ry, 0) * 1.35deg))
-    scale(1.06);
-  transform-origin: center 32%;
-  will-change: transform;
-  transition: transform 0.1s linear;
-}
-@media (prefers-reduced-motion: reduce) {
-  html.home-tilt-kit-on img.home-pitch-photo,
-  html.home-tilt-kit-on .home-pitch-photo-crest,
-  html.home-tilt-kit-on .home-pitch-photo-fallback {
-    transform: none !important;
-    transition: none !important;
-  }
 }
 .home-pitch-photo-fallback.is-photo-icon {
   color: var(--home-pitch-card-muted);

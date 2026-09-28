@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1551" />
+<link rel="stylesheet" href="styles.css?v=1578" />
 <link rel="stylesheet" href="motion-enhanced.css?v=11" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -25,6 +25,9 @@
     const root = document.documentElement;
     const theme = localStorage.getItem("fpl-explorer-theme");
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
+    try {
+      localStorage.removeItem("fpl-explorer-home-view-chrome");
+    } catch (_) {}
     // Animations master switch (default off). Migrates legacy number-roll prefs.
     const ANIM_KEY = "fpl-explorer-animations";
     try {
@@ -185,6 +188,12 @@
   </symbol>
   <symbol id="i-chart-gantt" viewBox="0 0 24 24">
     <path d="M8 6h10"/><path d="M6 12h9"/><path d="M11 18h7"/><path d="M3 3v18"/>
+  </symbol>
+  <symbol id="i-bar-chart-2" viewBox="0 0 24 24">
+    <path d="M5 3v18"/><path d="M19 9v12"/><path d="M12 6v15"/>
+  </symbol>
+  <symbol id="i-circle-dot" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/>
   </symbol>
   <symbol id="i-calendar-days" viewBox="0 0 24 24">
     <path d="M8 2v4"/><path d="M16 2v4"/>
@@ -471,9 +480,9 @@
             <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
             xData
           </button>
-          <button id="page-schedule" class="page-tab-btn" type="button">
+          <button id="page-schedule" class="page-tab-btn" type="button" data-tray-short="SoS">
             <svg class="icon" aria-hidden="true"><use href="#i-calendar-search"/></svg>
-            Strength of Schedule
+            Strength of Schedule (SoS)
           </button>
           <button id="page-fixtures" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-calendar-days"/></svg>
@@ -522,6 +531,16 @@
       <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
     </button>
     <button type="button" class="page-live-badge page-live-badge-nav" id="page-nav-live" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button>
+    <button type="button" id="home-view-status" class="home-view-status" hidden>
+      <svg class="icon home-view-status-icon" aria-hidden="true"><use href="#i-eye"/></svg>
+      <span class="home-view-status-copy">
+        <span class="home-view-status-kicker" id="home-view-status-kicker">Viewing</span>
+        <strong class="home-view-status-name" id="home-view-status-name"></strong>
+      </span>
+      <span class="home-view-status-clear-affordance" aria-hidden="true">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </span>
+    </button>
     <button class="icon-btn icon-only-btn page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
       aria-label="How Home works" aria-describedby="page-info-tooltip" aria-expanded="false">
       <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
@@ -568,22 +587,6 @@
                 <span class="settings-switch-hint">Page enters, number rolls, and motion polish across the site. Off shows content immediately.</span>
               </span>
               <input type="checkbox" id="prefs-animations" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
-            <label class="settings-switch-row" for="prefs-home-tilt">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Home tilt</span>
-                <span class="settings-switch-hint">Drag a finger or move the cursor over a pitch card — the card tips toward your pointer (no motion permission).</span>
-              </span>
-              <input type="checkbox" id="prefs-home-tilt" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
-            <label class="settings-switch-row" for="prefs-home-tilt-kit">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Kit tilt</span>
-                <span class="settings-switch-hint">Same pointer tracking, but only the kit photo tips — frame, name, and pts stay still.</span>
-              </span>
-              <input type="checkbox" id="prefs-home-tilt-kit" />
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
             <label class="settings-switch-row" for="prefs-mock-live">
@@ -1567,7 +1570,7 @@
       <div class="page-header opta-header expected-header">
         <div class="opta-header-top">
           <div class="opta-header-text">
-            <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">Expected Data</span><button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How Expected Data works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <h2 id="expected-title"><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg><span class="page-title-text">xData</span><button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"></span>Live</button><button class="page-info-btn" type="button" aria-label="How xData works" aria-describedby="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
             <p id="expected-sub" class="page-subtitle">Compare expected (x) stats with what actually happened — who overperformed or underperformed.</p>
           </div>
         </div>
@@ -1836,6 +1839,14 @@
         <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
         <span>Compare</span>
       </button>
+      <div class="segmented home-compare-viz-seg" id="mobile-sheet-compare-viz" hidden role="group" aria-label="Compare layout">
+        <button type="button" data-compare-viz="bars" class="active" aria-label="Bar charts" title="Bar charts">
+          <svg class="icon" aria-hidden="true"><use href="#i-bar-chart-2"/></svg>
+        </button>
+        <button type="button" data-compare-viz="axis" aria-label="Axis dots" title="Axis dots">
+          <svg class="icon" aria-hidden="true"><use href="#i-circle-dot"/></svg>
+        </button>
+      </div>
       <a class="ghost-btn home-player-open-x" id="mobile-sheet-open-x" hidden aria-label="Search X" target="_blank" rel="noopener noreferrer">
         <span>Search</span>
         <svg class="icon icon-x-logo" aria-hidden="true"><use href="#i-x-logo"/></svg>
@@ -1928,6 +1939,14 @@
           <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
           <span>Compare</span>
         </button>
+        <div class="segmented home-compare-viz-seg" id="home-player-modal-compare-viz" hidden role="group" aria-label="Compare layout">
+          <button type="button" data-compare-viz="bars" class="active" aria-label="Bar charts" title="Bar charts">
+            <svg class="icon" aria-hidden="true"><use href="#i-bar-chart-2"/></svg>
+          </button>
+          <button type="button" data-compare-viz="axis" aria-label="Axis dots" title="Axis dots">
+            <svg class="icon" aria-hidden="true"><use href="#i-circle-dot"/></svg>
+          </button>
+        </div>
         <a class="ghost-btn home-player-open-x" id="home-player-modal-open-x" hidden aria-label="Search X" target="_blank" rel="noopener noreferrer">
           <span>Search</span>
           <svg class="icon icon-x-logo" aria-hidden="true"><use href="#i-x-logo"/></svg>
@@ -1970,7 +1989,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1433"></script>
+<script src="app.js?v=1458"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -662,6 +662,8 @@
   const PLAYER_FPL_STAT_KEYS = [
     "apps", "starts", "mins", "xg", "goals", "xa", "assists", "bps", "bonus", "pts",
     "cleanSheets", "goalsConceded", "xgc", "saves", "xgi", "cbit", "cbitr", "defCon",
+    // Live bootstrap fields (form rolling + ICT index) — used by Home compare / lookup.
+    "form", "ict", "formPts", "ppg",
   ];
   const TEAM_OPTA_ONLY_KEYS = [
     "shots", "shotsOnTarget", "touchesBox", "bigChances", "xcs",
@@ -1402,8 +1404,10 @@
     mobileSheetReset: $("#mobile-sheet-reset"),
     mobileSheetOpenX: $("#mobile-sheet-open-x"),
     mobileSheetCompare: $("#mobile-sheet-compare"),
+    mobileSheetCompareViz: $("#mobile-sheet-compare-viz"),
     homePlayerModalOpenX: $("#home-player-modal-open-x"),
     homePlayerModalCompare: $("#home-player-modal-compare"),
+    homePlayerModalCompareViz: $("#home-player-modal-compare-viz"),
     mobileFilterDock: $("#mobile-filter-dock"),
     mobileViewDock: $("#mobile-view-dock"),
     mobileChromeFade: $("#mobile-chrome-fade"),
@@ -1455,9 +1459,10 @@
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
     prefsAnimations: $("#prefs-animations"),
-    prefsHomeTilt: $("#prefs-home-tilt"),
-    prefsHomeTiltKit: $("#prefs-home-tilt-kit"),
     prefsMockLive: $("#prefs-mock-live"),
+    homeViewStatus: $("#home-view-status"),
+    homeViewStatusName: $("#home-view-status-name"),
+    homeViewStatusKicker: $("#home-view-status-kicker"),
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
     fontPairSelect: $("#font-pair-select"),
@@ -4827,6 +4832,82 @@
     return null;
   }
 
+  /** FPL element_type: 1 GK, 2 DEF, 3 MID, 4 FWD. Squad rows use elementType (not pos). */
+  function mockLiveElementType(row) {
+    if (!row || typeof row !== "object") return 0;
+    const et = Number(row.elementType);
+    if (et >= 1 && et <= 4) return et;
+    const slot = Number(row.position);
+    if (slot === 1 || slot === 12) return 1;
+    return 0;
+  }
+
+  function mockLiveIsGk(row) {
+    return mockLiveElementType(row) === 1;
+  }
+
+  function mockLiveIsOutfield(row) {
+    const et = mockLiveElementType(row);
+    return et >= 2 && et <= 4;
+  }
+
+  /**
+   * Pick a realistic autosub pair. Entry bucket varies the scenario so league
+   * standings show GK→GK, same-pos outfield, and cross-pos outfield — not only keepers.
+   * (Home rows have elementType; there is no `pos` field, so the old same-pos
+   * match never fired and every sub fell through to bench[0] = GK.)
+   */
+  function mockLivePickAutosubPair(starters, bench, entryId) {
+    const eid = Number(entryId) || 0;
+    const configured = homeConfiguredEntryId();
+    const bucket = eid === configured ? -1 : mockLiveEntryBucket(eid);
+    const eligibleOut = (r) =>
+      r && !r.isCaptain && !r.isVice && !r.autoSubOut && !r.autoSubIn;
+    const gkStarters = starters.filter((r) => eligibleOut(r) && mockLiveIsGk(r));
+    const ofStarters = starters.filter((r) => eligibleOut(r) && mockLiveIsOutfield(r));
+    const gkBench = bench.filter((r) => r && mockLiveIsGk(r) && !r.autoSubIn);
+    const ofBench = bench.filter((r) => r && mockLiveIsOutfield(r) && !r.autoSubIn);
+    if (!ofStarters.length && !gkStarters.length) return null;
+    if (!ofBench.length && !gkBench.length) return null;
+
+    // bucket -1 / 0: outfield → different outfield type (formation-flex look)
+    // bucket 2: outfield → same elementType when possible
+    // bucket 1: outfield → any other outfield type
+    // bucket 4: GK → GK (keep one keeper path)
+    let preferGk = bucket === 4;
+    let preferSameType = bucket === 2;
+    let preferCrossType = bucket === -1 || bucket === 0 || bucket === 1;
+
+    let outRow = null;
+    let inRow = null;
+
+    if (preferGk && gkStarters.length && gkBench.length) {
+      outRow = gkStarters[eid % gkStarters.length];
+      inRow = gkBench.find((r) => r.element !== outRow.element) || gkBench[0];
+    } else if (ofStarters.length && ofBench.length) {
+      const byType = (list, et) => list.filter((r) => mockLiveElementType(r) === et);
+      // Rotate which starter blanked so DEF/MID/FWD all appear across entries.
+      const outPool = ofStarters;
+      outRow = outPool[(eid + (preferSameType ? 1 : 2)) % outPool.length];
+      const outEt = mockLiveElementType(outRow);
+      const same = byType(ofBench, outEt).filter((r) => r.element !== outRow.element);
+      const cross = ofBench.filter(
+        (r) => r.element !== outRow.element && mockLiveElementType(r) !== outEt
+      );
+      if (preferSameType && same.length) inRow = same[eid % same.length];
+      else if (preferCrossType && cross.length) inRow = cross[eid % cross.length];
+      else if (same.length) inRow = same[0];
+      else if (cross.length) inRow = cross[0];
+      else inRow = ofBench.find((r) => r.element !== outRow.element) || ofBench[0];
+    } else if (gkStarters.length && gkBench.length) {
+      outRow = gkStarters[0];
+      inRow = gkBench.find((r) => r.element !== outRow.element) || gkBench[0];
+    }
+
+    if (!outRow || !inRow || outRow.element === inRow.element) return null;
+    return { outRow, inRow };
+  }
+
   function applyMockLiveSquad(squad, entryId) {
     if (!Array.isArray(squad) || !squad.length) return squad;
     const eid = Number(entryId) || 0;
@@ -4838,14 +4919,19 @@
     }));
     const starters = rows.filter((r) => r && r.starter && !r.onBench);
     const bench = rows.filter((r) => r && (r.onBench || !r.starter));
+    const outfieldStarters = starters.filter((r) => mockLiveIsOutfield(r));
 
-    // Mark several starters in play (skip every 3rd for mixed finished look).
-    const liveN = Math.min(5, starters.length);
+    // Mark several outfield starters in play (spread across DEF/MID/FWD), plus
+    // occasionally the GK — avoid only lighting the first XI slots (often DEF).
+    const livePool = [
+      ...outfieldStarters,
+      ...starters.filter((r) => mockLiveIsGk(r)),
+    ];
+    const liveN = Math.min(6, livePool.length);
     for (let i = 0; i < liveN; i++) {
       if (i > 0 && (eid + i) % 3 === 0) continue;
-      const row = starters[i];
-      if (!row) continue;
-      if (row.autoSubOut) continue;
+      const row = livePool[(i * 2 + (eid % 3)) % livePool.length];
+      if (!row || row.autoSubOut) continue;
       row.live = true;
       row.matchStatus = "live";
       const mins = 32 + ((eid + i * 11) % 48);
@@ -4871,18 +4957,9 @@
 
     const plan = mockLiveAutosubPlan(eid);
     if (plan && starters.length && bench.length) {
-      const outRow =
-        starters.find((r) => r && !r.isCaptain && !r.isVice) ||
-        starters.find((r) => r && !r.isCaptain) ||
-        starters[0];
-      const inRow =
-        (outRow &&
-          bench.find(
-            (r) => r && r.element !== outRow.element && r.pos && r.pos === outRow.pos
-          )) ||
-        bench.find((r) => r && (!outRow || r.element !== outRow.element)) ||
-        bench[0];
-      if (outRow && inRow && outRow.element !== inRow.element) {
+      const pair = mockLivePickAutosubPair(starters, bench, eid);
+      if (pair) {
+        const { outRow, inRow } = pair;
         const outPts =
           plan === "loss"
             ? Math.max(4, Number(outRow.gwPoints) || 5)
@@ -5124,22 +5201,19 @@
     if (el.homeBento) el.homeBento.classList.toggle("is-viewing-manager", viewingOther);
     if (el.homePage) el.homePage.classList.toggle("is-viewing-manager", viewingOther);
     const banner = el.homeViewBanner;
-    if (!banner) return;
-    // Floating bottom chip (all viewports). Prefer viewing over ownership pin.
-    if (viewingOther) {
-      hideHomeOwnerBannerToast();
-      if (el.homeViewBannerName) {
-        el.homeViewBannerName.textContent = homeViewBannerLabel(homeActiveViewEntryId());
+    if (banner) {
+      if (viewingOther) {
+        hideHomeOwnerBannerToast();
+        if (mobileSheetOpen && mobileSheetKey === "home-search") {
+          closeMobileSheet();
+        }
+        hideHomeDesktopSearchResults();
       }
-      // Search is own-team only — close any open sheet / results.
-      if (mobileSheetOpen && mobileSheetKey === "home-search") {
-        closeMobileSheet();
-      }
-      hideHomeDesktopSearchResults();
+      banner.hidden = true;
+      banner.classList.remove("is-visible", "is-leaving");
     }
-    banner.hidden = !viewingOther;
-    banner.classList.remove("is-visible", "is-leaving");
     syncHomeSearchBtn();
+    syncHomeViewStatus();
   }
 
   function syncHomeOwnerBanner() {
@@ -5150,18 +5224,48 @@
       !homeLookupPlayer;
     if (el.homeBento) el.homeBento.classList.toggle("is-owner-pinning", pinOn);
     if (el.homePage) el.homePage.classList.toggle("is-owner-pinning", pinOn);
-    if (!banner) return;
-    // Lookup mode uses the player detail card — skip the ownership chip.
-    if (!pinOn) {
-      hideHomeOwnerBannerToast();
+    if (banner) {
+      if (!pinOn) hideHomeOwnerBannerToast();
+      else hideHomeViewBannerToast();
+      banner.hidden = true;
+      banner.classList.remove("is-visible", "is-leaving");
+    }
+    syncHomeViewStatus();
+  }
+
+  function syncHomeViewStatus() {
+    const status = el.homeViewStatus;
+    const root = document.documentElement;
+    if (!status) {
+      root.classList.remove("is-home-view-status-on");
       return;
     }
-    hideHomeViewBannerToast();
-    if (el.homeOwnerBannerName) {
-      el.homeOwnerBannerName.textContent = homeOwnerBannerPlayerName();
+    const onHome = state.page === "home";
+    const viewingOther = homeIsViewingOtherManager();
+    const pinOn =
+      !!(homeOwnerPin && homeOwnerPin.type === "element") &&
+      !viewingOther &&
+      !homeLookupPlayer;
+    const active = onHome && (viewingOther || pinOn);
+    status.hidden = !active;
+    root.classList.toggle("is-home-view-status-on", active);
+    if (!active) return;
+    const iconUse = status.querySelector(".home-view-status-icon use");
+    const fullName = viewingOther
+      ? homeViewBannerLabel(homeActiveViewEntryId())
+      : homeOwnerBannerPlayerName();
+    if (viewingOther) {
+      if (el.homeViewStatusKicker) el.homeViewStatusKicker.textContent = "Viewing";
+      if (iconUse) iconUse.setAttribute("href", "#i-eye");
+      status.setAttribute("aria-label", `Back to your team (${fullName})`);
+      status.title = `Back to your team — ${fullName}`;
+    } else {
+      if (el.homeViewStatusKicker) el.homeViewStatusKicker.textContent = "Pinned";
+      if (iconUse) iconUse.setAttribute("href", "#i-map-pin");
+      status.setAttribute("aria-label", `Clear ownership highlight (${fullName})`);
+      status.title = `Clear ownership highlight — ${fullName}`;
     }
-    banner.hidden = false;
-    banner.classList.remove("is-visible", "is-leaving");
+    if (el.homeViewStatusName) el.homeViewStatusName.textContent = fullName;
   }
 
   function homeOwnersForElement(elementId) {
@@ -10635,14 +10739,27 @@
 
   function homeFormGwThresholdHit(eg, spec) {
     if (!eg || !spec || !spec.threshold) return false;
-    if (spec.threshold.kind === "defcon") return !!eg.defConHit;
-    if (spec.threshold.kind === "saves") {
-      return Math.floor(Number(eg.saves) || 0) >= 1;
+    const thr = spec.threshold;
+    const line = Number(thr.line);
+    // DefCon: color when actions reach the drawn threshold (FPL +2). Fall back to
+    // the API hit flag when the action count is missing.
+    if (thr.kind === "defcon") {
+      const acts = homeFormGwValue(eg, spec);
+      if (acts != null && Number.isFinite(line)) return acts >= line;
+      return !!eg.defConHit;
     }
-    if (spec.threshold.kind === "minutes") {
-      return (Number(eg.minutes) || 0) >= 60;
+    // Saves / Minutes: hit means the bar meets or clears the threshold line
+    // (3 saves → 1 FPL pt; 60′ → appearance pts). Never treat “any positive”
+    // as a hit — that was coloring 1-save gameweeks as save-point bars.
+    if (!Number.isFinite(line)) return false;
+    if (thr.kind === "saves") {
+      return (Number(eg.saves) || 0) >= line;
     }
-    return false;
+    if (thr.kind === "minutes") {
+      return (Number(eg.minutes) || 0) >= line;
+    }
+    const v = homeFormGwValue(eg, spec);
+    return v != null && Number(v) >= line;
   }
 
   function homeFormSeriesForPlayer(elementId, spec, window = homeFormGwWindow()) {
@@ -10856,7 +10973,7 @@
       avgSvg = `<g class="home-form-avg-group">
         <line class="home-form-avg" x1="${padL}" y1="${y.toFixed(1)}" x2="${lineEnd.toFixed(1)}" y2="${y.toFixed(1)}" />
         <g class="home-form-avg-pill">
-          <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH}" rx="7.5" ry="7.5" />
+          <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH}" rx="4" ry="4" />
           <text x="${(pillX + pillW / 2).toFixed(1)}" y="${(pillCy + 3.2).toFixed(1)}" text-anchor="middle">${escapeHtml(pillText)}</text>
         </g>
       </g>`;
@@ -10898,7 +11015,7 @@
         const pillY = Math.max(1, y - pillH - 3);
         const textY = pillY + pillH / 2 + 3.1;
         return `<g class="home-form-val" style="--bar-i:${i}">
-          <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH}" rx="6" ry="6" />
+          <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW.toFixed(1)}" height="${pillH}" rx="3" ry="3" />
           <text x="${cx.toFixed(1)}" y="${textY.toFixed(1)}" text-anchor="middle">${escapeHtml(text)}</text>
         </g>`;
       })
@@ -12223,6 +12340,12 @@
   let homeCompareBase = null;
   let homeCompareOther = null;
   let homeCompareMode = "total"; // total | per90 | price
+  /** Compare row layout: diverging bars or shared-axis dots. */
+  let homeCompareViz = "bars"; // bars | axis
+  /** Which header card search is replacing: "a" (base) or "b" (other). */
+  let homeCompareReplaceSide = "b";
+  /** Section titles (lowercase) the user collapsed in player/team compare. */
+  const homeCompareCollapsedSections = new Set();
 
   function homeCompareActive() {
     return !!(homeCompareBase && homeCompareOther);
@@ -12251,6 +12374,8 @@
     homeCompareBase = null;
     homeCompareOther = null;
     homeCompareMode = "total";
+    homeCompareReplaceSide = "b";
+    homeCompareCollapsedSections.clear();
   }
 
   function syncHomePlayerHeaderActions(row = homeLookupPlayer) {
@@ -12291,11 +12416,13 @@
     const showPlayerCompare = !!row && !comparing && playerDetailsOpen;
     const showTeamCompare = !!teamDetailsCode && !comparing && teamDetailsOpen;
     const showCompare = showPlayerCompare || showTeamCompare;
+    const showXBtn = showX && !comparing;
+    const showViz = comparing;
 
     [el.mobileSheetOpenX, el.homePlayerModalOpenX].forEach((btn) => {
       if (!btn) return;
-      btn.hidden = !showX;
-      if (showX) {
+      btn.hidden = !showXBtn;
+      if (showXBtn) {
         btn.href = url;
         btn.dataset.xSearchUrl = url;
         btn.setAttribute("aria-label", xLabel);
@@ -12311,6 +12438,15 @@
       const label = showTeamCompare ? "Compare team" : "Compare player";
       btn.setAttribute("aria-label", label);
       btn.title = label;
+    });
+    [el.mobileSheetCompareViz, el.homePlayerModalCompareViz].forEach((seg) => {
+      if (!seg) return;
+      seg.hidden = !showViz;
+      if (!showViz) return;
+      const viz = homeCompareViz === "axis" ? "axis" : "bars";
+      seg.querySelectorAll("[data-compare-viz]").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-compare-viz") === viz);
+      });
     });
   }
 
@@ -12334,10 +12470,8 @@
   function homeCompareSectionsFor(mode, position) {
     const pos = String(position || "").toUpperCase();
     const general = [
-      { key: "position", label: "Position", text: true },
-      { key: "price", label: "Price", decimals: 1, lowerBetter: true, fmt: "price" },
       { key: "owned", label: "TSB%", decimals: 1 },
-      { key: "mins", label: "Minutes", decimals: 0 },
+      { key: "mins", label: "Min", decimals: 0 },
       { key: "apps", label: "Apps", decimals: 0 },
       { key: "starts", label: "Starts", decimals: 0 },
       { key: "pts", label: "Pts", decimals: 0 },
@@ -12434,11 +12568,14 @@
   }
 
   function homeCompareSideHTML(row, side) {
+    const sideKey = side === "b" ? "b" : "a";
     if (!row) {
-      return `<div class="home-compare-side is-${side} is-empty">
+      return `<button type="button" class="home-compare-side is-${sideKey} is-empty" data-compare-replace-side="${sideKey}" aria-label="Select player">
         <span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("user")}</span>
-        <span class="home-compare-name">Select player</span>
-      </div>`;
+        <div class="home-compare-id">
+          <span class="home-compare-name">Select player</span>
+        </div>
+      </button>`;
     }
     const initials = String(row.name || "?")
       .split(/[\s.]+/)
@@ -12449,33 +12586,86 @@
       .toUpperCase() || "?";
     const photo = feedPlayerPhotoUrl(row.code, row);
     const photoBlock = photo
-      ? `<img class="home-compare-photo" src="${escapeHtml(photo)}" alt="" width="48" height="48" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(row.team || ""))}" data-pos="${escapeHtml(String(row.position || ""))}" data-element-type="${escapeHtml(String(row.elementType ?? row.element_type ?? ""))}" data-initials="${escapeHtml(initials)}" />`
+      ? `<img class="home-compare-photo" src="${escapeHtml(photo)}" alt="" width="52" height="52" loading="lazy" data-code="${escapeHtml(String(row.code ?? ""))}" data-team="${escapeHtml(String(row.team || ""))}" data-pos="${escapeHtml(String(row.position || ""))}" data-element-type="${escapeHtml(String(row.elementType ?? row.element_type ?? ""))}" data-initials="${escapeHtml(initials)}" />`
       : `<span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("user")}</span>`;
-    const badge = row.team ? badgeHTML(row.team, "home-compare-badge") : "";
-    const meta = [row.position, row.team].filter(Boolean).join(" · ");
+    const metaBits = [row.position, row.team].filter(Boolean);
+    const metaInner = metaBits.length
+      ? `<span class="home-compare-meta-text">${escapeHtml(metaBits.join(" · "))}</span>`
+      : "";
     const accent = TEAM_SCATTER_ACCENT[row.team] || "";
     const style = accent ? ` style="--home-compare-accent:${accent}"` : "";
-    return `<div class="home-compare-side is-${side}"${style}>
-      <div class="home-compare-photo-wrap">${photoBlock}${badge}</div>
+    const name = row.name || "—";
+    return `<button type="button" class="home-compare-side is-${sideKey}" data-compare-replace-side="${sideKey}" aria-label="Change ${escapeHtml(name)}" title="Change player"${style}>
+      <div class="home-compare-photo-wrap">${photoBlock}</div>
       <div class="home-compare-id">
-        <span class="home-compare-name">${escapeHtml(row.name || "—")}</span>
-        ${meta ? `<span class="home-compare-meta">${escapeHtml(meta)}</span>` : ""}
+        <span class="home-compare-name">${escapeHtml(name)}</span>
+        ${metaInner ? `<span class="home-compare-meta">${metaInner}</span>` : ""}
       </div>
-    </div>`;
+    </button>`;
   }
 
-  function homeCompareBarPcts(aNum, bNum) {
-    const absA = aNum == null || !Number.isFinite(Number(aNum)) ? 0 : Math.abs(Number(aNum));
-    const absB = bNum == null || !Number.isFinite(Number(bNum)) ? 0 : Math.abs(Number(bNum));
-    const max = Math.max(absA, absB);
-    if (!(max > 0)) return { a: 0, b: 0 };
+  /**
+   * Bar width vs category leader (not the head-to-head winner).
+   * Higher-better: value / leader → only the real #1 hits 100%.
+   * Lower-better: leader / value (leader = minimum) → same idea.
+   */
+  function homeCompareBarPcts(aNum, bNum, { lowerBetter = false, leaderValue = null } = {}) {
+    const parse = (v) => {
+      if (v == null || !Number.isFinite(Number(v))) return null;
+      return Math.abs(Number(v));
+    };
+    const a = parse(aNum);
+    const b = parse(bNum);
+    if (a == null && b == null) return { a: 0, b: 0 };
+
+    const round = (n) => Math.round(Math.max(0, Math.min(100, n)) * 10) / 10;
+    let leader = parse(leaderValue);
+
+    // Fallback: pairwise max/min only when category leader is unavailable.
+    if (leader == null) {
+      if (!lowerBetter) {
+        leader = Math.max(a || 0, b || 0);
+      } else {
+        const present = [a, b].filter((v) => v != null);
+        leader = present.length ? Math.min(...present) : null;
+      }
+    }
+    if (leader == null) return { a: 0, b: 0 };
+
+    if (!lowerBetter) {
+      if (!(leader > 0)) {
+        return {
+          a: a != null && a === 0 ? 100 : 0,
+          b: b != null && b === 0 ? 100 : 0,
+        };
+      }
+      return {
+        a: a == null ? 0 : round((a / leader) * 100),
+        b: b == null ? 0 : round((b / leader) * 100),
+      };
+    }
+
+    // Lower is better: leader is the category minimum.
+    const strength = (v) => {
+      if (v == null) return 0;
+      if (leader === 0) return v === 0 ? 1 : 0;
+      if (v === 0) return 1; // better than a positive leader (edge)
+      return leader / v;
+    };
+    const sA = strength(a);
+    const sB = strength(b);
+    // Normalize to the stronger of the two only if both exceed leader (shouldn't);
+    // otherwise leader strength is 1 → 100%.
+    const maxS = Math.max(1, sA, sB);
     return {
-      a: Math.round((absA / max) * 1000) / 10,
-      b: Math.round((absB / max) * 1000) / 10,
+      a: a == null ? 0 : round((sA / maxS) * 100),
+      b: b == null ? 0 : round((sB / maxS) * 100),
     };
   }
 
-  function homeCompareDivergingRowHTML(label, a, b, { better = null, textOnly = false } = {}) {
+  function homeCompareDivergingRowHTML(label, a, b, { better = null, textOnly = false, lowerBetter = false, leaderValue = null } = {}) {
+    // Tie → no winner border. Only an explicit a|b marks the matchup winner.
+    const winner = better === "a" || better === "b" ? better : null;
     if (textOnly || (a.num == null && b.num == null)) {
       return `<div class="home-compare-row is-text">
         <span class="home-compare-val is-a">${escapeHtml(a.text)}</span>
@@ -12483,12 +12673,20 @@
         <span class="home-compare-val is-b">${escapeHtml(b.text)}</span>
       </div>`;
     }
-    const pct = homeCompareBarPcts(a.num, b.num);
+    if (homeCompareViz === "axis") {
+      return homeCompareAxisRowHTML(label, a, b, { better: winner, lowerBetter, leaderValue });
+    }
+    const pct = homeCompareBarPcts(a.num, b.num, { lowerBetter, leaderValue });
     const metric = (side, shown, width) => {
-      const win = better === side;
+      const win = winner === side;
+      const cls = [
+        "home-compare-metric",
+        `is-${side}`,
+        win ? "is-better" : "",
+      ].filter(Boolean).join(" ");
       const bar = `<div class="home-compare-bar-rail" aria-hidden="true"><span class="home-compare-bar" style="width:${width}%"></span></div>`;
       const val = `<span class="home-compare-val">${escapeHtml(shown.text)}</span>`;
-      return `<div class="home-compare-metric is-${side}${win ? " is-better" : ""}">${
+      return `<div class="${cls}">${
         side === "a" ? `${val}${bar}` : `${bar}${val}`
       }</div>`;
     };
@@ -12499,30 +12697,151 @@
     </div>`;
   }
 
-  function homeCompareRowHTML(left, right, spec, mode) {
+  function homeCompareLeaderDisplayText(leaderValue, a, b) {
+    if (leaderValue == null || !Number.isFinite(Number(leaderValue))) return "";
+    const sample = [a && a.text, b && b.text].find((t) => t && String(t).includes(".")) || "";
+    const decimals = sample.includes(".") ? 1 : 0;
+    return feedStatDisplay(Number(leaderValue), decimals);
+  }
+
+  function homeCompareAxisRowHTML(label, a, b, { better = null, lowerBetter = false, leaderValue = null } = {}) {
+    const winner = better === "a" || better === "b" ? better : null;
+    const pct = homeCompareBarPcts(a.num, b.num, { lowerBetter, leaderValue });
+    const leaderText = homeCompareLeaderDisplayText(leaderValue, a, b);
+    const gap = Math.abs((Number(pct.a) || 0) - (Number(pct.b) || 0));
+    // Near dots: A sits above the rail, B below — avoids stacked labels.
+    const splitClose = gap < 12;
+    const dot = (side, width) => {
+      const win = winner === side;
+      const cls = [
+        "home-compare-axis-dot",
+        `is-${side}`,
+        win ? "is-better" : "",
+      ].filter(Boolean).join(" ");
+      return `<span class="${cls}" style="left:${width}%"></span>`;
+    };
+    const valCls = (side, lane) =>
+      [
+        "home-compare-val",
+        `is-${side}`,
+        lane,
+        winner === side ? "is-better" : "",
+      ].filter(Boolean).join(" ");
+    const val = (side, width, text, lane) =>
+      `<span class="${valCls(side, lane)}" style="left:${width}%">${escapeHtml(text)}</span>`;
+    const laneA = "is-above";
+    const laneB = splitClose ? "is-below" : "is-above";
+    const axisLabel = `${label}: ${a.text} vs ${b.text}${leaderText ? `; category leader ${leaderText}` : ""}`;
+    return `<div class="home-compare-row is-axis${splitClose ? " is-axis-split" : ""}" aria-label="${escapeHtml(axisLabel)}">
+      <span class="home-compare-lab is-axis-lab" aria-hidden="true">${escapeHtml(label)}</span>
+      <div class="home-compare-axis" aria-hidden="true">
+        <div class="home-compare-axis-plot">
+          ${val("a", pct.a, a.text, laneA)}
+          ${val("b", pct.b, b.text, laneB)}
+          <div class="home-compare-axis-rail">
+            ${dot("a", pct.a)}
+            ${dot("b", pct.b)}
+            <span class="home-compare-axis-leader-tick"></span>
+          </div>
+        </div>
+        ${leaderText ? `<span class="home-compare-axis-leader-val">${escapeHtml(leaderText)}</span>` : `<span class="home-compare-axis-leader-val is-empty"></span>`}
+      </div>
+    </div>`;
+  }
+
+  function homeComparePopulation(left, right) {
+    const catalog = typeof homeSearchCatalog === "function" ? homeSearchCatalog() : [];
+    const posL = String(left && left.position || "").toUpperCase();
+    const posR = String(right && right.position || "").toUpperCase();
+    if (posL && posL === posR) {
+      return catalog.filter((r) => String(r.position || "").toUpperCase() === posL);
+    }
+    return catalog;
+  }
+
+  /** Best value in the compare population for each spec key (category leader). */
+  function homeCompareLeaderMap(left, right, mode) {
+    const m = mode === "per90" || mode === "price" ? mode : "total";
+    const population = homeComparePopulation(left, right);
+    const pos = (left && left.position) || (right && right.position) || "";
+    const map = new Map();
+    for (const sec of homeCompareSectionsFor(m, pos)) {
+      for (const spec of sec.rows) {
+        if (!spec || spec.text) continue;
+        let best = null;
+        for (const row of population) {
+          const shown = homeCompareDisplayValue(row, spec, m);
+          if (shown.num == null || !Number.isFinite(shown.num)) continue;
+          if (best == null) best = shown.num;
+          else if (spec.lowerBetter) best = Math.min(best, shown.num);
+          else best = Math.max(best, shown.num);
+        }
+        if (best != null) map.set(spec.key, best);
+      }
+    }
+    return map;
+  }
+
+  function homeCompareNumsTied(aNum, bNum) {
+    if (aNum == null || bNum == null) return false;
+    if (!Number.isFinite(Number(aNum)) || !Number.isFinite(Number(bNum))) return false;
+    return Math.abs(Number(aNum) - Number(bNum)) < 1e-9;
+  }
+
+  /** Shared pill width for every value badge in this compare (max digits across rows). */
+  function homeCompareValChForPair(left, right, mode, sectionsFn, displayFn) {
+    let max = 2;
+    const secs = typeof sectionsFn === "function" ? sectionsFn() : [];
+    for (const sec of secs) {
+      for (const spec of sec.rows || []) {
+        if (!spec) continue;
+        const a = displayFn(left, spec, mode);
+        const b = displayFn(right, spec, mode);
+        max = Math.max(
+          max,
+          String(a && a.text != null ? a.text : "").length,
+          String(b && b.text != null ? b.text : "").length
+        );
+      }
+    }
+    return max;
+  }
+
+  function homeCompareRowHTML(left, right, spec, mode, leaderMap) {
     const a = homeCompareDisplayValue(left, spec, mode);
     const b = homeCompareDisplayValue(right, spec, mode);
     let better = null;
-    if (!spec.text && a.num != null && b.num != null && a.num !== b.num) {
-      const lower = !!spec.lowerBetter;
-      better = lower ? (a.num < b.num ? "a" : "b") : (a.num > b.num ? "a" : "b");
+    const lowerBetter = !!spec.lowerBetter;
+    if (!spec.text && a.num != null && b.num != null && !homeCompareNumsTied(a.num, b.num)) {
+      better = lowerBetter ? (a.num < b.num ? "a" : "b") : (a.num > b.num ? "a" : "b");
     }
+    const leaderValue = leaderMap && spec && !spec.text
+      ? leaderMap.get(spec.key)
+      : null;
     return homeCompareDivergingRowHTML(spec.label, a, b, {
       better,
       textOnly: !!spec.text,
+      lowerBetter,
+      leaderValue: leaderValue != null ? leaderValue : null,
     });
   }
 
   function homeCompareViewHTML(left, right, mode = homeCompareMode) {
     const m = mode === "per90" || mode === "price" ? mode : "total";
     const pos = left && left.position ? left.position : (right && right.position) || "";
-    const sections = homeCompareSectionsFor(m, pos)
+    const leaderMap = homeCompareLeaderMap(left, right, m);
+    const sectionsSpec = homeCompareSectionsFor(m, pos);
+    const valCh = homeCompareValChForPair(
+      left,
+      right,
+      m,
+      () => sectionsSpec,
+      homeCompareDisplayValue
+    );
+    const sections = sectionsSpec
       .map((sec) => {
-        const rows = sec.rows.map((spec) => homeCompareRowHTML(left, right, spec, m)).join("");
-        return `<section class="home-compare-section">
-          <h4 class="home-compare-section-title">${escapeHtml(sec.title)}</h4>
-          <div class="home-compare-table">${rows}</div>
-        </section>`;
+        const rows = sec.rows.map((spec) => homeCompareRowHTML(left, right, spec, m, leaderMap)).join("");
+        return homeCompareSectionBlockHTML(sec.title, rows);
       })
       .join("");
     const seg = (id, label) =>
@@ -12532,10 +12851,11 @@
     const accentStyle = [
       accentA ? `--compare-accent-a:${accentA}` : "",
       accentB ? `--compare-accent-b:${accentB}` : "",
+      `--home-compare-val-ch:${valCh}`,
     ]
       .filter(Boolean)
       .join(";");
-    return `<article class="home-compare-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
+    return `<article class="home-compare-card" style="${accentStyle}">
       <div class="home-compare-heads">
         ${homeCompareSideHTML(left, "a")}
         <span class="home-compare-vs" aria-hidden="true">vs</span>
@@ -12550,12 +12870,20 @@
     </article>`;
   }
 
+  function homeCompareSearchKeepCode() {
+    // Exclude the player on the side we're not replacing.
+    if (homeCompareReplaceSide === "a") {
+      return homeCompareOther ? Number(homeCompareOther.code) : NaN;
+    }
+    return homeCompareBase ? Number(homeCompareBase.code) : NaN;
+  }
+
   function homeCompareSearchResultsListHTML(query) {
-    const baseCode = homeCompareBase ? Number(homeCompareBase.code) : NaN;
+    const keepCode = homeCompareSearchKeepCode();
     const items = homeSearchResultItems(query).filter((item) => {
       if (item.type === "team") return false;
       if (!item.row) return false;
-      if (Number.isFinite(baseCode) && Number(item.row.code) === baseCode) return false;
+      if (Number.isFinite(keepCode) && Number(item.row.code) === keepCode) return false;
       return true;
     });
     if (!items.length) {
@@ -12565,10 +12893,13 @@
   }
 
   function homeCompareSearchSheetHTML(query = "") {
+    const placeholder = homeCompareReplaceSide === "a"
+      ? "Search player to replace"
+      : "Search player to compare";
     return `<div class="home-search-sheet home-compare-search">
       <div class="home-search-input-wrap">
         <input id="home-compare-search-input" class="home-search-input" type="search" enterkeyhint="search"
-          placeholder="Search player to compare" value="${escapeHtml(query)}" autocomplete="off" />
+          placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(query)}" autocomplete="off" />
       </div>
       <div class="home-search-results" id="home-compare-search-results">${homeCompareSearchResultsListHTML(query)}</div>
     </div>`;
@@ -12598,9 +12929,69 @@
           || (Number.isFinite(id) && homeLookupElementId(r) === id)
         );
         if (!row) return;
-        homeCompareSelectOther(row);
+        homeCompareSelectPick(row);
       });
     }
+  }
+
+  function homeCompareSectionBlockHTML(title, rowsHTML) {
+    const key = String(title || "").trim().toLowerCase();
+    const open = !homeCompareCollapsedSections.has(key);
+    return `<section class="home-compare-section" data-compare-section="${escapeHtml(key)}" data-open="${open ? "true" : "false"}">
+      <button type="button" class="home-compare-section-head" aria-expanded="${open ? "true" : "false"}">
+        <span class="home-compare-section-title">${escapeHtml(title)}</span>
+        <span class="home-compare-section-chevron" aria-hidden="true">${iconHTML("chevron-down")}</span>
+      </button>
+      <div class="home-compare-section-panel">
+        <div class="home-compare-section-panel-inner">
+          <div class="home-compare-table">${rowsHTML}</div>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function bindHomeCompareSectionCollapse(host) {
+    if (!host) return;
+    host.querySelectorAll(".home-compare-section-head").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sec = btn.closest(".home-compare-section");
+        if (!sec || !host.contains(sec)) return;
+        const key = sec.getAttribute("data-compare-section") || "";
+        const open = sec.getAttribute("data-open") === "true";
+        const next = !open;
+        sec.setAttribute("data-open", String(next));
+        btn.setAttribute("aria-expanded", String(next));
+        if (key) {
+          if (next) homeCompareCollapsedSections.delete(key);
+          else homeCompareCollapsedSections.add(key);
+        }
+      });
+    });
+  }
+
+  function bindHomeCompareVizToggle() {
+    [el.mobileSheetCompareViz, el.homePlayerModalCompareViz].forEach((seg) => {
+      if (!seg || seg.dataset.boundCompareViz) return;
+      seg.dataset.boundCompareViz = "1";
+      seg.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-compare-viz]");
+        if (!btn || !seg.contains(btn)) return;
+        const next = btn.getAttribute("data-compare-viz");
+        if (next !== "bars" && next !== "axis") return;
+        if (next === homeCompareViz) return;
+        homeCompareViz = next;
+        syncHomePlayerHeaderActions(homeLookupPlayer || homeCompareBase);
+        if (homeCompareActive() && homeCompareUiOpen()) {
+          openHomeCompareView({ replace: true });
+        } else if (homeTeamCompareActive() && homeTeamCompareUiOpen()) {
+          openHomeTeamCompareView({ replace: true });
+        } else if (homeCompareActive()) {
+          openHomeCompareView({ replace: true });
+        } else if (homeTeamCompareActive()) {
+          openHomeTeamCompareView({ replace: true });
+        }
+      });
+    });
   }
 
   function bindHomeCompareViewEvents(root) {
@@ -12621,30 +13012,39 @@
         if (typeof syncSegThumb === "function") syncSegThumb(seg, { animate: false });
       });
     }
+    const sideA = host.querySelector(".home-compare-side.is-a");
     const sideB = host.querySelector(".home-compare-side.is-b");
-    if (sideB) {
-      sideB.style.cursor = "pointer";
-      sideB.title = "Change player";
-      sideB.addEventListener("click", () => openHomeCompareSearch());
+    if (sideA) {
+      sideA.addEventListener("click", () => openHomeCompareSearch("a"));
     }
+    if (sideB) {
+      sideB.addEventListener("click", () => openHomeCompareSearch("b"));
+    }
+    bindHomeCompareSectionCollapse(host);
+    bindHomeCompareVizToggle();
   }
 
-  function openHomeCompareSearch() {
-    const base = homeLookupPlayer || homeCompareBase;
-    if (!base) return;
-    homeCompareBase = base;
+  function openHomeCompareSearch(side = "b") {
+    homeCompareReplaceSide = side === "a" ? "a" : "b";
+    if (!homeCompareBase && homeLookupPlayer) homeCompareBase = homeLookupPlayer;
+    if (!homeCompareBase && homeCompareReplaceSide === "b") return;
+    if (homeCompareReplaceSide === "a" && !homeCompareOther && !homeCompareBase) return;
+    const headerRow = homeCompareReplaceSide === "a"
+      ? (homeCompareBase || homeLookupPlayer)
+      : (homeCompareBase || homeLookupPlayer);
+    const title = homeCompareReplaceSide === "a" ? "Replace player" : "Select player";
     if (preferMobileSheet()) {
       openMobileSheet({
-        title: "Select player",
+        title,
         html: homeCompareSearchSheetHTML(""),
         key: "home-compare-search",
       });
       bindHomeCompareSearchEvents(el.mobileSheetBody);
-      syncHomePlayerHeaderActions(base);
+      syncHomePlayerHeaderActions(headerRow);
       return;
     }
     if (!el.homePlayerModal || !el.homePlayerModalBody) return;
-    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = "Select player";
+    if (el.homePlayerModalTitle) el.homePlayerModalTitle.textContent = title;
     unbindHomePlayerDetailCardMetrics();
     el.homePlayerModalBody.innerHTML = homeCompareSearchSheetHTML("");
     if (el.homePlayerModal.hidden) {
@@ -12653,16 +13053,31 @@
       document.documentElement.classList.add("home-player-modal-open");
     }
     bindHomeCompareSearchEvents(el.homePlayerModalBody);
-    syncHomePlayerHeaderActions(base);
+    syncHomePlayerHeaderActions(headerRow);
   }
 
-  function homeCompareSelectOther(row) {
-    if (!row || !homeCompareBase) return;
-    if (Number(row.code) === Number(homeCompareBase.code)) return;
-    homeCompareOther = row;
-    homeCompareMode = "total";
-    if (!homeLookupPlayer) homeLookupPlayer = homeCompareBase;
+  function homeCompareSelectPick(row) {
+    if (!row) return;
+    const code = Number(row.code);
+    if (homeCompareReplaceSide === "a") {
+      if (homeCompareOther && Number(homeCompareOther.code) === code) return;
+      homeCompareBase = row;
+      homeLookupPlayer = row;
+    } else {
+      if (!homeCompareBase) {
+        homeCompareBase = homeLookupPlayer || row;
+      }
+      if (homeCompareBase && Number(homeCompareBase.code) === code) return;
+      homeCompareOther = row;
+      if (!homeLookupPlayer) homeLookupPlayer = homeCompareBase;
+    }
     openHomeCompareView();
+  }
+
+  /** @deprecated use homeCompareSelectPick — kept for any stray callers */
+  function homeCompareSelectOther(row) {
+    homeCompareReplaceSide = "b";
+    homeCompareSelectPick(row);
   }
 
   function openHomeCompareView({ replace = false } = {}) {
@@ -12813,7 +13228,9 @@
     if (!code) {
       return `<div class="home-compare-side is-${side} is-empty is-team">
         <span class="home-compare-photo home-compare-photo-fallback" aria-hidden="true">${iconHTML("shield-half")}</span>
-        <span class="home-compare-name">Select team</span>
+        <div class="home-compare-id">
+          <span class="home-compare-name">Select team</span>
+        </div>
       </div>`;
     }
     const row = teamDetailsRow(code);
@@ -12831,36 +13248,69 @@
       <div class="home-compare-photo-wrap is-crest-only">${crest}</div>
       <div class="home-compare-id">
         <span class="home-compare-name">${escapeHtml(name)}</span>
-        ${metaBits.length ? `<span class="home-compare-meta">${escapeHtml(metaBits.join(" · "))}</span>` : ""}
+        ${metaBits.length ? `<span class="home-compare-meta"><span class="home-compare-meta-text">${escapeHtml(metaBits.join(" · "))}</span></span>` : ""}
       </div>
     </div>`;
   }
 
-  function homeTeamCompareRowHTML(left, right, spec, mode) {
+  function homeTeamCompareLeaderMap(mode) {
+    const m = mode === "overall" ? "overall" : "values";
+    const population = typeof teamDetailsCatalog === "function" ? teamDetailsCatalog() : [];
+    const map = new Map();
+    for (const sec of homeTeamCompareSections()) {
+      for (const spec of sec.rows) {
+        if (!spec) continue;
+        const useLower = m === "overall" ? spec.key !== "gp" : !!spec.lowerBetter;
+        let best = null;
+        for (const row of population) {
+          const shown = homeTeamCompareDisplayValue(row, spec, m);
+          if (shown.num == null || !Number.isFinite(shown.num)) continue;
+          if (best == null) best = shown.num;
+          else if (useLower) best = Math.min(best, shown.num);
+          else best = Math.max(best, shown.num);
+        }
+        if (best != null) map.set(spec.key, best);
+      }
+    }
+    return map;
+  }
+
+  function homeTeamCompareRowHTML(left, right, spec, mode, leaderMap) {
     const a = homeTeamCompareDisplayValue(left, spec, mode);
     const b = homeTeamCompareDisplayValue(right, spec, mode);
     let better = null;
-    if (a.num != null && b.num != null && a.num !== b.num) {
-      // Rank mode: lower rank wins; GP stays higher-better. Values use spec.lowerBetter.
-      const useLower = mode === "overall"
-        ? spec.key !== "gp"
-        : !!spec.lowerBetter;
+    // Rank mode: lower rank wins; GP stays higher-better. Values use spec.lowerBetter.
+    const useLower = mode === "overall"
+      ? spec.key !== "gp"
+      : !!spec.lowerBetter;
+    if (a.num != null && b.num != null && !homeCompareNumsTied(a.num, b.num)) {
       better = useLower ? (a.num < b.num ? "a" : "b") : (a.num > b.num ? "a" : "b");
     }
-    return homeCompareDivergingRowHTML(spec.label, a, b, { better });
+    const leaderValue = leaderMap ? leaderMap.get(spec.key) : null;
+    return homeCompareDivergingRowHTML(spec.label, a, b, {
+      better,
+      lowerBetter: useLower,
+      leaderValue: leaderValue != null ? leaderValue : null,
+    });
   }
 
   function homeTeamCompareViewHTML(leftCode, rightCode, mode = homeTeamCompareMode) {
     const m = mode === "overall" ? "overall" : "values";
     const left = teamDetailsRow(leftCode);
     const right = teamDetailsRow(rightCode);
-    const sections = homeTeamCompareSections()
+    const leaderMap = homeTeamCompareLeaderMap(m);
+    const sectionsSpec = homeTeamCompareSections();
+    const valCh = homeCompareValChForPair(
+      left,
+      right,
+      m,
+      () => sectionsSpec,
+      homeTeamCompareDisplayValue
+    );
+    const sections = sectionsSpec
       .map((sec) => {
-        const rows = sec.rows.map((spec) => homeTeamCompareRowHTML(left, right, spec, m)).join("");
-        return `<section class="home-compare-section">
-          <h4 class="home-compare-section-title">${escapeHtml(sec.title)}</h4>
-          <div class="home-compare-table">${rows}</div>
-        </section>`;
+        const rows = sec.rows.map((spec) => homeTeamCompareRowHTML(left, right, spec, m, leaderMap)).join("");
+        return homeCompareSectionBlockHTML(sec.title, rows);
       })
       .join("");
     const seg = (id, label) =>
@@ -12870,10 +13320,11 @@
     const accentStyle = [
       accentA ? `--compare-accent-a:${accentA}` : "",
       accentB ? `--compare-accent-b:${accentB}` : "",
+      `--home-compare-val-ch:${valCh}`,
     ]
       .filter(Boolean)
       .join(";");
-    return `<article class="home-compare-card home-team-compare-card"${accentStyle ? ` style="${accentStyle}"` : ""}>
+    return `<article class="home-compare-card home-team-compare-card" style="${accentStyle}">
       <div class="home-compare-heads">
         ${homeTeamCompareSideHTML(leftCode, "a")}
         <span class="home-compare-vs" aria-hidden="true">vs</span>
@@ -12973,6 +13424,8 @@
       sideB.title = "Change team";
       sideB.addEventListener("click", () => openHomeTeamCompareSearch());
     }
+    bindHomeCompareSectionCollapse(host);
+    bindHomeCompareVizToggle();
   }
 
   function openHomeTeamCompareSearch() {
@@ -18656,8 +19109,8 @@
       iconRows.push(spitRow(iconHTML("info"), "On a card — that club’s own home/away attack &amp; defence ranks."));
     }
     // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
-    return `${spitHead("calendar-days", "How Strength of Schedule works")}
-      ${spitIntro("Find clubs with a soft upcoming run for attack and/or defence.")}
+    return `${spitHead("calendar-search", "How Strength of Schedule works")}
+      ${spitIntro("Find teams with a soft upcoming run for attack and/or defence.")}
       ${spitSection("Legend", iconRows)}
       <div class="spit-annotate">
         <p class="spit-annotate-lead">Fixture card key</p>
@@ -18745,30 +19198,50 @@
       ];
       const reading = [
         spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
+        spitRow(spitRank("Summary"), "Hero Overall Rank band; cards below for GW points, GW rank, Total points, and League rank."),
         spitRow(
-          spitRank("Summary"),
-          "Home hero: Overall Rank band with Gameweek rank card overlapping below."
+          spitRank("Pitch"),
+          "Default Team view. Mode menu swaps card strips: Points, Fixtures, Form, Importance, Price."
         ),
         spitRow(
-          spitRank("Own"),
-          mobile
-            ? "Tap a player for Details (profile, form, fixtures, league owners). Tap a standings manager to view their team — Exit returns to yours."
-            : "Click a player for Details (profile, form, fixtures, league owners). Click a standings manager to view their team — Exit returns to yours."
+          spitRank("List"),
+          "Squad table with live pts, minutes, and status. Wide screens keep Points pills beside the list."
         ),
         spitRow(
-          spitRank("Pts"),
+          spitRank("Points"),
           mobile
-            ? "Second team swipe — GW stat pills (G, A, CS, DC, B, Sv); Sv → YC when no keeper saves."
-            : "GW stat pills beside Starting XI on wide screens, or team page 2 — same Live Points colors; Sv → YC when no keeper saves."
+            ? "Team swipe — GW stat pills (G, A, CS, DC, B, Sv); Sv → YC when no keeper saves."
+            : "GW stat pills beside List on wide screens, or the Points swipe — same Live Points colors; Sv → YC when no keeper saves."
+        ),
+        spitRow(
+          spitRank("Ownership"),
+          "Team swipe — TSB%, 3d Δ, 1d Δ, and Price Δ for each pick."
         ),
         spitRow(
           spitRank("Schedule"),
-          "Upcoming fixtures — crest + home icon; FPL difficulty wash (green easy → red hard)."
+          "Team swipe — upcoming GW pills with FDR wash (green easy → red hard; your ratings when Custom fixture colors is on)."
         ),
-        spitRow(spitRank("Chips"), "Standings swipe → Chips: WC / FH / BB / TC for the current half only (second half appears from GW20)."),
+        spitRow(
+          spitRank("Player"),
+          mobile
+            ? "Tap a player for the GW points card (event breakdown), then Player Details (Profile, Form, Schedule, League Ownership, Overall TSB). Compare uses Bars or Axis dots."
+            : "Click a player for the GW points card (event breakdown), then Player Details (Profile, Form, Schedule, League Ownership, Overall TSB). Compare uses Bars or Axis dots."
+        ),
+        spitRow(
+          spitRank("Viewing"),
+          mobile
+            ? "Tap a standings manager to view their team. Viewing chrome returns to yours; Pinned clears an ownership highlight."
+            : "Click a standings manager to view their team. Viewing chrome returns to yours; Pinned clears an ownership highlight."
+        ),
+        spitRow(spitRank("League"), "League panel: Table, Transfers, Captaincy, Chips, Bench Points."),
+        spitRow(spitRank("Chips"), "League swipe → Chips: WC / FH / BB / TC for the current half only (second half from GW20)."),
         spitRow(
           spitRank("Bench Points"),
-          "Standings swipe → Bench Points: GW pill + Season bar = points left on the pine (live squad; auto-subs excluded). Bench Boost weeks count as 0 — those pts are in the XI score."
+          "League swipe → Bench Points: GW pill + Season bar = points left on the pine (live squad; auto-subs excluded). Bench Boost weeks count as 0 — those pts are in the XI score."
+        ),
+        spitRow(
+          spitRank("Feed"),
+          "Live scoring feed for league-owned picks, or All players."
         ),
         spitRow(
           spitRank("Search"),
@@ -18826,9 +19299,11 @@
         spitRow(spitOwnedPinHTML(), "In your FPL squad"),
       ];
       const reading = [
-        spitRow(spitRank("Cat"), "Category — toolbar dropdown"),
+        spitRow(spitRank("Category"), "Toolbar / sheet — which expected metric to chart."),
+        spitRow(spitRank("Locations"), "Total / Home / Away / Compare — venue split for the chart."),
+        spitRow(spitRank("View"), "Players or Teams tabs."),
         ...(state.expectedSplit === "compare"
-          ? [spitRow(spitRank("Split"), "Home and away side by side for the same players or teams.")]
+          ? [spitRow(spitRank("Compare"), "Home and away side by side for the same players or teams.")]
           : []),
         spitRow(spitRank("Bar"), "Expected → actual. Moving dashes show the gap direction."),
         spitRow(
@@ -18839,11 +19314,11 @@
       const intro = isNextSeason()
         ? "FPL expected vs actual for 2026/27 — home/away from live match venue."
         : "Expected (x) vs actual — who over- or underperformed.";
-      return `${spitHead("chart-gantt", "How Expected Data works")}
+      return `${spitHead("chart-gantt", "How xData works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}
         ${spitSection("Reading", reading)}
-        ${spitNote("Blue/orange here is over/under vs expectation — not Strength of Schedule fixture difficulty. Soft blue is quieter in dark mode.")}`;
+        ${spitNote("Blue/orange here is over/under vs expectation — not Strength of Schedule (SoS) fixture difficulty. Soft blue is quieter in dark mode.")}`;
     }
 
     if (state.page === "ownership") {
@@ -18899,12 +19374,18 @@
           ];
       const reading = isActual
         ? [
-            spitRow(spitRank("Prediction vs Actual"), "Prediction shows FPL’s price-change predictor. Actual lists confirmed £0.1m moves from bootstrap snapshot diffs (backfilled where daily snapshots exist)."),
-            spitRow(spitRank("Before / After"), "Price immediately before and after the detected change."),
+            spitRow(spitRank("Predicted / Actual"), "Predicted shows FPL’s price-change predictor. Actual lists confirmed £0.1m moves from bootstrap snapshot diffs (backfilled where daily snapshots exist)."),
+            spitRow(
+              spitRank("Columns"),
+              mobile
+                ? "Actual table: Date, Player, After."
+                : "Actual table: Before / After price, Date, All(%) / ML(%), Player."
+            ),
             spitRow(spitRank("Date"), "When the change was detected (check-in timestamp)."),
             spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
           ]
         : [
+            spitRow(spitRank("Predicted / Actual"), "Toggle between the live predictor and the confirmed £0.1m change log."),
             spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
             spitRow(
               spitRank("Status"),
@@ -18954,8 +19435,8 @@
           "spit-symbol-wide"
         ),
         spitRow(
-          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(var(--delta-rise));--imp-fg:hsl(var(--delta-rise))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span></span>`,
-          "DefCon progress — solid blue fill when threshold hit (+2 pts).",
+          `<span class="live-defcon-bar spit-home-swatch" data-defcon-units="10" aria-hidden="true" style="--defcon-fill:70%"><span class="live-defcon-track"><span class="live-defcon-fill is-drawn" style="width:70%"></span></span></span>`,
+          "DefCon progress — fill toward the position threshold (complete when hit).",
           "spit-symbol-wide"
         ),
         spitRow(
@@ -18972,13 +19453,13 @@
       ];
       const reading = [
         spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus — current gameweek only."),
-        spitRow(spitRank("Feed"), "Newest first — goals, assists, cards, DefCon, appearance pts; bonus only after that match hits 60′."),
+        spitRow(spitRank("Feed"), "Newest first — goals, assists, cards, DefCon, appearance pts; bonus only after that match hits 60′. Scope: League owned or All players."),
         spitRow(spitRank("Total"), "Running GW pts for that player; pill color scales with haul size."),
         spitRow(spitRank("Impact"), "Pts change × your ownership edge vs league avg. Unique picks swing most; shared picks ~0."),
         spitRow(spitRank("Threshold"), "DEF 10 CBIT · MID/FWD 12 CBIRT · GK ineligible."),
         spitRow(spitRank("Points"), "Sortable GW stats — Pts, G, A, CS, Sv, DC, bonus, cards."),
         spitRow(spitRank("Bonus"), "Per fixture after 60′ — BPS bars; top three projected 3/2/1."),
-        spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned."),
+        spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned (plus Feed League owned / All players)."),
       ];
       return `${spitHead("circle-play", "How Gameweek works")}
         ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
@@ -19033,7 +19514,7 @@
           spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
           "Set-piece — FPL #1 (check mark). FK/CK also show #2."
         ),
-        spitRow(spitHighlightSwatch("top"), "Stat cell wash — rank among that position (same band as Statistics Enhance)."),
+        spitRow(spitHighlightSwatch("top"), "Stat cell wash — rank among that position (Highlight Top/Bottom bands, same as Statistics)."),
         spitRow(iconHTML("plus"), "Empty row — add a player of that position"),
         spitRow(iconHTML("scale"), "Compare — pick up to 5 players in the squad or picker"),
       ];
@@ -19096,7 +19577,6 @@
             ? "Pill wash = your custom team ratings (max attack/defence of the opponent at that venue)"
             : "Pill wash = official FPL fixture difficulty (1 easy → 5 hard)"
         ),
-        spitRow(iconHTML("scale"), "Compare — tap the toolbar button, then pick up to five clubs"),
         spitRow(
           iconHTML("sliders-horizontal"),
           "Custom ratings — Preferences → Custom fixture colors"
@@ -19106,12 +19586,13 @@
           "Sum of fixture difficulty in the GW window. Click to sort hardest ↔ easiest (then back to league order)."
         ),
         spitRow(
-          spitRank("All / Atk / Def"),
+          spitRank("All / Attacking / Defending"),
           "All = overall FDR. Attacking = opponent defence. Defending = opponent attack (custom ratings when Custom fixture colors is on)."
         ),
       ];
       const reading = [
-        spitRow(spitRank("Window"), "Default is current GW through +6. Shift earlier or later with the arrows."),
+        spitRow(spitRank("Scope"), "Premier League or All competitions."),
+        spitRow(spitRank("Window"), "Gameweeks dual slider — default is current GW through +6."),
         spitRow(spitRank("Order"), "Clubs follow live league position (then name), or Σ sort. Tap a row to demote it to the bottom; tap again to restore."),
         spitRow(spitRank("Blank"), "En dash when that club has no fixture in the gameweek."),
       ];
@@ -19134,7 +19615,6 @@
         spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
         "Set-piece — FPL #1 (check mark). FK/CK also show #2."
       ),
-      spitRow(iconHTML("refresh-ccw-dot"), "2026/27 matched price, club, and position on 2025/26 rows"),
       spitRow(iconHTML("scale"), mobile
         ? "Compare — open from the toolbar or Filters sheet, then pick up to five rows"
         : "Compare — tap the toolbar button, then pick up to five rows"),
@@ -19149,8 +19629,8 @@
       spitRow(
         spitRank("Fixtures"),
         mobile
-          ? "Tap a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Strength of Schedule pink/blue wash)."
-          : "Click a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses Strength of Schedule pink/blue wash)."
+          ? "Tap a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses hard orange / soft blue wash)."
+          : "Click a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses hard orange / soft blue wash)."
       ),
       spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
     ];
@@ -19792,7 +20272,7 @@
       report: "How Report works",
       opta: "How Statistics works",
       rankings: "How Rankings works",
-      expected: "How Expected Data works",
+      expected: "How xData works",
       schedule: "How Strength of Schedule works",
       fixtures: "How Fixtures works",
       ownership: "How Ownership works",
@@ -20978,7 +21458,7 @@
     syncExpectedCatToolbar();
     hideExpectedTooltip();
 
-    el.expectedTitle.querySelector(".page-title-text").textContent = "Expected Data";
+    el.expectedTitle.querySelector(".page-title-text").textContent = "xData";
 
     if (isNextSeason()) {
       el.expectedSub.textContent = compareMode
@@ -32543,15 +33023,20 @@
     const btn =
       (el.pageTabs && el.pageTabs.querySelector(".page-tab-btn.active[id]")) ||
       (el.pageTabs && el.pageTabs.querySelector(".page-tab-btn.active"));
-    const label = btn
+    const fullLabel = btn
       ? Array.from(btn.childNodes)
           .filter((n) => n.nodeType === Node.TEXT_NODE)
           .map((n) => n.textContent.replace(/\s+/g, " ").trim())
           .filter(Boolean)
           .join(" ")
       : "";
+    const shortLabel = (btn && btn.getAttribute("data-tray-short") || "").trim();
+    const label = shortLabel || fullLabel;
     if (el.pageTrayLabel && label) el.pageTrayLabel.textContent = label;
-    el.pageTrayBtn.setAttribute("aria-label", label ? `Pages, ${label}` : "Pages");
+    el.pageTrayBtn.setAttribute(
+      "aria-label",
+      fullLabel ? `Pages, ${fullLabel}` : label ? `Pages, ${label}` : "Pages"
+    );
   }
 
   function setPage(page) {
@@ -32836,7 +33321,7 @@
     syncMobileTopChromeInset();
     requestAnimationFrame(syncMobileTopChromeInset);
     syncHomeLivePolling();
-    syncHomeTiltRuntime();
+    if (typeof syncHomeViewStatus === "function") syncHomeViewStatus();
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
@@ -32859,6 +33344,13 @@
     el.homeOwnerBannerClear.addEventListener("click", (e) => {
       e.preventDefault();
       clearHomeOwnerPin();
+    });
+  }
+  if (el.homeViewStatus) {
+    el.homeViewStatus.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (homeIsViewingOtherManager()) clearHomeViewEntry();
+      else clearHomeOwnerPin();
     });
   }
   if (el.homeSearchBtn) {
@@ -32952,6 +33444,7 @@
     e.preventDefault();
     openHomePlayerXSearch(homeLookupPlayer || homeCompareBase);
   });
+  bindHomeCompareVizToggle();
   document.addEventListener("pointerdown", (e) => {
     const wrap = el.homeDesktopSearch;
     if (!wrap || wrap.hidden) return;
@@ -35209,6 +35702,17 @@
   } catch {
     /* ignore */
   }
+  try {
+    localStorage.removeItem("fpl-explorer-home-view-chrome");
+    document.documentElement.removeAttribute("data-home-view-chrome");
+  } catch {
+    /* ignore */
+  }
+  window.addEventListener("resize", () => {
+    if (document.documentElement.classList.contains("is-home-view-status-on")) {
+      syncHomeViewStatus();
+    }
+  });
 
   if (el.prefsAnimations) {
     el.prefsAnimations.addEventListener("change", () => {
@@ -35218,335 +35722,12 @@
   applyAnimationsEnabled(animationsEnabled(), { preview: false });
   try { localStorage.removeItem("fpl-explorer-autosub-preview"); } catch { /* ignore */ }
 
-  const HOME_TILT_KEY = "fpl-explorer-home-tilt";
-  const HOME_TILT_KIT_KEY = "fpl-explorer-home-tilt-kit";
-  const HOME_TILT_MAX_DEG = 11;
-
-  let homeTiltListening = false;
-  let homeTiltRaf = 0;
-  let homeTiltPending = null;
-  let homeTiltActiveCard = null;
-  let homeTiltDemoTimer = 0;
-  let homeTiltPointerBound = false;
-
-  function homeTiltCardEnabled() {
-    try {
-      return localStorage.getItem(HOME_TILT_KEY) === "on";
-    } catch {
-      return false;
-    }
-  }
-
-  function homeTiltKitEnabled() {
-    try {
-      return localStorage.getItem(HOME_TILT_KIT_KEY) === "on";
-    } catch {
-      return false;
-    }
-  }
-
-  function homeTiltAnyEnabled() {
-    return homeTiltCardEnabled() || homeTiltKitEnabled();
-  }
-
-  /** @deprecated use homeTiltCardEnabled */
-  function homeTiltEnabled() {
-    return homeTiltCardEnabled();
-  }
-
-  function homeTiltReducedMotion() {
-    try {
-      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    } catch {
-      return false;
-    }
-  }
-
-  function syncHomeTiltToggle(on = homeTiltCardEnabled()) {
-    if (el.prefsHomeTilt) el.prefsHomeTilt.checked = !!on;
-  }
-
-  function syncHomeTiltKitToggle(on = homeTiltKitEnabled()) {
-    if (el.prefsHomeTiltKit) el.prefsHomeTiltKit.checked = !!on;
-  }
-
-  function syncHomeTiltClasses() {
-    const root = document.documentElement;
-    const live = homeTiltListening && !homeTiltReducedMotion();
-    root.classList.toggle("home-tilt-on", live && homeTiltCardEnabled());
-    root.classList.toggle("home-tilt-kit-on", live && homeTiltKitEnabled());
-  }
-
-  function clearHomeTiltVarsOn(node) {
-    if (!node || !node.style) return;
-    node.style.removeProperty("--home-tilt-rx");
-    node.style.removeProperty("--home-tilt-ry");
-    node.style.removeProperty("--home-tilt-sx");
-    node.style.removeProperty("--home-tilt-sy");
-  }
-
-  function clearHomeTiltVars() {
-    clearHomeTiltVarsOn(document.documentElement);
-    document.querySelectorAll("#home-page .home-pitch-card").forEach(clearHomeTiltVarsOn);
-  }
-
-  function applyHomeTiltVarsOn(node, rx, ry) {
-    if (!node || !node.style) return;
-    node.style.setProperty("--home-tilt-rx", rx.toFixed(2));
-    node.style.setProperty("--home-tilt-ry", ry.toFixed(2));
-    node.style.setProperty("--home-tilt-sx", `${(-ry * 0.45).toFixed(2)}px`);
-    node.style.setProperty("--home-tilt-sy", `${(rx * 0.45).toFixed(2)}px`);
-  }
-
-  function homeTiltCardFromEvent(e) {
-    const t = e.target;
-    if (!t || !t.closest) return null;
-    return t.closest("#home-page .home-pitch-card");
-  }
-
-  function homeTiltFromPointer(e, card) {
-    const rect = card.getBoundingClientRect();
-    if (!(rect.width > 0) || !(rect.height > 0)) return { rx: 0, ry: 0 };
-    const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
-    const rx = Math.max(-1, Math.min(1, -ny)) * HOME_TILT_MAX_DEG;
-    const ry = Math.max(-1, Math.min(1, nx)) * HOME_TILT_MAX_DEG;
-    return { rx, ry };
-  }
-
-  function scheduleHomeTiltApply(card, rx, ry) {
-    homeTiltPending = { card, rx, ry };
-    if (homeTiltRaf) return;
-    homeTiltRaf = requestAnimationFrame(() => {
-      homeTiltRaf = 0;
-      const next = homeTiltPending;
-      homeTiltPending = null;
-      if (!next || !next.card.isConnected) return;
-      applyHomeTiltVarsOn(next.card, next.rx, next.ry);
-    });
-  }
-
-  function resetHomeTiltCard(card) {
-    if (!card) return;
-    clearHomeTiltVarsOn(card);
-  }
-
-  function playHomeTiltDemo() {
-    if (homeTiltReducedMotion()) return;
-    const card =
-      document.querySelector("#home-page .home-pitch-card") ||
-      document.documentElement;
-    if (homeTiltDemoTimer) {
-      clearTimeout(homeTiltDemoTimer);
-      homeTiltDemoTimer = 0;
-    }
-    const steps = [
-      [8, -6],
-      [-6, 8],
-      [5, 4],
-      [0, 0],
-    ];
-    let i = 0;
-    const tick = () => {
-      if (i >= steps.length) {
-        homeTiltDemoTimer = 0;
-        resetHomeTiltCard(card);
-        return;
-      }
-      const [rx, ry] = steps[i++];
-      applyHomeTiltVarsOn(card, rx, ry);
-      homeTiltDemoTimer = setTimeout(tick, 180);
-    };
-    tick();
-  }
-
-  function onHomeTiltPointerDown(e) {
-    if (!homeTiltListening || state.page !== "home") return;
-    if (e.pointerType === "mouse") return;
-    const card = homeTiltCardFromEvent(e);
-    if (!card) return;
-    if (homeTiltActiveCard && homeTiltActiveCard !== card) {
-      resetHomeTiltCard(homeTiltActiveCard);
-    }
-    homeTiltActiveCard = card;
-    try {
-      card.setPointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-    const { rx, ry } = homeTiltFromPointer(e, card);
-    scheduleHomeTiltApply(card, rx, ry);
-  }
-
-  function onHomeTiltPointerMove(e) {
-    if (!homeTiltListening || state.page !== "home") return;
-    if (e.pointerType === "mouse") {
-      const card = homeTiltCardFromEvent(e);
-      if (!card) {
-        if (homeTiltActiveCard) {
-          resetHomeTiltCard(homeTiltActiveCard);
-          homeTiltActiveCard = null;
-        }
-        return;
-      }
-      if (homeTiltActiveCard && homeTiltActiveCard !== card) {
-        resetHomeTiltCard(homeTiltActiveCard);
-      }
-      homeTiltActiveCard = card;
-      const { rx, ry } = homeTiltFromPointer(e, card);
-      scheduleHomeTiltApply(card, rx, ry);
-      return;
-    }
-    if (!homeTiltActiveCard) return;
-    const { rx, ry } = homeTiltFromPointer(e, homeTiltActiveCard);
-    scheduleHomeTiltApply(homeTiltActiveCard, rx, ry);
-  }
-
-  function onHomeTiltPointerUp(e) {
-    if (e.pointerType === "mouse") return;
-    if (!homeTiltActiveCard) return;
-    try {
-      homeTiltActiveCard.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-    resetHomeTiltCard(homeTiltActiveCard);
-    homeTiltActiveCard = null;
-  }
-
-  function onHomeTiltPointerCancel() {
-    if (homeTiltActiveCard) {
-      resetHomeTiltCard(homeTiltActiveCard);
-      homeTiltActiveCard = null;
-    }
-  }
-
-  function startHomeTiltListening() {
-    if (homeTiltListening || homeTiltReducedMotion()) {
-      syncHomeTiltClasses();
-      return;
-    }
-    if (!homeTiltPointerBound) {
-      const root = document;
-      root.addEventListener("pointerdown", onHomeTiltPointerDown, { passive: true });
-      root.addEventListener("pointermove", onHomeTiltPointerMove, { passive: true });
-      root.addEventListener("pointerup", onHomeTiltPointerUp, { passive: true });
-      root.addEventListener("pointercancel", onHomeTiltPointerCancel, { passive: true });
-      homeTiltPointerBound = true;
-    }
-    homeTiltListening = true;
-    syncHomeTiltClasses();
-  }
-
-  function stopHomeTiltListening() {
-    homeTiltListening = false;
-    homeTiltActiveCard = null;
-    if (homeTiltRaf) {
-      cancelAnimationFrame(homeTiltRaf);
-      homeTiltRaf = 0;
-    }
-    homeTiltPending = null;
-    if (homeTiltDemoTimer) {
-      clearTimeout(homeTiltDemoTimer);
-      homeTiltDemoTimer = 0;
-    }
-    clearHomeTiltVars();
-    syncHomeTiltClasses();
-  }
-
-  function syncHomeTiltRuntime() {
-    const want =
-      homeTiltAnyEnabled() &&
-      state.page === "home" &&
-      !homeTiltReducedMotion() &&
-      !document.hidden;
-    if (want) startHomeTiltListening();
-    else stopHomeTiltListening();
-    syncHomeTiltClasses();
-  }
-
-  function applyHomeTiltMode({ card, kit }, { demo = true } = {}) {
-    const wantCard = card != null ? !!card : homeTiltCardEnabled();
-    const wantKit = kit != null ? !!kit : homeTiltKitEnabled();
-    const enabling = (wantCard && !homeTiltCardEnabled()) || (wantKit && !homeTiltKitEnabled());
-    const anyOn = wantCard || wantKit;
-
-    if (anyOn && homeTiltReducedMotion()) {
-      syncHomeTiltToggle(false);
-      syncHomeTiltKitToggle(false);
-      try {
-        localStorage.removeItem(HOME_TILT_KEY);
-        localStorage.removeItem(HOME_TILT_KIT_KEY);
-      } catch {
-        /* ignore */
-      }
-      if (typeof showToast === "function") {
-        showToast({
-          title: "Reduce Motion is on",
-          message: "Turn off Reduce Motion in iOS Accessibility to use tilt.",
-          icon: "info",
-        });
-      }
-      stopHomeTiltListening();
-      return;
-    }
-
-    try {
-      if (wantCard) localStorage.setItem(HOME_TILT_KEY, "on");
-      else localStorage.removeItem(HOME_TILT_KEY);
-      if (wantKit) localStorage.setItem(HOME_TILT_KIT_KEY, "on");
-      else localStorage.removeItem(HOME_TILT_KIT_KEY);
-    } catch {
-      /* ignore */
-    }
-    syncHomeTiltToggle(homeTiltCardEnabled());
-    syncHomeTiltKitToggle(homeTiltKitEnabled());
-    syncHomeTiltRuntime();
-    if (anyOn && demo && homeTiltListening) {
-      playHomeTiltDemo();
-      if (typeof showToast === "function" && enabling) {
-        showToast({
-          title: wantKit && !wantCard ? "Kit tilt on" : wantCard && !wantKit ? "Home tilt on" : "Tilt on",
-          message: "Drag across a pitch card — it tips toward your finger.",
-          icon: "circle-check",
-        });
-      }
-    }
-  }
-
-  function applyHomeTiltEnabled(on) {
-    applyHomeTiltMode({ card: !!on, kit: homeTiltKitEnabled() });
-  }
-
-  function applyHomeTiltKitEnabled(on) {
-    applyHomeTiltMode({ card: homeTiltCardEnabled(), kit: !!on });
-  }
-
-  if (el.prefsHomeTilt) {
-    el.prefsHomeTilt.addEventListener("change", () => {
-      applyHomeTiltEnabled(el.prefsHomeTilt.checked);
-    });
-  }
-  if (el.prefsHomeTiltKit) {
-    el.prefsHomeTiltKit.addEventListener("change", () => {
-      applyHomeTiltKitEnabled(el.prefsHomeTiltKit.checked);
-    });
-  }
-  syncHomeTiltToggle();
-  syncHomeTiltKitToggle();
-  syncHomeTiltRuntime();
-  document.addEventListener("visibilitychange", () => {
-    syncHomeTiltRuntime();
-  });
   try {
-    const reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const onReduce = () => syncHomeTiltRuntime();
-    if (reduceMq.addEventListener) reduceMq.addEventListener("change", onReduce);
-    else if (reduceMq.addListener) reduceMq.addListener(onReduce);
+    localStorage.removeItem("fpl-explorer-home-tilt");
+    localStorage.removeItem("fpl-explorer-home-tilt-kit");
   } catch {
     /* ignore */
   }
-
 
   // Player thumbs locked to kit — prefs UI removed.
   document.documentElement.classList.add("player-thumbs-kit");
