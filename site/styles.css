@@ -78,6 +78,15 @@
   --shadow: 0 1px 3px 0 hsl(240 6% 10% / 0.1), 0 1px 2px -1px hsl(240 6% 10% / 0.1);
   --shadow-lg: 0 10px 15px -3px hsl(240 6% 10% / 0.1), 0 4px 6px -4px hsl(240 6% 10% / 0.1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Mobile chrome scroll hide / show — always on (not Prefs → Animations).
+     Long expo-out so title + docks glide rather than snap away. */
+  --chrome-nav-dur: 880ms;
+  --chrome-dock-dur: 820ms;
+  --chrome-fade-dur: 760ms;
+  --chrome-dock-stagger: 70ms;
+  --chrome-dock-scale: 0.94;
+  --chrome-dock-blur: 2px;
+  --chrome-ease: cubic-bezier(0.16, 1, 0.3, 1);
   /* Keyboard focus ring — cleared on touch (html[data-pointer="coarse"]). */
   --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
 
@@ -325,7 +334,7 @@ html, body {
     min-height: 0;
     overflow: hidden;
     padding-top: var(--mobile-top-chrome-h, 52px);
-    transition: padding-top var(--chrome-nav-dur, 420ms) var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: padding-top var(--chrome-nav-dur) var(--chrome-ease);
   }
   :root {
     --badge-size: 26px;
@@ -2241,8 +2250,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     align-items: center;
     transform: translate3d(0, 0, 0);
-    transition: transform var(--chrome-nav-dur, 420ms) var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    will-change: transform;
+    opacity: 1;
+    transition:
+      transform var(--chrome-nav-dur) var(--chrome-ease),
+      opacity var(--chrome-nav-dur) var(--chrome-ease);
+    will-change: transform, opacity;
     backface-visibility: hidden;
   }
   /* Keep the button row intact; expanded search covers this same row. */
@@ -2290,8 +2302,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     overflow: visible;
     transform: translate3d(0, 0, 0);
-    transition: transform var(--chrome-nav-dur, 420ms) var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    will-change: transform;
+    opacity: 1;
+    transition:
+      transform var(--chrome-nav-dur) var(--chrome-ease),
+      opacity var(--chrome-nav-dur) var(--chrome-ease);
+    will-change: transform, opacity;
     backface-visibility: hidden;
   }
   /* Add-to-Home-Screen / installed PWA only — not normal Safari browsing.
@@ -2777,8 +2792,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     height: calc(var(--mobile-dock-clearance, 66px) + 20px);
     pointer-events: none;
     opacity: 1;
-    transition: opacity var(--chrome-fade-dur, var(--chrome-dock-dur, 420ms))
-      var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: opacity var(--chrome-fade-dur) var(--chrome-ease);
     background: linear-gradient(
       to top,
       color-mix(in srgb, var(--bg) 88%, transparent) 0%,
@@ -2830,9 +2844,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       0 0 0 1px hsl(var(--foreground) / 0.05);
     /* Stable resting transform — animating to/from `none` skips the tween in
        some WebKit / embedded mobile previews. */
-    transform: translate3d(0, 0, 0);
-    transition: transform var(--chrome-dock-dur, 420ms) var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    will-change: transform;
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+    transition:
+      transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+      opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+      filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger);
+    will-change: transform, opacity, filter;
     backface-visibility: hidden;
   }
   :root[data-theme="dark"] .mobile-view-dock,
@@ -3107,18 +3126,23 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html.mobile-chrome-scroll-hidden .mobile-filter-dock:not([hidden]),
   html.mobile-chrome-scroll-hidden .fixtures-sos-fab:not([hidden]) {
     /* Pixel travel (not %) so the tween always has a resolvable from/to. */
+    opacity: 0;
+    filter: blur(var(--chrome-dock-blur));
     transform: translate3d(
       0,
       calc(var(--mobile-dock-clearance, 66px) + 28px + env(safe-area-inset-bottom, 0px)),
       0
-    );
+    ) scale(var(--chrome-dock-scale));
     pointer-events: none;
   }
   html.mobile-chrome-scroll-hidden .mobile-chrome-fade:not([hidden]) {
     opacity: 0;
   }
-  /* Title row vacates; subtoolbar stays and parks under the safe area.
-     Transform-only (no opacity) so the slide stays visible end-to-end. */
+  /* Title row vacates; subtoolbar stays and parks under the safe area. */
+  html.mobile-chrome-scroll-hidden .page-nav,
+  html.mobile-chrome-scroll-hidden .topbar {
+    opacity: 0;
+  }
   html.mobile-chrome-scroll-hidden .page-nav {
     transform: translate3d(
       0,
@@ -3471,6 +3495,28 @@ html.animations-off .page-live-badge-dot-ping {
 html.animations-off .page-tab-live-dot:not([hidden]),
 html.animations-off .home-status-dot.is-live {
   animation: home-live-pulse 1.6s ease-out infinite !important;
+}
+/* Mobile chrome scroll hide / show — scroll UX, not Prefs → Animations. */
+html.animations-off.is-mobile-layout .page-nav,
+html.animations-off.is-mobile-layout .topbar,
+html.animations-off.is-mobile-layout #subtoolbar {
+  transition:
+    transform var(--chrome-nav-dur) var(--chrome-ease),
+    opacity var(--chrome-nav-dur) var(--chrome-ease) !important;
+}
+html.animations-off.is-mobile-layout .layout {
+  transition: padding-top var(--chrome-nav-dur) var(--chrome-ease) !important;
+}
+html.animations-off .mobile-view-dock,
+html.animations-off .mobile-filter-dock,
+html.animations-off .fixtures-sos-fab {
+  transition:
+    transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+    opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+    filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger) !important;
+}
+html.animations-off .mobile-chrome-fade {
+  transition: opacity var(--chrome-fade-dur) var(--chrome-ease) !important;
 }
 html.animations-off .page-pane.is-enter-pending > .page-header,
 html.animations-off .page-pane.is-enter-pending > .table-wrap,
@@ -27072,9 +27118,14 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   --mobile-dock-shadow:
     0 2px 6px hsl(240 6% 10% / 0.1),
     0 0 0 1px hsl(var(--foreground) / 0.05);
-  transform: translate3d(0, 0, 0);
-  transition: transform var(--chrome-dock-dur, 420ms) var(--chrome-ease, cubic-bezier(0.22, 1, 0.36, 1));
-  will-change: transform;
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    transform var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+    opacity var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger),
+    filter var(--chrome-dock-dur) var(--chrome-ease) var(--chrome-dock-stagger);
+  will-change: transform, opacity, filter;
   backface-visibility: hidden;
 }
 :root[data-theme="dark"] .fixtures-sos-fab {
