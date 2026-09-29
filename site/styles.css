@@ -2816,7 +2816,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     --mobile-dock-clearance: calc(var(--mobile-dock-size) + var(--mobile-dock-bottom) + 12px);
   }
   .mobile-view-dock,
-  .mobile-filter-dock {
+  .mobile-filter-dock,
+  .fixtures-sos-fab {
     --mobile-dock-size: 48px;
     --mobile-dock-btn-size: auto;
     --mobile-dock-radius: 14px;
@@ -2843,7 +2844,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     backface-visibility: hidden;
   }
   :root[data-theme="dark"] .mobile-view-dock,
-  :root[data-theme="dark"] .mobile-filter-dock {
+  :root[data-theme="dark"] .mobile-filter-dock,
+  :root[data-theme="dark"] .fixtures-sos-fab {
     --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
     --mobile-dock-border: hsl(var(--foreground) / 0.34);
     --mobile-dock-shadow:
@@ -2852,7 +2854,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .mobile-view-dock,
-    :root:not([data-theme="light"]) .mobile-filter-dock {
+    :root:not([data-theme="light"]) .mobile-filter-dock,
+    :root:not([data-theme="light"]) .fixtures-sos-fab {
       --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
       --mobile-dock-border: hsl(var(--foreground) / 0.34);
       --mobile-dock-shadow:
@@ -2864,7 +2867,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: none;
   }
   .mobile-view-dock .mobile-dock-label,
-  .mobile-filter-fab .mobile-dock-label {
+  .mobile-filter-fab .mobile-dock-label,
+  .fixtures-sos-fab .mobile-dock-label {
     display: inline;
     font-size: var(--mobile-dock-font);
     font-weight: 650;
@@ -2874,7 +2878,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     color: var(--mobile-dock-fg);
   }
   .mobile-view-dock .tab-btn.active .mobile-dock-label,
-  .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active .mobile-dock-label {
+  .mobile-view-dock .tabs:has(.seg-thumb.is-ready) .tab-btn.active .mobile-dock-label,
+  .fixtures-sos-fab-btn.active .mobile-dock-label,
+  .fixtures-sos-fab-btn.is-active .mobile-dock-label,
+  .fixtures-sos-fab .fixtures-sos-fab-tabs:has(.seg-thumb.is-ready) .fixtures-sos-fab-btn.active .mobile-dock-label,
+  .fixtures-sos-fab .fixtures-sos-fab-tabs:has(.seg-thumb.is-ready) .fixtures-sos-fab-btn.is-active .mobile-dock-label {
     color: #fff;
   }
   #sidebar-toggle.mobile-filter-fab .btn-label {
@@ -3047,13 +3055,22 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     color: inherit;
     flex: none;
   }
+  /* Open / pressed — same solid blue + white as xData Players/Teams active. */
   .mobile-filter-fab.on,
   .mobile-filter-fab[aria-expanded="true"],
   .mobile-filter-fab[aria-pressed="true"] {
-    background: hsl(var(--blue-hsl) / 0.14);
-    border-color: hsl(var(--foreground) / 0.38);
-    color: hsl(var(--blue-hsl));
+    background: hsl(var(--blue-hsl));
+    border-color: hsl(var(--blue-hsl));
+    color: #fff;
     box-shadow: var(--mobile-dock-shadow);
+  }
+  .mobile-filter-fab.on .icon,
+  .mobile-filter-fab[aria-expanded="true"] .icon,
+  .mobile-filter-fab[aria-pressed="true"] .icon,
+  .mobile-filter-fab.on .mobile-dock-label,
+  .mobile-filter-fab[aria-expanded="true"] .mobile-dock-label,
+  .mobile-filter-fab[aria-pressed="true"] .mobile-dock-label {
+    color: #fff;
   }
   html[data-pointer="coarse"] .mobile-filter-fab:hover {
     background: hsl(var(--card));
@@ -3062,11 +3079,12 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   html[data-pointer="coarse"] .mobile-filter-fab.on:hover,
   html[data-pointer="coarse"] .mobile-filter-fab[aria-expanded="true"]:hover,
   html[data-pointer="coarse"] .mobile-filter-fab[aria-pressed="true"]:hover {
-    background: hsl(var(--blue-hsl) / 0.14);
-    color: hsl(var(--blue-hsl));
+    background: hsl(var(--blue-hsl));
+    border-color: hsl(var(--blue-hsl));
+    color: #fff;
   }
   .mobile-filter-fab:active:not(:disabled) {
-    transform: scale(0.96);
+    transform: scale(0.98);
   }
   /* Home search — icon-only FAB, same shell height as Filters. */
   #home-search-btn.mobile-filter-fab.is-fab-icon,
@@ -27087,45 +27105,14 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
 #fixtures-page:not(.is-fixtures-all) .fixtures-all-horizon-note {
   display: none !important;
 }
+/* Fixtures SOS — same scale + solid-blue active chrome as xData / Players-Teams dock. */
 .fixtures-sos-fab {
   display: none;
   position: fixed;
   left: max(14px, env(safe-area-inset-left, 0px));
   bottom: max(14px, env(safe-area-inset-bottom, 0px));
-  z-index: 45;
+  z-index: 44;
   pointer-events: none;
-  /* Match Players/Teams + Filters dock chrome. */
-  --mobile-dock-size: 40px;
-  --mobile-dock-radius: 12px;
-  --mobile-dock-fg: hsl(var(--foreground));
-  --mobile-dock-fg-muted: hsl(var(--foreground) / 0.72);
-  --mobile-dock-border: hsl(var(--foreground) / 0.26);
-  --mobile-dock-shadow:
-    0 2px 6px hsl(240 6% 10% / 0.1),
-    0 0 0 1px hsl(var(--foreground) / 0.05);
-  transform: translate3d(0, 0, 0) scale(1);
-  opacity: 1;
-  transition:
-    transform var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger),
-    opacity var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger);
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-}
-:root[data-theme="dark"] .fixtures-sos-fab {
-  --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
-  --mobile-dock-border: hsl(var(--foreground) / 0.34);
-  --mobile-dock-shadow:
-    0 2px 8px hsl(0 0% 0% / 0.38),
-    0 0 0 1px hsl(var(--foreground) / 0.08);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .fixtures-sos-fab {
-    --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
-    --mobile-dock-border: hsl(var(--foreground) / 0.34);
-    --mobile-dock-shadow:
-      0 2px 8px hsl(0 0% 0% / 0.38),
-      0 0 0 1px hsl(var(--foreground) / 0.08);
-  }
 }
 html.is-mobile-layout[data-page="fixtures"] .fixtures-sos-fab:not([hidden]) {
   display: block;
@@ -27149,7 +27136,7 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
 }
 .fixtures-sos-fab .fixtures-sos-fab-tabs .seg-thumb {
   border-radius: calc(var(--mobile-dock-radius) - 3px);
-  background: hsl(var(--blue-hsl) / 0.14);
+  background: hsl(var(--blue-hsl));
 }
 .fixtures-sos-fab-btn.tab-btn,
 .fixtures-sos-fab-btn {
@@ -27159,19 +27146,19 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--mobile-dock-gap);
   width: auto;
   min-width: 0;
   height: auto;
   min-height: 0;
   margin: 0;
-  padding: 0 12px;
+  padding: 0 var(--mobile-dock-pad-x);
   border: none;
   border-radius: calc(var(--mobile-dock-radius) - 3px);
   background: transparent;
   box-shadow: none;
   color: var(--mobile-dock-fg-muted);
-  font-size: 12.5px;
+  font-size: var(--mobile-dock-font);
   font-weight: 650;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -27182,26 +27169,30 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
     transform 0.14s var(--ease-out);
 }
 .fixtures-sos-fab-btn .icon {
-  width: 16px;
-  height: 16px;
-  font-size: 16px;
+  width: var(--mobile-dock-icon);
+  height: var(--mobile-dock-icon);
+  font-size: var(--mobile-dock-icon);
   color: inherit;
   flex: none;
 }
 .fixtures-sos-fab-btn .mobile-dock-label {
-  display: inline;
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  white-space: nowrap;
   color: inherit;
 }
 .fixtures-sos-fab-btn.active,
 .fixtures-sos-fab-btn.is-active {
-  background: transparent;
-  color: var(--mobile-dock-fg);
+  background: hsl(var(--blue-hsl));
+  color: #fff;
   box-shadow: none;
+}
+.fixtures-sos-fab .fixtures-sos-fab-tabs:has(.seg-thumb.is-ready) .fixtures-sos-fab-btn.active,
+.fixtures-sos-fab .fixtures-sos-fab-tabs:has(.seg-thumb.is-ready) .fixtures-sos-fab-btn.is-active {
+  background: transparent;
+  color: #fff;
+  box-shadow: none;
+}
+.fixtures-sos-fab-btn.active .icon,
+.fixtures-sos-fab-btn.is-active .icon {
+  color: #fff;
 }
 .fixtures-sos-fab-btn:active:not(:disabled) {
   transform: scale(0.98);
