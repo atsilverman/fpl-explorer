@@ -78,10 +78,8 @@
   --shadow: 0 1px 3px 0 hsl(240 6% 10% / 0.1), 0 1px 2px -1px hsl(240 6% 10% / 0.1);
   --shadow-lg: 0 10px 15px -3px hsl(240 6% 10% / 0.1), 0 4px 6px -4px hsl(240 6% 10% / 0.1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Mobile chrome scroll hide / show — always on (not Prefs → Animations).
-     transitions refine: match panel/page slide tokens so show+hide feel
-     the same on iOS (same ease both ways; ~400ms not ~880ms). */
-  --chrome-nav-dur: var(--duration-slow, 400ms);
+  /* Mobile chrome scroll hide / show — floating docks only (not top bar).
+     Top title chrome stays pinned; scroll only dissolves bottom FABs. */
   --chrome-dock-dur: var(--duration-slow, 400ms);
   --chrome-fade-dur: var(--duration-medium, 350ms);
   --chrome-dock-stagger: 0ms;
@@ -336,7 +334,6 @@ html, body {
     min-height: 0;
     overflow: hidden;
     padding-top: var(--mobile-top-chrome-h, 52px);
-    transition: padding-top var(--chrome-nav-dur) var(--chrome-ease-show);
   }
   :root {
     --badge-size: 26px;
@@ -2252,10 +2249,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     align-items: center;
     transform: translate3d(0, 0, 0);
-    /* Transform-only — fading the title chrome leaves a blank padding gap. */
-    transition: transform var(--chrome-nav-dur) var(--chrome-ease);
-    will-change: transform;
-    backface-visibility: hidden;
+    /* Top chrome stays pinned — scroll hide applies to floating docks only. */
   }
   /* Keep the button row intact; expanded search covers this same row. */
   .topbar:has(#search-wrap.search-open) {
@@ -2302,10 +2296,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     flex-wrap: nowrap;
     overflow: visible;
     transform: translate3d(0, 0, 0);
-    /* Transform-only — fading the title chrome leaves a blank padding gap. */
-    transition: transform var(--chrome-nav-dur) var(--chrome-ease);
-    will-change: transform;
-    backface-visibility: hidden;
+    /* Top chrome stays pinned — scroll hide applies to floating docks only. */
   }
   /* Add-to-Home-Screen / installed PWA only — not normal Safari browsing.
      Pairs with opaque apple-mobile-web-app-status-bar-style so the iOS status
@@ -3138,38 +3129,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     opacity: 0;
     transition-timing-function: var(--chrome-ease-hide);
   }
-  /* Title row vacates; subtoolbar stays and parks under the safe area.
-     Transform-only on top chrome (no opacity) so the slide stays visible
-     end-to-end and doesn't leave an empty padding gap. */
-  html.mobile-chrome-scroll-hidden .page-nav {
-    transform: translate3d(
-      0,
-      calc(-1 * (var(--mobile-page-nav-h, 56px) + 12px)),
-      0
-    );
-    pointer-events: none;
-    transition-timing-function: var(--chrome-ease-hide);
-  }
-  html.mobile-chrome-scroll-hidden #subtoolbar {
-    transform: translate3d(
-      0,
-      calc(-1 * (var(--mobile-page-nav-h, 48px) - env(safe-area-inset-top, 0px))),
-      0
-    );
-    pointer-events: auto;
-    transition-timing-function: var(--chrome-ease-hide);
-  }
-  html.mobile-chrome-scroll-hidden .layout {
-    padding-top: calc(
-      var(--mobile-top-chrome-h, 52px) - var(--mobile-page-nav-h, 48px) +
-        env(safe-area-inset-top, 0px)
-    );
-    transition-timing-function: var(--chrome-ease-hide);
-  }
   @media (prefers-reduced-motion: reduce) {
-    html.is-mobile-layout .layout,
-    html.is-mobile-layout .page-nav,
-    html.is-mobile-layout .topbar,
     html.is-mobile-layout .mobile-view-dock,
     html.is-mobile-layout .mobile-filter-dock,
     html.is-mobile-layout .fixtures-sos-fab,
@@ -3497,15 +3457,7 @@ html.animations-off .page-tab-live-dot:not([hidden]),
 html.animations-off .home-status-dot.is-live {
   animation: home-live-pulse 1.6s ease-out infinite !important;
 }
-/* Mobile chrome scroll hide / show — scroll UX, not Prefs → Animations. */
-html.animations-off.is-mobile-layout .page-nav,
-html.animations-off.is-mobile-layout .topbar,
-html.animations-off.is-mobile-layout #subtoolbar {
-  transition: transform var(--chrome-nav-dur) var(--chrome-ease) !important;
-}
-html.animations-off.is-mobile-layout .layout {
-  transition: padding-top var(--chrome-nav-dur) var(--chrome-ease) !important;
-}
+/* Mobile chrome scroll hide / show — floating docks only (not Prefs → Animations). */
 html.animations-off .mobile-view-dock,
 html.animations-off .mobile-filter-dock,
 html.animations-off .fixtures-sos-fab {
@@ -3515,12 +3467,6 @@ html.animations-off .fixtures-sos-fab {
 }
 html.animations-off .mobile-chrome-fade {
   transition: opacity var(--chrome-fade-dur) var(--chrome-ease-show) !important;
-}
-html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden .page-nav,
-html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden .topbar,
-html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden #subtoolbar,
-html.animations-off.is-mobile-layout.mobile-chrome-scroll-hidden .layout {
-  transition-timing-function: var(--chrome-ease-hide) !important;
 }
 html.animations-off.mobile-chrome-scroll-hidden .mobile-view-dock,
 html.animations-off.mobile-chrome-scroll-hidden .mobile-filter-dock,
