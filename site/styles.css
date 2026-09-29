@@ -79,15 +79,15 @@
   --shadow-lg: 0 10px 15px -3px hsl(240 6% 10% / 0.1), 0 4px 6px -4px hsl(240 6% 10% / 0.1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   /* Mobile chrome scroll hide / show — always on (not Prefs → Animations).
-     Directional easings: show settles (ease-out); hide eases away (ease-in)
-     so both directions feel equally smooth. Expo-out alone rockets the hide. */
-  --chrome-nav-dur: 880ms;
-  --chrome-dock-dur: 820ms;
-  --chrome-fade-dur: 760ms;
+     transitions refine: match panel/page slide tokens so show+hide feel
+     the same on iOS (same ease both ways; ~400ms not ~880ms). */
+  --chrome-nav-dur: var(--duration-slow, 400ms);
+  --chrome-dock-dur: var(--duration-slow, 400ms);
+  --chrome-fade-dur: var(--duration-medium, 350ms);
   --chrome-dock-stagger: 0ms;
-  --chrome-dock-scale: 0.96;
-  --chrome-ease-show: cubic-bezier(0.22, 1, 0.36, 1);
-  --chrome-ease-hide: cubic-bezier(0.4, 0, 0.68, 0.2);
+  --chrome-dock-scale: var(--scale-large, 0.96);
+  --chrome-ease-show: var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1));
+  --chrome-ease-hide: var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1));
   --chrome-ease: var(--chrome-ease-show);
   /* Keyboard focus ring — cleared on touch (html[data-pointer="coarse"]). */
   --focus-ring: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
@@ -3130,7 +3130,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
       0
     ) scale(var(--chrome-dock-scale));
     pointer-events: none;
-    /* Ease-in on hide — soft start so it doesn't rocket off (esp. iOS). */
+    /* Same ease as show (transitions refine) — keeps iOS hide/show consistent. */
     transition-timing-function: var(--chrome-ease-hide);
     transition-delay: 0ms;
   }

@@ -10,6 +10,7 @@ html.motion-enhanced {
   --duration-slow: 400ms;
   --duration-very-slow: 500ms;
   --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --scale-large: 0.96;
   --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
   --ease-bounce-strong: cubic-bezier(0.34, 1.45, 0.64, 1);
   --dropdown-open-dur: 250ms;
