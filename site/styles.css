@@ -25750,10 +25750,6 @@ html.is-mobile-layout.has-fixtures-sos-fab .main {
   line-height: 1.35;
   color: var(--text-faint);
 }
-.prefs-fixtures-diff-toggle.is-disabled {
-  opacity: 0.55;
-  pointer-events: none;
-}
 button.settings-switch-row.prefs-diff-edit-row {
   width: 100%;
   margin: 0;

@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1605" />
+<link rel="stylesheet" href="styles.css?v=1606" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -602,18 +602,10 @@
             <button type="button" class="settings-switch-row prefs-diff-edit-row" id="prefs-difficulty-btn">
               <span class="settings-switch-text">
                 <span class="settings-switch-label">Edit ratings</span>
-                <span class="settings-switch-hint">Attack &amp; defence for each club (home &amp; away)</span>
+                <span class="settings-switch-hint">Used on Fixtures &amp; Home Schedule (attack &amp; defence, home &amp; away)</span>
               </span>
               <span class="prefs-diff-edit-affordance" aria-hidden="true">Edit</span>
             </button>
-            <label class="settings-switch-row prefs-fixtures-diff-toggle" for="prefs-fixtures-custom-colors">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Custom fixture colors</span>
-                <span class="settings-switch-hint">Use your ratings on Fixtures &amp; Home Schedule</span>
-              </span>
-              <input type="checkbox" id="prefs-fixtures-custom-colors" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
           </section>
         </div>
       </div>
@@ -1778,7 +1770,7 @@
     </button>
     <div class="difficulty-wizard-step" data-diff-step="intro">
       <h3 id="difficulty-wizard-title">Set team difficulties</h3>
-      <p class="difficulty-wizard-copy">Set your own 1–5 club ratings (1 easy → 5 hard). When Custom fixture colors is on in Preferences, those ratings are used site-wide for fixture difficulty colors.</p>
+      <p class="difficulty-wizard-copy">Set your own 1–5 club ratings (1 easy → 5 hard). They apply on Fixtures and Home Schedule for fixture difficulty colors. Strength of Schedule keeps season rank edges.</p>
       <ul class="difficulty-wizard-bullets">
         <li>Switch anytime between official FPL difficulty and your custom ratings</li>
         <li>Saved in this browser — edit again from Preferences</li>
@@ -1873,7 +1865,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1467"></script>
+<script src="app.js?v=1468"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -1311,7 +1311,6 @@
     fixturesTableWrap: $("#fixtures-table-wrap"),
     fixturesHead: $("#fixtures-head"),
     fixturesBody: $("#fixtures-body"),
-    prefsFixturesCustomColors: $("#prefs-fixtures-custom-colors"),
     difficultyWizard: $("#difficulty-wizard"),
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
@@ -2003,7 +2002,7 @@
   let teamDifficultyStore = {
     version: 2,
     ratings: {},
-    useOnFixtures: false,
+    useOnFixtures: true,
     useOnMatchups: false,
     completedOnce: false,
     advanced: false,
@@ -2107,14 +2106,16 @@
     const base = {
       version: 2,
       ratings: {},
-      useOnFixtures: false,
+      useOnFixtures: true,
       useOnMatchups: false,
       completedOnce: false,
       advanced: false,
     };
     if (!raw || typeof raw !== "object") return base;
     const prevVersion = Number(raw.version) || 1;
-    base.useOnFixtures = !!raw.useOnFixtures;
+    // Custom ratings always paint Fixtures / Home Schedule when present.
+    // useOnFixtures kept in the stored shape for older localStorage payloads.
+    base.useOnFixtures = true;
     base.useOnMatchups = false; // Matchups uses locked 2026/27 FPL ranks, not custom ratings.
     base.completedOnce = !!raw.completedOnce;
     base.advanced = !!raw.advanced;
@@ -2173,16 +2174,7 @@
   }
 
   function teamDifficultyUsesFixtures() {
-    return !!(teamDifficultyStore.useOnFixtures && teamDifficultyHasCustomRatings());
-  }
-
-  function prefsCustomColorsInput() {
-    if (el.prefsFixturesCustomColors && el.prefsFixturesCustomColors.isConnected) {
-      return el.prefsFixturesCustomColors;
-    }
-    const live = $("#prefs-fixtures-custom-colors");
-    if (live) el.prefsFixturesCustomColors = live;
-    return live;
+    return teamDifficultyHasCustomRatings();
   }
 
   const MATCHUPS_SEASON_KEY = "fpl-explorer-matchups-season-v1";
@@ -2292,7 +2284,6 @@
 
   /** Persist current draft (or FPL seed) and soft-refresh FDR surfaces. */
   function applyDifficultyDraftAndRefresh({
-    enableFixtures = null,
     toast = true,
     closeWizard = true,
   } = {}) {
@@ -2301,8 +2292,7 @@
     ensureTeamDifficultyDraftFromSeed();
     teamDifficultyStore.ratings = cloneTeamDifficultyRatings(teamDifficultyDraft);
     teamDifficultyStore.advanced = true;
-    if (enableFixtures != null) teamDifficultyStore.useOnFixtures = !!enableFixtures;
-    else teamDifficultyStore.useOnFixtures = true;
+    teamDifficultyStore.useOnFixtures = true;
     teamDifficultyStore.useOnMatchups = false;
     teamDifficultyStore.completedOnce = true;
     const saved = saveTeamDifficultyStore();
@@ -2330,24 +2320,23 @@
     }
     showToast({
       title: "Team difficulties saved",
-      message: teamDifficultyStore.useOnFixtures
-        ? "Custom fixture colors are on — Fixtures and Home Schedule use your ratings."
-        : "Stored in this browser. Turn on Custom fixture colors in Preferences to apply them (Strength of Schedule keeps OPTA/FPL ranks).",
+      message: "Fixtures and Home Schedule use your ratings. Strength of Schedule keeps season rank edges.",
       icon: "circle-check",
       animateCheck: true,
     });
     return true;
   }
 
-  function commitDifficultyWizard({ enableFixtures = null } = {}) {
-    applyDifficultyDraftAndRefresh({ enableFixtures, toast: true, closeWizard: true });
+  function commitDifficultyWizard() {
+    applyDifficultyDraftAndRefresh({ toast: true, closeWizard: true });
   }
 
   function resetDifficultyDraftToFpl() {
     teamDifficultyDraft = buildFplDifficultySeedRatings();
     renderDifficultyWizardList();
-    // Persist FPL seeds + soft-refresh; keep Custom fixture colors toggle as-is.
+    // Persist FPL seeds + soft-refresh (always applied on Fixtures / Home Schedule).
     teamDifficultyStore.ratings = cloneTeamDifficultyRatings(teamDifficultyDraft);
+    teamDifficultyStore.useOnFixtures = true;
     teamDifficultyStore.completedOnce = true;
     const saved = saveTeamDifficultyStore();
     if (!saved) {
@@ -2363,9 +2352,7 @@
     refreshTeamDifficultyConsumers();
     showToast({
       title: "Reset to FPL defaults",
-      message: teamDifficultyStore.useOnFixtures
-        ? "Custom fixture colors still on — using official FPL difficulty seeds."
-        : "Ratings restored to FPL defaults.",
+      message: "Ratings restored to official FPL difficulty seeds.",
       icon: "info",
     });
   }
@@ -18822,7 +18809,7 @@
         ),
         spitRow(
           spitRank("Schedule"),
-          "Team swipe — upcoming GW pills with FDR wash (green easy → red hard; your ratings when Custom fixture colors is on)."
+          "Team swipe — upcoming GW pills with FDR wash (green easy → red hard; your ratings when set in Preferences)."
         ),
         spitRow(
           spitRank("Player"),
@@ -19133,7 +19120,7 @@
         ),
         spitRow(
           iconHTML("sliders-horizontal"),
-          "Custom ratings — Preferences → Custom fixture colors"
+          "Custom ratings — Preferences → Team difficulties (always used when set)"
         ),
         spitRow(
           spitRank("Σ"),
@@ -19141,7 +19128,7 @@
         ),
         spitRow(
           spitRank("All / Attacking / Defending"),
-          "All = overall FDR. Attacking = opponent defence. Defending = opponent attack (custom ratings when Custom fixture colors is on)."
+          "All = overall FDR. Attacking = opponent defence. Defending = opponent attack (your ratings when set)."
         ),
       ];
       const reading = [
@@ -22699,59 +22686,19 @@
 
   function syncTeamDifficultyTogglesUI() {
     const has = teamDifficultyHasCustomRatings();
-    const input = prefsCustomColorsInput();
-    if (input) {
-      input.disabled = !has;
-      // Reflect stored flag only — never force on just because ratings exist.
-      input.checked = !!(has && teamDifficultyStore.useOnFixtures);
-      const row = input.closest(".settings-switch-row, .diff-toggle-row, .schedule-control");
-      if (row) row.classList.toggle("is-disabled", !has);
-    }
     if (el.prefsDifficultyBtn) {
       const label = el.prefsDifficultyBtn.querySelector(".settings-switch-label");
       const affordance = el.prefsDifficultyBtn.querySelector(".prefs-diff-edit-affordance");
+      const hint = el.prefsDifficultyBtn.querySelector(".settings-switch-hint");
       if (label) label.textContent = has ? "Edit ratings" : "Set ratings";
       if (affordance) affordance.textContent = has ? "Edit" : "Set";
+      if (hint) {
+        hint.textContent = has
+          ? "Used on Fixtures & Home Schedule (attack & defence, home & away)"
+          : "Set attack & defence for each club (home & away)";
+      }
     }
     document.documentElement.classList.toggle("custom-fdr-on", teamDifficultyUsesFixtures());
-  }
-
-  function setTeamDifficultyToggle(surface, on) {
-    if (surface !== "fixtures") return;
-    if (!teamDifficultyHasCustomRatings()) {
-      showToast({
-        title: "No custom ratings yet",
-        message: "Open Team difficulties in Preferences to set them first.",
-        icon: "info",
-      });
-      syncTeamDifficultyTogglesUI();
-      return;
-    }
-    const next = !!on;
-    teamDifficultyStore.useOnFixtures = next;
-    teamDifficultyStore.useOnMatchups = false;
-    saveTeamDifficultyStore();
-    // Re-read so a failed write can't leave UI and memory disagreeing.
-    try {
-      const raw = localStorage.getItem(TEAM_DIFFICULTY_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (!!parsed.useOnFixtures !== next) {
-          parsed.useOnFixtures = next;
-          localStorage.setItem(TEAM_DIFFICULTY_KEY, JSON.stringify(parsed));
-        }
-      }
-    } catch {
-      /* private browsing */
-    }
-    refreshTeamDifficultyConsumers();
-    showToast({
-      title: next ? "Custom fixture colors on" : "Custom fixture colors off",
-      message: next
-        ? "Fixtures and Home Schedule (squad + player/team cards) use your ratings. Strength of Schedule stays on OPTA/FPL ranks."
-        : "Back to official FPL FDR / opponent-rank washes. Strength of Schedule was never using custom ratings.",
-      icon: "info",
-    });
   }
 
   function syncScheduleEdgeMinChrome() {
@@ -30455,10 +30402,6 @@
     el.prefsPanel.addEventListener("change", (e) => {
       const t = e.target;
       if (!t) return;
-      if (t.id === "prefs-fixtures-custom-colors") {
-        setTeamDifficultyToggle("fixtures", !!t.checked);
-        return;
-      }
       if (t.matches && t.matches("input[type='checkbox']")) {
         motionMarkSwitchInit(t);
       }
