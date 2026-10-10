@@ -3761,7 +3761,6 @@
         r.toPlay,
         r.benchPoints,
         r.benchPointsGw,
-        r.freeTransfersLeft ?? "",
         r.activeChip || "",
         homeChipsStatusFingerprint(r.chips),
       ].join(":"))
@@ -4719,7 +4718,6 @@
   const HOME_SQUAD_VIEW_LABELS = ["Pitch", "List", "Points", "Ownership", "Schedule"];
   const HOME_SQUAD_VIEW_LABELS_WIDE = ["Pitch", "List", "Ownership", "Schedule"];
   const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips", "Bench Points"];
-  const HOME_FT_MAX = 5;
   const HOME_STANDINGS_TRANSFERS_PAGE = 1;
   const HOME_STANDINGS_CAPTAINS_PAGE = 2;
   const HOME_STANDINGS_BENCH_PAGE = 4;
@@ -6386,35 +6384,7 @@
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
       ${homeStandingsManagerCellsHTML(row)}
       <td class="home-col-transfers">${homeTransfersCellHTML(transfers)}</td>
-      <td class="home-col-ft">${homeFreeTransfersCellHTML(row)}</td>
     </tr>`;
-  }
-
-  function homeFreeTransfersCellHTML(row) {
-    const n = row && row.freeTransfersLeft != null ? Number(row.freeTransfersLeft) : NaN;
-    if (!Number.isFinite(n)) return `<span class="home-ft-value is-empty">—</span>`;
-    const cls = n <= 0 ? " is-none" : n >= HOME_FT_MAX ? " is-max" : "";
-    return `<span class="home-ft-value${cls}">${n}</span>`;
-  }
-
-  function homeFreeTransfersGw(rows) {
-    for (const r of rows || []) {
-      const gw = Number(r && r.freeTransfersGw);
-      if (Number.isFinite(gw) && gw > 0) return gw;
-    }
-    return null;
-  }
-
-  function syncHomeTransfersFtHead(rows) {
-    const head = document.getElementById("home-transfers-ft-head");
-    if (!head) return;
-    const gw = homeFreeTransfersGw(rows);
-    setTip(
-      head,
-      gw
-        ? `Free transfers left for the GW${gw} deadline (max ${HOME_FT_MAX})`
-        : "Free transfers left for the next deadline"
-    );
   }
 
   function syncHomeStandingsPagerDots(activeIndex) {
@@ -15366,10 +15336,9 @@
           el.homeTransfersStatus.textContent = "";
         }
       }
-      syncHomeTransfersFtHead(rows);
       el.homeStandingsTransfersBody.innerHTML = homeStandingsShowLoading()
-        ? homeSquadLoadingHTML(4, 8)
-        : rows.map((r) => homeTransfersRowHTML(r, opts)).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
+        ? homeSquadLoadingHTML(3, 8)
+        : rows.map((r) => homeTransfersRowHTML(r, opts)).join("") || `<tr><td colspan="3">No standings.</td></tr>`;
       requestAnimationFrame(() => {
         resetHomeTransfersTableScroll();
       });

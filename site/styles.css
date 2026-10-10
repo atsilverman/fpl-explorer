@@ -22709,16 +22709,13 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
     table-layout: fixed;
   }
   .home-transfers-table .home-col-rank {
-    width: 13%;
+    width: 14%;
   }
   .home-transfers-table .home-col-manager {
-    width: 31%;
+    width: 38%;
   }
   .home-transfers-table .home-col-transfers {
     width: 46%;
-  }
-  .home-transfers-table .home-col-ft {
-    width: 10%;
   }
   .home-chips-table {
     table-layout: fixed;
@@ -23604,52 +23601,6 @@ html[data-theme="dark"] .home-standings-chip-badge[data-chip] {
 .home-transfers-table tbody tr[data-entry] > td.home-col-transfers {
   padding-top: 8px;
 }
-.home-transfers-table .home-col-ft {
-  text-align: center;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.home-transfers-table th.home-col-ft {
-  white-space: normal;
-  line-height: 1.1;
-  vertical-align: bottom;
-  font-size: 9px;
-  letter-spacing: 0.02em;
-  padding-left: 2px;
-  padding-right: 2px;
-}
-.home-transfers-table tbody tr[data-entry] > td.home-col-ft {
-  padding-top: 8px;
-}
-/* Keep each move on one line; long names ellipsize, short ones stay whole. */
-.home-transfers-table .home-transfer-move {
-  flex-wrap: nowrap;
-}
-.home-transfers-table .home-transfer-out,
-.home-transfers-table .home-transfer-in {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.home-transfers-table .home-transfer-arrow {
-  flex: none;
-}
-.home-ft-value {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-}
-.home-ft-value.is-max {
-  color: hsl(var(--positive));
-  font-weight: 700;
-}
-.home-ft-value.is-none,
-.home-ft-value.is-empty {
-  color: var(--text-faint);
-  font-weight: 500;
-}
 .home-transfers-status {
   margin: 0 0 8px;
   padding: 6px 10px;
@@ -24302,16 +24253,13 @@ html[data-theme="dark"] .home-bench-gw-pill:not(.is-empty) {
     table-layout: fixed;
   }
   .home-transfers-table .home-col-rank {
-    width: 13%;
+    width: 14%;
   }
   .home-transfers-table .home-col-manager {
-    width: 31%;
+    width: 36%;
   }
   .home-transfers-table .home-col-transfers {
-    width: 46%;
-  }
-  .home-transfers-table .home-col-ft {
-    width: 10%;
+    width: 50%;
   }
   .home-chips-table {
     table-layout: fixed;
@@ -24396,9 +24344,6 @@ html[data-theme="dark"] .home-bench-gw-pill:not(.is-empty) {
   }
   .home-captains-table .home-col-captain {
     width: 44%;
-  }
-  .home-transfers-table .home-col-rank {
-    width: 13%;
   }
   .home-standings-live-table .home-col-live,
   .home-standings-live-table .home-col-left,
