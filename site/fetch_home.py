@@ -168,6 +168,66 @@ def fetch_entry_transfers(entry_id: int) -> tuple[list[dict], str | None]:
     return [row for row in data if isinstance(row, dict)], None
 
 
+def next_deadline_gw(bootstrap: dict) -> int | None:
+    for ev in bootstrap.get("events") or []:
+        if isinstance(ev, dict) and ev.get("is_next"):
+            try:
+                return int(ev["id"])
+            except (KeyError, TypeError, ValueError):
+                return None
+    return None
+
+
+def free_transfers_left(
+    history_payload: dict | None,
+    transfer_rows: list[dict] | None,
+    target_gw: int | None,
+    ft_max: int = 5,
+) -> int | None:
+    """Free transfers still unused for ``target_gw`` (the next deadline).
+
+    Banks +1 per GW from GW2 (capped at ``ft_max``); WC / FH weeks keep the bank.
+    Transfers already logged for ``target_gw`` (pre-deadline) are subtracted.
+    """
+    if not isinstance(history_payload, dict) or not target_gw or target_gw <= 1:
+        return None
+    current = history_payload.get("current")
+    if not isinstance(current, list):
+        return None
+    chip_events: set[int] = set()
+    for ch in history_payload.get("chips") or []:
+        if isinstance(ch, dict) and ch.get("name") in {"wildcard", "freehit"}:
+            try:
+                chip_events.add(int(ch.get("event") or 0))
+            except (TypeError, ValueError):
+                continue
+    ft = 1
+    for row in sorted(
+        (r for r in current if isinstance(r, dict)),
+        key=lambda r: int(r.get("event") or 0),
+    ):
+        try:
+            ev = int(row.get("event") or 0)
+            transfers = int(row.get("event_transfers") or 0)
+            cost = int(row.get("event_transfers_cost") or 0)
+        except (TypeError, ValueError):
+            continue
+        if ev >= target_gw:
+            break
+        if ev <= 1:
+            continue
+        free_used = 0 if ev in chip_events else max(0, transfers - round(cost / 4))
+        ft = min(ft_max, max(0, ft - free_used) + 1)
+    pending = 0
+    for row in transfer_rows or []:
+        try:
+            if int(row.get("event") or 0) == target_gw:
+                pending += 1
+        except (TypeError, ValueError, AttributeError):
+            continue
+    return max(0, ft - pending)
+
+
 def picks_payload_ready(payload: dict | None) -> bool:
     if not payload or not isinstance(payload, dict):
         return False
@@ -1175,6 +1235,11 @@ def main() -> int:
         gw = display_gw
         transfer_poll_gw = picks_gw if picks_gw > display_gw else None
         compare_gw = display_gw if transfer_poll_gw else max(0, display_gw - 1)
+        ft_target_gw = next_deadline_gw(bootstrap)
+        try:
+            ft_max = 1 + int((bootstrap.get("game_settings") or {}).get("max_extra_free_transfers"))
+        except (TypeError, ValueError):
+            ft_max = 5
 
         live_raw, live_err = fpl_get_result(f"/event/{display_gw}/live/")
         live = live_raw if isinstance(live_raw, dict) else {}
@@ -1345,6 +1410,7 @@ def main() -> int:
         )
 
         transfers_by_entry: dict[str, dict] = {}
+        official_transfers_by_entry: dict[int, list[dict]] = {}
         for eid in entry_ids:
             curr_payload = (
                 transfer_picks_by_entry.get(eid)
@@ -1357,6 +1423,8 @@ def main() -> int:
             curr_picks = (curr_payload or {}).get("picks") or []
             prev_picks = (prev_payload or {}).get("picks") or [] if prev_payload else []
             official_rows, _xfer_err = fetch_entry_transfers(eid)
+            if not _xfer_err:
+                official_transfers_by_entry[eid] = official_rows
             transfers_by_entry[str(eid)] = compute_transfers(
                 prev_picks,
                 curr_picks,
@@ -1632,6 +1700,23 @@ def main() -> int:
                         bench_points_gw = int(cached_gw_bp)
                 except (TypeError, ValueError):
                     bench_points_gw = None
+            ft_left = None
+            if ft_target_gw:
+                if eid not in official_transfers_by_entry:
+                    rows_xfer, rows_err = fetch_entry_transfers(eid)
+                    if not rows_err:
+                        official_transfers_by_entry[eid] = rows_xfer
+                if eid in official_transfers_by_entry:
+                    ft_left = free_transfers_left(
+                        hist_payload,
+                        official_transfers_by_entry[eid],
+                        ft_target_gw,
+                        ft_max,
+                    )
+            if ft_left is None:
+                cached_ft = cached_standings.get(eid) or {}
+                if cached_ft.get("freeTransfersGw") == ft_target_gw:
+                    ft_left = cached_ft.get("freeTransfersLeft")
             standing_rows.append(
                 {
                     "entry": eid,
@@ -1656,6 +1741,8 @@ def main() -> int:
                     "transfers": transfer_summary,
                     "benchPoints": bench_points,
                     "benchPointsGw": bench_points_gw,
+                    "freeTransfersLeft": ft_left,
+                    "freeTransfersGw": ft_target_gw,
                 }
             )
 
