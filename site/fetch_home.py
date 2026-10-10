@@ -186,7 +186,8 @@ def free_transfers_left(
 ) -> int | None:
     """Free transfers still unused for ``target_gw`` (the next deadline).
 
-    Banks +1 per GW from GW2 (capped at ``ft_max``); WC / FH weeks keep the bank.
+    Banks +1 per GW from GW2 (capped at ``ft_max``). WC / FH weeks keep the bank
+    as-is but do not earn the +1.
     Transfers already logged for ``target_gw`` (pre-deadline) are subtracted.
     """
     if not isinstance(history_payload, dict) or not target_gw or target_gw <= 1:
@@ -216,7 +217,9 @@ def free_transfers_left(
             break
         if ev <= 1:
             continue
-        free_used = 0 if ev in chip_events else max(0, transfers - round(cost / 4))
+        if ev in chip_events:
+            continue
+        free_used = max(0, transfers - round(cost / 4))
         ft = min(ft_max, max(0, ft - free_used) + 1)
     pending = 0
     for row in transfer_rows or []:
