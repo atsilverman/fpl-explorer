@@ -5186,6 +5186,23 @@
     return player.matchStatus === "finished" && mins <= 0;
   }
 
+  /** Captain/vice yet to start — show TBD instead of a misleading 0. */
+  function homePlayerGwYetToPlay(player) {
+    if (!player) return false;
+    if (homeGwAwaitingKickoff()) return true;
+    if (homeSquadRowIsInPlay(player)) return false;
+    if (player.matchStatus === "finished") return false;
+    const mins = Number(player.minutes) || 0;
+    if (mins > 0) return false;
+    const fxs = homeSquadFixtures(player);
+    if (fxs.length) {
+      return fxs.every(
+        (fx) => !fx.finished && !fx.live && !(Number(fx.minutes) > 0)
+      );
+    }
+    return player.matchStatus === "scheduled" || !player.matchStatus;
+  }
+
   /** Single Captain column when the League card is narrow (mobile or split grid). */
   function homeLeagueCompactCaptains() {
     const track = el.homeStandingsTrack;
@@ -5215,12 +5232,8 @@
     for (const r of rows) {
       const { captain, vice } = homeCaptainsForEntry(Number(r.entry));
       const { player } = homeEffectiveCaptainPick(captain, vice);
-      if (!player) continue;
-      const pts = homeGwAwaitingKickoff()
-        ? 0
-        : player.gwPoints != null
-          ? Number(player.gwPoints)
-          : null;
+      if (!player || homePlayerGwYetToPlay(player)) continue;
+      const pts = player.gwPoints != null ? Number(player.gwPoints) : null;
       if (!Number.isFinite(pts)) continue;
       if (max == null || pts > max) max = pts;
     }
@@ -5231,14 +5244,17 @@
     if (!player) return "—";
     const teamBadge = badgeHTML(player.team, "home-crest home-crest-captain") ||
       teamCrestFallbackHTML(player.team, "home-crest-fallback home-crest-captain");
-    const pts = homeGwAwaitingKickoff()
-      ? 0
+    const yetToPlay = homePlayerGwYetToPlay(player);
+    const pts = yetToPlay
+      ? null
       : player.gwPoints != null
         ? Number(player.gwPoints)
         : null;
-    const ptsHTML = Number.isFinite(pts)
-      ? `<span class="home-captain-pts">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
-      : "";
+    const ptsHTML = yetToPlay
+      ? `<span class="home-captain-pts is-tbd" title="Yet to play">TBD</span>`
+      : Number.isFinite(pts)
+        ? `<span class="home-captain-pts">${statRollSpan(pts, { from: 0, decimals: 0, className: "home-stat-roll" })}</span>`
+        : "";
     const fromName = original && original.name ? original.name : "Captain";
     const subHTML = autoSubbed
       ? `<span class="home-captain-sub"${tipAttr(`Vice on as captain — ${fromName} did not play`)} aria-label="Vice on as captain">${iconHTML("repeat-2", "home-captain-sub-icon")}</span>`
@@ -5295,8 +5311,8 @@
       return n > 0 ? n : 0;
     }
     if (key === "left") {
-      const n = Number(row.toPlay);
-      return Number.isFinite(n) ? n : null;
+      const n = homeStandingsRowToPlayCount(row);
+      return n != null && Number.isFinite(n) ? n : null;
     }
     if (key === "gw") {
       return homeStandingsGwPoints(row);
@@ -5330,19 +5346,36 @@
 
   function homeStandingsRowToPlayCount(row) {
     if (!homeTrustLiveMatchState()) return null;
-    if (mockLiveEnabled()) {
-      const squad = homeSquadForEntry(row && row.entry) || [];
+    // Prefer squad when present so captain/TC weight (+1 / +2) is correct even
+    // before the next home bundle refresh lands new toPlay values.
+    const squad = homeSquadForEntry(row && row.entry) || [];
+    if (squad.length || mockLiveEnabled()) {
       let n = 0;
       for (const p of squad) {
         if (!p || !p.starter || p.onBench) continue;
         if (homeSquadRowIsInPlay(p)) continue;
         if (p.matchStatus === "finished") continue;
-        n += 1;
+        const mult = Number(p.multiplier);
+        n += Number.isFinite(mult) && mult > 0 ? mult : 1;
       }
       return n;
     }
     const n = Number(row && row.toPlay);
     return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  /** True when a captain/TC (mult ≥ 2) is still among this manager's to-play. */
+  function homeStandingsRowCaptainStillToPlay(row) {
+    if (!homeTrustLiveMatchState()) return false;
+    const squad = homeSquadForEntry(row && row.entry) || [];
+    for (const p of squad) {
+      if (!p || !p.starter || p.onBench) continue;
+      if (homeSquadRowIsInPlay(p)) continue;
+      if (p.matchStatus === "finished") continue;
+      const mult = Number(p.multiplier);
+      if ((Number.isFinite(mult) && mult >= 2) || p.isCaptain) return true;
+    }
+    return false;
   }
 
   function homeStandingsGwPoints(row) {
@@ -5642,24 +5675,32 @@
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const inPlay = homeStandingsRowInPlayCount(row);
     const toPlay = homeStandingsRowToPlayCount(row);
+    const captainLeft = homeStandingsRowCaptainStillToPlay(row);
     const liveTitle = "Active picks in play (Bench Boost can exceed 11)";
-    const leftTitle = "Still to play this gameweek";
+    const leftTitle = captainLeft
+      ? "Still to play this gameweek — includes captain (counts double)"
+      : "Still to play this gameweek (captain counts double)";
     const gwPts = homeStandingsGwPoints(row);
     const totalPts = row.total != null ? Number(row.total) : null;
     const hasPlay = toPlay != null;
+    const leftCls = [
+      "home-play-left",
+      toPlay > 0 ? "is-active" : "is-zero",
+      captainLeft ? "has-captain" : "",
+    ].filter(Boolean).join(" ");
     const liveHTML = hasPlay
       ? (inPlay > 0
         ? `<span class="ownership-pill home-standings-live-pill is-active"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`
         : `<span class="ownership-pill home-standings-live-pill is-zero"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`)
       : "—";
     const leftHTML = hasPlay
-      ? `<span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}" title="${escapeHtml(leftTitle)}">${homeStandingsCountHTML(toPlay)}</span>`
+      ? `<span class="${leftCls}"${tipAttr(leftTitle)}>${homeStandingsCountHTML(toPlay)}</span>`
       : "—";
     const playHTML = hasPlay
       ? `<span class="home-play-split"${tipAttr(`${liveTitle}. ${leftTitle}`)}>
           <span class="home-play-live${inPlay > 0 ? " is-active" : " is-zero"}">${homeStandingsCountHTML(inPlay)}</span>
           <span class="home-play-split-sep" aria-hidden="true">/</span>
-          <span class="home-play-left${toPlay > 0 ? " is-active" : " is-zero"}">${homeStandingsCountHTML(toPlay)}</span>
+          <span class="${leftCls}">${homeStandingsCountHTML(toPlay)}</span>
         </span>`
       : "—";
     const gwIntensity = topMaps && topMaps.gw ? topMaps.gw.get(entry) : null;
@@ -18731,7 +18772,11 @@
         ),
         spitRow(
           `<span class="home-play-left is-active spit-home-swatch">3</span>`,
-          "Left — still to play this gameweek"
+          "Left / Left to play — still to play this gameweek (captain counts double)"
+        ),
+        spitRow(
+          `<span class="home-play-left is-active has-captain spit-home-swatch">4</span>`,
+          "Left includes captain still to play — amber pill; total already counts captain as 2"
         ),
         spitRow(
           `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">A</span>`,

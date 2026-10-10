@@ -913,10 +913,14 @@ def active_pick_progress(
     elements: dict[int, dict],
     fixtures: list[dict],
     match_status: dict[int, str],
+    mults: dict[int, int] | None = None,
 ) -> tuple[int, int]:
     """(in_play, still_to_play) among active scoring picks.
 
     Bench Boost can push either count above 11. DGW: live > to-play > done.
+    Still-to-play weights by effective multiplier so a captain left to play
+    contributes +1 (2 total) and triple captain +2 (3 total); live stays a
+    headcount of picks currently on the pitch.
     """
     in_play = 0
     to_play = 0
@@ -925,19 +929,28 @@ def active_pick_progress(
             eid = int(pick["element"])
         except (KeyError, TypeError, ValueError):
             continue
+        try:
+            if mults is not None:
+                mult = int(mults.get(eid) or 0)
+            else:
+                mult = int(pick.get("multiplier") or 0)
+        except (TypeError, ValueError):
+            mult = 0
+        if mult <= 0:
+            mult = 1
         el = elements.get(eid) or {}
         fx_list = fixtures_for_element(el, fixtures)
         if fx_list:
             if any(fixture_is_live(fx) for fx in fx_list):
                 in_play += 1
             elif any(not fixture_is_finished(fx) for fx in fx_list):
-                to_play += 1
+                to_play += mult
             continue
         status = match_status.get(eid) or "scheduled"
         if status == "live":
             in_play += 1
         elif status != "finished":
-            to_play += 1
+            to_play += mult
     return in_play, to_play
 
 
@@ -1415,7 +1428,7 @@ def main() -> int:
         active_ids = {int(p["element"]) for p in focus_active}
         focus_mults = effective_element_multipliers(focus_picks, focus_active)
         focus_in_play, focus_to_play = active_pick_progress(
-            focus_active, elements, fixtures, match_status
+            focus_active, elements, fixtures, match_status, focus_mults
         )
 
         transfers_by_entry: dict[str, dict] = {}
@@ -1623,7 +1636,11 @@ def main() -> int:
                         history_chips_by_entry.setdefault(eid, [])
                 chip_by_entry[eid] = chip
                 progress_by_entry[eid] = active_pick_progress(
-                    active, elements, fixtures, match_status
+                    active,
+                    elements,
+                    fixtures,
+                    match_status,
+                    mults_by_entry.get(eid),
                 )
             except (
                 urllib.error.HTTPError,

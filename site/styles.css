@@ -21189,10 +21189,46 @@ html[data-theme="dark"] .home-dnp-icon {
   color: hsl(var(--primary));
   font-weight: 650;
 }
+/* Orangish border pill — Left count includes captain still to play. */
+.home-play-left.has-captain {
+  box-sizing: border-box;
+  min-width: 1.65em;
+  min-height: 1.65em;
+  padding: 3px 5px;
+  border-radius: var(--home-chip-radius, 6px);
+  border: 1px solid hsl(var(--amber-hsl) / 0.72);
+  background: hsl(var(--amber-hsl) / 0.12);
+  color: hsl(38 92% 36%);
+  font-weight: 650;
+}
+html[data-theme="dark"] .home-play-left.has-captain {
+  border-color: hsl(var(--amber-hsl) / 0.75);
+  background: hsl(var(--amber-hsl) / 0.18);
+  color: hsl(43 90% 62%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-play-left.has-captain {
+    border-color: hsl(var(--amber-hsl) / 0.75);
+    background: hsl(var(--amber-hsl) / 0.18);
+    color: hsl(43 90% 62%);
+  }
+}
 .home-play-live.is-zero,
 .home-play-left.is-zero {
   color: var(--text-faint);
   font-weight: 500;
+}
+.home-play-left.is-zero.has-captain {
+  color: hsl(38 92% 36%);
+  font-weight: 650;
+}
+html[data-theme="dark"] .home-play-left.is-zero.has-captain {
+  color: hsl(43 90% 62%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-play-left.is-zero.has-captain {
+    color: hsl(43 90% 62%);
+  }
 }
 .home-standings-metric {
   font-variant-numeric: tabular-nums;
@@ -21251,11 +21287,22 @@ html[data-theme="dark"] .home-dnp-icon {
   width: 11px;
   height: 11px;
 }
+/* Match .home-data-table th (GW / Total) — don't shrink longer "Left to play". */
 .home-standings-table th.home-col-live,
 .home-standings-table th.home-col-left {
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+/* Non-live: "LEFT TO PLAY". While fixtures are live: short "LEFT". */
+.home-standings-live-table .home-left-head-long {
+  display: none;
+}
+.home-standings-live-table:not(.has-live-picks) .home-left-head-short {
+  display: none;
+}
+.home-standings-live-table:not(.has-live-picks) .home-left-head-long {
+  display: inline;
 }
 .home-standings-live-table .home-col-play {
   display: none;
@@ -21299,7 +21346,7 @@ html.home-squad-wide .home-standings-live-table .home-col-play {
 }
 html.home-squad-wide .home-standings-live-table th.home-col-play {
   font-size: 10.5px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -21669,7 +21716,8 @@ html[data-theme="dark"] .home-standings-chip-badge[data-chip] {
   gap: 8px;
   width: 100%;
   margin-top: 3px;
-  padding: 4px 6px;
+  /* No right pad — keep Net Δ flush with move-row pts (same cell edge). */
+  padding: 4px 0 4px 6px;
   border-top: none;
   border-radius: 5px;
   background: hsl(var(--muted-foreground) / 0.07);
@@ -21814,6 +21862,11 @@ html[data-theme="dark"] .home-transfer-net {
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
+}
+.home-captain-pts.is-tbd {
+  font-variant-numeric: normal;
+  letter-spacing: 0.02em;
+  color: hsl(var(--muted-foreground) / 0.72);
 }
 /* Top captain — cell fill only (must beat zebra / row washes). */
 .home-captains-table tbody tr[data-entry] > td.home-col-captain.is-top-captain {
@@ -22027,6 +22080,11 @@ html[data-theme="dark"] .home-bench-gw-pill:not(.is-empty) {
   gap: 0;
   min-width: 2.4em;
   vertical-align: middle;
+}
+/* Used / active: a little air between the GW label and the played dot. */
+.home-chip-cell.is-used,
+.home-chip-cell.is-active {
+  gap: 3px;
 }
 .home-chip-cell-mark {
   width: 12px;
