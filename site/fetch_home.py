@@ -186,7 +186,7 @@ def free_transfers_left(
 ) -> int | None:
     """Free transfers still unused for ``target_gw`` (the next deadline).
 
-    Banks +1 per GW from GW2 (capped at ``ft_max``). WC / FH weeks keep the bank
+    Banks +1 per GW from the GW after the manager joined (capped at ``ft_max``). WC / FH weeks keep the bank
     as-is but do not earn the +1.
     Transfers already logged for ``target_gw`` (pre-deadline) are subtracted.
     """
@@ -202,11 +202,17 @@ def free_transfers_left(
                 chip_events.add(int(ch.get("event") or 0))
             except (TypeError, ValueError):
                 continue
-    ft = 1
-    for row in sorted(
+    rows = sorted(
         (r for r in current if isinstance(r, dict)),
         key=lambda r: int(r.get("event") or 0),
-    ):
+    )
+    # The joining GW has unlimited transfers; 1 FT arrives the GW after.
+    try:
+        start_ev = max(1, int(rows[0].get("event") or 1)) if rows else 1
+    except (TypeError, ValueError):
+        start_ev = 1
+    ft = 1
+    for row in rows:
         try:
             ev = int(row.get("event") or 0)
             transfers = int(row.get("event_transfers") or 0)
@@ -215,7 +221,7 @@ def free_transfers_left(
             continue
         if ev >= target_gw:
             break
-        if ev <= 1:
+        if ev <= start_ev:
             continue
         if ev in chip_events:
             continue
