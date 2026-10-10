@@ -83,23 +83,21 @@
     root.setAttribute("data-home-surface", "glass");
     try {
       localStorage.removeItem("fpl-explorer-nameplate-edges");
+      localStorage.removeItem("fpl-explorer-team-draft");
     } catch (_) {}
     const PAGE_KEY = "fpl-explorer-page";
-    // Keep in sync with app.js PAGES / PLANNER_NAV_ENABLED / REPORT_NAV_ENABLED —
+    // Keep in sync with app.js PAGES / REPORT_NAV_ENABLED —
     // missing entries flash the wrong shell before JS loads (e.g. omitting "live"
     // painted Home on refresh).
-    const PLANNER_NAV_ENABLED = false;
     const REPORT_NAV_ENABLED = false;
-    if (!PLANNER_NAV_ENABLED) document.documentElement.classList.remove("planner-nav-enabled");
     if (!REPORT_NAV_ENABLED) document.documentElement.classList.remove("report-nav-enabled");
-    const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets", "team"];
+    const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets"];
     let page = "home";
     try {
       const saved = localStorage.getItem(PAGE_KEY);
       if (saved === "notes") page = "opta";
       else if (PAGES.includes(saved)) {
-        page = !PLANNER_NAV_ENABLED && saved === "team" ? "home" : saved;
-        if (!REPORT_NAV_ENABLED && page === "report") page = "home";
+        page = !REPORT_NAV_ENABLED && saved === "report" ? "home" : saved;
       }
     } catch (_) {}
     root.dataset.page = page;
@@ -118,8 +116,7 @@
       'html[data-page="expected"] #expected-page,' +
       'html[data-page="schedule"] #schedule-page,' +
       'html[data-page="fixtures"] #fixtures-page,' +
-      'html[data-page="markets"] #markets-page,' +
-      'html[data-page="team"] #team-page{display:block}' +
+      'html[data-page="markets"] #markets-page{display:block}' +
       'html[data-page="prices"] #prices-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
@@ -135,7 +132,6 @@
       'html[data-page="markets"] #enhance-relative-btn,' +
       'html[data-page="markets"] #expected-cat-toolbar,' +
       'html[data-page="markets"] #live-mode-seg,' +
-      'html[data-page="markets"] #team-toolbar-controls,' +
       'html[data-page="markets"] #table-only-toggles{display:none!important}' +
       'html[data-page="markets"] #markets-toolbar{display:flex}' +
       'html[data-page="live"] #subtoolbar .tabs,' +
@@ -144,7 +140,6 @@
       'html[data-page="live"] #columns-btn,' +
       'html[data-page="live"] #enhance-relative-btn,' +
       'html[data-page="live"] #expected-cat-toolbar,' +
-      'html[data-page="live"] #team-toolbar-controls,' +
       'html[data-page="live"] #table-only-toggles{display:none!important}' +
       'html[data-page="live"] #live-mode-seg{display:flex!important}' +
       'html:not([data-page="live"]) #live-mode-seg{display:none!important}' +
@@ -155,7 +150,6 @@
       'html.is-mobile-layout[data-page="prices"] #stats-toolbar-start #sidebar-toggle,' +
       'html.is-mobile-layout[data-page="prices"] #stats-toolbar-start>.tabs{display:none!important}' +
       'html.is-mobile-layout[data-page="expected"] #stats-toolbar-start #sidebar-toggle{display:none!important}' +
-      'html[data-page="team"] #subtoolbar .tabs{display:none!important}' +
       'html.is-mobile-layout[data-page="rankings"] #subtoolbar{display:none!important}';
     document.head.appendChild(boot);
     if (window.matchMedia("(max-width: 720px)").matches) {
@@ -373,9 +367,6 @@
     <circle cx="18" cy="18" r="3"/>
     <path d="m22 22-1.875-1.875"/>
   </symbol>
-  <symbol id="i-shirt" viewBox="0 0 24 24">
-    <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>
-  </symbol>
   <symbol id="i-users" viewBox="0 0 24 24">
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
     <circle cx="9" cy="7" r="4"/>
@@ -471,10 +462,6 @@
           <button id="page-prices" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
             Price Changes
-          </button>
-          <button id="page-team" class="page-tab-btn" type="button" hidden>
-            <svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg>
-            Planner
           </button>
           <button id="page-expected" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-chart-gantt"/></svg>
@@ -628,17 +615,6 @@
               <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             </label>
           </section>
-          <section class="settings-section" id="prefs-planner-section" hidden>
-            <div class="settings-section-label">Planner</div>
-            <div class="prefs-field">
-              <p class="prefs-field-hint prefs-planner-hint-mobile">Resync copies your linked FPL squad into the Planner. Clear removes every planned pick.</p>
-              <p class="prefs-field-hint prefs-planner-hint-desktop">On desktop, Resync and Clear live in the Planner toolbar next to the gameweek controls.</p>
-              <div class="prefs-action-row prefs-planner-actions">
-                <button type="button" class="ghost-btn prefs-action-btn" id="team-resync-btn" data-team-planner-action="resync">Resync from FPL</button>
-                <button type="button" class="ghost-btn prefs-action-btn" id="team-clear-btn" data-team-planner-action="clear">Clear planner</button>
-              </div>
-            </div>
-          </section>
         </div>
       </div>
     </div>
@@ -680,26 +656,6 @@
     </div>
 
     <div class="topbar-cluster topbar-end-cluster">
-      <div class="team-toolbar-controls" id="team-toolbar-controls" hidden>
-        <button type="button" class="ghost-btn icon-label-btn" id="team-compare-btn" hidden
-          aria-pressed="false" title="Click up to 5 players to compare">
-          <svg class="icon" aria-hidden="true"><use href="#i-scale"/></svg>
-          <span class="btn-label">Compare</span>
-        </button>
-        <div class="team-toolbar-planner-actions" id="team-toolbar-planner-actions">
-          <button type="button" class="ghost-btn icon-label-btn" id="team-resync-toolbar"
-            data-team-planner-action="resync" title="Copy linked FPL squad into Planner" hidden>
-            <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
-            <span class="btn-label">Resync</span>
-          </button>
-          <button type="button" class="ghost-btn icon-label-btn" id="team-clear-toolbar"
-            data-team-planner-action="clear" title="Remove every planned pick" hidden>
-            <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-            <span class="btn-label">Clear</span>
-          </button>
-        </div>
-        <div class="team-gw-nav" id="team-gw-nav"></div>
-      </div>
       <div class="markets-toolbar" id="markets-toolbar">
         <div class="markets-control markets-control-view" id="markets-view-control">
           <div class="schedule-control-head">
@@ -834,14 +790,6 @@
     <div class="filter-group" id="position-filter-group">
       <h3>Position</h3>
       <div class="chip-row" id="pos-filters"></div>
-    </div>
-
-    <div class="filter-group" id="team-affordable-group" style="display:none;">
-      <h3>Budget</h3>
-      <label class="check-row-block">
-        <span class="check-row-line"><input type="checkbox" id="team-affordable-check" /> Affordable only</span>
-        <span class="check-row-note">Hide anyone above remaining Bank. Replace credits the outgoing player's price.</span>
-      </label>
     </div>
 
     <div class="filter-group">
@@ -1503,70 +1451,6 @@
       <p class="page-updated-text page-data-footer" id="rankings-updated-footer" hidden></p>
     </div>
 
-    <div id="team-page" class="page-pane" style="display:none;">
-      <div class="page-header team-header">
-        <div class="team-header-text">
-          <div class="team-header-title-row">
-            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shirt"/></svg>Planner<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Planner works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <div class="team-header-inline-actions" id="team-header-inline-actions"></div>
-          </div>
-          <p class="page-subtitle" id="team-page-subtitle">Plan transfers and lineups by gameweek — synced from your linked FPL manager. Your live squad is on Home.</p>
-        </div>
-        <div class="page-header-meta team-picker-header-actions" id="team-picker-header-actions">
-          <button type="button" class="ghost-btn icon-label-btn team-picker-cancel" id="team-picker-cancel" hidden aria-label="Back to squad">
-            <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
-            <span class="btn-label">Back</span>
-          </button>
-        </div>
-      </div>
-      <div class="team-budget-bar" id="team-budget-bar"></div>
-      <div class="compare-wrap" id="team-compare-wrap" hidden>
-        <div class="compare-header">
-          <span id="team-compare-title">Compare</span>
-          <span class="ghost-btn" id="team-compare-clear" role="button" tabindex="0">Clear selection</span>
-        </div>
-        <div class="table-wrap team-table-wrap">
-          <table>
-            <thead id="team-compare-head"></thead>
-            <tbody id="team-compare-body"></tbody>
-          </table>
-        </div>
-      </div>
-      <div id="team-sub-bar" class="team-sub-bar" hidden></div>
-      <div id="team-squad-view">
-        <div class="compare-wrap team-search-results" id="team-search-results" hidden>
-          <div class="compare-header">
-            <span id="team-search-title">Matching players</span>
-            <span class="team-search-header-end">
-              <span class="team-search-hint">↑↓ to choose · Enter to pin · Click to add</span>
-              <span class="ghost-btn" id="team-search-clear-pins" hidden role="button" tabindex="0">Clear pins</span>
-            </span>
-          </div>
-          <div class="table-wrap team-table-wrap">
-            <table>
-              <thead id="team-search-head"></thead>
-              <tbody id="team-search-body" role="listbox" aria-label="Matching players"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="table-wrap team-table-wrap">
-          <table>
-            <thead id="team-squad-head"></thead>
-            <tbody id="team-squad-body"></tbody>
-          </table>
-        </div>
-      </div>
-      <div id="team-picker-view" hidden role="region" aria-label="Select player">
-        <div class="table-wrap team-table-wrap team-picker-table-wrap">
-          <table>
-            <thead id="team-picker-head"></thead>
-            <tbody id="team-picker-body"></tbody>
-          </table>
-        </div>
-      </div>
-      <p class="page-updated-text page-data-footer" id="team-updated-footer" hidden></p>
-    </div>
-
     <div id="expected-page" class="page-pane" style="display:none;">
       <div class="page-header opta-header expected-header">
         <div class="opta-header-top">
@@ -1814,7 +1698,6 @@
   </div>
   <div class="page-info-panel-body" id="page-info-panel-body"></div>
 </div>
-<div id="team-row-menu" class="dropdown-panel settings-panel team-row-menu" role="menu" aria-labelledby="team-row-menu-title" aria-hidden="true" tabindex="-1"></div>
 <div id="mobile-chrome-fade" class="mobile-chrome-fade" hidden aria-hidden="true"></div>
 <!-- Outside .main so fixed stacking clears the bottom chrome fade / docks. -->
 <div id="home-view-banner" class="home-view-chip" hidden>
@@ -1865,17 +1748,6 @@
       </button>
     </div>
     <div id="mobile-sheet-body" class="mobile-sheet-body"></div>
-  </div>
-</div>
-<div id="confirm-modal" class="confirm-modal" hidden>
-  <div class="confirm-modal-backdrop" data-confirm-cancel></div>
-  <div class="confirm-modal-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-msg">
-    <h3 id="confirm-modal-title">Clear squad?</h3>
-    <p id="confirm-modal-msg">This removes every player from the draft.</p>
-    <div class="confirm-modal-actions">
-      <button type="button" class="ghost-btn" data-confirm-cancel>Cancel</button>
-      <button type="button" class="ghost-btn confirm-modal-danger" id="confirm-modal-ok">Clear squad</button>
-    </div>
   </div>
 </div>
 <div id="home-manager-modal" class="home-manager-modal" hidden>
