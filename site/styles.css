@@ -21189,28 +21189,31 @@ html[data-theme="dark"] .home-dnp-icon {
   color: hsl(var(--primary));
   font-weight: 650;
 }
-/* Orangish border pill — Left count includes captain still to play. */
+/* Amber border pill, no fill — Left includes captain still to play. Sized like Live. */
 .home-play-left.has-captain {
+  --pill-pad-x: var(--data-pill-pad-x);
   box-sizing: border-box;
-  min-width: 1.65em;
-  min-height: 1.65em;
-  padding: 3px 5px;
-  border-radius: var(--home-chip-radius, 6px);
+  min-width: calc(2ch + 2 * var(--pill-pad-x));
+  min-height: var(--data-pill-min-height);
+  padding: var(--data-pill-pad-y) var(--pill-pad-x);
+  border-radius: var(--home-chip-radius, var(--data-pill-radius));
   border: 1px solid hsl(var(--amber-hsl) / 0.72);
-  background: hsl(var(--amber-hsl) / 0.12);
-  color: hsl(38 92% 36%);
-  font-weight: 650;
+  background: transparent;
+  color: #000;
+  font-size: var(--data-pill-font-size);
+  font-weight: var(--data-pill-font-weight);
+  line-height: var(--data-pill-line-height);
 }
 html[data-theme="dark"] .home-play-left.has-captain {
   border-color: hsl(var(--amber-hsl) / 0.75);
-  background: hsl(var(--amber-hsl) / 0.18);
-  color: hsl(43 90% 62%);
+  background: transparent;
+  color: #fff;
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-play-left.has-captain {
     border-color: hsl(var(--amber-hsl) / 0.75);
-    background: hsl(var(--amber-hsl) / 0.18);
-    color: hsl(43 90% 62%);
+    background: transparent;
+    color: #fff;
   }
 }
 .home-play-live.is-zero,
@@ -21219,15 +21222,15 @@ html[data-theme="dark"] .home-play-left.has-captain {
   font-weight: 500;
 }
 .home-play-left.is-zero.has-captain {
-  color: hsl(38 92% 36%);
-  font-weight: 650;
+  color: #000;
+  font-weight: var(--data-pill-font-weight);
 }
 html[data-theme="dark"] .home-play-left.is-zero.has-captain {
-  color: hsl(43 90% 62%);
+  color: #fff;
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-play-left.is-zero.has-captain {
-    color: hsl(43 90% 62%);
+    color: #fff;
   }
 }
 .home-standings-metric {
@@ -21381,7 +21384,7 @@ html.home-squad-wide .home-standings-live-table .home-col-total {
   white-space: nowrap;
 }
 .home-play-split .home-play-live,
-.home-play-split .home-play-left {
+.home-play-split .home-play-left:not(.has-captain) {
   min-width: 0.75em;
 }
 .home-play-split-sep {
