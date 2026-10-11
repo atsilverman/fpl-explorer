@@ -863,6 +863,8 @@
     ownershipTreeWindow: "d7", // d7 | d3 | d1
     ownershipSortKey: "d14",
     ownershipSortDir: "desc",
+    defconSortKey: "hits",
+    defconSortDir: "desc",
     pricesViewMode: "prediction", // prediction | actual
     pricesActualSortKey: "default", // default | changedAt | name | change | before | after
     pricesActualSortDir: "desc",
@@ -1084,6 +1086,7 @@
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
     pageOwnership: $("#page-ownership"),
+    pageDefcon: $("#page-defcon"),
     pagePrices: $("#page-prices"),
     pageExpected: $("#page-expected"),
     pageTabs: $("#page-tabs"),
@@ -1265,6 +1268,12 @@
     ownershipTreemapPlot: $("#ownership-treemap-plot"),
     ownershipTreemapEmpty: $("#ownership-treemap-empty"),
     ownershipUpdatedFooter: $("#ownership-updated-footer"),
+    defconPage: $("#defcon-page"),
+    defconTableWrap: $("#defcon-table-wrap"),
+    defconTableHead: $("#defcon-table-head"),
+    defconTableBody: $("#defcon-table-body"),
+    defconCountLabel: $("#defcon-count-label"),
+    defconUpdatedFooter: $("#defcon-updated-footer"),
     pricesPage: $("#prices-page"),
     pricesCountdownValue: $("#prices-countdown-value"),
     pricesViewSeg: $("#prices-view-seg"),
@@ -1611,6 +1620,7 @@
     renderColumnsPanel();
     renderTable();
     if (state.page === "ownership") renderOwnership();
+    if (state.page === "defcon") renderDefcon();
     if (state.page === "prices") renderPrices();
     if (state.page === "live") renderLive({ animate: true });
   }
@@ -14708,6 +14718,7 @@
     bindPlayerDetailsRowClicks(el.ownershipTreemapPlot, {
       rowSelector: ".ownership-treemap-cell[data-player-code]",
     });
+    bindPlayerDetailsRowClicks(el.defconTableBody);
     bindPlayerDetailsRowClicks(el.pricesPage);
     bindPlayerDetailsRowClicks(el.barbellBody || el.barbellWrap);
     bindPlayerDetailsRowClicks(el.reportArticle, {
@@ -15594,7 +15605,7 @@
   function isOwnedRow(row) {
     if (!row || row.code == null || row.kind === "team") return false;
     if (!ownedCodes.has(row.code)) return false;
-    if (state.page === "ownership" || state.page === "prices") return true;
+    if (state.page === "ownership" || state.page === "defcon" || state.page === "prices") return true;
     return state.view === "players";
   }
 
@@ -16268,6 +16279,9 @@
     } else if (state.page === "ownership" && el.ownershipTableWrap) {
       el.ownershipTableWrap.scrollTop = 0;
       el.ownershipTableWrap.scrollLeft = 0;
+    } else if (state.page === "defcon" && el.defconTableWrap) {
+      el.defconTableWrap.scrollTop = 0;
+      el.defconTableWrap.scrollLeft = 0;
     } else if (state.page === "prices") {
       const wraps = pricesActiveTableWraps();
       wraps.forEach((wrap) => {
@@ -16434,7 +16448,8 @@
       page === "markets" ||
       page === "schedule" ||
       page === "fixtures" ||
-      page === "prices"
+      page === "prices" ||
+      page === "defcon"
     ) {
       return false;
     }
@@ -16573,7 +16588,7 @@
     const viewTabs = el.tabPlayers && el.tabPlayers.closest(".tabs");
     if (viewTabs) {
       viewTabs.style.display =
-        page === "live" || page === "prices" || page === "fixtures"
+        page === "live" || page === "prices" || page === "fixtures" || page === "defcon"
           ? "none"
           : "";
     }
@@ -16685,7 +16700,8 @@
           state.page === "live" ||
           state.page === "prices" ||
           state.page === "fixtures" ||
-          (state.page === "ownership" && !ownershipIsTreemap()))
+          (state.page === "ownership" && !ownershipIsTreemap()) ||
+          state.page === "defcon")
       );
     }
 
@@ -16930,6 +16946,9 @@
     if (state.page === "ownership" && el.ownershipTableWrap && !el.ownershipTableWrap.hidden) {
       wraps.push(el.ownershipTableWrap);
     }
+    if (state.page === "defcon" && el.defconTableWrap && !el.defconTableWrap.hidden) {
+      wraps.push(el.defconTableWrap);
+    }
     if (state.page === "prices") {
       pricesActiveTableWraps().forEach((wrap) => {
         if (wrap && !wrap.hidden) wraps.push(wrap);
@@ -16964,6 +16983,7 @@
     if (!(NARROW_MQ.matches || !hasFineHover())) return false;
     return (
       state.page === "ownership" ||
+      state.page === "defcon" ||
       state.page === "prices" ||
       state.page === "expected" ||
       state.page === "opta" ||
@@ -16974,6 +16994,7 @@
 
   let optaMobileNameColW = null;
   let ownershipMobileNameColW = null;
+  let defconMobileNameColW = null;
   let pricesMobileNameColW = null;
   let liveMobileNameColW = null;
   let mobileNameColRaf = 0;
@@ -17159,6 +17180,29 @@
     }
   }
 
+  function syncDefconMobileNameColWidth() {
+    const wrap = el.defconTableWrap;
+    if (!NARROW_MQ.matches || state.page !== "defcon" || !wrap || wrap.hidden) {
+      defconMobileNameColW = null;
+      if (wrap) wrap.style.removeProperty("--name-col-w");
+      return;
+    }
+    const measured = measureNameColWidth(wrap, {
+      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
+      hugContent: true,
+    });
+    const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
+    defconMobileNameColW = Math.max(
+      OWNERSHIP_MOBILE_NAME_COL_MIN,
+      Math.min(measured, cap)
+    );
+    const prev = wrap.style.getPropertyValue("--name-col-w");
+    wrap.style.setProperty("--name-col-w", `${defconMobileNameColW}px`);
+    if (prev !== `${defconMobileNameColW}px`) {
+      invalidateNameSimplifyOrigin(wrap);
+    }
+  }
+
   const LIVE_POINTS_NAME_COL_MIN = 128;
   const LIVE_POINTS_MOBILE_NAME_COL_W = 118;
 
@@ -17279,6 +17323,7 @@
       mobileNameColRaf = 0;
       syncOptaMobileNameColWidth();
       syncOwnershipMobileNameColWidth();
+      syncDefconMobileNameColWidth();
       syncPricesMobileNameColWidth();
       syncLivePointsNameColWidth();
       if (state.page === "prices" && pricesViewMode() === "actual") {
@@ -17290,7 +17335,7 @@
   function nameSimplifyProgress(scrollLeft, origin = 0, wrap = null) {
     // Ownership still maps the full remaining pan (short table). Statistics
     // finishes compact well before the last column.
-    if (wrap && (state.page === "ownership" || state.page === "prices")) {
+    if (wrap && (state.page === "ownership" || state.page === "defcon" || state.page === "prices")) {
       const maxScroll = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
       if (maxScroll <= 0) return 0;
       const linear = Math.min(1, Math.max(0, scrollLeft) / maxScroll);
@@ -17509,6 +17554,7 @@
     if (!nameSimplifyActive()) {
       nameSimplifyWraps().forEach(clearNameColumnSimplify);
       if (el.ownershipTableWrap) clearNameColumnSimplify(el.ownershipTableWrap);
+      if (el.defconTableWrap) clearNameColumnSimplify(el.defconTableWrap);
       pricesActiveTableWraps().forEach((wrap) => clearNameColumnSimplify(wrap));
       const barbellScroll = expectedScrollWrap();
       if (barbellScroll) clearNameColumnSimplify(barbellScroll);
@@ -18266,6 +18312,12 @@
     hideFixtureTooltip();
     if (state.page === "ownership") {
       renderOwnership();
+      syncFiltersResetUI();
+      syncSearchHost();
+      return;
+    }
+    if (state.page === "defcon") {
+      renderDefcon();
       syncFiltersResetUI();
       syncSearchHost();
       return;
@@ -19049,6 +19101,28 @@
         ${spitSection("Legend", legend)}`;
     }
 
+    if (state.page === "defcon") {
+      const legend = [
+        spitRow(
+          `<span class="defcon-gw-dot is-hit spit-ui-swatch"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
+          "Hit — cleared the match DefCon threshold that gameweek"
+        ),
+        spitRow(
+          `<span class="defcon-gw-dot is-miss spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
+          "Miss — played but stayed under the threshold"
+        ),
+        spitRow(
+          `<span class="defcon-gw-dot is-dnp spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
+          "DNP — no minutes that gameweek"
+        ),
+        spitRow(`<span class="defcon-hits spit-ui-swatch">3/5</span>`, "Hits out of finished gameweeks shown"),
+        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
+      ];
+      return `${spitHead("shield-half", "How DefCon works")}
+        ${spitIntro("Per-gameweek DefCon hits for finished GWs. Thresholds are binary: DEF 10 CBIT, MID/FWD 12 CBIRT. Goalkeepers are ineligible.")}
+        ${spitSection("Legend", legend)}`;
+    }
+
     if (state.page === "prices") {
       const mobile = NARROW_MQ.matches;
       const isActual = pricesViewMode() === "actual";
@@ -19829,6 +19903,7 @@
       schedule: "How Strength of Schedule works",
       fixtures: "How Fixtures works",
       ownership: "How Ownership works",
+      defcon: "How DefCon works",
       prices: "How Price Changes works",
       markets: "How Markets works",
     };
@@ -19845,6 +19920,7 @@
         else if (pane.id === "schedule-page") page = "schedule";
         else if (pane.id === "fixtures-page") page = "fixtures";
         else if (pane.id === "ownership-page") page = "ownership";
+        else if (pane.id === "defcon-page") page = "defcon";
         else if (pane.id === "prices-page") page = "prices";
         else if (pane.id === "markets-page") page = "markets";
       }
@@ -22922,6 +22998,7 @@
         return MARKETS.generatedAt || null;
       case "opta":
       case "rankings":
+      case "defcon":
         // 2026/27 £ + owned % track ownership check-ins between build.py runs.
         return isNextSeason()
           ? latestDataIso(DATA.generatedAt, OWNERSHIP.generatedAt)
@@ -27311,6 +27388,244 @@
     }
   }
 
+  function defconPastGws() {
+    const byGw = DATA.defconByGw || {};
+    return Object.keys(byGw)
+      .map((k) => Number(k))
+      .filter((gw) => Number.isFinite(gw) && gw > 0)
+      .sort((a, b) => a - b);
+  }
+
+  function defconActionsForRecord(eg, position) {
+    if (!eg) return 0;
+    const pos = String(position || "").toUpperCase();
+    if (pos === "DEF") return Number(eg.cbit) || 0;
+    return Number(eg.cbitr) || 0;
+  }
+
+  function defconGwState(eg, eligible) {
+    if (!eligible) return "dnp";
+    if (!eg) return "dnp";
+    const mins = Number(eg.minutes) || 0;
+    if (mins <= 0) return "dnp";
+    if (eg.defConHit) return "hit";
+    return "miss";
+  }
+
+  function defconBuildRow(player, gws) {
+    const eid = Number(fplElementIdForRow(player));
+    const pos = String(player.newPosition || player.position || "").toUpperCase();
+    const eligible = pos === "DEF" || pos === "MID" || pos === "FWD";
+    const cells = [];
+    let hits = 0;
+    let apps = 0;
+    let pts = 0;
+    let actions = 0;
+    for (const gw of gws) {
+      const map = (DATA.defconByGw || {})[String(gw)] || (DATA.defconByGw || {})[gw] || {};
+      const eg = Number.isFinite(eid) ? map[String(eid)] || map[eid] : null;
+      const stateGw = defconGwState(eg, eligible);
+      if (stateGw === "hit") hits += 1;
+      if (stateGw === "hit" || stateGw === "miss") {
+        apps += 1;
+        pts += Number(eg && eg.pts) || 0;
+        actions += defconActionsForRecord(eg, pos);
+      }
+      cells.push({ gw, state: stateGw, eg });
+    }
+    const owned = currentOwnership(player.code);
+    return {
+      ...player,
+      kind: "player",
+      position: pos || player.position,
+      team: currentTeamCode(player) || player.team,
+      price: player.price,
+      owned: owned == null || Number.isNaN(Number(owned)) ? null : Number(owned),
+      element: eid,
+      eligible,
+      gws: cells,
+      hits,
+      apps,
+      gwCount: gws.length,
+      pts,
+      actions,
+    };
+  }
+
+  function defconUniverseRows() {
+    const gws = defconPastGws();
+    if (!gws.length) return [];
+    const pool = (season2627Data().players && season2627Data().players.combined) || [];
+    const out = [];
+    for (const player of pool) {
+      if (!player || player.code == null) continue;
+      out.push(defconBuildRow(player, gws));
+    }
+    return out;
+  }
+
+  function defconPlayerPassesFilters(row) {
+    const pos = String(row.position || "").toUpperCase();
+    if (state.posFilter.size && !state.posFilter.has(pos)) return false;
+    if (!state.posFilter.size && pos === "GK") return false;
+    if (state.teamFilter.size && !state.teamFilter.has(row.team)) return false;
+    const price = Number(row.price);
+    if (Number.isFinite(price) && (price < state.priceMin || price > state.priceMax)) return false;
+    if (!passesOwnershipFilter(row)) return false;
+    const q = state.search.trim().toLowerCase();
+    if (q) {
+      if (KNOWN_TEAM_CODES_LOWER.has(q)) {
+        if (String(row.team || "").toLowerCase() !== q) return false;
+      } else {
+        const hay = `${row.name || ""} ${row.team || ""} ${teamNameForSeason(row.team) || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+    }
+    return true;
+  }
+
+  function defconSortValue(row, key) {
+    if (key === "name") return String(row.name || "").toLowerCase();
+    if (key === "hits") return row.hits;
+    if (key === "rate") return row.gwCount ? row.hits / row.gwCount : 0;
+    if (key === "pts") return row.pts;
+    if (key === "actions") return row.actions;
+    if (key === "owned") return row.owned == null ? -Infinity : row.owned;
+    if (key === "price") return row.price == null ? -Infinity : Number(row.price);
+    return -Infinity;
+  }
+
+  function sortDefconRows(rows) {
+    const key = state.defconSortKey || "hits";
+    const dir = state.defconSortDir === "asc" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      if (key === "name") {
+        return dir * String(a.name || "").localeCompare(String(b.name || ""));
+      }
+      const va = defconSortValue(a, key);
+      const vb = defconSortValue(b, key);
+      if (va !== vb) return dir * (va - vb);
+      if (a.hits !== b.hits) return b.hits - a.hits;
+      if (a.actions !== b.actions) return b.actions - a.actions;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+  }
+
+  function defconSortArrow(key) {
+    if (state.defconSortKey !== key) return "";
+    return `<span class="arrow">${iconHTML(state.defconSortDir === "asc" ? "chevron-up" : "chevron-down")}</span>`;
+  }
+
+  function defconSortTh(key, label, extra = "") {
+    return `<th class="${extra}${state.defconSortKey === key ? " sorted" : ""}" data-defcon-sort="${key}">${escapeHtml(label)}${defconSortArrow(key)}</th>`;
+  }
+
+  function defconIdCellHTML(row) {
+    const teamTag = teamTagAttrs(row.team);
+    const bits = [
+      row.team ? `<span class="ownership-id-team${teamTag.className}"${teamTag.style}>${escapeHtml(row.team)}</span>` : "",
+      row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
+      row.price != null && Number.isFinite(Number(row.price))
+        ? `<span class="ownership-id-price">£${Number(row.price).toFixed(1)}m</span>`
+        : "",
+      row.owned != null && Number.isFinite(row.owned)
+        ? `<span>${escapeHtml(fmtOwnedPct(row.owned))}%</span>`
+        : "",
+    ].filter(Boolean);
+    const ownedPin = ownedFlagHTML(row);
+    const flag = playerFlagHTML(row);
+    return `<div class="ownership-id">
+      ${ownershipPhotoHTML(row)}
+      <div class="ownership-id-text">
+        <div class="player-name-line"><span class="player-name">${escapeHtml(row.name || "—")}</span>${flag}${ownedPin}</div>
+        ${bits.length ? `<div class="ownership-id-sub">${bits.join("<span class=\"ownership-id-sep\">·</span>")}</div>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function defconGwDotHTML(cell, position) {
+    const stateGw = cell.state;
+    const thr = String(position || "").toUpperCase() === "DEF" ? 10 : 12;
+    const actions = defconActionsForRecord(cell.eg, position);
+    let title;
+    if (stateGw === "hit") {
+      title = `GW${cell.gw}: DefCon hit — ${actions}/${thr} actions`;
+    } else if (stateGw === "miss") {
+      title = `GW${cell.gw}: Missed — ${actions}/${thr} actions`;
+    } else {
+      title = `GW${cell.gw}: Did not play`;
+    }
+    if (stateGw === "hit") {
+      return `<span class="defcon-gw-dot is-hit"${tipAttr(title)}><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`;
+    }
+    const cls = stateGw === "miss" ? "is-miss" : "is-dnp";
+    return `<span class="defcon-gw-dot ${cls}"${tipAttr(title)}><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`;
+  }
+
+  function defconHeadHTML(gws) {
+    const gwHeads = gws
+      .map((gw) => `<th class="defcon-col-gw" scope="col" title="Gameweek ${gw}">GW${gw}</th>`)
+      .join("");
+    return `<tr>
+      ${defconSortTh("name", "Player", "col-player ")}
+      ${gwHeads}
+      ${defconSortTh("hits", "Hits", "defcon-col-hits ")}
+      ${defconSortTh("pts", "Summary", "defcon-col-summary ")}
+    </tr>`;
+  }
+
+  function defconRowHTML(row) {
+    const gwCells = row.gws
+      .map(
+        (cell) =>
+          `<td class="defcon-col-gw">${defconGwDotHTML(cell, row.position)}</td>`
+      )
+      .join("");
+    const hitsCls = row.hits > 0 ? "" : " is-empty";
+    const hitsLabel = `${row.hits}/${row.gwCount}`;
+    const summary = `${row.pts} pts · ${row.actions} actions`;
+    return `<tr data-player-code="${escapeHtml(String(row.code ?? ""))}">
+      <td class="col-player">${defconIdCellHTML(row)}</td>
+      ${gwCells}
+      <td class="defcon-col-hits"><span class="defcon-hits${hitsCls}">${escapeHtml(hitsLabel)}</span></td>
+      <td class="defcon-col-summary"><span class="defcon-summary">${escapeHtml(summary)}</span></td>
+    </tr>`;
+  }
+
+  function renderDefcon() {
+    if (!el.defconTableBody || !el.defconTableHead) return;
+    const gws = defconPastGws();
+    const scrollSnap = el.defconTableWrap ? captureScrollWraps([el.defconTableWrap]) : null;
+    const universe = defconUniverseRows();
+    const visible = sortDefconRows(universe.filter(defconPlayerPassesFilters));
+    if (el.defconCountLabel) {
+      if (!gws.length) {
+        el.defconCountLabel.textContent = "No finished GWs";
+      } else {
+        el.defconCountLabel.textContent =
+          visible.length === universe.length
+            ? `${visible.length} players`
+            : `${visible.length} of ${universe.length} players`;
+      }
+    }
+    el.defconTableHead.innerHTML = defconHeadHTML(gws);
+    const colCount = 3 + gws.length;
+    if (!gws.length) {
+      el.defconTableBody.innerHTML = `<tr class="defcon-empty-row"><td class="col-player" colspan="${Math.max(colCount, 3)}">No finished gameweek DefCon data yet. Run <code>python3 site/build.py</code> after event-live snapshots exist.</td></tr>`;
+    } else if (!visible.length) {
+      el.defconTableBody.innerHTML = `<tr class="defcon-empty-row"><td class="col-player" colspan="${colCount}">No players match the current filters.</td></tr>`;
+    } else {
+      el.defconTableBody.innerHTML = visible.map((row) => defconRowHTML(row)).join("");
+      bindOwnershipPhotoFallback(el.defconTableBody);
+    }
+    syncFiltersResetUI();
+    syncPageUpdatedFooter(el.defconUpdatedFooter, pageDataUpdatedIso("defcon"));
+    bindAllNameColumnSimplifies();
+    scheduleOptaMobileNameColWidth();
+    if (scrollSnap) restoreScrollWraps(scrollSnap);
+    requestAnimationFrame(() => syncMobileScrollportHeight());
+  }
+
   let ownershipEnterMotionToken = 0;
   const OWNERSHIP_ENTER_ROLL_MS_MIN = 420;
   const OWNERSHIP_ENTER_ROLL_MS_MAX = 1600;
@@ -29265,7 +29580,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Weekly Report is ready to show in nav again.
   const REPORT_NAV_ENABLED = false;
-  const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "fixtures", "markets"];
+  const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
@@ -29315,6 +29630,7 @@
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
     if (page === "ownership") return el.ownershipPage;
+    if (page === "defcon") return el.defconPage;
     if (page === "prices") return el.pricesPage;
     if (page === "expected") return el.expectedPage;
     if (page === "schedule") return el.schedulePage;
@@ -29655,7 +29971,7 @@
 
     syncSearchClearBtns();
     if (rerender) {
-      if (state.page === "opta" || state.page === "rankings" || state.page === "ownership") renderTable();
+      if (state.page === "opta" || state.page === "rankings" || state.page === "ownership" || state.page === "defcon") renderTable();
     }
   }
 
@@ -29780,6 +30096,7 @@
     if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
     if (el.pageReport) el.pageReport.classList.toggle("active", page === "report");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
+    if (el.pageDefcon) el.pageDefcon.classList.toggle("active", page === "defcon");
     if (el.pagePrices) el.pagePrices.classList.toggle("active", page === "prices");
     el.pageExpected.classList.toggle("active", page === "expected");
     el.pageSchedule.classList.toggle("active", page === "schedule");
@@ -29795,6 +30112,7 @@
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
     if (el.ownershipPage) el.ownershipPage.style.display = page === "ownership" ? "" : "none";
+    if (el.defconPage) el.defconPage.style.display = page === "defcon" ? "" : "none";
     if (el.pricesPage) el.pricesPage.style.display = page === "prices" ? "" : "none";
     el.expectedPage.style.display = page === "expected" ? "" : "none";
     el.schedulePage.style.display = page === "schedule" ? "" : "none";
@@ -29835,7 +30153,7 @@
     // Expected Data keeps its own Fixture Location control (adds Compare),
     // swapped into the same sidebar slot as the shared Total/Home/Away group.
     el.splitGroup.style.display =
-      page === "expected" || page === "ownership" || page === "prices" || isLive ? "none" : "";
+      page === "expected" || page === "ownership" || page === "defcon" || page === "prices" || isLive ? "none" : "";
     if (el.expectedSplitGroup) {
       el.expectedSplitGroup.style.display = page === "expected" ? "" : "none";
     }
@@ -29870,6 +30188,22 @@
       el.minutesFilterGroup.style.display = "none";
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
+      el.tableOnlyToggles.style.display = "none";
+      if (el.compareToggle) el.compareToggle.style.display = "none";
+    }
+    if (page === "defcon") {
+      if (state.view !== "players") {
+        state.view = "players";
+        document.documentElement.dataset.view = "players";
+        el.tabPlayers.classList.add("active");
+        el.tabTeams.classList.remove("active");
+      }
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      el.priceFilterGroup.style.display = "";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "";
+      el.positionFilterGroup.style.display = "";
       el.tableOnlyToggles.style.display = "none";
       if (el.compareToggle) el.compareToggle.style.display = "none";
     }
@@ -29943,6 +30277,8 @@
     } else if (page === "ownership") {
       if (el.ownershipPage) el.ownershipPage.classList.add("is-enter-pending");
       renderOwnership();
+    } else if (page === "defcon") {
+      renderDefcon();
     } else if (page === "prices") {
       if (el.pricesPage) el.pricesPage.classList.add("is-enter-pending");
       renderPrices();
@@ -30133,6 +30469,7 @@
   el.pageOpta.addEventListener("click", () => setPage("opta"));
   el.pageRankings.addEventListener("click", () => setPage("rankings"));
   if (el.pageOwnership) el.pageOwnership.addEventListener("click", () => setPage("ownership"));
+  if (el.pageDefcon) el.pageDefcon.addEventListener("click", () => setPage("defcon"));
   if (el.pagePrices) el.pagePrices.addEventListener("click", () => setPage("prices"));
   if (el.liveModeSeg) {
     el.liveModeSeg.addEventListener("click", (e) => {
@@ -30262,6 +30599,21 @@
         state.ownershipSortDir = key === "name" ? "asc" : "desc";
       }
       renderOwnership();
+    });
+  }
+  if (el.defconTableWrap) {
+    el.defconTableWrap.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-defcon-sort]");
+      if (!th || !el.defconTableWrap.contains(th)) return;
+      const key = th.getAttribute("data-defcon-sort");
+      if (!key) return;
+      if (state.defconSortKey === key) {
+        state.defconSortDir = state.defconSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.defconSortKey = key;
+        state.defconSortDir = key === "name" ? "asc" : "desc";
+      }
+      renderDefcon();
     });
   }
   bindPlayerDetailsSurfaces();
@@ -30534,6 +30886,7 @@
     if (id === "page-opta") return "opta";
     if (id === "page-rankings") return "rankings";
     if (id === "page-ownership") return "ownership";
+    if (id === "page-defcon") return "defcon";
     if (id === "page-prices") return "prices";
     if (id === "page-expected") return "expected";
     if (id === "page-schedule") return "schedule";
@@ -30927,6 +31280,14 @@
       if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = "none";
     }
+    if (state.page === "defcon") {
+      el.valueModeGroup.style.display = "none";
+      el.minutesFilterGroup.style.display = "none";
+      if (el.setpieceFilterGroup) el.setpieceFilterGroup.style.display = "none";
+      el.priceFilterGroup.style.display = view === "players" ? "" : "none";
+      if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = view === "players" ? "" : "none";
+      el.positionFilterGroup.style.display = view === "players" ? "" : "none";
+    }
     if (state.page === "prices") {
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
@@ -31016,6 +31377,7 @@
       !preferMobileSheet() &&
       (state.page === "opta" ||
         state.page === "ownership" ||
+        state.page === "defcon" ||
         state.page === "expected")
     );
   }
@@ -31024,6 +31386,7 @@
     return (
       preferMobileSheet() &&
       (state.page === "ownership" ||
+        state.page === "defcon" ||
         state.page === "expected" ||
         state.page === "opta")
     );
@@ -31758,6 +32121,7 @@
       state.setPieceTakersOnly = !!el.setpieceTakersCheck.checked;
       syncFiltersResetUI();
       if (state.page === "ownership") renderOwnership();
+      else if (state.page === "defcon") renderDefcon();
       else if (state.page === "prices") renderPrices();
       else renderTable();
     });
@@ -32246,6 +32610,7 @@
     if (repaint) {
       if (state.page === "home") renderHome({ settleQuiet: true, deferDuringEnter: true });
       else if (state.page === "ownership") renderOwnership();
+      else if (state.page === "defcon") renderDefcon();
       else if (state.page === "prices") renderPrices();
       else if (state.page === "fixtures") renderFixturesPage();
     }

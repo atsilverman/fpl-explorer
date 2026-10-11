@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1613" />
+<link rel="stylesheet" href="styles.css?v=1614" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -458,6 +458,10 @@
           <button id="page-ownership" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
             Ownership
+          </button>
+          <button id="page-defcon" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-shield-half"/></svg>
+            DefCon
           </button>
           <button id="page-prices" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-pound-sterling-circle"/></svg>
@@ -1348,6 +1352,29 @@
       <p class="page-updated-text page-data-footer" id="ownership-updated-footer" hidden></p>
     </div>
 
+    <div id="defcon-page" class="page-pane" style="display:none;">
+      <div class="page-header opta-header defcon-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-shield-half"/></svg>DefCon<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How DefCon works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">DefCon is binary — averages flatter. Each column is a finished gameweek; filled where the player cleared the match threshold (DEF 10 CBIT · MID/FWD 12 CBIRT).</p>
+          </div>
+        </div>
+      </div>
+      <div class="ownership-mover-bar defcon-toolbar-bar">
+        <div class="ownership-mover-end">
+          <span class="count-label" id="defcon-count-label"></span>
+        </div>
+      </div>
+      <div class="table-wrap" id="defcon-table-wrap">
+        <table class="ownership-table defcon-table">
+          <thead id="defcon-table-head"></thead>
+          <tbody id="defcon-table-body"></tbody>
+        </table>
+      </div>
+      <p class="page-updated-text page-data-footer" id="defcon-updated-footer" hidden></p>
+    </div>
+
     <div id="prices-page" class="page-pane" data-prices-view="prediction" style="display:none;">
       <div class="page-header opta-header prices-header">
         <div class="opta-header-top">
@@ -1880,7 +1907,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1477"></script>
+<script src="app.js?v=1479"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

@@ -2432,9 +2432,10 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 6px;
   }
 
-  /* Ownership / Prices: always-expanded search fills the bar, flush with content. */
+  /* Ownership / Prices / DefCon: always-expanded search fills the bar, flush with content. */
   html[data-page="ownership"] #stats-toolbar-start,
-  html[data-page="prices"] #stats-toolbar-start {
+  html[data-page="prices"] #stats-toolbar-start,
+  html[data-page="defcon"] #stats-toolbar-start {
     display: none !important;
   }
   /* Prices: no search row — collapse the empty subtoolbar on mobile. */
@@ -2442,7 +2443,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: none !important;
   }
   html[data-page="ownership"] #subtoolbar #stats-toolbar-actions,
-  html[data-page="prices"] #subtoolbar #stats-toolbar-actions {
+  html[data-page="prices"] #subtoolbar #stats-toolbar-actions,
+  html[data-page="defcon"] #subtoolbar #stats-toolbar-actions {
     display: flex;
     flex: 1 1 auto;
     width: 100%;
@@ -2450,7 +2452,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     min-width: 0;
   }
   html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
-  html[data-page="prices"] #subtoolbar .topbar-end-cluster {
+  html[data-page="prices"] #subtoolbar .topbar-end-cluster,
+  html[data-page="defcon"] #subtoolbar .topbar-end-cluster {
     display: flex;
     flex: 1 1 auto;
     width: 100%;
@@ -2460,7 +2463,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     gap: 0;
   }
   html[data-page="ownership"] #subtoolbar #search-wrap,
-  html[data-page="ownership"] #subtoolbar #search-wrap.search-open {
+  html[data-page="ownership"] #subtoolbar #search-wrap.search-open,
+  html[data-page="defcon"] #subtoolbar #search-wrap,
+  html[data-page="defcon"] #subtoolbar #search-wrap.search-open {
     flex: 1 1 auto;
     width: auto;
     max-width: none;
@@ -2538,7 +2543,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     display: none !important;
   }
   html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start #sidebar-toggle,
-  html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start > .tabs {
+  html.is-mobile-layout[data-page="ownership"] #stats-toolbar-start > .tabs,
+  html.is-mobile-layout[data-page="defcon"] #stats-toolbar-start #sidebar-toggle,
+  html.is-mobile-layout[data-page="defcon"] #stats-toolbar-start > .tabs {
     display: none !important;
   }
   html.is-mobile-layout[data-page="expected"] #stats-toolbar-start #sidebar-toggle {
@@ -2638,6 +2645,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #opta-page .page-header,
   #rankings-page .page-header,
   #ownership-page .page-header,
+  #defcon-page .page-header,
   #live-page .page-header,
   #feed-page .page-header,
   #expected-page .page-header {
@@ -3021,6 +3029,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html.has-mobile-bottom-dock[data-page="opta"] .main,
   html.has-mobile-bottom-dock[data-page="ownership"]:not(:has(#ownership-page.is-treemap)) .main,
+  html.has-mobile-bottom-dock[data-page="defcon"] .main,
   html.has-mobile-bottom-dock[data-page="live"] .main {
     padding-bottom: var(--mobile-dock-clearance);
   }
@@ -3257,6 +3266,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 
 /* Transform on <tr> breaks WebKit table layout (first row tucks under header). */
 #ownership-page.is-entering .table-wrap > table > tbody > tr {
+  animation: none !important;
+}
+#defcon-page.is-entering .table-wrap > table > tbody > tr {
   animation: none !important;
 }
 #prices-page.is-entering .table-wrap > table > tbody > tr {
@@ -4186,6 +4198,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
    stay single-line and clip from the right (no wrap → no row-height jump).
    Rank fades/collapses beside the photo on Ownership. */
 #ownership-table-wrap.name-simplify-ready,
+#defcon-table-wrap.name-simplify-ready,
 #prices-page .prices-table-wrap.name-simplify-ready,
 #opta-page .table-wrap.name-simplify-ready,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready,
@@ -4220,6 +4233,8 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
 }
 #ownership-table-wrap.name-simplify-ready thead th.col-player,
 #ownership-table-wrap.name-simplify-ready tbody td.col-player,
+#defcon-table-wrap.name-simplify-ready thead th.col-player,
+#defcon-table-wrap.name-simplify-ready tbody td.col-player,
 #prices-page .prices-table-wrap.name-simplify-ready thead th.col-player,
 #prices-page .prices-table-wrap.name-simplify-ready tbody td.col-player,
 #opta-page .table-wrap.name-simplify-ready thead th.col-player,
@@ -4237,6 +4252,8 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
 @media (max-width: 720px) {
   #ownership-table-wrap.name-simplify-ready thead th.col-player,
   #ownership-table-wrap.name-simplify-ready tbody td.col-player,
+  #defcon-table-wrap.name-simplify-ready thead th.col-player,
+  #defcon-table-wrap.name-simplify-ready tbody td.col-player,
   #prices-page .prices-table-wrap.name-simplify-ready thead th.col-player,
   #prices-page .prices-table-wrap.name-simplify-ready tbody td.col-player,
   #opta-page .table-wrap.name-simplify-ready thead th.col-player,
@@ -4250,6 +4267,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   }
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id,
+#defcon-table-wrap.name-simplify-ready .ownership-id,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id,
 #opta-page .table-wrap.name-simplify-ready .ownership-id,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-id,
@@ -4265,6 +4283,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   overflow: visible;
 }
 #ownership-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
+#defcon-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #prices-page .prices-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #opta-page .table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready.is-name-simplifying .ownership-id,
@@ -4274,6 +4293,8 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
 }
 #ownership-table-wrap.name-simplify-ready .ownership-photo-frame,
 #ownership-table-wrap.name-simplify-ready .ownership-crest,
+#defcon-table-wrap.name-simplify-ready .ownership-photo-frame,
+#defcon-table-wrap.name-simplify-ready .ownership-crest,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-photo-frame,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-crest,
 #opta-page .table-wrap.name-simplify-ready .ownership-photo-frame,
@@ -4287,6 +4308,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   height: var(--own-photo);
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text,
+#defcon-table-wrap.name-simplify-ready .ownership-id-text,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-id-text,
@@ -4301,6 +4323,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   pointer-events: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
+#defcon-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-id-text .player-name-line,
@@ -4314,6 +4337,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   max-width: 100%;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id .player-name,
+#defcon-table-wrap.name-simplify-ready .ownership-id .player-name,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id .player-name,
 #opta-page .table-wrap.name-simplify-ready .ownership-id .player-name,
 #fixtures-page .fixtures-table-wrap.name-simplify-ready .ownership-id .player-name,
@@ -4346,6 +4370,8 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #ownership-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
+#defcon-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
+#defcon-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .player-flag,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-text .player-name-line > .owned-flag,
@@ -4355,6 +4381,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   flex: none;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub,
+#defcon-table-wrap.name-simplify-ready .ownership-id-sub,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-sub,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-sub {
@@ -4369,6 +4396,7 @@ tbody td.col-name, tbody td.col-team, tbody td.col-player { text-align: left; fo
   white-space: nowrap;
 }
 #ownership-table-wrap.name-simplify-ready .ownership-id-sub > *,
+#defcon-table-wrap.name-simplify-ready .ownership-id-sub > *,
 #prices-page .prices-table-wrap.name-simplify-ready .ownership-id-sub > *,
 #opta-page .table-wrap.name-simplify-ready .ownership-id-sub > *,
 #live-page .live-table-wrap.name-simplify-ready .ownership-id-sub > * {
@@ -4596,6 +4624,7 @@ html[data-page="live"] #live-page tr[data-player-code],
 html[data-page="live"] #live-page .live-bonus-row[data-player-code],
 html[data-page="ownership"] #ownership-table-body tr[data-player-code],
 html[data-page="ownership"] .ownership-treemap-cell[data-player-code],
+html[data-page="defcon"] #defcon-table-body tr[data-player-code],
 html[data-page="prices"] #prices-page tr[data-player-code],
 html[data-page="expected"] .barbell-row[data-player-code],
 html[data-page="expected"] .barbell-group[data-player-code] {
@@ -5469,9 +5498,10 @@ html[data-theme="dark"] .page-live-badge-dot-ping {
   color: var(--text-faint);
 }
 
-/* Ownership / Prices tables */
+/* Ownership / Prices / DefCon tables */
 html[data-page="ownership"] .layout .main,
-html[data-page="prices"] .layout .main {
+html[data-page="prices"] .layout .main,
+html[data-page="defcon"] .layout .main {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -5484,6 +5514,15 @@ html[data-page="prices"] .layout .main {
   min-height: 0;
 }
 #ownership-page .ownership-header {
+  flex: none;
+}
+#defcon-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#defcon-page .defcon-header {
   flex: none;
 }
 #prices-page {
@@ -6221,7 +6260,8 @@ html[data-page="prices"] .layout .main {
   font-size: 12px;
   font-weight: 650;
 }
-#ownership-table-wrap {
+#ownership-table-wrap,
+#defcon-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -6232,7 +6272,8 @@ html[data-page="prices"] .layout .main {
    wrap max-height + overflow:hidden on .main cropped the last rows and footer
    even when the table itself was scrolled to the end. Treemap still fills. */
 @media (min-width: 721px) {
-  html[data-page="ownership"] .layout .main {
+  html[data-page="ownership"] .layout .main,
+  html[data-page="defcon"] .layout .main {
     display: block;
     overflow-x: hidden;
     overflow-y: auto;
@@ -6246,7 +6287,8 @@ html[data-page="prices"] .layout .main {
     overflow-x: hidden;
     min-width: 0;
   }
-  html[data-page="ownership"] #ownership-page {
+  html[data-page="ownership"] #ownership-page,
+  html[data-page="defcon"] #defcon-page {
     display: block;
     flex: none;
     min-height: 0;
@@ -6259,7 +6301,8 @@ html[data-page="prices"] .layout .main {
     min-height: 0;
     overflow: hidden;
   }
-  html[data-page="ownership"] #ownership-table-wrap {
+  html[data-page="ownership"] #ownership-table-wrap,
+  html[data-page="defcon"] #defcon-table-wrap {
     flex: none;
     overflow-x: auto;
     overflow-y: hidden;
@@ -6268,7 +6311,8 @@ html[data-page="prices"] .layout .main {
     overscroll-behavior-x: none;
     overscroll-behavior-y: auto;
   }
-  html[data-page="ownership"] #ownership-updated-footer {
+  html[data-page="ownership"] #ownership-updated-footer,
+  html[data-page="defcon"] #defcon-updated-footer {
     flex: none;
   }
 }
@@ -6421,29 +6465,121 @@ html[data-page="prices"] .layout .main {
   flex: 1 1 auto;
 }
 
-/* Ownership / Prices desktop: keep Filters / Players·Teams / Search on one row. */
+/* Ownership / Prices / DefCon desktop: keep Filters / Players·Teams / Search on one row. */
 @media (min-width: 721px) {
-  html[data-page="ownership"] #subtoolbar {
+  html[data-page="ownership"] #subtoolbar,
+  html[data-page="defcon"] #subtoolbar {
     flex-wrap: nowrap;
   }
-  html[data-page="ownership"] #subtoolbar .topbar-end-cluster {
+  html[data-page="ownership"] #subtoolbar .topbar-end-cluster,
+  html[data-page="defcon"] #subtoolbar .topbar-end-cluster {
     flex: 1 1 auto;
     min-width: 0;
     justify-content: flex-end;
     gap: 8px;
   }
-  html[data-page="ownership"] #subtoolbar #search-wrap {
+  html[data-page="ownership"] #subtoolbar #search-wrap,
+  html[data-page="defcon"] #subtoolbar #search-wrap {
     flex: 0 1 280px;
     min-width: 140px;
     max-width: 320px;
   }
 }
-html[data-page="prices"] #stats-toolbar-start > .tabs {
+html[data-page="prices"] #stats-toolbar-start > .tabs,
+html[data-page="defcon"] #stats-toolbar-start > .tabs {
   display: none !important;
 }
-#ownership-table-wrap > table {
+#ownership-table-wrap > table,
+#defcon-table-wrap > table {
   width: max-content;
   min-width: 100%;
+}
+.defcon-toolbar-bar {
+  justify-content: flex-end;
+}
+.defcon-table th.defcon-col-gw,
+.defcon-table td.defcon-col-gw {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  padding-left: 2px;
+  padding-right: 2px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.defcon-table th.defcon-col-hits,
+.defcon-table td.defcon-col-hits {
+  min-width: 52px;
+  padding-left: 10px;
+  padding-right: 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+.defcon-table th.defcon-col-summary,
+.defcon-table td.defcon-col-summary {
+  min-width: 110px;
+  padding-left: 8px;
+  padding-right: 14px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.defcon-gw-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+}
+.defcon-gw-dot .check-mark-icon {
+  width: 14px;
+  height: 14px;
+}
+.defcon-gw-dot.is-hit {
+  color: hsl(var(--check-threshold));
+}
+.defcon-gw-dot.is-miss,
+.defcon-gw-dot.is-dnp {
+  color: var(--text-faint);
+}
+.defcon-gw-dot.is-miss .defcon-gw-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+}
+.defcon-gw-dot.is-dnp .defcon-gw-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-dasharray: 2.5 2;
+  opacity: 0.55;
+}
+.defcon-hits {
+  display: inline-block;
+  font-family: "Fira Code", ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.defcon-hits.is-empty {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.defcon-summary {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.defcon-empty-row td {
+  padding: 28px 16px;
+  color: var(--text-dim);
+  text-align: left;
 }
 .ownership-table .col-num {
   text-align: center;
@@ -6670,6 +6806,24 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     overflow: hidden;
   }
   html[data-page="ownership"] #ownership-page .ownership-header {
+    display: none;
+  }
+  html[data-page="defcon"] .layout .main {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;
+    padding-bottom: var(--main-pad-x, 8px);
+  }
+  html[data-page="defcon"] #defcon-page {
+    display: block;
+    flex: none;
+    min-width: 0;
+    min-height: 0;
+    overflow: visible;
+  }
+  html[data-page="defcon"] #defcon-page .defcon-header {
     display: none;
   }
   html[data-page="prices"] .layout .main {
@@ -7029,8 +7183,9 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
   .ownership-treemap-delta {
     font-size: 10px;
   }
-  /* Ownership table: content-sized; horizontal pan; vertical → .main via JS fling. */
-  #ownership-table-wrap {
+  /* Ownership / DefCon table: content-sized; horizontal pan; vertical → .main via JS fling. */
+  #ownership-table-wrap,
+  #defcon-table-wrap {
     flex: none;
     min-height: 0;
     max-height: none;
@@ -7042,14 +7197,17 @@ html[data-page="prices"] #stats-toolbar-start > .tabs {
     --name-col-w: 176px;
     --metric-col-w: 58px;
   }
-  #ownership-table-wrap > table > thead tr:not(.section-row) th.col-player {
+  #ownership-table-wrap > table > thead tr:not(.section-row) th.col-player,
+  #defcon-table-wrap > table > thead tr:not(.section-row) th.col-player {
     position: sticky;
     left: 0;
     z-index: 10;
     background-color: hsl(var(--muted));
   }
   #ownership-table-wrap.name-simplify-ready thead th.col-player,
-  #ownership-table-wrap.name-simplify-ready tbody td.col-player {
+  #ownership-table-wrap.name-simplify-ready tbody td.col-player,
+  #defcon-table-wrap.name-simplify-ready thead th.col-player,
+  #defcon-table-wrap.name-simplify-ready tbody td.col-player {
     padding-right: 4px;
   }
   #ownership-table-wrap .ownership-table .col-num,
