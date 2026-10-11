@@ -53,6 +53,9 @@
     reports: {},
   };
   if (!window.FPL_REPORT) window.FPL_REPORT = REPORT;
+  const TEAM_NEWS = window.FPL_TEAM_NEWS || { generatedAt: null, gw: null, teams: [] };
+  if (!window.FPL_TEAM_NEWS) window.FPL_TEAM_NEWS = TEAM_NEWS;
+  if (!Array.isArray(TEAM_NEWS.teams)) TEAM_NEWS.teams = [];
   // Prefer ownership bundle (refreshed with bootstrap) over build-time data.js.
   const GAMEWEEKS =
     OWNERSHIP.gameweeks ||
@@ -1222,6 +1225,11 @@
     homeFeedAllHead: $("#home-feed-all-head"),
     homeFeedAllBody: $("#home-feed-all-body"),
     homeFeedCountLabel: $("#home-feed-count-label"),
+    homeTeamGraphicsPanel: $("#home-team-graphics-panel"),
+    homeTeamGraphicsTrack: $("#home-team-graphics-track"),
+    homeTeamGraphicsDots: $("#home-team-graphics-dots"),
+    homeTeamGraphicsViewLabel: $("#home-team-graphics-view-label"),
+    homeTeamGraphicsMeta: $("#home-team-graphics-meta"),
     homeTablesGrid: $(".home-tables-grid"),
     homeStandingsLookupEmpty: $("#home-standings-lookup-empty"),
     homePlayerProfile: $("#home-player-profile"),
@@ -7105,6 +7113,171 @@
     requestAnimationFrame(() => syncHomeFeedPagerDots(0));
   }
 
+  let homeTeamGraphicsPagerReady = false;
+  let homeTeamGraphicsPagerTarget = null;
+  let homeTeamGraphicsRenderKey = "";
+
+  function homeTeamGraphicsTeams() {
+    const teams = Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : [];
+    const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : null;
+    const homeGw = HOME && HOME.gw != null ? Number(HOME.gw) : null;
+    if (gw != null && homeGw != null && gw !== homeGw) return [];
+    // Bundle already sorted newest-first; keep that for left-most = most recent.
+    return teams.filter((t) => t && t.localPath);
+  }
+
+  function homeTeamGraphicsActivePageIndex() {
+    if (!el.homeTeamGraphicsTrack) return 0;
+    const pages = [...el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page")];
+    if (!pages.length) return 0;
+    const w = el.homeTeamGraphicsTrack.clientWidth || 1;
+    return Math.max(0, Math.min(pages.length - 1, Math.round(el.homeTeamGraphicsTrack.scrollLeft / w)));
+  }
+
+  function syncHomeTeamGraphicsPagerDots(activeIndex) {
+    if (!el.homeTeamGraphicsDots) return;
+    const teams = homeTeamGraphicsTeams();
+    el.homeTeamGraphicsDots.querySelectorAll(".home-team-graphics-dot").forEach((dot, i) => {
+      const on = i === activeIndex;
+      dot.classList.toggle("is-active", on);
+      dot.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    const team = teams[activeIndex];
+    if (el.homeTeamGraphicsViewLabel) {
+      el.homeTeamGraphicsViewLabel.textContent = team
+        ? (team.name || team.code || "")
+        : "";
+    }
+    if (el.homeTeamGraphicsMeta) {
+      el.homeTeamGraphicsMeta.textContent = team
+        ? (team.match || "")
+        : "";
+    }
+  }
+
+  function snapHomeTeamGraphicsPage(index) {
+    if (!el.homeTeamGraphicsTrack) return;
+    const pages = [...el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page")];
+    if (!pages[index]) return;
+    const w = el.homeTeamGraphicsTrack.clientWidth || 1;
+    const target = Math.max(0, index) * w;
+    if (Math.abs(el.homeTeamGraphicsTrack.scrollLeft - target) > 1) {
+      el.homeTeamGraphicsTrack.scrollTo({ left: target, behavior: "auto" });
+    }
+  }
+
+  function setHomeTeamGraphicsPage(index, { smooth = true } = {}) {
+    if (!el.homeTeamGraphicsTrack) return;
+    const pages = [...el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page")];
+    if (!pages.length) return;
+    const i = Math.max(0, Math.min(pages.length - 1, index));
+    homeTeamGraphicsPagerTarget = i;
+    const w = el.homeTeamGraphicsTrack.clientWidth || 1;
+    el.homeTeamGraphicsTrack.scrollTo({
+      left: i * w,
+      behavior: smooth ? "smooth" : "auto",
+    });
+    syncHomeTeamGraphicsPagerDots(i);
+    if (!smooth) homeTeamGraphicsPagerTarget = null;
+  }
+
+  function homeTeamGraphicsPageHTML(team) {
+    const code = escapeHtml(String(team.code || ""));
+    const src = escapeHtml(String(team.localPath || ""));
+    const alt = escapeHtml(
+      String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
+    );
+    const href = team.tweetUrl
+      ? escapeHtml(String(team.tweetUrl))
+      : "";
+    const img = href
+      ? `<a class="home-team-graphics-link" href="${href}" target="_blank" rel="noopener noreferrer"><img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" /></a>`
+      : `<img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
+    return `<div class="home-team-graphics-page" data-team="${code}">
+      <div class="home-team-graphics-slide">${img}</div>
+    </div>`;
+  }
+
+  function renderHomeTeamGraphics() {
+    if (!el.homeTeamGraphicsPanel || !el.homeTeamGraphicsTrack || !el.homeTeamGraphicsDots) return;
+    // Mobile-only card — keep markup empty / hidden on desktop.
+    const mobile = document.documentElement.classList.contains("is-mobile-layout")
+      || (typeof NARROW_MQ !== "undefined" && NARROW_MQ.matches);
+    const teams = homeTeamGraphicsTeams();
+    if (!mobile || !teams.length) {
+      el.homeTeamGraphicsPanel.hidden = true;
+      homeTeamGraphicsRenderKey = "";
+      return;
+    }
+    const key = `${TEAM_NEWS.gw || ""}:${teams.map((t) => t.tweetId || t.localPath).join(",")}`;
+    if (key === homeTeamGraphicsRenderKey && !el.homeTeamGraphicsPanel.hidden) {
+      syncHomeTeamGraphicsPagerDots(homeTeamGraphicsActivePageIndex());
+      return;
+    }
+    homeTeamGraphicsRenderKey = key;
+    el.homeTeamGraphicsPanel.hidden = false;
+    el.homeTeamGraphicsTrack.innerHTML = teams.map(homeTeamGraphicsPageHTML).join("");
+    el.homeTeamGraphicsDots.innerHTML = teams
+      .map(
+        (t, i) =>
+          `<button type="button" class="home-team-graphics-dot${i === 0 ? " is-active" : ""}" role="tab" aria-selected="${i === 0 ? "true" : "false"}" aria-label="${escapeHtml(String(t.name || t.code || "Team"))}" data-page="${i}"></button>`
+      )
+      .join("");
+    el.homeTeamGraphicsDots.querySelectorAll(".home-team-graphics-dot").forEach((dot, i) => {
+      dot.addEventListener("click", () => setHomeTeamGraphicsPage(i));
+    });
+    bindHomeTeamGraphicsPager();
+    requestAnimationFrame(() => {
+      snapHomeTeamGraphicsPage(0);
+      syncHomeTeamGraphicsPagerDots(0);
+    });
+  }
+
+  function bindHomeTeamGraphicsPager() {
+    if (homeTeamGraphicsPagerReady) return;
+    if (!el.homeTeamGraphicsTrack || !el.homeTeamGraphicsDots) return;
+    homeTeamGraphicsPagerReady = true;
+    let scrollSettleTimer = null;
+    const onScrollSettled = () => {
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = null;
+      homeTeamGraphicsPagerTarget = null;
+      const idx = homeTeamGraphicsActivePageIndex();
+      snapHomeTeamGraphicsPage(idx);
+      syncHomeTeamGraphicsPagerDots(idx);
+    };
+    const onScrollTick = () => {
+      const idx =
+        homeTeamGraphicsPagerTarget != null
+          ? homeTeamGraphicsPagerTarget
+          : homeTeamGraphicsActivePageIndex();
+      syncHomeTeamGraphicsPagerDots(idx);
+      clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = setTimeout(onScrollSettled, 140);
+    };
+    el.homeTeamGraphicsTrack.addEventListener("scroll", onScrollTick, { passive: true });
+    el.homeTeamGraphicsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    bindHomePagerTrackpad(el.homeTeamGraphicsTrack, {
+      getIndex: () =>
+        homeTeamGraphicsPagerTarget != null
+          ? homeTeamGraphicsPagerTarget
+          : homeTeamGraphicsActivePageIndex(),
+      setPage: (i) => setHomeTeamGraphicsPage(i, { smooth: true }),
+      pageCount: () =>
+        el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page").length,
+    });
+    bindHomePagerEdgeLock(el.homeTeamGraphicsTrack);
+    window.addEventListener("resize", () => {
+      if (state.page !== "home") return;
+      renderHomeTeamGraphics();
+      if (el.homeTeamGraphicsPanel && !el.homeTeamGraphicsPanel.hidden) {
+        const idx = homeTeamGraphicsActivePageIndex();
+        snapHomeTeamGraphicsPage(idx);
+        syncHomeTeamGraphicsPagerDots(idx);
+      }
+    });
+  }
+
   const HOME_SQUAD_FIXTURE_GWS_DESKTOP = 5;
   const HOME_SQUAD_FIXTURE_GWS_WIDE = 8;
   const HOME_SQUAD_FIXTURE_GWS_MOBILE = 4;
@@ -8021,6 +8194,7 @@
     bindHomeStandingsPager();
     bindHomeSquadPager();
     bindHomeFeedPager();
+    bindHomeTeamGraphicsPager();
     bindHomeScrollHoverGuard();
     bindHomeCrossHover();
     bindHomeMainPullLock();
@@ -15233,6 +15407,7 @@
     if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
       finishHomeStatRolls(el.homePage, { summary: false, tables: true });
     }
+    renderHomeTeamGraphics();
     bindHomeOwnerHighlighting();
     syncHomeViewBanner();
     syncHomeOwnerBanner();
@@ -18836,21 +19011,11 @@
         spitRow(spitRankingsPinSwatch(), "Pinned compare — up to five, colour-coded across cards."),
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
-      const reading = [
-        spitRow(spitRank("Place"), "Rank within current filters and pins — not the full list. Default mins/price cuts limit Per 90 outliers."),
-        spitRow(
-          spitRank(mobile ? "Tap" : "Pin"),
-          mobile
-            ? "Tap to pin up to five names. Pins persist across filters; colour key above the cards."
-            : "Pin up to five names. Pins persist across filters; hover cross-highlights the same name."
-        ),
-      ];
       return `${spitHead("podium", "How Rankings works")}
         ${spitIntro(isNextSeason()
           ? "Top 10 leaderboards for FPL season stats, grouped into Key Stats, Attacking, and Defending."
           : "Top 10 boards for OPTA and FPL metrics, grouped Key Stats, Attacking, and Defending.")}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}`;
+        ${spitSection("Legend", legend)}`;
     }
 
     if (state.page === "expected") {
@@ -18863,27 +19028,12 @@
         spitRow(spitDiffPillSwatch("under"), "Diff pill — actual below expected"),
         spitRow(spitOwnedPinHTML(), "In your FPL squad"),
       ];
-      const reading = [
-        spitRow(spitRank("Category"), "Toolbar / sheet — which expected metric to chart."),
-        spitRow(spitRank("Locations"), "Total / Home / Away / Compare — venue split for the chart."),
-        spitRow(spitRank("View"), "Players or Teams tabs."),
-        ...(state.expectedSplit === "compare"
-          ? [spitRow(spitRank("Compare"), "Home and away side by side for the same players or teams.")]
-          : []),
-        spitRow(spitRank("Bar"), "Expected → actual. Moving dashes show the gap direction."),
-        spitRow(
-          spitRank("Diff"),
-          "Actual − expected. Pill intensity scales with gap size. For xGC, a negative Diff can still be blue (conceded less than expected)."
-        ),
-      ];
       const intro = isNextSeason()
         ? "FPL expected vs actual for 2026/27 — home/away from live match venue."
         : "Expected (x) vs actual — who over- or underperformed.";
       return `${spitHead("chart-gantt", "How xData works")}
         ${spitIntro(intro)}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}
-        ${spitNote("Blue/orange here is over/under vs expectation — not Strength of Schedule (SoS) fixture difficulty. Soft blue is quieter in dark mode.")}`;
+        ${spitSection("Legend", legend)}`;
     }
 
     if (state.page === "ownership") {
@@ -18894,19 +19044,9 @@
         spitRow(spitOwnershipLineSwatch("riser"), "14-day sparkline — start and end % labeled"),
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
-      const reading = [
-        spitRow(spitRank("Risers"), "Top 20 14-day TSB% increases, ranked before team/position filters."),
-        spitRow(spitRank("Fallers"), "Top 20 14-day TSB% decreases. Toggle in the bar above the table."),
-        spitRow(spitRank("Treemap"), "Top movers by 7d / 3d / 1d Δ as tiles (largest changes only). Toggle beside the count."),
-        spitRow(spitRank("Players"), "Photo, name, team, price, and position. Sort any numeric column."),
-        spitRow(spitRank("Teams"), "Average TSB% of each club’s 20 most-owned players at that check-in."),
-        spitRow(spitRank("Windows"), "7d / 3d / 1d use the nearest check-in on or before that many days before the latest point (hourly when available)."),
-      ];
       return `${spitHead("trending-up", "How Ownership works")}
         ${spitIntro("FPL selected-by% (TSB%) movers from the saved ownership cache.")}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}
-        ${spitNote("This page reads the saved ownership cache — it does not call the FPL API live.")}`;
+        ${spitSection("Legend", legend)}`;
     }
 
     if (state.page === "prices") {
@@ -18937,54 +19077,12 @@
             spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
             spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
           ];
-      const reading = isActual
-        ? [
-            spitRow(spitRank("Predicted / Actual"), "Predicted shows FPL’s price-change predictor. Actual lists confirmed £0.1m moves from bootstrap snapshot diffs (backfilled where daily snapshots exist)."),
-            spitRow(
-              spitRank("Columns"),
-              mobile
-                ? "Actual table: Date, Player, After."
-                : "Actual table: Before / After price, Date, All(%) / ML(%), Player."
-            ),
-            spitRow(spitRank("Date"), "When the change was detected (check-in timestamp)."),
-            spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
-          ]
-        : [
-            spitRow(spitRank("Predicted / Actual"), "Toggle between the live predictor and the confirmed £0.1m change log."),
-            spitRow(spitRank("Filter"), "Only Very/Likely rise and drop tags — excludes “Unlikely to change”."),
-            spitRow(
-              spitRank("Status"),
-              mobile
-                ? "VL/L badge + ↗/↘ arrow for GW transfer direction. Green = rise, red = drop."
-                : "Likelihood label with ↗/↘ for more transfers in vs out this GW."
-            ),
-            spitRow(
-              spitRank("Risers / Fallers"),
-              mobile
-                ? "Use the Risers / Fallers toggle to switch tables. Owned players show a pin next to their name."
-                : "Two side-by-side tables when the window is wide enough — otherwise stacked. Ranked by status tier then |progress|. Owned players show a pin next to their name."
-            ),
-            spitRow(spitRank("3d trend"), "Progress % spark over the last 3 days of hourly check-ins. Line colour follows 3d Δ (green up, red down)."),
-            spitRow(
-              spitRank("Progress filter"),
-              mobile
-                ? "Filters sheet — minimum |progress| (±90%–±200%, default ±90%)."
-                : "Sidebar slider sets minimum |progress| (±90%–±200%, default ±90%)."
-            ),
-            spitRow(spitRank("Countdown"), "Time until the next daily price update (your local timezone)."),
-            spitRow(spitRank("Player"), "Photo, crest ring, team, price, position — same as Ownership."),
-          ];
       const intro = isActual
         ? "Confirmed £0.1m price moves from bootstrap snapshot diffs."
         : "Official FPL price-change predictor from hourly bootstrap check-ins.";
-      const note = isActual
-        ? "Actual log starts empty on deploy and fills as daily/hourly fetches detect changes."
-        : "Refreshed hourly via fetch_prices.py. FPL updates predictor data ~every 15 minutes.";
       return `${spitHead("pound-sterling-circle", "How Price Changes works")}
         ${spitIntro(intro)}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}
-        ${spitNote(note)}`;
+        ${spitSection("Legend", legend)}`;
     }
 
     if (state.page === "live") {
@@ -19016,36 +19114,14 @@
         ),
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
-      const reading = [
-        spitRow(spitRank("Modes"), "Feed / DefCon / Points / Bonus — current gameweek only."),
-        spitRow(spitRank("Feed"), "Newest first — goals, assists, cards, DefCon, appearance pts; bonus only after that match hits 60′. Scope: League owned or All players."),
-        spitRow(spitRank("Total"), "Running GW pts for that player; pill color scales with haul size."),
-        spitRow(spitRank("Impact"), "Pts change × your ownership edge vs league avg. Unique picks swing most; shared picks ~0."),
-        spitRow(spitRank("Threshold"), "DEF 10 CBIT · MID/FWD 12 CBIRT · GK ineligible."),
-        spitRow(spitRank("Points"), "Sortable GW stats — Pts, G, A, CS, Sv, DC, bonus, cards."),
-        spitRow(spitRank("Bonus"), "Per fixture after 60′ — BPS bars; top three projected 3/2/1."),
-        spitRow(spitRank("Filters"), "Matchup badges, team, position, All/Live/Owned (plus Feed League owned / All players)."),
-      ];
       return `${spitHead("circle-play", "How Gameweek works")}
         ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}`;
+        ${spitSection("Legend", legend)}`;
     }
 
     if (state.page === "report") {
-      const reading = [
-        spitRow(spitRank("When"), "Written after the gameweek is settled — not live. Same bake until the next weekly run."),
-        spitRow(
-          spitRank("Names"),
-          "Club badge + name opens Details (same card as Home)."
-        ),
-        spitRow(spitRank("Run"), "Fixture pills are the next 3–5 GWs (same FDR colours as Home Schedule)."),
-        spitRow(spitRank("Starts"), "Fixture-run notes skip bench fodder (backup GK, cheap benched players). Essential holds (Haaland) are never sell recommendations."),
-        spitRow(spitRank("Standouts"), "Form, xGI, and differentials only call out clear gaps — not every 0.2 difference."),
-      ];
       return `${spitHead("file-text", "How Report works")}
-        ${spitIntro("Weekly brief for your linked manager: last GW recap, then injuries, form, minutes, midweek, the next 3–5 fixtures, and differentials.")}
-        ${spitSection("Reading", reading)}`;
+        ${spitIntro("Weekly brief for your linked manager: last GW recap, then injuries, form, minutes, midweek, the next 3–5 fixtures, and differentials.")}`;
     }
 
     if (state.page === "markets") {
@@ -19054,22 +19130,16 @@
         spitRow(spitMarketsStatSwatch("low", "18%"), "Goals / CS% — below your orange threshold"),
         spitRow(spitMarketsDeltaSwatch("up"), "Compare mode — moved up vs earlier pull"),
         spitRow(spitMarketsDeltaSwatch("down"), "Compare mode — moved down vs earlier pull"),
-      ];
-      const reading = [
-        spitRow(spitRank("View"), mobile ? "Goals and CS% or Scoreline — in the Filters sheet" : "Goals and CS% or Scoreline — in the toolbar above the title"),
-        spitRow(iconHTML("scale"), mobile
-          ? "Compare window — Current / Last 24 hr / Last 72 hr (Filters sheet)"
-          : "Compare window — Current / Last 24 hr / Last 72 hr (both card views)"),
-        spitRow(spitRank("Goals"), "Poisson λ from de-vigged 1X2 + totals — projected goals per side."),
-        spitRow(spitRank("CS%"), "P(opponent scores 0) under that model — not a native book market."),
-        spitRow(spitRank("Scoreline"), "Exact-score matrix (% in cells). Goals view lists top likely scores."),
-        spitRow(spitRank("Color"), "Blue/orange bands on Goals and CS%; deeper past the threshold. Soft blue is quieter in dark mode."),
-        spitRow(spitRank("Compare"), "Last 24 hr or Last 72 hr — movement vs prior odds pull."),
+        spitRow(
+          iconHTML("scale"),
+          mobile
+            ? "Compare window — Current / Last 24 hr / Last 72 hr (Filters sheet)"
+            : "Compare window — Current / Last 24 hr / Last 72 hr (both card views)"
+        ),
       ];
       return `${spitHead("candlestick", "How Markets works")}
         ${spitIntro("Upcoming PL fixtures: projected goals, clean-sheet %, and likely scorelines from bookmaker odds.")}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}`;
+        ${spitSection("Legend", legend)}`;
     }
 
 
@@ -19097,25 +19167,10 @@
           iconHTML("sliders-horizontal"),
           "Custom ratings — Preferences → Team difficulties (always used when set)"
         ),
-        spitRow(
-          spitRank("Σ"),
-          "Sum of fixture difficulty in the GW window. Click to sort hardest ↔ easiest (then back to league order)."
-        ),
-        spitRow(
-          spitRank("All / Attacking / Defending"),
-          "All = overall FDR. Attacking = opponent defence. Defending = opponent attack (your ratings when set)."
-        ),
-      ];
-      const reading = [
-        spitRow(spitRank("Scope"), "Premier League or All competitions."),
-        spitRow(spitRank("Window"), "Gameweeks dual slider — default is current GW through +6."),
-        spitRow(spitRank("Order"), "Clubs follow live league position (then name), or Σ sort. Tap a row to demote it to the bottom; tap again to restore."),
-        spitRow(spitRank("Blank"), "En dash when that club has no fixture in the gameweek."),
       ];
       return `${spitHead("calendar-days", "How Fixtures works")}
         ${spitIntro("Season ticker by club — FDR-colored opponent pills across gameweeks. Σ ranks strength of schedule in the visible window.")}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}`;
+        ${spitSection("Legend", legend)}`;
     }
 
     // Statistics (default)
@@ -19136,26 +19191,11 @@
         : "Compare — tap the toolbar button, then pick up to five rows"),
       spitRow(iconHTML("triangle-alert", "source-unsupported"), "Source can’t fill this cell"),
     ];
-    const reading = [
-      spitRow(spitRank("TSB%"), "FPL selected-by-% from the latest ownership check-in."),
-      spitRow(
-        spitRank("Tint"),
-        "Highlight Top/Bottom bands on raw values (default top/bottom 5%). Relative mode shrinks bands to filtered rows."
-      ),
-      spitRow(
-        spitRank("Fixtures"),
-        mobile
-          ? "Tap a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses hard orange / soft blue wash)."
-          : "Click a stat cell for upcoming fixtures and venue-matched opponent ranks (Teams view uses hard orange / soft blue wash)."
-      ),
-      spitRow(spitRank("–"), "Stat doesn’t apply (e.g. saves for an outfielder)."),
-    ];
     return `${spitHead("table", "How Statistics works")}
       ${spitIntro(isNextSeason()
         ? "2026/27 FPL season stats for players or teams — filter, sort, rank, and compare."
         : "Season OPTA and FPL stats — filter, sort, and compare Players or Teams.")}
-      ${spitSection("Legend", legend)}
-      ${spitSection("Reading", reading)}`;
+      ${spitSection("Legend", legend)}`;
   }
 
   function shuffleCopy(items) {

@@ -16951,6 +16951,9 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
 .home-dashboard.is-player-lookup #home-feed-panel {
   display: none !important;
 }
+.home-dashboard.is-player-lookup #home-team-graphics-panel {
+  display: none !important;
+}
 @media (max-width: 720px) {
   /* Restore main top pad when looking up a player (hero flush no longer applies). */
   html[data-page="home"]:has(.home-dashboard.is-player-lookup) .main {
@@ -18262,6 +18265,118 @@ html.home-squad-wide #home-feed-panel {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+/* Team Graphics: mobile Home only (hidden on desktop for now). */
+#home-team-graphics-panel {
+  display: none;
+}
+html.is-mobile-layout #home-team-graphics-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+@media (min-width: 901px) {
+  #home-team-graphics-panel {
+    display: none !important;
+  }
+}
+.home-team-graphics-pager {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-team-graphics-track {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.home-team-graphics-track::-webkit-scrollbar {
+  display: none;
+}
+.home-team-graphics-page {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+}
+.home-team-graphics-slide {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.home-team-graphics-link {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  line-height: 0;
+}
+.home-team-graphics-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(72vh, 560px);
+  object-fit: contain;
+  object-position: center top;
+  background: hsl(var(--muted) / 0.35);
+  border-radius: 10px;
+}
+.home-team-graphics-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  padding: 10px 4px 2px;
+}
+.home-team-graphics-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.22s var(--ease-out),
+    background-color 0.22s ease,
+    opacity 0.22s ease;
+}
+.home-team-graphics-dot.is-active {
+  background: hsl(var(--primary));
+  transform: scale(1.18);
+  opacity: 1;
+}
+.home-team-graphics-dot:not(.is-active) {
+  opacity: 0.85;
+}
+.home-team-graphics-dot:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.55);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-team-graphics-track {
+    scroll-behavior: auto;
+  }
+  .home-team-graphics-dot {
+    transition: none;
+  }
 }
 /* Desktop (mid-band + wide): cap Team / League / Feed; overflow scrolls inside. */
 @media (min-width: 901px) {

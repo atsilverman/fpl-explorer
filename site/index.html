@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1610" />
+<link rel="stylesheet" href="styles.css?v=1613" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1165,6 +1165,20 @@
           </div>
         </article>
 
+        <article class="home-panel home-table-panel home-team-graphics-panel" id="home-team-graphics-panel" hidden>
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker">Team Graphics</span>
+              <span class="home-panel-heading-view" id="home-team-graphics-view-label"></span>
+            </span>
+            <span class="home-panel-heading-meta" id="home-team-graphics-meta"></span>
+          </h3>
+          <div class="home-team-graphics-pager">
+            <div class="home-team-graphics-track" id="home-team-graphics-track"></div>
+            <div class="home-team-graphics-dots" id="home-team-graphics-dots" role="tablist" aria-label="Team graphics"></div>
+          </div>
+        </article>
+
         <article class="home-panel home-table-panel" id="home-feed-panel">
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
@@ -1843,6 +1857,7 @@
 <script src="price_changes_data.js?v=237"></script>
 <script src="leagues_data.js?v=6"></script>
 <script src="home_data.js?v=49"></script>
+<script src="team_news_data.js?v=5"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1865,7 +1880,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1474"></script>
+<script src="app.js?v=1477"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

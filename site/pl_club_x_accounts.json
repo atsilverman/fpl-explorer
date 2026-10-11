@@ -1,0 +1,152 @@
+{
+  "season": "2026/27",
+  "source": "premierleague.com/en/clubs → club website social links; handles verified via X profile lookup",
+  "generatedAt": "2026-10-11T17:50:00Z",
+  "notes": [
+    "Primary English-language club accounts only (not regional Man City language accounts).",
+    "Aston Villa rebrand uses @AstonVilla (@AVFCOfficial is no longer the official club account).",
+    "Used by site/fetch_team_news.py for current-GW Team Graphics (Home mobile). Not wired into autosub UI."
+  ],
+  "clubs": [
+    {
+      "code": "ARS",
+      "name": "Arsenal",
+      "website": "https://www.arsenal.com/",
+      "xHandle": "Arsenal",
+      "xUrl": "https://x.com/Arsenal"
+    },
+    {
+      "code": "AVL",
+      "name": "Aston Villa",
+      "website": "https://www.avfc.co.uk/",
+      "xHandle": "AstonVilla",
+      "xUrl": "https://x.com/AstonVilla"
+    },
+    {
+      "code": "BOU",
+      "name": "Bournemouth",
+      "website": "https://www.afcb.co.uk/",
+      "xHandle": "afcbournemouth",
+      "xUrl": "https://x.com/afcbournemouth"
+    },
+    {
+      "code": "BRE",
+      "name": "Brentford",
+      "website": "https://www.brentfordfc.com/",
+      "xHandle": "BrentfordFC",
+      "xUrl": "https://x.com/BrentfordFC"
+    },
+    {
+      "code": "BHA",
+      "name": "Brighton",
+      "website": "https://www.brightonandhovealbion.com/",
+      "xHandle": "BHAFC",
+      "xUrl": "https://x.com/BHAFC"
+    },
+    {
+      "code": "CHE",
+      "name": "Chelsea",
+      "website": "https://www.chelseafc.com/",
+      "xHandle": "ChelseaFC",
+      "xUrl": "https://x.com/ChelseaFC"
+    },
+    {
+      "code": "COV",
+      "name": "Coventry City",
+      "website": "https://www.ccfc.co.uk/",
+      "xHandle": "CoventryCityFC",
+      "xUrl": "https://x.com/CoventryCityFC"
+    },
+    {
+      "code": "CRY",
+      "name": "Crystal Palace",
+      "website": "https://www.cpfc.co.uk/",
+      "xHandle": "CPFC",
+      "xUrl": "https://x.com/CPFC"
+    },
+    {
+      "code": "EVE",
+      "name": "Everton",
+      "website": "https://www.evertonfc.com/",
+      "xHandle": "Everton",
+      "xUrl": "https://x.com/Everton"
+    },
+    {
+      "code": "FUL",
+      "name": "Fulham",
+      "website": "https://www.fulhamfc.com/",
+      "xHandle": "FulhamFC",
+      "xUrl": "https://x.com/FulhamFC"
+    },
+    {
+      "code": "HUL",
+      "name": "Hull City",
+      "website": "https://www.wearehullcity.co.uk/",
+      "xHandle": "HullCity",
+      "xUrl": "https://x.com/HullCity"
+    },
+    {
+      "code": "IPS",
+      "name": "Ipswich Town",
+      "website": "https://www.itfc.co.uk/",
+      "xHandle": "IpswichTown",
+      "xUrl": "https://x.com/IpswichTown"
+    },
+    {
+      "code": "LEE",
+      "name": "Leeds",
+      "website": "https://www.leedsunited.com/",
+      "xHandle": "LUFC",
+      "xUrl": "https://x.com/LUFC"
+    },
+    {
+      "code": "LIV",
+      "name": "Liverpool",
+      "website": "https://www.liverpoolfc.com/",
+      "xHandle": "LFC",
+      "xUrl": "https://x.com/LFC"
+    },
+    {
+      "code": "MCI",
+      "name": "Man City",
+      "website": "https://www.mancity.com/",
+      "xHandle": "ManCity",
+      "xUrl": "https://x.com/ManCity"
+    },
+    {
+      "code": "MUN",
+      "name": "Man Utd",
+      "website": "https://www.manutd.com/",
+      "xHandle": "ManUtd",
+      "xUrl": "https://x.com/ManUtd"
+    },
+    {
+      "code": "NEW",
+      "name": "Newcastle",
+      "website": "https://www.newcastleunited.com/",
+      "xHandle": "NUFC",
+      "xUrl": "https://x.com/NUFC"
+    },
+    {
+      "code": "NFO",
+      "name": "Nott'm Forest",
+      "website": "https://www.nottinghamforest.co.uk/",
+      "xHandle": "NFFC",
+      "xUrl": "https://x.com/NFFC"
+    },
+    {
+      "code": "SUN",
+      "name": "Sunderland",
+      "website": "https://www.safc.com/",
+      "xHandle": "SunderlandAFC",
+      "xUrl": "https://x.com/SunderlandAFC"
+    },
+    {
+      "code": "TOT",
+      "name": "Spurs",
+      "website": "https://www.tottenhamhotspur.com/",
+      "xHandle": "SpursOfficial",
+      "xUrl": "https://x.com/SpursOfficial"
+    }
+  ]
+}
