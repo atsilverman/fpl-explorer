@@ -27525,12 +27525,6 @@
     const bits = [
       row.team ? `<span class="ownership-id-team${teamTag.className}"${teamTag.style}>${escapeHtml(row.team)}</span>` : "",
       row.position ? `<span>${escapeHtml(row.position)}</span>` : "",
-      row.price != null && Number.isFinite(Number(row.price))
-        ? `<span class="ownership-id-price">£${Number(row.price).toFixed(1)}m</span>`
-        : "",
-      row.owned != null && Number.isFinite(row.owned)
-        ? `<span>${escapeHtml(fmtOwnedPct(row.owned))}%</span>`
-        : "",
     ].filter(Boolean);
     const ownedPin = ownedFlagHTML(row);
     const flag = playerFlagHTML(row);
@@ -27541,6 +27535,20 @@
         ${bits.length ? `<div class="ownership-id-sub">${bits.join("<span class=\"ownership-id-sep\">·</span>")}</div>` : ""}
       </div>
     </div>`;
+  }
+
+  function defconPriceCellHTML(row) {
+    if (row.price == null || !Number.isFinite(Number(row.price))) {
+      return `<span class="defcon-metric is-empty">—</span>`;
+    }
+    return `<span class="defcon-metric">£${Number(row.price).toFixed(1)}</span>`;
+  }
+
+  function defconOwnedCellHTML(row) {
+    if (row.owned == null || !Number.isFinite(row.owned)) {
+      return `<span class="defcon-metric is-empty">—</span>`;
+    }
+    return `<span class="defcon-metric">${escapeHtml(fmtOwnedPct(row.owned))}%</span>`;
   }
 
   function defconGwDotHTML(cell, position) {
@@ -27568,9 +27576,12 @@
       .join("");
     return `<tr>
       ${defconSortTh("name", "Player", "col-player ")}
+      ${defconSortTh("price", "£", "defcon-col-price col-num ")}
+      ${defconSortTh("owned", "TSB%", "defcon-col-owned col-num ")}
       ${gwHeads}
-      ${defconSortTh("hits", "Hits", "defcon-col-hits ")}
-      ${defconSortTh("pts", "Summary", "defcon-col-summary ")}
+      ${defconSortTh("hits", "Hits", "defcon-col-hits col-num ")}
+      ${defconSortTh("pts", "Pts", "defcon-col-pts col-num ")}
+      ${defconSortTh("actions", "Actions", "defcon-col-actions col-num ")}
     </tr>`;
   }
 
@@ -27583,12 +27594,14 @@
       .join("");
     const hitsCls = row.hits > 0 ? "" : " is-empty";
     const hitsLabel = `${row.hits}/${row.gwCount}`;
-    const summary = `${row.pts} pts · ${row.actions} actions`;
     return `<tr data-player-code="${escapeHtml(String(row.code ?? ""))}">
       <td class="col-player">${defconIdCellHTML(row)}</td>
+      <td class="defcon-col-price col-num">${defconPriceCellHTML(row)}</td>
+      <td class="defcon-col-owned col-num">${defconOwnedCellHTML(row)}</td>
       ${gwCells}
-      <td class="defcon-col-hits"><span class="defcon-hits${hitsCls}">${escapeHtml(hitsLabel)}</span></td>
-      <td class="defcon-col-summary"><span class="defcon-summary">${escapeHtml(summary)}</span></td>
+      <td class="defcon-col-hits col-num"><span class="defcon-hits${hitsCls}">${escapeHtml(hitsLabel)}</span></td>
+      <td class="defcon-col-pts col-num"><span class="defcon-metric">${row.pts}</span></td>
+      <td class="defcon-col-actions col-num"><span class="defcon-metric">${row.actions}</span></td>
     </tr>`;
   }
 
@@ -27609,9 +27622,9 @@
       }
     }
     el.defconTableHead.innerHTML = defconHeadHTML(gws);
-    const colCount = 3 + gws.length;
+    const colCount = 6 + gws.length;
     if (!gws.length) {
-      el.defconTableBody.innerHTML = `<tr class="defcon-empty-row"><td class="col-player" colspan="${Math.max(colCount, 3)}">No finished gameweek DefCon data yet. Run <code>python3 site/build.py</code> after event-live snapshots exist.</td></tr>`;
+      el.defconTableBody.innerHTML = `<tr class="defcon-empty-row"><td class="col-player" colspan="${Math.max(colCount, 6)}">No finished gameweek DefCon data yet. Run <code>python3 site/build.py</code> after event-live snapshots exist.</td></tr>`;
     } else if (!visible.length) {
       el.defconTableBody.innerHTML = `<tr class="defcon-empty-row"><td class="col-player" colspan="${colCount}">No players match the current filters.</td></tr>`;
     } else {
