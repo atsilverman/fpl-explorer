@@ -918,9 +918,8 @@ def active_pick_progress(
     """(in_play, still_to_play) among active scoring picks.
 
     Bench Boost can push either count above 11. DGW: live > to-play > done.
-    Still-to-play weights by effective multiplier so a captain left to play
-    contributes +1 (2 total) and triple captain +2 (3 total); live stays a
-    headcount of picks currently on the pitch.
+    Both counts weight by effective multiplier so a captain contributes +1
+    (2 total) and triple captain +2 (3 total), whether still to play or live.
     """
     in_play = 0
     to_play = 0
@@ -942,13 +941,13 @@ def active_pick_progress(
         fx_list = fixtures_for_element(el, fixtures)
         if fx_list:
             if any(fixture_is_live(fx) for fx in fx_list):
-                in_play += 1
+                in_play += mult
             elif any(not fixture_is_finished(fx) for fx in fx_list):
                 to_play += mult
             continue
         status = match_status.get(eid) or "scheduled"
         if status == "live":
-            in_play += 1
+            in_play += mult
         elif status != "finished":
             to_play += mult
     return in_play, to_play

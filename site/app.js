@@ -5319,11 +5319,15 @@
    */
   function homeStandingsRowInPlayCount(row) {
     if (!homeTrustLiveMatchState()) return 0;
-    if (mockLiveEnabled()) {
-      const squad = homeSquadForEntry(row && row.entry) || [];
+    // Prefer squad when present so captain/TC weight (+1 / +2) matches Left.
+    const squad = homeSquadForEntry(row && row.entry) || [];
+    if (squad.length || mockLiveEnabled()) {
       let n = 0;
       for (const p of squad) {
-        if (p && p.starter && !p.onBench && homeSquadRowIsInPlay(p)) n += 1;
+        if (!p || !p.starter || p.onBench) continue;
+        if (!homeSquadRowIsInPlay(p)) continue;
+        const mult = Number(p.multiplier);
+        n += Number.isFinite(mult) && mult > 0 ? mult : 1;
       }
       return n;
     }
@@ -5349,6 +5353,19 @@
     }
     const n = Number(row && row.toPlay);
     return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  /** True when a captain/TC (mult ≥ 2) is among this manager's in-play picks. */
+  function homeStandingsRowCaptainInPlay(row) {
+    if (!homeTrustLiveMatchState()) return false;
+    const squad = homeSquadForEntry(row && row.entry) || [];
+    for (const p of squad) {
+      if (!p || !p.starter || p.onBench) continue;
+      if (!homeSquadRowIsInPlay(p)) continue;
+      const mult = Number(p.multiplier);
+      if ((Number.isFinite(mult) && mult >= 2) || p.isCaptain) return true;
+    }
+    return false;
   }
 
   /** True when a captain/TC (mult ≥ 2) is still among this manager's to-play. */
@@ -5662,8 +5679,11 @@
     const rowCls = homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther });
     const inPlay = homeStandingsRowInPlayCount(row);
     const toPlay = homeStandingsRowToPlayCount(row);
+    const captainLive = homeStandingsRowCaptainInPlay(row);
     const captainLeft = homeStandingsRowCaptainStillToPlay(row);
-    const liveTitle = "Active picks in play (Bench Boost can exceed 11)";
+    const liveTitle = captainLive
+      ? "Active picks in play — includes captain (counts double); Bench Boost can exceed 11"
+      : "Active picks in play (captain counts double; Bench Boost can exceed 11)";
     const leftTitle = captainLeft
       ? "Still to play this gameweek — includes captain (counts double)"
       : "Still to play this gameweek (captain counts double)";
@@ -5675,19 +5695,26 @@
       toPlay > 0 ? "is-active" : "is-zero",
       captainLeft ? "has-captain" : "",
     ].filter(Boolean).join(" ");
+    // Grey muted pill only when Left is 0 (matches Live idle). Otherwise plain text;
+    // captain-still-to-play keeps the amber outline.
+    const leftPillCls = captainLeft
+      ? leftCls
+      : toPlay === 0
+        ? "ownership-pill home-standings-live-pill is-zero"
+        : leftCls;
     const liveHTML = hasPlay
       ? (inPlay > 0
         ? `<span class="ownership-pill home-standings-live-pill is-active"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`
         : `<span class="ownership-pill home-standings-live-pill is-zero"${tipAttr(liveTitle)}>${homeStandingsCountHTML(inPlay)}</span>`)
       : "—";
     const leftHTML = hasPlay
-      ? `<span class="${leftCls}"${tipAttr(leftTitle)}>${homeStandingsCountHTML(toPlay)}</span>`
+      ? `<span class="${leftPillCls}"${tipAttr(leftTitle)}>${homeStandingsCountHTML(toPlay)}</span>`
       : "—";
     const playHTML = hasPlay
       ? `<span class="home-play-split"${tipAttr(`${liveTitle}. ${leftTitle}`)}>
           <span class="home-play-live${inPlay > 0 ? " is-active" : " is-zero"}">${homeStandingsCountHTML(inPlay)}</span>
           <span class="home-play-split-sep" aria-hidden="true">/</span>
-          <span class="${leftCls}">${homeStandingsCountHTML(toPlay)}</span>
+          <span class="${leftPillCls}">${homeStandingsCountHTML(toPlay)}</span>
         </span>`
       : "—";
     const gwIntensity = topMaps && topMaps.gw ? topMaps.gw.get(entry) : null;
@@ -18656,8 +18683,11 @@
     return `<div class="spit-row"><span class="${cls}">${symbol}</span><span>${text}</span></div>`;
   }
 
-  function spitSection(title, rows) {
-    return `<div class="spit-section"><h4>${title}</h4><div class="spit-list">${rows.join("")}</div></div>`;
+  function spitSection(title, rows, blurb = "") {
+    const hint = blurb
+      ? `<p class="spit-section-blurb">${blurb}</p>`
+      : "";
+    return `<div class="spit-section"><h4>${title}</h4>${hint}<div class="spit-list">${rows.join("")}</div></div>`;
   }
 
   function spitHead(icon, title) {
@@ -18726,7 +18756,16 @@
     const mobile = pageInfoIsMobile();
 
     if (state.page === "home") {
-      const legend = [
+      // Visual marks only (pills, badges, dots) — no text-label reading rows.
+      const team = [
+        spitRow(
+          `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">A</span>`,
+          "Captain / vice on the squad list"
+        ),
+        spitRow(
+          spitOwnedPinHTML(),
+          "Also in your configured squad (when viewing another manager)"
+        ),
         spitRow(
           `<span class="home-status-dot is-live spit-home-swatch" aria-hidden="true"></span>`,
           "Fixture in play"
@@ -18753,25 +18792,23 @@
           "IMP behind league top third",
           "spit-symbol-wide"
         ),
+      ];
+      const league = [
         spitRow(
-          `<span class="home-play-live is-active spit-home-swatch">2</span>`,
-          "Live — active picks in play (Bench Boost can exceed 11)"
+          `<span class="ownership-pill home-standings-live-pill is-active spit-home-swatch">2</span>`,
+          "Live — active picks in play (captain counts double; Bench Boost can exceed 11)"
         ),
         spitRow(
           `<span class="home-play-left is-active spit-home-swatch">3</span>`,
           "Left / Left to play — still to play this gameweek (captain counts double)"
         ),
         spitRow(
+          `<span class="ownership-pill home-standings-live-pill is-zero spit-home-swatch">0</span>`,
+          "Left is 0 — same grey pill as Live idle"
+        ),
+        spitRow(
           `<span class="home-play-left is-active has-captain spit-home-swatch">4</span>`,
           "Left includes captain still to play — amber pill; total already counts captain as 2"
-        ),
-        spitRow(
-          `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">A</span>`,
-          "Captain / vice on the squad list"
-        ),
-        spitRow(
-          spitOwnedPinHTML(),
-          "Also in your configured squad (when viewing another manager)"
         ),
         spitRow(
           `<span class="home-chip-cell is-available spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span></span>`,
@@ -18786,72 +18823,10 @@
           "Chip active this gameweek"
         ),
       ];
-      const reading = [
-        spitRow(spitRank("GW pts"), "Active picks × multiplier after auto-subs. Bench Boost counts all 15."),
-        spitRow(spitRank("Summary"), "Hero Overall Rank band; cards below for GW points, GW rank, Total points, and League rank."),
-        spitRow(
-          spitRank("Pitch"),
-          "Default Team view. Mode menu swaps card strips: Points, Fixtures, Form, Importance, Price."
-        ),
-        spitRow(
-          spitRank("List"),
-          "Squad table with live pts, minutes, and status. Wide screens keep Points pills beside the list."
-        ),
-        spitRow(
-          spitRank("Points"),
-          mobile
-            ? "Team swipe — GW stat pills (G, A, CS, DC, B, Sv); Sv → YC when no keeper saves."
-            : "GW stat pills beside List on wide screens, or the Points swipe — same Live Points colors; Sv → YC when no keeper saves."
-        ),
-        spitRow(
-          spitRank("Ownership"),
-          "Team swipe — TSB%, 3d Δ, 1d Δ, and Price Δ for each pick."
-        ),
-        spitRow(
-          spitRank("Schedule"),
-          "Team swipe — upcoming GW pills with FDR wash (green easy → red hard; your ratings when set in Preferences)."
-        ),
-        spitRow(
-          spitRank("Player"),
-          mobile
-            ? "Tap a player for the GW points card (event breakdown), then Player Details (Profile, Form, Schedule, League Ownership, Overall TSB). Compare uses Bars or Axis dots."
-            : "Click a player for the GW points card (event breakdown), then Player Details (Profile, Form, Schedule, League Ownership, Overall TSB). Compare uses Bars or Axis dots."
-        ),
-        spitRow(
-          spitRank("Viewing"),
-          mobile
-            ? "Tap a standings manager to view their team. Viewing chrome returns to yours; Pinned clears an ownership highlight."
-            : "Click a standings manager to view their team. Viewing chrome returns to yours; Pinned clears an ownership highlight."
-        ),
-        spitRow(spitRank("League"), "League panel: Table, Transfers, Captaincy, Chips, Bench Points."),
-        spitRow(spitRank("Chips"), "League swipe → Chips: WC / FH / BB / TC for the current half only (second half from GW20)."),
-        spitRow(
-          spitRank("Bench Points"),
-          "League swipe → Bench Points: GW pill + Season bar = points left on the pine (live squad; auto-subs excluded). Bench Boost weeks count as 0 — those pts are in the XI score."
-        ),
-        spitRow(
-          spitRank("Feed"),
-          "Live scoring feed for league-owned picks, or All players."
-        ),
-        spitRow(
-          spitRank("Search"),
-          mobile
-            ? "Nav search — empty tray mixes live form, top scorers, ownership/price trends, and hot clubs. Type to filter; matched teams stay first."
-            : "Header search — empty tray mixes live form, top scorers, ownership/price trends, and hot clubs. Type to filter; matched teams stay first."
-        ),
-        spitRow(
-          spitRank("Flag"),
-          "Injury / availability banner on Player Details when FPL flags a player (chance % + news)."
-        ),
-        spitRow(
-          spitRank("Refresh"),
-          "Live scores poll automatically. Changing manager or league in Preferences rebuilds Home."
-        ),
-      ];
       return `${spitHead("house", "How Home works")}
-        ${spitIntro("Live GW dashboard for your Preferences manager + league (auto-subs & chips from last refresh).")}
-        ${spitSection("Legend", legend)}
-        ${spitSection("Reading", reading)}`;
+        ${spitIntro("Live GW dashboard for your Preferences manager + league. Marks below are grouped by where they appear.")}
+        ${spitSection("Team", team, "Your squad card — Pitch / List and related chrome.")}
+        ${spitSection("League", league, "Standings table and Chips swipe.")}`;
     }
 
     if (state.page === "rankings") {
