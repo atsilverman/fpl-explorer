@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1616" />
+<link rel="stylesheet" href="styles.css?v=1620" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1754,6 +1754,13 @@
 </div>
 <div id="mobile-view-dock" class="mobile-view-dock" hidden aria-hidden="true"></div>
 <div id="mobile-filter-dock" class="mobile-filter-dock" hidden aria-hidden="true"></div>
+<div id="defcon-opponents-dock" class="defcon-opponents-dock" hidden aria-hidden="true">
+  <button type="button" class="ghost-btn icon-label-btn defcon-opponents-toggle mobile-filter-fab" id="defcon-opponents-toggle" aria-pressed="false" title="Show opponents in place of DefCon dots" aria-label="Opponents">
+    <svg class="icon" aria-hidden="true"><use href="#i-swords"/></svg>
+    <span class="btn-label">Opponents</span>
+    <span class="mobile-dock-label">Opponents</span>
+  </button>
+</div>
 <div id="mobile-sheet" class="mobile-sheet" hidden aria-hidden="true">
   <div class="mobile-sheet-backdrop" data-sheet-dismiss></div>
   <div class="mobile-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-sheet-title">
@@ -1883,8 +1890,8 @@
 <script src="ownership_data.js?v=189"></script>
 <script src="price_changes_data.js?v=241"></script>
 <script src="leagues_data.js?v=6"></script>
-<script src="home_data.js?v=49"></script>
-<script src="team_news_data.js?v=5"></script>
+<script src="home_data.js?v=50"></script>
+<script src="team_news_data.js?v=6"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1907,7 +1914,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1481"></script>
+<script src="app.js?v=1484"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

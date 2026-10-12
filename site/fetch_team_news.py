@@ -8,6 +8,7 @@ Stores one graphic per team for the current GW only; re-runs update as posts lan
 
 Run:
     python3 site/fetch_team_news.py
+    python3 site/fetch_team_news.py --active-only   # scheduled: clubs near KO only
 """
 from __future__ import annotations
 
@@ -423,7 +424,12 @@ def write_bundle(gw: int, teams: list[dict], generated: str) -> None:
     )
 
 
+ACTIVE_BEFORE_KO = timedelta(minutes=120)
+ACTIVE_AFTER_KO = timedelta(minutes=45)
+
+
 def main() -> int:
+    active_only = "--active-only" in sys.argv[1:]
     bearer = os.environ.get("X_BEARER_TOKEN", "").strip()
     if not bearer:
         print("No X_BEARER_TOKEN in .env — cannot fetch team news.", file=sys.stderr)
@@ -466,7 +472,8 @@ def main() -> int:
             }
 
     state = load_state()
-    if state.get("gw") != gw:
+    gw_changed = state.get("gw") != gw
+    if gw_changed:
         # New GW — drop prior stored graphics from the bundle (files can remain for debug)
         state = {"gw": gw, "teams": {}}
         gw_dir = MEDIA_DIR / f"gw{gw}"
@@ -486,6 +493,10 @@ def main() -> int:
         ko = parse_iso(fxinfo["ko"])
         if not ko:
             continue
+        if active_only:
+            now_check = datetime.now(timezone.utc)
+            if not (ko - ACTIVE_BEFORE_KO <= now_check <= ko + ACTIVE_AFTER_KO):
+                continue
         # Anchor on FPL KO (~75 min pre-KO). Some clubs' XI posts are NOT
         # indexed under has:media (ARS/MUN), so also search by XI keywords
         # in the same window without the media operator.
@@ -598,6 +609,10 @@ def main() -> int:
             f"  ✓ {code} @{handle}: saved {rel} "
             f"(Δko={best['minsBeforeKo']}m score={best['score']})"
         )
+
+    if active_only and not updated and not gw_changed:
+        print(f"\nGW{gw}: no new graphics — bundle unchanged.")
+        return 0 if errors == 0 else 1
 
     teams = list((state.get("teams") or {}).values())
     # Only keep clubs still in this GW fixture list

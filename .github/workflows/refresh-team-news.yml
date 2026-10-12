@@ -1,0 +1,71 @@
+# Club team-news graphics (Home → Team Graphics) every 15 min.
+# --active-only searches X just for clubs within KO-120m … KO+45m and exits
+# without writing when nothing new landed, so idle runs make no X calls or commits.
+name: Refresh team news
+
+on:
+  schedule:
+    - cron: "5,20,35,50 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-team-news
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tesseract (multi-image lineup OCR)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr
+
+      - name: Refresh team news
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+        run: python3 site/fetch_team_news.py --active-only
+
+      - name: Bump cache-bust query param
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          if subprocess.run(["git", "diff", "--quiet", "--", "site/team_news_data.js"]).returncode == 0:
+              print("team_news_data.js unchanged")
+              raise SystemExit(0)
+          path = Path("site/index.html")
+          text = path.read_text(encoding="utf-8")
+          pat = re.compile(r'(src="team_news_data\.js\?v=)(\d+)(")')
+          text, n = pat.subn(lambda m: f"{m.group(1)}{int(m.group(2)) + 1}{m.group(3)}", text)
+          print("Bumped team_news_data.js" if n else "No cache param for team_news_data.js")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A site/team-news site/team_news_data.js site/team_news_data.json site/team_news_state.json site/index.html || true
+          if git diff --staged --quiet; then
+            echo "No team-news changes to commit."
+            exit 0
+          fi
+          git commit -m "Refresh scheduled team-news graphics."
+          for attempt in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          exit 1

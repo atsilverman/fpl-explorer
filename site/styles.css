@@ -2722,6 +2722,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   .mobile-view-dock,
   .mobile-filter-dock,
+  .defcon-opponents-dock,
   .fixtures-sos-fab {
     --mobile-dock-size: 48px;
     --mobile-dock-btn-size: auto;
@@ -2750,6 +2751,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   :root[data-theme="dark"] .mobile-view-dock,
   :root[data-theme="dark"] .mobile-filter-dock,
+  :root[data-theme="dark"] .defcon-opponents-dock,
   :root[data-theme="dark"] .fixtures-sos-fab {
     --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
     --mobile-dock-border: hsl(var(--foreground) / 0.34);
@@ -2760,6 +2762,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .mobile-view-dock,
     :root:not([data-theme="light"]) .mobile-filter-dock,
+    :root:not([data-theme="light"]) .defcon-opponents-dock,
     :root:not([data-theme="light"]) .fixtures-sos-fab {
       --mobile-dock-fg-muted: hsl(var(--foreground) / 0.78);
       --mobile-dock-border: hsl(var(--foreground) / 0.34);
@@ -3035,6 +3038,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   }
   html.mobile-chrome-scroll-hidden .mobile-view-dock:not([hidden]),
   html.mobile-chrome-scroll-hidden .mobile-filter-dock:not([hidden]),
+  html.mobile-chrome-scroll-hidden .defcon-opponents-dock:not([hidden]),
   html.mobile-chrome-scroll-hidden .fixtures-sos-fab:not([hidden]) {
     /* Pixel travel (not %) so the tween always has a resolvable from/to. */
     opacity: 0;
@@ -3055,6 +3059,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   @media (prefers-reduced-motion: reduce) {
     html.is-mobile-layout .mobile-view-dock,
     html.is-mobile-layout .mobile-filter-dock,
+    html.is-mobile-layout .defcon-opponents-dock,
     html.is-mobile-layout .fixtures-sos-fab,
     html.is-mobile-layout .mobile-chrome-fade {
       transition: none !important;
@@ -3372,6 +3377,7 @@ html.animations-off .home-status-dot.is-live {
 /* Mobile chrome scroll hide / show — floating docks only (not Prefs → Animations). */
 html.animations-off .mobile-view-dock,
 html.animations-off .mobile-filter-dock,
+html.animations-off .defcon-opponents-dock,
 html.animations-off .fixtures-sos-fab {
   transition:
     transform var(--chrome-dock-dur) var(--chrome-ease-show) var(--chrome-dock-stagger),
@@ -3382,6 +3388,7 @@ html.animations-off .mobile-chrome-fade {
 }
 html.animations-off.mobile-chrome-scroll-hidden .mobile-view-dock,
 html.animations-off.mobile-chrome-scroll-hidden .mobile-filter-dock,
+html.animations-off.mobile-chrome-scroll-hidden .defcon-opponents-dock,
 html.animations-off.mobile-chrome-scroll-hidden .fixtures-sos-fab,
 html.animations-off.mobile-chrome-scroll-hidden .mobile-chrome-fade {
   transition-timing-function: var(--chrome-ease-hide) !important;
@@ -6497,47 +6504,74 @@ html[data-page="defcon"] #stats-toolbar-start > .tabs {
 .defcon-toolbar-bar {
   justify-content: flex-end;
 }
-.defcon-table th.defcon-col-price,
-.defcon-table td.defcon-col-price,
-.defcon-table th.defcon-col-owned,
-.defcon-table td.defcon-col-owned,
-.defcon-table th.defcon-col-hits,
-.defcon-table td.defcon-col-hits,
-.defcon-table th.defcon-col-pts,
-.defcon-table td.defcon-col-pts,
+.defcon-opponents-dock {
+  display: none;
+  position: fixed;
+  left: max(14px, env(safe-area-inset-left, 0px));
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  z-index: 44;
+  pointer-events: none;
+}
+.defcon-opponents-dock:not([hidden]) {
+  display: block;
+  pointer-events: auto;
+}
+html.has-defcon-opponents-fab[data-page="defcon"] .main {
+  padding-bottom: var(--mobile-dock-clearance, 66px);
+}
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab {
+  box-sizing: border-box;
+  width: auto;
+  min-width: var(--mobile-dock-size, 48px);
+  height: var(--mobile-dock-size, 48px);
+  min-height: var(--mobile-dock-size, 48px);
+  padding: 0 var(--mobile-dock-pad-x, 14px);
+  gap: var(--mobile-dock-gap, 7px);
+  justify-content: center;
+  border-radius: var(--mobile-dock-radius, 14px);
+  background: hsl(var(--card));
+  border: 1px solid var(--mobile-dock-border, hsl(var(--foreground) / 0.26));
+  box-shadow: var(
+    --mobile-dock-shadow,
+    0 2px 6px hsl(240 6% 10% / 0.1),
+    0 0 0 1px hsl(var(--foreground) / 0.05)
+  );
+  color: var(--mobile-dock-fg, hsl(var(--foreground)));
+  font-size: var(--mobile-dock-font, 13.5px);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  touch-action: manipulation;
+}
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab .icon {
+  width: var(--mobile-dock-icon, 18px);
+  height: var(--mobile-dock-icon, 18px);
+  font-size: var(--mobile-dock-icon, 18px);
+  color: inherit;
+  flex: none;
+}
+.defcon-opponents-dock .defcon-opponents-toggle .btn-label {
+  display: none;
+}
+.defcon-opponents-dock .defcon-opponents-toggle .mobile-dock-label {
+  display: inline;
+}
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab.on,
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab[aria-pressed="true"] {
+  background: hsl(var(--blue-hsl));
+  border-color: hsl(var(--blue-hsl));
+  color: #fff;
+}
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab.on .icon,
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab[aria-pressed="true"] .icon,
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab.on .mobile-dock-label,
+.defcon-opponents-dock .defcon-opponents-toggle.mobile-filter-fab[aria-pressed="true"] .mobile-dock-label {
+  color: #fff;
+}
+/* Metric cols inherit Statistics table type (13px / --mono / body text). */
 .defcon-table th.defcon-col-actions,
 .defcon-table td.defcon-col-actions {
-  min-width: 48px;
-  padding-left: 6px;
-  padding-right: 6px;
-  text-align: center;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-.defcon-table th.defcon-col-price,
-.defcon-table td.defcon-col-price {
-  min-width: 40px;
-}
-.defcon-table th.defcon-col-hits,
-.defcon-table td.defcon-col-hits {
-  min-width: 44px;
-  padding-left: 8px;
-}
-.defcon-table th.defcon-col-actions,
-.defcon-table td.defcon-col-actions {
-  min-width: 56px;
   padding-right: 12px;
-}
-.defcon-metric {
-  font-family: "Fira Code", ui-monospace, monospace;
-  font-size: 11.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-.defcon-metric.is-empty {
-  color: var(--text-faint);
-  font-weight: 500;
 }
 .defcon-table th.defcon-col-gw,
 .defcon-table td.defcon-col-gw {
@@ -6548,9 +6582,15 @@ html[data-page="defcon"] #stats-toolbar-start > .tabs {
   padding-right: 2px;
   text-align: center;
   vertical-align: middle;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-dim);
+}
+#defcon-page.is-opponents .defcon-table th.defcon-col-gw,
+#defcon-page.is-opponents .defcon-table td.defcon-col-gw {
+  width: 40px;
+  min-width: 40px;
+  max-width: 48px;
 }
 .defcon-gw-dot {
   display: inline-flex;
@@ -6583,23 +6623,31 @@ html[data-page="defcon"] #stats-toolbar-start > .tabs {
   stroke-dasharray: 2.5 2;
   opacity: 0.55;
 }
-.defcon-hits {
+.defcon-gw-opp {
   display: inline-block;
-  font-family: "Fira Code", ui-monospace, monospace;
-  font-size: 11.5px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  color: var(--text);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
 }
-.defcon-hits.is-empty {
+.defcon-gw-opp.is-hit {
+  color: hsl(var(--check-threshold));
+}
+.defcon-gw-opp.is-miss {
+  color: var(--text-dim);
+}
+.defcon-gw-opp.is-dnp,
+.defcon-gw-opp.is-blank {
   color: var(--text-faint);
-  font-weight: 500;
 }
 .defcon-empty-row td {
   padding: 28px 16px;
   color: var(--text-dim);
   text-align: left;
+  font-family: var(--sans);
 }
 .ownership-table .col-num {
   text-align: center;

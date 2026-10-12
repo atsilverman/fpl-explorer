@@ -865,6 +865,7 @@
     ownershipSortDir: "desc",
     defconSortKey: "hits",
     defconSortDir: "desc",
+    defconShowOpponents: false,
     pricesViewMode: "prediction", // prediction | actual
     pricesActualSortKey: "default", // default | changedAt | name | change | before | after
     pricesActualSortDir: "desc",
@@ -1273,6 +1274,8 @@
     defconTableHead: $("#defcon-table-head"),
     defconTableBody: $("#defcon-table-body"),
     defconCountLabel: $("#defcon-count-label"),
+    defconOpponentsDock: $("#defcon-opponents-dock"),
+    defconOpponentsToggle: $("#defcon-opponents-toggle"),
     defconUpdatedFooter: $("#defcon-updated-footer"),
     pricesPage: $("#prices-page"),
     pricesCountdownValue: $("#prices-countdown-value"),
@@ -16165,7 +16168,8 @@
     const show =
       mobileDocksActive() &&
       ((!el.mobileFilterDock || !el.mobileFilterDock.hidden) ||
-        (!el.mobileViewDock || !el.mobileViewDock.hidden));
+        (!el.mobileViewDock || !el.mobileViewDock.hidden) ||
+        (!el.defconOpponentsDock || !el.defconOpponentsDock.hidden));
     if (fade) {
       fade.hidden = !show;
       fade.setAttribute("aria-hidden", show ? "false" : "true");
@@ -16666,6 +16670,7 @@
     syncMobileFilterDock();
     syncMobileViewDock();
     syncHomeSearchBtn();
+    if (typeof syncDefconOpponentsDock === "function") syncDefconOpponentsDock();
     if (!mobileChromeScrollActive()) resetMobileChromeScrollHide();
     else {
       const main = document.querySelector("main.main");
@@ -19115,11 +19120,11 @@
           `<span class="defcon-gw-dot is-dnp spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
           "DNP — no minutes that gameweek"
         ),
-        spitRow(`<span class="defcon-hits spit-ui-swatch">3/5</span>`, "Hits out of finished gameweeks shown"),
+        spitRow(`<span class="defcon-gw-opp is-hit spit-ui-swatch">ARS</span>`, "Opponents mode — UPPERCASE home, lowercase away; color still tracks hit/miss"),
         spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
       ];
       return `${spitHead("shield-half", "How DefCon works")}
-        ${spitIntro("Per-gameweek DefCon hits for finished GWs. Thresholds are binary: DEF 10 CBIT, MID/FWD 12 CBIRT. Goalkeepers are ineligible.")}
+        ${spitIntro("Per-gameweek DefCon hits for finished GWs. Thresholds are binary: DEF 10 CBIT, MID/FWD 12 CBIRT. Goalkeepers are ineligible. Toggle Opponents to swap dots for matchup codes.")}
         ${spitSection("Legend", legend)}`;
     }
 
@@ -27538,17 +27543,32 @@
   }
 
   function defconPriceCellHTML(row) {
-    if (row.price == null || !Number.isFinite(Number(row.price))) {
-      return `<span class="defcon-metric is-empty">—</span>`;
-    }
-    return `<span class="defcon-metric">£${Number(row.price).toFixed(1)}</span>`;
+    if (row.price == null || !Number.isFinite(Number(row.price))) return "–";
+    return escapeHtml(fmtNum(Number(row.price), 1));
   }
 
   function defconOwnedCellHTML(row) {
-    if (row.owned == null || !Number.isFinite(row.owned)) {
-      return `<span class="defcon-metric is-empty">—</span>`;
+    if (row.owned == null || !Number.isFinite(row.owned)) return "–";
+    return escapeHtml(fmtOwnedPct(row.owned));
+  }
+
+  function defconFixturesForTeamGw(team, gw) {
+    const code = String(team || "");
+    const g = Number(gw);
+    if (!code || !Number.isFinite(g)) return [];
+    const fromTicker = (FIXTURES_BY_TEAM[code] || []).filter((fx) => Number(fx.gw) === g);
+    if (fromTicker.length) return fromTicker;
+    const baked = (DATA.liveFixturesByGw || {})[String(g)] || (DATA.liveFixturesByGw || {})[g] || [];
+    const out = [];
+    for (const fx of baked) {
+      if (!fx) continue;
+      if (fx.home === code && fx.away) {
+        out.push({ opp: fx.away, ha: "H", gw: g, kickoff: fx.kickoff });
+      } else if (fx.away === code && fx.home) {
+        out.push({ opp: fx.home, ha: "A", gw: g, kickoff: fx.kickoff });
+      }
     }
-    return `<span class="defcon-metric">${escapeHtml(fmtOwnedPct(row.owned))}%</span>`;
+    return out;
   }
 
   function defconGwDotHTML(cell, position) {
@@ -27570,13 +27590,64 @@
     return `<span class="defcon-gw-dot ${cls}"${tipAttr(title)}><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`;
   }
 
+  function defconGwOppHTML(cell, position, team) {
+    const stateGw = cell.state;
+    const fixtures = defconFixturesForTeamGw(team, cell.gw);
+    const thr = String(position || "").toUpperCase() === "DEF" ? 10 : 12;
+    const actions = defconActionsForRecord(cell.eg, position);
+    const statusBit =
+      stateGw === "hit"
+        ? `DefCon hit — ${actions}/${thr}`
+        : stateGw === "miss"
+          ? `Missed — ${actions}/${thr}`
+          : "Did not play";
+    if (!fixtures.length) {
+      return `<span class="defcon-gw-opp is-blank ${stateGw === "hit" ? "is-hit" : stateGw === "miss" ? "is-miss" : "is-dnp"}"${tipAttr(`GW${cell.gw}: ${statusBit}`)}>–</span>`;
+    }
+    const label = fixtures.map(teamHeatOppLabel).join("+");
+    const tip = fixtures
+      .map((fx) => {
+        const where = fx.ha === "A" ? "A" : "H";
+        return `${where} vs ${fx.opp}`;
+      })
+      .join(" · ");
+    const cls =
+      stateGw === "hit" ? "is-hit" : stateGw === "miss" ? "is-miss" : "is-dnp";
+    return `<span class="defcon-gw-opp ${cls}"${tipAttr(`GW${cell.gw}: ${tip} · ${statusBit}`)}>${escapeHtml(label)}</span>`;
+  }
+
+  function defconGwCellHTML(cell, row) {
+    if (state.defconShowOpponents) {
+      return defconGwOppHTML(cell, row.position, row.team);
+    }
+    return defconGwDotHTML(cell, row.position);
+  }
+
+  function syncDefconOpponentsToggle() {
+    if (!el.defconOpponentsToggle) return;
+    const on = !!state.defconShowOpponents;
+    el.defconOpponentsToggle.classList.toggle("on", on);
+    el.defconOpponentsToggle.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function syncDefconOpponentsDock() {
+    const dock = el.defconOpponentsDock;
+    if (!dock) return;
+    const show = state.page === "defcon";
+    dock.hidden = !show;
+    dock.setAttribute("aria-hidden", show ? "false" : "true");
+    document.documentElement.classList.toggle("has-defcon-opponents-fab", show);
+    syncDefconOpponentsToggle();
+    if (typeof syncMobileChromeFade === "function") syncMobileChromeFade();
+  }
+
   function defconHeadHTML(gws) {
     const gwHeads = gws
       .map((gw) => `<th class="defcon-col-gw" scope="col" title="Gameweek ${gw}">GW${gw}</th>`)
       .join("");
     return `<tr>
       ${defconSortTh("name", "Player", "col-player ")}
-      ${defconSortTh("price", "£", "defcon-col-price col-num ")}
+      ${defconSortTh("price", "£m", "defcon-col-price col-num ")}
       ${defconSortTh("owned", "TSB%", "defcon-col-owned col-num ")}
       ${gwHeads}
       ${defconSortTh("hits", "Hits", "defcon-col-hits col-num ")}
@@ -27589,24 +27660,27 @@
     const gwCells = row.gws
       .map(
         (cell) =>
-          `<td class="defcon-col-gw">${defconGwDotHTML(cell, row.position)}</td>`
+          `<td class="defcon-col-gw">${defconGwCellHTML(cell, row)}</td>`
       )
       .join("");
-    const hitsCls = row.hits > 0 ? "" : " is-empty";
     const hitsLabel = `${row.hits}/${row.gwCount}`;
     return `<tr data-player-code="${escapeHtml(String(row.code ?? ""))}">
       <td class="col-player">${defconIdCellHTML(row)}</td>
       <td class="defcon-col-price col-num">${defconPriceCellHTML(row)}</td>
       <td class="defcon-col-owned col-num">${defconOwnedCellHTML(row)}</td>
       ${gwCells}
-      <td class="defcon-col-hits col-num"><span class="defcon-hits${hitsCls}">${escapeHtml(hitsLabel)}</span></td>
-      <td class="defcon-col-pts col-num"><span class="defcon-metric">${row.pts}</span></td>
-      <td class="defcon-col-actions col-num"><span class="defcon-metric">${row.actions}</span></td>
+      <td class="defcon-col-hits col-num">${escapeHtml(hitsLabel)}</td>
+      <td class="defcon-col-pts col-num">${escapeHtml(fmtNum(row.pts, 0))}</td>
+      <td class="defcon-col-actions col-num">${escapeHtml(fmtNum(row.actions, 0))}</td>
     </tr>`;
   }
 
   function renderDefcon() {
     if (!el.defconTableBody || !el.defconTableHead) return;
+    syncDefconOpponentsToggle();
+    if (el.defconPage) {
+      el.defconPage.classList.toggle("is-opponents", !!state.defconShowOpponents);
+    }
     const gws = defconPastGws();
     const scrollSnap = el.defconTableWrap ? captureScrollWraps([el.defconTableWrap]) : null;
     const universe = defconUniverseRows();
@@ -30627,6 +30701,13 @@
         state.defconSortDir = key === "name" ? "asc" : "desc";
       }
       renderDefcon();
+    });
+  }
+  if (el.defconOpponentsToggle) {
+    el.defconOpponentsToggle.addEventListener("click", () => {
+      state.defconShowOpponents = !state.defconShowOpponents;
+      if (state.page === "defcon") renderDefcon();
+      else syncDefconOpponentsToggle();
     });
   }
   bindPlayerDetailsSurfaces();
