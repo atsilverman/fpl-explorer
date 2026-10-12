@@ -1419,7 +1419,6 @@
     pageInfoPanelClose: $("#page-info-panel-close"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
-    prefsMockLive: $("#prefs-mock-live"),
     homeViewStatus: $("#home-view-status"),
     homeViewStatusName: $("#home-view-status-name"),
     homeViewStatusKicker: $("#home-view-status-kicker"),
@@ -4614,12 +4613,9 @@
     return rows.map((row) => applyMockLiveStanding(row));
   }
 
+  /** Mock live prefs toggle removed — always off. */
   function mockLiveEnabled() {
-    try {
-      return localStorage.getItem("fpl-explorer-mock-live") === "on";
-    } catch {
-      return false;
-    }
+    return false;
   }
 
   /** Deterministic mock chip / autosub buckets from entry id. */
@@ -22926,7 +22922,9 @@
       const affordance = el.prefsDifficultyBtn.querySelector(".prefs-diff-edit-affordance");
       const hint = el.prefsDifficultyBtn.querySelector(".settings-switch-hint");
       if (label) label.textContent = has ? "Edit ratings" : "Set ratings";
-      if (affordance) affordance.textContent = has ? "Edit" : "Set";
+      if (affordance) {
+        affordance.innerHTML = `${iconHTML("sliders-horizontal")}${has ? "Edit" : "Set"}`;
+      }
       if (hint) {
         hint.textContent = has
           ? "Used on Fixtures & Home Schedule (attack & defence, home & away)"
@@ -32869,34 +32867,7 @@
   document.documentElement.classList.add("player-thumbs-kit");
   try { localStorage.removeItem("fpl-explorer-player-thumb"); } catch { /* private browsing */ }
 
-  function syncMockLiveToggle(on = mockLiveEnabled()) {
-    if (el.prefsMockLive) el.prefsMockLive.checked = !!on;
-  }
-
-  function applyMockLiveEnabled(on) {
-    const enabled = !!on;
-    try {
-      if (enabled) localStorage.setItem("fpl-explorer-mock-live", "on");
-      else localStorage.removeItem("fpl-explorer-mock-live");
-    } catch {
-      /* private browsing */
-    }
-    syncMockLiveToggle(enabled);
-    syncLiveNavChrome();
-    if (state.page === "home") {
-      renderHome({ settleQuiet: true, deferDuringEnter: true });
-    }
-  }
-
-  if (el.prefsMockLive) {
-    syncMockLiveToggle();
-    el.prefsMockLive.addEventListener("change", () => {
-      applyMockLiveEnabled(el.prefsMockLive.checked);
-    });
-  }
-  if (mockLiveEnabled()) {
-    syncLiveNavChrome();
-  }
+  try { localStorage.removeItem("fpl-explorer-mock-live"); } catch { /* private browsing */ }
 
   function motionEnhancedOn() {
     return (

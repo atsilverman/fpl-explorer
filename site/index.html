@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1623" />
+<link rel="stylesheet" href="styles.css?v=1624" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -555,14 +555,6 @@
                 </button>
               </div>
             </div>
-            <label class="settings-switch-row" for="prefs-mock-live">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Mock live</span>
-                <span class="settings-switch-hint">Preview live chrome: in-play players, Live badge, chips, autosubs, and pending ± pts / places. Does not write to FPL.</span>
-              </span>
-              <input type="checkbox" id="prefs-mock-live" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
           </section>
           <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
@@ -583,7 +575,7 @@
                 <span class="settings-switch-label">Edit ratings</span>
                 <span class="settings-switch-hint">Used on Fixtures &amp; Home Schedule (attack &amp; defence, home &amp; away)</span>
               </span>
-              <span class="prefs-diff-edit-affordance" aria-hidden="true">Edit</span>
+              <span class="prefs-diff-edit-affordance" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-sliders-horizontal"/></svg>Edit</span>
             </button>
           </section>
         </div>
@@ -1905,7 +1897,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1493"></script>
+<script src="app.js?v=1494"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
