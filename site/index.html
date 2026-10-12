@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1620" />
+<link rel="stylesheet" href="styles.css?v=1623" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1158,6 +1158,21 @@
                   </table>
                 </div>
               </div>
+              <div class="home-standings-page">
+                <div class="home-table-wrap">
+                  <table class="home-data-table home-standings-table home-bench-points-table home-autosub-points-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="home-col-rank">#</th>
+                        <th scope="col" class="home-col-manager">Manager</th>
+                        <th scope="col" class="home-col-bench-gw" title="Points gained from automatic substitutions this gameweek (sub in pts − sub out pts; 0 with Bench Boost)">GW</th>
+                        <th scope="col" class="home-col-bench-season" title="Season points from automatic substitutions — FPL's official auto-subs for finished gameweeks">Season</th>
+                      </tr>
+                    </thead>
+                    <tbody id="home-standings-autosub-body"></tbody>
+                  </table>
+                </div>
+              </div>
             </div>
             <div class="home-standings-dots" id="home-standings-dots" role="tablist" aria-label="League views">
               <button type="button" class="home-standings-dot is-active" role="tab" aria-selected="true" aria-label="Table" data-page="0"></button>
@@ -1165,6 +1180,7 @@
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Captaincy" data-page="2"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Chips" data-page="3"></button>
               <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Bench Points" data-page="4"></button>
+              <button type="button" class="home-standings-dot" role="tab" aria-selected="false" aria-label="Auto-subs" data-page="5"></button>
             </div>
           </div>
         </article>
@@ -1890,7 +1906,7 @@
 <script src="ownership_data.js?v=189"></script>
 <script src="price_changes_data.js?v=241"></script>
 <script src="leagues_data.js?v=6"></script>
-<script src="home_data.js?v=50"></script>
+<script src="home_data.js?v=51"></script>
 <script src="team_news_data.js?v=7"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
@@ -1914,7 +1930,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1485"></script>
+<script src="app.js?v=1492"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

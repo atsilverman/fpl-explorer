@@ -1212,6 +1212,7 @@
     homeStandingsCaptainsBody: $("#home-standings-captains-body"),
     homeStandingsChipsBody: $("#home-standings-chips-body"),
     homeStandingsBenchBody: $("#home-standings-bench-body"),
+    homeStandingsAutosubBody: $("#home-standings-autosub-body"),
     homeTransfersStatus: $("#home-transfers-status"),
     homeTransfersTableWrap: $("#home-transfers-table-wrap"),
     homeCaptainsTableWrap: $("#home-captains-table-wrap"),
@@ -2623,6 +2624,7 @@
     if (el.homeStandingsCaptainsBody) el.homeStandingsCaptainsBody.innerHTML = "";
     if (el.homeStandingsChipsBody) el.homeStandingsChipsBody.innerHTML = "";
     if (el.homeStandingsBenchBody) el.homeStandingsBenchBody.innerHTML = "";
+    if (el.homeStandingsAutosubBody) el.homeStandingsAutosubBody.innerHTML = "";
     if (el.homeTransfersStatus) {
       el.homeTransfersStatus.hidden = true;
       el.homeTransfersStatus.textContent = "";
@@ -2811,30 +2813,39 @@
       if (!Number.isFinite(eid) || eid <= 0) continue;
       const season = row?.benchPoints == null ? NaN : Number(row.benchPoints);
       const gw = row?.benchPointsGw == null ? NaN : Number(row.benchPointsGw);
+      const finite = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
       priorByEntry.set(eid, {
         benchPoints: Number.isFinite(season) ? season : null,
         benchPointsGw: Number.isFinite(gw) ? gw : null,
+        autosubPoints: finite(row?.autosubPoints),
+        autosubPointsGw: finite(row?.autosubPointsGw),
+        autosubPendingGw: !!row?.autosubPendingGw,
       });
     }
     if (!priorByEntry.size || !Array.isArray(incomingRows)) return incomingRows;
+    // null/undefined must not become Number(null)===0 (that blocked season preserve).
+    const missing = (row, key) => !Object.prototype.hasOwnProperty.call(row, key)
+      || row[key] == null
+      || !Number.isFinite(Number(row[key]));
     return incomingRows.map((row) => {
       if (!row || typeof row !== "object") return row;
       const kept = priorByEntry.get(Number(row.entry));
       if (!kept) return row;
-      // null/undefined must not become Number(null)===0 (that blocked season preserve).
-      const seasonMissing = !Object.prototype.hasOwnProperty.call(row, "benchPoints")
-        || row.benchPoints == null
-        || !Number.isFinite(Number(row.benchPoints));
-      const gwMissing = !Object.prototype.hasOwnProperty.call(row, "benchPointsGw")
-        || row.benchPointsGw == null
-        || !Number.isFinite(Number(row.benchPointsGw));
-      const needSeason = seasonMissing;
-      const needGw = !gwChanged && gwMissing;
-      if (!needSeason && !needGw && !(gwChanged && gwMissing)) return row;
-      const next = { ...row };
-      if (needSeason && kept.benchPoints != null) next.benchPoints = kept.benchPoints;
-      if (needGw && kept.benchPointsGw != null) next.benchPointsGw = kept.benchPointsGw;
-      if (gwChanged && gwMissing) next.benchPointsGw = 0;
+      let next = row;
+      const patch = (key, val) => {
+        if (next === row) next = { ...row };
+        next[key] = val;
+      };
+      for (const [seasonKey, gwKey] of [["benchPoints", "benchPointsGw"], ["autosubPoints", "autosubPointsGw"]]) {
+        if (missing(row, seasonKey) && kept[seasonKey] != null) patch(seasonKey, kept[seasonKey]);
+        if (missing(row, gwKey)) {
+          if (gwChanged) patch(gwKey, 0);
+          else if (kept[gwKey] != null) {
+            patch(gwKey, kept[gwKey]);
+            if (gwKey === "autosubPointsGw") patch("autosubPendingGw", kept.autosubPendingGw);
+          }
+        }
+      }
       return next;
     });
   }
@@ -2955,7 +2966,38 @@
    * Keep projected autosub icons when a live poll (older droplet) clears them.
    * Prefer incoming flags when present; otherwise restore prior for the same element.
    */
+  /**
+   * Autosubs are 1:1 — keep only IN/OUT rows whose partners point at each
+   * other, so subs-on always equals subs-off (drops stale or orphan flags).
+   */
+  function homeReconcileAutosubPairs(squad) {
+    const rows = Array.isArray(squad) ? squad : [];
+    const byEl = new Map();
+    for (const row of rows) {
+      if (row && row.element != null) byEl.set(Number(row.element), row);
+    }
+    const paired = (row) => {
+      if (!row || row.autoSubWith == null) return false;
+      const other = byEl.get(Number(row.autoSubWith));
+      if (!other || Number(other.autoSubWith) !== Number(row.element)) return false;
+      return row.autoSubIn ? !!other.autoSubOut : row.autoSubOut ? !!other.autoSubIn : false;
+    };
+    let changed = false;
+    const out = rows.map((row) => {
+      if (!row || !(row.autoSubIn || row.autoSubOut) || paired(row)) return row;
+      changed = true;
+      return { ...row, autoSubIn: false, autoSubOut: false, autoSubWith: null, autoSubWithName: null };
+    });
+    return changed ? out : rows;
+  }
+
   function homeMergeAutosubFlags(squad, priorSquad) {
+    const incoming = Array.isArray(squad) ? squad : [];
+    // Only backfill when the poll cleared every flag (older droplet); never
+    // mix per-player — a stale IN from an earlier projection would stick.
+    if (incoming.some((row) => row && (row.autoSubIn || row.autoSubOut))) {
+      return homeReconcileAutosubPairs(incoming);
+    }
     const prior = new Map();
     for (const row of Array.isArray(priorSquad) ? priorSquad : []) {
       if (!row || row.element == null) continue;
@@ -2967,14 +3009,13 @@
         autoSubWithName: row.autoSubWithName ?? null,
       });
     }
-    if (!prior.size) return Array.isArray(squad) ? squad : [];
-    return (Array.isArray(squad) ? squad : []).map((row) => {
+    if (!prior.size) return incoming;
+    return homeReconcileAutosubPairs(incoming.map((row) => {
       if (!row || row.element == null) return row;
-      if (row.autoSubIn || row.autoSubOut) return row;
       const flags = prior.get(Number(row.element));
       if (!flags) return row;
       return { ...row, ...flags };
-    });
+    }));
   }
 
   function homeMergeAutosubByEntry(byEntry, priorByEntry) {
@@ -3549,6 +3590,9 @@
         r.toPlay,
         r.benchPoints,
         r.benchPointsGw,
+        r.autosubPoints ?? "",
+        r.autosubPointsGw ?? "",
+        r.autosubPendingGw ? 1 : 0,
         r.freeTransfersLeft ?? "",
         r.activeChip || "",
         homeChipsStatusFingerprint(r.chips),
@@ -3657,7 +3701,7 @@
     }
     HOME.standings = (Array.isArray(HOME.standings) ? HOME.standings : []).map((row) => {
       if (!row || typeof row !== "object") return row;
-      return { ...row, gwPointsLive: 0, eventTotalOfficial: 0, benchPointsGw: 0 };
+      return { ...row, gwPointsLive: 0, eventTotalOfficial: 0, benchPointsGw: 0, autosubPointsGw: 0, autosubPendingGw: false };
     });
     const zeroSquadPts = (rows) =>
       (Array.isArray(rows) ? rows : []).map((row) => {
@@ -4506,11 +4550,12 @@
   const HOME_SQUAD_OWNERSHIP_PAGE = 3;
   const HOME_SQUAD_VIEW_LABELS = ["Pitch", "List", "Points", "Ownership", "Schedule"];
   const HOME_SQUAD_VIEW_LABELS_WIDE = ["Pitch", "List", "Ownership", "Schedule"];
-  const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips", "Bench Points"];
+  const HOME_STANDINGS_VIEW_LABELS = ["Table", "Transfers", "Captaincy", "Chips", "Bench Points", "Auto-subs"];
   const HOME_FT_MAX = 5;
   const HOME_STANDINGS_TRANSFERS_PAGE = 1;
   const HOME_STANDINGS_CAPTAINS_PAGE = 2;
   const HOME_STANDINGS_BENCH_PAGE = 4;
+  const HOME_STANDINGS_AUTOSUB_PAGE = 5;
   const HOME_FEED_VIEW_LABELS = ["League", "All"];
   let homeViewEntryId = null;
   // Live standings sort — default total pts desc; Live/Left/GW/Total/# are clickable.
@@ -5146,6 +5191,7 @@
     }
     if (el.homeStandingsChipsBody) el.homeStandingsChipsBody.classList.remove("has-owner-filter");
     if (el.homeStandingsBenchBody) el.homeStandingsBenchBody.classList.remove("has-owner-filter");
+    if (el.homeStandingsAutosubBody) el.homeStandingsAutosubBody.classList.remove("has-owner-filter");
     forEachHomeStandingsRow((tr) => {
       const entry = Number(tr.dataset.entry);
       const ownerSlot =
@@ -5281,7 +5327,7 @@
   }
 
   function forEachHomeStandingsRow(fn) {
-    [el.homeStandingsBody, el.homeStandingsTransfersBody, el.homeStandingsCaptainsBody, el.homeStandingsChipsBody, el.homeStandingsBenchBody].forEach((body) => {
+    [el.homeStandingsBody, el.homeStandingsTransfersBody, el.homeStandingsCaptainsBody, el.homeStandingsChipsBody, el.homeStandingsBenchBody, el.homeStandingsAutosubBody].forEach((body) => {
       if (!body) return;
       body.querySelectorAll("tr[data-entry]").forEach(fn);
     });
@@ -5622,7 +5668,13 @@
     const maps = { gw: new Map(), total: new Map() };
     function fill(map, key) {
       const withVals = rows
-        .map((r) => ({ entry: Number(r.entry), val: homeStandingsSortValue(r, key) }))
+        .map((r) => {
+          const base = homeStandingsSortValue(r, key);
+          const delta = base != null && Number.isFinite(base)
+            ? homeAutosubPendingGwDelta(homeSquadForEntry(r.entry) || [])
+            : 0;
+          return { entry: Number(r.entry), val: base != null ? base + delta : base };
+        })
         .filter((x) => Number.isFinite(x.entry) && x.val != null && Math.abs(x.val) > 1e-9);
       if (withVals.length < 2) return;
       withVals.sort((a, b) => b.val - a.val);
@@ -5708,8 +5760,10 @@
     const leftTitle = captainLeft
       ? "Still to play this gameweek — includes captain (counts double)"
       : "Still to play this gameweek (captain counts double)";
-    const gwPts = homeStandingsGwPoints(row);
-    const totalPts = row.total != null ? Number(row.total) : null;
+    const autosubDelta = homeAutosubPendingGwDelta(homeSquadForEntry(entry) || []);
+    const gwBase = homeStandingsGwPoints(row);
+    const gwPts = gwBase != null && Number.isFinite(gwBase) ? gwBase + autosubDelta : gwBase;
+    const totalPts = row.total != null ? Number(row.total) + autosubDelta : null;
     const hasPlay = toPlay != null;
     const leftCls = [
       "home-play-left",
@@ -5740,11 +5794,17 @@
       : "—";
     const gwIntensity = topMaps && topMaps.gw ? topMaps.gw.get(entry) : null;
     const totalIntensity = topMaps && topMaps.total ? topMaps.total.get(entry) : null;
+    const autosubTip = autosubDelta
+      ? `Includes ${autosubDelta > 0 ? "+" : ""}${autosubDelta} pending auto-sub pts — FPL hasn't stamped them yet`
+      : "";
+    const withAutosubMark = (html) => (autosubDelta
+      ? `<span class="home-standings-autosub"${tipAttr(autosubTip)}>${html}<svg class="icon home-standings-autosub-mark" aria-hidden="true"><use href="#i-triangle-alert"/></svg></span>`
+      : html);
     const gwHTML = gwPts != null && Number.isFinite(gwPts)
-      ? homeStandingsPillHTML(gwPts, gwIntensity)
+      ? withAutosubMark(homeStandingsPillHTML(gwPts, gwIntensity))
       : "—";
     const totalHTML = totalPts != null && Number.isFinite(totalPts)
-      ? homeStandingsPillHTML(totalPts, totalIntensity)
+      ? withAutosubMark(homeStandingsPillHTML(totalPts, totalIntensity))
       : "—";
     const labelName = row.playerName || row.entryName || "this manager";
     return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team">
@@ -5823,8 +5883,9 @@
     return map;
   }
 
-  function homeBenchGwPillHTML(pts) {
-    const n = pts != null && Number.isFinite(Number(pts)) ? Math.max(0, Math.round(Number(pts))) : null;
+  function homeBenchGwPillHTML(pts, { allowNegative = false } = {}) {
+    const raw = pts != null && Number.isFinite(Number(pts)) ? Math.round(Number(pts)) : null;
+    const n = raw == null ? null : allowNegative ? raw : Math.max(0, raw);
     if (n == null) {
       return `<span class="home-bench-gw-pill is-empty" aria-hidden="true">—</span>`;
     }
@@ -5845,9 +5906,9 @@
     </span>`;
   }
 
-  function placeHomeBenchBarValues() {
-    if (!el.homeStandingsBenchBody) return;
-    el.homeStandingsBenchBody.querySelectorAll(".home-bench-meter").forEach((meter) => {
+  function placeHomeBenchBarValues(body = el.homeStandingsBenchBody) {
+    if (!body) return;
+    body.querySelectorAll(".home-bench-meter").forEach((meter) => {
       const bar = meter.querySelector(".home-bench-bar");
       let val = meter.querySelector(".home-bench-bar-val");
       if (!bar || !val || bar.classList.contains("is-empty")) return;
@@ -5888,13 +5949,13 @@
     </tr>`;
   }
 
-  function animateHomeBenchBars() {
-    if (!el.homeStandingsBenchBody) return;
-    const bars = [...el.homeStandingsBenchBody.querySelectorAll(".home-bench-bar")];
+  function animateHomeBenchBars(body = el.homeStandingsBenchBody) {
+    if (!body) return;
+    const bars = [...body.querySelectorAll(".home-bench-bar")];
     if (!bars.length) return;
     bars.forEach((bar) => bar.classList.remove("is-drawn"));
     // Park values inside bars until width is known again.
-    el.homeStandingsBenchBody.querySelectorAll(".home-bench-meter").forEach((meter) => {
+    body.querySelectorAll(".home-bench-meter").forEach((meter) => {
       meter.classList.remove("is-value-outside");
       const bar = meter.querySelector(".home-bench-bar");
       const val = meter.querySelector(".home-bench-bar-val");
@@ -5903,7 +5964,7 @@
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const draw = () => {
       bars.forEach((bar) => bar.classList.add("is-drawn"));
-      placeHomeBenchBarValues();
+      placeHomeBenchBarValues(body);
     };
     if (reduce) {
       draw();
@@ -5940,6 +6001,98 @@
       })
     ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
     if (animateBars) animateHomeBenchBars();
+  }
+
+  /** {pts, pending} — live squad auto-sub pairs (in − out, ×1) when present,
+   *  else the server's official / projected GW value. */
+  function homeStandingsAutosubGw(row) {
+    const rowPts = row && row.autosubPointsGw != null ? Number(row.autosubPointsGw) : NaN;
+    const fallback = Number.isFinite(rowPts) ? Math.round(rowPts) : 0;
+    if (homeGwAwaitingKickoff()) return { pts: fallback, pending: false };
+    const pending = !!(row && row.autosubPendingGw);
+    const squad = homeSquadForEntry(row && row.entry);
+    if (squad && squad.length && homeCanShowVolatileStats()) {
+      const { outs, ins, hasAny } = homeSquadAutosubPairs(squad);
+      if (hasAny) {
+        const base = (r) => {
+          const n = r.basePoints != null ? Number(r.basePoints) : Number(r.gwPoints);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const pts = ins.reduce((s, r) => s + base(r), 0) - outs.reduce((s, r) => s + base(r), 0);
+        return { pts: Math.round(pts), pending };
+      }
+    }
+    return { pts: fallback, pending: pending && fallback !== 0 };
+  }
+
+  function homeStandingsAutosubSeason(row) {
+    const season = row && row.autosubPoints != null ? Number(row.autosubPoints) : 0;
+    const prior = Number.isFinite(season) ? Math.round(season) : 0;
+    return prior + homeStandingsAutosubGw(row).pts;
+  }
+
+  function homeAutosubPointsMedalMap(rows) {
+    const scored = (rows || []).map((r) => ({
+      entry: Number(r.entry),
+      pts: homeStandingsAutosubSeason(r),
+    }));
+    scored.sort((a, b) => b.pts - a.pts || a.entry - b.entry);
+    const map = new Map();
+    let place = 0;
+    let lastPts = null;
+    scored.forEach((s, i) => {
+      if (!Number.isFinite(s.entry)) return;
+      if (s.pts !== lastPts) place = i + 1;
+      lastPts = s.pts;
+      // No medal for a zero haul — nobody "won" auto-subs yet.
+      if (s.pts <= 0) return;
+      if (place === 1) map.set(s.entry, "gold");
+      else if (place === 2) map.set(s.entry, "silver");
+      else if (place === 3) map.set(s.entry, "bronze");
+    });
+    return map;
+  }
+
+  function homeAutosubPointsRowHTML(row, { configuredEntry, viewEntry, viewingOther, seasonScale, medal, barI }) {
+    const entry = Number(row.entry);
+    const rowCls = [
+      homeStandingsRowClasses(entry, { configuredEntry, viewEntry, viewingOther }),
+      medal ? `medal-${medal}` : "",
+    ].filter(Boolean).join(" ");
+    const { pts: gwPts, pending } = homeStandingsAutosubGw(row);
+    const seasonPts = homeStandingsAutosubSeason(row);
+    const labelName = row.playerName || row.entryName || "this manager";
+    const ariaPts = `${gwPts} GW${pending ? " (projected)" : ""}, ${seasonPts} season`;
+    const gwHTML = homeBenchGwPillHTML(gwPts, { allowNegative: true });
+    return `<tr class="${rowCls}" data-entry="${escapeHtml(String(row.entry ?? ""))}" role="button" tabindex="0" aria-label="View ${escapeHtml(labelName)} team, ${escapeHtml(ariaPts)} auto-sub points">
+      ${homeStandingsManagerCellsHTML(row)}
+      <td class="home-col-bench-gw">${gwHTML}</td>
+      <td class="home-col-bench-season">${homeBenchBarHTML(Math.max(0, seasonPts), { scale: seasonScale, barI, medalTone: true })}</td>
+    </tr>`;
+  }
+
+  function renderHomeStandingsAutosubBody({ animateBars = true } = {}) {
+    const body = el.homeStandingsAutosubBody;
+    if (!body) return;
+    if (homeStandingsShowLoading()) {
+      body.innerHTML = homeSquadLoadingHTML(4, 8);
+      return;
+    }
+    const configuredEntry = homeConfiguredEntryId();
+    const viewEntry = homeActiveViewEntryId();
+    const viewingOther = homeIsViewingOtherManager();
+    const rows = homeStandingsRows();
+    const medals = homeAutosubPointsMedalMap(rows);
+    const seasonScale = rows.reduce((m, r) => Math.max(m, homeStandingsAutosubSeason(r)), 0) || 1;
+    const opts = { configuredEntry, viewEntry, viewingOther, seasonScale };
+    body.innerHTML = rows.map((r, i) =>
+      homeAutosubPointsRowHTML(r, {
+        ...opts,
+        medal: medals.get(Number(r.entry)) || "",
+        barI: i,
+      })
+    ).join("") || `<tr><td colspan="4">No standings.</td></tr>`;
+    if (animateBars) animateHomeBenchBars(body);
   }
 
   function renderHomeStandingsCaptainsBody() {
@@ -6395,6 +6548,7 @@
       el.homeStandingsCaptainsBody && el.homeStandingsCaptainsBody.closest("table"),
       el.homeStandingsChipsBody && el.homeStandingsChipsBody.closest("table"),
       el.homeStandingsBenchBody && el.homeStandingsBenchBody.closest("table"),
+      el.homeStandingsAutosubBody && el.homeStandingsAutosubBody.closest("table"),
     ].filter(Boolean);
     const allTables = transfersTable ? [...coreTables, transfersTable] : coreTables;
     allTables.forEach((table) => {
@@ -6701,6 +6855,7 @@
       syncHomeStandingsPagerDots(idx);
       syncHomeStandingsLayout(idx, homeIsEnterBusy() ? { animate: false } : undefined);
       if (idx === HOME_STANDINGS_BENCH_PAGE) animateHomeBenchBars();
+      if (idx === HOME_STANDINGS_AUTOSUB_PAGE) animateHomeBenchBars(el.homeStandingsAutosubBody);
     };
     const onScrollTick = () => {
       const idx =
@@ -7212,12 +7367,7 @@
     const alt = escapeHtml(
       String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
     );
-    const href = team.tweetUrl
-      ? escapeHtml(String(team.tweetUrl))
-      : "";
-    const img = href
-      ? `<a class="home-team-graphics-link" href="${href}" target="_blank" rel="noopener noreferrer"><img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" /></a>`
-      : `<img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
+    const img = `<img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
     return `<div class="home-team-graphics-page" data-team="${code}">
       <div class="home-team-graphics-slide">${img}</div>
     </div>`;
@@ -15445,6 +15595,11 @@
     if (el.homeStandingsBenchBody) {
       renderHomeStandingsBenchBody({
         animateBars: homeStandingsActivePageIndex() === HOME_STANDINGS_BENCH_PAGE,
+      });
+    }
+    if (el.homeStandingsAutosubBody) {
+      renderHomeStandingsAutosubBody({
+        animateBars: homeStandingsActivePageIndex() === HOME_STANDINGS_AUTOSUB_PAGE,
       });
     }
     if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
@@ -32867,6 +33022,7 @@
       el.homeStandingsCaptainsBody,
       el.homeStandingsChipsBody,
       el.homeStandingsBenchBody,
+      el.homeStandingsAutosubBody,
     ];
     bodies.forEach((body) => {
       if (!body) return;

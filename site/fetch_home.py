@@ -55,6 +55,7 @@ TRACKED_MANAGERS = [296817, 1404383, 5497737, 185072]
 TRACKED_PATH = SITE / "tracked_ids.json"
 PREFS_PATH = SITE / "home_prefs.json"
 BASELINES_PATH = SITE / "home_rank_baselines.json"
+AUTOSUB_CACHE_PATH = SITE / "autosub_points_cache.json"
 OUT_PATH = SITE / "home_data.js"
 JSON_PATH = SITE / "home_data.json"
 FPL_BASE = "https://fantasy.premierleague.com/api"
@@ -561,6 +562,109 @@ def entry_bench_points_total(
         except (TypeError, ValueError):
             pass
     return total if seen else None
+
+
+def settled_gameweeks(bootstrap: dict) -> set[int]:
+    """GWs FPL has fully processed (``finished`` + ``data_checked``) — official
+    ``automatic_subs`` and element points no longer change."""
+    out: set[int] = set()
+    for ev in bootstrap.get("events") or []:
+        try:
+            eid = int(ev["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if ev.get("finished") and ev.get("data_checked"):
+            out.add(eid)
+    return out
+
+
+def score_autosubs(subs: list[dict], points_by_element: dict[int, int]) -> dict:
+    """{"pts", "subs": [{"in", "out", "pts"}]} — in-player pts minus out-player pts
+    (out played 0′ so usually 0). Subbed-in players always count ×1."""
+    rows: list[dict] = []
+    total = 0
+    for sub in subs or []:
+        try:
+            in_id = int(sub["in"])
+            out_id = int(sub["out"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        pts = int(points_by_element.get(in_id, 0)) - int(points_by_element.get(out_id, 0))
+        total += pts
+        rows.append({"in": in_id, "out": out_id, "pts": pts})
+    return {"pts": total, "subs": rows}
+
+
+def official_autosubs(picks_payload: dict | None, gw: int) -> list[dict]:
+    """FPL ``automatic_subs`` for this GW as [{"in", "out"}]."""
+    out: list[dict] = []
+    for row in (picks_payload or {}).get("automatic_subs") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            if int(row.get("event") or gw) != int(gw):
+                continue
+            out.append({"in": int(row["element_in"]), "out": int(row["element_out"])})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def element_points_map(live_payload: dict | None) -> dict[int, int]:
+    out: dict[int, int] = {}
+    for eid, stats in live_stats_map(live_payload or {}).items():
+        try:
+            out[eid] = int(stats.get("total_points") or 0)
+        except (TypeError, ValueError):
+            out[eid] = 0
+    return out
+
+
+def backfill_autosub_points(
+    entry_ids: list[int],
+    settled: set[int],
+    cache: dict,
+) -> bool:
+    """Fill cache["entries"][entry][gw] for every settled GW not yet cached.
+
+    Settled GWs never change, so each (entry, GW) is fetched once. A failed
+    fetch is skipped (not cached) and retried next run. Returns True if the
+    cache changed.
+    """
+    entries = cache.setdefault("entries", {})
+    live_points: dict[int, dict[int, int]] = {}
+    changed = False
+
+    def points_for(gw: int) -> dict[int, int] | None:
+        if gw in live_points:
+            return live_points[gw]
+        data, err = fpl_get_result(f"/event/{gw}/live/")
+        if err or not isinstance(data, dict):
+            snap = SITE.parent / "snapshots" / f"event-live_{gw}.json"
+            data = load_json(snap) if snap.exists() else None
+        pts = element_points_map(data) if isinstance(data, dict) and data.get("elements") else None
+        if pts is not None:
+            live_points[gw] = pts
+        return pts
+
+    for eid in entry_ids:
+        per_entry = entries.setdefault(str(eid), {})
+        for gw in sorted(settled):
+            if str(gw) in per_entry:
+                continue
+            payload, err = fetch_entry_event_picks(eid, gw)
+            if err or not isinstance(payload, dict):
+                # 404 = entry joined after this GW — record a zero so we don't refetch.
+                if err and err.startswith("HTTP 404"):
+                    per_entry[str(gw)] = {"pts": 0, "subs": []}
+                    changed = True
+                continue
+            pts = points_for(gw)
+            if pts is None:
+                continue
+            per_entry[str(gw)] = score_autosubs(official_autosubs(payload, gw), pts)
+            changed = True
+    return changed
 
 
 def resolve_gw_rank(
@@ -1461,6 +1565,11 @@ def main() -> int:
         entry_data: dict[int, dict] = {}
         history_by_entry: dict[int, dict] = {manager_id: history_payload}
         cached_standings = cached_standings_by_entry(cached, league_id)
+        autosub_cache = load_json(AUTOSUB_CACHE_PATH)
+        if backfill_autosub_points(entry_ids, settled_gameweeks(bootstrap), autosub_cache):
+            save_json(AUTOSUB_CACHE_PATH, autosub_cache)
+        autosub_entries = autosub_cache.get("entries") or {}
+        current_points = element_points_map(live)
         mults_by_entry: dict[int, dict[int, int]] = {}
         owners_by_element: dict[int, list[int]] = {}
         progress_by_entry: dict[int, tuple[int, int]] = {}
@@ -1742,6 +1851,32 @@ def main() -> int:
                 cached_ft = cached_standings.get(eid) or {}
                 if cached_ft.get("freeTransfersGw") == ft_target_gw:
                     ft_left = cached_ft.get("freeTransfersLeft")
+            autosub_by_gw = autosub_entries.get(str(eid)) or {}
+            autosub_season = 0
+            for gw_key, slot in autosub_by_gw.items():
+                try:
+                    if int(gw_key) < int(gw):
+                        autosub_season += int((slot or {}).get("pts") or 0)
+                except (TypeError, ValueError):
+                    continue
+            if not autosub_by_gw:
+                try:
+                    autosub_season = int((cached_standings.get(eid) or {}).get("autosubPoints") or 0)
+                except (TypeError, ValueError):
+                    autosub_season = 0
+            autosub_pending = False
+            if gw_awaiting_kickoff:
+                autosub_gw = 0
+            elif str(gw) in autosub_by_gw:
+                autosub_gw = int((autosub_by_gw[str(gw)] or {}).get("pts") or 0)
+            else:
+                official = official_autosubs(picks_by_entry.get(eid), gw)
+                if official:
+                    autosub_gw = score_autosubs(official, current_points)["pts"]
+                else:
+                    projected = (entry_data.get(eid) or {}).get("ui_subs") or []
+                    autosub_gw = score_autosubs(projected, current_points)["pts"]
+                    autosub_pending = bool(projected)
             standing_rows.append(
                 {
                     "entry": eid,
@@ -1766,6 +1901,9 @@ def main() -> int:
                     "transfers": transfer_summary,
                     "benchPoints": bench_points,
                     "benchPointsGw": bench_points_gw,
+                    "autosubPoints": autosub_season,
+                    "autosubPointsGw": autosub_gw,
+                    "autosubPendingGw": autosub_pending,
                     "freeTransfersLeft": ft_left,
                     "freeTransfersGw": ft_target_gw,
                 }

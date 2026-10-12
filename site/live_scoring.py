@@ -94,9 +94,6 @@ def apply_auto_substitution(
             bench_id = int(bp["element"])
             if bench_id in used_bench:
                 continue
-            bench_mins = _minutes(live_stats.get(bench_id))
-            if bench_mins <= 0:
-                continue
             bench_etype = element_types.get(bench_id)
             if not starter_etype or not bench_etype:
                 continue
@@ -109,6 +106,13 @@ def apply_auto_substitution(
             remaining = starting[idx + 1 :]
             current = active + remaining
             if not would_maintain_valid_formation(current, bench_id, element_types):
+                continue
+            bench_mins = _minutes(live_stats.get(bench_id))
+            if bench_mins <= 0:
+                # Earlier bench slot still to play — he may yet come on, so
+                # don't skip past him to a later bench player.
+                if (match_status.get(bench_id) or "scheduled") != "finished":
+                    break
                 continue
             subbed = dict(bp)
             subbed["substituted_for"] = starter_id

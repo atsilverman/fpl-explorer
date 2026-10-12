@@ -348,6 +348,10 @@ def merge_autosub_flags(live_home: dict, local_home: dict | None) -> dict:
     def apply_rows(entry_key: str, rows: list | None) -> list | None:
         if not isinstance(rows, list):
             return rows
+        # Live already projected subs for this squad — never mix in per-player
+        # local flags (a stale IN would leave more subs-on than subs-off).
+        if any(isinstance(r, dict) and (r.get("autoSubIn") or r.get("autoSubOut")) for r in rows):
+            return rows
         next_rows = []
         changed = False
         for row in rows:
@@ -359,8 +363,6 @@ def merge_autosub_flags(live_home: dict, local_home: dict | None) -> dict:
                 continue
             eid = row.get("element")
             flags = local_flags.get(f"{entry_key}|{eid}")
-            if flags is None and entry_key != "_":
-                flags = local_flags.get(f"_|{eid}")
             if not flags:
                 next_rows.append(row)
                 continue

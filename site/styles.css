@@ -19959,7 +19959,6 @@ html[data-home-surface="solid"] .home-pitch-photo-wrap {
   background: var(--home-pitch-ink-bg, hsl(0 0% 100% / 0.08));
 }
 .home-pitch-pts.is-idle {
-  font-weight: 600;
   color: var(--home-pitch-ink-idle-fg, var(--home-pitch-card-muted));
   background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.05));
 }
@@ -19972,7 +19971,6 @@ html[data-home-surface="solid"] .home-pitch-photo-wrap {
 .home-pitch-pts.is-live.is-idle {
   color: hsl(0 0% 100% / 0.88);
   background: hsl(var(--delta-rise) / 0.82);
-  font-weight: 700;
 }
 .home-pitch-price {
   font-weight: 800;
@@ -21588,6 +21586,32 @@ html[data-theme="dark"] .home-play-left.is-zero.has-captain {
 .home-standings-metric.is-zero {
   color: var(--text-faint);
   font-weight: 500;
+}
+/* Pending auto-sub pts folded into GW / Total — "!" hangs outside the value
+   (absolute) so the number stays centred in its column. */
+.home-standings-autosub {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.home-standings-autosub-mark {
+  position: absolute;
+  left: calc(100% + 2px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.25;
+  color: hsl(38 92% 36%);
+  pointer-events: none;
+}
+html[data-theme="dark"] .home-standings-autosub-mark {
+  color: hsl(40 96% 68%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-standings-autosub-mark {
+    color: hsl(40 96% 68%);
+  }
 }
 .home-standings-pill {
   display: inline-flex;
