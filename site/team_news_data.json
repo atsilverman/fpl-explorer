@@ -1,28 +1,7 @@
 {
-  "generatedAt": "2026-10-12T19:54:39Z",
+  "generatedAt": "2026-10-12T20:00:25Z",
   "gw": 6,
   "teams": [
-    {
-      "code": "NEW",
-      "name": "Newcastle",
-      "handle": "NUFC",
-      "tweetId": "2109707157797323192",
-      "tweetUrl": "https://x.com/NUFC/status/2109707157797323192",
-      "postedAt": "2026-10-12T18:05:57Z",
-      "kickoff": "2026-10-12T19:00:00Z",
-      "minsBeforeKo": 54.0,
-      "match": "COV v NEW",
-      "opp": "COV",
-      "ha": "A",
-      "text": "All back in the matchday squad! 🙌\n\nGreat to have you back, lads! 💪 https://t.co/OPU1DKxwIM https://t.co/HjsIYXAKxC",
-      "altText": "Will Osula arriving at Coventry",
-      "localPath": "team-news/gw6/NEW.jpg",
-      "mediaUrl": "https://pbs.twimg.com/media/HUcvPFsXgAAt3L6.jpg",
-      "width": 3277,
-      "height": 4096,
-      "score": 103.4,
-      "fetchedAt": "2026-10-12T19:54:39Z"
-    },
     {
       "code": "COV",
       "name": "Coventry City",
@@ -43,6 +22,27 @@
       "height": 1440,
       "score": 155.0,
       "fetchedAt": "2026-10-12T19:54:39Z"
+    },
+    {
+      "code": "NEW",
+      "name": "Newcastle",
+      "handle": "NUFC",
+      "tweetId": "2109701884361560411",
+      "tweetUrl": "https://x.com/NUFC/status/2109701884361560411",
+      "postedAt": "2026-10-12T17:45:00Z",
+      "kickoff": "2026-10-12T19:00:00Z",
+      "minsBeforeKo": 75.0,
+      "match": "COV v NEW",
+      "opp": "COV",
+      "ha": "A",
+      "text": "UNITED 👊 https://t.co/3TuUWUpCOS",
+      "altText": "Newcastle United v Coventry City: Horníček, Hall, Botman, Nico, Wissa, Barnes, Thiaw, Fernandez-Pardo, Murphy, Willock, Miley",
+      "localPath": "team-news/gw6/NEW.jpg",
+      "mediaUrl": "https://pbs.twimg.com/media/HUchCLxWYAA2miP.jpg",
+      "width": 1080,
+      "height": 1350,
+      "score": 170.0,
+      "fetchedAt": "2026-10-12T20:00:25Z"
     },
     {
       "code": "LIV",

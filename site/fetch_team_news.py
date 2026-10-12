@@ -150,6 +150,43 @@ def x_search(
         return json.loads(resp.read().decode("utf-8"))
 
 
+# Alt text that describes a photo of something else (arrivals, warm-ups, venue).
+NON_LINEUP_ALT = re.compile(
+    r"\b(arriv\w*|warm(s|ing)?[\s-]*up|training|general\s+view|kick[\s-]?off|"
+    r"celebrat\w*|goal|full[\s-]?time|half[\s-]?time)\b",
+    re.I,
+)
+
+
+# Weak-wording posts must OCR as a dense name sheet (~8+ surnames) to count.
+WEAK_MIN_OCR = 40.0
+
+
+def alt_is_lineup(alt: str) -> bool:
+    """Alt text that reads like a team sheet (names list or XI / Subs labels)."""
+    a = normalize_text(alt or "")
+    if not a:
+        return False
+    if re.search(r"\b(starting\s*xi|xi\s*[:|]|subs?\s*[:|]|substitutes|line[\s-]?up|team\s*news)", a, re.I):
+        return True
+    return a.count(",") >= 8
+
+
+def lineup_evidence(text: str, alt: str) -> str:
+    """'strong' = post or alt clearly a team sheet; 'weak' = XI-ish wording only;
+    'none' = no team-news signal, or alt describes a non-lineup photo."""
+    t = normalize_text(text)
+    if alt_is_lineup(alt):
+        return "strong"
+    if alt and NON_LINEUP_ALT.search(normalize_text(alt)):
+        return "none"
+    if STRONG.search(t):
+        return "strong"
+    if HINT.search(t):
+        return "weak"
+    return "none"
+
+
 def score_candidate(
     text: str,
     alt: str,
@@ -161,20 +198,23 @@ def score_candidate(
     blob = normalize_text(f"{text}\n{alt}")
     if not has_photo:
         return -1.0
-    if not HINT.search(blob) and not STRONG.search(blob):
+    evidence = lineup_evidence(text, alt)
+    if evidence == "none":
         return -1.0
     mins_before = (ko - created).total_seconds() / 60.0
     # Ideal ~75 min pre-KO; accept KO-180 → KO+45
     if mins_before > 180 or mins_before < -45:
-        if not STRONG.search(blob):
+        if evidence != "strong":
             return -1.0
         if abs(mins_before) > 36 * 60:
             return -1.0
         score = 20.0
     else:
         score = 100.0 - abs(mins_before - 75.0) * 0.6
-    if STRONG.search(blob):
+    if evidence == "strong":
         score += 40.0
+    if alt_is_lineup(alt):
+        score += 30.0
     if "team news graphic" in blob.lower():
         score += 50.0
     if re.search(r"\bsubs?\b", blob, re.I):
@@ -355,6 +395,13 @@ def pick_best(
                 created=created,
                 ko=ko,
             )
+            if sc < 0:
+                continue
+            if lineup_evidence(text, media.get("alt_text") or "") == "weak":
+                if media["url"] not in ocr_bonus:
+                    ocr_bonus[media["url"]] = ocr_lineup_score(media["url"])
+                if ocr_bonus[media["url"]] < WEAK_MIN_OCR:
+                    continue
             sc += ocr_bonus.get(media["url"], 0.0)
             if sc > best_score:
                 best_score = sc

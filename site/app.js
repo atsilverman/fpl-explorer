@@ -7129,6 +7129,18 @@
   let homeTeamGraphicsPagerReady = false;
   let homeTeamGraphicsPagerTarget = null;
   let homeTeamGraphicsRenderKey = "";
+  /** False until the user swipes / taps — browser scroll restoration (reload,
+   *  bfcache) can land mid-carousel after render; snap those back to newest. */
+  let homeTeamGraphicsUserMoved = false;
+
+  function resetHomeTeamGraphicsToNewest() {
+    const track = el.homeTeamGraphicsTrack;
+    if (!track) return;
+    homeTeamGraphicsUserMoved = false;
+    homeTeamGraphicsPagerTarget = null;
+    if (track.scrollLeft > 1) track.scrollTo({ left: 0, behavior: "instant" });
+    syncHomeTeamGraphicsPagerDots(0);
+  }
 
   function homeTeamGraphicsTeams() {
     const teams = Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : [];
@@ -7175,7 +7187,7 @@
     const w = el.homeTeamGraphicsTrack.clientWidth || 1;
     const target = Math.max(0, index) * w;
     if (Math.abs(el.homeTeamGraphicsTrack.scrollLeft - target) > 1) {
-      el.homeTeamGraphicsTrack.scrollTo({ left: target, behavior: "auto" });
+      el.homeTeamGraphicsTrack.scrollTo({ left: target, behavior: "instant" });
     }
   }
 
@@ -7237,13 +7249,14 @@
       )
       .join("");
     el.homeTeamGraphicsDots.querySelectorAll(".home-team-graphics-dot").forEach((dot, i) => {
-      dot.addEventListener("click", () => setHomeTeamGraphicsPage(i));
+      dot.addEventListener("click", () => {
+        homeTeamGraphicsUserMoved = true;
+        setHomeTeamGraphicsPage(i);
+      });
     });
     bindHomeTeamGraphicsPager();
-    requestAnimationFrame(() => {
-      snapHomeTeamGraphicsPage(0);
-      syncHomeTeamGraphicsPagerDots(0);
-    });
+    resetHomeTeamGraphicsToNewest();
+    requestAnimationFrame(resetHomeTeamGraphicsToNewest);
   }
 
   function bindHomeTeamGraphicsPager() {
@@ -7260,6 +7273,10 @@
       syncHomeTeamGraphicsPagerDots(idx);
     };
     const onScrollTick = () => {
+      if (!homeTeamGraphicsUserMoved) {
+        resetHomeTeamGraphicsToNewest();
+        return;
+      }
       const idx =
         homeTeamGraphicsPagerTarget != null
           ? homeTeamGraphicsPagerTarget
@@ -7268,8 +7285,20 @@
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = setTimeout(onScrollSettled, 140);
     };
+    const markUserMoved = () => {
+      homeTeamGraphicsUserMoved = true;
+    };
+    for (const type of ["touchstart", "pointerdown", "wheel", "keydown"]) {
+      el.homeTeamGraphicsTrack.addEventListener(type, markUserMoved, { passive: true, capture: true });
+    }
     el.homeTeamGraphicsTrack.addEventListener("scroll", onScrollTick, { passive: true });
-    el.homeTeamGraphicsTrack.addEventListener("scrollend", onScrollSettled, { passive: true });
+    el.homeTeamGraphicsTrack.addEventListener("scrollend", () => {
+      if (homeTeamGraphicsUserMoved) onScrollSettled();
+    }, { passive: true });
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted) resetHomeTeamGraphicsToNewest();
+    });
+    window.addEventListener("load", resetHomeTeamGraphicsToNewest);
     bindHomePagerTrackpad(el.homeTeamGraphicsTrack, {
       getIndex: () =>
         homeTeamGraphicsPagerTarget != null
