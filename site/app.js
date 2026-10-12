@@ -1419,7 +1419,6 @@
     pageInfoPanelClose: $("#page-info-panel-close"),
     themeCycleBtn: $("#theme-cycle-btn"),
     themeSeg: $("#theme-seg"),
-    prefsAnimations: $("#prefs-animations"),
     prefsMockLive: $("#prefs-mock-live"),
     homeViewStatus: $("#home-view-status"),
     homeViewStatusName: $("#home-view-status-name"),
@@ -15218,55 +15217,18 @@
     return [...pane.querySelectorAll(".home-summary .home-stat-roll[data-count-to]")];
   }
 
-  function startHomeEnterMotion(pane, { duration = HOME_SUMMARY_ROLL_MS } = {}) {
-    const finishAll = () => {
-      homeSummaryRankChromePending = false;
-      clearHomeRankBorderRevealTimer();
-      if (!pane) return;
-      finishHighlightSatEnter(pane);
-      finishHomeRankSatEnter(pane);
-      finishHomeStatRolls(pane);
-      animateHomeImpBars(pane, { animate: false });
-      const summary = homeSummaryForView(homeActiveViewEntryId());
-      applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
-    };
-    if (!pane || statRollsDisabled()) {
-      finishAll();
-      return;
-    }
-    const token = ++homeEnterMotionToken;
-    // Tables, feed, IMP snap immediately — summary cards roll; rank color blooms mid-spin.
-    finishHomeStatRolls(pane, { summary: false, tables: true });
-    animateHomeImpBars(pane, { animate: false });
-    finishHighlightSatEnter(pane);
+  /** Hero numbers settle instantly on Home enter — no summary odometer. */
+  function startHomeEnterMotion(pane) {
+    ++homeEnterMotionToken;
     homeSummaryRankChromePending = false;
+    clearHomeRankBorderRevealTimer();
+    if (!pane) return;
+    finishHighlightSatEnter(pane);
+    finishHomeRankSatEnter(pane);
+    finishHomeStatRolls(pane);
+    animateHomeImpBars(pane, { animate: false });
     const summary = homeSummaryForView(homeActiveViewEntryId());
-    primeHomeRankSatEnter(pane);
-    // Mount Δ with odometer markup so it rolls with the other hero numbers.
-    applyHomeSummaryRankChrome(summary, {
-      viewingOther: homeIsViewingOtherManager(),
-      animateRoll: true,
-    });
-    startHomeRankSatEnter(pane, { duration, token });
-
-    // Always rebuild summary drums from 0. Reusing already-painted nodes (common
-    // on soft navigations / live handoff) skipped the roll so overall + league
-    // looked instant while GW still animated after a hard refresh.
-    prepareHomeStatRolls();
-    mountHomeSummaryRollsAtStart(pane);
-    const summaryRolls = homeHeroRollNodes(pane);
-    const rollMs = Math.max(400, Number(duration) || HOME_SUMMARY_ROLL_MS);
-    summaryRolls.forEach((node) => {
-      node.dataset.countFrom = "0";
-      animateStatRollNode(node, { duration: rollMs });
-    });
-    // Staggered digit drums can finish after the base roll window — wait for
-    // the slowest column, then force plain-text settle (no sticky half-digits).
-    window.setTimeout(() => {
-      if (token !== homeEnterMotionToken) return;
-      summaryRolls.forEach(finishStatRollNode);
-      finishHomeRankSatEnter(pane);
-    }, rollMs + 520);
+    applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
   }
 
   function renderHomeUnlinked() {
@@ -15355,15 +15317,8 @@
     renderHomeSummaryStats(summary, {
       enterPending: leaveRollsPending || homePageEnterArmed || homeIsEnterBusy(),
     });
-    if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
-      mountHomeSummaryRollsAtStart(el.homePage);
-    }
-    if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
-      mountHomeSummaryRollsAtStart(el.homePage);
-      applyHomeSummaryRankChrome(summary, { viewingOther, animateRoll: true });
-    } else {
-      applyHomeSummaryRankChrome(summary, { viewingOther });
-    }
+    applyHomeSummaryRankChrome(summary, { viewingOther });
+    finishHomeStatRolls(el.homePage, { summary: true, tables: false });
     if (el.homeGwMeta) el.homeGwMeta.innerHTML = "";
     if (el.homeHeroChip) {
       const chipKey = summary.activeChip ? String(summary.activeChip).trim() : "";
@@ -32780,53 +32735,17 @@
     return document.documentElement.classList.contains("odometer-sfi");
   }
 
-  function animationsEnabled() {
+  /** Animations are always on (no prefs toggle). */
+  function applyAnimationsEnabled() {
     try {
-      return localStorage.getItem(ANIMATIONS_KEY) === "on";
-    } catch {
-      return false;
-    }
-  }
-
-  function syncAnimationsToggle(on = animationsEnabled()) {
-    if (el.prefsAnimations) el.prefsAnimations.checked = !!on;
-  }
-
-  /** Replay Home summary rolls so turning Animations on is obvious without a reload. */
-  function previewAnimationsOnHome() {
-    if (state.page !== "home" || !el.homePage) return;
-    try {
-      prepareHomeStatRolls();
-      mountHomeSummaryRollsAtStart(el.homePage);
-      startHomeEnterMotion(el.homePage);
-    } catch {
-      /* best-effort demo roll */
-    }
-  }
-
-  function applyAnimationsEnabled(on, { preview = true } = {}) {
-    const enabled = !!on;
-    try {
-      if (enabled) localStorage.setItem(ANIMATIONS_KEY, "on");
-      else localStorage.removeItem(ANIMATIONS_KEY);
+      localStorage.removeItem(ANIMATIONS_KEY);
       localStorage.removeItem("fpl-explorer-odometer");
     } catch {
-      /* ignore quota */
+      /* private browsing */
     }
     const root = document.documentElement;
-    root.classList.toggle("animations-off", !enabled);
-    root.classList.toggle("motion-enhanced", enabled);
-    root.classList.toggle("odometer-sfi", enabled);
-    root.classList.remove("odometer-off");
-    syncAnimationsToggle(enabled);
-    if (preview && enabled) previewAnimationsOnHome();
-    else if (preview && !enabled && state.page === "home") {
-      try {
-        renderHome({ settleQuiet: true, deferDuringEnter: true });
-      } catch {
-        /* best-effort settle */
-      }
-    }
+    root.classList.remove("animations-off", "odometer-off");
+    root.classList.add("motion-enhanced", "odometer-sfi");
   }
 
   function currentThemeMode() {
@@ -32936,12 +32855,7 @@
     }
   });
 
-  if (el.prefsAnimations) {
-    el.prefsAnimations.addEventListener("change", () => {
-      applyAnimationsEnabled(el.prefsAnimations.checked, { preview: true });
-    });
-  }
-  applyAnimationsEnabled(animationsEnabled(), { preview: false });
+  applyAnimationsEnabled();
   try { localStorage.removeItem("fpl-explorer-autosub-preview"); } catch { /* ignore */ }
 
   try {

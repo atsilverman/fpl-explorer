@@ -28,26 +28,9 @@
     try {
       localStorage.removeItem("fpl-explorer-home-view-chrome");
     } catch (_) {}
-    // Animations master switch (default off). Migrates legacy number-roll prefs.
-    const ANIM_KEY = "fpl-explorer-animations";
-    try {
-      const legacyOdo = localStorage.getItem("fpl-explorer-odometer");
-      if (legacyOdo != null) {
-        if (legacyOdo === "sfi" || legacyOdo === "classic") {
-          localStorage.setItem(ANIM_KEY, "on");
-        } else {
-          localStorage.removeItem(ANIM_KEY);
-        }
-        localStorage.removeItem("fpl-explorer-odometer");
-      }
-    } catch (_) {}
-    const animationsOn = localStorage.getItem(ANIM_KEY) === "on";
-    if (animationsOn) {
-      root.classList.add("motion-enhanced");
-      root.classList.add("odometer-sfi");
-    } else {
-      root.classList.add("animations-off");
-    }
+    // Animations always on (prefs toggle removed).
+    root.classList.add("motion-enhanced");
+    root.classList.add("odometer-sfi");
     root.classList.add("player-thumbs-kit");
     // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
     // keeps the title row clear of the iOS status blur (unlike black-translucent).
@@ -572,14 +555,6 @@
                 </button>
               </div>
             </div>
-            <label class="settings-switch-row" for="prefs-animations">
-              <span class="settings-switch-text">
-                <span class="settings-switch-label">Animations</span>
-                <span class="settings-switch-hint">Page enters, number rolls, and motion polish across the site. Off shows content immediately.</span>
-              </span>
-              <input type="checkbox" id="prefs-animations" />
-              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            </label>
             <label class="settings-switch-row" for="prefs-mock-live">
               <span class="settings-switch-text">
                 <span class="settings-switch-label">Mock live</span>
@@ -1930,7 +1905,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1492"></script>
+<script src="app.js?v=1493"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
