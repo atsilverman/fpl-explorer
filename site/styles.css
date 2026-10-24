@@ -16243,6 +16243,7 @@ html:not([data-page="home"]) .home-view-status {
   display: inline-flex;
 }
 html[data-page="home"].is-home-view-status-on .page-info-btn.page-info-nav-btn,
+html[data-page="home"].is-home-view-status-on #gw-recap-btn,
 html[data-page="home"].is-home-view-status-on #prefs-wrap {
   display: none !important;
 }
@@ -17130,6 +17131,7 @@ html[data-theme="dark"] .home-summary-hero .home-summary-hero-delta.is-down {
   html[data-page="home"] #home-view-status {
     order: 4;
   }
+  html[data-page="home"] #gw-recap-btn,
   html[data-page="home"] #page-info-nav-btn {
     order: 5;
   }
@@ -22065,6 +22067,9 @@ html[data-theme="dark"] .home-standings-chip-badge[data-chip] {
   flex-wrap: wrap;
   gap: 4px;
   width: 100%;
+  /* Match the Net pill's inner pad so move Δ and Net Δ share one column, off the cell edge. */
+  padding: 0 8px 0 0;
+  box-sizing: border-box;
   font-size: 11px;
   line-height: 1.25;
 }
@@ -22095,8 +22100,7 @@ html[data-theme="dark"] .home-standings-chip-badge[data-chip] {
   gap: 8px;
   width: 100%;
   margin-top: 3px;
-  /* No right pad — keep Net Δ flush with move-row pts (same cell edge). */
-  padding: 4px 0 4px 6px;
+  padding: 4px 8px;
   border-top: none;
   border-radius: 5px;
   background: hsl(var(--muted-foreground) / 0.07);
@@ -26756,4 +26760,492 @@ html.player-thumbs-kit img.home-pitch-photo {
   object-fit: cover;
   object-position: center 18%;
   transform: none;
+}
+
+/* ---------- GW recap (league walkthrough modal) ---------- */
+:root {
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --page-slide-dur: 250ms;
+  --page-fade-dur: 250ms;
+  --page-slide-distance: 8px;
+  --page-blur: 3px;
+  --page-stagger: 0ms;
+  --page-exit-enabled: 1;
+  --page-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --page-fade-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-modal {
+  transform-origin: center;
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-open-dur) var(--modal-ease),
+    opacity   var(--modal-open-dur) var(--modal-ease);
+  will-change: transform, opacity;
+}
+.t-modal.is-open {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-modal.is-closing {
+  transform: scale(var(--modal-scale-close));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-close-dur) var(--modal-ease),
+    opacity   var(--modal-close-dur) var(--modal-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-modal { transition: none !important; }
+}
+
+.gw-recap-btn[hidden] {
+  display: none !important;
+}
+html.is-gw-recap-open,
+html.is-gw-recap-open body {
+  overflow: hidden;
+}
+.gw-recap {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+}
+.gw-recap[hidden] {
+  display: none;
+}
+.gw-recap-backdrop {
+  position: absolute;
+  inset: 0;
+  background: hsl(240 6% 10% / 0.5);
+  opacity: 0;
+  transition: opacity var(--modal-close-dur) var(--modal-ease);
+}
+.gw-recap.is-open .gw-recap-backdrop {
+  opacity: 1;
+  transition-duration: var(--modal-open-dur);
+}
+.gw-recap-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 520px);
+  height: min(100%, 680px);
+  background: hsl(var(--card));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.gw-recap-progress {
+  display: flex;
+  gap: 4px;
+  padding: 14px 18px 0;
+  flex: none;
+}
+.gw-recap-seg {
+  flex: 1 1 0;
+  height: 16px;
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.gw-recap-seg-fill {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.22);
+  background-image: linear-gradient(hsl(var(--blue-hsl)), hsl(var(--blue-hsl)));
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  transition: background-size var(--page-slide-dur) var(--page-slide-ease);
+}
+.gw-recap-seg.is-done .gw-recap-seg-fill,
+.gw-recap-seg.is-current .gw-recap-seg-fill {
+  background-size: 100% 100%;
+}
+.gw-recap-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px 6px 20px;
+  flex: none;
+}
+.gw-recap-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gw-recap-kicker {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: hsl(var(--blue-hsl));
+}
+.gw-recap-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.gw-recap-close {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+.gw-recap-stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  touch-action: pan-y;
+}
+.gw-recap-page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 20px 20px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(var(--t-page-from-x, 0px) * var(--page-exit-enabled)));
+  filter: blur(calc(var(--page-blur) * var(--page-exit-enabled)));
+  transition:
+    opacity   var(--page-fade-dur)  var(--page-fade-ease),
+    transform var(--page-slide-dur) var(--page-slide-ease),
+    filter    var(--page-slide-dur) var(--page-slide-ease);
+  will-change: opacity, transform, filter;
+}
+.gw-recap-page.is-before {
+  --t-page-from-x: calc(var(--page-slide-distance) * -1);
+}
+.gw-recap-page.is-after {
+  --t-page-from-x: var(--page-slide-distance);
+}
+.gw-recap-page.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  filter: blur(0);
+  transition-delay: var(--page-stagger);
+}
+.gw-recap-lede {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.gw-recap-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.gw-recap-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: hsl(var(--accent-hsl) / 0.45);
+  min-width: 0;
+}
+.gw-recap-tile-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.gw-recap-tile-value {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gw-recap-tile-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.35;
+}
+.gw-recap-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.gw-recap-subhead {
+  margin: 20px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.gw-recap-empty {
+  margin: 4px 0 0;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.gw-recap-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* Crest spans name + bar rows and centres on them; the manager list sits below. */
+.gw-recap-bar-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 10px;
+  row-gap: 5px;
+}
+.gw-recap-bar-row > .gw-recap-crest-slot {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.gw-recap-bar-main {
+  display: contents;
+}
+.gw-recap-bar-main > * {
+  grid-column: 2;
+}
+.gw-recap-bar-label {
+  grid-row: 1;
+}
+.gw-recap-bar-track {
+  grid-row: 2;
+}
+.gw-recap-bar-sub,
+.gw-recap-bar-who {
+  margin-top: -1px;
+}
+.gw-recap-bar-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.gw-recap-bar-sub + .gw-recap-bar-who {
+  margin-top: -4px;
+}
+.gw-recap-bars.is-negative .gw-recap-bar-fill {
+  background: hsl(var(--negative) / 0.5);
+}
+.gw-recap-bars.is-negative .gw-recap-bar-row.is-top .gw-recap-bar-fill {
+  background: hsl(var(--negative));
+}
+.gw-recap-crest-slot {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.gw-recap-crest-slot .badge-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+.gw-recap-crest-fallback {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.gw-recap-chip-badge {
+  min-width: 28px;
+  justify-content: center;
+}
+.gw-recap-bar-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+.gw-recap-bar-name {
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gw-recap-bar-value {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.gw-recap-bar-row.is-top .gw-recap-bar-value {
+  color: var(--text);
+}
+.gw-recap-tag {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+  color: hsl(34 88% 42%);
+  background: hsl(34 88% 42% / 0.14);
+}
+.gw-recap-bar-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.14);
+  overflow: hidden;
+}
+/* Share-of-league bars: a card-coloured divider every 10% (same treatment as the DefCon bar). */
+.gw-recap-bars.is-blocks .gw-recap-bar-track {
+  height: 10px;
+}
+.gw-recap-bars.is-blocks .gw-recap-bar-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(100% - 2px),
+    hsl(var(--card)) calc(100% - 2px),
+    hsl(var(--card)) 100%
+  );
+  background-size: 10% 100%;
+  background-repeat: repeat-x;
+}
+.gw-recap-bars.is-blocks .gw-recap-bar-fill {
+  border-radius: 0;
+}
+.gw-recap-bar-fill {
+  display: block;
+  width: var(--bar-pct, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--blue-hsl) / 0.55);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--duration-very-slow, 500ms) var(--page-slide-ease);
+  transition-delay: calc(var(--bar-i, 0) * 40ms + 80ms);
+}
+.gw-recap-bar-row.is-top .gw-recap-bar-fill {
+  background: hsl(var(--blue-hsl));
+}
+.gw-recap-page.is-active .gw-recap-bar-fill {
+  transform: scaleX(1);
+}
+.gw-recap-bar-who {
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.35;
+}
+.gw-recap-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.gw-recap-hits li {
+  display: flex;
+  justify-content: space-between;
+}
+.gw-recap-hit-cost {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--negative));
+}
+.gw-recap-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px max(14px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  flex: none;
+}
+.gw-recap-count {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.gw-recap-nav {
+  min-width: 88px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: hsl(var(--background));
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gw-recap-nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.gw-recap-nav.is-primary {
+  border-color: transparent;
+  background: hsl(var(--blue-hsl));
+  color: #fff;
+}
+.gw-recap-nav:focus-visible,
+.gw-recap-seg:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+@media (max-width: 720px) {
+  .gw-recap {
+    padding: 0;
+    align-items: stretch;
+  }
+  .gw-recap-panel {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-recap-page { transition: none !important; }
+  .gw-recap-bar-fill,
+  .gw-recap-seg-fill,
+  .gw-recap-backdrop { transition: none !important; }
 }

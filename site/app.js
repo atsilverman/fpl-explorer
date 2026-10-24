@@ -3219,6 +3219,7 @@
     livePlayerByElementCache = null;
     syncPlanningHorizon({ rerender: state.page === "home" || state.page === "schedule" });
     syncLiveNavChrome();
+    setTimeout(() => syncGwRecap(), 0);
     if (!fromSessionSnapshot && (fromLivePoll || homeLivePollReady())) {
       persistHomeSessionSnapshot(HOME);
     }
@@ -6441,6 +6442,602 @@
         ? `Free transfers left for the GW${gw} deadline (max ${HOME_FT_MAX})`
         : "Free transfers left for the next deadline"
     );
+  }
+
+  /* ---------- GW recap: once-per-GW league walkthrough (auto-shows when picks unlock) ---------- */
+  const GW_RECAP_SEEN_KEY = "fpl.gwRecapSeen.v1";
+  const GW_RECAP_MAX_BARS = 8;
+  let gwRecapPages = [];
+  let gwRecapIndex = 0;
+  let gwRecapOpen = false;
+  let gwRecapAutoTimer = null;
+  let gwRecapCloseTimer = null;
+  let gwRecapBound = false;
+  let gwRecapForcedShown = false;
+
+  function gwRecapKey() {
+    return `${HOME.leagueId}:${HOME.gw}`;
+  }
+
+  function gwRecapHasSeen() {
+    try {
+      return localStorage.getItem(GW_RECAP_SEEN_KEY) === gwRecapKey();
+    } catch {
+      return false;
+    }
+  }
+
+  function markGwRecapSeen() {
+    try {
+      localStorage.setItem(GW_RECAP_SEEN_KEY, gwRecapKey());
+    } catch {
+      /* private mode */
+    }
+  }
+
+  /** Ready once every league squad + transfer for the current GW is in (post-deadline). */
+  function gwRecapReady() {
+    const gw = Number(HOME && HOME.gw);
+    const rows = homeStandingsRows();
+    if (!HOME || !HOME.leagueId || !(gw > 0) || rows.length < 2) return false;
+    const status = HOME.leaguePicksStatus;
+    if (status && typeof status === "object") {
+      if (!status.picksReady || !status.transfersReady) return false;
+      if (Number(status.picksGw) > 0 && Number(status.picksGw) !== gw) return false;
+      return true;
+    }
+    return rows.every((r) => (homeSquadForEntry(r.entry) || []).length >= 11);
+  }
+
+  function gwRecapShortName(row) {
+    const full = String(row.playerName || row.entryName || "Manager").trim();
+    const parts = full.split(/\s+/);
+    if (parts.length < 2) return full;
+    return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
+  }
+
+  /** Latest hourly ownership check-in rows (code, name, team, owned TSB%). */
+  function gwRecapLatestOwnership() {
+    const checkIns = ownershipCheckIns();
+    const last = checkIns[checkIns.length - 1];
+    return last && Array.isArray(last.players) ? last.players : [];
+  }
+
+  let gwRecapOwnedCache = null;
+  function gwRecapOwnedByCode() {
+    const rows = gwRecapLatestOwnership();
+    if (gwRecapOwnedCache && gwRecapOwnedCache.rows === rows) return gwRecapOwnedCache.map;
+    const map = new Map();
+    for (const p of rows) {
+      const owned = Number(p && p.owned);
+      if (p && p.code != null && Number.isFinite(owned)) map.set(Number(p.code), owned);
+    }
+    gwRecapOwnedCache = { rows, map };
+    return map;
+  }
+
+  function gwRecapPlayerMeta(id, fallback) {
+    const row = livePlayerByElement().get(Number(id));
+    const pts = row && Number.isFinite(Number(row.pts)) ? Number(row.pts) : null;
+    const code = fallback && fallback.code != null ? Number(fallback.code) : (row && row.code != null ? Number(row.code) : null);
+    const tsb = code != null ? (gwRecapOwnedByCode().get(code) ?? null) : null;
+    return {
+      id: Number(id),
+      code,
+      name: (fallback && fallback.name) || (row && row.name) || "—",
+      team: (fallback && fallback.team) || (row && row.team) || "",
+      pts,
+      tsb,
+    };
+  }
+
+  /** Points multiplier for a squad row: 0 bench, 1 starter, 2 captain, 3 triple captain. */
+  function gwRecapMultiplier(p) {
+    const m = Number(p && p.multiplier);
+    if (Number.isFinite(m)) return Math.max(0, m);
+    if (!p || !p.starter) return 0;
+    return p.isCaptain ? 2 : 1;
+  }
+
+  function gwRecapManagerLabel(row, isMe) {
+    const rank = homeStandingsRankValue(row);
+    const name = isMe ? "You" : gwRecapShortName(row);
+    return Number.isFinite(Number(rank)) && rank != null ? `${name} (${rank})` : name;
+  }
+
+  function gwRecapTally(map, key, meta, who) {
+    let rec = map.get(key);
+    if (!rec) {
+      rec = { ...meta, count: 0, who: [] };
+      map.set(key, rec);
+    }
+    rec.count += 1;
+    rec.who.push(who);
+    return rec;
+  }
+
+  function gwRecapSorted(map) {
+    return [...map.values()].sort((a, b) => b.count - a.count || String(a.name).localeCompare(String(b.name)));
+  }
+
+  function buildGwRecapData() {
+    const rows = homeStandingsRows();
+    const captains = new Map();
+    const ins = new Map();
+    const outs = new Map();
+    const owners = new Map();
+    const starters = new Map();
+    const chipsNow = new Map();
+    const chipSeason = Object.fromEntries(HOME_CHIP_ORDER.map((c) => [c, 0]));
+    const hits = [];
+    const myMult = new Map();
+    const me = homeConfiguredEntryId();
+    let meInLeague = false;
+    let transferCount = 0;
+    let movers = 0;
+    for (const row of rows) {
+      const isMe = Number.isFinite(me) && Number(row.entry) === me;
+      if (isMe) meInLeague = true;
+      const who = gwRecapManagerLabel(row, isMe);
+      const squad = homeSquadForEntry(row.entry) || [];
+      const chip = homeActiveChipName(row);
+      const cap = squad.find((p) => p.isCaptain);
+      if (cap) {
+        const rec = gwRecapTally(captains, cap.element, gwRecapPlayerMeta(cap.element, cap), who);
+        if (chip === "3xc") rec.tc = (rec.tc || 0) + 1;
+      }
+      if (chip) gwRecapTally(chipsNow, chip, { name: HOME_CHIP_LABELS[chip] || chip, chip }, who);
+      const chips = row.chips && typeof row.chips === "object" ? row.chips : {};
+      for (const name of HOME_CHIP_ORDER) {
+        const st = chips[name] && chips[name].status;
+        if (st === "used" || st === "active") chipSeason[name] += 1;
+      }
+      for (const p of squad) {
+        const meta = gwRecapPlayerMeta(p.element, p);
+        const mult = gwRecapMultiplier(p);
+        const rec = gwRecapTally(owners, p.element, meta, who);
+        rec.eoSum = (rec.eoSum || 0) + mult;
+        if (isMe) myMult.set(Number(p.element), mult);
+        if (p.starter) gwRecapTally(starters, p.element, meta, who);
+      }
+      const t = homeTransfersForStandingRow(row);
+      const moves = (t && Array.isArray(t.moves) ? t.moves : []).filter(homeTransferMoveIsValid);
+      if (moves.length) movers += 1;
+      transferCount += moves.length;
+      for (const m of moves) {
+        if (m.in && m.in.id != null) gwRecapTally(ins, m.in.id, gwRecapPlayerMeta(m.in.id, m.in), who);
+        if (m.out && m.out.id != null) gwRecapTally(outs, m.out.id, gwRecapPlayerMeta(m.out.id, m.out), who);
+      }
+      const cost = Number(t && t.cost) || 0;
+      if (t && t.hit && cost > 0) hits.push({ who, cost });
+    }
+    const differentials = [...starters.values()]
+      .filter((s) => (owners.get(s.id) || {}).count === 1)
+      .sort((a, b) => (b.pts ?? -1) - (a.pts ?? -1) || String(a.name).localeCompare(String(b.name)));
+    const impact = meInLeague ? buildGwRecapImpact(owners, myMult, rows.length) : null;
+    return {
+      impact,
+      gw: Number(HOME.gw),
+      leagueName: HOME.leagueName || "Your league",
+      managers: rows.length,
+      captains: gwRecapSorted(captains),
+      chipsNow: gwRecapSorted(chipsNow),
+      chipSeason,
+      ins: gwRecapSorted(ins),
+      outs: gwRecapSorted(outs),
+      template: gwRecapSorted(owners),
+      differentials,
+      hits: hits.sort((a, b) => b.cost - a.cost),
+      transferCount,
+      movers,
+    };
+  }
+
+  /**
+   * Swing per point a player scores, for the linked manager:
+   *   league  = your multiplier − league effective ownership (Σ multipliers ÷ managers)
+   *   overall = your multiplier − TSB% (proxy — FPL doesn't publish overall captaincy)
+   */
+  function buildGwRecapImpact(owners, myMult, managers) {
+    const byId = new Map();
+    for (const o of owners.values()) {
+      const mine = myMult.get(Number(o.id)) || 0;
+      const owned = myMult.has(Number(o.id));
+      const leagueEo = (o.eoSum || 0) / Math.max(1, managers);
+      byId.set(Number(o.id), { ...o, mine, owned, leagueEo, swing: mine - leagueEo });
+    }
+    const leagueList = [...byId.values()];
+    const rootFor = leagueList.filter((x) => x.swing > 0.001).sort((a, b) => b.swing - a.swing);
+    const rootAgainst = leagueList.filter((x) => x.swing < -0.001).sort((a, b) => a.swing - b.swing);
+
+    const overallHelps = [];
+    const overallHurts = [];
+    for (const [id, mine] of myMult) {
+      if (mine <= 0) continue;
+      const base = byId.get(id) || gwRecapPlayerMeta(id);
+      if (base.tsb == null) continue;
+      overallHelps.push({ ...base, mine, overallSwing: mine - base.tsb / 100 });
+    }
+    overallHelps.sort((a, b) => b.overallSwing - a.overallSwing);
+    const leagueByCode = new Map();
+    for (const x of byId.values()) {
+      if (x.code != null) leagueByCode.set(Number(x.code), x);
+    }
+    for (const p of gwRecapLatestOwnership()) {
+      const tsb = Number(p && p.owned);
+      if (!Number.isFinite(tsb) || tsb < 5 || p.code == null) continue;
+      const league = leagueByCode.get(Number(p.code));
+      const mine = league ? league.mine : 0;
+      const overallSwing = mine - tsb / 100;
+      if (overallSwing >= 0) continue;
+      const base = league || { id: null, code: Number(p.code), name: p.name || "—", team: p.team || "", tsb };
+      overallHurts.push({ ...base, tsb, mine, overallSwing });
+    }
+    overallHurts.sort((a, b) => a.overallSwing - b.overallSwing);
+    return { rootFor, rootAgainst, overallHelps, overallHurts };
+  }
+
+  function gwRecapWhoHTML(who) {
+    const list = Array.isArray(who) ? who : [];
+    if (!list.length) return "";
+    const shown = list.slice(0, 4).map(escapeHtml).join(", ");
+    const more = list.length > 4 ? ` +${list.length - 4}` : "";
+    return `<span class="gw-recap-bar-who">${shown}${more}</span>`;
+  }
+
+  function gwRecapCrestHTML(team) {
+    if (!team) return `<span class="gw-recap-crest-slot" aria-hidden="true"></span>`;
+    return `<span class="gw-recap-crest-slot">${badgeHTML(team, "gw-recap-crest") || teamCrestFallbackHTML(team, "gw-recap-crest-fallback")}</span>`;
+  }
+
+  /** Horizontal bar list. items: {name, team?, count, who?, lead?}; scale = bar 100% value. */
+  function gwRecapBarsHTML(items, { scale, valueText, tag, blocks = false, negative = false, limit = GW_RECAP_MAX_BARS } = {}) {
+    const list = (items || []).slice(0, limit);
+    if (!list.length) return "";
+    const top = Math.max(...list.map((x) => x.count));
+    const max = scale || top || 1;
+    const cls = ["gw-recap-bars", blocks ? "is-blocks" : "", negative ? "is-negative" : ""].filter(Boolean).join(" ");
+    return `<ol class="${cls}">${list.map((x, i) => {
+      const pct = Math.max(3, Math.min(100, (x.count / max) * 100));
+      const lead = x.lead != null ? x.lead : (x.team != null ? gwRecapCrestHTML(x.team) : "");
+      const value = valueText ? valueText(x) : String(x.count);
+      const tagHTML = tag ? tag(x) : "";
+      return `<li class="gw-recap-bar-row${x.count === top && top > 0 ? " is-top" : ""}" style="--bar-i:${i}">
+        ${lead}
+        <div class="gw-recap-bar-main">
+          <div class="gw-recap-bar-label"><span class="gw-recap-bar-name">${escapeHtml(x.name)}${tagHTML}</span><span class="gw-recap-bar-value">${escapeHtml(value)}</span></div>
+          <div class="gw-recap-bar-track"><span class="gw-recap-bar-fill" style="--bar-pct:${pct.toFixed(1)}%"></span></div>
+          ${x.sub ? `<span class="gw-recap-bar-sub">${escapeHtml(x.sub)}</span>` : ""}
+          ${gwRecapWhoHTML(x.who)}
+        </div>
+      </li>`;
+    }).join("")}</ol>`;
+  }
+
+  function gwRecapEmptyHTML(text) {
+    return `<p class="gw-recap-empty">${escapeHtml(text)}</p>`;
+  }
+
+  function gwRecapChipLeadHTML(chip) {
+    const abbr = HOME_CHIP_ABBR[chip] || String(chip).toUpperCase();
+    return `<span class="gw-recap-crest-slot"><span class="home-standings-chip-badge gw-recap-chip-badge"${homeChipToneAttr(chip)}>${escapeHtml(abbr)}</span></span>`;
+  }
+
+  /** Headline for a ranked list: the leader's name, or "N-way tie" when the top count is shared. */
+  function gwRecapLeaderTitle(items, single, tied) {
+    if (!items.length) return "";
+    const tiedCount = items.filter((x) => x.count === items[0].count).length;
+    return tiedCount > 1 ? tied(tiedCount) : single(items[0].name);
+  }
+
+  function buildGwRecapPages(d) {
+    const pct = (n) => `${Math.round((n / Math.max(1, d.managers)) * 100)}%`;
+    const topCap = d.captains[0];
+    const hitPts = d.hits.reduce((s, h) => s + h.cost, 0);
+    const chipsPlayed = d.chipsNow.reduce((s, c) => s + c.count, 0);
+    const tile = (label, value, sub = "") => `<div class="gw-recap-tile">
+        <span class="gw-recap-tile-label">${escapeHtml(label)}</span>
+        <span class="gw-recap-tile-value">${escapeHtml(value)}</span>
+        ${sub ? `<span class="gw-recap-tile-sub">${escapeHtml(sub)}</span>` : ""}
+      </div>`;
+    const pages = [];
+
+    pages.push({
+      kicker: d.leagueName,
+      title: `Gameweek ${d.gw} is locked in`,
+      html: `<p class="gw-recap-lede">Here's how your league lined up for GW${d.gw} — captains, chips, transfers and the picks that set managers apart.</p>
+        <div class="gw-recap-tiles">
+          ${tile("Top captain", topCap ? topCap.name : "—", topCap ? `${topCap.count} of ${d.managers} managers` : "")}
+          ${tile("Transfers", String(d.transferCount), `${d.movers} of ${d.managers} managers moved`)}
+          ${tile("Chips played", String(chipsPlayed), chipsPlayed ? d.chipsNow.map((c) => `${HOME_CHIP_ABBR[c.chip]} ×${c.count}`).join(" · ") : "None this week")}
+          ${tile("Hits taken", String(d.hits.length), hitPts ? `−${hitPts} pts across the league` : "Nobody paid for moves")}
+        </div>`,
+    });
+
+    pages.push({
+      kicker: "Captaincy",
+      title: gwRecapLeaderTitle(d.captains, (n) => `${n} wears the armband`, (k) => `Armband split ${k} ways`) || "Captain picks",
+      html: d.captains.length
+        ? gwRecapBarsHTML(d.captains, {
+          scale: d.managers,
+          blocks: true,
+          valueText: (x) => `${x.count} · ${pct(x.count)}`,
+          tag: (x) => (x.tc ? `<span class="gw-recap-tag">TC${x.tc > 1 ? ` ×${x.tc}` : ""}</span>` : ""),
+        })
+        : gwRecapEmptyHTML("No captain picks yet."),
+    });
+
+    const seasonChips = HOME_CHIP_ORDER.map((chip) => ({
+      name: HOME_CHIP_LABELS[chip],
+      chip,
+      count: d.chipSeason[chip] || 0,
+      lead: gwRecapChipLeadHTML(chip),
+    }));
+    pages.push({
+      kicker: "Chips",
+      title: chipsPlayed ? `${chipsPlayed} chip${chipsPlayed === 1 ? "" : "s"} played this week` : "Chips stayed in the bank",
+      html: `${d.chipsNow.length
+        ? gwRecapBarsHTML(d.chipsNow.map((c) => ({ ...c, lead: gwRecapChipLeadHTML(c.chip) })), { scale: d.managers, blocks: true })
+        : gwRecapEmptyHTML(`Nobody activated a chip for GW${d.gw}.`)}
+        <h4 class="gw-recap-subhead">Used this half</h4>
+        ${gwRecapBarsHTML(seasonChips, { scale: d.managers, blocks: true, valueText: (x) => `${x.count}/${d.managers}` })}`,
+    });
+
+    pages.push({
+      kicker: "Transfers in",
+      title: gwRecapLeaderTitle(d.ins, (n) => `${n} was the hot pick`, (k) => `${k}-way tie for the hot pick`) || "No transfers in",
+      html: d.ins.length
+        ? `<p class="gw-recap-note">${d.transferCount} transfer${d.transferCount === 1 ? "" : "s"} by ${d.movers} manager${d.movers === 1 ? "" : "s"}</p>${gwRecapBarsHTML(d.ins)}`
+        : gwRecapEmptyHTML("Everyone rolled their transfers."),
+    });
+
+    pages.push({
+      kicker: "Transfers out",
+      title: gwRecapLeaderTitle(d.outs, (n) => `${n} got the boot`, (k) => `${k} players shared the boot`) || "No transfers out",
+      html: d.outs.length
+        ? `${gwRecapBarsHTML(d.outs)}${d.hits.length
+          ? `<h4 class="gw-recap-subhead">Hits taken</h4><ul class="gw-recap-hits">${d.hits.map((h) => `<li><span>${escapeHtml(h.who)}</span><span class="gw-recap-hit-cost">−${h.cost}</span></li>`).join("")}</ul>`
+          : ""}`
+        : gwRecapEmptyHTML("Nobody sold anyone this week."),
+    });
+
+    pages.push({
+      kicker: "League template",
+      title: "The players everyone owns",
+      html: gwRecapBarsHTML(d.template.map(({ who, ...x }) => x), {
+        scale: d.managers,
+        blocks: true,
+        valueText: (x) => pct(x.count),
+      }),
+    });
+
+    pages.push({
+      kicker: "Differentials",
+      title: "Starters only one manager has",
+      html: d.differentials.length
+        ? `<p class="gw-recap-note">Ranked by season points</p>${gwRecapBarsHTML(d.differentials.map((x) => ({ ...x, count: x.pts ?? 0 })), {
+          valueText: (x) => `${x.count} pts`,
+        })}`
+        : gwRecapEmptyHTML("No unique starters — this league is all template."),
+    });
+
+    if (d.impact) {
+      const multLabel = (m, owned) => (
+        m >= 3 ? "TC ×3" : m === 2 ? "C ×2" : m === 1 ? "XI" : owned ? "bench" : "not owned"
+      );
+      const swingText = (n) => `${n > 0 ? "+" : "−"}${Math.abs(n).toFixed(2)}`;
+      const leagueRows = (list) => list.map((x) => ({
+        ...x,
+        count: Math.abs(x.swing),
+        sub: `You: ${multLabel(x.mine, x.owned)} · League EO ${pct(x.leagueEo * d.managers)}${x.tsb != null ? ` · Overall ${x.tsb}%` : ""}`,
+      }));
+      const overallRows = (list) => list.map((x) => ({
+        ...x,
+        count: Math.abs(x.overallSwing),
+        sub: `You: ${multLabel(x.mine, x.owned)} · Overall ${x.tsb}%${x.leagueEo != null ? ` · League EO ${pct(x.leagueEo * d.managers)}` : ""}`,
+        who: undefined,
+      }));
+      const { rootFor, rootAgainst, overallHelps, overallHurts } = d.impact;
+      const leagueScale = Math.max(0.01, ...[...rootFor, ...rootAgainst].slice(0, 16).map((x) => Math.abs(x.swing)));
+      const overallScale = Math.max(0.01, ...[...overallHelps, ...overallHurts].slice(0, 12).map((x) => Math.abs(x.overallSwing)));
+      const leagueNote = `<p class="gw-recap-note">League points you gain or lose for every point they score (your multiplier − league effective ownership).</p>`;
+
+      const byCount = (list, key) => list.map((x) => ({ ...x, count: Math.round(Math.abs(x[key]) * 100) }));
+      pages.push({
+        kicker: "Root for · League",
+        title: gwRecapLeaderTitle(byCount(rootFor, "swing"), (n) => `Come on, ${n}`, (k) => `${k} players carry your edge`) || "Nobody to root for",
+        html: rootFor.length
+          ? `${leagueNote}${gwRecapBarsHTML(leagueRows(rootFor), { scale: leagueScale, valueText: (x) => swingText(x.swing) })}`
+          : gwRecapEmptyHTML("Your team matches the league exactly — no edge either way."),
+      });
+
+      pages.push({
+        kicker: "Root against · League",
+        title: gwRecapLeaderTitle(byCount(rootAgainst, "swing"), (n) => `Keep ${n} quiet`, (k) => `${k} players to keep quiet`) || "No league threats",
+        html: rootAgainst.length
+          ? `${leagueNote}${gwRecapBarsHTML(leagueRows(rootAgainst), { scale: leagueScale, negative: true, valueText: (x) => swingText(x.swing) })}`
+          : gwRecapEmptyHTML("Nobody in the league out-owns you on any player."),
+      });
+
+      pages.push({
+        kicker: "Overall rank",
+        title: "Who moves your overall rank",
+        html: `<p class="gw-recap-note">Swing per point scored vs the whole game, using overall ownership (TSB%) as a guide.</p>
+          <h4 class="gw-recap-subhead">Helps you</h4>
+          ${gwRecapBarsHTML(overallRows(overallHelps), { scale: overallScale, limit: 5, valueText: (x) => swingText(x.overallSwing) }) || gwRecapEmptyHTML("No starters yet.")}
+          <h4 class="gw-recap-subhead">Hurts you</h4>
+          ${gwRecapBarsHTML(overallRows(overallHurts), { scale: overallScale, limit: 5, negative: true, valueText: (x) => swingText(x.overallSwing) }) || gwRecapEmptyHTML("No popular players you're missing.")}`,
+      });
+    }
+
+    return pages;
+  }
+
+  function gwRecapEls() {
+    return {
+      root: document.getElementById("gw-recap"),
+      panel: document.getElementById("gw-recap-panel"),
+      stack: document.getElementById("gw-recap-stack"),
+      progress: document.getElementById("gw-recap-progress"),
+      kicker: document.getElementById("gw-recap-kicker"),
+      title: document.getElementById("gw-recap-title"),
+      prev: document.getElementById("gw-recap-prev"),
+      next: document.getElementById("gw-recap-next"),
+      count: document.getElementById("gw-recap-count"),
+      btn: document.getElementById("gw-recap-btn"),
+    };
+  }
+
+  function renderGwRecapStack() {
+    const e = gwRecapEls();
+    if (!e.stack) return;
+    e.stack.innerHTML = gwRecapPages.map((p, i) =>
+      `<section class="gw-recap-page" data-recap-page="${i}" aria-hidden="true">${p.html}</section>`
+    ).join("");
+    if (e.progress) {
+      e.progress.innerHTML = gwRecapPages.map((p, i) =>
+        `<button type="button" class="gw-recap-seg" data-recap-go="${i}" aria-label="${escapeHtml(`Page ${i + 1}: ${p.kicker}`)}"><span class="gw-recap-seg-fill"></span></button>`
+      ).join("");
+    }
+  }
+
+  function showGwRecapPage(idx) {
+    const e = gwRecapEls();
+    if (!gwRecapPages.length || !e.stack) return;
+    gwRecapIndex = Math.max(0, Math.min(gwRecapPages.length - 1, idx));
+    const page = gwRecapPages[gwRecapIndex];
+    e.stack.querySelectorAll(".gw-recap-page").forEach((sec, i) => {
+      sec.classList.toggle("is-active", i === gwRecapIndex);
+      sec.classList.toggle("is-before", i < gwRecapIndex);
+      sec.classList.toggle("is-after", i > gwRecapIndex);
+      sec.setAttribute("aria-hidden", i === gwRecapIndex ? "false" : "true");
+      if (i === gwRecapIndex) sec.scrollTop = 0;
+    });
+    if (e.progress) {
+      e.progress.querySelectorAll(".gw-recap-seg").forEach((seg, i) => {
+        seg.classList.toggle("is-done", i < gwRecapIndex);
+        seg.classList.toggle("is-current", i === gwRecapIndex);
+        seg.setAttribute("aria-current", i === gwRecapIndex ? "step" : "false");
+      });
+    }
+    if (e.kicker) e.kicker.textContent = page.kicker;
+    if (e.title) e.title.textContent = page.title;
+    if (e.count) e.count.textContent = `${gwRecapIndex + 1} / ${gwRecapPages.length}`;
+    if (e.prev) e.prev.disabled = gwRecapIndex === 0;
+    if (e.next) e.next.textContent = gwRecapIndex === gwRecapPages.length - 1 ? "Done" : "Next";
+  }
+
+  function openGwRecap() {
+    const e = gwRecapEls();
+    if (!e.root || !e.panel || !gwRecapReady()) return;
+    bindGwRecapOnce();
+    if (gwRecapCloseTimer) {
+      clearTimeout(gwRecapCloseTimer);
+      gwRecapCloseTimer = null;
+    }
+    gwRecapPages = buildGwRecapPages(buildGwRecapData());
+    renderGwRecapStack();
+    gwRecapOpen = true;
+    markGwRecapSeen();
+    e.root.hidden = false;
+    document.documentElement.classList.add("is-gw-recap-open");
+    showGwRecapPage(0);
+    e.panel.classList.remove("is-closing");
+    void e.panel.offsetWidth;
+    e.root.classList.add("is-open");
+    e.panel.classList.add("is-open");
+    if (e.next) e.next.focus({ preventScroll: true });
+  }
+
+  function closeGwRecap() {
+    const e = gwRecapEls();
+    if (!gwRecapOpen || !e.root || !e.panel) return;
+    gwRecapOpen = false;
+    const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")) || 150;
+    e.root.classList.remove("is-open");
+    e.panel.classList.remove("is-open");
+    e.panel.classList.add("is-closing");
+    document.documentElement.classList.remove("is-gw-recap-open");
+    gwRecapCloseTimer = setTimeout(() => {
+      gwRecapCloseTimer = null;
+      e.panel.classList.remove("is-closing");
+      e.root.hidden = true;
+    }, closeMs);
+    if (e.btn && !e.btn.hidden) e.btn.focus({ preventScroll: true });
+  }
+
+  function stepGwRecap(dir) {
+    if (dir > 0 && gwRecapIndex >= gwRecapPages.length - 1) {
+      closeGwRecap();
+      return;
+    }
+    showGwRecapPage(gwRecapIndex + dir);
+  }
+
+  function bindGwRecapOnce() {
+    if (gwRecapBound) return;
+    const e = gwRecapEls();
+    if (!e.root) return;
+    gwRecapBound = true;
+    e.root.addEventListener("click", (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest("[data-recap-close]")) {
+        closeGwRecap();
+        return;
+      }
+      const go = t.closest("[data-recap-go]");
+      if (go) showGwRecapPage(Number(go.getAttribute("data-recap-go")));
+    });
+    if (e.prev) e.prev.addEventListener("click", () => stepGwRecap(-1));
+    if (e.next) e.next.addEventListener("click", () => stepGwRecap(1));
+    document.addEventListener("keydown", (ev) => {
+      if (!gwRecapOpen) return;
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        closeGwRecap();
+      } else if (ev.key === "ArrowRight") {
+        stepGwRecap(1);
+      } else if (ev.key === "ArrowLeft") {
+        stepGwRecap(-1);
+      }
+    });
+    let sx = null;
+    let sy = 0;
+    if (e.stack) {
+      e.stack.addEventListener("touchstart", (ev) => {
+        const t = ev.touches[0];
+        sx = t.clientX;
+        sy = t.clientY;
+      }, { passive: true });
+      e.stack.addEventListener("touchend", (ev) => {
+        if (sx == null) return;
+        const t = ev.changedTouches[0];
+        const dx = t.clientX - sx;
+        const dy = t.clientY - sy;
+        sx = null;
+        if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        stepGwRecap(dx < 0 ? 1 : -1);
+      }, { passive: true });
+    }
+    if (e.btn) e.btn.addEventListener("click", () => openGwRecap());
+  }
+
+  /** Show the header button when the recap has data; auto-open once per league + GW per device. */
+  function syncGwRecap() {
+    const e = gwRecapEls();
+    if (!e.root) return;
+    bindGwRecapOnce();
+    const ready = gwRecapReady();
+    if (e.btn) e.btn.hidden = !ready;
+    const forced = !gwRecapForcedShown && /[?&]recap(=|&|$)/.test(window.location.search);
+    if (!ready || !savedManagerId || gwRecapOpen || gwRecapAutoTimer || (!forced && gwRecapHasSeen())) return;
+    gwRecapAutoTimer = setTimeout(() => {
+      gwRecapAutoTimer = null;
+      if (gwRecapOpen || !savedManagerId || !gwRecapReady() || (!forced && gwRecapHasSeen())) return;
+      gwRecapForcedShown = true;
+      openGwRecap();
+    }, 900);
   }
 
   function syncHomeStandingsPagerDots(activeIndex) {
@@ -33467,6 +34064,7 @@
     syncReportNavVisibility();
     setPage(page);
     syncLiveNavChrome();
+    syncGwRecap();
     bindMobileScrollTopFade();
     syncMobileScrollTopFade();
     if (state.page !== "live" && state.page !== "opta") renderTable();

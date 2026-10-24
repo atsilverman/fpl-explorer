@@ -53,7 +53,7 @@ HINT = re.compile(
     rf"here.?s\s+(our|the)\s+team|confirmed\s*(line|xi|team)|matchday\s*(squad|xi)|"
     rf"your\s+.{{0,48}}\b({_CLUB_WORDS})\b|"
     rf"(our|the)\s+.{{0,48}}\b(xi|side|team|gunners)\b|"
-    rf"to\s+(face|take\s+on)\s+\w+|starting\s+(at|xi)\b)",
+    rf"to\s+(face|take\s+on)\s+@?\w+|starting\s+(at|xi)\b|📋)",
     re.I,
 )
 STRONG = re.compile(
@@ -62,7 +62,8 @@ STRONG = re.compile(
     rf"your\s+.{{0,48}}\bXI\b|"
     rf"your\s+.{{0,48}}\b({_CLUB_WORDS})\b\s+to\s+(face|take\s+on)|"
     rf"(our|the)\s+.{{0,48}}\b(side|team|xi|gunners)\b|"
-    rf"to\s+(face|take\s+on)\s+\w+)",
+    rf"to\s+(face|take\s+on)\s+@?\w+|"
+    rf"your\s+.{{0,48}}\b({_CLUB_WORDS})\b.{{0,40}}📋)",
     re.I,
 )
 
@@ -160,6 +161,26 @@ NON_LINEUP_ALT = re.compile(
 
 # Weak-wording posts must OCR as a dense name sheet (~8+ surnames) to count.
 WEAK_MIN_OCR = 40.0
+
+# Clubs often caption the XI with just a nickname ("The Tigers. 👊"), so photo
+# posts in the usual XI slot get an OCR-only chance at a stricter bar.
+SLOT_MIN_BEFORE_KO = 55.0
+SLOT_MAX_BEFORE_KO = 100.0
+SLOT_MIN_OCR = 70.0
+# OCR-only picks must never outrank a post whose caption says it is the XI.
+SLOT_OCR_PENALTY = 100.0
+NON_LINEUP_CAPTION = re.compile(
+    r"\b(arriv\w*|check(ed|ing)\s+in|in\s+the\s+building|warm(s|ing)?[\s-]*up|"
+    r"scene|setting|minutes\s+(until|to\s+go)|from\s+above|appearances?|"
+    r"racism|stadium|tickets?|kit|kick[\s-]?off|build(ing)?[\s-]+up|"
+    r"fan\s*zone|times)\b",
+    re.I,
+)
+
+
+def in_lineup_slot(created: datetime, ko: datetime) -> bool:
+    mins_before = (ko - created).total_seconds() / 60.0
+    return SLOT_MIN_BEFORE_KO <= mins_before <= SLOT_MAX_BEFORE_KO
 
 
 def alt_is_lineup(alt: str) -> bool:
@@ -363,9 +384,14 @@ def pick_best(
                     "height": media.get("height"),
                 }
             )
+        slot_ok = in_lineup_slot(created, ko) and not NON_LINEUP_CAPTION.search(
+            normalize_text(text)
+        )
         # Expand via fxtwitter when X hid attachments, or to recover full
         # carousels (some XI posts list only one image in search results).
-        if HINT.search(normalize_text(text)) and len(candidates) <= 1:
+        if (HINT.search(normalize_text(text)) and len(candidates) <= 1) or (
+            slot_ok and not candidates
+        ):
             fx_photos = fxtwitter_photos(tid)
             time.sleep(0.15)
             if fx_photos:
@@ -388,16 +414,24 @@ def pick_best(
                 time.sleep(0.05)
 
         for media in candidates:
+            alt = media.get("alt_text") or ""
             sc = score_candidate(
                 text,
-                media.get("alt_text") or "",
+                alt,
                 has_photo=True,
                 created=created,
                 ko=ko,
             )
             if sc < 0:
-                continue
-            if lineup_evidence(text, media.get("alt_text") or "") == "weak":
+                if not slot_ok or (alt and NON_LINEUP_ALT.search(normalize_text(alt))):
+                    continue
+                if media["url"] not in ocr_bonus:
+                    ocr_bonus[media["url"]] = ocr_lineup_score(media["url"])
+                if ocr_bonus[media["url"]] < SLOT_MIN_OCR:
+                    continue
+                mins_before = (ko - created).total_seconds() / 60.0
+                sc = 100.0 - abs(mins_before - 75.0) * 0.6 - SLOT_OCR_PENALTY
+            elif lineup_evidence(text, alt) == "weak":
                 if media["url"] not in ocr_bonus:
                     ocr_bonus[media["url"]] = ocr_lineup_score(media["url"])
                 if ocr_bonus[media["url"]] < WEAK_MIN_OCR:
@@ -472,11 +506,44 @@ def write_bundle(gw: int, teams: list[dict], generated: str) -> None:
 
 
 ACTIVE_BEFORE_KO = timedelta(minutes=120)
-ACTIVE_AFTER_KO = timedelta(minutes=45)
+# Searches stay capped at KO+30; the long tail only lets a late run catch up.
+ACTIVE_AFTER_KO = timedelta(minutes=120)
+# XI graphics land ~KO-75, so poll densely just after that, then sparse catch-ups.
+POLL_OFFSETS_MIN = (-90, -70, -64, -58, -50, -40, -25, -5, 30, 110)
+# A stored graphic at/above this score stops further polling for that club.
+DONE_MIN_SCORE = 120.0
+NEXT_POLL_HORIZON = timedelta(hours=6)
+
+
+def club_is_done(state: dict, gw: int, code: str) -> bool:
+    if state.get("gw") != gw:
+        return False
+    row = (state.get("teams") or {}).get(code) or {}
+    return bool(row.get("localPath")) and float(row.get("score") or 0) >= DONE_MIN_SCORE
+
+
+def next_poll_seconds(club_fixtures: dict, state: dict, gw: int) -> int | None:
+    """Seconds until the next checkpoint for a club still missing a graphic."""
+    now = datetime.now(timezone.utc)
+    best: datetime | None = None
+    for code, fxinfo in club_fixtures.items():
+        ko = parse_iso(fxinfo["ko"])
+        if not ko or club_is_done(state, gw, code):
+            continue
+        for off in POLL_OFFSETS_MIN:
+            at = ko + timedelta(minutes=off)
+            if at <= now + timedelta(seconds=30) or at > now + NEXT_POLL_HORIZON:
+                continue
+            if best is None or at < best:
+                best = at
+    if best is None:
+        return None
+    return max(0, int((best - now).total_seconds()))
 
 
 def main() -> int:
     active_only = "--active-only" in sys.argv[1:]
+    next_poll = "--next-poll" in sys.argv[1:]
     bearer = os.environ.get("X_BEARER_TOKEN", "").strip()
     if not bearer:
         print("No X_BEARER_TOKEN in .env — cannot fetch team news.", file=sys.stderr)
@@ -519,6 +586,10 @@ def main() -> int:
             }
 
     state = load_state()
+    if next_poll:
+        secs = next_poll_seconds(club_fixtures, state, gw)
+        print("none" if secs is None else secs)
+        return 0
     gw_changed = state.get("gw") != gw
     if gw_changed:
         # New GW — drop prior stored graphics from the bundle (files can remain for debug)
@@ -543,6 +614,9 @@ def main() -> int:
         if active_only:
             now_check = datetime.now(timezone.utc)
             if not (ko - ACTIVE_BEFORE_KO <= now_check <= ko + ACTIVE_AFTER_KO):
+                continue
+            if club_is_done(state, gw, code):
+                print(f"  ✓ {code} @{handle}: already have graphic — skip")
                 continue
         # Anchor on FPL KO (~75 min pre-KO). Some clubs' XI posts are NOT
         # indexed under has:media (ARS/MUN), so also search by XI keywords

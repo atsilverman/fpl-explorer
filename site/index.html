@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1627" />
+<link rel="stylesheet" href="styles.css?v=1631" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -514,6 +514,10 @@
       <span class="home-view-status-clear-affordance" aria-hidden="true">
         <svg class="icon"><use href="#i-x"/></svg>
       </span>
+    </button>
+    <button class="icon-btn icon-only-btn gw-recap-btn" id="gw-recap-btn" type="button"
+      title="Gameweek recap" aria-label="Open gameweek league recap" aria-controls="gw-recap" hidden>
+      <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg>
     </button>
     <button class="icon-btn icon-only-btn page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
       aria-label="How Home works" aria-controls="page-info-tooltip" aria-expanded="false">
@@ -1708,6 +1712,27 @@
 <div id="team-rank-tooltip" class="fixture-tooltip team-rank-tooltip" role="tooltip" style="display:none;"></div>
 <div id="matchup-edge-tooltip" class="fixture-tooltip matchup-edge-tooltip" role="tooltip" style="display:none;"></div>
 <div id="schedule-scatter-tooltip" class="fixture-tooltip schedule-scatter-tooltip" role="tooltip" style="display:none;"></div>
+<div id="gw-recap" class="gw-recap" hidden>
+  <div class="gw-recap-backdrop" data-recap-close></div>
+  <div class="gw-recap-panel t-modal" id="gw-recap-panel" role="dialog" aria-modal="true" aria-labelledby="gw-recap-title">
+    <div class="gw-recap-progress" id="gw-recap-progress"></div>
+    <header class="gw-recap-head">
+      <div class="gw-recap-head-text">
+        <span class="gw-recap-kicker" id="gw-recap-kicker"></span>
+        <h3 class="gw-recap-title" id="gw-recap-title"></h3>
+      </div>
+      <button type="button" class="icon-btn icon-only-btn gw-recap-close" data-recap-close aria-label="Close recap">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </header>
+    <div class="gw-recap-stack" id="gw-recap-stack"></div>
+    <footer class="gw-recap-foot">
+      <button type="button" class="gw-recap-nav" id="gw-recap-prev">Back</button>
+      <span class="gw-recap-count" id="gw-recap-count"></span>
+      <button type="button" class="gw-recap-nav is-primary" id="gw-recap-next">Next</button>
+    </footer>
+  </div>
+</div>
 <div id="page-info-tooltip" class="page-info-panel" role="dialog" aria-modal="false" aria-labelledby="page-info-panel-title" hidden>
   <div class="page-info-panel-head">
     <h3 id="page-info-panel-title" class="page-info-panel-title"></h3>
@@ -1897,7 +1922,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1497"></script>
+<script src="app.js?v=1502"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
