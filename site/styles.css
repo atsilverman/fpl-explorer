@@ -9932,10 +9932,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   gap: 6px;
   height: 26px;
   padding: 0 9px 0 8px;
-  border: 1px solid hsl(var(--autosub-amber) / 0.55);
+  border: 1px solid hsl(var(--autosub-amber) / 0.7);
   border-radius: 8px;
-  background: hsl(var(--autosub-amber) / 0.16);
-  color: hsl(32 78% 28%);
+  background: color-mix(in srgb, hsl(var(--autosub-amber)) 48%, hsl(var(--card)));
+  color: hsl(32 70% 28%);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -16965,9 +16965,15 @@ html[data-theme="dark"] .home-summary-hero.is-rank-ready {
   vertical-align: 0.42em;
   flex: none;
 }
-.home-stat-rank .home-autosub-impact-dot {
-  align-self: flex-start;
-  margin-top: 0.28em;
+.home-summary-cards > .home-stat-panel {
+  position: relative;
+}
+.home-stat-panel > .home-autosub-impact-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+  vertical-align: unset;
 }
 html[data-theme="dark"] .home-autosub-impact-dot,
 html:not([data-theme="light"]) .home-autosub-impact-dot {
@@ -16975,9 +16981,18 @@ html:not([data-theme="light"]) .home-autosub-impact-dot {
   box-shadow: 0 0 0 2px hsl(40 96% 62% / 0.22);
 }
 .home-standings-autosub-impact {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  vertical-align: middle;
+}
+.home-standings-autosub-impact .home-autosub-impact-dot {
+  position: absolute;
+  left: calc(100% + 3px);
+  top: 50%;
+  margin: -3px 0 0;
+  vertical-align: unset;
+  animation: none;
 }
 .home-autosub-fab {
   display: none;
@@ -16995,13 +17010,13 @@ html:not([data-theme="light"]) .home-autosub-impact-dot {
   height: 48px;
   min-width: 48px;
   padding: 0 14px 0 12px;
-  border: 1px solid hsl(var(--autosub-amber) / 0.45);
+  border: 1px solid hsl(var(--autosub-amber) / 0.7);
   border-radius: 14px;
-  background: color-mix(in srgb, hsl(var(--autosub-amber)) 16%, hsl(var(--card)));
-  color: hsl(32 78% 28%);
+  background: color-mix(in srgb, hsl(var(--autosub-amber)) 48%, hsl(var(--card)));
+  color: hsl(32 70% 28%);
   box-shadow:
     0 2px 10px hsl(32 40% 18% / 0.16),
-    0 0 0 1px hsl(var(--autosub-amber) / 0.12);
+    0 0 0 1px hsl(var(--autosub-amber) / 0.16);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -17016,7 +17031,7 @@ html:not([data-theme="light"]) .home-autosub-impact-dot {
   flex: none;
 }
 #home-autosub-preview-btn.home-autosub-fab:hover {
-  background: color-mix(in srgb, hsl(var(--autosub-amber)) 24%, hsl(var(--card)));
+  background: color-mix(in srgb, hsl(var(--autosub-amber)) 58%, hsl(var(--card)));
 }
 #home-autosub-preview-btn.home-autosub-fab:focus-visible {
   outline: none;
@@ -17031,8 +17046,8 @@ html:not([data-theme="light"]) .home-autosub-impact-dot {
 html[data-theme="dark"] #home-autosub-preview-btn.home-autosub-fab:not([hidden]),
 html:not([data-theme="light"]) #home-autosub-preview-btn.home-autosub-fab:not([hidden]) {
   --autosub-amber: 40 96% 58%;
-  color: hsl(40 100% 86%);
-  background: color-mix(in srgb, hsl(var(--autosub-amber)) 22%, hsl(var(--card)));
+  color: hsl(var(--autosub-amber));
+  background: color-mix(in srgb, hsl(var(--autosub-amber)) 38%, hsl(var(--card)));
 }
 html[data-theme="dark"] #home-autosub-preview-btn.home-autosub-fab[aria-pressed="true"],
 html:not([data-theme="light"]) #home-autosub-preview-btn.home-autosub-fab[aria-pressed="true"] {
@@ -17086,19 +17101,19 @@ html.has-home-fx-scrub #home-autosub-preview-btn.home-autosub-fab:not([hidden]) 
 }
 @media (prefers-reduced-motion: no-preference) {
   #home-autosub-preview-btn.home-autosub-fab:not([hidden]):not([aria-pressed="true"]) {
-    animation: home-autosub-fab-pulse 4.2s ease-in-out infinite;
+    animation: home-autosub-fab-pulse 3.6s ease-in-out infinite;
   }
 }
 @keyframes home-autosub-fab-pulse {
   0%, 100% {
     box-shadow:
       0 2px 10px hsl(32 40% 18% / 0.16),
-      0 0 0 0 hsl(38 92% 46% / 0.16);
+      0 0 0 0 hsl(38 92% 46% / 0.24);
   }
   50% {
     box-shadow:
       0 2px 10px hsl(32 40% 18% / 0.16),
-      0 0 0 6px hsl(38 92% 46% / 0);
+      0 0 0 8px hsl(38 92% 46% / 0);
   }
 }
 .home-autosub-banner {
@@ -19010,6 +19025,13 @@ html[data-theme="dark"] .home-overall-pct {
 #home-squad-panel .home-data-table :is(th, td):last-child,
 #home-standings-panel .home-data-table :is(th, td):last-child {
   padding-right: 12px;
+}
+html.home-autosub-preview #home-standings-panel .home-data-table :is(th, td).home-col-gw,
+html.home-autosub-preview #home-standings-panel .home-data-table :is(th, td).home-col-total {
+  padding-right: 10px;
+}
+html.home-autosub-preview #home-standings-panel .home-data-table :is(th, td).home-col-total:last-child {
+  padding-right: 16px;
 }
 #home-squad-panel .home-bench-divider th {
   padding-left: 12px;

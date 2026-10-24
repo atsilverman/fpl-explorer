@@ -10674,21 +10674,24 @@
 
   function clearHomeAutosubOverlayMarks() {
     document.querySelectorAll(".home-autosub-pts-delta").forEach((node) => node.remove());
+    document.querySelectorAll(".home-summary-cards .home-autosub-impact-dot").forEach((node) => node.remove());
     [el.homeGwPoints, el.homeTotalPoints, el.homeLeagueRank].forEach((host) => {
       if (!host) return;
       host.querySelectorAll(".home-autosub-impact-dot").forEach((node) => node.remove());
     });
   }
 
-  function appendHomeAutosubImpactDot(host, { after = null, title = "Changed by auto-subs" } = {}) {
+  function appendHomeAutosubImpactDot(host, { after = null, title = "Changed by auto-subs", onCard = false } = {}) {
     if (!host) return;
-    host.querySelectorAll(".home-autosub-impact-dot").forEach((node) => node.remove());
+    const card = onCard ? host.closest(".home-stat-panel") : null;
+    const target = card || host;
+    target.querySelectorAll(".home-autosub-impact-dot").forEach((node) => node.remove());
     const html = homeAutosubImpactDotHTML(title);
-    if (after && host.contains(after)) {
+    if (!card && after && host.contains(after)) {
       after.insertAdjacentHTML("afterend", html);
       return;
     }
-    host.insertAdjacentHTML("beforeend", html);
+    target.insertAdjacentHTML("beforeend", html);
   }
 
   /** Bake pending auto-sub pts + destination league rank into a summary copy. */
@@ -10851,11 +10854,11 @@
     if (!homeAutosubPreviewActive()) return;
     const summary = homeAutosubAdjustSummary(homeSummaryForView(homeActiveViewEntryId()));
     const impact = summary._autosubImpact || {};
-    if (impact.gw) appendHomeAutosubImpactDot(el.homeGwPoints);
-    if (impact.total) appendHomeAutosubImpactDot(el.homeTotalPoints);
+    if (impact.gw) appendHomeAutosubImpactDot(el.homeGwPoints, { onCard: true });
+    if (impact.total) appendHomeAutosubImpactDot(el.homeTotalPoints, { onCard: true });
     if (impact.league) {
       appendHomeAutosubImpactDot(el.homeLeagueRank, {
-        after: el.homeLeagueRankNum,
+        onCard: true,
         title: "League place after auto-subs",
       });
     }
@@ -16595,7 +16598,7 @@
           decimals: 0,
           className: "home-stat-roll",
         });
-        if (impact.gw) appendHomeAutosubImpactDot(el.homeGwPoints);
+        if (impact.gw) appendHomeAutosubImpactDot(el.homeGwPoints, { onCard: true });
       }
     }
     const overallRankEl = el.homeOverallRankNum || el.homeOverallRank;
@@ -16636,7 +16639,7 @@
         el.homeTotalPoints.textContent = "—";
       } else {
         el.homeTotalPoints.innerHTML = homeRankStatRollHTML(Number(painted.overallPoints), 0);
-        if (impact.total) appendHomeAutosubImpactDot(el.homeTotalPoints);
+        if (impact.total) appendHomeAutosubImpactDot(el.homeTotalPoints, { onCard: true });
       }
     }
     const leagueRankEl = el.homeLeagueRankNum || el.homeLeagueRank;
@@ -16651,7 +16654,7 @@
     }
     if (impact.league) {
       appendHomeAutosubImpactDot(el.homeLeagueRank, {
-        after: el.homeLeagueRankNum,
+        onCard: true,
         title: "League place after auto-subs",
       });
     }
