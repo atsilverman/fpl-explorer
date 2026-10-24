@@ -9652,16 +9652,22 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   line-height: 1.35;
 }
 
+.spit-key,
 .spit-home-key {
   padding-top: 14px;
 }
+.spit-key:first-child,
 .spit-home-key:first-child {
   padding-top: 0;
 }
-.spit-home-key + .spit-home-key {
+.spit-key + .spit-key,
+.spit-home-key + .spit-home-key,
+.spit-key + .spit-annotate {
   margin-top: 6px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+.spit-key-title,
 .spit-home-key-title {
   margin: 0 0 10px;
   font-size: 10.5px;
@@ -9670,11 +9676,13 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   text-transform: uppercase;
   color: var(--text-faint);
 }
+.spit-key-list,
 .spit-home-key-list {
   display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
 }
+.spit-key-row,
 .spit-home-key-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
@@ -9682,6 +9690,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   align-items: center;
   min-height: 32px;
 }
+.spit-key-row.is-wide {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+.spit-key-mark,
 .spit-home-key-mark {
   display: flex;
   align-items: center;
@@ -9695,11 +9707,28 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   background: hsl(var(--muted) / 0.55);
   white-space: nowrap;
 }
+.spit-key-row.is-wide .spit-key-mark {
+  width: 96px;
+}
+.spit-key-mark .spit-home-swatch,
+.spit-key-mark .spit-ui-swatch,
+.spit-key-mark .icon,
+.spit-key-mark .spit-owned-pin,
 .spit-home-key-mark .spit-home-swatch,
 .spit-home-key-mark .icon,
 .spit-home-key-mark .spit-owned-pin {
   flex: none;
 }
+.spit-key-mark .icon {
+  width: 14px;
+  height: 14px;
+}
+.spit-key-mark .spit-easy,
+.spit-key-mark .spit-tough,
+.spit-key-mark .spit-even {
+  margin-top: 0;
+}
+.spit-key-mark .home-autosub-impact-dot,
 .spit-home-key-mark .home-autosub-impact-dot {
   position: static;
   margin: 0;
@@ -9708,9 +9737,12 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   vertical-align: unset;
   animation: none;
 }
+.spit-key-mark .home-captain-sub,
 .spit-home-key-mark .home-captain-sub {
   color: hsl(32 80% 42%);
 }
+.spit-key-mark .home-captain-sub-icon,
+.spit-key-mark .home-captain-sub .icon,
 .spit-home-key-mark .home-captain-sub-icon,
 .spit-home-key-mark .home-captain-sub .icon {
   width: 14px;
@@ -9719,6 +9751,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   stroke: currentColor;
   stroke-width: 2.25;
 }
+.spit-key-mark .home-autosub-fab.spit-home-swatch,
 .spit-home-key-mark .home-autosub-fab.spit-home-swatch {
   --autosub-amber: 38 92% 46%;
   display: inline-flex;
@@ -9735,13 +9768,103 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   box-shadow: none;
   position: static;
 }
+.spit-key-mark .home-autosub-fab.spit-home-swatch .icon,
 .spit-home-key-mark .home-autosub-fab.spit-home-swatch .icon {
   width: 13px;
   height: 13px;
 }
+.spit-key-mark .home-chip-cell.is-active .home-chip-cell-mark,
 .spit-home-key-mark .home-chip-cell.is-active .home-chip-cell-mark {
   animation: none;
 }
+.spit-key-mark .rankings-bar.spit-rankings-bar {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 16px;
+  padding: 0 4px;
+  transition: none;
+}
+.spit-key-mark .rankings-bar.spit-rankings-bar .rankings-value {
+  opacity: 1;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.spit-key-mark .rankings-pin-chip.spit-rankings-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 5px;
+  border: 1px solid hsl(var(--pin-1) / 0.5);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.spit-key-mark .rankings-pin-chip.spit-rankings-pin .rankings-pin-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: hsl(var(--pin-1));
+}
+.spit-key-mark .markets-stat.spit-markets-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.spit-key-mark .markets-stat.spit-markets-swatch .markets-stat-value {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.spit-key-mark .markets-stat-delta.spit-ui-swatch {
+  font-size: 10.5px;
+  gap: 3px;
+}
+.spit-key-mark .markets-stat-delta.spit-ui-swatch .icon {
+  width: 12px;
+  height: 12px;
+}
+.spit-key-mark .spit-barbell-track {
+  width: 40px;
+}
+.spit-key-mark .diff-pill.spit-ui-swatch {
+  --pill-pad-x: 6px;
+  padding: 2px var(--pill-pad-x);
+  font-size: 11px;
+}
+.spit-key-mark .live-feed-impact.spit-home-swatch {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: hsl(var(--positive));
+}
+.spit-key-mark .live-feed-event-label.spit-home-swatch {
+  font-size: 11px;
+  font-weight: 600;
+}
+.spit-key-mark .live-bonus-status.spit-home-swatch {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.spit-key-mark .live-defcon-bar {
+  width: 36px;
+  height: 8px;
+}
+.spit-key-mark .live-points-pill {
+  min-width: 14px;
+  padding: 0 3px;
+  font-size: 10px;
+}
+.spit-key-mark .source-unsupported {
+  color: hsl(38 92% 46%);
+}
+.spit-key-label,
 .spit-home-key-label {
   min-width: 0;
   font-size: 13px;

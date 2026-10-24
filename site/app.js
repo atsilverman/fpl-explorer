@@ -21196,20 +21196,21 @@
     return `<div class="spit-row"><span class="${cls}">${symbol}</span><span>${text}</span></div>`;
   }
 
-  function spitHomeKeyRow(symbol, label) {
+  function spitKeyRow(symbol, label, extraClass = "") {
+    const cls = extraClass ? `spit-key-row ${extraClass}` : "spit-key-row";
     return (
-      `<div class="spit-home-key-row">` +
-      `<span class="spit-home-key-mark">${symbol}</span>` +
-      `<span class="spit-home-key-label">${label}</span>` +
+      `<div class="${cls}">` +
+      `<span class="spit-key-mark">${symbol}</span>` +
+      `<span class="spit-key-label">${label}</span>` +
       `</div>`
     );
   }
 
-  function spitHomeKeySection(title, rows) {
+  function spitKeySection(title, rows) {
     return (
-      `<section class="spit-home-key">` +
-      `<h4 class="spit-home-key-title">${title}</h4>` +
-      `<div class="spit-home-key-list">${rows.join("")}</div>` +
+      `<section class="spit-key">` +
+      `<h4 class="spit-key-title">${title}</h4>` +
+      `<div class="spit-key-list">${rows.join("")}</div>` +
       `</section>`
     );
   }
@@ -21243,24 +21244,23 @@
   }
 
   function matchupPageInfoHTML() {
-    const mobile = pageInfoIsMobile();
-    const iconRows = [
-      spitRow(
-        `${iconHTML("swords", "ftt-attack-icon")} ${iconHTML("shield-half", "ftt-defence-icon")}`,
-        "Attack / defence edge when Advantage ≥ Flag threshold."
+    const marks = [
+      spitKeyRow(
+        `${iconHTML("swords", "ftt-attack-icon")}${iconHTML("shield-half", "ftt-defence-icon")}`,
+        "Attack / defence flag"
       ),
-      spitRow(iconHTML("funnel"), "Gameweek range, Highlight Ranks, Expected/Actual blend, and Flag threshold."),
-      spitRow(iconHTML("sliders-horizontal"), "Strength ranks use 2026/27 FPL season-to-date."),
     ];
-    if (!mobile) {
-      iconRows.push(spitRow(iconHTML("info"), "On a card — that club’s own home/away attack &amp; defence ranks."));
-    }
-    // Static hi-res captures of a real card; pins are HTML overlays (not baked into the PNG).
+    const card = [
+      spitKeyRow(`<span class="spit-pin" aria-hidden="true">1</span>`, "Score chips"),
+      spitKeyRow(`<span class="spit-pin" aria-hidden="true">2</span>`, "Card info"),
+      spitKeyRow(`<span class="spit-pin" aria-hidden="true">3</span>`, "Home"),
+      spitKeyRow(`<span class="spit-pin" aria-hidden="true">4</span>`, "Opp ranks"),
+      spitKeyRow(`<span class="spit-pin" aria-hidden="true">5</span>`, "Attack / defence"),
+    ];
     return `${spitHead("calendar-search", "How Strength of Schedule works")}
-      ${spitIntro("Find teams with a soft upcoming run for attack and/or defence.")}
-      ${spitSection("Legend", iconRows)}
+      ${spitKeySection("Marks", marks)}
+      ${spitKeySection("Card", card)}
       <div class="spit-annotate">
-        <p class="spit-annotate-lead">Fixture card key</p>
         <div class="spit-annotate-figure" aria-hidden="true">
           <img class="spit-annotate-img spit-annotate-img-dark" src="img/matchup-card-guide-dark.png" width="888" height="670" alt="" decoding="async" />
           <img class="spit-annotate-img spit-annotate-img-light" src="img/matchup-card-guide-light.png" width="888" height="670" alt="" decoding="async" />
@@ -21272,333 +21272,293 @@
             <li class="spit-pin" style="--x:93%;--y:20%">5</li>
           </ol>
         </div>
-        <ol class="spit-annotate-key">
-          <li><span class="spit-pin" aria-hidden="true">1</span><span><strong>Score chips</strong> — sum of Advantages on flagged fixtures, then count.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">2</span><span><strong>Info</strong> — this club’s home/away attack &amp; defence ranks.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">3</span><span><strong>Home icon</strong> — home for the team on the card.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">4</span><span><strong>Opp ranks (1–20)</strong> — venue-matched; soft blue / tough pink tint.</span></li>
-          <li><span class="spit-pin" aria-hidden="true">5</span><span><strong>${iconHTML("swords", "ftt-attack-icon")} / ${iconHTML("shield-half", "ftt-defence-icon")}</strong> — flagged attack or defence edge.</span></li>
-        </ol>
-      </div>
-      ${spitNote("Scatter averages every fixture (not only flagged). Ranks use 2026/27 FPL season-to-date.")}`;
+      </div>`;
   }
 
   function pageInfoTooltipHTML() {
-    const mobile = pageInfoIsMobile();
-
     if (state.page === "home") {
       const roles = [
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">V</span>`,
           "Captain / vice"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-captain-sub spit-home-swatch" aria-hidden="true">${iconHTML("repeat-2", "home-captain-sub-icon")}</span>`,
           "Vice took captain"
         ),
       ];
       const status = [
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-status-dot is-live spit-home-swatch" aria-hidden="true"></span>`,
           "Fixture live"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `${iconHTML("circle-x", "home-dnp-icon spit-home-swatch")}`,
           "Did not play"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-mp-line is-short-mins spit-home-swatch" aria-hidden="true">45′</span>`,
           "Under 60′"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-mp-line is-modest-mins spit-home-swatch" aria-hidden="true">68′</span>`,
           "60–75′"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="spit-pitch-chip is-mp spit-home-swatch" aria-hidden="true">27′</span>`,
           "Minutes in play"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="spit-pitch-chip is-unused spit-home-swatch" aria-hidden="true">!</span><span class="spit-pitch-chip is-dash spit-home-swatch" aria-hidden="true">–</span>`,
           "Unused starter"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           spitOwnedPinHTML(),
           "In your squad"
         ),
       ];
       const autosubs = [
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-autosub-tag is-in spit-home-swatch" aria-hidden="true">${iconHTML("caret-up", "home-autosub-icon")}</span><span class="home-autosub-tag is-out spit-home-swatch" aria-hidden="true">${iconHTML("caret-down", "home-autosub-icon")}</span>`,
           "Auto-sub on / off"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-autosub-impact-dot spit-home-swatch" aria-hidden="true"></span>`,
           "Projected in Total"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-autosub-fab spit-home-swatch" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg></span>`,
           "Auto-sub breakdown"
         ),
       ];
       const league = [
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="ownership-pill home-standings-live-pill is-active spit-home-swatch">2</span>`,
           "In play"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-play-left is-active spit-home-swatch">3</span>`,
           "Still to play"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="ownership-pill home-standings-live-pill is-zero spit-home-swatch">0</span>`,
           "None left"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-play-left is-active has-captain spit-home-swatch">4</span>`,
           "Captain still to play"
         ),
       ];
       const chips = [
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-chip-cell is-available spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span></span>`,
           "Available"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-chip-cell is-used spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW4</span></span>`,
           "Used"
         ),
-        spitHomeKeyRow(
+        spitKeyRow(
           `<span class="home-chip-cell is-active spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW1</span></span>`,
           "Active"
         ),
       ];
       return `${spitHead("house", "How Home works")}
-        ${spitHomeKeySection("Roles", roles)}
-        ${spitHomeKeySection("Status", status)}
-        ${spitHomeKeySection("Auto-subs", autosubs)}
-        ${spitHomeKeySection("League", league)}
-        ${spitHomeKeySection("Chips", chips)}`;
+        ${spitKeySection("Roles", roles)}
+        ${spitKeySection("Status", status)}
+        ${spitKeySection("Auto-subs", autosubs)}
+        ${spitKeySection("League", league)}
+        ${spitKeySection("Chips", chips)}`;
     }
 
     if (state.page === "rankings") {
-      const legend = [
-        spitRow(spitMedalsHTML(), "Places 1–3 on each card.", "spit-medals"),
-        spitRow(spitRankingsBarSwatch(), "Bar length — value within the card (longer = higher)."),
-        spitRow(spitRankingsPinSwatch(), "Pinned compare — up to five, colour-coded across cards."),
-        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-      ];
       return `${spitHead("podium", "How Rankings works")}
-        ${spitIntro(isNextSeason()
-          ? "Top 10 leaderboards for FPL season stats, grouped into Key Stats, Attacking, and Defending."
-          : "Top 10 boards for OPTA and FPL metrics, grouped Key Stats, Attacking, and Defending.")}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Board", [
+          spitKeyRow(spitMedalsHTML(), "1st / 2nd / 3rd"),
+          spitKeyRow(spitRankingsBarSwatch(), "Card value"),
+          spitKeyRow(spitRankingsPinSwatch(), "Compare pin"),
+          spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        ])}`;
     }
 
     if (state.page === "expected") {
-      const legend = [
-        spitRow(spitBarbellTrackSwatch(), "Expected dot → actual bar on the track"),
-        spitRow(`<i class="spit-easy"></i>`, "Outperforming expectation"),
-        spitRow(`<i class="spit-tough"></i>`, "Underperforming expectation"),
-        spitRow(`<i class="spit-even"></i>`, "Even — actual ≈ expected"),
-        spitRow(spitDiffPillSwatch("over"), "Diff pill — actual above expected"),
-        spitRow(spitDiffPillSwatch("under"), "Diff pill — actual below expected"),
-        spitRow(spitOwnedPinHTML(), "In your FPL squad"),
-      ];
-      const intro = isNextSeason()
-        ? "FPL expected vs actual for 2026/27 — home/away from live match venue."
-        : "Expected (x) vs actual — who over- or underperformed.";
       return `${spitHead("chart-gantt", "How xData works")}
-        ${spitIntro(intro)}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Track", [
+          spitKeyRow(spitBarbellTrackSwatch(), "Expected → actual"),
+          spitKeyRow(`<i class="spit-easy"></i>`, "Over"),
+          spitKeyRow(`<i class="spit-tough"></i>`, "Under"),
+          spitKeyRow(`<i class="spit-even"></i>`, "Even"),
+        ])}
+        ${spitKeySection("Diff", [
+          spitKeyRow(spitDiffPillSwatch("over"), "Above expected"),
+          spitKeyRow(spitDiffPillSwatch("under"), "Below expected"),
+          spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        ])}`;
     }
 
     if (state.page === "ownership") {
-      const legend = [
-        spitRow(`<span class="ownership-pill is-live spit-ui-swatch">12.4</span>`, "Live TSB% — latest check-in"),
-        spitRow(`<span class="ownership-delta is-up spit-ui-swatch">+1.2</span>`, "Ownership up over that window"),
-        spitRow(`<span class="ownership-delta is-down spit-ui-swatch">−0.8</span>`, "Ownership down over that window"),
-        spitRow(spitOwnershipLineSwatch("riser"), "14-day sparkline — start and end % labeled"),
-        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-      ];
       return `${spitHead("trending-up", "How Ownership works")}
-        ${spitIntro("FPL selected-by% (TSB%) movers from the saved ownership cache.")}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("TSB%", [
+          spitKeyRow(`<span class="ownership-pill is-live spit-ui-swatch">12.4</span>`, "Live"),
+          spitKeyRow(`<span class="ownership-delta is-up spit-ui-swatch">+1.2</span>`, "Up"),
+          spitKeyRow(`<span class="ownership-delta is-down spit-ui-swatch">−0.8</span>`, "Down"),
+          spitKeyRow(spitOwnershipLineSwatch("riser"), "14-day trend"),
+          spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        ])}`;
     }
 
     if (state.page === "defcon") {
-      const legend = [
-        spitRow(
-          `<span class="defcon-gw-dot is-hit spit-ui-swatch"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
-          "Hit — cleared the match DefCon threshold that gameweek"
-        ),
-        spitRow(
-          `<span class="defcon-gw-dot is-miss spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
-          "Miss — played but stayed under the threshold"
-        ),
-        spitRow(
-          `<span class="defcon-gw-dot is-dnp spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
-          "DNP — no minutes that gameweek"
-        ),
-        spitRow(`<span class="defcon-gw-opp is-hit spit-ui-swatch">ARS</span>`, "Opponents mode — UPPERCASE home, lowercase away; color still tracks hit/miss"),
-        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-      ];
       return `${spitHead("shield-half", "How DefCon works")}
-        ${spitIntro("Per-gameweek DefCon hits for finished GWs. Thresholds are binary: DEF 10 CBIT, MID/FWD 12 CBIRT. Goalkeepers are ineligible. Toggle Opponents to swap dots for matchup codes.")}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Match", [
+          spitKeyRow(
+            `<span class="defcon-gw-dot is-hit spit-ui-swatch"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
+            "Hit"
+          ),
+          spitKeyRow(
+            `<span class="defcon-gw-dot is-miss spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
+            "Miss"
+          ),
+          spitKeyRow(
+            `<span class="defcon-gw-dot is-dnp spit-ui-swatch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="defcon-gw-ring" cx="12" cy="12" r="9"/></svg></span>`,
+            "DNP"
+          ),
+        ])}
+        ${spitKeySection("Opponents", [
+          spitKeyRow(`<span class="defcon-gw-opp is-hit spit-ui-swatch">ARS</span>`, "Home"),
+          spitKeyRow(`<span class="defcon-gw-opp is-hit spit-ui-swatch">liv</span>`, "Away"),
+          spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        ])}`;
     }
 
     if (state.page === "prices") {
-      const mobile = NARROW_MQ.matches;
       const isActual = pricesViewMode() === "actual";
-      const legend = isActual
-        ? [
-            spitRow(
-              `<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
-              "Colored arrow beside Risers / Fallers — direction for the whole table"
-            ),
-            spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-          ]
-        : mobile
-        ? [
-            spitRow(`<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`, "Colored arrow beside Risers / Fallers — direction for the whole table"),
-            spitRow(`<span class="prices-status-pill is-very-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">VL</span></span>`, "Very likely to rise (green) + transfer trend arrow"),
-            spitRow(`<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`, "Likely to drop (red) + transfer trend arrow"),
-            spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
-            spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
-            spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-          ]
-        : [
-            spitRow(`<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`, "Colored arrow beside Risers / Fallers — direction for the whole table"),
-            spitRow(`<span class="prices-status-pill is-very-likely-rise has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">Very likely</span></span>`, "Strong rise signal + GW transfer trend"),
-            spitRow(`<span class="prices-status-pill is-likely-drop has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">Likely</span></span>`, "Moderate fall signal + GW transfer trend"),
-            spitRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101.2%</span></span>`, "Progress toward next £0.1m change"),
-            spitRow(`<span class="ownership-spark prices-spark is-up spit-ui-swatch"><span class="ownership-spark-lab">+12.1%</span><svg class="ownership-spark-svg" viewBox="0 0 92 28" width="92" height="28" aria-hidden="true"><polyline points="2,20 46,12 90,6" /><circle cx="90" cy="6" r="1.8" /></svg><span class="ownership-spark-lab">+95.2%</span></span>`, "3-day progress sparkline — start and end % labeled"),
-            spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-          ];
-      const intro = isActual
-        ? "Confirmed £0.1m price moves from bootstrap snapshot diffs."
-        : "Official FPL price-change predictor from hourly bootstrap check-ins.";
+      const direction = [
+        spitKeyRow(
+          `<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
+          "Risers / Fallers"
+        ),
+        spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+      ];
+      if (isActual) {
+        return `${spitHead("pound-sterling-circle", "How Price Change works")}
+          ${spitKeySection("Moves", direction)}`;
+      }
       return `${spitHead("pound-sterling-circle", "How Price Change works")}
-        ${spitIntro(intro)}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Signal", [
+          spitKeyRow(
+            `<span class="prices-section-arrow is-rise spit-ui-swatch">${iconHTML("trending-up")}</span>`,
+            "Risers / Fallers"
+          ),
+          spitKeyRow(
+            `<span class="prices-status-pill is-very-likely-rise is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-up")}</span><span class="prices-status-label">VL</span></span>`,
+            "Very likely"
+          ),
+          spitKeyRow(
+            `<span class="prices-status-pill is-likely-drop is-short has-trend spit-ui-swatch"><span class="prices-status-trend-icon">${iconHTML("trending-down")}</span><span class="prices-status-label">L</span></span>`,
+            "Likely"
+          ),
+        ])}
+        ${spitKeySection("Progress", [
+          spitKeyRow(`<span class="prices-progress-pill is-rise spit-ui-swatch"><span>+101%</span></span>`, "Toward £0.1"),
+          spitKeyRow(spitOwnershipLineSwatch("riser"), "3-day trend"),
+          spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        ])}`;
     }
 
     if (state.page === "live") {
-      const legend = [
-        spitRow(
-          `<span class="live-feed-impact is-pos spit-home-swatch" aria-hidden="true"><span class="live-feed-impact-val">+3.5</span><span class="live-feed-impact-suffix"> vs avg</span></span>`,
-          "League impact — pts gained or lost vs avg opponent (captain 2×).",
-          "spit-symbol-wide"
-        ),
-        spitRow(
-          `<span class="live-feed-event-label spit-home-swatch" aria-hidden="true">Goal</span>`,
-          "Feed event label.",
-          "spit-symbol-wide"
-        ),
-        spitRow(
-          `<span class="live-defcon-bar spit-home-swatch" data-defcon-units="10" aria-hidden="true" style="--defcon-fill:70%"><span class="live-defcon-track"><span class="live-defcon-fill is-drawn" style="width:70%"></span></span></span>`,
-          "DefCon progress — fill toward the position threshold (complete when hit).",
-          "spit-symbol-wide"
-        ),
-        spitRow(
-          `<span class="threshold-dot"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
-          "DefCon earned this match."
-        ),
-        spitRow(`<span class="live-card-dot is-yc spit-home-swatch" aria-hidden="true"></span>`, "Yellow card (Points mode)."),
-        spitRow(
-          `<span class="ownership-pill live-points-pill is-defcon-progress spit-home-swatch">2</span><span class="ownership-pill live-points-pill is-good spit-home-swatch">3</span><span class="ownership-pill live-points-pill is-good is-ga-ring spit-home-swatch">6</span>`,
-          "Saves — plain under 3; fill at 3 (1 pt); ring at 6 (double threshold)"
-        ),
-        spitRow(
-          `<span class="live-bonus-status is-live spit-home-swatch" aria-hidden="true"><span class="home-status-dot is-live"></span> Live</span>`,
-          "Bonus card in play — green border; live cards sort first.",
-          "spit-symbol-wide"
-        ),
-        spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)."),
-      ];
       return `${spitHead("circle-play", "How Gameweek works")}
-        ${spitIntro("Current-GW live stats — event feed, DefCon progress, gameweek points, and per-fixture bonus projections.")}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Feed", [
+          spitKeyRow(
+            `<span class="live-feed-impact is-pos spit-home-swatch" aria-hidden="true"><span class="live-feed-impact-val">+3.5</span></span>`,
+            "Vs league avg"
+          ),
+          spitKeyRow(
+            `<span class="live-feed-event-label spit-home-swatch" aria-hidden="true">Goal</span>`,
+            "Event"
+          ),
+        ])}
+        ${spitKeySection("DefCon", [
+          spitKeyRow(
+            `<span class="live-defcon-bar spit-home-swatch" data-defcon-units="10" aria-hidden="true" style="--defcon-fill:70%"><span class="live-defcon-track"><span class="live-defcon-fill is-drawn" style="width:70%"></span></span></span>`,
+            "Progress"
+          ),
+          spitKeyRow(
+            `<span class="threshold-dot"><svg class="check-mark-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>`,
+            "Hit"
+          ),
+        ])}
+        ${spitKeySection("Points", [
+          spitKeyRow(`<span class="live-card-dot is-yc spit-home-swatch" aria-hidden="true"></span>`, "Yellow card"),
+          spitKeyRow(
+            `<span class="ownership-pill live-points-pill is-defcon-progress spit-home-swatch">2</span><span class="ownership-pill live-points-pill is-good spit-home-swatch">3</span><span class="ownership-pill live-points-pill is-good is-ga-ring spit-home-swatch">6</span>`,
+            "Saves"
+          ),
+          spitKeyRow(
+            `<span class="live-bonus-status is-live spit-home-swatch" aria-hidden="true"><span class="home-status-dot is-live"></span> Live</span>`,
+            "Bonus live"
+          ),
+          spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        ])}`;
     }
 
     if (state.page === "report") {
-      return `${spitHead("file-text", "How Report works")}
-        ${spitIntro("Weekly brief for your linked manager: last GW recap, then injuries, form, minutes, midweek, the next 3–5 fixtures, and differentials.")}`;
+      return `${spitHead("file-text", "How Report works")}`;
     }
 
     if (state.page === "markets") {
-      const legend = [
-        spitRow(spitMarketsStatSwatch("high", "1.82"), "Goals / CS% — above your blue threshold"),
-        spitRow(spitMarketsStatSwatch("low", "18%"), "Goals / CS% — below your orange threshold"),
-        spitRow(spitMarketsDeltaSwatch("up"), "Compare mode — moved up vs earlier pull"),
-        spitRow(spitMarketsDeltaSwatch("down"), "Compare mode — moved down vs earlier pull"),
-        spitRow(
-          iconHTML("scale"),
-          mobile
-            ? "Compare window — Current / Last 24 hr / Last 72 hr (Filters sheet)"
-            : "Compare window — Current / Last 24 hr / Last 72 hr (both card views)"
-        ),
-      ];
       return `${spitHead("candlestick", "How Markets works")}
-        ${spitIntro("Upcoming PL fixtures: projected goals, clean-sheet %, and likely scorelines from bookmaker odds.")}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Goals / CS%", [
+          spitKeyRow(spitMarketsStatSwatch("high", "1.82"), "Above threshold"),
+          spitKeyRow(spitMarketsStatSwatch("low", "18%"), "Below threshold"),
+        ])}
+        ${spitKeySection("Compare", [
+          spitKeyRow(spitMarketsDeltaSwatch("up"), "Up vs pull"),
+          spitKeyRow(spitMarketsDeltaSwatch("down"), "Down vs pull"),
+        ])}`;
     }
-
 
     if (state.page === "schedule") {
       return matchupPageInfoHTML();
     }
 
     if (state.page === "fixtures") {
-      const legend = [
-        spitRow(
-          `<span class="fixtures-pill spit-home-swatch" style="background:hsl(var(--spectrum-rise) / 0.45)">ARS</span>`,
-          "HOME — opponent code in UPPERCASE"
-        ),
-        spitRow(
-          `<span class="fixtures-pill spit-home-swatch" style="background:hsl(var(--spectrum-fall) / 0.45)">liv</span>`,
-          "AWAY — opponent code in lowercase"
-        ),
-        spitRow(
-          `<span class="fixtures-pill spit-home-swatch" style="background:hsl(var(--muted) / 0.55)">MCI</span>`,
-          teamDifficultyUsesFixtures()
-            ? "Pill wash = your custom team ratings (max attack/defence of the opponent at that venue)"
-            : "Pill wash = official FPL fixture difficulty (1 easy → 5 hard)"
-        ),
-        spitRow(
-          iconHTML("sliders-horizontal"),
-          "Custom ratings — Preferences → Team difficulties (always used when set)"
-        ),
-      ];
       return `${spitHead("calendar-days", "How Fixtures works")}
-        ${spitIntro("Season ticker by club — FDR-colored opponent pills across gameweeks. Σ ranks strength of schedule in the visible window.")}
-        ${spitSection("Legend", legend)}`;
+        ${spitKeySection("Venue", [
+          spitKeyRow(
+            `<span class="fixtures-pill spit-home-swatch" style="background:hsl(var(--spectrum-rise) / 0.45)">ARS</span>`,
+            "Home"
+          ),
+          spitKeyRow(
+            `<span class="fixtures-pill spit-home-swatch" style="background:hsl(var(--spectrum-fall) / 0.45)">liv</span>`,
+            "Away"
+          ),
+        ])}
+        ${spitKeySection("Difficulty", [
+          spitKeyRow(
+            `<span class="fixtures-pill spit-home-swatch" style="background:hsl(var(--muted) / 0.55)">MCI</span>`,
+            teamDifficultyUsesFixtures() ? "Custom rating" : "FPL difficulty"
+          ),
+        ])}`;
     }
 
-    // Statistics (default)
-    const legend = [
-      spitRow(spitHighlightSwatch("top"), "Highlight Top — in the top band for that stat"),
-      spitRow(spitHighlightSwatch("bottom"), "Highlight Bottom — in the bottom band for that stat"),
-      spitRow(spitOwnedPinHTML(), "In your FPL squad (Preferences → Manager)"),
-      spitRow(
-        spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold"),
-        "DefCon check — earned DC points by hitting the match threshold (DEF 10 CBIT / MID·FWD 12 CBIRT). Not a per-90 rate."
-      ),
-      spitRow(
-        spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
-        "Set-piece — FPL #1 (check mark). FK/CK also show #2."
-      ),
-      spitRow(iconHTML("scale"), mobile
-        ? "Compare — open from the toolbar or Filters sheet, then pick up to five rows"
-        : "Compare — tap the toolbar button, then pick up to five rows"),
-      spitRow(iconHTML("triangle-alert", "source-unsupported"), "Source can’t fill this cell"),
-    ];
     return `${spitHead("table", "How Statistics works")}
-      ${spitIntro(isNextSeason()
-        ? "2026/27 FPL season stats for players or teams — filter, sort, rank, and compare."
-        : "Season OPTA and FPL stats — filter, sort, and compare Players or Teams.")}
-      ${spitSection("Legend", legend)}`;
+      ${spitKeySection("Highlight", [
+        spitKeyRow(spitHighlightSwatch("top"), "Top band"),
+        spitKeyRow(spitHighlightSwatch("bottom"), "Bottom band"),
+      ])}
+      ${spitKeySection("Marks", [
+        spitKeyRow(spitOwnedPinHTML(), "In your squad"),
+        spitKeyRow(
+          spitCheckMarkHTML("spit-check-mark spit-check-mark--threshold"),
+          "DefCon"
+        ),
+        spitKeyRow(
+          spitCheckMarkHTML("spit-check-mark spit-check-mark--setpiece"),
+          "Set piece"
+        ),
+        spitKeyRow(iconHTML("scale"), "Compare"),
+        spitKeyRow(iconHTML("triangle-alert", "source-unsupported"), "No source"),
+      ])}`;
   }
 
   function shuffleCopy(items) {
