@@ -333,7 +333,17 @@ html, body {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
-    padding-top: var(--mobile-top-chrome-h, 52px);
+  }
+  /* Scroller runs under the fixed top chrome so the frosted .page-nav has
+     content behind it. Spacer (not padding) so each page's own .main
+     padding-top still stacks on top of the chrome inset. */
+  .layout > .main::before {
+    content: "";
+    display: block;
+    flex: none;
+    width: 100%;
+    height: var(--mobile-top-chrome-h, 52px);
+    pointer-events: none;
   }
   :root {
     --badge-size: 26px;
@@ -485,7 +495,7 @@ html[data-page="opta"] {
   align-items: center;
   gap: 8px;
   padding: var(--page-nav-pad-y) 18px;
-  background: hsl(var(--card));
+  background: transparent;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -494,6 +504,24 @@ html[data-page="opta"] {
   z-index: 70;
   flex-wrap: nowrap;
   box-shadow: var(--shadow-sm);
+}
+/* Frosted fill on a pseudo — backdrop-filter on .page-nav itself would make it
+   the containing block for the fixed page-tray menu. Kept near-opaque so only
+   a hint of scrolled colour shows through. */
+.page-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: hsl(var(--card) / 0.74);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .page-nav::before {
+    background: hsl(var(--card));
+  }
 }
 
 .page-nav-center {
@@ -1500,7 +1528,7 @@ html[data-theme="dark"] .page-tab-live-dot {
   min-width: max-content;
   position: relative;
   z-index: 4;
-  background: hsl(var(--card));
+  background: transparent;
   margin-left: auto;
   padding-left: 4px;
   box-shadow: none;
@@ -5097,6 +5125,11 @@ html[data-theme="dark"] .page-live-badge-dot-ping {
 .page-nav-actions .page-info-btn.page-info-nav-btn:focus-visible {
   background: hsl(var(--accent-hsl));
   color: hsl(var(--accent-foreground));
+}
+/* Glass tint on the frosted nav instead of solid page-bg tiles. */
+.page-nav-actions .icon-btn:not(:hover):not(:focus-visible):not(.on):not([aria-expanded="true"]) {
+  background: hsl(var(--foreground) / 0.05);
+  box-shadow: none;
 }
 .page-info-btn:focus-visible {
   outline: none;
@@ -24333,8 +24366,9 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
   #live-page .live-sticky-head:not([hidden]) {
     display: block;
     position: sticky;
-    /* Keep the same gap under the mode slider — don't slide flush into it. */
-    top: var(--main-pad-top, 8px);
+    /* Keep the same gap under the mode slider — don't slide flush into it.
+       .main scrolls under the fixed top chrome, so offset by its height. */
+    top: calc(var(--mobile-top-chrome-h, 52px) + var(--main-pad-top, 8px));
     z-index: 8;
     isolation: isolate;
     margin: 0;
@@ -24352,7 +24386,7 @@ html.is-mobile-layout[data-page="live"] #live-mode-seg button {
     position: absolute;
     left: calc(-1 * var(--mobile-gutter-x, 8px));
     right: calc(-1 * var(--mobile-gutter-x, 8px));
-    top: calc(-1 * (var(--mobile-top-chrome-h, 96px) + 24px));
+    top: calc(-1 * (var(--main-pad-top, 8px) + 1px));
     bottom: 0;
     background: var(--bg);
     z-index: 0;

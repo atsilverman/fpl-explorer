@@ -8704,7 +8704,7 @@
       if (main) {
         const mainRect = main.getBoundingClientRect();
         const panelRect = panel.getBoundingClientRect();
-        const pad = 10;
+        const pad = 10 + mobileTopChromeInset();
         const nextTop = Math.max(0, main.scrollTop + (panelRect.top - mainRect.top) - pad);
         animateHomeScrollTo(main, { top: nextTop, left: 0, duration });
         return;
@@ -17029,6 +17029,15 @@
     root.style.setProperty("--vv-offset-top", `${Math.round(vv.offsetTop)}px`);
     root.style.setProperty("--vv-keyboard-inset", `${Math.round(keyboardInset)}px`);
     syncMobileTopChromeInset();
+  }
+
+  /** Fixed nav (+ subtoolbar) height that .main scrolls underneath on mobile. */
+  function mobileTopChromeInset() {
+    if (!NARROW_MQ.matches) return 0;
+    const v = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--mobile-top-chrome-h")
+    );
+    return Number.isFinite(v) ? v : 0;
   }
 
   function syncMobileTopChromeInset() {
