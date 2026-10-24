@@ -1,10 +1,36 @@
 {
   "automationStartGw": 2,
-  "note": "GW1 matchdays seeded as whole-day marks. From GW2, automation rebuilds per kickoff wave ({gw, matchday, wave}); legacy {gw, matchday} rows still mean the whole UK day is done.",
   "rebuilt": [
-    {"gw": 1, "matchday": "2026-08-21", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
-    {"gw": 1, "matchday": "2026-08-22", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
-    {"gw": 1, "matchday": "2026-08-23", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true},
-    {"gw": 1, "matchday": "2026-08-24", "rebuiltAt": "2026-08-26T23:35:00Z", "seeded": true}
-  ]
+    {
+      "gw": 1,
+      "matchday": "2026-08-21",
+      "rebuiltAt": "2026-08-26T23:35:00Z",
+      "seeded": true
+    },
+    {
+      "gw": 1,
+      "matchday": "2026-08-22",
+      "rebuiltAt": "2026-08-26T23:35:00Z",
+      "seeded": true
+    },
+    {
+      "gw": 1,
+      "matchday": "2026-08-23",
+      "rebuiltAt": "2026-08-26T23:35:00Z",
+      "seeded": true
+    },
+    {
+      "gw": 1,
+      "matchday": "2026-08-24",
+      "rebuiltAt": "2026-08-26T23:35:00Z",
+      "seeded": true
+    },
+    {
+      "gw": 8,
+      "matchday": "2026-10-23",
+      "wave": "2026-10-23T20:00",
+      "rebuiltAt": "2026-10-24T05:58:43Z"
+    }
+  ],
+  "note": "GW1 matchdays seeded as whole-day marks. From GW2, automation rebuilds per kickoff wave ({gw, matchday, wave}); legacy {gw, matchday} rows still mean the whole UK day is done."
 }
