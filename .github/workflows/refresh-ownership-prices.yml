@@ -1,14 +1,21 @@
-# Price-change check-ins every hour (UTC).
-# Writes snapshots/price-changes/*.json + site/price_changes_data.js
-name: Refresh prices
+# Ownership TSB% + price-change check-ins every hour (UTC), one commit per run.
+# One combined job keeps Vercel to a single deploy per hour (Deployment Storage).
+# Ownership: snapshots/ownership/*.json + today's bootstrap-static + site/ownership_data.js
+#   (7d / 3d / 1d deltas remain lookbacks from the latest point; hourly makes 1d ≈ 24h).
+# Prices: snapshots/price-changes/*.json + snapshots/price-actual/ + site/price_changes_data.js
+name: Refresh ownership + prices
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "5 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: refresh-ownership-prices
+  cancel-in-progress: false
 
 jobs:
   refresh:
@@ -21,6 +28,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Refresh Ownership
+        run: python3 site/fetch_ownership.py
 
       - name: Refresh Prices
         run: |
@@ -41,6 +51,8 @@ jobs:
               return subprocess.run(["git", "diff", "--quiet", "--", rel]).returncode != 0
 
           bumps = []
+          if dirty("site/ownership_data.js") or dirty("snapshots/bootstrap-static_") or dirty("snapshots/ownership"):
+              bumps.append("ownership_data.js")
           if dirty("site/price_changes_data.js") or dirty("snapshots/price-changes") or dirty("snapshots/price-actual"):
               bumps.append("price_changes_data.js")
 
@@ -61,14 +73,24 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/price_changes_data.js site/index.html snapshots/price-changes/ snapshots/price-actual/ snapshots/bootstrap-static_*.json || true
+          git add site/ownership_data.js site/price_changes_data.js site/index.html \
+            snapshots/bootstrap-static_*.json snapshots/ownership/ \
+            snapshots/price-changes/ snapshots/price-actual/ || true
           if git diff --staged --quiet; then
             echo "No cache changes to commit."
             exit 0
           fi
           git commit -m "$(cat <<'EOF'
-          Refresh scheduled price-change check-ins.
+          Refresh scheduled ownership + price-change check-ins.
 
           EOF
           )"
-          git push
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt) — rebasing onto origin/main."
+            git pull --rebase origin main
+          done
+          echo "Push failed after retries." >&2
+          exit 1

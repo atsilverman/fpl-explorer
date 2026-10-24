@@ -475,6 +475,11 @@ def main() -> int:
     bump_data_js_cache()
 
     if args.commit:
+        # Record the wave before committing so the state file ships in the same
+        # commit — otherwise CI never sees it and rebuilds this wave every poll.
+        mark_rebuilt_for_gw_through_wave(
+            state, gw, pending, waves, settle_minutes=settle_minutes, now=now
+        )
         try:
             if git_commit_push(gw, pending["wave"]):
                 print("Committed and pushed.")
@@ -483,9 +488,6 @@ def main() -> int:
         except subprocess.CalledProcessError:
             print("Git commit/push failed.", file=sys.stderr)
             return 1
-        mark_rebuilt_for_gw_through_wave(
-            state, gw, pending, waves, settle_minutes=settle_minutes, now=now
-        )
     else:
         mark_rebuilt_for_gw_through_wave(
             state, gw, pending, waves, settle_minutes=settle_minutes, now=now

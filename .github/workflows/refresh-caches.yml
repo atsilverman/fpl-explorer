@@ -3,7 +3,7 @@
 #
 #   07:00 UTC ≈ midnight PT  → Markets
 #   19:00 UTC ≈ noon PT      → Markets + Calendar (Odds /events)
-#   Ownership TSB% is hourly — see refresh-ownership.yml
+#   Ownership TSB% is hourly — see refresh-ownership-prices.yml
 #
 # Requires repo secrets: ODDS_API_KEY (Markets + Fixtures All calendar)
 name: Refresh caches
@@ -60,7 +60,7 @@ jobs:
             MARKETS=1
           else
             # ~noon Pacific (or unknown schedule) — markets + calendar
-            # Ownership check-ins are hourly (refresh-ownership.yml).
+            # Ownership check-ins are hourly (refresh-ownership-prices.yml).
             MARKETS=1
             CALENDAR=1
           fi
