@@ -14999,10 +14999,17 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.home-own-area {
+  pointer-events: none;
+}
+.home-own-x-tick {
+  stroke: hsl(var(--border-hsl));
+  stroke-width: 1;
+}
 .home-own-dot {
   fill: var(--home-own-stroke, hsl(var(--foreground) / 0.55));
   stroke: hsl(var(--card));
-  stroke-width: 1.25;
+  stroke-width: 1.75;
 }
 .home-own-dot.is-live {
   fill: var(--home-own-stroke, hsl(var(--foreground) / 0.7));
@@ -20169,9 +20176,10 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
 }
 .home-pitch-ha {
   display: block;
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  margin-top: -1px;
   overflow: hidden;
   color: currentColor;
   fill: currentColor;
@@ -20262,9 +20270,9 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     font-size: 10px;
   }
   .home-pitch-ha {
-    width: 6px;
-    height: 6px;
-    flex-basis: 6px;
+    width: 9px;
+    height: 9px;
+    flex-basis: 9px;
   }
   .home-pitch-crest,
   .home-pitch-photo-crest .badge-img,
@@ -27248,4 +27256,179 @@ html.is-gw-recap-open body {
   .gw-recap-bar-fill,
   .gw-recap-seg-fill,
   .gw-recap-backdrop { transition: none !important; }
+}
+
+/* Mobile identity column — Statistics / DefCon / Fixtures match xData's
+   barbell label: 122px, 10px inset, 30px photo, 11.5px name that ellipsizes,
+   9.5px TEAM | POS, 10px headers. Width is set via --name-col-w (JS). */
+@media (max-width: 720px) {
+  #fixtures-page .fixtures-table-wrap {
+    --name-col-w: 122px;
+  }
+  #opta-page .table-wrap thead th.col-player,
+  #opta-page .table-wrap thead th.col-name,
+  #opta-page .table-wrap tbody td.col-player,
+  #opta-page .table-wrap tbody td.col-name,
+  #defcon-table-wrap thead th.col-player,
+  #defcon-table-wrap tbody td.col-player,
+  #fixtures-page .table-wrap > table > thead tr:not(.section-row) th.col-name,
+  #fixtures-page .table-wrap > table > tbody td.col-name {
+    padding-left: 10px;
+    padding-right: 6px;
+  }
+  #opta-page .table-wrap .ownership-id,
+  #defcon-table-wrap .ownership-id {
+    gap: 8px;
+  }
+  #opta-page .table-wrap .ownership-photo-frame,
+  #opta-page .table-wrap .ownership-crest,
+  #defcon-table-wrap .ownership-photo-frame,
+  #defcon-table-wrap .ownership-crest {
+    --own-photo: 30px;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+  }
+  #opta-page .table-wrap .ownership-id-text,
+  #defcon-table-wrap .ownership-id-text,
+  #fixtures-page .fixtures-table .ownership-id-text {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #opta-page .table-wrap .ownership-id .player-name,
+  #defcon-table-wrap .ownership-id .player-name,
+  #fixtures-page .fixtures-table .ownership-id .player-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  #opta-page .table-wrap .ownership-id-sub,
+  #opta-page .table-wrap .ownership-id-sub *,
+  #defcon-table-wrap .ownership-id-sub,
+  #defcon-table-wrap .ownership-id-sub *,
+  #fixtures-page .fixtures-table .ownership-id-sub {
+    font-size: 9.5px;
+  }
+  #opta-page .table-wrap thead th,
+  #defcon-table-wrap thead th,
+  #fixtures-page .fixtures-table thead th {
+    font-size: 10px;
+  }
+}
+
+/* Mobile Price Changes (Predicted) — same identity column as xData /
+   Statistics, and pills sized to their content so Predict stays on screen. */
+@media (max-width: 720px) {
+  #prices-page .prices-prediction-table-wrap .prices-table thead th.col-player,
+  #prices-page .prices-prediction-table-wrap .prices-table tbody td.col-player {
+    padding-left: 10px;
+    padding-right: 6px;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id {
+    gap: 8px;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-photo-frame,
+  #prices-page .prices-prediction-table-wrap .ownership-crest {
+    --own-photo: 30px;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id-text {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id .player-name {
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  #prices-page .prices-prediction-table-wrap .ownership-id-sub,
+  #prices-page .prices-prediction-table-wrap .ownership-id-sub * {
+    font-size: 9.5px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table thead th {
+    font-size: 10px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table .prices-status-pill {
+    min-width: 0;
+    min-height: 20px;
+    padding: 2px 7px;
+    gap: 3px;
+    font-size: 10.5px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table .prices-status-pill svg {
+    width: 11px;
+    height: 11px;
+  }
+  #prices-page .prices-prediction-table-wrap .prices-table .prices-progress-pill {
+    --pill-pad-x: 5px;
+    min-width: calc(5ch + 2 * var(--pill-pad-x));
+    min-height: 20px;
+    padding: 2px var(--pill-pad-x);
+    font-size: 10.5px;
+  }
+}
+
+/* Mobile Price Changes (Actual) — xData identity column; Before / After /
+   TSB% share the remaining width (JS sets --prices-actual-metric-col-w). */
+@media (max-width: 720px) {
+  #prices-page .prices-actual-table-wrap .prices-col-before,
+  #prices-page .prices-actual-table-wrap .prices-col-owned {
+    display: table-cell;
+  }
+  #prices-actual-wrap[data-actual-hide-before="1"] .prices-actual-table-wrap .prices-col-before {
+    display: none;
+  }
+  #prices-page .prices-actual-table-wrap .prices-col-before,
+  #prices-page .prices-actual-table-wrap .prices-col-after,
+  #prices-page .prices-actual-table-wrap .prices-col-owned {
+    width: var(--prices-actual-metric-col-w, 3.5rem);
+    min-width: 0;
+    max-width: none;
+    padding-left: 2px;
+    padding-right: 2px;
+    text-align: center;
+    font-size: 10.5px;
+  }
+  #prices-page .prices-actual-table-wrap .prices-col-owned {
+    padding-right: var(--mobile-gutter-x, 8px);
+  }
+  #prices-page .prices-actual-table-wrap .prices-col-owned .ownership-pill {
+    font-size: 10.5px;
+  }
+  #prices-page .prices-actual-table-wrap > table > thead tr:not(.section-row) th.col-player,
+  #prices-page .prices-actual-table-wrap > table > tbody td.col-player {
+    padding-left: 10px;
+    padding-right: 6px;
+  }
+  #prices-page .prices-actual-table-wrap .ownership-id {
+    gap: 8px;
+  }
+  #prices-page .prices-actual-table-wrap .ownership-photo-frame,
+  #prices-page .prices-actual-table-wrap .ownership-crest {
+    --own-photo: 30px;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+  }
+  #prices-page .prices-actual-table-wrap .ownership-id-text {
+    min-width: 0;
+    overflow: hidden;
+  }
+  #prices-page .prices-actual-table-wrap .ownership-id .player-name {
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  #prices-page .prices-actual-table-wrap .ownership-id-sub,
+  #prices-page .prices-actual-table-wrap .ownership-id-sub * {
+    font-size: 9.5px;
+  }
+  #prices-page .prices-table-wrap .prices-table > thead tr:not(.section-row) th {
+    font-family: inherit;
+    font-size: 10px;
+    vertical-align: middle;
+  }
 }

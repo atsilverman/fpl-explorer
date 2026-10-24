@@ -12027,22 +12027,38 @@
     </article>`;
   }
 
-  function homeOwnChartYScale(vals) {
+  let homeOwnChartSeq = 0;
+
+  /** Round gridline values (≤4 lines) bracketing the data, clamped to 0–100%. */
+  function homeOwnChartNiceTicks(vals) {
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
-    const raw = hi - lo;
-    const pad = Math.max(0.35, (raw || 1) * 0.12);
-    let yLo = lo - pad;
-    let yHi = hi + pad;
+    const raw = Math.max(hi - lo, 0.3);
+    const steps = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25];
+    const step = steps.find((s) => raw / s <= 3) || 25;
+    let yLo = Math.floor((lo - raw * 0.04) / step) * step;
+    let yHi = Math.ceil((hi + raw * 0.04) / step) * step;
+    if (yHi - yLo < step) yHi = yLo + step;
     yLo = Math.max(0, yLo);
     yHi = Math.min(100, yHi);
-    if (yHi - yLo < 0.5) {
-      const mid = (lo + hi) / 2;
-      yLo = Math.max(0, mid - 0.4);
-      yHi = Math.min(100, mid + 0.4);
+    const ticks = [];
+    for (let v = yLo; v <= yHi + step * 0.01; v += step) ticks.push(Math.round(v * 100) / 100);
+    const decimals = step < 1 ? (step < 0.25 ? 1 : String(step).split(".")[1].length) : 0;
+    return { yLo, yHi, rng: yHi - yLo || 1, ticks, decimals };
+  }
+
+  /** Linear value at `ms` between the surrounding check-ins. */
+  function homeOwnValueAt(timed, ms) {
+    if (ms <= timed[0].ms) return timed[0].owned;
+    for (let i = 1; i < timed.length; i++) {
+      const b = timed[i];
+      if (b.ms >= ms) {
+        const a = timed[i - 1];
+        const t = b.ms > a.ms ? (ms - a.ms) / (b.ms - a.ms) : 1;
+        return a.owned + (b.owned - a.owned) * t;
+      }
     }
-    const rng = yHi - yLo || 1;
-    return { yLo, yHi, rng };
+    return timed[timed.length - 1].owned;
   }
 
   function homeOwnershipChartSvg(series, { accent = "", toneDelta = null, windowDays = 7 } = {}) {
@@ -12050,21 +12066,53 @@
     if (points.length < 2) return "";
     const w = 320;
     const h = 132;
-    const padL = 34;
-    const padR = 12;
-    const padT = 14;
-    const padB = 24;
-    const vals = points.map((pt) => Number(pt.owned));
-    const { yLo, yHi, rng } = homeOwnChartYScale(vals);
-    const n = points.length;
+    const padL = 30;
+    const padR = 14;
+    const padT = 12;
+    const padB = 26;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const timed = points
+      .map((pt) => ({ ms: ownershipCheckInMs(pt.checkedAt), owned: Number(pt.owned), checkedAt: pt.checkedAt }))
+      .filter((pt) => Number.isFinite(pt.ms) && Number.isFinite(pt.owned))
+      .sort((a, b) => a.ms - b.ms);
+    if (timed.length < 2) return "";
+    const liveMs = timed[timed.length - 1].ms;
+    const days = Number(windowDays) > 0 ? Number(windowDays) : (liveMs - timed[0].ms) / dayMs;
+    const windowStart = liveMs - days * dayMs;
+    // Window filtering trims the check-in just before the edge; hold its value
+    // back to the edge so the first marker and date label still fit.
+    if (timed[0].ms > windowStart && timed[0].ms - windowStart < dayMs) {
+      timed.unshift({ ...timed[0], ms: windowStart });
+    }
+    const t0 = Math.max(timed[0].ms, windowStart);
+    const span = Math.max(liveMs - t0, 1);
+    const { yLo, rng, ticks: yTicks, decimals } = homeOwnChartNiceTicks(timed.map((p) => p.owned));
     const plotW = w - padL - padR;
     const plotH = h - padT - padB;
-    const coords = points.map((pt, i) => {
-      const x = padL + (i / (n - 1)) * plotW;
-      const y = padT + (1 - (Number(pt.owned) - yLo) / rng) * plotH;
-      return { x, y, owned: Number(pt.owned), checkedAt: pt.checkedAt };
-    });
+    const xAt = (ms) => padL + ((ms - t0) / span) * plotW;
+    const yAt = (v) => padT + (1 - (v - yLo) / rng) * plotH;
+    const coords = timed
+      .filter((p) => p.ms >= t0)
+      .map((p) => ({ x: xAt(p.ms), y: yAt(p.owned), owned: p.owned, checkedAt: p.checkedAt }));
     const pathD = homeOwnSmoothPathD(coords);
+    const baseY = padT + plotH;
+    const areaD = `${pathD} L${coords[coords.length - 1].x.toFixed(1)} ${baseY} L${coords[0].x.toFixed(1)} ${baseY} Z`;
+    // ~7 evenly spaced markers anchored on the live check-in, labelled every other one.
+    const stepDays = days <= 8 ? 1 : days <= 15 ? 2 : Math.max(3, Math.round(days / 6));
+    const marks = [];
+    for (let ms = liveMs; ms >= t0 - 1; ms -= stepDays * dayMs) marks.push(ms);
+    marks.reverse();
+    const labelEvery = marks.length > 5 ? 2 : 1;
+    const markEls = marks.map((ms, i) => {
+      const fromEnd = marks.length - 1 - i;
+      return {
+        ms,
+        x: xAt(ms),
+        y: yAt(homeOwnValueAt(timed, ms)),
+        isLast: fromEnd === 0,
+        labelled: fromEnd % labelEvery === 0,
+      };
+    });
     const toneDeltaVal =
       toneDelta != null && Number.isFinite(Number(toneDelta))
         ? Number(toneDelta)
@@ -12076,45 +12124,49 @@
         : tone === "is-down"
           ? "hsl(var(--delta-fall))"
           : accent || "hsl(var(--foreground) / 0.55)";
-    const yTop = fmtOwnedPct(yHi);
-    const yBot = fmtOwnedPct(yLo);
-    const xFirst = fmtOwnershipDate(coords[0].checkedAt);
-    const xLast = fmtOwnershipDate(coords[coords.length - 1].checkedAt);
-    const last = coords[coords.length - 1];
-    const liveMs = ownershipCheckInMs(last.checkedAt);
-    const dayMs = 24 * 60 * 60 * 1000;
-    const showBand =
-      windowDays == null || (Number.isFinite(Number(windowDays)) && Number(windowDays) > 7);
+    const last = markEls[markEls.length - 1];
     let bandRect = "";
-    if (showBand && Number.isFinite(liveMs)) {
-      const bandFromMs = liveMs - 7 * dayMs;
-      let bandStart = coords.findIndex((c) => ownershipCheckInMs(c.checkedAt) >= bandFromMs);
-      if (bandStart < 0) bandStart = Math.max(0, coords.length - 2);
-      const x0 = coords[bandStart].x;
-      const x1 = last.x;
-      if (x1 > x0 + 1) {
-        bandRect = `<rect class="home-own-band" x="${x0.toFixed(1)}" y="${padT}" width="${(x1 - x0).toFixed(1)}" height="${plotH}" rx="3" ry="3" />`;
+    if (days > 8) {
+      const x0 = xAt(Math.max(t0, liveMs - 7 * dayMs));
+      if (last.x > x0 + 1) {
+        bandRect = `<rect class="home-own-band" x="${x0.toFixed(1)}" y="${padT}" width="${(last.x - x0).toFixed(1)}" height="${plotH}" rx="3" ry="3" />`;
       }
     }
-    const dots = coords
-      .map((c, i) => {
-        const isLast = i === coords.length - 1;
-        return `<circle class="home-own-dot${isLast ? " is-live" : ""}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast ? 3.2 : 2}" />`;
+    const grid = yTicks
+      .map((v) => {
+        const y = yAt(v).toFixed(1);
+        return `<line class="home-own-grid" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" />
+      <text class="home-own-y-label" x="${padL - 6}" y="${(Number(y) + 3).toFixed(1)}" text-anchor="end">${escapeHtml(v.toFixed(decimals))}</text>`;
       })
+      .join("");
+    const xLabels = markEls
+      .filter((m) => m.labelled)
+      .map((m) => {
+        const anchor = m.isLast ? "end" : m.x - padL < 18 ? "start" : "middle";
+        const lx = m.isLast ? w - padR + 4 : m.x;
+        return `<line class="home-own-x-tick" x1="${m.x.toFixed(1)}" y1="${baseY + 2}" x2="${m.x.toFixed(1)}" y2="${baseY + 5}" />
+      <text class="home-own-x-label" x="${lx.toFixed(1)}" y="${h - 6}" text-anchor="${anchor}">${escapeHtml(fmtOwnershipDate(new Date(m.ms).toISOString()))}</text>`;
+      })
+      .join("");
+    const dots = markEls
+      .map(
+        (m) =>
+          `<circle class="home-own-dot${m.isLast ? " is-live" : ""}" cx="${m.x.toFixed(1)}" cy="${m.y.toFixed(1)}" r="${m.isLast ? 4 : 3}" />`
+      )
       .join("");
     const pulse = prefersReducedMotion()
       ? ""
-      : `<circle class="home-own-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.2" />`;
-    const midY = padT + plotH / 2;
+      : `<circle class="home-own-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4" />`;
+    const gradId = `home-own-fill-${++homeOwnChartSeq}`;
     return `<svg class="home-own-svg ${tone}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="--home-own-stroke:${stroke}">
+      <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${stroke}" stop-opacity="0.22" />
+        <stop offset="1" stop-color="${stroke}" stop-opacity="0" />
+      </linearGradient></defs>
       ${bandRect}
-      <line class="home-own-grid" x1="${padL}" y1="${padT}" x2="${w - padR}" y2="${padT}" />
-      <line class="home-own-grid" x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" />
-      <line class="home-own-grid" x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" />
-      <text class="home-own-y-label" x="${padL - 6}" y="${padT + 3}" text-anchor="end">${escapeHtml(yTop)}</text>
-      <text class="home-own-y-label" x="${padL - 6}" y="${h - padB + 3}" text-anchor="end">${escapeHtml(yBot)}</text>
-      <text class="home-own-x-label" x="${padL}" y="${h - 6}" text-anchor="start">${escapeHtml(xFirst)}</text>
-      <text class="home-own-x-label" x="${w - padR}" y="${h - 6}" text-anchor="end">${escapeHtml(xLast)}</text>
+      ${grid}
+      ${xLabels}
+      <path class="home-own-area" d="${areaD}" fill="url(#${gradId})" />
       <path class="home-own-line" d="${pathD}" />
       ${dots}
       ${pulse}
@@ -17783,7 +17835,8 @@
   const OWNERSHIP_MOBILE_NAME_COL_MIN = 168;
   const MOBILE_NAME_COL_MAX_FRAC = 0.58;
   const MOBILE_NAME_COL_SLACK = 10;
-  const PRICES_ACTUAL_MOBILE_PLAYER_MIN = 96;
+  /** xData barbell label width — Statistics / DefCon / Fixtures match it on mobile. */
+  const MOBILE_COMPACT_NAME_COL_W = 122;
   const PRICES_ACTUAL_MOBILE_CHANGE_MIN = 44;
   const PRICES_ACTUAL_MOBILE_AFTER_MIN = 58;
 
@@ -17906,19 +17959,7 @@
       return;
     }
     const mainWrap = wraps[0];
-    if (mainWrap) {
-      const measured = measureNameColWidth(mainWrap, {
-        minW: MOBILE_NAME_COL_MIN,
-        hugContent: true,
-      });
-      const cap = Math.round(mainWrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
-      optaMobileNameColW = Math.max(
-        MOBILE_NAME_COL_MIN,
-        Math.min(measured, cap)
-      );
-    } else {
-      optaMobileNameColW = null;
-    }
+    optaMobileNameColW = mainWrap ? MOBILE_COMPACT_NAME_COL_W : null;
     if (optaMobileNameColW == null) return;
     const prev = mainWrap && mainWrap.style.getPropertyValue("--name-col-w");
     wraps.forEach((wrap) => {
@@ -17966,15 +18007,7 @@
       if (wrap) wrap.style.removeProperty("--name-col-w");
       return;
     }
-    const measured = measureNameColWidth(wrap, {
-      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
-      hugContent: true,
-    });
-    const cap = Math.round(wrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
-    defconMobileNameColW = Math.max(
-      OWNERSHIP_MOBILE_NAME_COL_MIN,
-      Math.min(measured, cap)
-    );
+    defconMobileNameColW = MOBILE_COMPACT_NAME_COL_W;
     const prev = wrap.style.getPropertyValue("--name-col-w");
     wrap.style.setProperty("--name-col-w", `${defconMobileNameColW}px`);
     if (prev !== `${defconMobileNameColW}px`) {
@@ -18075,17 +18108,7 @@
       wraps.forEach((wrap) => wrap.style.removeProperty("--name-col-w"));
       return;
     }
-    const mainWrap =
-      wraps.find((wrap) => wrap.offsetParent !== null && wrap.clientWidth > 0) || wraps[0];
-    const measured = measureNameColWidth(mainWrap, {
-      minW: OWNERSHIP_MOBILE_NAME_COL_MIN,
-      hugContent: true,
-    });
-    const cap = Math.round(mainWrap.clientWidth * MOBILE_NAME_COL_MAX_FRAC);
-    pricesMobileNameColW = Math.max(
-      OWNERSHIP_MOBILE_NAME_COL_MIN,
-      Math.min(measured, cap)
-    );
+    pricesMobileNameColW = MOBILE_COMPACT_NAME_COL_W;
     wraps.forEach((wrap) => {
       const prev = wrap.style.getPropertyValue("--name-col-w");
       wrap.dataset.view = "players";
@@ -19933,7 +19956,7 @@
       const intro = isActual
         ? "Confirmed £0.1m price moves from bootstrap snapshot diffs."
         : "Official FPL price-change predictor from hourly bootstrap check-ins.";
-      return `${spitHead("pound-sterling-circle", "How Price Changes works")}
+      return `${spitHead("pound-sterling-circle", "How Price Change works")}
         ${spitIntro(intro)}
         ${spitSection("Legend", legend)}`;
     }
@@ -20683,7 +20706,7 @@
       fixtures: "How Fixtures works",
       ownership: "How Ownership works",
       defcon: "How DefCon works",
-      prices: "How Price Changes works",
+      prices: "How Price Change works",
       markets: "How Markets works",
     };
     pageInfoButtons().forEach((btn) => {
@@ -28793,14 +28816,6 @@
     return (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
   }
 
-  function measurePricesActualMobilePlayerWidth(wrap) {
-    return measureNameColWidth(wrap, {
-      minW: PRICES_ACTUAL_MOBILE_PLAYER_MIN,
-      hugContent: true,
-      slack: 4,
-    });
-  }
-
   function syncPricesActualColumnWidths() {
     const wraps = pricesActualTableWraps();
     const active =
@@ -28833,11 +28848,9 @@
 
     let maxDate = measurePricesTextWidth("Date", dateRef);
     let maxTsb = 0;
-    let maxPlayer = PRICES_ACTUAL_MOBILE_PLAYER_MIN;
     let maxAfter = measurePricesTextWidth("After", afterRef);
 
     visibleWraps.forEach((wrap) => {
-      maxPlayer = Math.max(maxPlayer, measurePricesActualMobilePlayerWidth(wrap));
       wrap
         .querySelectorAll("td.prices-col-date, td.prices-actual-day")
         .forEach((cell) => {
@@ -28874,13 +28887,9 @@
         PRICES_ACTUAL_MOBILE_AFTER_MIN,
         Math.ceil(maxAfter + afterPad)
       );
-      let playerW = maxPlayer;
-      let slack = tableW - (dateW + playerW + afterW);
-      if (slack > 0) {
-        playerW += slack;
-      } else if (slack < 0) {
-        playerW = Math.max(PRICES_ACTUAL_MOBILE_PLAYER_MIN, playerW + slack);
-      }
+      // Player matches the xData identity column; Before / After / TSB% share the rest.
+      const playerW = MOBILE_COMPACT_NAME_COL_W;
+      afterW = Math.max(afterW, Math.floor((tableW - dateW - playerW) / 3));
 
       visibleWraps.forEach((wrap) => {
         wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
@@ -29280,7 +29289,9 @@
       return `<tr>
         ${th("Date", "col-date prices-col-date")}
         ${th("Player", "col-player")}
+        ${th("Before", "col-num prices-col-actual-price prices-col-before")}
         ${th("After", "col-num prices-col-actual-price prices-col-after")}
+        ${th("TSB%", "col-num prices-col-owned")}
       </tr>`;
     }
     const th = (key, label, extra = "", title = "") => {
@@ -29388,13 +29399,10 @@
 
   function pricesActualMetricCellsHTML(row, catalog) {
     const mobile = NARROW_MQ.matches;
-    let html = "";
-    if (!mobile) {
-      html += `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
-    }
+    let html = `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
     html += `<td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
+    html += `<td class="col-num prices-col-owned">${ownershipPillHTML(pricesActualOwnedPctDisplay(row, catalog), { live: true })}</td>`;
     if (!mobile) {
-      html += `<td class="col-num prices-col-owned">${ownershipPillHTML(pricesActualOwnedPctDisplay(row, catalog), { live: true })}</td>`;
       html += `<td class="col-num prices-col-league-owned">${ownershipPillHTML(pricesActualLeagueTsbPct(row), { live: true })}</td>`;
     }
     return html;
@@ -29861,7 +29869,7 @@
     if (!isNextSeason()) {
       if (el.pricesCountLabel) el.pricesCountLabel.textContent = "2026/27 only";
       const msg =
-        "Price Changes Predictor is available in 2026/27 season mode.";
+        "Price Change Predictor is available in 2026/27 season mode.";
       if (el.pricesRisersHead) el.pricesRisersHead.innerHTML = pricesHeadHTML();
       if (el.pricesFallersHead) el.pricesFallersHead.innerHTML = pricesHeadHTML();
       if (el.pricesRisersBody) {
