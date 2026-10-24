@@ -963,6 +963,107 @@ def record_actual_changes_from_checkin(
     return append_actual_changes(events)
 
 
+def _bootstrap_snapshot_date(path: Path) -> str | None:
+    match = BOOTSTRAP_DATE_RE.search(path.name)
+    return match.group(1) if match else None
+
+
+def _event_deadline_date(ev: dict) -> str | None:
+    raw = ev.get("deadline_time") if ev else None
+    if not raw or not isinstance(raw, str):
+        return None
+    return raw[:10] if len(raw) >= 10 else None
+
+
+def _pick_bootstrap_for_deadline(paths: list[Path], deadline_date: str) -> Path | None:
+    chosen = None
+    for path in paths:
+        snap_date = _bootstrap_snapshot_date(path)
+        if snap_date and snap_date <= deadline_date:
+            chosen = path
+        elif snap_date and snap_date > deadline_date:
+            break
+    return chosen
+
+
+def build_price_by_gw(bootstrap: dict | None = None) -> dict:
+    """Deadline-day £ prices per player, GW1 → current, from bootstrap-static snapshots.
+
+    Shape:
+      {
+        "gws": [1, 2, …],
+        "sources": {"1": "bootstrap-static_2026-08-21.json", …},
+        "prices": {"223094": [145, 145, …]}  # now_cost tenths, null if absent
+      }
+    """
+    paths = bootstrap_snapshot_paths()
+    if not paths:
+        return {"gws": [], "sources": {}, "prices": {}}
+
+    snap = bootstrap
+    if snap is None:
+        try:
+            snap = json.loads(paths[-1].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"gws": [], "sources": {}, "prices": {}}
+
+    now = utc_now()
+    events: list[tuple[int, str]] = []
+    for ev in snap.get("events") or []:
+        try:
+            gid = int(ev["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        deadline_date = _event_deadline_date(ev)
+        if not deadline_date:
+            continue
+        include = bool(ev.get("finished") or ev.get("is_previous") or ev.get("is_current"))
+        if not include:
+            try:
+                deadline = datetime.fromisoformat(str(ev.get("deadline_time")).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                deadline = None
+            include = deadline is not None and deadline <= now
+        if include:
+            events.append((gid, deadline_date))
+    events.sort(key=lambda item: item[0])
+    if not events:
+        return {"gws": [], "sources": {}, "prices": {}}
+
+    costs_by_path: dict[Path, dict[int, int]] = {}
+    sources: dict[str, str] = {}
+    per_gw: list[dict[int, int]] = []
+    gws: list[int] = []
+    codes: set[int] = set()
+    for gid, deadline_date in events:
+        path = _pick_bootstrap_for_deadline(paths, deadline_date)
+        gws.append(gid)
+        if path is None:
+            sources[str(gid)] = ""
+            per_gw.append({})
+            continue
+        sources[str(gid)] = path.name
+        if path not in costs_by_path:
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                costs_by_path[path] = {}
+            else:
+                costs_by_path[path] = costs_index_from_snap(loaded)
+        costs = costs_by_path[path]
+        codes.update(costs)
+        per_gw.append(costs)
+
+    prices: dict[str, list[int | None]] = {}
+    for code in sorted(codes):
+        series: list[int | None] = []
+        for costs in per_gw:
+            val = costs.get(code)
+            series.append(int(val) if val is not None else None)
+        prices[str(code)] = series
+    return {"gws": gws, "sources": sources, "prices": prices}
+
+
 def rebuild_price_changes_bundle(
     *,
     latest_snap: dict | None = None,
@@ -1021,6 +1122,7 @@ def rebuild_price_changes_bundle(
         "checkIns": check_ins,
         "players": players,
         "actualChanges": actual_changes_newest_first(),
+        "priceByGw": build_price_by_gw(meta_snap),
     }
     write_price_changes_js(payload)
     return payload

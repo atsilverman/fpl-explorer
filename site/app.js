@@ -22,6 +22,7 @@
     players: [],
     nextChangeAt: null,
     actualChanges: [],
+    priceByGw: { gws: [], sources: {}, prices: {} },
   };
   if (!window.FPL_PRICE_CHANGES) window.FPL_PRICE_CHANGES = PRICES;
   const LEAGUES = window.FPL_LEAGUES || { generatedAt: null, managers: [], leagues: [] };
@@ -2572,7 +2573,7 @@
     if (el.homeDeadline) el.homeDeadline.hidden = true;
     if (el.homeViewBanner) el.homeViewBanner.hidden = true;
     if (el.homeOwnerBanner) el.homeOwnerBanner.hidden = true;
-    if (el.homeGwHeading) el.homeGwHeading.textContent = "GW points";
+    if (el.homeGwHeading) el.homeGwHeading.textContent = "GW PTS";
     if (el.homeGwPoints) el.homeGwPoints.textContent = "—";
     if (el.homeGwMeta) el.homeGwMeta.innerHTML = "";
     if (el.homeHeroChip) {
@@ -4560,6 +4561,7 @@
   let homeFeedPagerTarget = null;
   // Physical pager: 0 Pitch · 1 List · 2 Points · 3 Ownership · 4 Schedule.
   // Wide desktop hides Points (merged beside the XI table) — skip physical index 2.
+  const HOME_SQUAD_PITCH_PAGE = 0;
   const HOME_SQUAD_PTS_PAGE = 2;
   const HOME_SQUAD_OWNERSHIP_PAGE = 3;
   const HOME_SQUAD_VIEW_LABELS = ["Pitch", "List", "Points", "Ownership", "Schedule"];
@@ -5364,8 +5366,8 @@
     return `<td class="home-col-rank">${rankHTML}</td>
       <td class="home-col-manager">
         <div class="home-standings-manager">
-          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.playerName || "—")}</span>${chipBadge}</span>
-          <span class="home-standings-entry">${escapeHtml(row.entryName || "")}</span>
+          <span class="home-standings-name"><span class="home-standings-name-text">${escapeHtml(row.entryName || "—")}</span>${chipBadge}</span>
+          <span class="home-standings-entry">${escapeHtml(row.playerName || "")}</span>
         </div>
       </td>`;
   }
@@ -8575,6 +8577,7 @@
     });
     syncHomeSquadPagerDots(idx);
     syncHomeSquadLayout(idx);
+    syncHomeFxScrub();
     if (
       homeSquadLogicalPageIndex(idx) ===
       homeSquadLogicalPageIndex(HOME_SQUAD_OWNERSHIP_PAGE)
@@ -8610,6 +8613,7 @@
       const idx =
         homeSquadPagerTarget != null ? homeSquadPagerTarget : homeSquadActivePageIndex();
       syncHomeSquadPagerDots(idx);
+      syncHomeFxScrub();
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = setTimeout(onScrollSettled, 140);
     };
@@ -9889,23 +9893,6 @@
   /** Pitch card strip mode: gw (default) | fixtures | form | imp | price */
   let homePitchStripMode = "gw";
 
-  function homeSquadPitchFormPts(row) {
-    const cur = Number(HOME && HOME.gw);
-    // Form = prior weeks only (end at current − 1), not the in-progress GW.
-    const end = Number.isFinite(cur) && cur >= 2 ? cur - 1 : 0;
-    const out = [];
-    for (let gw = end - 2; gw <= end; gw++) {
-      if (gw < 1) {
-        out.push(null);
-        continue;
-      }
-      const eg = (liveElementMapForGw(gw) || {})[String(row.element)];
-      const pts = eg != null && Number.isFinite(Number(eg.pts)) ? Math.round(Number(eg.pts)) : null;
-      out.push(pts);
-    }
-    return out;
-  }
-
   function homeSquadPitchGwStripHTML(row) {
     if (homeSquadRowIsUnusedLive(row)) {
       return `<span class="home-pitch-strip home-pitch-pts is-idle is-unused">–</span>`;
@@ -9934,11 +9921,42 @@
   let homeFxPos = 0;
   let homeFxScrubBound = false;
 
+  function homePitchScrubVisible() {
+    return homePitchStripMode === "price" ? 1 : HOME_FX_VISIBLE;
+  }
+
   /** Gameweeks the pitch fixture carousel can scrub through (next GW → season end). */
   function homeFxGwRange() {
+    const vis = HOME_FX_VISIBLE;
     const start = Math.min(SCHEDULE_GW_MAX, Math.max(1, planningGameweek()));
-    const n = Math.max(HOME_FX_VISIBLE, SCHEDULE_GW_MAX - start + 1);
-    return { start, n, maxPos: Math.max(0, n - HOME_FX_VISIBLE) };
+    const n = Math.max(vis, SCHEDULE_GW_MAX - start + 1);
+    return { start, n, maxPos: Math.max(0, n - vis), vis };
+  }
+
+  /** Prior GWs only (oldest left → newest right). Pad left so the window stays 3 wide. */
+  function homeFormGwRange() {
+    const vis = HOME_FX_VISIBLE;
+    const cur = Number(HOME && HOME.gw);
+    const end = Number.isFinite(cur) && cur >= 2 ? cur - 1 : 0;
+    const n = Math.max(vis, end);
+    const start = end - n + 1;
+    return { start, n, maxPos: Math.max(0, n - vis), end, vis };
+  }
+
+  /** GW1 → current, one GW at a time (oldest left → newest right). Current cell uses live £. */
+  function homePriceGwRange() {
+    const vis = 1;
+    const cur = Number(HOME && HOME.gw);
+    const end = Number.isFinite(cur) && cur >= 1 ? cur : 0;
+    const n = Math.max(vis, end);
+    const start = end - n + 1;
+    return { start, n, maxPos: Math.max(0, n - vis), end, vis };
+  }
+
+  function homePitchScrubRange() {
+    if (homePitchStripMode === "form") return homeFormGwRange();
+    if (homePitchStripMode === "price") return homePriceGwRange();
+    return homeFxGwRange();
   }
 
   function homePitchFxCellRamp(fx) {
@@ -9992,21 +10010,27 @@
   }
 
   function homeFxWindowLabel(pos = homeFxPos) {
-    const { start } = homeFxGwRange();
+    const { start, end, vis } = homePitchScrubRange();
+    const shown = vis || homePitchScrubVisible();
     const a = start + Math.round(pos);
-    return `GW${a}–${a + HOME_FX_VISIBLE - 1}`;
+    const b = a + shown - 1;
+    const lo = Math.max(1, a);
+    const hi = Number.isFinite(end) && end > 0 ? Math.min(end, b) : b;
+    if (lo >= hi) return `GW${Math.max(lo, hi)}`;
+    return `GW${lo}–${hi}`;
   }
 
   /** Drives every pitch strip at once via --home-fx-pos (fractional while dragging). */
   function setHomeFxPos(pos, { snap = false } = {}) {
-    const { n, maxPos } = homeFxGwRange();
+    const { n, maxPos, vis } = homePitchScrubRange();
+    const shown = vis || homePitchScrubVisible();
     let next = Math.max(0, Math.min(maxPos, Number(pos) || 0));
     if (snap) next = Math.round(next);
     homeFxPos = next;
     document.documentElement.style.setProperty("--home-fx-pos", String(next));
     const { track, win, label } = homeFxScrubEls();
     if (win) {
-      const wPct = (HOME_FX_VISIBLE / n) * 100;
+      const wPct = (shown / n) * 100;
       win.style.width = `${wPct}%`;
       win.style.left = `${maxPos ? (next / maxPos) * (100 - wPct) : 0}%`;
     }
@@ -10028,7 +10052,7 @@
     const posFromX = (clientX) => {
       const r = track.getBoundingClientRect();
       const w = win ? win.getBoundingClientRect().width : 0;
-      const { maxPos } = homeFxGwRange();
+      const { maxPos } = homePitchScrubRange();
       const off = grabOffset != null ? grabOffset : w / 2;
       const usable = Math.max(1, r.width - w);
       return ((clientX - r.left - off) / usable) * maxPos;
@@ -10060,7 +10084,7 @@
     track.addEventListener("pointerup", end);
     track.addEventListener("pointercancel", end);
     track.addEventListener("keydown", (e) => {
-      const { maxPos } = homeFxGwRange();
+      const { maxPos } = homePitchScrubRange();
       const cur = Math.round(homeFxPos);
       let next = null;
       if (e.key === "ArrowRight" || e.key === "ArrowUp") next = cur + 1;
@@ -10073,32 +10097,64 @@
     });
   }
 
-  /** Mobile Home + Fixtures pitch mode: scrubber replaces the bottom FABs. */
+  /** Mobile Home + Fixtures / Form / Price pitch: scrubber replaces the bottom FABs. */
   function syncHomeFxScrub() {
-    const { root, ticks } = homeFxScrubEls();
+    const { root, ticks, track } = homeFxScrubEls();
     if (!root) return;
+    const scrubMode =
+      homePitchStripMode === "fixtures" ||
+      homePitchStripMode === "form" ||
+      homePitchStripMode === "price";
     const on =
-      mobileDocksActive() && state.page === "home" && homePitchStripMode === "fixtures";
+      mobileDocksActive() &&
+      state.page === "home" &&
+      scrubMode &&
+      (homeSquadPagerTarget != null
+        ? homeSquadPagerTarget
+        : homeSquadActivePageIndex()) === HOME_SQUAD_PITCH_PAGE;
     document.documentElement.classList.toggle("has-home-fx-scrub", on);
     root.hidden = !on;
     root.setAttribute("aria-hidden", on ? "false" : "true");
     if (!on) return;
     bindHomeFxScrub();
-    const { n } = homeFxGwRange();
+    const { n } = homePitchScrubRange();
     if (ticks && ticks.childElementCount !== n) {
       ticks.innerHTML = Array.from({ length: n }, () => "<span></span>").join("");
+    }
+    if (track) {
+      track.setAttribute(
+        "aria-label",
+        homePitchStripMode === "form"
+          ? "Form gameweeks"
+          : homePitchStripMode === "price"
+            ? "Price gameweeks"
+            : "Fixture gameweeks"
+      );
     }
     setHomeFxPos(homeFxPos, { snap: true });
   }
 
   function homeSquadPitchFormStripHTML(row) {
-    const pts = homeSquadPitchFormPts(row);
-    const cells = pts.map((p) => {
-      if (p == null) return `<span class="home-pitch-form-cell is-blank">–</span>`;
-      const zero = p === 0;
-      return `<span class="home-pitch-form-cell${zero ? " is-zero" : ""}">${escapeHtml(String(p))}</span>`;
-    });
-    return `<span class="home-pitch-strip home-pitch-form-strip">${cells.join("")}</span>`;
+    const { start, n } = homeFormGwRange();
+    const cells = [];
+    for (let i = 0; i < n; i++) {
+      const gw = start + i;
+      if (gw < 1) {
+        cells.push(`<span class="home-pitch-form-cell is-blank">–</span>`);
+        continue;
+      }
+      const eg = (liveElementMapForGw(gw) || {})[String(row.element)];
+      const pts = eg != null && Number.isFinite(Number(eg.pts)) ? Math.round(Number(eg.pts)) : null;
+      if (pts == null) {
+        cells.push(`<span class="home-pitch-form-cell is-blank" title="GW${gw}">–</span>`);
+      } else {
+        const zero = pts === 0;
+        cells.push(
+          `<span class="home-pitch-form-cell${zero ? " is-zero" : ""}" title="GW${gw} · ${pts} pts">${escapeHtml(String(pts))}</span>`
+        );
+      }
+    }
+    return `<span class="home-pitch-strip home-pitch-form-strip" style="--fx-n:${n}"><span class="home-pitch-form-track">${cells.join("")}</span></span>`;
   }
 
   function homeSquadPitchPrice(row) {
@@ -10176,7 +10232,33 @@
     return null;
   }
 
-  function homeSquadPitchPriceStripHTML(row) {
+  function homePriceByGwReady() {
+    const gws = PRICES && PRICES.priceByGw && PRICES.priceByGw.gws;
+    return Array.isArray(gws) && gws.length > 0;
+  }
+
+  function homePricePoundsAtGw(code, gw) {
+    const bundle = PRICES && PRICES.priceByGw;
+    if (!bundle || !Number.isFinite(code)) return null;
+    const gws = bundle.gws || [];
+    const idx = gws.indexOf(gw);
+    if (idx < 0) return null;
+    const series = (bundle.prices || {})[String(code)];
+    if (!Array.isArray(series)) return null;
+    const tenths = Number(series[idx]);
+    return Number.isFinite(tenths) ? tenths / 10 : null;
+  }
+
+  function homeSquadPitchPriceAtGw(row, gw) {
+    const cur = Number(HOME && HOME.gw);
+    if (Number.isFinite(cur) && gw === cur) {
+      const live = homeSquadPitchPrice(row);
+      if (live != null) return live;
+    }
+    return homePricePoundsAtGw(Number(row && row.code), gw);
+  }
+
+  function homeSquadPitchPriceNowHTML(row) {
     const price = homeSquadPitchPrice(row);
     if (price == null) {
       return `<span class="home-pitch-strip home-pitch-price is-idle">–</span>`;
@@ -10191,6 +10273,36 @@
       arrow = `<span class="home-pitch-price-arrow ${rise ? "is-rise" : "is-fall"}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${iconHTML(rise ? "trending-up" : "trending-down", "home-pitch-price-arrow-icon")}</span>`;
     }
     return `<span class="home-pitch-strip home-pitch-price${moverCls}">${arrow}<span class="home-pitch-price-val">£${escapeHtml(Number(price).toFixed(1))}</span></span>`;
+  }
+
+  function homeSquadPitchPriceStripHTML(row) {
+    if (!homePriceByGwReady()) return homeSquadPitchPriceNowHTML(row);
+    const { start, n } = homePriceGwRange();
+    const cells = [];
+    let prev = null;
+    for (let i = 0; i < n; i++) {
+      const gw = start + i;
+      if (gw < 1) {
+        cells.push(`<span class="home-pitch-price-cell is-blank">–</span>`);
+        continue;
+      }
+      const price = homeSquadPitchPriceAtGw(row, gw);
+      if (price == null) {
+        cells.push(`<span class="home-pitch-price-cell is-blank" title="GW${gw}">–</span>`);
+        continue;
+      }
+      let deltaCls = "";
+      if (prev != null) {
+        if (price > prev) deltaCls = " is-rise";
+        else if (price < prev) deltaCls = " is-fall";
+      }
+      prev = price;
+      const label = `£${Number(price).toFixed(1)}`;
+      cells.push(
+        `<span class="home-pitch-price-cell${deltaCls}" title="GW${gw} · ${label}m">${escapeHtml(label)}</span>`
+      );
+    }
+    return `<span class="home-pitch-strip home-pitch-price-strip" style="--fx-n:${n};--fx-visible:1"><span class="home-pitch-price-track">${cells.join("")}</span></span>`;
   }
 
   function homeSquadPitchStripHTML(row) {
@@ -10232,6 +10344,8 @@
     syncHomePitchModeUI(next);
     closeHomePitchModePicker();
     if (next === "fixtures") homeFxPos = 0;
+    if (next === "form") homeFxPos = homeFormGwRange().maxPos;
+    if (next === "price") homeFxPos = homePriceGwRange().maxPos;
     syncHomeFxScrub();
     // Update strips only — rebuilding cards reloads every photo and flickers
     // missing-image icons while primary/legacy CDNs are retried.
@@ -11037,7 +11151,12 @@
     const cells = cols
       .map((col) => {
         const inner = homeSquadPtsCellHTML(entry, col);
-        const cls = ["home-col-stat", "col-num", col.narrow ? "col-num-narrow" : ""]
+        const cls = [
+          "home-col-stat",
+          "col-num",
+          col.narrow ? "col-num-narrow" : "",
+          col.key === "defConHit" ? "is-dc-sv" : "",
+        ]
           .filter(Boolean)
           .join(" ");
         return `<td class="${cls}">${inner}</td>`;
@@ -16232,7 +16351,7 @@
       el.homeDeadline.hidden = !label;
     }
     if (el.homeGwHeading) {
-      el.homeGwHeading.textContent = "GW points";
+      el.homeGwHeading.textContent = "GW PTS";
     }
     renderHomeSummaryStats(summary, {
       enterPending: leaveRollsPending || homePageEnterArmed || homeIsEnterBusy(),
@@ -28906,6 +29025,9 @@
     Object.assign(PRICES, payload);
     if (!Array.isArray(PRICES.players)) PRICES.players = [];
     if (!Array.isArray(PRICES.actualChanges)) PRICES.actualChanges = [];
+    if (!PRICES.priceByGw || typeof PRICES.priceByGw !== "object") {
+      PRICES.priceByGw = { gws: [], sources: {}, prices: {} };
+    }
     window.FPL_PRICE_CHANGES = PRICES;
     return (
       PRICES.generatedAt !== prevAt ||

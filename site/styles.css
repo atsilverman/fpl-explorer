@@ -19924,11 +19924,6 @@ img.home-pitch-photo {
   color: var(--home-pitch-card-muted);
   font-weight: 700;
 }
-/* Match clock still shows, but grey — he isn't the one playing. */
-.home-pitch-card.is-unused .home-pitch-mp-badge {
-  background: hsl(240 4% 46%);
-  color: hsl(0 0% 100% / 0.92);
-}
 /* Stack under the top-right chip when live MP owns the TL overhang. */
 .home-pitch-photo-wrap .home-badge-tr-below {
   top: calc(var(--home-pitch-badge-inset) + var(--home-pitch-badge-size) + 2px);
@@ -20168,14 +20163,16 @@ html[data-home-surface="solid"] .home-pitch-photo-wrap {
   overflow: hidden;
 }
 .home-pitch-fx-strip,
-.home-pitch-form-strip {
+.home-pitch-form-strip,
+.home-pitch-price-strip {
   gap: 2px;
   padding: 0;
   /* Card-colored gutters = white (light) / near-black (dark) cell dividers. */
   background: var(--home-pitch-card-bg);
 }
 .home-pitch-fx-cell,
-.home-pitch-form-cell {
+.home-pitch-form-cell,
+.home-pitch-price-cell {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
@@ -20195,15 +20192,18 @@ html[data-home-surface="solid"] .home-pitch-photo-wrap {
   white-space: nowrap;
 }
 .home-pitch-fx-cell:first-child,
-.home-pitch-form-cell:first-child {
+.home-pitch-form-cell:first-child,
+.home-pitch-price-cell:first-child {
   border-bottom-left-radius: var(--home-pitch-strip-bottom-radius, 0);
 }
 .home-pitch-fx-cell:last-child,
-.home-pitch-form-cell:last-child {
+.home-pitch-form-cell:last-child,
+.home-pitch-price-cell:last-child {
   border-bottom-right-radius: var(--home-pitch-strip-bottom-radius, 0);
 }
 .home-pitch-fx-cell:only-child,
-.home-pitch-form-cell:only-child {
+.home-pitch-form-cell:only-child,
+.home-pitch-price-cell:only-child {
   border-radius: 0 0 var(--home-pitch-strip-bottom-radius, 0) var(--home-pitch-strip-bottom-radius, 0);
 }
 .home-pitch-fx-cell {
@@ -20220,24 +20220,37 @@ html[data-home-surface="solid"] .home-pitch-photo-wrap {
   background: hsl(0 0% 100% / 0.04);
   font-weight: 600;
 }
-/* Every GW sits in one track; 3 cells + 2 gutters fill the strip at each
-   whole --home-fx-pos (set on :root by the mobile scrubber). */
-.home-pitch-fx-strip {
+/* Every GW sits in one track; --fx-visible cells + gutters fill the strip at
+   each whole --home-fx-pos (set on :root by the mobile scrubber). Form is a
+   3-wide window; Price is one GW. Oldest left → newest right. */
+.home-pitch-fx-strip,
+.home-pitch-form-strip {
+  --fx-visible: 3;
   display: block;
 }
-.home-pitch-fx-track {
+.home-pitch-price-strip {
+  --fx-visible: 1;
+  display: block;
+}
+.home-pitch-fx-track,
+.home-pitch-form-track,
+.home-pitch-price-track {
   display: flex;
   gap: 2px;
   height: 100%;
-  width: calc((100% + 2px) * var(--fx-n, 3) / 3 - 2px);
+  width: calc((100% + 2px) * var(--fx-n, 3) / var(--fx-visible, 3) - 2px);
   transform: translate3d(calc(var(--home-fx-pos, 0) * -1 * (100% + 2px) / var(--fx-n, 3)), 0, 0);
   transition: transform 0.32s var(--ease-out);
   will-change: transform;
 }
-html.is-home-fx-scrubbing .home-pitch-fx-track {
+html.is-home-fx-scrubbing .home-pitch-fx-track,
+html.is-home-fx-scrubbing .home-pitch-form-track,
+html.is-home-fx-scrubbing .home-pitch-price-track {
   transition: none;
 }
-.home-pitch-fx-track > .home-pitch-fx-cell {
+.home-pitch-fx-track > .home-pitch-fx-cell,
+.home-pitch-form-track > .home-pitch-form-cell,
+.home-pitch-price-track > .home-pitch-price-cell {
   border-radius: 0;
 }
 .home-pitch-fx-cell.is-double {
@@ -20260,7 +20273,9 @@ html.is-home-fx-scrubbing .home-pitch-fx-track {
   color: #fff;
 }
 @media (prefers-reduced-motion: reduce) {
-  .home-pitch-fx-track { transition: none; }
+  .home-pitch-fx-track,
+  .home-pitch-form-track,
+  .home-pitch-price-track { transition: none; }
 }
 
 .home-fx-scrub {
@@ -20361,6 +20376,25 @@ html.is-home-fx-scrubbing .home-pitch-fx-track {
   color: var(--home-pitch-ink-idle-fg, var(--home-pitch-card-muted));
   background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.05));
   font-weight: 600;
+}
+.home-pitch-price-cell.is-blank {
+  color: var(--home-pitch-ink-idle-fg, var(--home-pitch-card-muted));
+  background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.04));
+  font-weight: 600;
+}
+.home-pitch-price-cell {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--home-pitch-ink-fg, var(--home-pitch-card-fg));
+  background: var(--home-pitch-ink-bg, hsl(0 0% 100% / 0.08));
+}
+.home-pitch-price-cell.is-rise {
+  color: #fff;
+  background: hsl(142 55% 36%);
+}
+.home-pitch-price-cell.is-fall {
+  color: #fff;
+  background: hsl(0 62% 42%);
 }
 .home-pitch-pts {
   font-weight: 800;
@@ -20515,7 +20549,8 @@ html[data-theme="light"] .home-dashboard .home-pitch-fx-cell.is-blank {
   color: var(--home-pitch-card-muted);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-fx-strip,
-html[data-theme="light"] .home-dashboard .home-pitch-form-strip {
+html[data-theme="light"] .home-dashboard .home-pitch-form-strip,
+html[data-theme="light"] .home-dashboard .home-pitch-price-strip {
   background: var(--home-pitch-card-bg);
 }
 html[data-theme="light"] .home-dashboard .home-pitch-opp:not([class*="fdr-"]) {
@@ -20546,7 +20581,8 @@ html[data-theme="light"] .home-dashboard .home-pitch-photo-fallback {
     color: var(--home-pitch-card-muted);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-fx-strip,
-  html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-strip {
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-form-strip,
+  html:not([data-theme="dark"]) .home-dashboard .home-pitch-price-strip {
     background: var(--home-pitch-card-bg);
   }
   html:not([data-theme="dark"]) .home-dashboard .home-pitch-opp:not([class*="fdr-"]) {
@@ -20899,17 +20935,33 @@ html.home-squad-wide .home-squad-pitch-xi {
   color: #fff;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress {
-  --pill-pad-x: 5px;
-  min-width: 0;
+  --pill-pad-x: 0;
   background: transparent;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+#home-squad-panel .home-squad-pts-table :is(th, td).home-col-stat.is-dc-sv {
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: center;
+}
+.home-squad-pts-table tbody td.home-col-stat.col-num.is-dc-sv {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.home-squad-pts-table tbody td.home-col-stat.col-num.is-dc-sv .ownership-pill.live-points-pill.is-defcon-progress {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  justify-content: center;
+}
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-frac {
   display: inline-flex;
   align-items: baseline;
+  justify-content: center;
   white-space: nowrap;
 }
 .home-squad-pts-table tbody td.home-col-stat .live-points-pill.is-defcon-progress .live-points-dc-thr {
@@ -21546,9 +21598,9 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   box-shadow: inset 0 0 0 1px hsl(24 95% 48% / 0.35);
 }
 .home-role-a {
-  background: hsl(var(--blue-hsl) / 0.26);
-  color: hsl(217 91% 42%);
-  box-shadow: inset 0 0 0 1px hsl(var(--blue-hsl) / 0.32);
+  background: hsl(240 6% 46% / 0.2);
+  color: hsl(240 6% 36%);
+  box-shadow: inset 0 0 0 1px hsl(240 6% 46% / 0.28);
 }
 html[data-theme="dark"] .home-role-c {
   background: hsl(24 95% 52% / 0.4);
@@ -21556,9 +21608,9 @@ html[data-theme="dark"] .home-role-c {
   box-shadow: inset 0 0 0 1px hsl(24 95% 55% / 0.48);
 }
 html[data-theme="dark"] .home-role-a {
-  background: hsl(var(--blue-hsl) / 0.34);
-  color: hsl(213 95% 72%);
-  box-shadow: inset 0 0 0 1px hsl(var(--blue-hsl) / 0.4);
+  background: hsl(240 5% 78% / 0.18);
+  color: hsl(240 8% 78%);
+  box-shadow: inset 0 0 0 1px hsl(240 5% 78% / 0.28);
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .home-role-c {
@@ -21567,9 +21619,9 @@ html[data-theme="dark"] .home-role-a {
     box-shadow: inset 0 0 0 1px hsl(24 95% 55% / 0.48);
   }
   html:not([data-theme="light"]) .home-role-a {
-    background: hsl(var(--blue-hsl) / 0.34);
-    color: hsl(213 95% 72%);
-    box-shadow: inset 0 0 0 1px hsl(var(--blue-hsl) / 0.4);
+    background: hsl(240 5% 78% / 0.18);
+    color: hsl(240 8% 78%);
+    box-shadow: inset 0 0 0 1px hsl(240 5% 78% / 0.28);
   }
 }
 .home-autosub-tag {
