@@ -174,7 +174,51 @@
       "score": 185.0,
       "evidence": "strong",
       "fetchedAt": "2026-10-24T12:50:15Z"
+    },
+    "CHE": {
+      "code": "CHE",
+      "name": "Chelsea",
+      "handle": "ChelseaFC",
+      "tweetId": "2114013535873208495",
+      "tweetUrl": "https://x.com/ChelseaFC/status/2114013535873208495",
+      "postedAt": "2026-10-24T15:17:58Z",
+      "kickoff": "2026-10-24T16:30:00Z",
+      "minsBeforeKo": 72.0,
+      "match": "CHE v TOT",
+      "opp": "TOT",
+      "ha": "H",
+      "text": "Our Chelsea. \ud83d\udc99\n\n#CFC | #CHETOT https://t.co/G5ua5Ufr3Y",
+      "altText": "",
+      "localPath": "team-news/gw8/CHE.jpg",
+      "mediaUrl": "https://pbs.twimg.com/media/HVZ8DP6WsAA6KqD.jpg",
+      "width": 1080,
+      "height": 1350,
+      "score": 90.2,
+      "evidence": "ocr",
+      "fetchedAt": "2026-10-24T15:20:00Z"
+    },
+    "TOT": {
+      "code": "TOT",
+      "name": "Spurs",
+      "handle": "SpursOfficial",
+      "tweetId": "2114012970166710728",
+      "tweetUrl": "https://x.com/SpursOfficial/status/2114012970166710728",
+      "postedAt": "2026-10-24T15:15:43Z",
+      "kickoff": "2026-10-24T16:30:00Z",
+      "minsBeforeKo": 74.3,
+      "match": "CHE v TOT",
+      "opp": "CHE",
+      "ha": "A",
+      "text": "Our Tottenham side to face Chelsea \u270a\n\n\ud83d\udd22 @krakenfx https://t.co/GggamSkkLY",
+      "altText": "",
+      "localPath": "team-news/gw8/TOT.jpg",
+      "mediaUrl": "https://pbs.twimg.com/media/HVZ7V8pWUAEdA60.jpg",
+      "width": 1080,
+      "height": 1350,
+      "score": 139.6,
+      "evidence": "strong",
+      "fetchedAt": "2026-10-24T15:20:00Z"
     }
   },
-  "generatedAt": "2026-10-24T12:50:15Z"
+  "generatedAt": "2026-10-24T15:20:00Z"
 }
