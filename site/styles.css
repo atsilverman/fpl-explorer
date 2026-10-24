@@ -9652,6 +9652,105 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   line-height: 1.35;
 }
 
+.spit-home-key {
+  padding-top: 14px;
+}
+.spit-home-key:first-child {
+  padding-top: 0;
+}
+.spit-home-key + .spit-home-key {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.spit-home-key-title {
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.spit-home-key-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.spit-home-key-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: center;
+  min-height: 32px;
+}
+.spit-home-key-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 52px;
+  min-height: 32px;
+  padding: 4px 3px;
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.55);
+  white-space: nowrap;
+}
+.spit-home-key-mark .spit-home-swatch,
+.spit-home-key-mark .icon,
+.spit-home-key-mark .spit-owned-pin {
+  flex: none;
+}
+.spit-home-key-mark .home-autosub-impact-dot {
+  position: static;
+  margin: 0;
+  width: 7px;
+  height: 7px;
+  vertical-align: unset;
+  animation: none;
+}
+.spit-home-key-mark .home-captain-sub {
+  color: hsl(32 80% 42%);
+}
+.spit-home-key-mark .home-captain-sub-icon,
+.spit-home-key-mark .home-captain-sub .icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+}
+.spit-home-key-mark .home-autosub-fab.spit-home-swatch {
+  --autosub-amber: 38 92% 46%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid hsl(var(--autosub-amber) / 0.7);
+  border-radius: 8px;
+  background: color-mix(in srgb, hsl(var(--autosub-amber)) 48%, hsl(var(--card)));
+  color: hsl(32 70% 28%);
+  box-shadow: none;
+  position: static;
+}
+.spit-home-key-mark .home-autosub-fab.spit-home-swatch .icon {
+  width: 13px;
+  height: 13px;
+}
+.spit-home-key-mark .home-chip-cell.is-active .home-chip-cell-mark {
+  animation: none;
+}
+.spit-home-key-label {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--text);
+}
+
 .spit-list {
   display: grid;
   gap: 6px;
@@ -19268,7 +19367,6 @@ html[data-theme="dark"] .home-overall-pct {
 #home-standings-panel .home-data-table :is(th, td):last-child {
   padding-right: 12px;
 }
-html.home-autosub-projected #home-standings-panel .home-data-table :is(th, td).home-col-gw,
 html.home-autosub-projected #home-standings-panel .home-data-table :is(th, td).home-col-total {
   padding-right: 10px;
 }

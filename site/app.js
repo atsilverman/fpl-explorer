@@ -6087,7 +6087,7 @@
       ? `<span class="home-standings-autosub-impact"${tipAttr(autosubTip)}>${html}${homeAutosubImpactDotHTML(autosubTip)}</span>`
       : html);
     const gwHTML = gwPts != null && Number.isFinite(gwPts)
-      ? withAutosubMark(homeStandingsPillHTML(gwPts, gwIntensity))
+      ? homeStandingsPillHTML(gwPts, gwIntensity)
       : "—";
     const totalHTML = totalPts != null && Number.isFinite(totalPts)
       ? withAutosubMark(homeStandingsPillHTML(totalPts, totalIntensity))
@@ -21196,6 +21196,24 @@
     return `<div class="spit-row"><span class="${cls}">${symbol}</span><span>${text}</span></div>`;
   }
 
+  function spitHomeKeyRow(symbol, label) {
+    return (
+      `<div class="spit-home-key-row">` +
+      `<span class="spit-home-key-mark">${symbol}</span>` +
+      `<span class="spit-home-key-label">${label}</span>` +
+      `</div>`
+    );
+  }
+
+  function spitHomeKeySection(title, rows) {
+    return (
+      `<section class="spit-home-key">` +
+      `<h4 class="spit-home-key-title">${title}</h4>` +
+      `<div class="spit-home-key-list">${rows.join("")}</div>` +
+      `</section>`
+    );
+  }
+
   function spitSection(title, rows, blurb = "") {
     const hint = blurb
       ? `<p class="spit-section-blurb">${blurb}</p>`
@@ -21269,112 +21287,98 @@
     const mobile = pageInfoIsMobile();
 
     if (state.page === "home") {
-      // Visual marks only (pills, badges, dots) — no text-label reading rows.
-      const team = [
-        spitRow(
+      const roles = [
+        spitHomeKeyRow(
           `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">V</span>`,
-          "Captain / vice on the squad list"
+          "Captain / vice"
         ),
-        spitRow(
-          spitOwnedPinHTML(),
-          "Also in your configured squad (when viewing another manager)"
+        spitHomeKeyRow(
+          `<span class="home-captain-sub spit-home-swatch" aria-hidden="true">${iconHTML("repeat-2", "home-captain-sub-icon")}</span>`,
+          "Vice took captain"
         ),
-        spitRow(
+      ];
+      const status = [
+        spitHomeKeyRow(
           `<span class="home-status-dot is-live spit-home-swatch" aria-hidden="true"></span>`,
-          "Fixture in play"
+          "Fixture live"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `${iconHTML("circle-x", "home-dnp-icon spit-home-swatch")}`,
-          "Did not play — 0′ after provisional or final FT"
+          "Did not play"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="home-mp-line is-short-mins spit-home-swatch" aria-hidden="true">45′</span>`,
-          "Under 60′ — after FT, or live once minutes stay frozen while the match clock keeps moving (likely subbed; not HT)"
+          "Under 60′"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="home-mp-line is-modest-mins spit-home-swatch" aria-hidden="true">68′</span>`,
-          "60–75′ — after FT, or live once minutes stay frozen while the match clock keeps moving"
+          "60–75′"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="spit-pitch-chip is-mp spit-home-swatch" aria-hidden="true">27′</span>`,
-          "Pitch card corner — this player's minutes while his fixture is in play (not the team clock)"
+          "Minutes in play"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="spit-pitch-chip is-unused spit-home-swatch" aria-hidden="true">!</span><span class="spit-pitch-chip is-dash spit-home-swatch" aria-hidden="true">–</span>`,
-          "Starter on 0′ with his match live (3′+) — likely benched; ! mark and points show – instead of 0"
+          "Unused starter"
         ),
-        spitRow(
+        spitHomeKeyRow(
+          spitOwnedPinHTML(),
+          "In your squad"
+        ),
+      ];
+      const autosubs = [
+        spitHomeKeyRow(
           `<span class="home-autosub-tag is-in spit-home-swatch" aria-hidden="true">${iconHTML("caret-up", "home-autosub-icon")}</span><span class="home-autosub-tag is-out spit-home-swatch" aria-hidden="true">${iconHTML("caret-down", "home-autosub-icon")}</span>`,
-          "Auto-sub on / off — shown on the pitch when Auto-subs is on (team-news graphic or FT blank)"
+          "Auto-sub on / off"
         ),
-        spitRow(
-          `<span class="home-autosub-fab spit-home-swatch" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg><span>Auto-subs</span></span>`,
-          "Bottom-left — appears when anyone in the league has a pending auto-sub. On = post auto-sub scores, ranks, and pitch; off = live FPL numbers"
+        spitHomeKeyRow(
+          `<span class="home-autosub-impact-dot spit-home-swatch" aria-hidden="true"></span>`,
+          "Projected in Total"
         ),
-        spitRow(
-          `<span class="spit-pitch-chip is-scrub spit-home-swatch" aria-hidden="true">GW9–11</span>`,
-          mobile
-            ? "Fixtures pitch mode — drag the bottom bar to slide every card through later gameweeks"
-            : "Fixtures pitch mode — next three gameweeks per card (blank –, doubles stacked)"
-        ),
-        spitRow(
-          `<span class="spit-pitch-imp spit-home-swatch" aria-hidden="true"><span class="spit-pitch-imp-fill"></span><span class="spit-pitch-imp-val">100%</span></span>`,
-          "Importance pitch mode — bar fills the card at 100% (captain clamps full); % moves inside the bar when it won’t fit beside it",
-          "spit-symbol-wide"
-        ),
-        spitRow(
-          `<span class="spit-pitch-chip is-pts spit-home-swatch" aria-hidden="true">7<small>pts</small></span>`,
-          "Tap a pitch card — this GW’s points breakdown vs the opponent, then Player details"
-        ),
-        spitRow(
-          `<span class="spit-dc-sv spit-home-swatch" aria-hidden="true">DC<span>·</span>Sv</span>`,
-          "Points table — outfield DefCon actions vs threshold; keepers show saves / 3. Numerator greens when the threshold is hit (+1 pt per 3, already in Pts)"
-        ),
-        spitRow(
-          `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(var(--delta-rise));--imp-fg:hsl(var(--delta-rise))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
-          "IMP ahead of league top third",
-          "spit-symbol-wide"
-        ),
-        spitRow(
-          `<span class="home-imp is-neg spit-home-swatch" style="--imp-pct:55%;--imp-fill:hsl(var(--delta-fall));--imp-fg:hsl(var(--delta-fall))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-neg is-drawn"></span></span><span class="home-imp-pct">55%</span></span>`,
-          "IMP behind league top third",
-          "spit-symbol-wide"
+        spitHomeKeyRow(
+          `<span class="home-autosub-fab spit-home-swatch" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg></span>`,
+          "Auto-sub breakdown"
         ),
       ];
       const league = [
-        spitRow(
+        spitHomeKeyRow(
           `<span class="ownership-pill home-standings-live-pill is-active spit-home-swatch">2</span>`,
-          "Live — active picks in play (captain counts double; Bench Boost can exceed 11)"
+          "In play"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="home-play-left is-active spit-home-swatch">3</span>`,
-          "Left / Left to play — still to play this gameweek (captain counts double)"
+          "Still to play"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="ownership-pill home-standings-live-pill is-zero spit-home-swatch">0</span>`,
-          "Left is 0 — same grey pill as Live idle"
+          "None left"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="home-play-left is-active has-captain spit-home-swatch">4</span>`,
-          "Left includes captain still to play — amber pill; total already counts captain as 2"
+          "Captain still to play"
         ),
-        spitRow(
+      ];
+      const chips = [
+        spitHomeKeyRow(
           `<span class="home-chip-cell is-available spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span></span>`,
-          "Chip still available (this half)"
+          "Available"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="home-chip-cell is-used spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW4</span></span>`,
-          "Chip used — label is the gameweek played"
+          "Used"
         ),
-        spitRow(
+        spitHomeKeyRow(
           `<span class="home-chip-cell is-active spit-home-swatch" aria-hidden="true"><span class="home-chip-cell-mark"></span><span class="home-chip-cell-gw">GW1</span></span>`,
-          "Chip active this gameweek"
+          "Active"
         ),
       ];
       return `${spitHead("house", "How Home works")}
-        ${spitIntro("Live GW dashboard for your Preferences manager + league. Marks below are grouped by where they appear.")}
-        ${spitSection("Team", team, "Your squad card — Pitch / List and related chrome.")}
-        ${spitSection("League", league, "Standings table and Chips swipe.")}`;
+        ${spitHomeKeySection("Roles", roles)}
+        ${spitHomeKeySection("Status", status)}
+        ${spitHomeKeySection("Auto-subs", autosubs)}
+        ${spitHomeKeySection("League", league)}
+        ${spitHomeKeySection("Chips", chips)}`;
     }
 
     if (state.page === "rankings") {
