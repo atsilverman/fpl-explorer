@@ -10628,6 +10628,7 @@
     for (const row of standings) {
       const sq = homeSquadForEntry(row.entry) || [];
       if (!homeSquadAutosubPairs(sq).hasAny) continue;
+      if (sq.some((r) => r && r.autoSubSource === "graphic")) return true;
       if (typeof liveGwHasActiveGames === "function" && liveGwHasActiveGames()) return true;
       for (const p of sq) {
         for (const fx of homeSquadFixtures(p)) {
@@ -10651,6 +10652,18 @@
     const proj = ranks.projected.get(focus);
     if (!cur || !proj) return 0;
     return cur - proj;
+  }
+
+  /** Projected 1-based league place after pending auto-subs, or null if unchanged. */
+  function homeAutosubProjectedLeagueRank(entryId = homeActiveViewEntryId()) {
+    const focus = Number(entryId);
+    if (!Number.isFinite(focus) || focus <= 0) return null;
+    if (!homeAutosubLeagueReshufflePending()) return null;
+    const ranks = homeStandingsProjectedRanks(homeStandingsRows());
+    const cur = ranks.current.get(focus);
+    const proj = ranks.projected.get(focus);
+    if (!cur || !proj || cur === proj) return null;
+    return proj;
   }
 
   /** Total incl. pending (unstamped) auto-sub pts — same figure the Table shows. */
@@ -10700,24 +10713,20 @@
       .sort((a, b) => (a.rankProjected ?? 9999) - (b.rankProjected ?? 9999));
   }
 
-  function appendHomeAutosubLeaguePlacesDelta(places) {
+  function appendHomeAutosubLeaguePlacesDelta() {
     const host = el.homeLeagueRank;
     const num = el.homeLeagueRankNum;
     if (!host) return;
     host.querySelectorAll(".home-autosub-pts-delta.is-league-places").forEach((node) => {
       node.remove();
     });
-    const n = Number(places);
-    if (!Number.isFinite(n) || n === 0) return;
+    const proj = homeAutosubProjectedLeagueRank();
+    if (proj == null) return;
     if (!num || !host.contains(num)) return;
-    const sign = n > 0 ? "+" : "";
-    const title =
-      n > 0
-        ? `Projected +${n} league place${n === 1 ? "" : "s"} after auto-subs`
-        : `Projected ${n} league place${n === -1 ? "" : "s"} after auto-subs`;
+    const title = `Projected ${proj} after auto-subs stamp`;
     num.insertAdjacentHTML(
       "afterend",
-      `<span class="home-autosub-pts-delta is-league-places" title="${escapeHtml(title)}">(${sign}${n})</span>`
+      `<span class="home-autosub-pts-delta is-league-places" title="${escapeHtml(title)}">→ ${escapeHtml(String(proj))}</span>`
     );
   }
 
@@ -10734,7 +10743,7 @@
       }
       appendHomeAutosubPtsDelta(host, delta);
     });
-    appendHomeAutosubLeaguePlacesDelta(homeAutosubPendingLeaguePlaces());
+    appendHomeAutosubLeaguePlacesDelta();
   }
 
   function homeAutosubNoticeTip(squad) {
@@ -16531,13 +16540,13 @@
         });
       }
     }
-    appendHomeAutosubLeaguePlacesDelta(
+    if (
       summary.leagueRank != null
-        && Number.isFinite(Number(summary.leagueRank))
-        && Number(summary.leagueRank) > 0
-        ? homeAutosubPendingLeaguePlaces()
-        : 0
-    );
+      && Number.isFinite(Number(summary.leagueRank))
+      && Number(summary.leagueRank) > 0
+    ) {
+      appendHomeAutosubLeaguePlacesDelta();
+    }
   }
 
   function finishHomeStatRolls(root, { summary = true, tables = true } = {}) {
