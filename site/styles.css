@@ -15967,7 +15967,7 @@ html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lo
   /* Strip pad / kit gutters — solid #1a1a1a for cell dividers & Solid surface. */
   --home-pitch-card-bg: #1a1a1a;
   /* Frosted fill for kit shoulders + strip tray (samples pitch behind). */
-  --home-pitch-glass-bg: color-mix(in srgb, #1a1a1a 78%, transparent);
+  --home-pitch-glass-bg: #1a1a1a;
   /* Pts / form / price ink strip — slate on dark (inverse of light charcoal). */
   --home-pitch-ink-bg: hsl(240 6% 84%);
   --home-pitch-ink-fg: hsl(240 10% 10%);
@@ -15978,12 +15978,12 @@ html.player-thumbs-kit .home-team-lookup-card .home-lookup-photo-clip > .home-lo
   --home-pitch-card-border-w: 3px;
   --home-pitch-card-fg: hsl(0 0% 96%);
   --home-pitch-card-muted: hsl(0 0% 100% / 0.58);
-  --home-pitch-nameplate-bg: hsl(210 16% 12% / 0.55);
+  --home-pitch-nameplate-bg: hsl(210 16% 12% / 0.7);
 }
 html[data-theme="light"] .home-dashboard {
   --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
   --home-pitch-card-bg: hsl(0 0% 100%);
-  --home-pitch-glass-bg: color-mix(in srgb, #fff 56%, transparent);
+  --home-pitch-glass-bg: #fff;
   --home-pitch-ink-bg: hsl(220 18% 12%);
   --home-pitch-ink-fg: #fff;
   --home-pitch-ink-idle-bg: hsl(220 14% 16%);
@@ -15997,7 +15997,7 @@ html[data-theme="light"] .home-dashboard {
   html:not([data-theme="dark"]) .home-dashboard {
     --home-pitch-line: color-mix(in srgb, hsl(var(--muted-foreground)) 12%, hsl(var(--background)));
     --home-pitch-card-bg: hsl(0 0% 100%);
-    --home-pitch-glass-bg: color-mix(in srgb, #fff 56%, transparent);
+    --home-pitch-glass-bg: #fff;
     --home-pitch-ink-bg: hsl(220 18% 12%);
     --home-pitch-ink-fg: #fff;
     --home-pitch-ink-idle-bg: hsl(220 14% 16%);
@@ -18518,7 +18518,7 @@ html.is-mobile-layout #home-team-graphics-panel:not([hidden]) {
   align-items: stretch;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
+  overscroll-behavior-x: none;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
@@ -19840,8 +19840,9 @@ html[data-theme="dark"] .home-dashboard .home-pitch-card.is-live {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  /* Solid base so pitch lines never show through the tinted strip. */
+  border-radius: 0 0 var(--home-pitch-card-radius, 8px) var(--home-pitch-card-radius, 8px);
+  background: var(--home-pitch-card-bg);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow: none;
@@ -20744,7 +20745,7 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   }
 }
 @media (max-width: 900px) {
-  /* Horizontal pager swipe + vertical scroll inside Transfers / Captaincy. */
+  /* Every League page shows all rows; the card resizes per page (no inner scroll). */
   .home-standings-track {
     touch-action: pan-x pan-y;
   }
@@ -20752,19 +20753,22 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
   .home-standings-page-captains,
   .home-transfers-page-shell,
   .home-captains-page-shell {
-    height: 100%;
+    height: auto;
+    max-height: none;
     min-height: 0;
-    align-self: stretch;
+    align-self: flex-start;
   }
   .home-transfers-page-shell,
   .home-captains-page-shell {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    overflow: visible;
   }
   .home-transfers-table-wrap,
   .home-captains-table-wrap {
     overflow-x: hidden;
-    overflow-y: auto;
-    flex: 1 1 auto;
+    overflow-y: visible;
+    flex: 0 0 auto;
+    max-height: none;
     min-height: 0;
   }
 }

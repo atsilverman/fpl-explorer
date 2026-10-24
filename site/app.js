@@ -2989,11 +2989,13 @@
     return changed ? out : rows;
   }
 
-  function homeMergeAutosubFlags(squad, priorSquad) {
+  function homeMergeAutosubFlags(squad, priorSquad, { sameGw = true } = {}) {
     const incoming = Array.isArray(squad) ? squad : [];
     // Only backfill when the poll cleared every flag (older droplet); never
     // mix per-player — a stale IN from an earlier projection would stick.
-    if (incoming.some((row) => row && (row.autoSubIn || row.autoSubOut))) {
+    // Never across gameweeks: last GW's pair stays valid when both players
+    // are still in the squad (e.g. baked GW6 cache vs first GW7 poll).
+    if (!sameGw || incoming.some((row) => row && (row.autoSubIn || row.autoSubOut))) {
       return homeReconcileAutosubPairs(incoming);
     }
     const prior = new Map();
@@ -3016,14 +3018,14 @@
     }));
   }
 
-  function homeMergeAutosubByEntry(byEntry, priorByEntry) {
+  function homeMergeAutosubByEntry(byEntry, priorByEntry, { sameGw = true } = {}) {
     const src = byEntry && typeof byEntry === "object" ? byEntry : {};
     const prior = priorByEntry && typeof priorByEntry === "object" ? priorByEntry : {};
     const out = {};
     const keys = new Set([...Object.keys(src), ...Object.keys(prior)]);
     keys.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(src, key)) {
-        out[key] = homeMergeAutosubFlags(src[key], prior[key] || []);
+        out[key] = homeMergeAutosubFlags(src[key], prior[key] || [], { sameGw });
       } else {
         out[key] = prior[key];
       }
@@ -3105,12 +3107,17 @@
       const gwRankEl = el.homeGwRankNum || el.homeGwRank;
       if (gwRankEl) delete gwRankEl.dataset.lastGwRank;
     }
+    const autosubSameGw =
+      Number.isFinite(Number(priorHome.gw))
+      && Number(priorHome.gw) > 0
+      && Number(priorHome.gw) === Number(payload.gw);
     HOME.squad = homeMergeAutosubFlags(
       homeNormalizeSquadFixtureFinal(
         Array.isArray(payload.squad) ? payload.squad : [],
         Array.isArray(priorHome.squad) ? priorHome.squad : []
       ),
-      Array.isArray(priorHome.squad) ? priorHome.squad : []
+      Array.isArray(priorHome.squad) ? priorHome.squad : [],
+      { sameGw: autosubSameGw }
     );
     HOME.squadsByEntry = homeMergeAutosubByEntry(
       homeNormalizeSquadsByEntryFinal(
@@ -3123,7 +3130,8 @@
       ),
       priorHome.squadsByEntry && typeof priorHome.squadsByEntry === "object"
         ? priorHome.squadsByEntry
-        : {}
+        : {},
+      { sameGw: autosubSameGw }
     );
     homeObserveAllHomeMinutes(HOME);
     HOME.standings = mergeHomeGwRank(
@@ -3704,7 +3712,14 @@
     const zeroSquadPts = (rows) =>
       (Array.isArray(rows) ? rows : []).map((row) => {
         if (!row || typeof row !== "object") return row;
-        return { ...row, gwPoints: 0 };
+        return {
+          ...row,
+          gwPoints: 0,
+          autoSubIn: false,
+          autoSubOut: false,
+          autoSubWith: null,
+          autoSubWithName: null,
+        };
       });
     HOME.squad = zeroSquadPts(HOME.squad);
     const nextByEntry = {};
@@ -5627,6 +5642,8 @@
   }
 
   function homeStandingsRankValue(row) {
+    const projected = Number(row.rankProjected);
+    if (Number.isFinite(projected) && projected > 0) return projected;
     if (row.rankOfficial != null) {
       const n = Number(row.rankOfficial);
       if (Number.isFinite(n) && n > 0) return n;
@@ -5640,6 +5657,9 @@
 
   function sortedHomeStandingsRows(rows) {
     return rows.slice().sort((a, b) => {
+      if (a.rankProjected != null && b.rankProjected != null) {
+        return a.rankProjected - b.rankProjected;
+      }
       const av = homeStandingsSortValue(a, "total");
       const bv = homeStandingsSortValue(b, "total");
       const aOk = av != null;
@@ -5981,7 +6001,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = homeStandingsRows();
+    const rows = homeStandingsDisplayRows();
     const medals = homeBenchPointsMedalMap(rows);
     const seasonScale = rows.reduce((m, r) => {
       const n = homeStandingsBenchPointsSeason(r);
@@ -6076,7 +6096,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = homeStandingsRows();
+    const rows = homeStandingsDisplayRows();
     const medals = homeAutosubPointsMedalMap(rows);
     const seasonScale = rows.reduce((m, r) => Math.max(m, homeStandingsAutosubSeason(r)), 0) || 1;
     const opts = { configuredEntry, viewEntry, viewingOther, seasonScale };
@@ -6099,7 +6119,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = homeStandingsRows();
+    const rows = homeStandingsDisplayRows();
     const compact = homeLeagueCompactCaptains();
     const topCaptainPts = homeLeagueMaxCaptainPts();
     const opts = { configuredEntry, viewEntry, viewingOther, topCaptainPts };
@@ -6120,7 +6140,7 @@
     const configuredEntry = homeConfiguredEntryId();
     const viewEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
-    const rows = homeStandingsRows();
+    const rows = homeStandingsDisplayRows();
     const sorted = sortedHomeStandingsRows(rows);
     const topMaps = buildHomeStandingsTopMaps(rows);
     const opts = { configuredEntry, viewEntry, viewingOther, topMaps };
@@ -6362,6 +6382,8 @@
   }
 
   function homeStandingsIsInnerScrollPage(idx) {
+    // Mobile: every page grows to its full content — no scroll inside the card.
+    if (!homeSquadIsDesktopLayout()) return false;
     return idx === HOME_STANDINGS_TRANSFERS_PAGE || idx === HOME_STANDINGS_CAPTAINS_PAGE;
   }
 
@@ -6511,11 +6533,11 @@
       const wrapIdx = wrap === el.homeTransfersTableWrap
         ? HOME_STANDINGS_TRANSFERS_PAGE
         : HOME_STANDINGS_CAPTAINS_PAGE;
-      wrap.style.maxHeight = idx === wrapIdx ? next : "";
+      wrap.style.maxHeight = innerScroll && idx === wrapIdx ? next : "";
     });
     [HOME_STANDINGS_TRANSFERS_PAGE, HOME_STANDINGS_CAPTAINS_PAGE].forEach((i) => {
       if (!pages[i]) return;
-      const on = idx === i;
+      const on = innerScroll && idx === i;
       pages[i].style.height = on ? next : "";
       pages[i].style.maxHeight = on ? next : "";
       pages[i].style.minHeight = "0";
@@ -8347,8 +8369,12 @@
         if (!edge || !NARROW_MQ.matches || state.page !== "home" || e.touches.length !== 1) return;
         const dx = e.touches[0].clientX - startX;
         const dy = e.touches[0].clientY - startY;
-        // Don't fight vertical page scroll / nested list scroll.
-        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+        const adx = Math.abs(dx);
+        const ady = Math.abs(dy);
+        // iOS cancels page scroll for the whole gesture if the first touchmove is
+        // prevented — never block until the swipe has a clear direction.
+        if (adx < 8 && ady < 8) return;
+        if (adx <= ady * 1.2) {
           edge = null;
           return;
         }
@@ -9593,47 +9619,58 @@
     const focus = Number(entryId);
     if (!Number.isFinite(focus) || focus <= 0) return 0;
     if (!homeAutosubLeagueReshufflePending()) return 0;
+    const ranks = homeStandingsProjectedRanks(homeStandingsRows());
+    const cur = ranks.current.get(focus);
+    const proj = ranks.projected.get(focus);
+    if (!cur || !proj) return 0;
+    return cur - proj;
+  }
 
-    const standings = homeStandingsRows();
-    if (!standings.length) return 0;
+  /** Total incl. pending (unstamped) auto-sub pts — same figure the Table shows. */
+  function homeStandingsProjectedTotal(row) {
+    const total = Number(row && row.total);
+    const base = Number.isFinite(total) ? total : 0;
+    return base + homeAutosubPendingGwDelta(homeSquadForEntry(row && row.entry) || []);
+  }
 
-    const rows = standings.map((row) => {
-      const eid = Number(row.entry);
+  /** {current, projected}: entry → 1-based league place, before / after pending auto-subs. */
+  function homeStandingsProjectedRanks(standings) {
+    const rows = (standings || []).map((row) => {
       const total = Number(row.total);
-      const totalN = Number.isFinite(total) ? total : 0;
-      const sq = homeSquadForEntry(eid) || [];
-      const bonus = homeAutosubPendingGwDeltaFromSquad(sq);
-      const curRank =
-        homePositiveRank(row.rankOfficial) ??
-        homePositiveRank(row.rankLive) ??
-        9999;
       return {
-        entry: eid,
-        total: totalN,
-        bonus,
-        projected: totalN + bonus,
-        currentRank: curRank,
+        entry: Number(row.entry),
+        total: Number.isFinite(total) ? total : 0,
+        projected: homeStandingsProjectedTotal(row),
+        currentRank:
+          homePositiveRank(row.rankOfficial) ??
+          homePositiveRank(row.rankLive) ??
+          9999,
       };
     });
-
     const currentOrder = [...rows].sort((a, b) => {
       if (a.currentRank !== b.currentRank) return a.currentRank - b.currentRank;
       return b.total - a.total;
     });
-    const currentRankOf = new Map();
-    currentOrder.forEach((r, i) => currentRankOf.set(r.entry, i + 1));
-
+    const current = new Map();
+    currentOrder.forEach((r, i) => current.set(r.entry, i + 1));
     const projectedOrder = [...rows].sort((a, b) => {
       if (b.projected !== a.projected) return b.projected - a.projected;
-      return (currentRankOf.get(a.entry) || 9999) - (currentRankOf.get(b.entry) || 9999);
+      return (current.get(a.entry) || 9999) - (current.get(b.entry) || 9999);
     });
-    const projectedRankOf = new Map();
-    projectedOrder.forEach((r, i) => projectedRankOf.set(r.entry, i + 1));
+    const projected = new Map();
+    projectedOrder.forEach((r, i) => projected.set(r.entry, i + 1));
+    return { current, projected };
+  }
 
-    const cur = currentRankOf.get(focus);
-    const proj = projectedRankOf.get(focus);
-    if (!cur || !proj) return 0;
-    return cur - proj;
+  /** League rows for rendering: reordered + re-ranked by pending auto-subs while
+   *  FPL hasn't stamped them (rankProjected), else the stored order. */
+  function homeStandingsDisplayRows() {
+    const rows = homeStandingsRows();
+    if (!rows.length || !homeAutosubLeagueReshufflePending()) return rows;
+    const { projected } = homeStandingsProjectedRanks(rows);
+    return rows
+      .map((r) => ({ ...r, rankProjected: projected.get(Number(r.entry)) ?? null }))
+      .sort((a, b) => (a.rankProjected ?? 9999) - (b.rankProjected ?? 9999));
   }
 
   function appendHomeAutosubLeaguePlacesDelta(places) {
@@ -15507,7 +15544,7 @@
     }
     if (el.homeStandingsTransfersBody) {
       const configuredEntry = homeConfiguredEntryId();
-      let rows = homeStandingsRows();
+      let rows = homeStandingsDisplayRows();
       const opts = { configuredEntry, viewEntry, viewingOther };
       const statusLabel = homeTransfersStatusLabel();
       if (el.homeTransfersStatus) {
@@ -15532,7 +15569,7 @@
     }
     if (el.homeStandingsChipsBody) {
       const configuredEntry = homeConfiguredEntryId();
-      const rows = homeStandingsRows();
+      const rows = homeStandingsDisplayRows();
       const opts = { configuredEntry, viewEntry, viewingOther };
       el.homeStandingsChipsBody.innerHTML = homeStandingsShowLoading()
         ? homeSquadLoadingHTML(6, 8)
@@ -17119,7 +17156,12 @@
     return scrollEl;
   }
 
+  // Mobile name-column collapse while panning tables (full name → badge).
+  // Paused for now; flip to true to restore.
+  const NAME_SIMPLIFY_ENABLED = false;
+
   function nameSimplifyActive() {
+    if (!NAME_SIMPLIFY_ENABLED) return false;
     if (!(NARROW_MQ.matches || !hasFineHover())) return false;
     return (
       state.page === "ownership" ||

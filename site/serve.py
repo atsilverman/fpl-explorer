@@ -315,6 +315,8 @@ def merge_autosub_flags(live_home: dict, local_home: dict | None) -> dict:
     """
     if not local_home or not isinstance(live_home, dict):
         return live_home
+    if str(local_home.get("gw")) != str(live_home.get("gw")):
+        return live_home
 
     AUTOSUB_KEYS = ("autoSubIn", "autoSubOut", "autoSubWith", "autoSubWithName")
 
