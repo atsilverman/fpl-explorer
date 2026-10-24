@@ -4896,8 +4896,9 @@
   function homeSquadForEntry(entryId) {
     const squad = homeSquadRawForEntry(entryId);
     if (!squad.length) return [];
-    if (homeAutosubPreviewActive()) return homeApplyTeamNewsAutosubs(squad, entryId);
-    return squad;
+    // Always project graphic autosubs onto the viewed squad so pitch in/out
+    // frames persist. Preview mode still gates baked points/ranks separately.
+    return homeApplyTeamNewsAutosubs(squad, entryId);
   }
 
   function homeEntryActiveChip(entryId) {
@@ -4990,15 +4991,22 @@
     const chip = String(homeEntryActiveChip(entryId) || "").toLowerCase();
     if (chip === "bboost" || chip === "benchboost" || chip === "bench_boost") return squad;
     const rows = Array.isArray(squad) ? squad : [];
-    if (rows.some((r) => r && (r.autoSubIn || r.autoSubOut))) return rows;
     const pairs = homeTeamNewsAutosubPairs(rows);
     if (!pairs.length) return rows;
+    const flagged = new Set();
+    for (const row of rows) {
+      if (row && (row.autoSubIn || row.autoSubOut)) flagged.add(Number(row.element));
+    }
     const outMap = new Map();
     const inMap = new Map();
     for (const pair of pairs) {
-      outMap.set(Number(pair.out.element), pair.inn);
-      inMap.set(Number(pair.inn.element), pair.out);
+      const outId = Number(pair.out.element);
+      const inId = Number(pair.inn.element);
+      if (flagged.has(outId) || flagged.has(inId)) continue;
+      outMap.set(outId, pair.inn);
+      inMap.set(inId, pair.out);
     }
+    if (!outMap.size) return rows;
     return rows.map((row) => {
       if (!row) return row;
       const eid = Number(row.element);
@@ -11712,10 +11720,15 @@
     const pin = homeOwnerPin
       ? `${homeOwnerPin.type || ""}:${homeOwnerPin.id ?? homeOwnerPin.element ?? ""}`
       : "";
+    const raw = homeSquadRawForEntry(viewEntry);
+    const graphicPairs = homeTeamNewsAutosubPairs(raw)
+      .map((p) => `${Number(p.out && p.out.element)}>${Number(p.inn && p.inn.element)}`)
+      .join(",");
     return [
       String(viewEntry ?? ""),
       pin,
-      homeSquadFingerprint(HOME && HOME.squad),
+      homeSquadFingerprint(raw),
+      graphicPairs,
       homeMinutesWarningFingerprint(HOME),
       homeElementGwFingerprint(HOME),
       String(HOME && HOME.gw != null ? HOME.gw : ""),
@@ -17070,6 +17083,9 @@
     } else if (skipSquadTables) {
       syncHomeSquadPtsMount();
       syncHomeBenchCollapsedUI();
+      // Re-stamp in/out frames from the viewed squad so a quiet live poll
+      // cannot leave the pitch without graphic autosub borders.
+      syncHomePitchCardStrips(homeSquadForEntry(viewEntry) || []);
     }
     if (el.homeStandingsBody) {
       renderHomeStandingsLiveBody();
