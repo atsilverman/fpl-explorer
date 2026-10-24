@@ -173,7 +173,13 @@ NON_LINEUP_CAPTION = re.compile(
     r"\b(arriv\w*|check(ed|ing)\s+in|in\s+the\s+building|warm(s|ing)?[\s-]*up|"
     r"scene|setting|minutes\s+(until|to\s+go)|from\s+above|appearances?|"
     r"racism|stadium|tickets?|kit|kick[\s-]?off|build(ing)?[\s-]+up|"
-    r"fan\s*zone|times)\b",
+    r"fan\s*zone|times|here\s+come)\b",
+    re.I,
+)
+# Countdown teasers ("Team news in 🔟...", "team news coming soon") precede the XI.
+TEASER_CAPTION = re.compile(
+    r"team\s*news\s+(in\s*(\d|🔟|\S\ufe0f?\u20e3|ten|five|a\s+few|\.{2,}|…)|"
+    r"(coming|is\s+coming|incoming|soon|shortly|next|to\s+follow|on\s+(its|the)\s+way|drops?))",
     re.I,
 )
 
@@ -200,6 +206,8 @@ def lineup_evidence(text: str, alt: str) -> str:
     if alt_is_lineup(alt):
         return "strong"
     if alt and NON_LINEUP_ALT.search(normalize_text(alt)):
+        return "none"
+    if TEASER_CAPTION.search(t):
         return "none"
     if STRONG.search(t):
         return "strong"
@@ -384,8 +392,10 @@ def pick_best(
                     "height": media.get("height"),
                 }
             )
-        slot_ok = in_lineup_slot(created, ko) and not NON_LINEUP_CAPTION.search(
-            normalize_text(text)
+        slot_ok = (
+            in_lineup_slot(created, ko)
+            and not NON_LINEUP_CAPTION.search(normalize_text(text))
+            and not TEASER_CAPTION.search(normalize_text(text))
         )
         # Expand via fxtwitter when X hid attachments, or to recover full
         # carousels (some XI posts list only one image in search results).
@@ -422,7 +432,9 @@ def pick_best(
                 created=created,
                 ko=ko,
             )
+            evidence = lineup_evidence(text, alt)
             if sc < 0:
+                evidence = "ocr"
                 if not slot_ok or (alt and NON_LINEUP_ALT.search(normalize_text(alt))):
                     continue
                 if media["url"] not in ocr_bonus:
@@ -431,12 +443,15 @@ def pick_best(
                     continue
                 mins_before = (ko - created).total_seconds() / 60.0
                 sc = 100.0 - abs(mins_before - 75.0) * 0.6 - SLOT_OCR_PENALTY
-            elif lineup_evidence(text, alt) == "weak":
+            elif evidence == "weak":
                 if media["url"] not in ocr_bonus:
                     ocr_bonus[media["url"]] = ocr_lineup_score(media["url"])
                 if ocr_bonus[media["url"]] < WEAK_MIN_OCR:
                     continue
-            sc += ocr_bonus.get(media["url"], 0.0)
+            # Weak wording only uses OCR as a gate: busy photos (bus livery,
+            # crowds) OCR high and must not outrank an explicit "Your XI" post.
+            if evidence != "weak":
+                sc += ocr_bonus.get(media["url"], 0.0)
             if sc > best_score:
                 best_score = sc
                 best = {
@@ -452,6 +467,7 @@ def pick_best(
                     "score": round(sc, 1),
                     "minsBeforeKo": round((ko - created).total_seconds() / 60.0, 1),
                     "ocrBonus": round(ocr_bonus.get(media["url"], 0.0), 1),
+                    "evidence": evidence,
                 }
     return best
 
@@ -519,6 +535,8 @@ def club_is_done(state: dict, gw: int, code: str) -> bool:
     if state.get("gw") != gw:
         return False
     row = (state.get("teams") or {}).get(code) or {}
+    if row.get("evidence") in ("weak", "ocr"):
+        return False
     return bool(row.get("localPath")) and float(row.get("score") or 0) >= DONE_MIN_SCORE
 
 
@@ -722,6 +740,7 @@ def main() -> int:
             "width": best.get("width"),
             "height": best.get("height"),
             "score": best["score"],
+            "evidence": best.get("evidence"),
             "fetchedAt": now,
         }
         state.setdefault("teams", {})[code] = row
