@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1674" />
+<link rel="stylesheet" href="styles.css?v=1677" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -212,7 +212,7 @@
     <path d="M16 16h5v5"/>
     <circle cx="12" cy="12" r="1"/>
   </symbol>
-  <symbol id="i-repeat-2" viewBox="0 0 24 24">
+  <symbol id="i-repeat-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="m2 9 3-3 3 3"/>
     <path d="M7 6v11a2 2 0 0 0 2 2h8"/>
     <path d="m22 15-3 3-3-3"/>
@@ -1785,16 +1785,9 @@
     <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
   </button>
 </div>
-<div id="home-autosub-banner" class="home-autosub-banner" hidden>
-  <span class="home-autosub-banner-dot" aria-hidden="true"></span>
-  <span class="home-autosub-banner-copy">Viewing post auto-sub data</span>
-  <button type="button" class="home-autosub-banner-clear icon-only-btn" id="home-autosub-banner-clear"
-    aria-label="Back to live scores" title="Back to live scores">
-    <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-  </button>
-</div>
 <button type="button" class="home-autosub-fab" id="home-autosub-preview-btn" hidden
-  aria-pressed="false" aria-label="View post auto-sub scores">
+  aria-haspopup="dialog" aria-expanded="false" aria-controls="home-player-modal"
+  aria-label="Auto-sub breakdown" title="Auto-sub breakdown">
   <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
   <span class="home-autosub-fab-label">Auto-subs</span>
 </button>
@@ -1968,7 +1961,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1539"></script>
+<script src="app.js?v=1543"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
