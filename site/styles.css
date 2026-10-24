@@ -9898,6 +9898,109 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .spit-symbol .home-chip-cell.spit-home-swatch {
   margin-top: 1px;
 }
+/* Pitch-card chips, standalone (live ones are scoped to .home-pitch-card). */
+.spit-symbol:has(.spit-pitch-chip),
+.spit-symbol:has(.home-autosub-tag) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.spit-pitch-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.spit-pitch-chip.is-mp {
+  background: hsl(var(--delta-rise));
+  color: #fff;
+}
+.spit-pitch-chip.is-mp.is-muted {
+  background: hsl(240 4% 46%);
+  color: hsl(0 0% 100% / 0.92);
+}
+.spit-pitch-chip.is-unused {
+  min-width: 16px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  background: hsl(38 92% 50%);
+  color: hsl(30 60% 10%);
+}
+.spit-pitch-chip.is-dash {
+  min-width: 26px;
+  border-radius: 3px;
+  background: hsl(240 5% 72%);
+  color: hsl(240 6% 30%);
+}
+.spit-pitch-chip.is-scrub {
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  background: hsl(var(--blue-hsl) / 0.18);
+  color: hsl(var(--blue-hsl));
+  box-shadow: inset 0 0 0 1.5px hsl(var(--blue-hsl));
+}
+.spit-pitch-chip.is-pts {
+  gap: 2px;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  background: hsl(var(--foreground) / 0.06);
+  color: hsl(var(--delta-rise));
+}
+.spit-pitch-chip.is-pts small {
+  font-size: 8.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.spit-pitch-imp {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 64px;
+  height: 16px;
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+  background: hsl(var(--foreground) / 0.08);
+}
+.spit-pitch-imp-fill {
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--delta-rise));
+}
+.spit-pitch-imp-val {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8.5px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.spit-dc-sv {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.spit-dc-sv span {
+  margin: 0 0.2em;
+  color: var(--text-faint);
+}
 .spit-symbol:has(.home-role-tag) {
   display: inline-flex;
   align-items: center;
@@ -14205,13 +14308,25 @@ html.mobile-sheet-active body {
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
+/* Dark scrim (not foreground-tinted) so dark mode dims instead of washing out. */
 .home-player-modal.is-gw-pts .home-player-modal-backdrop {
-  background: hsl(var(--foreground) / 0.22);
+  background: hsl(240 10% 3% / 0.52);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+html[data-theme="light"] .home-player-modal.is-gw-pts .home-player-modal-backdrop {
+  background: hsl(220 25% 12% / 0.3);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-player-modal.is-gw-pts .home-player-modal-backdrop {
+    background: hsl(220 25% 12% / 0.3);
+  }
 }
 .home-player-modal.is-gw-pts .home-player-modal-panel {
   position: relative;
   width: min(360px, calc(100vw - 32px));
   max-height: min(80vh, 560px);
+  border-radius: 20px;
   background: var(--home-glass-bg-strong, var(--glass-bg));
   border-color: var(--home-glass-border, var(--glass-border));
   box-shadow: var(--home-glass-shadow, var(--shadow-lg));
@@ -14230,13 +14345,13 @@ html.mobile-sheet-active body {
   }
 }
 .home-player-modal.is-gw-pts .home-player-modal-body {
-  padding: 14px 16px 16px;
+  padding: 16px;
   overflow: auto;
 }
 .home-player-modal.is-gw-pts .home-player-modal-header {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 12px;
+  right: 12px;
   z-index: 3;
   width: auto;
   min-height: 0;
@@ -14255,6 +14370,25 @@ html.mobile-sheet-active body {
 .home-player-modal.is-gw-pts .home-player-open-x {
   display: none !important;
 }
+.home-player-modal.is-gw-pts .home-player-modal-close {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
+  border-radius: 999px;
+  border-color: transparent;
+  background: hsl(var(--foreground) / 0.07);
+  color: var(--text-dim);
+  box-shadow: none;
+}
+.home-player-modal.is-gw-pts .home-player-modal-close:hover {
+  background: hsl(var(--foreground) / 0.13);
+  color: var(--text);
+}
+.home-player-modal.is-gw-pts .home-player-modal-close .icon {
+  width: 15px;
+  height: 15px;
+}
 .home-gw-pts {
   display: flex;
   flex-direction: column;
@@ -14263,47 +14397,106 @@ html.mobile-sheet-active body {
 .home-gw-pts > .home-lookup-head {
   padding-right: 36px;
 }
+/* Fixture context left, big GW total right. */
+.home-gw-pts-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: hsl(var(--foreground) / 0.05);
+  border: 1px solid hsl(var(--foreground) / 0.07);
+}
+.home-gw-pts-fx {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.home-gw-pts-fx-gw {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.home-gw-pts-fx-opp {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+.home-gw-pts-fx-opp.is-empty {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.home-gw-pts-fx-crest {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.home-gw-pts-fx-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-gw-pts-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: none;
+  color: var(--text);
+}
+.home-gw-pts-total strong {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.home-gw-pts-total span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.home-gw-pts-total.is-pos strong {
+  color: hsl(var(--delta-rise));
+}
+.home-gw-pts-total.is-neg strong {
+  color: hsl(var(--delta-fall));
+}
 .home-gw-pts-list {
   list-style: none;
   margin: 0;
-  padding: 0;
-  border: 1px solid var(--home-glass-border, hsl(var(--border-hsl)));
-  border-radius: calc(var(--radius) - 2px);
-  overflow: hidden;
-  background: var(--home-glass-bg, hsl(var(--card) / 0.55));
+  padding: 2px 0;
 }
 .home-gw-pts-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 12px;
+  padding: 8px 4px 8px 2px;
   font-size: 13px;
   line-height: 1.3;
-  border-top: 1px solid hsl(var(--border-hsl) / 0.85);
+  border-top: 1px solid hsl(var(--foreground) / 0.06);
 }
 .home-gw-pts-row:first-child {
   border-top: none;
 }
-.home-gw-pts-row.is-total {
-  border-top: 1.5px solid hsl(var(--foreground) / 0.22);
-  background: hsl(var(--secondary) / 0.55);
-  font-weight: 700;
-}
-.home-gw-pts-row.is-total .home-gw-pts-event,
-.home-gw-pts-row.is-total .home-gw-pts-pts {
-  font-weight: 700;
-  color: hsl(var(--foreground));
-}
 .home-gw-pts-event {
   min-width: 0;
   font-weight: 500;
-  color: hsl(var(--foreground) / 0.92);
+  color: var(--text-dim);
 }
 .home-gw-pts-detail {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: hsl(var(--muted-foreground));
+  color: var(--text-faint);
   text-align: right;
   min-width: 3.5ch;
 }
@@ -14352,16 +14545,34 @@ html.mobile-sheet-active body {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
-  height: 36px;
+  height: 40px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 0 14px;
+  border-radius: 12px;
+  font-size: 13px;
   font-weight: 600;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary));
+  background: hsl(var(--blue-hsl) / 0.12);
+  color: hsl(var(--blue-hsl));
+  border-color: hsl(var(--blue-hsl) / 0.28);
+}
+.home-gw-pts-details-btn .icon {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.18s var(--ease-out);
 }
 .home-gw-pts-details-btn:hover {
-  background: hsl(var(--primary) / 0.9);
-  color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary) / 0.9);
+  background: hsl(var(--blue-hsl) / 0.18);
+  color: hsl(var(--blue-hsl));
+  border-color: hsl(var(--blue-hsl) / 0.4);
+}
+.home-gw-pts-details-btn:hover .icon {
+  transform: translateX(2px);
+}
+.home-gw-pts-pin-btn {
+  border-radius: 12px;
+  height: 40px;
+  width: 40px;
 }
 /* Wide desktop: 3×2 — Ownership sits beside Form; bottom-right slot left open. */
 @media (min-width: 900px) {
@@ -19665,7 +19876,8 @@ img.home-pitch-photo {
 }
 /* C / A / autosub chips — same size; radius tracks the card corner. */
 .home-pitch-photo-wrap .home-role-tag,
-.home-pitch-photo-wrap .home-autosub-tag {
+.home-pitch-photo-wrap .home-autosub-tag,
+.home-pitch-photo-wrap .home-unused-tag {
   position: absolute;
   z-index: 4;
   box-sizing: border-box;
@@ -19697,6 +19909,25 @@ img.home-pitch-photo {
 .home-pitch-photo-wrap .home-badge-tr {
   right: var(--home-pitch-badge-inset);
   left: auto;
+}
+/* Unused starter: amber "!" — match live, 0 minutes logged. */
+.home-pitch-photo-wrap .home-unused-tag {
+  top: var(--home-pitch-badge-inset);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  background: hsl(38 92% 50%);
+  color: hsl(30 60% 10%);
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.25);
+}
+.home-pitch-pts.is-unused {
+  color: var(--home-pitch-card-muted);
+  font-weight: 700;
+}
+/* Match clock still shows, but grey — he isn't the one playing. */
+.home-pitch-card.is-unused .home-pitch-mp-badge {
+  background: hsl(240 4% 46%);
+  color: hsl(0 0% 100% / 0.92);
 }
 /* Stack under the top-right chip when live MP owns the TL overhang. */
 .home-pitch-photo-wrap .home-badge-tr-below {
@@ -20552,6 +20783,15 @@ html.home-squad-wide .home-squad-pitch-xi {
   padding-top: 6px;
   padding-bottom: 6px;
   white-space: nowrap;
+}
+.home-squad-pts-table thead th.home-col-stat.is-dc-sv {
+  letter-spacing: 0;
+}
+.home-squad-pts-table thead th .home-pts-dc-sv-dot {
+  display: inline-block;
+  margin: 0 0.15em;
+  font-weight: 700;
+  color: var(--text-faint);
 }
 .home-squad-pts-table tbody td.home-col-stat {
   font-size: 11px;

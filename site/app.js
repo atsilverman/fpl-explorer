@@ -9192,7 +9192,7 @@
       teamCrestFallbackHTML(row.team, "home-crest-fallback");
     const tags = [];
     if (row.isCaptain) tags.push(`<span class="home-role-tag home-role-c">C</span>`);
-    if (row.isVice) tags.push(`<span class="home-role-tag home-role-a">A</span>`);
+    if (row.isVice) tags.push(`<span class="home-role-tag home-role-a">V</span>`);
     if (row.autoSubIn) {
       const from = row.autoSubWithName || "starter";
       tags.push(
@@ -9738,6 +9738,30 @@
     };
   }
 
+  /** GW + opponent context for the points card summary (crest, name, H/A). */
+  function homePlayerGwFixtureSummaryHTML(row) {
+    const gw = Number(HOME && HOME.gw);
+    const gwLabel = Number.isFinite(gw) ? `GW${gw}` : "This GW";
+    const fx =
+      (FIXTURES_BY_TEAM[row.team] || []).find((f) => Number(f.gw) === gw && f.opp) ||
+      (homeSquadFixtures(row) || [])[0] ||
+      null;
+    const oppCode = (fx && fx.opp) || row.opp || "";
+    const ha = (fx && (fx.oppHa || fx.ha)) || row.oppHa || "";
+    if (!oppCode || oppCode === "—") {
+      return `<span class="home-gw-pts-fx-gw">${escapeHtml(gwLabel)}</span><span class="home-gw-pts-fx-opp is-empty">No fixture</span>`;
+    }
+    const name = teamNameForSeason(oppCode) || oppCode;
+    const crest =
+      badgeHTML(oppCode, "home-gw-pts-fx-crest") ||
+      teamCrestFallbackHTML(oppCode, "home-gw-pts-fx-crest");
+    const haLabel = ha === "H" ? "Home" : ha === "A" ? "Away" : "";
+    return (
+      `<span class="home-gw-pts-fx-gw">${escapeHtml(gwLabel)}${haLabel ? ` · ${haLabel}` : ""}</span>` +
+      `<span class="home-gw-pts-fx-opp">${crest}<span class="home-gw-pts-fx-name">vs ${escapeHtml(name)}</span></span>`
+    );
+  }
+
   function homePlayerGwPosLabel(row) {
     const raw = String((row && row.position) || "").toUpperCase();
     if (raw === "GKP" || raw === "GK") return "GK";
@@ -9811,16 +9835,20 @@
         );
       })
       .join("");
-    const totalRow =
-      `<li class="home-gw-pts-row is-total">` +
-      `<span class="home-gw-pts-event">Total</span>` +
-      `<span class="home-gw-pts-detail" aria-hidden="true"></span>` +
-      `<span class="home-gw-pts-pts">${homeGwPtsPillHTML(explain.total, { signed: false })}</span>` +
-      `</li>`;
+    const total = Number(explain.total) || 0;
+    const totalTone = total > 0 ? " is-pos" : total < 0 ? " is-neg" : "";
+    const summary =
+      `<div class="home-gw-pts-summary">` +
+      `<div class="home-gw-pts-fx">${homePlayerGwFixtureSummaryHTML(row)}</div>` +
+      `<div class="home-gw-pts-total${totalTone}" aria-label="${escapeHtml(`${total} points`)}">` +
+      `<strong>${escapeHtml(String(total))}</strong><span>pts</span>` +
+      `</div>` +
+      `</div>`;
     return (
       `<div class="home-gw-pts">` +
       homePlayerIdentityHeadHTML(row) +
-      `<ul class="home-gw-pts-list">${rows}${totalRow}</ul>` +
+      summary +
+      `<ul class="home-gw-pts-list">${rows}</ul>` +
       `<div class="home-gw-pts-actions">` +
       (homeGwPtsPinAvailable(row)
         ? (
@@ -9832,7 +9860,8 @@
         )
         : "") +
       `<button type="button" class="ghost-btn home-gw-pts-details-btn" data-home-gw-pts-details>` +
-      `Player Details` +
+      `<span>Player details</span>` +
+      `<svg class="icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg>` +
       `</button>` +
       `</div>` +
       `</div>`
@@ -9878,6 +9907,9 @@
   }
 
   function homeSquadPitchGwStripHTML(row) {
+    if (homeSquadRowIsUnusedLive(row)) {
+      return `<span class="home-pitch-strip home-pitch-pts is-idle is-unused">–</span>`;
+    }
     if (homeSquadPitchPlayed(row)) {
       const pts = homeSquadRowGwPoints(row);
       const ptsN = pts != null && Number.isFinite(Number(pts)) ? Math.round(Number(pts)) : 0;
@@ -10252,6 +10284,22 @@
           else if (hasRole) autosub.classList.add("home-badge-tl");
           else autosub.classList.add("home-badge-tr");
         }
+
+        const unusedEl = card.querySelector(".home-unused-tag");
+        const unusedHTML = autosub ? "" : homePitchUnusedBadgeHTML(row);
+        if (unusedHTML && !unusedEl) {
+          const wrap = card.querySelector(".home-pitch-photo-wrap");
+          if (wrap) {
+            const corner = hasRole ? "home-badge-tr-below" : "home-badge-tr";
+            wrap.insertAdjacentHTML(
+              "beforeend",
+              unusedHTML.replace('class="home-unused-tag', `class="home-unused-tag ${corner}`)
+            );
+          }
+        } else if (!unusedHTML && unusedEl) {
+          unusedEl.remove();
+        }
+        card.classList.toggle("is-unused", !!unusedHTML);
       });
     }
     if (homePitchStripMode === "imp") syncHomePitchImpLabels();
@@ -10527,6 +10575,26 @@
     return Math.min(120, Math.round(mins));
   }
 
+  /**
+   * Starter whose match is in play but who has logged no minutes — likely
+   * benched / unused. Grace of a few clock minutes so kickoff doesn't flash
+   * every XI player before FPL's live feed records minutes.
+   */
+  function homeSquadRowIsUnusedLive(row) {
+    if (!row || row.onBench || Number(row.position) > 11) return false;
+    if (!homeSquadRowIsInPlay(row)) return false;
+    const eg = homeElementGwRecord(row.element);
+    if (Math.max(Number(row.minutes) || 0, Number(eg && eg.minutes) || 0) > 0) return false;
+    const clock = homePitchLiveMinutes(row);
+    return clock != null && clock >= 3;
+  }
+
+  function homePitchUnusedBadgeHTML(row) {
+    if (!homeSquadRowIsUnusedLive(row)) return "";
+    const tip = "0 minutes while his match is live — likely on the bench";
+    return `<span class="home-unused-tag"${tipAttr(tip)} aria-label="${escapeHtml(tip)}">!</span>`;
+  }
+
   function homePitchMpBadgeHTML(row) {
     const mins = homePitchLiveMinutes(row);
     if (mins == null) return "";
@@ -10615,7 +10683,7 @@
     if (hasRole) {
       const role = row.isCaptain
         ? `<span class="home-role-tag home-role-c home-badge-tr" title="Captain">C</span>`
-        : `<span class="home-role-tag home-role-a home-badge-tr" title="Vice-captain">A</span>`;
+        : `<span class="home-role-tag home-role-a home-badge-tr" title="Vice-captain">V</span>`;
       badges.push(role);
     }
     const autosub = homePitchAutosubBadgeHTML(row);
@@ -10624,6 +10692,12 @@
       if (hasRole && live) corner = "home-badge-tr-below";
       else if (hasRole) corner = "home-badge-tl";
       badges.push(autosub.replace('class="home-autosub-tag', `class="home-autosub-tag ${corner}`));
+    }
+    const unused = autosub ? "" : homePitchUnusedBadgeHTML(row);
+    if (unused) {
+      // Live MP owns the TL overhang, so stay right; stack under C/A.
+      const corner = hasRole ? "home-badge-tr-below" : "home-badge-tr";
+      badges.push(unused.replace('class="home-unused-tag', `class="home-unused-tag ${corner}`));
     }
     const strip = homeSquadPitchStripHTML(row);
     const fullName = row.name || "—";
@@ -10634,6 +10708,7 @@
       row.autoSubOut ? "is-autosub-out" : "",
       live ? "is-live" : "",
       mpBadge ? "has-live-mp" : "",
+      unused ? "is-unused" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -10840,7 +10915,11 @@
     { key: "assists", label: "A", title: "Assists" },
     { key: "cleanSheets", label: "CS", title: "Clean sheets" },
     { key: "bonus", label: "B", title: "Bonus points" },
-    { key: "defConHit", label: "DC", title: "Defensive contribution threshold hit (+2 pts)" },
+    {
+      key: "defConHit",
+      label: "DC · Sv",
+      title: "Outfield: defensive contribution actions vs threshold (+2 pts). Goalkeepers: saves vs 3 (+1 pt per 3)",
+    },
   ];
 
   const HOME_SQUAD_PTS_FALLBACKS = [
@@ -10879,6 +10958,7 @@
         if (pos !== "GK" && (entry.threshold != null || eg.defConHit || Number(entry.actions) > 0)) {
           return true;
         }
+        if (pos === "GK" && Number(eg.saves) > 0) return true;
         continue;
       }
       if (colKey === "saves") {
@@ -10932,6 +11012,22 @@
       const raw = homeSquadRowGwPoints(entry.row, entry.eg);
       if (!Number.isFinite(raw)) return "—";
       return homePtsPillHTML(raw, { minutes: entry.row && entry.row.minutes });
+    }
+    if (col.key === "defConHit" && entry.pos === "GK") {
+      const saves = Number(entry.eg.saves) || 0;
+      const mins = Math.max(
+        Number(entry.row && entry.row.minutes) || 0,
+        Number(entry.eg.minutes) || 0
+      );
+      if (saves <= 0 && mins <= 0) return "";
+      const thr = 3;
+      const hit = saves >= thr;
+      const savePts = Math.floor(saves / thr);
+      const tip = hit
+        ? `Saves — ${saves} ≥ ${thr} (+${savePts} pt${savePts === 1 ? "" : "s"})`
+        : `Saves — ${saves} / ${thr} (+1 pt at threshold)`;
+      const frac = `<span class="live-points-dc-frac${hit ? " is-hit" : ""}"${tipAttr(tip)}><span class="live-points-dc-num">${saves}</span><span class="live-points-dc-thr">/${thr}</span></span>`;
+      return livePointsPillHTML("saves", frac, { tone: "is-defcon-progress" });
     }
     return livePointsCellHTML(entry, col);
   }
@@ -16297,10 +16393,13 @@
         el.homeSquadPtsHead.innerHTML =
           (ptsShowPlayer ? `<th scope="col" class="home-col-player">Player</th>` : "") +
           ptsDisplayCols
-            .map(
-              (col) =>
-                `<th scope="col" class="home-col-stat col-num${col.narrow ? " col-num-narrow" : ""}"${tipAttr(col.title || col.label)}>${escapeHtml(col.label)}</th>`
-            )
+            .map((col) => {
+              const label =
+                col.key === "defConHit"
+                  ? `DC<span class="home-pts-dc-sv-dot" aria-hidden="true">·</span>Sv`
+                  : escapeHtml(col.label);
+              return `<th scope="col" class="home-col-stat col-num${col.narrow ? " col-num-narrow" : ""}${col.key === "defConHit" ? " is-dc-sv" : ""}"${tipAttr(col.title || col.label)}>${label}</th>`;
+            })
             .join("");
       }
       if (el.homeSquadPtsBody) {
@@ -19942,7 +20041,7 @@
       // Visual marks only (pills, badges, dots) — no text-label reading rows.
       const team = [
         spitRow(
-          `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">A</span>`,
+          `<span class="home-role-tag home-role-c spit-home-swatch">C</span><span class="home-role-tag home-role-a spit-home-swatch">V</span>`,
           "Captain / vice on the squad list"
         ),
         spitRow(
@@ -19964,6 +20063,37 @@
         spitRow(
           `<span class="home-mp-line is-modest-mins spit-home-swatch" aria-hidden="true">68′</span>`,
           "60–75′ — after FT, or live once minutes stay frozen while the match clock keeps moving"
+        ),
+        spitRow(
+          `<span class="spit-pitch-chip is-mp spit-home-swatch" aria-hidden="true">27′</span>`,
+          "Pitch card corner — match clock while his fixture is in play"
+        ),
+        spitRow(
+          `<span class="spit-pitch-chip is-mp is-muted spit-home-swatch" aria-hidden="true">27′</span><span class="spit-pitch-chip is-unused spit-home-swatch" aria-hidden="true">!</span><span class="spit-pitch-chip is-dash spit-home-swatch" aria-hidden="true">–</span>`,
+          "Starter on 0′ with his match live (3′+) — likely benched; clock greys out and points show – instead of 0"
+        ),
+        spitRow(
+          `<span class="home-autosub-tag is-in spit-home-swatch" aria-hidden="true">${iconHTML("caret-up", "home-autosub-icon")}</span><span class="home-autosub-tag is-out spit-home-swatch" aria-hidden="true">${iconHTML("caret-down", "home-autosub-icon")}</span>`,
+          "Auto-sub on / off — appears at full time when a starter didn’t play; bench points count once FPL finalises the fixture"
+        ),
+        spitRow(
+          `<span class="spit-pitch-chip is-scrub spit-home-swatch" aria-hidden="true">GW9–11</span>`,
+          mobile
+            ? "Fixtures pitch mode — drag the bottom bar to slide every card through later gameweeks"
+            : "Fixtures pitch mode — next three gameweeks per card (blank –, doubles stacked)"
+        ),
+        spitRow(
+          `<span class="spit-pitch-imp spit-home-swatch" aria-hidden="true"><span class="spit-pitch-imp-fill"></span><span class="spit-pitch-imp-val">100%</span></span>`,
+          "Importance pitch mode — bar fills the card at 100% (captain clamps full); % moves inside the bar when it won’t fit beside it",
+          "spit-symbol-wide"
+        ),
+        spitRow(
+          `<span class="spit-pitch-chip is-pts spit-home-swatch" aria-hidden="true">7<small>pts</small></span>`,
+          "Tap a pitch card — this GW’s points breakdown vs the opponent, then Player details"
+        ),
+        spitRow(
+          `<span class="spit-dc-sv spit-home-swatch" aria-hidden="true">DC<span>·</span>Sv</span>`,
+          "Points table — outfield DefCon actions vs threshold; keepers show saves / 3. Numerator greens when the threshold is hit (+1 pt per 3, already in Pts)"
         ),
         spitRow(
           `<span class="home-imp is-pos spit-home-swatch" style="--imp-pct:70%;--imp-fill:hsl(var(--delta-rise));--imp-fg:hsl(var(--delta-rise))" aria-hidden="true"><span class="home-imp-track"><span class="home-imp-fill is-pos is-drawn"></span></span><span class="home-imp-pct">70%</span></span>`,
@@ -20137,6 +20267,10 @@
           "DefCon earned this match."
         ),
         spitRow(`<span class="live-card-dot is-yc spit-home-swatch" aria-hidden="true"></span>`, "Yellow card (Points mode)."),
+        spitRow(
+          `<span class="ownership-pill live-points-pill is-defcon-progress spit-home-swatch">2</span><span class="ownership-pill live-points-pill is-good spit-home-swatch">3</span><span class="ownership-pill live-points-pill is-good is-ga-ring spit-home-swatch">6</span>`,
+          "Saves — plain under 3; fill at 3 (1 pt); ring at 6 (double threshold)"
+        ),
         spitRow(
           `<span class="live-bonus-status is-live spit-home-swatch" aria-hidden="true"><span class="home-status-dot is-live"></span> Live</span>`,
           "Bonus card in play — green border; live cards sort first.",
@@ -24785,12 +24919,13 @@
     const pushMatchup = (home, away, kickoff) => {
       if (!home || !away) return;
       const key = `${home}|${away}`;
-      if (seen.has(key)) return;
+      const rev = `${away}|${home}`;
+      if (seen.has(key) || seen.has(rev)) return;
       seen.add(key);
       out.push({ id: key, home, away, kickoff: kickoff || null });
     };
 
-    // Upcoming schedule (fixturesByTeam drops finished GWs after FT).
+    // Upcoming schedule (fixturesByTeam drops finished fixtures after FT).
     for (const [team, list] of Object.entries(FIXTURES_BY_TEAM)) {
       for (const fx of list || []) {
         if (Number(fx.gw) !== gw) continue;
@@ -24800,18 +24935,17 @@
       }
     }
 
-    // Finished / in-play GWs still marked current — keep Bonus cards until next GW.
-    if (!out.length) {
-      const baked =
-        (DATA.liveFixturesByGw || {})[String(gw)] || (DATA.liveFixturesByGw || {})[gw] || [];
-      for (const fx of baked) {
-        if (!fx) continue;
-        pushMatchup(fx.home, fx.away, fx.kickoff);
-      }
+    // Already-played / in-play fixtures in the current GW (baked at last rebuild).
+    const baked =
+      (DATA.liveFixturesByGw || {})[String(gw)] || (DATA.liveFixturesByGw || {})[gw] || [];
+    for (const fx of baked) {
+      if (!fx) continue;
+      pushMatchup(fx.home, fx.away, fx.kickoff);
     }
 
-    // Last resort: pair clubs from elementGw fixtureIds (works before rebuild).
-    if (!out.length) {
+    // Pair clubs from elementGw fixtureIds so early-KO games stay visible
+    // even before the next build.py refresh.
+    {
       const egMap = liveElementMapForGw(gw);
       const byElement = livePlayerByElement();
       const byFx = new Map();
@@ -26113,6 +26247,15 @@
     );
   }
 
+  /** Points / Bonus “Live” = fixture has started (in play or finished this GW). */
+  function liveRowFixtureStarted(r) {
+    if (!r) return false;
+    if (r.live || liveEgIsInPlay(r.eg)) return true;
+    const status = String(r.status || (r.eg && r.eg.status) || "").toLowerCase();
+    if (status === "finished") return true;
+    return (Number(r.minutes) || 0) > 0;
+  }
+
   function liveFilteredRows(rows) {
     let out = rows;
     if (state.liveMatchups.size) {
@@ -26125,7 +26268,11 @@
       out = out.filter((r) => state.posFilter.has(r.pos));
     }
     if (state.liveStatus === "live") {
-      out = out.filter((r) => r.live);
+      out = out.filter((r) =>
+        state.liveMode === "points" || state.liveMode === "bonus"
+          ? liveRowFixtureStarted(r)
+          : r.live
+      );
     } else if (state.liveStatus === "owned") {
       out = out.filter((r) => r.player && r.player.code != null && ownedCodes.has(r.player.code));
     }
@@ -26413,7 +26560,7 @@
       extra = ` is-bonus-${n}`;
     }
     if (
-      (colKey === "goals" || colKey === "assists") &&
+      (colKey === "goals" || colKey === "assists" || colKey === "saves") &&
       Number.isFinite(Number(statCount)) &&
       Number(statCount) > 1
     ) {
@@ -26443,7 +26590,25 @@
         `<span class="live-defcon-check-slot">${liveCleanSheetDotHTML()}</span>`
       );
     }
-    if (col.key === "saves" && pos !== "GK") return "";
+    if (col.key === "saves") {
+      if (pos !== "GK") return "";
+      const n = Number(eg.saves);
+      if (!Number.isFinite(n) || n === 0) return "";
+      const roll = statRollSpan(n, {
+        from: 0,
+        decimals: 0,
+        className: "live-stat-roll",
+        rollKind: "stat",
+      });
+      // 3 saves = 1 pt (fill); 6 = double threshold (ring, same as 2 goals).
+      if (n < 3) {
+        return livePointsPillHTML(col.key, roll, { tone: "is-defcon-progress" });
+      }
+      return livePointsPillHTML(col.key, roll, {
+        tone: "is-good",
+        statCount: n >= 6 ? 2 : 1,
+      });
+    }
     const n = Number(eg[col.key]);
     if (!Number.isFinite(n) || n === 0) return "";
     const roll = statRollSpan(n, {
