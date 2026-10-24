@@ -134,6 +134,7 @@ def project_graphic_auto_subs(
     team_code_by_element: dict[int, str],
     named_ids_by_team: dict[str, set[int]],
     active_chip: str | None = None,
+    live_stats: dict | None = None,
 ) -> list[dict]:
     """UI-only auto-subs from team-news graphics (starter not named on the sheet).
 
@@ -187,7 +188,8 @@ def project_graphic_auto_subs(
             )
             if not compatible:
                 continue
-            if sheet_ready(bench_id) and not on_sheet(bench_id):
+            bench_mins = _minutes((live_stats or {}).get(bench_id))
+            if sheet_ready(bench_id) and not on_sheet(bench_id) and bench_mins <= 0:
                 continue
             remaining = starting[idx + 1 :]
             current = active + remaining

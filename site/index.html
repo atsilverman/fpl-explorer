@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1660" />
+<link rel="stylesheet" href="styles.css?v=1673" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -159,6 +159,12 @@
     <path d="M10 9H8"/>
     <path d="M16 13H8"/>
     <path d="M16 17H8"/>
+  </symbol>
+  <symbol id="i-file-user" viewBox="0 0 24 24">
+    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    <path d="M15 18a3 3 0 1 0-6 0"/>
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>
+    <circle cx="12" cy="13" r="2"/>
   </symbol>
   <symbol id="i-table" viewBox="0 0 24 24">
     <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
@@ -517,7 +523,7 @@
     </button>
     <button class="icon-btn icon-only-btn gw-recap-btn" id="gw-recap-btn" type="button"
       title="Gameweek recap" aria-label="Open gameweek league recap" aria-controls="gw-recap" hidden>
-      <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg>
+      <svg class="icon" aria-hidden="true"><use href="#i-file-user"/></svg>
     </button>
     <button class="icon-btn icon-only-btn page-info-btn page-info-nav-btn" id="page-info-nav-btn" type="button"
       aria-label="How Home works" aria-controls="page-info-tooltip" aria-expanded="false">
@@ -1779,6 +1785,19 @@
     <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
   </button>
 </div>
+<div id="home-autosub-banner" class="home-autosub-banner" hidden>
+  <span class="home-autosub-banner-dot" aria-hidden="true"></span>
+  <span class="home-autosub-banner-copy">Viewing post auto-sub data</span>
+  <button type="button" class="home-autosub-banner-clear icon-only-btn" id="home-autosub-banner-clear"
+    aria-label="Back to live scores" title="Back to live scores">
+    <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+  </button>
+</div>
+<button type="button" class="home-autosub-fab" id="home-autosub-preview-btn" hidden
+  aria-pressed="false" aria-label="View post auto-sub scores">
+  <svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg>
+  <span class="home-autosub-fab-label">Auto-subs</span>
+</button>
 <div id="mobile-view-dock" class="mobile-view-dock" hidden aria-hidden="true"></div>
 <div id="mobile-filter-dock" class="mobile-filter-dock" hidden aria-hidden="true"></div>
 <div id="home-fx-scrub" class="home-fx-scrub" hidden aria-hidden="true">
@@ -1926,7 +1945,7 @@
 <script src="price_changes_data.js?v=307"></script>
 <script src="leagues_data.js?v=6"></script>
 <script src="home_data.js?v=51"></script>
-<script src="team_news_data.js?v=15"></script>
+<script src="team_news_data.js?v=16"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1949,7 +1968,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1530"></script>
+<script src="app.js?v=1536"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

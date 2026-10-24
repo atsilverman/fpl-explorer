@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-24T15:40:03Z",
+  "generatedAt": "2026-10-24T16:28:36Z",
   "gw": 8,
   "teams": [
     {
@@ -193,6 +193,7 @@
         91,
         104,
         110,
+        173,
         175,
         176,
         177,
@@ -214,6 +215,7 @@
         "Pinnock",
         "Onyeka",
         "Rushworth",
+        "Thomas",
         "van Ewijk",
         "Dasilva",
         "Kesler-Hayden",
@@ -232,7 +234,7 @@
         "Mfuni"
       ],
       "namedReady": true,
-      "namedCount": 19
+      "namedCount": 20
     },
     {
       "code": "EVE",
@@ -315,32 +317,48 @@
       "fetchedAt": "2026-10-24T12:50:15Z",
       "named": [
         250,
+        251,
+        253,
         254,
+        256,
         257,
         258,
         261,
+        263,
         264,
+        265,
+        266,
         268,
+        271,
         569,
+        570,
         580,
         635,
         650
       ],
       "namedNames": [
         "Leno",
+        "Lecomte",
+        "Andersen",
         "Robinson",
+        "Tete",
         "Bassey",
         "Castagne",
         "Iwobi",
+        "Kevin",
         "Bobb",
+        "Berge",
+        "Cairney",
         "King",
+        "Muniz",
         "Gonzalo",
+        "Palacios",
         "Charles",
         "Larsson",
         "Affengruber"
       ],
       "namedReady": true,
-      "namedCount": 11
+      "namedCount": 19
     },
     {
       "code": "AVL",

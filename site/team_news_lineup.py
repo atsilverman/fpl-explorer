@@ -56,12 +56,20 @@ def player_keys(el: dict) -> set[str]:
     web = fold_name(el.get("web_name") or "")
     if web:
         keys.add(web)
+        keys.add(web.replace(" ", ""))
         keys.update(name_tokens(web))
     second = el.get("second_name") or ""
     for tok in name_tokens(second):
         if len(tok) >= 4:
             keys.add(tok)
     return {k for k in keys if k not in STOP}
+
+
+def player_web_keys(el: dict) -> set[str]:
+    web = fold_name(el.get("web_name") or "")
+    if not web:
+        return set()
+    return {web, web.replace(" ", "")}
 
 
 def club_players(bootstrap: dict, club_code: str) -> list[dict]:
@@ -102,6 +110,7 @@ def _unique_fuzzy(token: str, key_index: dict[str, list[int]]) -> int | None:
 
 def match_named_players(ocr_text: str, players: list[dict]) -> dict:
     key_index: dict[str, list[int]] = {}
+    web_index: dict[str, list[int]] = {}
     by_id = {}
     for el in players:
         try:
@@ -113,13 +122,29 @@ def match_named_players(ocr_text: str, players: list[dict]) -> dict:
             key_index.setdefault(key, [])
             if eid not in key_index[key]:
                 key_index[key].append(eid)
+        for key in player_web_keys(el):
+            web_index.setdefault(key, [])
+            if eid not in web_index[key]:
+                web_index[key].append(eid)
 
     named: dict[int, str] = {}
     tokens = [fold_name(t).replace(" ", "") for t in TOKEN_RE.findall(ocr_text or "")]
     tokens = [t for t in tokens if len(t) >= 3 and t not in STOP]
     for token in tokens:
-        hits = key_index.get(token) or []
-        eid = hits[0] if len(hits) == 1 else None
+        web_hits = web_index.get(token) or []
+        eid = web_hits[0] if len(web_hits) == 1 else None
+        if eid is None:
+            hits = key_index.get(token) or []
+            if len(hits) == 1:
+                eid = hits[0]
+            elif len(hits) > 1:
+                exact = [
+                    i
+                    for i in hits
+                    if fold_name((by_id.get(i) or {}).get("web_name") or "").replace(" ", "")
+                    == token
+                ]
+                eid = exact[0] if len(exact) == 1 else None
         if eid is None and len(token) >= 5:
             eid = _unique_fuzzy(token, key_index)
         if eid is None or eid not in by_id:
@@ -154,7 +179,9 @@ def annotate_team_row(row: dict, bootstrap: dict, site_dir: Path, *, force: bool
         out["namedCount"] = 0
         return out
     players = club_players(bootstrap, str(out.get("code") or ""))
-    parsed = match_named_players(ocr_image_text(path), players)
+    ocr = ocr_image_text(path)
+    alt = str(out.get("altText") or "")
+    parsed = match_named_players("\n".join(part for part in (ocr, alt) if part), players)
     out.update(parsed)
     return out
 

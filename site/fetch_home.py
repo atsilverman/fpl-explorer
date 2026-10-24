@@ -1133,7 +1133,9 @@ def resolve_ui_auto_subs(
     ui = projected_auto_subs_for_ui(picks, stats, match_status, etypes, chip)
     if ui:
         return ui
-    return project_graphic_auto_subs(picks, etypes, team_codes, graphic_named, chip)
+    return project_graphic_auto_subs(
+        picks, etypes, team_codes, graphic_named, chip, live_stats=stats
+    )
 
 
 def resolve_manager_gw_points(
