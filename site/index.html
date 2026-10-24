@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1658" />
+<link rel="stylesheet" href="styles.css?v=1660" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -557,6 +557,25 @@
                 <button type="button" data-theme-mode="dark" title="Always dark" aria-label="Theme: Dark">
                   <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
                 </button>
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-label">Home badges</div>
+            <label class="settings-switch-row" for="prefs-home-badge-preview">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Preview all badges</span>
+                <span class="settings-switch-hint">Force-show every Home mark (hero + pitch + list)</span>
+              </span>
+              <input type="checkbox" id="prefs-home-badge-preview" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="home-badge-style-label">Badge style</span>
+              <div class="segmented segmented-block" id="home-badge-style-seg" role="group" aria-labelledby="home-badge-style-label">
+                <button type="button" data-home-badge-style="mixed" class="active">Mixed</button>
+                <button type="button" data-home-badge-style="wash">Wash</button>
+                <button type="button" data-home-badge-style="stamp">Stamps</button>
               </div>
             </div>
           </section>
@@ -1930,7 +1949,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1525"></script>
+<script src="app.js?v=1526"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

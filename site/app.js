@@ -1337,6 +1337,8 @@
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
     prefsDifficultyBtn: $("#prefs-difficulty-btn"),
+    prefsHomeBadgePreview: $("#prefs-home-badge-preview"),
+    homeBadgeStyleSeg: $("#home-badge-style-seg"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
     marketsAttribution: $("#markets-attribution"),
@@ -10417,6 +10419,7 @@
       });
     }
     if (homePitchStripMode === "imp") syncHomePitchImpLabels();
+    applyHomeBadgePreviewPitch();
   }
 
   function homeSquadAutosubPairs(squad) {
@@ -10649,6 +10652,273 @@
     el.homeHeroAutosub.title = tip;
     el.homeHeroAutosub.setAttribute("data-tip", tip);
     el.homeHeroAutosub.setAttribute("aria-label", tip);
+  }
+
+  function syncHomeHeroChip(summary) {
+    if (!el.homeHeroChip) return;
+    const chipKey = summary && summary.activeChip ? String(summary.activeChip).trim() : "";
+    const label = chipKey
+      ? (HOME_CHIP_LABELS[chipKey] || HOME_CHIP_ABBR[chipKey] || chipKey)
+      : "";
+    if (label) {
+      el.homeHeroChip.hidden = false;
+      el.homeHeroChip.textContent = label;
+      el.homeHeroChip.title = `${label} active this gameweek`;
+      el.homeHeroChip.setAttribute("aria-label", `${label} active this gameweek`);
+      if (HOME_CHIP_ABBR[chipKey]) el.homeHeroChip.setAttribute("data-chip", chipKey);
+      else el.homeHeroChip.removeAttribute("data-chip");
+    } else {
+      el.homeHeroChip.hidden = true;
+      el.homeHeroChip.textContent = "";
+      el.homeHeroChip.removeAttribute("title");
+      el.homeHeroChip.removeAttribute("aria-label");
+      el.homeHeroChip.removeAttribute("data-chip");
+    }
+    el.homeHeroChip.removeAttribute("data-badge-preview");
+  }
+
+  const HOME_BADGE_PREVIEW_KEY = "fpl-explorer-home-badge-preview";
+  const HOME_BADGE_STYLE_KEY = "fpl-explorer-home-badge-style";
+
+  function homeBadgePreviewOn() {
+    return document.documentElement.classList.contains("home-badge-preview");
+  }
+
+  function homeBadgeStyle() {
+    const raw = document.documentElement.getAttribute("data-home-badge-style");
+    return raw === "wash" || raw === "stamp" ? raw : "mixed";
+  }
+
+  function syncHomeBadgePrefsUI() {
+    if (el.prefsHomeBadgePreview) el.prefsHomeBadgePreview.checked = homeBadgePreviewOn();
+    if (el.homeBadgeStyleSeg) {
+      const cur = homeBadgeStyle();
+      el.homeBadgeStyleSeg.querySelectorAll("[data-home-badge-style]").forEach((btn) => {
+        const on = btn.getAttribute("data-home-badge-style") === cur;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+  }
+
+  function applyHomeBadgePrefs({ persist = false } = {}) {
+    const preview = el.prefsHomeBadgePreview ? !!el.prefsHomeBadgePreview.checked : homeBadgePreviewOn();
+    let style = homeBadgeStyle();
+    if (el.homeBadgeStyleSeg) {
+      const active = el.homeBadgeStyleSeg.querySelector("[data-home-badge-style].active");
+      const next = active && active.getAttribute("data-home-badge-style");
+      if (next === "wash" || next === "stamp" || next === "mixed") style = next;
+    }
+    document.documentElement.classList.toggle("home-badge-preview", preview);
+    if (style === "mixed") document.documentElement.removeAttribute("data-home-badge-style");
+    else document.documentElement.setAttribute("data-home-badge-style", style);
+    if (persist) {
+      try {
+        if (preview) localStorage.setItem(HOME_BADGE_PREVIEW_KEY, "1");
+        else localStorage.removeItem(HOME_BADGE_PREVIEW_KEY);
+        if (style === "mixed") localStorage.removeItem(HOME_BADGE_STYLE_KEY);
+        else localStorage.setItem(HOME_BADGE_STYLE_KEY, style);
+      } catch {
+        /* private browsing */
+      }
+    }
+    syncHomeBadgePrefsUI();
+    applyHomeBadgePreview();
+  }
+
+  function loadHomeBadgePrefs() {
+    let preview = false;
+    let style = "mixed";
+    try {
+      preview = localStorage.getItem(HOME_BADGE_PREVIEW_KEY) === "1";
+      const saved = localStorage.getItem(HOME_BADGE_STYLE_KEY);
+      if (saved === "wash" || saved === "stamp") style = saved;
+    } catch {
+      /* ignore */
+    }
+    document.documentElement.classList.toggle("home-badge-preview", preview);
+    if (style === "mixed") document.documentElement.removeAttribute("data-home-badge-style");
+    else document.documentElement.setAttribute("data-home-badge-style", style);
+    if (el.prefsHomeBadgePreview) el.prefsHomeBadgePreview.checked = preview;
+    if (el.homeBadgeStyleSeg) {
+      el.homeBadgeStyleSeg.querySelectorAll("[data-home-badge-style]").forEach((btn) => {
+        const on = (btn.getAttribute("data-home-badge-style") || "mixed") === style;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+  }
+
+  function clearHomeBadgePreviewNodes(root = document) {
+    root.querySelectorAll("[data-badge-preview]").forEach((node) => node.remove());
+  }
+
+  function applyHomeBadgePreviewHero() {
+    const on = homeBadgePreviewOn();
+    if (!on) {
+      if (el.homeHeroChip && el.homeHeroChip.getAttribute("data-badge-preview")) {
+        syncHomeHeroChip(homeSummaryForView(homeActiveViewEntryId()));
+      }
+      if (el.homeHeroAutosub && el.homeHeroAutosub.getAttribute("data-badge-preview")) {
+        el.homeHeroAutosub.removeAttribute("data-badge-preview");
+        syncHomeHeroAutosubNotice(homeSquadForEntry(homeActiveViewEntryId()) || []);
+      }
+      if (el.homeHeroTopPct && el.homeHeroTopPct.getAttribute("data-badge-preview")) {
+        el.homeHeroTopPct.removeAttribute("data-badge-preview");
+        const summary = homeSummaryForView(homeActiveViewEntryId());
+        setHomeOverallPct(el.homeHeroTopPct, summary.overallRank, summary.totalPlayers);
+      }
+      if (el.homeHeroOverallRankDelta && el.homeHeroOverallRankDelta.getAttribute("data-badge-preview")) {
+        el.homeHeroOverallRankDelta.removeAttribute("data-badge-preview");
+        const summary = homeSummaryForView(homeActiveViewEntryId());
+        setHomeRankDelta(
+          el.homeHeroOverallRankDelta,
+          homeSummaryLayout() === "hero" ? homeSummaryRankDeltaPlaces(summary, "overall") : null,
+          { fullDigits: true }
+        );
+      }
+      return;
+    }
+    if (el.homeHeroChip && el.homeHeroChip.hidden) {
+      el.homeHeroChip.hidden = false;
+      el.homeHeroChip.setAttribute("data-badge-preview", "1");
+      el.homeHeroChip.textContent = "Triple Captain";
+      el.homeHeroChip.setAttribute("data-chip", "3xc");
+      el.homeHeroChip.title = "Preview — Triple Captain";
+      el.homeHeroChip.setAttribute("aria-label", "Preview — Triple Captain");
+    }
+    if (el.homeHeroAutosub && el.homeHeroAutosub.hidden) {
+      el.homeHeroAutosub.hidden = false;
+      el.homeHeroAutosub.setAttribute("data-badge-preview", "1");
+      const tip = "Preview — Auto-subs may still update official points";
+      el.homeHeroAutosub.title = tip;
+      el.homeHeroAutosub.setAttribute("data-tip", tip);
+      el.homeHeroAutosub.setAttribute("aria-label", tip);
+    }
+    if (el.homeHeroOverallRankDelta && el.homeHeroOverallRankDelta.hidden) {
+      el.homeHeroOverallRankDelta.setAttribute("data-badge-preview", "1");
+      setHomeRankDelta(el.homeHeroOverallRankDelta, 669126, { fullDigits: true });
+    }
+    if (el.homeHeroTopPct && el.homeHeroTopPct.hidden) {
+      el.homeHeroTopPct.hidden = false;
+      el.homeHeroTopPct.removeAttribute("hidden");
+      el.homeHeroTopPct.setAttribute("data-badge-preview", "1");
+      el.homeHeroTopPct.textContent = "Top 9.1%";
+      el.homeHeroTopPct.title = "Preview — Top 9.1% of all managers";
+      el.homeHeroTopPct.setAttribute("aria-label", "Preview — Top 9.1% of all managers");
+    }
+  }
+
+  function applyHomeBadgePreviewPitch() {
+    const roots = [el.homeSquadPitchXi, el.homeSquadPitchBench].filter(Boolean);
+    roots.forEach((root) => clearHomeBadgePreviewNodes(root));
+    if (!homeBadgePreviewOn()) return;
+    const cards = roots.flatMap((root) => [...root.querySelectorAll(".home-pitch-card")]);
+    if (!cards.length) return;
+    const hasMp = cards.some((c) => c.querySelector(".home-pitch-mp-badge:not([data-badge-preview])"));
+    const hasUnused = cards.some((c) => c.querySelector(".home-unused-tag:not([data-badge-preview])"));
+    const hasIn = cards.some((c) => c.querySelector(".home-autosub-tag.is-in:not([data-badge-preview])"));
+    const hasOut = cards.some((c) => c.querySelector(".home-autosub-tag.is-out:not([data-badge-preview])"));
+    const xi = el.homeSquadPitchXi
+      ? [...el.homeSquadPitchXi.querySelectorAll(".home-pitch-card")]
+      : [];
+    const bench = el.homeSquadPitchBench
+      ? [...el.homeSquadPitchBench.querySelectorAll(".home-pitch-card")]
+      : [];
+    if (!hasMp && xi[0]) {
+      const mp = document.createElement("span");
+      mp.className = "home-pitch-mp-badge";
+      mp.setAttribute("data-badge-preview", "1");
+      mp.textContent = "27'";
+      mp.title = "Preview — 27 minutes played";
+      mp.setAttribute("aria-label", "Preview — 27 minutes played");
+      xi[0].insertBefore(mp, xi[0].firstChild);
+      xi[0].classList.add("has-live-mp", "is-live");
+    }
+    const unusedHost = xi.find((c) => !c.querySelector(".home-unused-tag") && !c.querySelector(".home-autosub-tag"));
+    if (!hasUnused && unusedHost) {
+      const wrap = unusedHost.querySelector(".home-pitch-photo-wrap");
+      const hasRole = !!unusedHost.querySelector(".home-role-tag");
+      const corner = hasRole ? "home-badge-tr-below" : "home-badge-tr";
+      if (wrap) {
+        wrap.insertAdjacentHTML(
+          "beforeend",
+          `<span class="home-unused-tag ${corner}" data-badge-preview="1" title="Preview — unused starter">!</span>`
+        );
+        unusedHost.classList.add("is-unused");
+      }
+    }
+    const outHost = xi.find(
+      (c) => !c.querySelector(".home-role-tag") && !c.querySelector(".home-autosub-tag") && !c.querySelector(".home-unused-tag")
+    );
+    if (!hasOut && outHost) {
+      const wrap = outHost.querySelector(".home-pitch-photo-wrap");
+      if (wrap) {
+        wrap.insertAdjacentHTML(
+          "beforeend",
+          `<span class="home-autosub-tag is-out home-badge-tr" data-badge-preview="1" title="Preview — auto-subbed off">${iconHTML("caret-down", "home-autosub-icon")}</span>`
+        );
+        outHost.classList.add("is-autosub-out");
+      }
+    }
+    const inHost = bench[0] || xi[xi.length - 1];
+    if (!hasIn && inHost && !inHost.querySelector(".home-autosub-tag")) {
+      const wrap = inHost.querySelector(".home-pitch-photo-wrap");
+      const hasRole = !!inHost.querySelector(".home-role-tag");
+      const corner = hasRole ? "home-badge-tl" : "home-badge-tr";
+      if (wrap) {
+        wrap.insertAdjacentHTML(
+          "beforeend",
+          `<span class="home-autosub-tag is-in ${corner}" data-badge-preview="1" title="Preview — auto-sub on">${iconHTML("caret-up", "home-autosub-icon")}</span>`
+        );
+        inHost.classList.add("is-autosub-in");
+      }
+    }
+  }
+
+  function applyHomeBadgePreviewList() {
+    const body = el.homeSquadBody;
+    if (!body) return;
+    clearHomeBadgePreviewNodes(body);
+    if (!homeBadgePreviewOn()) return;
+    const names = [...body.querySelectorAll(".home-player-name")];
+    if (!names.length) return;
+    const hasIn = !!body.querySelector(".home-autosub-tag.is-in:not([data-badge-preview])");
+    const hasOut = !!body.querySelector(".home-autosub-tag.is-out:not([data-badge-preview])");
+    const hasUnused = !!body.querySelector(".home-unused-tag:not([data-badge-preview])");
+    const add = (host, html) => {
+      if (!host) return;
+      host.insertAdjacentHTML("beforeend", html);
+    };
+    if (!hasOut) {
+      const host = names.find((n) => !n.querySelector(".home-role-tag") && !n.querySelector(".home-autosub-tag"));
+      add(
+        host,
+        `<span class="home-autosub-tag is-out" data-badge-preview="1" title="Preview — auto-subbed off">${iconHTML("caret-down", "home-autosub-icon")}</span>`
+      );
+    }
+    if (!hasIn) {
+      const host = names[names.length - 1];
+      if (host && !host.querySelector(".home-autosub-tag.is-in")) {
+        add(
+          host,
+          `<span class="home-autosub-tag is-in" data-badge-preview="1" title="Preview — auto-sub on">${iconHTML("caret-up", "home-autosub-icon")}</span>`
+        );
+      }
+    }
+    if (!hasUnused) {
+      const host = names.find((n) => n.querySelector(".home-role-tag"));
+      add(
+        host,
+        `<span class="home-unused-tag" data-badge-preview="1" title="Preview — unused starter">!</span>`
+      );
+    }
+  }
+
+  function applyHomeBadgePreview() {
+    applyHomeBadgePreviewHero();
+    applyHomeBadgePreviewPitch();
+    applyHomeBadgePreviewList();
   }
 
   function homePitchAutosubBadgeHTML(row) {
@@ -16359,27 +16629,9 @@
     applyHomeSummaryRankChrome(summary, { viewingOther });
     finishHomeStatRolls(el.homePage, { summary: true, tables: false });
     if (el.homeGwMeta) el.homeGwMeta.innerHTML = "";
-    if (el.homeHeroChip) {
-      const chipKey = summary.activeChip ? String(summary.activeChip).trim() : "";
-      const label = chipKey
-        ? (HOME_CHIP_LABELS[chipKey] || HOME_CHIP_ABBR[chipKey] || chipKey)
-        : "";
-      if (label) {
-        el.homeHeroChip.hidden = false;
-        el.homeHeroChip.textContent = label;
-        el.homeHeroChip.title = `${label} active this gameweek`;
-        el.homeHeroChip.setAttribute("aria-label", `${label} active this gameweek`);
-        if (HOME_CHIP_ABBR[chipKey]) el.homeHeroChip.setAttribute("data-chip", chipKey);
-        else el.homeHeroChip.removeAttribute("data-chip");
-      } else {
-        el.homeHeroChip.hidden = true;
-        el.homeHeroChip.textContent = "";
-        el.homeHeroChip.removeAttribute("title");
-        el.homeHeroChip.removeAttribute("aria-label");
-        el.homeHeroChip.removeAttribute("data-chip");
-      }
-    }
+    syncHomeHeroChip(summary);
     syncHomeHeroAutosubNotice(homeSquadForEntry(viewEntry) || []);
+    applyHomeBadgePreview();
     if (el.homeSquadGwLabel) {
       el.homeSquadGwLabel.textContent = HOME.gw != null ? `Gameweek ${HOME.gw}` : "";
     }
@@ -33917,6 +34169,24 @@
   }
 
   applyTheme(currentThemeMode());
+  loadHomeBadgePrefs();
+  applyHomeBadgePreview();
+  if (el.prefsHomeBadgePreview) {
+    el.prefsHomeBadgePreview.addEventListener("change", () => applyHomeBadgePrefs({ persist: true }));
+  }
+  if (el.homeBadgeStyleSeg) {
+    el.homeBadgeStyleSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-home-badge-style]");
+      if (!btn || !el.homeBadgeStyleSeg.contains(btn)) return;
+      el.homeBadgeStyleSeg.querySelectorAll("[data-home-badge-style]").forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      applyHomeBadgePrefs({ persist: true });
+      btn.blur();
+    });
+  }
   try {
     const onThemeLayout = () => {
       syncThemeSeg(currentThemeMode());

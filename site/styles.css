@@ -3579,6 +3579,9 @@ html.animations-off .page-pane.is-enter-pending > .report-article {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.settings-section:has(#prefs-home-badge-preview) .settings-switch-label {
+  white-space: normal;
+}
 .settings-switch-meta {
   font-size: 11px;
   font-weight: 500;
@@ -19910,14 +19913,14 @@ img.home-pitch-photo {
   right: var(--home-pitch-badge-inset);
   left: auto;
 }
-/* Unused starter: amber "!" — match live, 0 minutes logged. */
+/* Unused starter: yellow "!" — 0 minutes; keep clear of Captain orange. */
 .home-pitch-photo-wrap .home-unused-tag {
   top: var(--home-pitch-badge-inset);
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
-  background: hsl(38 92% 50%);
-  color: hsl(30 60% 10%);
+  background: hsl(50 96% 50%);
+  color: hsl(45 70% 14%);
   box-shadow: 0 1px 2px hsl(0 0% 0% / 0.25);
 }
 .home-pitch-pts.is-unused {
@@ -21589,8 +21592,25 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
 .home-player-name .home-role-tag {
   margin-inline-start: 2px;
 }
-.home-player-name .home-role-tag + .home-role-tag {
+.home-player-name .home-role-tag + .home-role-tag,
+.home-player-name .home-unused-tag {
   margin-inline-start: 0;
+}
+.home-player-name .home-unused-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 13px;
+  height: 13px;
+  margin-inline-start: 2px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  background: hsl(50 96% 50%);
+  color: hsl(45 70% 14%);
+  flex: none;
 }
 .home-role-c {
   background: hsl(24 95% 48% / 0.32);
@@ -21676,6 +21696,91 @@ html[data-theme="dark"] .home-autosub-tag.is-out {
 .home-player-name .home-autosub-tag {
   flex: none;
 }
+
+/* Home badge compare — Wash (tinted inset) vs Stamps (solid fill). Mixed = current. */
+html[data-home-badge-style="wash"] .home-pitch-mp-badge {
+  background: hsl(var(--delta-rise) / 0.2);
+  color: hsl(142 55% 28%);
+  box-shadow: inset 0 0 0 1px hsl(var(--delta-rise) / 0.4);
+}
+html[data-home-badge-style="wash"] .home-unused-tag,
+html[data-home-badge-style="wash"] .home-player-name .home-unused-tag,
+html[data-home-badge-style="wash"] .home-pitch-photo-wrap .home-unused-tag {
+  background: hsl(50 96% 50% / 0.28);
+  color: hsl(48 80% 24%);
+  box-shadow: inset 0 0 0 1px hsl(50 90% 42% / 0.5);
+}
+html[data-theme="dark"][data-home-badge-style="wash"] .home-pitch-mp-badge {
+  background: hsl(var(--delta-rise) / 0.28);
+  color: hsl(142 70% 72%);
+}
+html[data-theme="dark"][data-home-badge-style="wash"] .home-unused-tag,
+html[data-theme="dark"][data-home-badge-style="wash"] .home-player-name .home-unused-tag,
+html[data-theme="dark"][data-home-badge-style="wash"] .home-pitch-photo-wrap .home-unused-tag {
+  background: hsl(50 92% 50% / 0.32);
+  color: hsl(50 100% 78%);
+}
+
+html[data-home-badge-style="stamp"] .home-role-c {
+  background: hsl(24 95% 48%);
+  color: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.22);
+}
+html[data-home-badge-style="stamp"] .home-role-a {
+  background: hsl(240 6% 42%);
+  color: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+}
+html[data-home-badge-style="stamp"] .home-autosub-tag.is-in {
+  background: hsl(142 55% 36%);
+  color: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+}
+html[data-home-badge-style="stamp"] .home-autosub-tag.is-out {
+  background: hsl(0 62% 42%);
+  color: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+}
+html[data-home-badge-style="stamp"] .home-summary-hero-delta,
+html[data-home-badge-style="stamp"] .home-summary-hero .home-summary-hero-delta.is-up,
+html[data-home-badge-style="stamp"] .home-summary-hero .home-summary-hero-delta.is-down {
+  border: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-home-badge-style="stamp"] .home-summary-hero .home-summary-hero-delta.is-up {
+  background: hsl(142 55% 36%);
+  color: #fff;
+}
+html[data-home-badge-style="stamp"] .home-summary-hero .home-summary-hero-delta.is-down {
+  background: hsl(0 62% 42%);
+  color: #fff;
+}
+html[data-home-badge-style="stamp"] .home-summary-hero-chip,
+html[data-home-badge-style="stamp"] .home-summary-hero-top-pct,
+html[data-home-badge-style="stamp"] .home-summary-hero-autosub {
+  border: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-home-badge-style="stamp"] .home-summary-hero-chip,
+html[data-home-badge-style="stamp"] .home-summary-hero-top-pct {
+  background: hsl(220 16% 28%);
+  color: #fff;
+}
+html[data-home-badge-style="stamp"] .home-summary-hero-autosub {
+  background: hsl(38 92% 50%);
+  color: hsl(30 60% 10%);
+}
+html[data-theme="dark"][data-home-badge-style="stamp"] .home-role-c {
+  background: hsl(24 95% 50%);
+  color: #fff;
+}
+html[data-theme="dark"][data-home-badge-style="stamp"] .home-role-a {
+  background: hsl(240 5% 58%);
+  color: #fff;
+}
+
 .home-bench-divider th {
   height: 28px;
   padding: 4px 8px;
