@@ -2896,6 +2896,11 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .mobile-filter-dock:not([hidden]) {
     pointer-events: auto;
   }
+  /* Round search FAB: inset to sit on the right-most midfielder's column
+     (5-man row) and clear the iPhone's corner radius. */
+  .mobile-filter-dock:has(.home-search-btn.is-fab-icon) {
+    right: max(22px, env(safe-area-inset-right));
+  }
   .mobile-filter-fab {
     display: inline-flex;
     align-items: center;
@@ -18531,7 +18536,8 @@ html.is-mobile-layout #home-team-graphics-panel:not([hidden]) {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  /* pan-y too, or vertical page swipes that start on a graphic are swallowed. */
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-width: 0;
@@ -18570,6 +18576,8 @@ html.is-mobile-layout #home-team-graphics-panel:not([hidden]) {
   object-position: center top;
   background: hsl(var(--muted) / 0.35);
   border-radius: 10px;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 .home-team-graphics-dots {
   display: flex;
@@ -19948,6 +19956,134 @@ html[data-home-surface="solid"] .home-pitch-photo-wrap {
   background: hsl(0 0% 100% / 0.04);
   font-weight: 600;
 }
+/* Every GW sits in one track; 3 cells + 2 gutters fill the strip at each
+   whole --home-fx-pos (set on :root by the mobile scrubber). */
+.home-pitch-fx-strip {
+  display: block;
+}
+.home-pitch-fx-track {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+  width: calc((100% + 2px) * var(--fx-n, 3) / 3 - 2px);
+  transform: translate3d(calc(var(--home-fx-pos, 0) * -1 * (100% + 2px) / var(--fx-n, 3)), 0, 0);
+  transition: transform 0.32s var(--ease-out);
+  will-change: transform;
+}
+html.is-home-fx-scrubbing .home-pitch-fx-track {
+  transition: none;
+}
+.home-pitch-fx-track > .home-pitch-fx-cell {
+  border-radius: 0;
+}
+.home-pitch-fx-cell.is-double {
+  flex-direction: column;
+  gap: 1px;
+  background: var(--home-pitch-card-bg);
+}
+.home-pitch-fx-sub {
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6.5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.home-pitch-fx-sub.highlight-strong {
+  color: #fff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-pitch-fx-track { transition: none; }
+}
+
+.home-fx-scrub {
+  display: none;
+}
+@media (max-width: 720px) {
+  html.has-home-fx-scrub #mobile-filter-dock,
+  html.has-home-fx-scrub #mobile-view-dock {
+    display: none !important;
+  }
+  .home-fx-scrub:not([hidden]) {
+    position: fixed;
+    left: max(14px, env(safe-area-inset-left, 0px));
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    z-index: 44;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 12px 0 14px;
+    box-sizing: border-box;
+    border-radius: 14px;
+    background: hsl(var(--card) / 0.86);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    backdrop-filter: blur(14px) saturate(1.4);
+    border: 1px solid hsl(var(--foreground) / 0.18);
+    box-shadow:
+      0 2px 8px hsl(240 6% 10% / 0.14),
+      0 0 0 1px hsl(var(--foreground) / 0.04);
+  }
+  .home-fx-scrub-label {
+    flex: 0 0 auto;
+    min-width: 58px;
+    font-size: 12.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.01em;
+  }
+  .home-fx-scrub-track {
+    position: relative;
+    flex: 1 1 auto;
+    height: 30px;
+    border-radius: 9px;
+    background: hsl(var(--foreground) / 0.06);
+    touch-action: none;
+    cursor: grab;
+    outline: none;
+  }
+  .home-fx-scrub-track:focus-visible {
+    box-shadow: 0 0 0 2px hsl(var(--blue-hsl) / 0.5);
+  }
+  .home-fx-scrub-ticks {
+    position: absolute;
+    inset: 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .home-fx-scrub-ticks > span {
+    width: 2px;
+    height: 8px;
+    border-radius: 1px;
+    background: hsl(var(--foreground) / 0.22);
+  }
+  .home-fx-scrub-window {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    min-width: 24px;
+    border-radius: 7px;
+    background: hsl(var(--blue-hsl) / 0.2);
+    border: 1.5px solid hsl(var(--blue-hsl));
+    box-sizing: border-box;
+    box-shadow: 0 1px 4px hsl(var(--blue-hsl) / 0.25);
+    transition: left 0.32s var(--ease-out);
+    pointer-events: none;
+  }
+  html.is-home-fx-scrubbing .home-fx-scrub-window {
+    transition: none;
+  }
+  html.is-home-fx-scrubbing .home-fx-scrub-track {
+    cursor: grabbing;
+  }
+}
 .home-pitch-form-cell.is-blank {
   color: var(--home-pitch-ink-idle-fg, var(--home-pitch-card-muted));
   background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.04));
@@ -20063,13 +20199,18 @@ html:not([data-theme="dark"]) .home-dashboard .home-pitch-price.is-vl-fall {
 }
 /* Not enough room past the fill — sit just inside the trailing edge. */
 .home-pitch-imp.is-label-inside .home-pitch-imp-val {
-  transform: translate(calc(-100% - 3px), -50%);
+  transform: translate(calc(-100% - 4px), -50%);
 }
 .home-pitch-imp.is-pos .home-pitch-imp-val {
   color: var(--imp-fg, hsl(var(--delta-rise)));
 }
 .home-pitch-imp.is-neg .home-pitch-imp-val {
   color: var(--imp-fg, hsl(var(--delta-fall)));
+}
+/* On the solid rise / fall fill — white reads in both themes. */
+.home-pitch-imp.is-pos.is-label-inside .home-pitch-imp-val,
+.home-pitch-imp.is-neg.is-label-inside .home-pitch-imp-val {
+  color: #fff;
 }
 .home-pitch-imp.is-flat .home-pitch-imp-val {
   left: 0;

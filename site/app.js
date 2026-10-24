@@ -7981,7 +7981,7 @@
     const alt = escapeHtml(
       String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
     );
-    const img = `<img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
+    const img = `<img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" draggable="false" />`;
     return `<div class="home-team-graphics-page" data-team="${code}">
       <div class="home-team-graphics-slide">${img}</div>
     </div>`;
@@ -9443,11 +9443,11 @@
     return { fill, fg };
   }
 
-  function homeImpBarVisual(impRaw) {
+  function homeImpBarVisual(impRaw, { max = HOME_IMP_BAR_MAX } = {}) {
     const imp = Number.isFinite(Number(impRaw)) ? Math.round(Number(impRaw)) : 0;
     const abs = Math.abs(imp);
-    // Bar fill: 0 at 0, full at ±200 (100% unique XI, 200% captain, 300% TC on the label).
-    const barPct = Math.min(100, (abs / HOME_IMP_BAR_MAX) * 100);
+    // Bar fill: 0 at 0, full at ±max (100% unique XI, 200% captain, 300% TC on the label).
+    const barPct = Math.min(100, (abs / max) * 100);
     if (abs < 1) {
       return { imp: 0, barPct: 0, sign: "is-flat", fillStyle: "--imp-pct:0%" };
     }
@@ -9898,26 +9898,165 @@
     return `<span class="home-pitch-strip home-pitch-opp${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(opp.label)}${homeIcon}</span>`;
   }
 
+  const HOME_FX_VISIBLE = 3;
+  let homeFxPos = 0;
+  let homeFxScrubBound = false;
+
+  /** Gameweeks the pitch fixture carousel can scrub through (next GW → season end). */
+  function homeFxGwRange() {
+    const start = Math.min(SCHEDULE_GW_MAX, Math.max(1, planningGameweek()));
+    const n = Math.max(HOME_FX_VISIBLE, SCHEDULE_GW_MAX - start + 1);
+    return { start, n, maxPos: Math.max(0, n - HOME_FX_VISIBLE) };
+  }
+
+  function homePitchFxCellRamp(fx) {
+    const fdr = resolveFixtureDifficulty(fx, "all");
+    return fdr != null
+      ? fdrRampInlineStyle(fdr, { schedulePalette: true })
+      : { className: "", styleAttr: "", strongClass: "" };
+  }
+
+  /** One cell per gameweek (blank / single / double), all GWs in a sliding track. */
   function homeSquadPitchFixturesStripHTML(row) {
-    const list = planningFixturesForTeam(row.team, 3);
-    const cells = [];
-    for (let i = 0; i < 3; i++) {
-      const fx = list[i];
-      if (!fx || !fx.opp) {
-        cells.push(`<span class="home-pitch-fx-cell is-blank">–</span>`);
-        continue;
-      }
-      const label = teamHeatOppLabel(fx);
-      const fdr = resolveFixtureDifficulty(fx, "all");
-      const ramp =
-        fdr != null
-          ? fdrRampInlineStyle(fdr, { schedulePalette: true })
-          : { className: "", styleAttr: "", strongClass: "" };
-      cells.push(
-        `<span class="home-pitch-fx-cell${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(label)}</span>`
-      );
+    const { start, n } = homeFxGwRange();
+    const byGw = new Map();
+    for (const fx of FIXTURES_BY_TEAM[row.team] || []) {
+      const gw = Number(fx.gw);
+      if (!fx.opp || !Number.isFinite(gw) || gw < start) continue;
+      if (!byGw.has(gw)) byGw.set(gw, []);
+      byGw.get(gw).push(fx);
     }
-    return `<span class="home-pitch-strip home-pitch-fx-strip">${cells.join("")}</span>`;
+    const cells = [];
+    for (let gw = start; gw < start + n; gw++) {
+      const list = byGw.get(gw) || [];
+      if (!list.length) {
+        cells.push(`<span class="home-pitch-fx-cell is-blank">–</span>`);
+      } else if (list.length === 1) {
+        const ramp = homePitchFxCellRamp(list[0]);
+        cells.push(
+          `<span class="home-pitch-fx-cell${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(teamHeatOppLabel(list[0]))}</span>`
+        );
+      } else {
+        const subs = list
+          .map((fx) => {
+            const ramp = homePitchFxCellRamp(fx);
+            return `<span class="home-pitch-fx-sub${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(teamHeatOppLabel(fx))}</span>`;
+          })
+          .join("");
+        cells.push(`<span class="home-pitch-fx-cell is-double">${subs}</span>`);
+      }
+    }
+    return `<span class="home-pitch-strip home-pitch-fx-strip" style="--fx-n:${n}"><span class="home-pitch-fx-track">${cells.join("")}</span></span>`;
+  }
+
+  function homeFxScrubEls() {
+    return {
+      root: document.getElementById("home-fx-scrub"),
+      track: document.getElementById("home-fx-scrub-track"),
+      win: document.getElementById("home-fx-scrub-window"),
+      label: document.getElementById("home-fx-scrub-label"),
+      ticks: document.getElementById("home-fx-scrub-ticks"),
+    };
+  }
+
+  function homeFxWindowLabel(pos = homeFxPos) {
+    const { start } = homeFxGwRange();
+    const a = start + Math.round(pos);
+    return `GW${a}–${a + HOME_FX_VISIBLE - 1}`;
+  }
+
+  /** Drives every pitch strip at once via --home-fx-pos (fractional while dragging). */
+  function setHomeFxPos(pos, { snap = false } = {}) {
+    const { n, maxPos } = homeFxGwRange();
+    let next = Math.max(0, Math.min(maxPos, Number(pos) || 0));
+    if (snap) next = Math.round(next);
+    homeFxPos = next;
+    document.documentElement.style.setProperty("--home-fx-pos", String(next));
+    const { track, win, label } = homeFxScrubEls();
+    if (win) {
+      const wPct = (HOME_FX_VISIBLE / n) * 100;
+      win.style.width = `${wPct}%`;
+      win.style.left = `${maxPos ? (next / maxPos) * (100 - wPct) : 0}%`;
+    }
+    const text = homeFxWindowLabel(next);
+    if (label && label.textContent !== text) label.textContent = text;
+    if (track) {
+      track.setAttribute("aria-valuemax", String(maxPos));
+      track.setAttribute("aria-valuenow", String(Math.round(next)));
+      track.setAttribute("aria-valuetext", text);
+    }
+  }
+
+  function bindHomeFxScrub() {
+    const { track, win } = homeFxScrubEls();
+    if (!track || homeFxScrubBound) return;
+    homeFxScrubBound = true;
+    let grabOffset = null;
+    let pointerId = null;
+    const posFromX = (clientX) => {
+      const r = track.getBoundingClientRect();
+      const w = win ? win.getBoundingClientRect().width : 0;
+      const { maxPos } = homeFxGwRange();
+      const off = grabOffset != null ? grabOffset : w / 2;
+      const usable = Math.max(1, r.width - w);
+      return ((clientX - r.left - off) / usable) * maxPos;
+    };
+    track.addEventListener("pointerdown", (e) => {
+      if (e.button != null && e.button > 0) return;
+      const wr = win && win.getBoundingClientRect();
+      grabOffset =
+        wr && e.clientX >= wr.left && e.clientX <= wr.right ? e.clientX - wr.left : null;
+      pointerId = e.pointerId;
+      try {
+        track.setPointerCapture(e.pointerId);
+      } catch {}
+      document.documentElement.classList.add("is-home-fx-scrubbing");
+      setHomeFxPos(posFromX(e.clientX));
+      e.preventDefault();
+    });
+    track.addEventListener("pointermove", (e) => {
+      if (pointerId !== e.pointerId) return;
+      setHomeFxPos(posFromX(e.clientX));
+    });
+    const end = (e) => {
+      if (pointerId !== e.pointerId) return;
+      pointerId = null;
+      grabOffset = null;
+      document.documentElement.classList.remove("is-home-fx-scrubbing");
+      setHomeFxPos(homeFxPos, { snap: true });
+    };
+    track.addEventListener("pointerup", end);
+    track.addEventListener("pointercancel", end);
+    track.addEventListener("keydown", (e) => {
+      const { maxPos } = homeFxGwRange();
+      const cur = Math.round(homeFxPos);
+      let next = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") next = cur + 1;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = cur - 1;
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = maxPos;
+      if (next == null) return;
+      e.preventDefault();
+      setHomeFxPos(next, { snap: true });
+    });
+  }
+
+  /** Mobile Home + Fixtures pitch mode: scrubber replaces the bottom FABs. */
+  function syncHomeFxScrub() {
+    const { root, ticks } = homeFxScrubEls();
+    if (!root) return;
+    const on =
+      mobileDocksActive() && state.page === "home" && homePitchStripMode === "fixtures";
+    document.documentElement.classList.toggle("has-home-fx-scrub", on);
+    root.hidden = !on;
+    root.setAttribute("aria-hidden", on ? "false" : "true");
+    if (!on) return;
+    bindHomeFxScrub();
+    const { n } = homeFxGwRange();
+    if (ticks && ticks.childElementCount !== n) {
+      ticks.innerHTML = Array.from({ length: n }, () => "<span></span>").join("");
+    }
+    setHomeFxPos(homeFxPos, { snap: true });
   }
 
   function homeSquadPitchFormStripHTML(row) {
@@ -9953,7 +10092,8 @@
 
   function homeSquadPitchImpStripHTML(row) {
     const impRaw = row.imp != null ? Number(row.imp) : (row.impMock != null ? Number(row.impMock) : 0);
-    const vis = homeImpBarVisual(impRaw);
+    // Pitch strip: 100% (unique XI) fills the card; captain / TC clamp full.
+    const vis = homeImpBarVisual(impRaw, { max: 100 });
     const label = `${Math.abs(vis.imp)}%`;
     const tip =
       vis.imp === 0
@@ -10059,6 +10199,8 @@
     homePitchStripMode = next;
     syncHomePitchModeUI(next);
     closeHomePitchModePicker();
+    if (next === "fixtures") homeFxPos = 0;
+    syncHomeFxScrub();
     // Update strips only — rebuilding cards reloads every photo and flickers
     // missing-image icons while primary/legacy CDNs are retried.
     syncHomePitchCardStrips(homeSquadForEntry(homeActiveViewEntryId()) || []);
@@ -17353,6 +17495,7 @@
       dock.setAttribute("aria-hidden", "true");
       document.documentElement.classList.remove("has-mobile-filter-fab");
       syncMobileChromeFade();
+      syncHomeFxScrub();
       return;
     }
     const active = mobileFilterButtonForPage();
@@ -17368,6 +17511,7 @@
       dock.setAttribute("aria-hidden", "true");
       document.documentElement.classList.remove("has-mobile-filter-fab");
       syncMobileChromeFade();
+      syncHomeFxScrub();
       return;
     }
     // Clear dock then append in order: search (home) or page filter toggle.
@@ -17387,6 +17531,7 @@
     dock.setAttribute("aria-hidden", "false");
     document.documentElement.classList.add("has-mobile-filter-fab");
     syncMobileChromeFade();
+    syncHomeFxScrub();
   }
 
   function mobileDocksActive() {

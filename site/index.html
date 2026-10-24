@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1636" />
+<link rel="stylesheet" href="styles.css?v=1640" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1762,6 +1762,14 @@
 </div>
 <div id="mobile-view-dock" class="mobile-view-dock" hidden aria-hidden="true"></div>
 <div id="mobile-filter-dock" class="mobile-filter-dock" hidden aria-hidden="true"></div>
+<div id="home-fx-scrub" class="home-fx-scrub" hidden aria-hidden="true">
+  <span class="home-fx-scrub-label" id="home-fx-scrub-label">GW–</span>
+  <div class="home-fx-scrub-track" id="home-fx-scrub-track" role="slider" tabindex="0"
+    aria-label="Fixture gameweeks" aria-valuemin="0">
+    <span class="home-fx-scrub-ticks" id="home-fx-scrub-ticks" aria-hidden="true"></span>
+    <span class="home-fx-scrub-window" id="home-fx-scrub-window" aria-hidden="true"></span>
+  </div>
+</div>
 <div id="defcon-opponents-dock" class="defcon-opponents-dock" hidden aria-hidden="true">
   <button type="button" class="ghost-btn icon-label-btn defcon-opponents-toggle mobile-filter-fab" id="defcon-opponents-toggle" aria-pressed="false" title="Show opponents in place of DefCon dots" aria-label="Opponents">
     <svg class="icon" aria-hidden="true"><use href="#i-swords"/></svg>
@@ -1922,7 +1930,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1507"></script>
+<script src="app.js?v=1510"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
