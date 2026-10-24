@@ -128,6 +128,84 @@ def apply_auto_substitution(
     return active, auto_subs
 
 
+def project_graphic_auto_subs(
+    picks: list[dict],
+    element_types: dict[int, int],
+    team_code_by_element: dict[int, str],
+    named_ids_by_team: dict[str, set[int]],
+    active_chip: str | None = None,
+) -> list[dict]:
+    """UI-only auto-subs from team-news graphics (starter not named on the sheet).
+
+    Does not require FT or minutes. Only teams with a ready named list take part.
+    Bench players whose own club sheet also omits them are skipped.
+    """
+    chip = (active_chip or "").lower()
+    if chip in {"bboost", "benchboost", "bench_boost"}:
+        return []
+    if not picks or not named_ids_by_team:
+        return []
+
+    def sheet_ready(eid: int) -> bool:
+        code = team_code_by_element.get(int(eid))
+        return bool(code and code in named_ids_by_team)
+
+    def on_sheet(eid: int) -> bool:
+        code = team_code_by_element.get(int(eid))
+        named = named_ids_by_team.get(code) if code else None
+        return bool(named and int(eid) in named)
+
+    starting = sorted(
+        [p for p in picks if int(p.get("position") or 0) <= 11],
+        key=lambda p: int(p.get("position") or 0),
+    )
+    bench = sorted(
+        [p for p in picks if int(p.get("position") or 0) > 11],
+        key=lambda p: int(p.get("position") or 0),
+    )
+    active: list[dict] = []
+    used_bench: set[int] = set()
+    auto_subs: list[dict] = []
+
+    for idx, starter in enumerate(starting):
+        starter_id = int(starter["element"])
+        starter_etype = element_types.get(starter_id)
+        if not sheet_ready(starter_id) or on_sheet(starter_id):
+            active.append(starter)
+            continue
+
+        found = False
+        for bp in bench:
+            bench_id = int(bp["element"])
+            if bench_id in used_bench:
+                continue
+            bench_etype = element_types.get(bench_id)
+            if not starter_etype or not bench_etype:
+                continue
+            compatible = (starter_etype == 1 and bench_etype == 1) or (
+                starter_etype != 1 and bench_etype != 1
+            )
+            if not compatible:
+                continue
+            if sheet_ready(bench_id) and not on_sheet(bench_id):
+                continue
+            remaining = starting[idx + 1 :]
+            current = active + remaining
+            if not would_maintain_valid_formation(current, bench_id, element_types):
+                continue
+            used_bench.add(bench_id)
+            auto_subs.append({"out": starter_id, "in": bench_id, "source": "graphic"})
+            subbed = dict(bp)
+            subbed["substituted_for"] = starter_id
+            active.append(subbed)
+            found = True
+            break
+        if not found:
+            active.append(starter)
+
+    return auto_subs
+
+
 def fixture_is_finished(fx: dict | None) -> bool:
     """True when the match is done for UI progress (incl. provisional FT).
 

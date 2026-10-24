@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fpl_gameweeks import display_gameweek_id, extract_gameweeks
+from team_news_lineup import annotate_teams
 
 SITE = Path(__file__).resolve().parent
 ROOT = SITE.parent
@@ -504,9 +505,21 @@ def save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def write_bundle(gw: int, teams: list[dict], generated: str) -> None:
+def write_bundle(
+    gw: int,
+    teams: list[dict],
+    generated: str,
+    bootstrap: dict | None = None,
+    *,
+    force_annotate: bool = False,
+) -> list[dict]:
     # Most recent left-most for the UI swipe track
-    ordered = sorted(teams, key=lambda t: t.get("postedAt") or "", reverse=True)
+    annotated = (
+        annotate_teams(teams, bootstrap or {}, SITE, force=force_annotate)
+        if bootstrap
+        else list(teams or [])
+    )
+    ordered = sorted(annotated, key=lambda t: t.get("postedAt") or "", reverse=True)
     payload = {
         "generatedAt": generated,
         "gw": gw,
@@ -519,6 +532,7 @@ def write_bundle(gw: int, teams: list[dict], generated: str) -> None:
         + ";\n",
         encoding="utf-8",
     )
+    return annotated
 
 
 ACTIVE_BEFORE_KO = timedelta(minutes=120)
@@ -559,10 +573,42 @@ def next_poll_seconds(club_fixtures: dict, state: dict, gw: int) -> int | None:
     return max(0, int((best - now).total_seconds()))
 
 
+def load_bootstrap_local() -> dict | None:
+    snaps = sorted((ROOT / "snapshots").glob("bootstrap-static_*.json"), reverse=True)
+    if not snaps:
+        return None
+    try:
+        data = json.loads(snaps[0].read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def main() -> int:
     active_only = "--active-only" in sys.argv[1:]
     next_poll = "--next-poll" in sys.argv[1:]
+    annotate_only = "--annotate-only" in sys.argv[1:]
     bearer = os.environ.get("X_BEARER_TOKEN", "").strip()
+    if annotate_only:
+        bootstrap = None
+        try:
+            bootstrap = fpl_get("/bootstrap-static/")
+        except Exception:
+            bootstrap = load_bootstrap_local()
+        if not isinstance(bootstrap, dict):
+            print("No bootstrap-static — cannot annotate lineups.", file=sys.stderr)
+            return 1
+        state = load_state()
+        gw = state.get("gw")
+        teams = list((state.get("teams") or {}).values())
+        now = generated_at()
+        annotated = write_bundle(int(gw or 0), teams, now, bootstrap, force_annotate=True)
+        state["teams"] = {t["code"]: t for t in annotated if t.get("code")}
+        state["generatedAt"] = now
+        save_state(state)
+        ready = sum(1 for t in annotated if t.get("namedReady"))
+        print(f"Annotated {len(annotated)} graphics ({ready} lineup-ready) → {OUT_JS.name}")
+        return 0
     if not bearer:
         print("No X_BEARER_TOKEN in .env — cannot fetch team news.", file=sys.stderr)
         return 1
@@ -751,17 +797,19 @@ def main() -> int:
         )
 
     if active_only and not updated and not gw_changed:
-        print(f"\nGW{gw}: no new graphics — bundle unchanged.")
-        return 0 if errors == 0 else 1
+        existing = list((state.get("teams") or {}).values())
+        if existing and all(t.get("namedReady") or not t.get("localPath") for t in existing):
+            print(f"\nGW{gw}: no new graphics — bundle unchanged.")
+            return 0 if errors == 0 else 1
 
     teams = list((state.get("teams") or {}).values())
     # Only keep clubs still in this GW fixture list
     teams = [t for t in teams if t.get("code") in club_fixtures]
+    annotated = write_bundle(gw, teams, now, bootstrap)
     state["gw"] = gw
-    state["teams"] = {t["code"]: t for t in teams}
+    state["teams"] = {t["code"]: t for t in annotated if t.get("code")}
     state["generatedAt"] = now
     save_state(state)
-    write_bundle(gw, teams, now)
 
     print(
         f"\nDone GW{gw}: {len(teams)} graphics stored, {updated} new/updated, "

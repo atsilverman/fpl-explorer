@@ -4885,7 +4885,129 @@
       squad = Array.isArray(HOME.squad) ? HOME.squad : [];
     }
     if (!squad.length) return [];
-    return mockLiveEnabled() ? applyMockLiveSquad(squad, id) : squad;
+    if (mockLiveEnabled()) squad = applyMockLiveSquad(squad, id);
+    return homeApplyTeamNewsAutosubs(squad, id);
+  }
+
+  function homeEntryActiveChip(entryId) {
+    const id = Number(entryId);
+    if (id === homeConfiguredEntryId() && HOME && HOME.summary) {
+      return HOME.summary.activeChip || "";
+    }
+    const row = (Array.isArray(HOME && HOME.standings) ? HOME.standings : [])
+      .find((r) => Number(r.entry) === id);
+    return (row && row.activeChip) || "";
+  }
+
+  function homeTeamNewsNamedByTeam() {
+    if (!TEAM_NEWS || Number(TEAM_NEWS.gw) !== Number(HOME && HOME.gw)) return new Map();
+    const map = new Map();
+    for (const row of TEAM_NEWS.teams || []) {
+      if (!row || !row.namedReady || !row.code) continue;
+      const ids = new Set();
+      for (const raw of row.named || []) {
+        const n = Number(raw);
+        if (Number.isFinite(n)) ids.add(n);
+      }
+      if (ids.size >= 11) map.set(String(row.code), ids);
+    }
+    return map;
+  }
+
+  function homeWouldMaintainFormation(currentRows, benchEt) {
+    const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    for (const row of currentRows || []) {
+      const et = Number(row && row.elementType);
+      if (counts[et] != null) counts[et] += 1;
+    }
+    if (counts[benchEt] != null) counts[benchEt] += 1;
+    return counts[1] >= 1 && counts[2] >= 3 && counts[3] >= 2 && counts[4] >= 1;
+  }
+
+  function homeTeamNewsAutosubPairs(squad) {
+    const named = homeTeamNewsNamedByTeam();
+    if (!named.size) return [];
+    const rows = Array.isArray(squad) ? squad : [];
+    const starting = rows
+      .filter((r) => r && Number(r.position) <= 11)
+      .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    const bench = rows
+      .filter((r) => r && Number(r.position) > 11)
+      .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    const sheetReady = (row) => named.has(String((row && row.team) || ""));
+    const onSheet = (row) => {
+      const set = named.get(String((row && row.team) || ""));
+      return !!(set && set.has(Number(row && row.element)));
+    };
+    const active = [];
+    const used = new Set();
+    const pairs = [];
+    starting.forEach((starter, idx) => {
+      if (!sheetReady(starter) || onSheet(starter) || (Number(starter.minutes) || 0) > 0) {
+        active.push(starter);
+        return;
+      }
+      let found = false;
+      for (const bp of bench) {
+        if (used.has(Number(bp.element))) continue;
+        const sEt = Number(starter.elementType);
+        const bEt = Number(bp.elementType);
+        const compatible = (sEt === 1 && bEt === 1) || (sEt !== 1 && bEt !== 1);
+        if (!compatible) continue;
+        if (sheetReady(bp) && !onSheet(bp)) continue;
+        const current = active.concat(starting.slice(idx + 1));
+        if (!homeWouldMaintainFormation(current, bEt)) continue;
+        used.add(Number(bp.element));
+        pairs.push({ out: starter, inn: bp });
+        active.push(bp);
+        found = true;
+        break;
+      }
+      if (!found) active.push(starter);
+    });
+    return pairs;
+  }
+
+  function homeApplyTeamNewsAutosubs(squad, entryId) {
+    const chip = String(homeEntryActiveChip(entryId) || "").toLowerCase();
+    if (chip === "bboost" || chip === "benchboost" || chip === "bench_boost") return squad;
+    const rows = Array.isArray(squad) ? squad : [];
+    if (rows.some((r) => r && (r.autoSubIn || r.autoSubOut))) return rows;
+    const pairs = homeTeamNewsAutosubPairs(rows);
+    if (!pairs.length) return rows;
+    const outMap = new Map();
+    const inMap = new Map();
+    for (const pair of pairs) {
+      outMap.set(Number(pair.out.element), pair.inn);
+      inMap.set(Number(pair.inn.element), pair.out);
+    }
+    return rows.map((row) => {
+      if (!row) return row;
+      const eid = Number(row.element);
+      if (outMap.has(eid)) {
+        const inn = outMap.get(eid);
+        return {
+          ...row,
+          autoSubOut: true,
+          autoSubIn: false,
+          autoSubWith: inn.element,
+          autoSubWithName: inn.name || "bench",
+          autoSubSource: "graphic",
+        };
+      }
+      if (inMap.has(eid)) {
+        const out = inMap.get(eid);
+        return {
+          ...row,
+          autoSubIn: true,
+          autoSubOut: false,
+          autoSubWith: out.element,
+          autoSubWithName: out.name || "starter",
+          autoSubSource: "graphic",
+        };
+      }
+      return row;
+    });
   }
 
   function homePositiveRank(value) {
@@ -10442,6 +10564,7 @@
   function homeAutosubOfficialMayLag(squad) {
     const { hasAny } = homeSquadAutosubPairs(squad);
     if (!hasAny) return false;
+    if ((squad || []).some((r) => r && r.autoSubSource === "graphic")) return true;
     if (typeof liveGwHasActiveGames === "function" && liveGwHasActiveGames()) return true;
     for (const row of squad || []) {
       for (const fx of homeSquadFixtures(row)) {
@@ -10933,7 +11056,24 @@
     return "";
   }
 
-  /** Live clock minutes for the pitch MP chip (null when not in play). */
+  /** Fixture clock for unused-starter grace (null when not in play). */
+  function homePitchMatchClock(row) {
+    if (!homeSquadRowIsInPlay(row)) return null;
+    let clock = NaN;
+    for (const fx of homeSquadFixtures(row) || []) {
+      if (!fx || typeof fx !== "object") continue;
+      if (!(homeSquadFixtureIsInPlay(fx) || (fx.live && !fx.finished))) continue;
+      const n = homeFixtureClock(fx);
+      const parsed = n != null ? n : parseInt(String(fx.clock || ""), 10);
+      if (Number.isFinite(parsed)) {
+        clock = Number.isFinite(clock) ? Math.max(clock, parsed) : parsed;
+      }
+    }
+    if (!Number.isFinite(clock) || clock < 0) return null;
+    return Math.min(120, Math.round(clock));
+  }
+
+  /** This player's appearance minutes for the pitch MP chip (null if not in play or 0′). */
   function homePitchLiveMinutes(row) {
     if (!homeSquadRowIsInPlay(row)) return null;
     let mins = Number(row.minutes);
@@ -10945,17 +11085,13 @@
       if (Number.isFinite(fxMins)) {
         mins = Number.isFinite(mins) ? Math.max(mins, fxMins) : fxMins;
       }
-      const clockMins = parseInt(String(fx.clock || ""), 10);
-      if (Number.isFinite(clockMins)) {
-        mins = Number.isFinite(mins) ? Math.max(mins, clockMins) : clockMins;
-      }
     }
     const eg = homeElementGwRecord(row.element);
     const egMins = eg != null ? Number(eg.minutes) : NaN;
     if (Number.isFinite(egMins)) {
       mins = Number.isFinite(mins) ? Math.max(mins, egMins) : egMins;
     }
-    if (!Number.isFinite(mins) || mins < 0) mins = 0;
+    if (!Number.isFinite(mins) || mins <= 0) return null;
     return Math.min(120, Math.round(mins));
   }
 
@@ -10964,18 +11100,31 @@
    * benched / unused. Grace of a few clock minutes so kickoff doesn't flash
    * every XI player before FPL's live feed records minutes.
    */
+  function homeSquadRowIsGraphicBlank(row) {
+    if (!row || row.onBench || Number(row.position) > 11) return false;
+    if (row.autoSubOut || row.autoSubIn) return false;
+    if (Math.max(Number(row.minutes) || 0) > 0) return false;
+    const named = homeTeamNewsNamedByTeam();
+    const set = named.get(String(row.team || ""));
+    if (!set) return false;
+    return !set.has(Number(row.element));
+  }
+
   function homeSquadRowIsUnusedLive(row) {
+    if (homeSquadRowIsGraphicBlank(row)) return true;
     if (!row || row.onBench || Number(row.position) > 11) return false;
     if (!homeSquadRowIsInPlay(row)) return false;
     const eg = homeElementGwRecord(row.element);
     if (Math.max(Number(row.minutes) || 0, Number(eg && eg.minutes) || 0) > 0) return false;
-    const clock = homePitchLiveMinutes(row);
+    const clock = homePitchMatchClock(row);
     return clock != null && clock >= 3;
   }
 
   function homePitchUnusedBadgeHTML(row) {
     if (!homeSquadRowIsUnusedLive(row)) return "";
-    const tip = "0 minutes while his match is live — likely on the bench";
+    const tip = homeSquadRowIsGraphicBlank(row)
+      ? "Left out of the published team sheet — unlikely to play"
+      : "0 minutes while his match is live — likely on the bench";
     return `<span class="home-unused-tag"${tipAttr(tip)} aria-label="${escapeHtml(tip)}">!</span>`;
   }
 
@@ -20437,15 +20586,15 @@
         ),
         spitRow(
           `<span class="spit-pitch-chip is-mp spit-home-swatch" aria-hidden="true">27′</span>`,
-          "Pitch card corner — match clock while his fixture is in play"
+          "Pitch card corner — this player's minutes while his fixture is in play (not the team clock)"
         ),
         spitRow(
-          `<span class="spit-pitch-chip is-mp is-muted spit-home-swatch" aria-hidden="true">27′</span><span class="spit-pitch-chip is-unused spit-home-swatch" aria-hidden="true">!</span><span class="spit-pitch-chip is-dash spit-home-swatch" aria-hidden="true">–</span>`,
-          "Starter on 0′ with his match live (3′+) — likely benched; clock greys out and points show – instead of 0"
+          `<span class="spit-pitch-chip is-unused spit-home-swatch" aria-hidden="true">!</span><span class="spit-pitch-chip is-dash spit-home-swatch" aria-hidden="true">–</span>`,
+          "Starter on 0′ with his match live (3′+) — likely benched; ! mark and points show – instead of 0"
         ),
         spitRow(
           `<span class="home-autosub-tag is-in spit-home-swatch" aria-hidden="true">${iconHTML("caret-up", "home-autosub-icon")}</span><span class="home-autosub-tag is-out spit-home-swatch" aria-hidden="true">${iconHTML("caret-down", "home-autosub-icon")}</span>`,
-          "Auto-sub on / off — appears at full time when a starter didn’t play; bench points count once FPL finalises the fixture"
+          "Auto-sub on / off — lights up from the team-news graphic when a starter is left out, or at full time when they blank; bench points count once FPL finalises the fixture"
         ),
         spitRow(
           `<span class="spit-pitch-chip is-scrub spit-home-swatch" aria-hidden="true">GW9–11</span>`,

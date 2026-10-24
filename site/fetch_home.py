@@ -45,6 +45,7 @@ from live_scoring import (
     gw_fixtures_awaiting_kickoff,
     importance_pct,
     live_stats_map,
+    project_graphic_auto_subs,
     team_by_id,
     top_third_entry_ids,
 )
@@ -56,6 +57,7 @@ TRACKED_PATH = SITE / "tracked_ids.json"
 PREFS_PATH = SITE / "home_prefs.json"
 BASELINES_PATH = SITE / "home_rank_baselines.json"
 AUTOSUB_CACHE_PATH = SITE / "autosub_points_cache.json"
+TEAM_NEWS_PATH = SITE / "team_news_data.json"
 OUT_PATH = SITE / "home_data.js"
 JSON_PATH = SITE / "home_data.json"
 FPL_BASE = "https://fantasy.premierleague.com/api"
@@ -1078,6 +1080,62 @@ def projected_auto_subs_for_ui(
     return subs
 
 
+def load_graphic_named_ids(gw: int) -> dict[str, set[int]]:
+    try:
+        payload = json.loads(TEAM_NEWS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    try:
+        news_gw = int(payload.get("gw"))
+    except (TypeError, ValueError):
+        news_gw = None
+    if news_gw != int(gw):
+        return {}
+    out: dict[str, set[int]] = {}
+    for row in payload.get("teams") or []:
+        if not row.get("namedReady"):
+            continue
+        code = str(row.get("code") or "")
+        ids: set[int] = set()
+        for raw in row.get("named") or []:
+            try:
+                ids.add(int(raw))
+            except (TypeError, ValueError):
+                continue
+        if code and len(ids) >= 11:
+            out[code] = ids
+    return out
+
+
+def team_code_by_element_map(elements: dict, teams: dict) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for eid, el in (elements or {}).items():
+        try:
+            tid = int((el or {}).get("team") or 0)
+            code = (teams.get(tid) or {}).get("short_name")
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if code:
+            out[int(eid)] = str(code)
+    return out
+
+
+def resolve_ui_auto_subs(
+    picks: list[dict],
+    stats: dict[int, dict],
+    match_status: dict[int, str],
+    etypes: dict[int, int],
+    chip: str | None,
+    *,
+    team_codes: dict[int, str],
+    graphic_named: dict[str, set[int]],
+) -> list[dict]:
+    ui = projected_auto_subs_for_ui(picks, stats, match_status, etypes, chip)
+    if ui:
+        return ui
+    return project_graphic_auto_subs(picks, etypes, team_codes, graphic_named, chip)
+
+
 def resolve_manager_gw_points(
     picks: list[dict],
     stats: dict,
@@ -1507,6 +1565,8 @@ def main() -> int:
         )
         any_fixture_live = any(fixture_is_live(fx) for fx in fixtures)
         gw_awaiting_kickoff = gw_fixtures_awaiting_kickoff(fixtures)
+        graphic_named = load_graphic_named_ids(gw)
+        team_codes = team_code_by_element_map(elements, teams)
 
         focus_picks_payload = picks_by_entry.get(manager_id)
         focus_picks = (focus_picks_payload or {}).get("picks") or []
@@ -1616,8 +1676,14 @@ def main() -> int:
                 "picks": focus_picks,
                 "active": focus_active,
                 "subs": focus_subs,
-                "ui_subs": projected_auto_subs_for_ui(
-                    focus_picks, stats, match_status, etypes, focus_chip
+                "ui_subs": resolve_ui_auto_subs(
+                    focus_picks,
+                    stats,
+                    match_status,
+                    etypes,
+                    focus_chip,
+                    team_codes=team_codes,
+                    graphic_named=graphic_named,
                 ),
                 "chip": focus_chip,
                 "live_gw": focus_pts,
@@ -1705,8 +1771,14 @@ def main() -> int:
                         "picks": other_picks,
                         "active": active,
                         "subs": subs,
-                        "ui_subs": projected_auto_subs_for_ui(
-                            other_picks, stats, match_status, etypes, chip
+                        "ui_subs": resolve_ui_auto_subs(
+                            other_picks,
+                            stats,
+                            match_status,
+                            etypes,
+                            chip,
+                            team_codes=team_codes,
+                            graphic_named=graphic_named,
                         ),
                         "chip": chip,
                         "live_gw": live_gw_pts,
