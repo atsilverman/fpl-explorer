@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1680" />
+<link rel="stylesheet" href="styles.css?v=1685" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -74,7 +74,7 @@
     // painted Home on refresh).
     const REPORT_NAV_ENABLED = false;
     if (!REPORT_NAV_ENABLED) document.documentElement.classList.remove("report-nav-enabled");
-    const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets"];
+    const PAGES = ["home", "graphics", "live", "report", "opta", "rankings", "ownership", "prices", "expected", "schedule", "markets"];
     let page = "home";
     try {
       const saved = localStorage.getItem(PAGE_KEY);
@@ -91,6 +91,7 @@
     boot.textContent =
       ".page-pane{display:none}" +
       'html[data-page="home"] #home-page,' +
+      'html[data-page="graphics"] #graphics-page,' +
       'html[data-page="live"] #live-page,' +
       'html[data-page="report"] #report-page,' +
       'html[data-page="opta"] #opta-page,' +
@@ -103,6 +104,7 @@
       'html[data-page="prices"] #prices-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="expected"] #expected-page{display:flex;flex-direction:column;min-height:0;overflow:hidden}' +
       'html[data-page="home"] #subtoolbar,' +
+      'html[data-page="graphics"] #subtoolbar,' +
       'html[data-page="report"] #subtoolbar,' +
       'html[data-page="schedule"] #subtoolbar,' +
       'html[data-page="fixtures"] #subtoolbar{display:none!important}' +
@@ -376,6 +378,12 @@
   <symbol id="i-layout-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
   </symbol>
+  <symbol id="i-images" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 22H4a2 2 0 0 1-2-2V6"/>
+    <path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"/>
+    <circle cx="12" cy="8" r="2"/>
+    <rect width="16" height="16" x="6" y="2" rx="2"/>
+  </symbol>
   <symbol id="i-mouse-pointer-click" viewBox="0 0 24 24">
     <path d="M14 4.1 12 6"/>
     <path d="m5.1 8-2.9-.8"/>
@@ -426,6 +434,10 @@
           <button id="page-home" class="page-tab-btn active" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-house"/></svg>
             Home
+          </button>
+          <button id="page-graphics" class="page-tab-btn" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-images"/></svg>
+            Graphics
           </button>
           <button id="page-live" class="page-tab-btn" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-circle-play"/></svg>
@@ -1181,17 +1193,22 @@
           </div>
         </article>
 
-        <article class="home-panel home-table-panel home-team-graphics-panel" id="home-team-graphics-panel" hidden>
+        <article class="home-panel home-table-panel home-manager-points-panel" id="home-manager-points-panel">
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
-              <span class="home-panel-heading-kicker">Team Graphics</span>
-              <span class="home-panel-heading-view" id="home-team-graphics-view-label"></span>
+              <span class="home-panel-heading-kicker">Manager Points</span>
+              <span class="home-panel-heading-view" id="home-manager-points-view-label">Gameweek</span>
             </span>
-            <span class="home-panel-heading-meta" id="home-team-graphics-meta"></span>
+            <span class="home-squad-heading-end">
+              <button type="button" class="ghost-btn icon-only-btn home-manager-points-toggle" id="home-manager-points-toggle" aria-pressed="false" title="Stacked breakdown by return type" aria-label="Stacked breakdown">
+                <svg class="icon" aria-hidden="true"><use href="#i-bar-chart-2"></use></svg>
+              </button>
+            </span>
           </h3>
-          <div class="home-team-graphics-pager">
-            <div class="home-team-graphics-track" id="home-team-graphics-track"></div>
-            <div class="home-team-graphics-dots" id="home-team-graphics-dots" role="tablist" aria-label="Team graphics"></div>
+          <div class="home-manager-points-body">
+            <div class="home-manager-points-chart" id="home-manager-points-chart"></div>
+            <div class="home-manager-points-table-wrap" id="home-manager-points-table" hidden></div>
+            <div class="home-manager-points-legend" id="home-manager-points-legend" hidden></div>
           </div>
         </article>
 
@@ -1231,6 +1248,33 @@
         </div>
       </div>
       <p id="home-updated-footer" class="home-updated-footer" hidden></p>
+    </div>
+
+    <div id="graphics-page" class="page-pane" style="display:none;">
+      <div class="page-header opta-header graphics-header">
+        <div class="opta-header-top">
+          <div class="opta-header-text">
+            <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-images"/></svg>Graphics<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Graphics works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
+            <p class="page-subtitle">Official club team-news graphics for the current gameweek, polled from X around kickoff (~75 minutes before).</p>
+          </div>
+          <div class="page-header-meta">
+            <span class="count-label" id="graphics-count-label"></span>
+          </div>
+        </div>
+      </div>
+      <div class="graphics-toolbar" id="graphics-toolbar">
+        <span class="graphics-toolbar-team" id="graphics-view-label"></span>
+        <span class="graphics-toolbar-meta" id="graphics-meta"></span>
+      </div>
+      <div class="graphics-chips" id="graphics-chips" role="tablist" aria-label="Clubs"></div>
+      <div class="graphics-body" id="graphics-body">
+        <div class="graphics-pager" id="graphics-pager">
+          <div class="graphics-track" id="graphics-track"></div>
+          <div class="graphics-dots" id="graphics-dots" role="tablist" aria-label="Team graphics"></div>
+        </div>
+        <p class="graphics-empty" id="graphics-empty" hidden>No team-news graphics for this gameweek yet.</p>
+      </div>
+      <p class="page-updated-text page-data-footer" id="graphics-updated-footer" hidden></p>
     </div>
 
     <div id="live-page" class="page-pane" style="display:none;">
@@ -1938,7 +1982,7 @@
 <script src="price_changes_data.js?v=313"></script>
 <script src="leagues_data.js?v=6"></script>
 <script src="home_data.js?v=51"></script>
-<script src="team_news_data.js?v=19"></script>
+<script src="team_news_data.js?v=20"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -1961,7 +2005,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1545"></script>
+<script src="app.js?v=1556"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

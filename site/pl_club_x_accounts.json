@@ -5,7 +5,7 @@
   "notes": [
     "Primary English-language club accounts only (not regional Man City language accounts).",
     "Aston Villa rebrand uses @AstonVilla (@AVFCOfficial is no longer the official club account).",
-    "Used by site/fetch_team_news.py for current-GW Team Graphics (Home). OCR'd names project auto-sub UI when a starter is left out of the sheet."
+    "Used by site/fetch_team_news.py for current-GW Team Graphics. OCR'd names project auto-sub UI when a starter is left out of the sheet."
   ],
   "clubs": [
     {

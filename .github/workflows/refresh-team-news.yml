@@ -1,4 +1,4 @@
-# Club team-news graphics (Home → Team Graphics).
+# Club team-news graphics (Graphics page).
 # GitHub drops most of these crons in practice (runs land ~every 2–8 h), so a
 # run that starts near any kickoff stays alive and polls at fixed checkpoints
 # around each KO (see POLL_OFFSETS_MIN in fetch_team_news.py) for up to ~5h45m.

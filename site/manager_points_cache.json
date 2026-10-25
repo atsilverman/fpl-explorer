@@ -1,0 +1,2482 @@
+{
+  "entries": {
+    "119198": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 5
+        },
+        "hits": 0,
+        "points": 52,
+        "stack": {
+          "assists": 9,
+          "bonus": 3,
+          "cleanSheets": 9,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 9,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 11,
+          "cleanSheets": 2,
+          "defcon": 2,
+          "discipline": 4,
+          "goals": 6,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 105,
+        "stack": {
+          "assists": 18,
+          "bonus": 14,
+          "cleanSheets": 8,
+          "defcon": 4,
+          "discipline": -5,
+          "goals": 43,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "FH",
+        "counts": {
+          "assists": 2,
+          "bonus": 6,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 55,
+        "stack": {
+          "assists": 6,
+          "bonus": 9,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 16,
+          "minutes": 22,
+          "saves": 0
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 10,
+          "cleanSheets": 6,
+          "defcon": 1,
+          "discipline": 2,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 85,
+        "stack": {
+          "assists": 12,
+          "bonus": 13,
+          "cleanSheets": 18,
+          "defcon": 2,
+          "discipline": -2,
+          "goals": 17,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 3,
+          "cleanSheets": 0,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 32,
+        "stack": {
+          "assists": 0,
+          "bonus": 3,
+          "cleanSheets": 0,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 8,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 7,
+          "cleanSheets": 3,
+          "defcon": 2,
+          "discipline": 2,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 71,
+        "stack": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 9,
+          "defcon": 4,
+          "discipline": -3,
+          "goals": 26,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": "WC",
+        "counts": {
+          "assists": 0,
+          "bonus": 6,
+          "cleanSheets": 7,
+          "defcon": 1,
+          "discipline": 2,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 70,
+        "stack": {
+          "assists": 0,
+          "bonus": 9,
+          "cleanSheets": 16,
+          "defcon": 2,
+          "discipline": -2,
+          "goals": 21,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    },
+    "1338409": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 3,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 54,
+        "stack": {
+          "assists": 6,
+          "bonus": 3,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 7,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 61,
+        "stack": {
+          "assists": 15,
+          "bonus": 7,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": -5,
+          "goals": 17,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "TC",
+        "counts": {
+          "assists": 3,
+          "bonus": 10,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 8,
+        "points": 76,
+        "stack": {
+          "assists": 9,
+          "bonus": 16,
+          "cleanSheets": 10,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 17,
+          "minutes": 26,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 12,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 75,
+        "stack": {
+          "assists": 9,
+          "bonus": 15,
+          "cleanSheets": 13,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 12,
+          "minutes": 22,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 1,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 37,
+        "stack": {
+          "assists": 3,
+          "bonus": 1,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": -5,
+          "goals": 13,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 5,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 68,
+        "stack": {
+          "assists": 12,
+          "bonus": 5,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 27,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 6,
+          "cleanSheets": 5,
+          "defcon": 1,
+          "discipline": 5,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 58,
+        "stack": {
+          "assists": 3,
+          "bonus": 9,
+          "cleanSheets": 11,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 16,
+          "minutes": 22,
+          "saves": 0
+        }
+      }
+    },
+    "1404383": {
+      "1": {
+        "chip": "BB",
+        "counts": {
+          "assists": 2,
+          "bonus": 4,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 6,
+          "goals": 3,
+          "minutes": 15,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 60,
+        "stack": {
+          "assists": 6,
+          "bonus": 4,
+          "cleanSheets": 9,
+          "defcon": 2,
+          "discipline": -7,
+          "goals": 14,
+          "minutes": 32,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 7,
+          "cleanSheets": 3,
+          "defcon": 3,
+          "discipline": 4,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 103,
+        "stack": {
+          "assists": 18,
+          "bonus": 10,
+          "cleanSheets": 12,
+          "defcon": 6,
+          "discipline": -5,
+          "goals": 39,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "WC",
+        "counts": {
+          "assists": 1,
+          "bonus": 5,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": 5,
+          "goals": 1,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 44,
+        "stack": {
+          "assists": 3,
+          "bonus": 8,
+          "cleanSheets": 7,
+          "defcon": 0,
+          "discipline": -6,
+          "goals": 8,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 6,
+          "bonus": 17,
+          "cleanSheets": 6,
+          "defcon": 0,
+          "discipline": 0,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 98,
+        "stack": {
+          "assists": 21,
+          "bonus": 17,
+          "cleanSheets": 18,
+          "defcon": 0,
+          "discipline": 0,
+          "goals": 13,
+          "minutes": 24,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 3,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 7,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 39,
+        "stack": {
+          "assists": 6,
+          "bonus": 3,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": -8,
+          "goals": 13,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 6,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 75,
+        "stack": {
+          "assists": 18,
+          "bonus": 6,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 24,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 9,
+          "cleanSheets": 6,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 68,
+        "stack": {
+          "assists": 3,
+          "bonus": 12,
+          "cleanSheets": 18,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 16,
+          "minutes": 23,
+          "saves": 0
+        }
+      }
+    },
+    "1593781": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 2,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 46,
+        "stack": {
+          "assists": 3,
+          "bonus": 2,
+          "cleanSheets": 8,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 10,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 10,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 2,
+          "goals": 6,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 105,
+        "stack": {
+          "assists": 18,
+          "bonus": 13,
+          "cleanSheets": 8,
+          "defcon": 2,
+          "discipline": -2,
+          "goals": 43,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "TC",
+        "counts": {
+          "assists": 0,
+          "bonus": 3,
+          "cleanSheets": 2,
+          "defcon": 3,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 57,
+        "stack": {
+          "assists": 0,
+          "bonus": 9,
+          "cleanSheets": 2,
+          "defcon": 6,
+          "discipline": -4,
+          "goals": 17,
+          "minutes": 26,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 9,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 66,
+        "stack": {
+          "assists": 0,
+          "bonus": 10,
+          "cleanSheets": 17,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 14,
+          "minutes": 23,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 10,
+          "cleanSheets": 2,
+          "defcon": 2,
+          "discipline": 4,
+          "goals": 6,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 73,
+        "stack": {
+          "assists": 3,
+          "bonus": 10,
+          "cleanSheets": 5,
+          "defcon": 4,
+          "discipline": -4,
+          "goals": 31,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 1,
+          "cleanSheets": 0,
+          "defcon": 4,
+          "discipline": 6,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 45,
+        "stack": {
+          "assists": 3,
+          "bonus": 1,
+          "cleanSheets": 0,
+          "defcon": 8,
+          "discipline": -7,
+          "goals": 15,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": "WC",
+        "counts": {
+          "assists": 1,
+          "bonus": 11,
+          "cleanSheets": 7,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 79,
+        "stack": {
+          "assists": 3,
+          "bonus": 14,
+          "cleanSheets": 16,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 25,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    },
+    "185072": {
+      "1": {
+        "chip": "BB",
+        "counts": {
+          "assists": 4,
+          "bonus": 5,
+          "cleanSheets": 7,
+          "defcon": 1,
+          "discipline": 5,
+          "goals": 2,
+          "minutes": 15,
+          "saves": 5
+        },
+        "hits": 0,
+        "points": 75,
+        "stack": {
+          "assists": 12,
+          "bonus": 5,
+          "cleanSheets": 19,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 9,
+          "minutes": 32,
+          "saves": 1
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 13,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 7,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 105,
+        "stack": {
+          "assists": 15,
+          "bonus": 16,
+          "cleanSheets": 8,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 46,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "TC",
+        "counts": {
+          "assists": 0,
+          "bonus": 3,
+          "cleanSheets": 1,
+          "defcon": 1,
+          "discipline": 5,
+          "goals": 1,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 46,
+        "stack": {
+          "assists": 0,
+          "bonus": 9,
+          "cleanSheets": 1,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 12,
+          "minutes": 26,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 12,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 6
+        },
+        "hits": 0,
+        "points": 90,
+        "stack": {
+          "assists": 18,
+          "bonus": 12,
+          "cleanSheets": 14,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 22,
+          "minutes": 23,
+          "saves": 2
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 49,
+        "stack": {
+          "assists": 9,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 13,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 5,
+          "cleanSheets": 2,
+          "defcon": 2,
+          "discipline": 2,
+          "goals": 6,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 78,
+        "stack": {
+          "assists": 9,
+          "bonus": 5,
+          "cleanSheets": 5,
+          "defcon": 4,
+          "discipline": -2,
+          "goals": 33,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 9,
+          "cleanSheets": 7,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 72,
+        "stack": {
+          "assists": 3,
+          "bonus": 12,
+          "cleanSheets": 16,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 20,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    },
+    "2601087": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 4,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 41,
+        "stack": {
+          "assists": 0,
+          "bonus": 4,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 11,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 10,
+          "cleanSheets": 1,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 7,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 90,
+        "stack": {
+          "assists": 15,
+          "bonus": 13,
+          "cleanSheets": 1,
+          "defcon": 2,
+          "discipline": -4,
+          "goals": 40,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "TC",
+        "counts": {
+          "assists": 1,
+          "bonus": 10,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 75,
+        "stack": {
+          "assists": 3,
+          "bonus": 16,
+          "cleanSheets": 9,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 22,
+          "minutes": 25,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 11,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 6
+        },
+        "hits": 0,
+        "points": 72,
+        "stack": {
+          "assists": 15,
+          "bonus": 11,
+          "cleanSheets": 10,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 12,
+          "minutes": 24,
+          "saves": 2
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 2,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 49,
+        "stack": {
+          "assists": 6,
+          "bonus": 2,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 14,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": "WC",
+        "counts": {
+          "assists": 2,
+          "bonus": 6,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 0,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 71,
+        "stack": {
+          "assists": 9,
+          "bonus": 6,
+          "cleanSheets": 7,
+          "defcon": 2,
+          "discipline": 0,
+          "goals": 26,
+          "minutes": 20,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 11,
+          "cleanSheets": 6,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 78,
+        "stack": {
+          "assists": 6,
+          "bonus": 14,
+          "cleanSheets": 18,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 20,
+          "minutes": 23,
+          "saves": 0
+        }
+      }
+    },
+    "2900072": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 52,
+        "stack": {
+          "assists": 9,
+          "bonus": 3,
+          "cleanSheets": 9,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 9,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": "BB",
+        "counts": {
+          "assists": 4,
+          "bonus": 14,
+          "cleanSheets": 2,
+          "defcon": 3,
+          "discipline": 7,
+          "goals": 8,
+          "minutes": 15,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 120,
+        "stack": {
+          "assists": 15,
+          "bonus": 17,
+          "cleanSheets": 8,
+          "defcon": 6,
+          "discipline": -8,
+          "goals": 51,
+          "minutes": 31,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 3,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 1,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 39,
+        "stack": {
+          "assists": 3,
+          "bonus": 6,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 8,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": "FH",
+        "counts": {
+          "assists": 4,
+          "bonus": 15,
+          "cleanSheets": 5,
+          "defcon": 1,
+          "discipline": 1,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 6
+        },
+        "hits": 0,
+        "points": 91,
+        "stack": {
+          "assists": 15,
+          "bonus": 15,
+          "cleanSheets": 17,
+          "defcon": 2,
+          "discipline": -1,
+          "goals": 18,
+          "minutes": 23,
+          "saves": 2
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 1,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": 5,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 34,
+        "stack": {
+          "assists": 0,
+          "bonus": 1,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": -5,
+          "goals": 13,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 7,
+          "cleanSheets": 3,
+          "defcon": 2,
+          "discipline": 4,
+          "goals": 6,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 74,
+        "stack": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 6,
+          "defcon": 4,
+          "discipline": -4,
+          "goals": 33,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 6,
+          "cleanSheets": 4,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 62,
+        "stack": {
+          "assists": 3,
+          "bonus": 9,
+          "cleanSheets": 13,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 16,
+          "minutes": 22,
+          "saves": 0
+        }
+      }
+    },
+    "296817": {
+      "1": {
+        "chip": "BB",
+        "counts": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 6,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 1,
+          "minutes": 15,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 64,
+        "stack": {
+          "assists": 9,
+          "bonus": 3,
+          "cleanSheets": 18,
+          "defcon": 2,
+          "discipline": -4,
+          "goals": 4,
+          "minutes": 32,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 9,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 78,
+        "stack": {
+          "assists": 15,
+          "bonus": 12,
+          "cleanSheets": 8,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 25,
+          "minutes": 22,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "TC",
+        "counts": {
+          "assists": 2,
+          "bonus": 4,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 2,
+          "minutes": 10,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 59,
+        "stack": {
+          "assists": 6,
+          "bonus": 10,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 17,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": "WC",
+        "counts": {
+          "assists": 3,
+          "bonus": 10,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 6
+        },
+        "hits": 0,
+        "points": 72,
+        "stack": {
+          "assists": 12,
+          "bonus": 10,
+          "cleanSheets": 14,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 13,
+          "minutes": 24,
+          "saves": 2
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 49,
+        "stack": {
+          "assists": 0,
+          "bonus": 3,
+          "cleanSheets": 6,
+          "defcon": 2,
+          "discipline": -4,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 6,
+          "cleanSheets": 1,
+          "defcon": 2,
+          "discipline": 3,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 72,
+        "stack": {
+          "assists": 12,
+          "bonus": 6,
+          "cleanSheets": 4,
+          "defcon": 4,
+          "discipline": -3,
+          "goals": 24,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 7,
+          "cleanSheets": 6,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 69,
+        "stack": {
+          "assists": 3,
+          "bonus": 10,
+          "cleanSheets": 18,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 16,
+          "minutes": 23,
+          "saves": 0
+        }
+      }
+    },
+    "3186311": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 2,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 6,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 40,
+        "stack": {
+          "assists": 0,
+          "bonus": 2,
+          "cleanSheets": 8,
+          "defcon": 2,
+          "discipline": -6,
+          "goals": 10,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 2,
+          "defcon": 2,
+          "discipline": 2,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 78,
+        "stack": {
+          "assists": 9,
+          "bonus": 10,
+          "cleanSheets": 8,
+          "defcon": 4,
+          "discipline": -2,
+          "goals": 25,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 5,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 64,
+        "stack": {
+          "assists": 6,
+          "bonus": 8,
+          "cleanSheets": 10,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 11,
+          "cleanSheets": 5,
+          "defcon": 2,
+          "discipline": 5,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 76,
+        "stack": {
+          "assists": 3,
+          "bonus": 14,
+          "cleanSheets": 14,
+          "defcon": 4,
+          "discipline": -5,
+          "goals": 17,
+          "minutes": 24,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 53,
+        "stack": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 9,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 1,
+          "cleanSheets": 0,
+          "defcon": 3,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 47,
+        "stack": {
+          "assists": 0,
+          "bonus": 1,
+          "cleanSheets": 0,
+          "defcon": 6,
+          "discipline": -3,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 0,
+          "bonus": 12,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 76,
+        "stack": {
+          "assists": 0,
+          "bonus": 15,
+          "cleanSheets": 11,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 30,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    },
+    "3400893": {
+      "1": {
+        "chip": "BB",
+        "counts": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 5,
+          "goals": 2,
+          "minutes": 14,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 55,
+        "stack": {
+          "assists": 9,
+          "bonus": 3,
+          "cleanSheets": 9,
+          "defcon": 0,
+          "discipline": -6,
+          "goals": 10,
+          "minutes": 30,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 7,
+          "bonus": 9,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 89,
+        "stack": {
+          "assists": 24,
+          "bonus": 11,
+          "cleanSheets": 8,
+          "defcon": 2,
+          "discipline": -7,
+          "goals": 28,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 3,
+          "cleanSheets": 4,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 1,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 4,
+        "points": 47,
+        "stack": {
+          "assists": 6,
+          "bonus": 3,
+          "cleanSheets": 11,
+          "defcon": 2,
+          "discipline": -4,
+          "goals": 5,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 8,
+          "cleanSheets": 4,
+          "defcon": 1,
+          "discipline": 1,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 4,
+        "points": 67,
+        "stack": {
+          "assists": 9,
+          "bonus": 8,
+          "cleanSheets": 13,
+          "defcon": 2,
+          "discipline": -1,
+          "goals": 8,
+          "minutes": 23,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 0,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 5,
+          "goals": 0,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 29,
+        "stack": {
+          "assists": 3,
+          "bonus": 0,
+          "cleanSheets": 6,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 0,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 4,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 58,
+        "stack": {
+          "assists": 12,
+          "bonus": 4,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 19,
+          "minutes": 23,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 7,
+          "cleanSheets": 5,
+          "defcon": 2,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 4,
+        "points": 54,
+        "stack": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 11,
+          "defcon": 4,
+          "discipline": -3,
+          "goals": 9,
+          "minutes": 23,
+          "saves": 0
+        }
+      }
+    },
+    "4455191": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 77,
+        "stack": {
+          "assists": 12,
+          "bonus": 9,
+          "cleanSheets": 13,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 20,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 8,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 78,
+        "stack": {
+          "assists": 18,
+          "bonus": 10,
+          "cleanSheets": 8,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 22,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 59,
+        "stack": {
+          "assists": 9,
+          "bonus": 10,
+          "cleanSheets": 6,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 13,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 13,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 78,
+        "stack": {
+          "assists": 9,
+          "bonus": 16,
+          "cleanSheets": 11,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 17,
+          "minutes": 23,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 3,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 60,
+        "stack": {
+          "assists": 6,
+          "bonus": 3,
+          "cleanSheets": 9,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 7,
+          "cleanSheets": 1,
+          "defcon": 2,
+          "discipline": 3,
+          "goals": 7,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 76,
+        "stack": {
+          "assists": 3,
+          "bonus": 7,
+          "cleanSheets": 1,
+          "defcon": 6,
+          "discipline": -3,
+          "goals": 39,
+          "minutes": 23,
+          "saves": 0
+        }
+      },
+      "7": {
+        "chip": "TC",
+        "counts": {
+          "assists": 0,
+          "bonus": 9,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 82,
+        "stack": {
+          "assists": 0,
+          "bonus": 15,
+          "cleanSheets": 11,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 34,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    },
+    "4777158": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 3,
+          "bonus": 8,
+          "cleanSheets": 3,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 63,
+        "stack": {
+          "assists": 9,
+          "bonus": 8,
+          "cleanSheets": 9,
+          "defcon": 0,
+          "discipline": -2,
+          "goals": 14,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 6,
+          "bonus": 9,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 2,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 80,
+        "stack": {
+          "assists": 18,
+          "bonus": 11,
+          "cleanSheets": 5,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 23,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 6,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 49,
+        "stack": {
+          "assists": 3,
+          "bonus": 6,
+          "cleanSheets": 6,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 13,
+          "minutes": 22,
+          "saves": 0
+        }
+      },
+      "4": {
+        "chip": "WC",
+        "counts": {
+          "assists": 2,
+          "bonus": 9,
+          "cleanSheets": 6,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 8
+        },
+        "hits": 0,
+        "points": 69,
+        "stack": {
+          "assists": 6,
+          "bonus": 9,
+          "cleanSheets": 15,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 14,
+          "minutes": 24,
+          "saves": 2
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 6,
+          "cleanSheets": 4,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 1,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 58,
+        "stack": {
+          "assists": 6,
+          "bonus": 9,
+          "cleanSheets": 13,
+          "defcon": 2,
+          "discipline": -4,
+          "goals": 8,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 3,
+          "cleanSheets": 0,
+          "defcon": 2,
+          "discipline": 5,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 5
+        },
+        "hits": 0,
+        "points": 56,
+        "stack": {
+          "assists": 6,
+          "bonus": 3,
+          "cleanSheets": 0,
+          "defcon": 4,
+          "discipline": -5,
+          "goals": 23,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 0,
+          "cleanSheets": 6,
+          "defcon": 1,
+          "discipline": 5,
+          "goals": 0,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 37,
+        "stack": {
+          "assists": 3,
+          "bonus": 0,
+          "cleanSheets": 13,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 0,
+          "minutes": 23,
+          "saves": 1
+        }
+      }
+    },
+    "5478794": {
+      "1": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 6,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 1
+        },
+        "hits": 0,
+        "points": 70,
+        "stack": {
+          "assists": 15,
+          "bonus": 6,
+          "cleanSheets": 14,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 14,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 9,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 2,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 80,
+        "stack": {
+          "assists": 6,
+          "bonus": 12,
+          "cleanSheets": 12,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 29,
+          "minutes": 22,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "FH",
+        "counts": {
+          "assists": 1,
+          "bonus": 9,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 1,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 61,
+        "stack": {
+          "assists": 3,
+          "bonus": 12,
+          "cleanSheets": 6,
+          "defcon": 2,
+          "discipline": -1,
+          "goals": 16,
+          "minutes": 22,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 9,
+          "cleanSheets": 6,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 3,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 82,
+        "stack": {
+          "assists": 6,
+          "bonus": 12,
+          "cleanSheets": 18,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 5
+        }
+      },
+      "5": {
+        "chip": "WC",
+        "counts": {
+          "assists": 1,
+          "bonus": 2,
+          "cleanSheets": 2,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 42,
+        "stack": {
+          "assists": 3,
+          "bonus": 2,
+          "cleanSheets": 5,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 12,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 4,
+          "bonus": 3,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 5,
+          "minutes": 11,
+          "saves": 4
+        },
+        "hits": 0,
+        "points": 63,
+        "stack": {
+          "assists": 12,
+          "bonus": 3,
+          "cleanSheets": 1,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 26,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 14,
+          "cleanSheets": 8,
+          "defcon": 0,
+          "discipline": 2,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 2
+        },
+        "hits": 0,
+        "points": 80,
+        "stack": {
+          "assists": 6,
+          "bonus": 14,
+          "cleanSheets": 21,
+          "defcon": 0,
+          "discipline": -3,
+          "goals": 18,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    },
+    "5497737": {
+      "1": {
+        "chip": "BB",
+        "counts": {
+          "assists": 3,
+          "bonus": 3,
+          "cleanSheets": 4,
+          "defcon": 1,
+          "discipline": 5,
+          "goals": 1,
+          "minutes": 15,
+          "saves": 5
+        },
+        "hits": 0,
+        "points": 59,
+        "stack": {
+          "assists": 9,
+          "bonus": 3,
+          "cleanSheets": 13,
+          "defcon": 2,
+          "discipline": -5,
+          "goals": 4,
+          "minutes": 32,
+          "saves": 1
+        }
+      },
+      "2": {
+        "chip": null,
+        "counts": {
+          "assists": 6,
+          "bonus": 13,
+          "cleanSheets": 2,
+          "defcon": 2,
+          "discipline": 5,
+          "goals": 7,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 114,
+        "stack": {
+          "assists": 21,
+          "bonus": 16,
+          "cleanSheets": 8,
+          "defcon": 4,
+          "discipline": -6,
+          "goals": 47,
+          "minutes": 24,
+          "saves": 0
+        }
+      },
+      "3": {
+        "chip": "TC",
+        "counts": {
+          "assists": 0,
+          "bonus": 5,
+          "cleanSheets": 3,
+          "defcon": 1,
+          "discipline": 4,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 59,
+        "stack": {
+          "assists": 0,
+          "bonus": 11,
+          "cleanSheets": 6,
+          "defcon": 2,
+          "discipline": -4,
+          "goals": 17,
+          "minutes": 26,
+          "saves": 1
+        }
+      },
+      "4": {
+        "chip": null,
+        "counts": {
+          "assists": 5,
+          "bonus": 16,
+          "cleanSheets": 6,
+          "defcon": 0,
+          "discipline": 1,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 6
+        },
+        "hits": 0,
+        "points": 98,
+        "stack": {
+          "assists": 15,
+          "bonus": 19,
+          "cleanSheets": 18,
+          "defcon": 0,
+          "discipline": -1,
+          "goals": 21,
+          "minutes": 24,
+          "saves": 2
+        }
+      },
+      "5": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 6,
+          "cleanSheets": 2,
+          "defcon": 1,
+          "discipline": 3,
+          "goals": 2,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 50,
+        "stack": {
+          "assists": 6,
+          "bonus": 6,
+          "cleanSheets": 5,
+          "defcon": 2,
+          "discipline": -3,
+          "goals": 9,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "6": {
+        "chip": null,
+        "counts": {
+          "assists": 1,
+          "bonus": 4,
+          "cleanSheets": 1,
+          "defcon": 3,
+          "discipline": 1,
+          "goals": 6,
+          "minutes": 11,
+          "saves": 3
+        },
+        "hits": 0,
+        "points": 70,
+        "stack": {
+          "assists": 3,
+          "bonus": 4,
+          "cleanSheets": 1,
+          "defcon": 6,
+          "discipline": -1,
+          "goals": 32,
+          "minutes": 24,
+          "saves": 1
+        }
+      },
+      "7": {
+        "chip": null,
+        "counts": {
+          "assists": 2,
+          "bonus": 10,
+          "cleanSheets": 4,
+          "defcon": 0,
+          "discipline": 4,
+          "goals": 4,
+          "minutes": 11,
+          "saves": 0
+        },
+        "hits": 0,
+        "points": 74,
+        "stack": {
+          "assists": 6,
+          "bonus": 13,
+          "cleanSheets": 10,
+          "defcon": 0,
+          "discipline": -4,
+          "goals": 25,
+          "minutes": 24,
+          "saves": 0
+        }
+      }
+    }
+  }
+}

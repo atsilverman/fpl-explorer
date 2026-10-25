@@ -57,6 +57,7 @@ TRACKED_PATH = SITE / "tracked_ids.json"
 PREFS_PATH = SITE / "home_prefs.json"
 BASELINES_PATH = SITE / "home_rank_baselines.json"
 AUTOSUB_CACHE_PATH = SITE / "autosub_points_cache.json"
+MANAGER_POINTS_CACHE_PATH = SITE / "manager_points_cache.json"
 TEAM_NEWS_PATH = SITE / "team_news_data.json"
 OUT_PATH = SITE / "home_data.js"
 JSON_PATH = SITE / "home_data.json"
@@ -667,6 +668,398 @@ def backfill_autosub_points(
             per_entry[str(gw)] = score_autosubs(official_autosubs(payload, gw), pts)
             changed = True
     return changed
+
+
+STACK_KEYS = (
+    "minutes",
+    "goals",
+    "assists",
+    "cleanSheets",
+    "defcon",
+    "bonus",
+    "saves",
+    "discipline",
+)
+GOAL_PTS_BY_TYPE = {1: 6, 2: 6, 3: 5, 4: 4}
+CS_PTS_BY_TYPE = {1: 4, 2: 4, 3: 1, 4: 0}
+GC_DOCK_BY_TYPE = {1: 1, 2: 1, 3: 0, 4: 0}
+
+
+def empty_points_stack() -> dict[str, int]:
+    return {key: 0 for key in STACK_KEYS}
+
+
+def empty_points_counts() -> dict[str, int]:
+    return {key: 0 for key in STACK_KEYS}
+
+
+def add_points_stack(dst: dict[str, int], src: dict[str, int], mult: int = 1) -> None:
+    for key in STACK_KEYS:
+        dst[key] = int(dst.get(key) or 0) + int(src.get(key) or 0) * mult
+
+
+def add_points_counts(dst: dict[str, int], src: dict[str, int]) -> None:
+    for key in STACK_KEYS:
+        dst[key] = int(dst.get(key) or 0) + int(src.get(key) or 0)
+
+
+def score_element_points_stack(
+    stats: dict | None, element_type: int
+) -> tuple[dict[str, int], dict[str, int]]:
+    """FPL return-type pts + event counts for one appearance."""
+    rec = normalize_element_gw_record(stats or {}, element_type=element_type)
+    return score_normalized_points_stack(rec)
+
+
+def score_normalized_points_stack(
+    rec: dict | None,
+) -> tuple[dict[str, int], dict[str, int]]:
+    rec = rec if isinstance(rec, dict) else {}
+    try:
+        etype = int(rec.get("elementType") or 0)
+    except (TypeError, ValueError):
+        etype = 0
+    out = empty_points_stack()
+    counts = empty_points_counts()
+    try:
+        mins = int(rec.get("minutes") or 0)
+    except (TypeError, ValueError):
+        mins = 0
+    if mins > 0:
+        out["minutes"] = 2 if mins >= 60 else 1
+        counts["minutes"] = 1
+    try:
+        goals = int(rec.get("goals") or 0)
+    except (TypeError, ValueError):
+        goals = 0
+    if goals:
+        out["goals"] = goals * GOAL_PTS_BY_TYPE.get(etype, 4)
+        counts["goals"] = goals
+    try:
+        assists = int(rec.get("assists") or 0)
+    except (TypeError, ValueError):
+        assists = 0
+    if assists:
+        out["assists"] = assists * 3
+        counts["assists"] = assists
+    try:
+        cs = int(rec.get("cleanSheets") or 0)
+    except (TypeError, ValueError):
+        cs = 0
+    cs_pts = CS_PTS_BY_TYPE.get(etype, 0)
+    if cs and cs_pts:
+        out["cleanSheets"] = cs * cs_pts
+        counts["cleanSheets"] = cs
+    try:
+        gc = int(rec.get("goalsConceded") or 0)
+    except (TypeError, ValueError):
+        gc = 0
+    gc_dock = GC_DOCK_BY_TYPE.get(etype, 0)
+    if gc and gc_dock:
+        docks = gc // 2
+        out["discipline"] -= docks * gc_dock
+        counts["discipline"] += docks
+    try:
+        saves = int(rec.get("saves") or 0)
+    except (TypeError, ValueError):
+        saves = 0
+    if saves:
+        out["saves"] += saves // 3
+        counts["saves"] += saves
+    try:
+        pen_saved = int(rec.get("penaltiesSaved") or 0)
+    except (TypeError, ValueError):
+        pen_saved = 0
+    if pen_saved:
+        out["saves"] += pen_saved * 5
+        counts["saves"] += pen_saved
+    try:
+        pen_miss = int(rec.get("penaltiesMissed") or 0)
+    except (TypeError, ValueError):
+        pen_miss = 0
+    if pen_miss:
+        out["discipline"] += pen_miss * -2
+        counts["discipline"] += pen_miss
+    try:
+        yc = int(rec.get("yellowCards") or 0)
+    except (TypeError, ValueError):
+        yc = 0
+    if yc:
+        out["discipline"] += yc * -1
+        counts["discipline"] += yc
+    try:
+        rc = int(rec.get("redCards") or 0)
+    except (TypeError, ValueError):
+        rc = 0
+    if rc:
+        out["discipline"] += rc * -3
+        counts["discipline"] += rc
+    try:
+        og = int(rec.get("ownGoals") or 0)
+    except (TypeError, ValueError):
+        og = 0
+    if og:
+        out["discipline"] += og * -2
+        counts["discipline"] += og
+    if rec.get("defConHit"):
+        out["defcon"] = 2
+        counts["defcon"] = 1
+    try:
+        bonus = int(rec.get("bonus") or 0)
+    except (TypeError, ValueError):
+        bonus = 0
+    if bonus:
+        out["bonus"] = bonus
+        counts["bonus"] = bonus
+    return out, counts
+
+
+def stack_from_picks(
+    picks: list | None,
+    stats_by_id: dict[int, dict],
+    etypes: dict[int, int],
+) -> tuple[dict[str, int], dict[str, int]]:
+    stack = empty_points_stack()
+    counts = empty_points_counts()
+    for pick in picks or []:
+        if not isinstance(pick, dict):
+            continue
+        try:
+            eid = int(pick["element"])
+            mult = int(pick.get("multiplier") or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if mult <= 0:
+            continue
+        etype = int(etypes.get(eid) or 0)
+        one_stack, one_counts = score_element_points_stack(stats_by_id.get(eid), etype)
+        add_points_stack(stack, one_stack, mult)
+        add_points_counts(counts, one_counts)
+    return stack, counts
+
+
+def stack_from_squad(
+    squad: list | None, element_gw: dict[str, dict]
+) -> tuple[dict[str, int], dict[str, int]]:
+    stack = empty_points_stack()
+    counts = empty_points_counts()
+    for row in squad or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            eid = int(row["element"])
+            mult = int(row.get("multiplier") or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if mult <= 0:
+            continue
+        rec = element_gw.get(str(eid)) if isinstance(element_gw, dict) else None
+        if not isinstance(rec, dict):
+            rec = {}
+            try:
+                rec["elementType"] = int(row.get("elementType") or 0)
+            except (TypeError, ValueError):
+                rec["elementType"] = 0
+        one_stack, one_counts = score_normalized_points_stack(rec)
+        add_points_stack(stack, one_stack, mult)
+        add_points_counts(counts, one_counts)
+    return stack, counts
+
+
+def load_event_live(gw: int) -> dict | None:
+    data, err = fpl_get_result(f"/event/{gw}/live/")
+    if isinstance(data, dict) and data.get("elements"):
+        return data
+    snap = SITE.parent / "snapshots" / f"event-live_{gw}.json"
+    loaded = load_json(snap) if snap.exists() else {}
+    if isinstance(loaded, dict) and loaded.get("elements"):
+        return loaded
+    if err:
+        print(f"  event live GW{gw} failed: {err}", file=sys.stderr)
+    return None
+
+
+def chips_by_event(history_payload: dict | None) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for ch in (history_payload or {}).get("chips") or []:
+        if not isinstance(ch, dict):
+            continue
+        try:
+            ev = int(ch.get("event") or 0)
+        except (TypeError, ValueError):
+            continue
+        name = str(ch.get("name") or "").lower()
+        label = CHIP_LABELS.get(name)
+        if ev > 0 and label:
+            out[ev] = label
+    return out
+
+
+def slim_history_gws(history_payload: dict | None) -> list[dict]:
+    chips = chips_by_event(history_payload)
+    rows: list[dict] = []
+    for hist in (history_payload or {}).get("current") or []:
+        if not isinstance(hist, dict):
+            continue
+        try:
+            gw = int(hist.get("event") or 0)
+        except (TypeError, ValueError):
+            continue
+        if gw <= 0:
+            continue
+        try:
+            points = int(hist.get("points") or 0)
+        except (TypeError, ValueError):
+            points = 0
+        try:
+            hits = int(hist.get("event_transfers_cost") or 0)
+        except (TypeError, ValueError):
+            hits = 0
+        rows.append({"gw": gw, "points": points, "hits": max(0, hits), "chip": chips.get(gw)})
+    rows.sort(key=lambda row: row["gw"])
+    return rows
+
+
+def fetch_entry_history(entry_id: int) -> dict:
+    data, err = fpl_get_result(f"/entry/{entry_id}/history/")
+    if err:
+        print(f"  history failed entry {entry_id}: {err}", file=sys.stderr)
+    return data if isinstance(data, dict) else {}
+
+
+def backfill_manager_points(
+    entry_ids: list[int],
+    settled: set[int],
+    cache: dict,
+    etypes: dict[int, int],
+    history_by_entry: dict[int, dict],
+) -> bool:
+    """Cache settled-GW stacks per entry. Each (entry, gw) is fetched once."""
+    entries = cache.setdefault("entries", {})
+    live_by_gw: dict[int, dict[int, dict]] = {}
+    changed = False
+
+    def stats_for(gw: int) -> dict[int, dict] | None:
+        if gw in live_by_gw:
+            return live_by_gw[gw]
+        payload = load_event_live(gw)
+        stats = live_stats_map(payload) if isinstance(payload, dict) else None
+        if stats is not None:
+            live_by_gw[gw] = stats
+        return stats
+
+    for eid in entry_ids:
+        per_entry = entries.setdefault(str(eid), {})
+        hist_rows = slim_history_gws(history_by_entry.get(eid))
+        hist_by_gw = {int(row["gw"]): row for row in hist_rows}
+        for gw in sorted(settled):
+            key = str(gw)
+            cached_row = per_entry.get(key)
+            if (
+                isinstance(cached_row, dict)
+                and "stack" in cached_row
+                and "counts" in cached_row
+            ):
+                continue
+            payload, err = fetch_entry_event_picks(eid, gw)
+            if err or not isinstance(payload, dict):
+                if err and err.startswith("HTTP 404"):
+                    hist = hist_by_gw.get(gw) or {}
+                    per_entry[key] = {
+                        "points": int(hist.get("points") or 0),
+                        "hits": int(hist.get("hits") or 0),
+                        "chip": hist.get("chip"),
+                        "stack": empty_points_stack(),
+                        "counts": empty_points_counts(),
+                    }
+                    changed = True
+                continue
+            stats = stats_for(gw)
+            if stats is None:
+                continue
+            hist = hist_by_gw.get(gw) or {}
+            chip = hist.get("chip")
+            if not chip:
+                raw_chip = str((payload or {}).get("active_chip") or "").lower()
+                chip = CHIP_LABELS.get(raw_chip)
+            try:
+                picks_pts = int(((payload or {}).get("entry_history") or {}).get("points") or 0)
+            except (TypeError, ValueError):
+                picks_pts = 0
+            try:
+                picks_hits = int(((payload or {}).get("entry_history") or {}).get("event_transfers_cost") or 0)
+            except (TypeError, ValueError):
+                picks_hits = 0
+            stack, counts = stack_from_picks((payload or {}).get("picks") or [], stats, etypes)
+            per_entry[key] = {
+                "points": int(hist.get("points") or picks_pts or 0),
+                "hits": max(0, int(hist.get("hits") or picks_hits or 0)),
+                "chip": chip,
+                "stack": stack,
+                "counts": counts,
+            }
+            changed = True
+    return changed
+
+
+def build_manager_points_by_entry(
+    entry_ids: list[int],
+    *,
+    current_gw: int,
+    settled: set[int],
+    history_by_entry: dict[int, dict],
+    cache: dict,
+    squads_by_entry: dict[str, list],
+    element_gw: dict[str, dict],
+    live_points_by_entry: dict[int, int],
+    chip_by_entry: dict[int, str | None],
+    gw_awaiting_kickoff: bool,
+) -> dict[str, dict]:
+    cached_entries = (cache or {}).get("entries") or {}
+    out: dict[str, dict] = {}
+    for eid in entry_ids:
+        hist_rows = slim_history_gws(history_by_entry.get(eid))
+        by_gw: dict[int, dict] = {}
+        cached = cached_entries.get(str(eid)) or {}
+        for row in hist_rows:
+            gw = int(row["gw"])
+            cached_row = cached.get(str(gw)) if isinstance(cached.get(str(gw)), dict) else {}
+            stack = cached_row.get("stack") if isinstance(cached_row.get("stack"), dict) else empty_points_stack()
+            counts = cached_row.get("counts") if isinstance(cached_row.get("counts"), dict) else empty_points_counts()
+            by_gw[gw] = {
+                "gw": gw,
+                "points": int(row["points"]),
+                "hits": int(row["hits"]),
+                "chip": row.get("chip") or cached_row.get("chip"),
+                "stack": {key: int(stack.get(key) or 0) for key in STACK_KEYS},
+                "counts": {key: int(counts.get(key) or 0) for key in STACK_KEYS},
+            }
+        if current_gw > 0 and current_gw not in settled:
+            squad = squads_by_entry.get(str(eid)) or []
+            live_pts = live_points_by_entry.get(eid)
+            if gw_awaiting_kickoff:
+                live_pts = 0
+            elif live_pts is None:
+                live_pts = int((by_gw.get(current_gw) or {}).get("points") or 0)
+            chip = chip_by_entry.get(eid)
+            if chip:
+                chip = CHIP_LABELS.get(str(chip).lower(), chip if str(chip).upper() in CHIP_LABELS.values() else None)
+            live_stack, live_counts = (
+                stack_from_squad(squad, element_gw)
+                if not gw_awaiting_kickoff
+                else (empty_points_stack(), empty_points_counts())
+            )
+            by_gw[current_gw] = {
+                "gw": current_gw,
+                "points": int(live_pts or 0),
+                "hits": 0,
+                "chip": chip,
+                "stack": live_stack,
+                "counts": live_counts,
+            }
+        gws = [by_gw[gw] for gw in sorted(by_gw)]
+        out[str(eid)] = {"gws": gws}
+    return out
 
 
 def resolve_gw_rank(
@@ -2117,6 +2510,36 @@ def main() -> int:
                 status=status,
             )
 
+        manager_points_cache = load_json(MANAGER_POINTS_CACHE_PATH)
+        settled = settled_gameweeks(bootstrap)
+        if backfill_manager_points(
+            entry_ids, settled, manager_points_cache, etypes, history_by_entry
+        ):
+            save_json(MANAGER_POINTS_CACHE_PATH, manager_points_cache)
+            cached_n = sum(
+                len(v) for v in (manager_points_cache.get("entries") or {}).values()
+                if isinstance(v, dict)
+            )
+            print(f"  manager points cache: {cached_n} settled GW stacks")
+        live_points_by_entry: dict[int, int] = {}
+        for row in standing_rows:
+            try:
+                live_points_by_entry[int(row["entry"])] = int(row.get("gwPointsLive") or 0)
+            except (KeyError, TypeError, ValueError):
+                continue
+        manager_points_by_entry = build_manager_points_by_entry(
+            entry_ids,
+            current_gw=gw,
+            settled=settled,
+            history_by_entry=history_by_entry,
+            cache=manager_points_cache,
+            squads_by_entry=squads_by_entry,
+            element_gw=element_gw,
+            live_points_by_entry=live_points_by_entry,
+            chip_by_entry=chip_by_entry,
+            gw_awaiting_kickoff=gw_awaiting_kickoff,
+        )
+
         payload = {
             "generatedAt": generated_at(),
             "gw": gw,
@@ -2164,6 +2587,7 @@ def main() -> int:
                 for el_id, entry_ids in sorted(owners_by_element.items())
             },
             "elementGw": element_gw,
+            "managerPointsByEntry": manager_points_by_entry,
             "leaguePicksStatus": league_picks_status,
             # v2 = official/same-position pairing with elementType on moves.
             "transfersSchemaVersion": 2,

@@ -38,6 +38,7 @@
     chipWindow: null,
     ownersByElement: {},
     elementGw: {},
+    managerPointsByEntry: {},
     leaguePicksStatus: null,
     transfersSchemaVersion: 0,
     transfersByEntry: {},
@@ -46,6 +47,9 @@
   };
   if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
   if (HOME.gwAwaitingKickoff == null) HOME.gwAwaitingKickoff = null;
+  if (!HOME.managerPointsByEntry || typeof HOME.managerPointsByEntry !== "object") {
+    HOME.managerPointsByEntry = {};
+  }
   window.FPL_HOME = HOME;
   const REPORT = window.FPL_REPORT || {
     generatedAt: null,
@@ -456,29 +460,6 @@
     };
   }
 
-  /** Team / Home fixture FDR wash — green easy → red hard (Prices Δ palette). */
-  function fdrScheduleHighlightPaint(kind, intensity) {
-    return spectrumHighlightPaint(kind === "easy", intensity, {
-      easy: "hsl(var(--delta-rise))",
-      hard: "hsl(var(--delta-fall))",
-      easyFill: (alpha) => `hsl(var(--delta-rise) / ${alpha})`,
-      hardFill: (alpha) => `hsl(var(--delta-fall) / ${alpha})`,
-    });
-  }
-
-  function fdrScheduleHighlightInlineStyle(kind, intensity) {
-    const paint = fdrScheduleHighlightPaint(kind, intensity);
-    if (paint.skip) return { style: "", strongClass: "" };
-    const color = paint.color ? `;color:${paint.color}` : "";
-    const kindClass =
-      paint.emphasize || paint.strong ? (kind === "easy" ? " highlight-top" : " highlight-bottom") : "";
-    const strong = paint.strong ? " highlight-strong" : "";
-    return {
-      style: `background-color:${paint.backgroundColor}${color}`,
-      strongClass: `${kindClass}${strong}`,
-    };
-  }
-
   function fdrHighlightInlineStyle(kind, intensity) {
     const paint = fdrHighlightPaint(kind, intensity);
     if (paint.skip) return { style: "", strongClass: "" };
@@ -521,8 +502,9 @@
       };
     }
     const intensity = quiet ? Math.min(1, spec.intensity * 0.4) : spec.intensity;
+    // Same blue/pink as Strength of Schedule ranks — fixture ease is one spectrum.
     const paint = schedulePalette
-      ? fdrScheduleHighlightInlineStyle(spec.kind, intensity)
+      ? scheduleHighlightInlineStyle(spec.kind === "easy" ? "top" : "bottom", intensity)
       : fdrHighlightInlineStyle(spec.kind, intensity);
     return {
       className: ` fdr-${n}`,
@@ -1084,6 +1066,7 @@
 
   const el = {
     pageHome: $("#page-home"),
+    pageGraphics: $("#page-graphics"),
     pageLive: $("#page-live"),
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
@@ -1109,6 +1092,16 @@
     pageMarkets: $("#page-markets"),
     pageReport: $("#page-report"),
     homePage: $("#home-page"),
+    graphicsPage: $("#graphics-page"),
+    graphicsCountLabel: $("#graphics-count-label"),
+    graphicsViewLabel: $("#graphics-view-label"),
+    graphicsMeta: $("#graphics-meta"),
+    graphicsChips: $("#graphics-chips"),
+    graphicsTrack: $("#graphics-track"),
+    graphicsDots: $("#graphics-dots"),
+    graphicsEmpty: $("#graphics-empty"),
+    graphicsPager: $("#graphics-pager"),
+    graphicsUpdatedFooter: $("#graphics-updated-footer"),
     livePage: $("#live-page"),
     livePageSubtitle: $("#live-page-subtitle"),
     liveCountLabel: $("#live-count-label"),
@@ -1223,6 +1216,12 @@
     homeSummaryCards: $("#home-summary-cards"),
     homeSquadPanel: $("#home-squad-panel"),
     homeStandingsPanel: $("#home-standings-panel"),
+    homeManagerPointsPanel: $("#home-manager-points-panel"),
+    homeManagerPointsViewLabel: $("#home-manager-points-view-label"),
+    homeManagerPointsToggle: $("#home-manager-points-toggle"),
+    homeManagerPointsChart: $("#home-manager-points-chart"),
+    homeManagerPointsTable: $("#home-manager-points-table"),
+    homeManagerPointsLegend: $("#home-manager-points-legend"),
     homeFeedPanel: $("#home-feed-panel"),
     homeFeedTrack: $("#home-feed-track"),
     homeFeedDots: $("#home-feed-dots"),
@@ -1232,11 +1231,6 @@
     homeFeedAllHead: $("#home-feed-all-head"),
     homeFeedAllBody: $("#home-feed-all-body"),
     homeFeedCountLabel: $("#home-feed-count-label"),
-    homeTeamGraphicsPanel: $("#home-team-graphics-panel"),
-    homeTeamGraphicsTrack: $("#home-team-graphics-track"),
-    homeTeamGraphicsDots: $("#home-team-graphics-dots"),
-    homeTeamGraphicsViewLabel: $("#home-team-graphics-view-label"),
-    homeTeamGraphicsMeta: $("#home-team-graphics-meta"),
     homeTablesGrid: $(".home-tables-grid"),
     homeStandingsLookupEmpty: $("#home-standings-lookup-empty"),
     homePlayerProfile: $("#home-player-profile"),
@@ -3158,6 +3152,14 @@
     HOME.elementGw = payload.elementGw && typeof payload.elementGw === "object"
       ? payload.elementGw
       : {};
+    const incomingManagerPoints =
+      payload.managerPointsByEntry && typeof payload.managerPointsByEntry === "object"
+        ? payload.managerPointsByEntry
+        : null;
+    HOME.managerPointsByEntry = incomingManagerPoints
+      || (priorHome.managerPointsByEntry && typeof priorHome.managerPointsByEntry === "object"
+        ? priorHome.managerPointsByEntry
+        : {});
     if (!skipFeedIngest && payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
       const onFeedPage = state.page === "live" || state.page === "home";
       if (onFeedPage) {
@@ -3211,12 +3213,19 @@
     if (identityChanged) {
       homeOwnerPin = null;
       homeViewEntryId = null;
-    } else if (homeViewEntryId != null) {
-      const viewId = Number(homeViewEntryId);
-      const stillInLeague = (Array.isArray(HOME.standings) ? HOME.standings : []).some(
-        (row) => Number(row && row.entry) === viewId
-      );
-      if (!stillInLeague) homeViewEntryId = null;
+      persistHomeViewEntryId(null);
+    } else {
+      if (homeViewEntryId == null) homeViewEntryId = readPersistedHomeViewEntryId();
+      if (homeViewEntryId != null) {
+        const viewId = Number(homeViewEntryId);
+        const stillInLeague = (Array.isArray(HOME.standings) ? HOME.standings : []).some(
+          (row) => Number(row && row.entry) === viewId
+        );
+        if (!stillInLeague) {
+          homeViewEntryId = null;
+          persistHomeViewEntryId(null);
+        }
+      }
     }
     homeElementGwCache = null;
     // element↔player map can go stale across seasons / identity changes.
@@ -4576,7 +4585,26 @@
   const HOME_STANDINGS_BENCH_PAGE = 4;
   const HOME_STANDINGS_AUTOSUB_PAGE = 5;
   const HOME_FEED_VIEW_LABELS = ["League", "All"];
+  const HOME_VIEW_ENTRY_KEY = "fpl.homeViewEntryId";
   let homeViewEntryId = null;
+
+  function persistHomeViewEntryId(id) {
+    try {
+      if (id == null) sessionStorage.removeItem(HOME_VIEW_ENTRY_KEY);
+      else sessionStorage.setItem(HOME_VIEW_ENTRY_KEY, String(id));
+    } catch {
+      // Private browsing — view just won't survive a reload.
+    }
+  }
+
+  function readPersistedHomeViewEntryId() {
+    try {
+      const id = Number(sessionStorage.getItem(HOME_VIEW_ENTRY_KEY));
+      return Number.isFinite(id) && id > 0 ? id : null;
+    } catch {
+      return null;
+    }
+  }
   let homeAutosubBreakdownOpen = false;
   let homeAutosubBreakdownCloseTimer = 0;
   // Live standings sort — default total pts desc; Live/Left/GW/Total/# are clickable.
@@ -5222,6 +5250,7 @@
       return true;
     }
     homeViewEntryId = id;
+    persistHomeViewEntryId(id);
     homeOwnerPin = null;
     homeRenderQueued = false;
     renderHome({ animateView: true });
@@ -5232,6 +5261,7 @@
     if (homeLookupPlayer) clearHomePlayerLookup({ rerender: false });
     if (homeViewEntryId == null) return false;
     homeViewEntryId = null;
+    persistHomeViewEntryId(null);
     homeOwnerPin = null;
     homeRenderQueued = false;
     renderHome({ animateView: true });
@@ -8165,23 +8195,23 @@
     requestAnimationFrame(() => syncHomeFeedPagerDots(0));
   }
 
-  let homeTeamGraphicsPagerReady = false;
-  let homeTeamGraphicsPagerTarget = null;
-  let homeTeamGraphicsRenderKey = "";
+  let graphicsPagerReady = false;
+  let graphicsPagerTarget = null;
+  let graphicsRenderKey = "";
   /** False until the user swipes / taps — browser scroll restoration (reload,
    *  bfcache) can land mid-carousel after render; snap those back to newest. */
-  let homeTeamGraphicsUserMoved = false;
+  let graphicsUserMoved = false;
 
-  function resetHomeTeamGraphicsToNewest() {
-    const track = el.homeTeamGraphicsTrack;
+  function resetGraphicsToNewest() {
+    const track = el.graphicsTrack;
     if (!track) return;
-    homeTeamGraphicsUserMoved = false;
-    homeTeamGraphicsPagerTarget = null;
+    graphicsUserMoved = false;
+    graphicsPagerTarget = null;
     if (track.scrollLeft > 1) track.scrollTo({ left: 0, behavior: "instant" });
-    syncHomeTeamGraphicsPagerDots(0);
+    syncGraphicsPager(0);
   }
 
-  function homeTeamGraphicsTeams() {
+  function graphicsTeams() {
     const teams = Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : [];
     const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : null;
     const homeGw = HOME && HOME.gw != null ? Number(HOME.gw) : null;
@@ -8190,166 +8220,204 @@
     return teams.filter((t) => t && t.localPath);
   }
 
-  function homeTeamGraphicsActivePageIndex() {
-    if (!el.homeTeamGraphicsTrack) return 0;
-    const pages = [...el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page")];
+  function graphicsActivePageIndex() {
+    if (!el.graphicsTrack) return 0;
+    const pages = [...el.graphicsTrack.querySelectorAll(".graphics-slide")];
     if (!pages.length) return 0;
-    const w = el.homeTeamGraphicsTrack.clientWidth || 1;
-    return Math.max(0, Math.min(pages.length - 1, Math.round(el.homeTeamGraphicsTrack.scrollLeft / w)));
+    const w = el.graphicsTrack.clientWidth || 1;
+    return Math.max(0, Math.min(pages.length - 1, Math.round(el.graphicsTrack.scrollLeft / w)));
   }
 
-  function syncHomeTeamGraphicsPagerDots(activeIndex) {
-    if (!el.homeTeamGraphicsDots) return;
-    const teams = homeTeamGraphicsTeams();
-    el.homeTeamGraphicsDots.querySelectorAll(".home-team-graphics-dot").forEach((dot, i) => {
-      const on = i === activeIndex;
-      dot.classList.toggle("is-active", on);
-      dot.setAttribute("aria-selected", on ? "true" : "false");
-    });
+  function syncGraphicsPager(activeIndex) {
+    const teams = graphicsTeams();
     const team = teams[activeIndex];
-    if (el.homeTeamGraphicsViewLabel) {
-      el.homeTeamGraphicsViewLabel.textContent = team
+    if (el.graphicsDots) {
+      el.graphicsDots.querySelectorAll(".graphics-dot").forEach((dot, i) => {
+        const on = i === activeIndex;
+        dot.classList.toggle("is-active", on);
+        dot.setAttribute("aria-selected", on ? "true" : "false");
+      });
+    }
+    if (el.graphicsChips) {
+      el.graphicsChips.querySelectorAll(".graphics-chip").forEach((chip, i) => {
+        const on = i === activeIndex;
+        chip.classList.toggle("is-active", on);
+        chip.setAttribute("aria-selected", on ? "true" : "false");
+      });
+    }
+    if (el.graphicsViewLabel) {
+      el.graphicsViewLabel.textContent = team
         ? (team.name || team.code || "")
         : "";
     }
-    if (el.homeTeamGraphicsMeta) {
-      el.homeTeamGraphicsMeta.textContent = team
-        ? (team.match || "")
-        : "";
+    if (el.graphicsMeta) {
+      const match = team && team.match ? String(team.match) : "";
+      const mins = team && team.minsBeforeKo != null ? Number(team.minsBeforeKo) : null;
+      const when =
+        Number.isFinite(mins)
+          ? `${mins >= 0 ? `${mins.toFixed(mins % 1 ? 1 : 0)}m before KO` : `${Math.abs(mins).toFixed(0)}m after KO`}`
+          : "";
+      el.graphicsMeta.textContent = [match, when].filter(Boolean).join(" · ");
     }
   }
 
-  function snapHomeTeamGraphicsPage(index) {
-    if (!el.homeTeamGraphicsTrack) return;
-    const pages = [...el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page")];
+  function snapGraphicsPage(index) {
+    if (!el.graphicsTrack) return;
+    const pages = [...el.graphicsTrack.querySelectorAll(".graphics-slide")];
     if (!pages[index]) return;
-    const w = el.homeTeamGraphicsTrack.clientWidth || 1;
+    const w = el.graphicsTrack.clientWidth || 1;
     const target = Math.max(0, index) * w;
-    if (Math.abs(el.homeTeamGraphicsTrack.scrollLeft - target) > 1) {
-      el.homeTeamGraphicsTrack.scrollTo({ left: target, behavior: "instant" });
+    if (Math.abs(el.graphicsTrack.scrollLeft - target) > 1) {
+      el.graphicsTrack.scrollTo({ left: target, behavior: "instant" });
     }
   }
 
-  function setHomeTeamGraphicsPage(index, { smooth = true } = {}) {
-    if (!el.homeTeamGraphicsTrack) return;
-    const pages = [...el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page")];
+  function setGraphicsPageIndex(index, { smooth = true } = {}) {
+    if (!el.graphicsTrack) return;
+    const pages = [...el.graphicsTrack.querySelectorAll(".graphics-slide")];
     if (!pages.length) return;
     const i = Math.max(0, Math.min(pages.length - 1, index));
-    homeTeamGraphicsPagerTarget = i;
-    const w = el.homeTeamGraphicsTrack.clientWidth || 1;
-    el.homeTeamGraphicsTrack.scrollTo({
+    graphicsPagerTarget = i;
+    graphicsUserMoved = true;
+    const w = el.graphicsTrack.clientWidth || 1;
+    el.graphicsTrack.scrollTo({
       left: i * w,
       behavior: smooth ? "smooth" : "auto",
     });
-    syncHomeTeamGraphicsPagerDots(i);
-    if (!smooth) homeTeamGraphicsPagerTarget = null;
+    syncGraphicsPager(i);
+    if (!smooth) graphicsPagerTarget = null;
   }
 
-  function homeTeamGraphicsPageHTML(team) {
+  function graphicsSlideHTML(team) {
     const code = escapeHtml(String(team.code || ""));
     const src = escapeHtml(String(team.localPath || ""));
+    const href = escapeHtml(String(team.tweetUrl || ""));
     const alt = escapeHtml(
       String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
     );
-    const img = `<img class="home-team-graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" draggable="false" />`;
-    return `<div class="home-team-graphics-page" data-team="${code}">
-      <div class="home-team-graphics-slide">${img}</div>
+    const img = `<img class="graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" draggable="false" />`;
+    const inner = href
+      ? `<a class="graphics-link" href="${href}" target="_blank" rel="noopener noreferrer">${img}</a>`
+      : img;
+    return `<div class="graphics-slide" data-team="${code}">
+      <div class="graphics-slide-inner">${inner}</div>
     </div>`;
   }
 
-  function renderHomeTeamGraphics() {
-    if (!el.homeTeamGraphicsPanel || !el.homeTeamGraphicsTrack || !el.homeTeamGraphicsDots) return;
-    // Mobile-only card — keep markup empty / hidden on desktop.
-    const mobile = document.documentElement.classList.contains("is-mobile-layout")
-      || (typeof NARROW_MQ !== "undefined" && NARROW_MQ.matches);
-    const teams = homeTeamGraphicsTeams();
-    if (!mobile || !teams.length) {
-      el.homeTeamGraphicsPanel.hidden = true;
-      homeTeamGraphicsRenderKey = "";
+  function renderGraphicsPage() {
+    if (!el.graphicsTrack || !el.graphicsDots) return;
+    const teams = graphicsTeams();
+    const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : (HOME && HOME.gw);
+    if (el.graphicsCountLabel) {
+      el.graphicsCountLabel.textContent = teams.length
+        ? `${teams.length} club${teams.length === 1 ? "" : "s"}${Number.isFinite(gw) ? ` · GW${gw}` : ""}`
+        : Number.isFinite(gw) ? `GW${gw}` : "";
+    }
+    syncPageUpdatedFooter(el.graphicsUpdatedFooter, pageDataUpdatedIso("graphics"));
+    if (!teams.length) {
+      graphicsRenderKey = "";
+      el.graphicsTrack.innerHTML = "";
+      el.graphicsDots.innerHTML = "";
+      if (el.graphicsChips) el.graphicsChips.innerHTML = "";
+      if (el.graphicsPager) el.graphicsPager.hidden = true;
+      if (el.graphicsEmpty) el.graphicsEmpty.hidden = false;
+      syncGraphicsPager(0);
       return;
     }
+    if (el.graphicsPager) el.graphicsPager.hidden = false;
+    if (el.graphicsEmpty) el.graphicsEmpty.hidden = true;
     const key = `${TEAM_NEWS.gw || ""}:${teams.map((t) => t.tweetId || t.localPath).join(",")}`;
-    if (key === homeTeamGraphicsRenderKey && !el.homeTeamGraphicsPanel.hidden) {
-      syncHomeTeamGraphicsPagerDots(homeTeamGraphicsActivePageIndex());
+    if (key === graphicsRenderKey && el.graphicsTrack.children.length === teams.length) {
+      syncGraphicsPager(graphicsActivePageIndex());
       return;
     }
-    homeTeamGraphicsRenderKey = key;
-    el.homeTeamGraphicsPanel.hidden = false;
-    el.homeTeamGraphicsTrack.innerHTML = teams.map(homeTeamGraphicsPageHTML).join("");
-    el.homeTeamGraphicsDots.innerHTML = teams
+    graphicsRenderKey = key;
+    el.graphicsTrack.innerHTML = teams.map(graphicsSlideHTML).join("");
+    el.graphicsDots.innerHTML = teams
       .map(
         (t, i) =>
-          `<button type="button" class="home-team-graphics-dot${i === 0 ? " is-active" : ""}" role="tab" aria-selected="${i === 0 ? "true" : "false"}" aria-label="${escapeHtml(String(t.name || t.code || "Team"))}" data-page="${i}"></button>`
+          `<button type="button" class="graphics-dot${i === 0 ? " is-active" : ""}" role="tab" aria-selected="${i === 0 ? "true" : "false"}" aria-label="${escapeHtml(String(t.name || t.code || "Team"))}" data-page="${i}"></button>`
       )
       .join("");
-    el.homeTeamGraphicsDots.querySelectorAll(".home-team-graphics-dot").forEach((dot, i) => {
-      dot.addEventListener("click", () => {
-        homeTeamGraphicsUserMoved = true;
-        setHomeTeamGraphicsPage(i);
+    if (el.graphicsChips) {
+      el.graphicsChips.innerHTML = teams
+        .map(
+          (t, i) =>
+            `<button type="button" class="graphics-chip${i === 0 ? " is-active" : ""}" role="tab" aria-selected="${i === 0 ? "true" : "false"}" data-page="${i}">${escapeHtml(String(t.code || ""))}</button>`
+        )
+        .join("");
+      el.graphicsChips.querySelectorAll(".graphics-chip").forEach((chip, i) => {
+        chip.addEventListener("click", () => setGraphicsPageIndex(i));
       });
+    }
+    el.graphicsDots.querySelectorAll(".graphics-dot").forEach((dot, i) => {
+      dot.addEventListener("click", () => setGraphicsPageIndex(i));
     });
-    bindHomeTeamGraphicsPager();
-    resetHomeTeamGraphicsToNewest();
-    requestAnimationFrame(resetHomeTeamGraphicsToNewest);
+    bindGraphicsPager();
+    resetGraphicsToNewest();
+    requestAnimationFrame(resetGraphicsToNewest);
   }
 
-  function bindHomeTeamGraphicsPager() {
-    if (homeTeamGraphicsPagerReady) return;
-    if (!el.homeTeamGraphicsTrack || !el.homeTeamGraphicsDots) return;
-    homeTeamGraphicsPagerReady = true;
+  function bindGraphicsPager() {
+    if (graphicsPagerReady) return;
+    if (!el.graphicsTrack || !el.graphicsDots) return;
+    graphicsPagerReady = true;
     let scrollSettleTimer = null;
     const onScrollSettled = () => {
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = null;
-      homeTeamGraphicsPagerTarget = null;
-      const idx = homeTeamGraphicsActivePageIndex();
-      snapHomeTeamGraphicsPage(idx);
-      syncHomeTeamGraphicsPagerDots(idx);
+      graphicsPagerTarget = null;
+      const idx = graphicsActivePageIndex();
+      snapGraphicsPage(idx);
+      syncGraphicsPager(idx);
     };
     const onScrollTick = () => {
-      if (!homeTeamGraphicsUserMoved) {
-        resetHomeTeamGraphicsToNewest();
+      if (!graphicsUserMoved) {
+        resetGraphicsToNewest();
         return;
       }
       const idx =
-        homeTeamGraphicsPagerTarget != null
-          ? homeTeamGraphicsPagerTarget
-          : homeTeamGraphicsActivePageIndex();
-      syncHomeTeamGraphicsPagerDots(idx);
+        graphicsPagerTarget != null
+          ? graphicsPagerTarget
+          : graphicsActivePageIndex();
+      syncGraphicsPager(idx);
       clearTimeout(scrollSettleTimer);
       scrollSettleTimer = setTimeout(onScrollSettled, 140);
     };
     const markUserMoved = () => {
-      homeTeamGraphicsUserMoved = true;
+      graphicsUserMoved = true;
     };
     for (const type of ["touchstart", "pointerdown", "wheel", "keydown"]) {
-      el.homeTeamGraphicsTrack.addEventListener(type, markUserMoved, { passive: true, capture: true });
+      el.graphicsTrack.addEventListener(type, markUserMoved, { passive: true, capture: true });
     }
-    el.homeTeamGraphicsTrack.addEventListener("scroll", onScrollTick, { passive: true });
-    el.homeTeamGraphicsTrack.addEventListener("scrollend", () => {
-      if (homeTeamGraphicsUserMoved) onScrollSettled();
+    el.graphicsTrack.addEventListener("scroll", onScrollTick, { passive: true });
+    el.graphicsTrack.addEventListener("scrollend", () => {
+      if (graphicsUserMoved) onScrollSettled();
     }, { passive: true });
     window.addEventListener("pageshow", (e) => {
-      if (e.persisted) resetHomeTeamGraphicsToNewest();
+      if (e.persisted) resetGraphicsToNewest();
     });
-    window.addEventListener("load", resetHomeTeamGraphicsToNewest);
-    bindHomePagerTrackpad(el.homeTeamGraphicsTrack, {
-      getIndex: () =>
-        homeTeamGraphicsPagerTarget != null
-          ? homeTeamGraphicsPagerTarget
-          : homeTeamGraphicsActivePageIndex(),
-      setPage: (i) => setHomeTeamGraphicsPage(i, { smooth: true }),
-      pageCount: () =>
-        el.homeTeamGraphicsTrack.querySelectorAll(".home-team-graphics-page").length,
-    });
-    bindHomePagerEdgeLock(el.homeTeamGraphicsTrack);
+    if (typeof bindHomePagerTrackpad === "function") {
+      bindHomePagerTrackpad(el.graphicsTrack, {
+        getIndex: () =>
+          graphicsPagerTarget != null
+            ? graphicsPagerTarget
+            : graphicsActivePageIndex(),
+        setPage: (i) => setGraphicsPageIndex(i, { smooth: true }),
+        pageCount: () =>
+          el.graphicsTrack.querySelectorAll(".graphics-slide").length,
+      });
+    }
+    if (typeof bindHomePagerEdgeLock === "function") {
+      bindHomePagerEdgeLock(el.graphicsTrack);
+    }
     window.addEventListener("resize", () => {
-      if (state.page !== "home") return;
-      renderHomeTeamGraphics();
-      if (el.homeTeamGraphicsPanel && !el.homeTeamGraphicsPanel.hidden) {
-        const idx = homeTeamGraphicsActivePageIndex();
-        snapHomeTeamGraphicsPage(idx);
-        syncHomeTeamGraphicsPagerDots(idx);
+      if (state.page !== "graphics") return;
+      renderGraphicsPage();
+      if (el.graphicsTrack && el.graphicsTrack.children.length) {
+        const idx = graphicsActivePageIndex();
+        snapGraphicsPage(idx);
+        syncGraphicsPager(idx);
       }
     });
   }
@@ -9276,7 +9344,6 @@
     bindHomeStandingsPager();
     bindHomeSquadPager();
     bindHomeFeedPager();
-    bindHomeTeamGraphicsPager();
     bindHomeScrollHoverGuard();
     bindHomeCrossHover();
     bindHomeMainPullLock();
@@ -9351,12 +9418,7 @@
       }
       const row = homeLookupRowForElement(eid);
       if (!row) return;
-      if (homeIsViewingOtherManager()) {
-        homeViewEntryId = null;
-        homeOwnerPin = null;
-        homeRenderQueued = false;
-        renderHome({ animateView: true });
-      }
+      // Keep the viewed (non-configured) manager while the player card is open.
       // Home only: if they've played this GW, show points breakdown first.
       if (homePlayerGwHasPlayed(row)) {
         openHomePlayerGwPointsOverlay(row);
@@ -13915,8 +13977,7 @@
     const highlightMaps = fixtureHighlightMaps();
     const rankMaps = fixtureRankMaps();
     const fixtures = planningFixturesForTeam(teamCode, HOME_DETAIL_SCHEDULE_COUNT);
-    const customFdr = teamDifficultyUsesFixtures();
-    // Outside Matchups: ranks + pink/blue wash only — no score chips, edges, or team info.
+    // Outside Matchups: ranks + pink/blue wash on stat cells only.
     return `<article class="schedule-card home-lookup-schedule-card" data-team="${escapeHtml(teamCode)}">${fixtureCardHTML(
       teamCode,
       highlightMaps,
@@ -13927,8 +13988,7 @@
         showTeamInfo: false,
         showBadge: false,
         headName: "Schedule",
-        headHint: customFdr ? "Custom difficulty" : "vs OPP Rank",
-        customFdrWash: customFdr,
+        headHint: "vs OPP Rank",
         showMatchups: true,
         showMatchupEdges: false,
       }
@@ -17389,6 +17449,555 @@
     applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
   }
 
+  const HOME_MP_VIEW_KEY = "fpl.homeManagerPoints.view";
+  const HOME_MP_STACK_KEYS = [
+    "minutes",
+    "goals",
+    "assists",
+    "cleanSheets",
+    "defcon",
+    "bonus",
+    "saves",
+    "discipline",
+  ];
+  const HOME_MP_STACK_META = [
+    { key: "minutes", label: "Minutes" },
+    { key: "goals", label: "Goals" },
+    { key: "assists", label: "Assists" },
+    { key: "cleanSheets", label: "Clean sheets" },
+    { key: "defcon", label: "DefCon" },
+    { key: "bonus", label: "Bonus" },
+    { key: "saves", label: "Saves" },
+    { key: "discipline", label: "Discipline" },
+    { key: "hits", label: "Hits" },
+  ];
+  let homeManagerPointsRenderKey = "";
+  let homeManagerPointsSelectedGw = null;
+
+  function homeEmptyPointsStack() {
+    return {
+      minutes: 0,
+      goals: 0,
+      assists: 0,
+      cleanSheets: 0,
+      defcon: 0,
+      bonus: 0,
+      saves: 0,
+      discipline: 0,
+    };
+  }
+
+  function homeEmptyPointsCounts() {
+    return homeEmptyPointsStack();
+  }
+
+  function homeScoreRecordStack(rec, row) {
+    const etype = Number(rec && rec.elementType) || Number(row && row.elementType) || 0;
+    const pos = LIVE_POS_BY_TYPE[etype] || null;
+    const stack = homeEmptyPointsStack();
+    const counts = homeEmptyPointsCounts();
+    const mins = Math.max(Number(rec && rec.minutes) || 0, Number(row && row.minutes) || 0);
+    if (mins > 0) {
+      stack.minutes = mins >= 60 ? 2 : 1;
+      counts.minutes = 1;
+    }
+    const goals = Number(rec && rec.goals) || 0;
+    if (goals) {
+      stack.goals = goals * liveFeedGoalPts(pos);
+      counts.goals = goals;
+    }
+    const assists = Number(rec && rec.assists) || 0;
+    if (assists) {
+      stack.assists = assists * 3;
+      counts.assists = assists;
+    }
+    const cs = Number(rec && rec.cleanSheets) || 0;
+    const csPts = liveFeedCleanSheetPts(pos);
+    if (cs && csPts) {
+      stack.cleanSheets = cs * csPts;
+      counts.cleanSheets = cs;
+    }
+    const gc = Number(rec && rec.goalsConceded) || 0;
+    const gcDock = liveFeedGoalsConcededDockPts(pos);
+    if (gc && gcDock) {
+      const docks = Math.floor(gc / 2);
+      stack.discipline -= docks * gcDock;
+      counts.discipline += docks;
+    }
+    const saves = Number(rec && rec.saves) || 0;
+    if (saves) {
+      stack.saves += Math.floor(saves / 3);
+      counts.saves += saves;
+    }
+    const penSaved = Number(rec && rec.penaltiesSaved) || 0;
+    if (penSaved) {
+      stack.saves += penSaved * 5;
+      counts.saves += penSaved;
+    }
+    const penMiss = Number(rec && rec.penaltiesMissed) || 0;
+    if (penMiss) {
+      stack.discipline += penMiss * -2;
+      counts.discipline += penMiss;
+    }
+    const yc = Number(rec && rec.yellowCards) || 0;
+    if (yc) {
+      stack.discipline += yc * -1;
+      counts.discipline += yc;
+    }
+    const rc = Number(rec && rec.redCards) || 0;
+    if (rc) {
+      stack.discipline += rc * -3;
+      counts.discipline += rc;
+    }
+    const og = Number(rec && rec.ownGoals) || 0;
+    if (og) {
+      stack.discipline += og * -2;
+      counts.discipline += og;
+    }
+    if (rec && rec.defConHit) {
+      stack.defcon = 2;
+      counts.defcon = 1;
+    }
+    const bonus = Number(rec && rec.bonus) || 0;
+    if (bonus) {
+      stack.bonus = bonus;
+      counts.bonus = bonus;
+    }
+    return { stack, counts };
+  }
+
+  function homeStackFromSquad(squad) {
+    const stack = homeEmptyPointsStack();
+    const counts = homeEmptyPointsCounts();
+    for (const row of squad || []) {
+      const mult = Number(row && row.multiplier) || 0;
+      if (mult <= 0) continue;
+      const rec = homeElementGwRecord(row.element);
+      const one = homeScoreRecordStack(rec, row);
+      for (const key of HOME_MP_STACK_KEYS) {
+        stack[key] += (Number(one.stack[key]) || 0) * mult;
+        counts[key] += Number(one.counts[key]) || 0;
+      }
+    }
+    return { stack, counts };
+  }
+
+  function homeManagerPointsDetail() {
+    try {
+      return sessionStorage.getItem(HOME_MP_VIEW_KEY) === "detail";
+    } catch {
+      return false;
+    }
+  }
+
+  function setHomeManagerPointsDetail(on) {
+    try {
+      sessionStorage.setItem(HOME_MP_VIEW_KEY, on ? "detail" : "gameweek");
+    } catch {
+      /* ignore */
+    }
+    homeManagerPointsRenderKey = "";
+    renderHomeManagerPoints();
+  }
+
+  function homeChipAbbr(chip) {
+    if (!chip) return null;
+    const raw = String(chip).trim();
+    if (!raw) return null;
+    const lower = raw.toLowerCase();
+    if (HOME_CHIP_ABBR[lower]) return HOME_CHIP_ABBR[lower];
+    const upper = raw.toUpperCase();
+    return ["WC", "FH", "BB", "TC"].includes(upper) ? upper : null;
+  }
+
+  function homeCurrentGwPointsForEntry(entryId) {
+    if (HOME.gwAwaitingKickoff) return 0;
+    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
+    const row = rows.find((r) => Number(r && r.entry) === Number(entryId));
+    if (row && row.gwPointsLive != null) return Number(row.gwPointsLive) || 0;
+    if (Number(entryId) === Number(HOME.managerId) && HOME.summary) {
+      return Number(HOME.summary.gwPoints) || 0;
+    }
+    return 0;
+  }
+
+  function homeNormalizePointsStack(raw) {
+    const stack = homeEmptyPointsStack();
+    if (!raw || typeof raw !== "object") return stack;
+    for (const key of HOME_MP_STACK_KEYS) {
+      stack[key] = Number(raw[key]) || 0;
+    }
+    return stack;
+  }
+
+  function homeManagerPointsSeries(entryId) {
+    const baked = HOME.managerPointsByEntry && HOME.managerPointsByEntry[String(entryId)];
+    const rows = Array.isArray(baked && baked.gws) ? baked.gws : [];
+    const byGw = new Map();
+    for (const row of rows) {
+      const gw = Number(row && row.gw);
+      if (!Number.isFinite(gw) || gw <= 0) continue;
+      byGw.set(gw, {
+        gw,
+        points: Number(row.points) || 0,
+        hits: Math.max(0, Number(row.hits) || 0),
+        chip: homeChipAbbr(row.chip),
+        stack: homeNormalizePointsStack(row.stack),
+        counts: homeNormalizePointsStack(row.counts),
+      });
+    }
+    const currentGw = Number(HOME.gw);
+    if (Number.isFinite(currentGw) && currentGw > 0) {
+      const standing = (Array.isArray(HOME.standings) ? HOME.standings : []).find(
+        (r) => Number(r && r.entry) === Number(entryId)
+      );
+      const chip = homeChipAbbr(standing && standing.activeChip);
+      const existing = byGw.get(currentGw);
+      const live = HOME.gwAwaitingKickoff
+        ? { stack: homeEmptyPointsStack(), counts: homeEmptyPointsCounts() }
+        : homeStackFromSquad(homeSquadForEntry(entryId) || []);
+      byGw.set(currentGw, {
+        gw: currentGw,
+        points: homeCurrentGwPointsForEntry(entryId),
+        hits: existing ? existing.hits : 0,
+        chip: chip || (existing && existing.chip) || null,
+        stack: live.stack,
+        counts: live.counts,
+      });
+    }
+    return [...byGw.values()].sort((a, b) => a.gw - b.gw);
+  }
+
+  function homeManagerPointsFingerprint(series) {
+    return series
+      .map((row) => {
+        const stack = HOME_MP_STACK_KEYS.map((key) => Number(row.stack[key]) || 0).join(",");
+        return `${row.gw}:${row.points}:${row.hits}:${row.chip || ""}:${stack}`;
+      })
+      .join("|");
+  }
+
+  function homeManagerPointsPosSum(stack) {
+    let n = 0;
+    for (const key of HOME_MP_STACK_KEYS) {
+      if (key === "discipline") continue;
+      n += Math.max(0, Number(stack[key]) || 0);
+    }
+    return n;
+  }
+
+  function homeManagerPointsNegSum(row) {
+    const disc = Number(row.stack && row.stack.discipline) || 0;
+    const hits = Math.max(0, Number(row.hits) || 0);
+    return Math.min(0, disc) - hits;
+  }
+
+  function homeManagerPointsHitsCount(hits) {
+    const n = Math.max(0, Number(hits) || 0);
+    if (!n) return 0;
+    return Math.max(1, Math.round(n / 4));
+  }
+
+  function homeManagerPointsFmtPts(n) {
+    const v = Number(n) || 0;
+    if (v > 0) return `+${v}`;
+    return String(v);
+  }
+
+  function homeManagerPointsRowLines(row) {
+    const lines = [];
+    for (const meta of HOME_MP_STACK_META) {
+      const pts = meta.key === "hits"
+        ? -Math.max(0, Number(row.hits) || 0)
+        : Number(row.stack && row.stack[meta.key]) || 0;
+      const count = meta.key === "hits"
+        ? homeManagerPointsHitsCount(row.hits)
+        : Number(row.counts && row.counts[meta.key]) || 0;
+      if (!pts && !count) continue;
+      lines.push({ key: meta.key, label: meta.label, count, pts });
+    }
+    return lines;
+  }
+
+  function homeManagerPointsTableHTML(row) {
+    const lines = homeManagerPointsRowLines(row);
+    const chip = row.chip ? ` · ${escapeHtml(row.chip)}` : "";
+    const body = lines.length
+      ? lines.map((line) => (
+          `<tr>` +
+          `<td class="home-mp-col-cat"><span class="home-mp-swatch is-${line.key}" aria-hidden="true"></span>${escapeHtml(line.label)}</td>` +
+          `<td class="home-mp-col-n">${line.count || "—"}</td>` +
+          `<td class="home-mp-col-pts">${homeManagerPointsFmtPts(line.pts)}</td>` +
+          `</tr>`
+        )).join("")
+      : `<tr><td colspan="3" class="home-mp-col-empty">No returns this gameweek.</td></tr>`;
+    return `<div class="home-mp-gw-table-head">GW${row.gw}${chip}</div>
+      <table class="home-data-table home-mp-gw-table">
+        <thead>
+          <tr>
+            <th scope="col" class="home-mp-col-cat">Category</th>
+            <th scope="col" class="home-mp-col-n">Count</th>
+            <th scope="col" class="home-mp-col-pts">Pts</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+        <tfoot>
+          <tr>
+            <th scope="row" class="home-mp-col-cat">Total</th>
+            <td class="home-mp-col-n"></td>
+            <td class="home-mp-col-pts">${Number(row.points) || 0}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  }
+
+  function homeManagerPointsSyncSelection() {
+    const gw = homeManagerPointsSelectedGw;
+    el.homeManagerPointsChart?.querySelectorAll("[data-mp-gw]").forEach((node) => {
+      node.classList.toggle("is-active", gw != null && Number(node.getAttribute("data-mp-gw")) === Number(gw));
+    });
+    if (!el.homeManagerPointsTable) return;
+    if (gw == null) {
+      el.homeManagerPointsTable.hidden = true;
+      el.homeManagerPointsTable.innerHTML = "";
+      return;
+    }
+    const series = homeManagerPointsSeries(homeActiveViewEntryId());
+    const row = series.find((r) => Number(r.gw) === Number(gw));
+    if (!row) {
+      homeManagerPointsSelectedGw = null;
+      el.homeManagerPointsTable.hidden = true;
+      el.homeManagerPointsTable.innerHTML = "";
+      return;
+    }
+    el.homeManagerPointsTable.hidden = false;
+    el.homeManagerPointsTable.innerHTML = homeManagerPointsTableHTML(row);
+  }
+
+  function homeManagerPointsSelectGw(gw) {
+    const next = Number(gw);
+    if (!Number.isFinite(next)) return;
+    homeManagerPointsSelectedGw = homeManagerPointsSelectedGw === next ? null : next;
+    homeManagerPointsSyncSelection();
+  }
+
+  function homeManagerPointsScroller() {
+    return el.homeManagerPointsChart?.querySelector(".home-mp-plot-scroll") || null;
+  }
+
+  function homeManagerPointsPinLatest() {
+    const scroller = homeManagerPointsScroller();
+    if (!scroller) return;
+    scroller.scrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+  }
+
+  function homeManagerPointsChartHTML(series, detail) {
+    const n = series.length;
+    const H = 232;
+    const YW = 28;
+    const padT = 22;
+    const padB = 38;
+    const padL = 6;
+    const padR = 12;
+    const SLOT = 48;
+    const BAR_W = 26;
+    const plotW = padL + n * SLOT + padR;
+    const plotH = H - padT - padB;
+    const posMax = Math.max(
+      1,
+      ...series.map((row) => (detail ? homeManagerPointsPosSum(row.stack) : Number(row.points) || 0))
+    );
+    const negMin = detail ? Math.min(0, ...series.map(homeManagerPointsNegSum)) : 0;
+    const yRange = Math.max(1, posMax - negMin);
+    const zeroY = padT + (posMax / yRange) * plotH;
+    const yAt = (val) => zeroY - (val / yRange) * plotH;
+    const niceTicks = (() => {
+      const step = posMax <= 20 ? 5 : posMax <= 40 ? 10 : posMax <= 80 ? 20 : 25;
+      const ticks = [0];
+      for (let v = step; v <= posMax; v += step) ticks.push(v);
+      if (negMin < 0) {
+        for (let v = -step; v >= negMin; v -= step) ticks.push(v);
+      }
+      return ticks;
+    })();
+
+    const yLabels = niceTicks
+      .map((t) => {
+        const y = yAt(t);
+        return `<text class="home-mp-y-label" x="${YW - 4}" y="${(y + 3).toFixed(1)}" text-anchor="end">${t}</text>`;
+      })
+      .join("");
+    const grid = niceTicks
+      .map((t) => {
+        const y = yAt(t);
+        return `<line class="home-mp-grid" x1="0" y1="${y.toFixed(1)}" x2="${plotW}" y2="${y.toFixed(1)}" />`;
+      })
+      .join("");
+
+    const bars = series
+      .map((row, i) => {
+        const cx = padL + SLOT * i + SLOT / 2;
+        const x = cx - BAR_W / 2;
+        const chip = row.chip
+          ? `<text class="home-mp-chip" x="${cx.toFixed(1)}" y="${(H - 22).toFixed(1)}" text-anchor="middle">${escapeHtml(row.chip)}</text>`
+          : "";
+        const tick = `<text class="home-mp-x-label" x="${cx.toFixed(1)}" y="${(H - 4).toFixed(1)}" text-anchor="middle">${row.gw}</text>`;
+        let segs = "";
+        if (detail) {
+          let yPos = zeroY;
+          for (const meta of HOME_MP_STACK_META) {
+            if (meta.key === "discipline" || meta.key === "hits") continue;
+            const val = Number(row.stack[meta.key]) || 0;
+            if (val <= 0) continue;
+            const h = (val / yRange) * plotH;
+            yPos -= h;
+            segs += `<rect class="home-mp-seg is-${meta.key}" x="${x.toFixed(1)}" y="${yPos.toFixed(1)}" width="${BAR_W}" height="${Math.max(1, h).toFixed(1)}" rx="1.5" />`;
+          }
+          let yNeg = zeroY;
+          const disc = Number(row.stack.discipline) || 0;
+          if (disc < 0) {
+            const h = (Math.abs(disc) / yRange) * plotH;
+            segs += `<rect class="home-mp-seg is-discipline" x="${x.toFixed(1)}" y="${yNeg.toFixed(1)}" width="${BAR_W}" height="${Math.max(1, h).toFixed(1)}" rx="1.5" />`;
+            yNeg += h;
+          }
+          if (row.hits > 0) {
+            const h = (row.hits / yRange) * plotH;
+            segs += `<rect class="home-mp-seg is-hits" x="${x.toFixed(1)}" y="${yNeg.toFixed(1)}" width="${BAR_W}" height="${Math.max(1, h).toFixed(1)}" rx="1.5" />`;
+          }
+        } else {
+          const val = Math.max(0, Number(row.points) || 0);
+          const h = val > 0 ? Math.max(2, (val / yRange) * plotH) : 2;
+          const y = val > 0 ? zeroY - h : zeroY - 2;
+          segs = `<rect class="home-mp-seg is-solid${val ? "" : " is-empty"}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${BAR_W}" height="${h.toFixed(1)}" rx="2.5" />`;
+        }
+        const total = Number(row.points) || 0;
+        const valH = detail ? homeManagerPointsPosSum(row.stack) : total;
+        const pill = valH > 0 || total
+          ? (() => {
+              const text = String(total);
+              const pillH = 16;
+              const pillX = x;
+              const pillY = Math.max(1, yAt(valH) - pillH - 3);
+              return `<g class="home-mp-val" style="--bar-i:${i}">
+                <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${BAR_W}" height="${pillH}" rx="3" />
+                <text x="${cx.toFixed(1)}" y="${(pillY + pillH / 2 + 3.6).toFixed(1)}" text-anchor="middle">${escapeHtml(text)}</text>
+              </g>`;
+            })()
+          : "";
+        return `<g class="home-mp-bar" data-mp-gw="${row.gw}" style="--bar-i:${i}">
+          <rect class="home-mp-hit" x="${(x - 4).toFixed(1)}" y="${padT}" width="${BAR_W + 8}" height="${plotH}" />
+          ${segs}
+          ${pill}
+          ${chip}
+          ${tick}
+        </g>`;
+      })
+      .join("");
+
+    const enterCls = prefersReducedMotion() ? "" : " is-enter";
+    const label = detail ? "Stacked manager points by gameweek" : "Manager points by gameweek";
+    return `<div class="home-mp-frame">
+      <div class="home-mp-y-col">
+        <svg class="home-mp-y-svg" viewBox="0 0 ${YW} ${H}" width="${YW}" height="${H}" aria-hidden="true">
+          ${yLabels}
+        </svg>
+      </div>
+      <div class="home-mp-plot-scroll">
+        <div class="home-mp-plot-inner" style="min-width:${plotW}px">
+          <svg class="home-mp-svg${enterCls}" style="--mp-bar-n:${n}" viewBox="0 0 ${plotW} ${H}" width="${plotW}" height="${H}" role="img" aria-label="${escapeHtml(label)}">
+            ${grid}
+            <line class="home-mp-axis" x1="0" y1="${zeroY.toFixed(1)}" x2="${plotW}" y2="${zeroY.toFixed(1)}" />
+            ${bars}
+          </svg>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function homeManagerPointsLegendHTML(series) {
+    const present = new Set();
+    for (const row of series) {
+      for (const meta of HOME_MP_STACK_META) {
+        const n = meta.key === "hits"
+          ? Number(row.hits) || 0
+          : Number(row.stack && row.stack[meta.key]) || 0;
+        if (n) present.add(meta.key);
+      }
+    }
+    const items = HOME_MP_STACK_META.filter((meta) => {
+      if (meta.key === "hits") return present.has("hits");
+      return true;
+    }).map((meta) => (
+      `<span class="home-mp-legend-item"><span class="home-mp-swatch is-${meta.key}" aria-hidden="true"></span>${escapeHtml(meta.label)}</span>`
+    ));
+    return items.join("");
+  }
+
+  function renderHomeManagerPoints() {
+    if (!el.homeManagerPointsChart) return;
+    const entryId = homeActiveViewEntryId();
+    const detail = homeManagerPointsDetail();
+    const series = homeManagerPointsSeries(entryId);
+    const fp = homeManagerPointsFingerprint(series);
+    const key = `${entryId || ""}|${detail ? "d" : "g"}|${fp}`;
+    if (el.homeManagerPointsToggle) {
+      el.homeManagerPointsToggle.setAttribute("aria-pressed", detail ? "true" : "false");
+    }
+    if (el.homeManagerPointsViewLabel) {
+      el.homeManagerPointsViewLabel.textContent = detail ? "Detail" : "Gameweek";
+    }
+    if (key === homeManagerPointsRenderKey && el.homeManagerPointsChart.childElementCount) {
+      homeManagerPointsSyncSelection();
+      return;
+    }
+    const prevKey = homeManagerPointsRenderKey;
+    const prevEntry = String(prevKey.split("|")[0] || "");
+    const sameEntry = prevEntry !== "" && prevEntry === String(entryId || "");
+    if (!sameEntry) homeManagerPointsSelectedGw = null;
+    const scroller = homeManagerPointsScroller();
+    const prevScroll = scroller ? scroller.scrollLeft : null;
+    homeManagerPointsRenderKey = key;
+    if (!series.length) {
+      el.homeManagerPointsChart.innerHTML = `<p class="home-manager-points-empty">No gameweek points yet.</p>`;
+      if (el.homeManagerPointsLegend) {
+        el.homeManagerPointsLegend.hidden = true;
+        el.homeManagerPointsLegend.innerHTML = "";
+      }
+      if (el.homeManagerPointsTable) {
+        el.homeManagerPointsTable.hidden = true;
+        el.homeManagerPointsTable.innerHTML = "";
+      }
+      return;
+    }
+    el.homeManagerPointsChart.innerHTML = homeManagerPointsChartHTML(series, detail);
+    const nextScroll = homeManagerPointsScroller();
+    if (nextScroll) bindHomePagerEdgeLock(nextScroll);
+    requestAnimationFrame(() => {
+      const plot = homeManagerPointsScroller();
+      if (!plot) return;
+      if (sameEntry && prevScroll != null) {
+        const max = Math.max(0, plot.scrollWidth - plot.clientWidth);
+        plot.scrollLeft = Math.min(max, Math.max(0, prevScroll));
+      } else {
+        homeManagerPointsPinLatest();
+      }
+    });
+    if (el.homeManagerPointsLegend) {
+      if (detail) {
+        el.homeManagerPointsLegend.hidden = false;
+        el.homeManagerPointsLegend.innerHTML = homeManagerPointsLegendHTML(series);
+      } else {
+        el.homeManagerPointsLegend.hidden = true;
+        el.homeManagerPointsLegend.innerHTML = "";
+      }
+    }
+    if (homeManagerPointsSelectedGw != null) {
+      const still = series.some((row) => row.gw === homeManagerPointsSelectedGw);
+      if (!still) homeManagerPointsSelectedGw = null;
+    }
+    homeManagerPointsSyncSelection();
+  }
+
   function renderHomeUnlinked() {
     if (el.homeEmpty) el.homeEmpty.hidden = true;
     if (el.homeBento) el.homeBento.hidden = true;
@@ -17708,7 +18317,7 @@
     if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
       finishHomeStatRolls(el.homePage, { summary: false, tables: true });
     }
-    renderHomeTeamGraphics();
+    renderHomeManagerPoints();
     bindHomeOwnerHighlighting();
     if (homeAutosubModalOpen()) fillHomeAutosubBreakdown();
     syncHomeViewBanner();
@@ -18702,6 +19311,7 @@
   function mobileFilterButtonForPage() {
     const page = state.page;
     if (page === "home") return null;
+    if (page === "graphics") return null;
     if (page === "report") return null;
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
@@ -18718,6 +19328,7 @@
       page === "fixtures" ||
       page === "markets" ||
       page === "home" ||
+      page === "graphics" ||
       page === "report" ||
       (page === "live" && state.liveMode === "bonus")
     );
@@ -18749,6 +19360,7 @@
     // Home has no Players/Teams split — keep the bottom dock clear.
       if (
       page === "home" ||
+      page === "graphics" ||
       page === "report" ||
       page === "markets" ||
       page === "schedule" ||
@@ -18887,6 +19499,7 @@
       (page === "prices" && preferMobileSheet()) ||
       (isMarkets && preferMobileSheet()) ||
       isHome ||
+      page === "graphics" ||
       page === "report" ||
       (preferMobileSheet() && page === "rankings");
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
@@ -20784,34 +21397,24 @@
     decimals,
     highlightMaps,
     rankMaps,
-    { schedulePalette = false, fdrWash = null } = {}
+    { schedulePalette = false } = {}
   ) {
-    // Tooltip always shows ranks + enhance-style highlighting. Colours are
-    // inverted relative to the main table: these are the *opponent's*
-    // figures, so being top of a category (rank 1) is a hard fixture and
-    // reads pink on Matchups cards, orange elsewhere; bottom reads blue.
-    // When custom FDR wash is on (Home schedule), paint by difficulty instead.
+    // Opponent ranks: 1 = strongest, so top of a category is a hard fixture
+    // (pink) and bottom is easier (blue). Same spectrum as FDR pills / Opp wash.
     const highlight = schedulePalette ? scheduleHighlightInlineStyle : enhanceHighlightInlineStyle;
     let style = "";
     let extraClass = "";
-    const fdrN = fdrWash != null ? Math.round(Number(fdrWash)) : null;
-    if (fdrN != null && fdrN >= 1 && fdrN <= 5) {
-      const ramp = fdrRampInlineStyle(fdrN, { schedulePalette: true });
-      style = ramp.styleAttr || "";
-      extraClass = `${ramp.className || ""}${ramp.strongClass || ""}`;
-    } else {
-      const ranks = highlightMaps[split] && highlightMaps[split][key];
-      const topIntensity = ranks && ranks.top.get(teamCode);
-      const bottomIntensity = ranks && ranks.bottom.get(teamCode);
-      if (topIntensity !== undefined) {
-        const paint = highlight("bottom", topIntensity);
-        style = ` style="${paint.style}"`;
-        extraClass = paint.strongClass;
-      } else if (bottomIntensity !== undefined) {
-        const paint = highlight("top", bottomIntensity);
-        style = ` style="${paint.style}"`;
-        extraClass = paint.strongClass;
-      }
+    const ranks = highlightMaps[split] && highlightMaps[split][key];
+    const topIntensity = ranks && ranks.top.get(teamCode);
+    const bottomIntensity = ranks && ranks.bottom.get(teamCode);
+    if (topIntensity !== undefined) {
+      const paint = highlight("bottom", topIntensity);
+      style = ` style="${paint.style}"`;
+      extraClass = paint.strongClass;
+    } else if (bottomIntensity !== undefined) {
+      const paint = highlight("top", bottomIntensity);
+      style = ` style="${paint.style}"`;
+      extraClass = paint.strongClass;
     }
     const rank = rankMaps[split] && rankMaps[split][key] && rankMaps[split][key].get(teamCode);
     const text = rank == null ? "—" : String(rank);
@@ -21041,29 +21644,21 @@
     if (!fixtures.length) {
       return `${header}<div class="ftt-empty">${showMeta ? "No upcoming fixtures" : "No fixtures in this range"}</div>`;
     }
-    const customFdrWash = options.customFdrWash === true && teamDifficultyUsesFixtures();
     const rows = fixtures.map((fx) => {
       const stats = opponentStatsForFixture(fx);
       const split = fx.ha === "H" ? "away" : "home";
       const verdict = showMatchupEdges ? matchupVerdictCell(teamCode, fx, rankMaps) : null;
-      const fdr = customFdrWash ? resolveFixtureDifficulty(fx) : null;
-      const fdrRamp =
-        fdr != null ? fdrRampInlineStyle(fdr, { schedulePalette: true }) : { className: "", styleAttr: "", strongClass: "" };
       const cellOpts = {
         schedulePalette: showMatchups,
-        fdrWash: customFdrWash ? fdr : null,
       };
       const homeIcon =
         fx.ha === "H" ? iconHTML("house-solid", "ftt-ha-icon") : "";
       const oppCode = String(fx.opp || "");
       const oppLabel = fx.ha === "A" ? oppCode.toLowerCase() : oppCode.toUpperCase();
-      const oppTitle = customFdrWash && fdr != null
-        ? `${oppCode}${fx.ha === "H" ? " (H)" : fx.ha === "A" ? " (A)" : ""} · difficulty ${fdr}`
-        : `${oppCode}${fx.ha === "H" ? " (H)" : fx.ha === "A" ? " (A)" : ""}`;
-      const oppCls = `ftt-opp${fdrRamp.className || ""}${fdrRamp.strongClass || ""}`.trim();
+      const oppTitle = `${oppCode}${fx.ha === "H" ? " (H)" : fx.ha === "A" ? " (A)" : ""}`;
       return `<tr>
         <td class="ftt-gw">${fx.gw}</td>
-        <td class="${oppCls}"${fdrRamp.styleAttr || ""}><span class="ftt-opp-line" title="${escapeHtml(oppTitle)}">${badgeHTML(fx.opp)}${escapeHtml(oppLabel)}<span class="ftt-ha-slot" aria-hidden="true">${homeIcon}</span></span></td>
+        <td class="ftt-opp"><span class="ftt-opp-line" title="${escapeHtml(oppTitle)}">${badgeHTML(fx.opp)}${escapeHtml(oppLabel)}<span class="ftt-ha-slot" aria-hidden="true">${homeIcon}</span></span></td>
         ${fixtureStatCell(fx.opp, split, "xg", stats && stats.xg, 1, highlightMaps, rankMaps, cellOpts)}
         ${fixtureStatCell(fx.opp, split, "goals", stats && stats.goals, 0, highlightMaps, rankMaps, cellOpts)}
         ${fixtureStatCell(fx.opp, split, "xgc", stats && stats.xgc, 1, highlightMaps, rankMaps, cellOpts)}
@@ -21072,7 +21667,7 @@
         ${verdict ? verdict.html : ""}
       </tr>`;
     }).join("");
-    return `${header}<table class="ftt-table${showMatchups ? " ftt-table-matchups" : ""}${customFdrWash ? " ftt-table-custom-fdr" : ""}">
+    return `${header}<table class="ftt-table${showMatchups ? " ftt-table-matchups" : ""}">
         <thead>
           <tr>
             <th>GW</th>
@@ -21252,7 +21847,6 @@
     ];
     const card = [
       spitKeyRow(`<span class="spit-pin" aria-hidden="true">1</span>`, "Score chips"),
-      spitKeyRow(`<span class="spit-pin" aria-hidden="true">2</span>`, "Card info"),
       spitKeyRow(`<span class="spit-pin" aria-hidden="true">3</span>`, "Home"),
       spitKeyRow(`<span class="spit-pin" aria-hidden="true">4</span>`, "Opp ranks"),
       spitKeyRow(`<span class="spit-pin" aria-hidden="true">5</span>`, "Attack / defence"),
@@ -21266,7 +21860,6 @@
           <img class="spit-annotate-img spit-annotate-img-light" src="img/matchup-card-guide-light.png" width="888" height="670" alt="" decoding="async" />
           <ol class="spit-pins">
             <li class="spit-pin" style="--x:74%;--y:6.5%">1</li>
-            <li class="spit-pin" style="--x:95.5%;--y:6.5%">2</li>
             <li class="spit-pin" style="--x:21%;--y:20%">3</li>
             <li class="spit-pin" style="--x:41%;--y:20%">4</li>
             <li class="spit-pin" style="--x:93%;--y:20%">5</li>
@@ -21324,7 +21917,7 @@
         ),
         spitKeyRow(
           `<span class="home-autosub-impact-dot spit-home-swatch" aria-hidden="true"></span>`,
-          "Projected in Total"
+          "Impacted by auto-sub"
         ),
         spitKeyRow(
           `<span class="home-autosub-fab spit-home-swatch" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-refresh-ccw-dot"/></svg></span>`,
@@ -21368,7 +21961,35 @@
         ${spitKeySection("Status", status)}
         ${spitKeySection("Auto-subs", autosubs)}
         ${spitKeySection("League", league)}
-        ${spitKeySection("Chips", chips)}`;
+        ${spitKeySection("Chips", chips)}
+        ${spitKeySection("Manager Points", [
+          spitKeyRow(
+            `<span class="home-mp-swatch is-solid spit-home-swatch" aria-hidden="true"></span>`,
+            "Gameweek pts"
+          ),
+          spitKeyRow(
+            `<span class="home-mp-swatch is-minutes spit-home-swatch" aria-hidden="true"></span><span class="home-mp-swatch is-goals spit-home-swatch" aria-hidden="true"></span><span class="home-mp-swatch is-assists spit-home-swatch" aria-hidden="true"></span>`,
+            "Return type"
+          ),
+          spitKeyRow(
+            `<span class="home-mp-chip-tick spit-home-swatch" aria-hidden="true">WC</span>`,
+            "Chip week"
+          ),
+        ])}`;
+    }
+
+    if (state.page === "graphics") {
+      return `${spitHead("images", "How Graphics works")}
+        ${spitKeySection("Source", [
+          spitKeyRow(
+            `${iconHTML("images", "spit-home-swatch")}`,
+            "Club XI graphic"
+          ),
+          spitKeyRow(
+            `${iconHTML("x-logo", "spit-home-swatch")}`,
+            "Official X post"
+          ),
+        ])}`;
     }
 
     if (state.page === "rankings") {
@@ -21686,7 +22307,7 @@
       {
         fixtures: profile.fixtures,
         showMeta: false,
-        showTeamInfo: true,
+        showTeamInfo: false,
         showMatchups: state.scheduleMatchups,
         matchupProfile: state.scheduleMatchups ? profile : null,
       }
@@ -22184,6 +22805,7 @@
   function syncPageInfoButton() {
     const labels = {
       home: "How Home works",
+      graphics: "How Graphics works",
       live: "How Gameweek works",
       report: "How Report works",
       opta: "How Statistics works",
@@ -22201,6 +22823,7 @@
       let page = state.page;
       if (pane) {
         if (pane.id === "home-page") page = "home";
+        else if (pane.id === "graphics-page") page = "graphics";
         else if (pane.id === "live-page") page = "live";
         else if (pane.id === "report-page") page = "report";
         else if (pane.id === "opta-page") page = "opta";
@@ -25277,6 +25900,8 @@
     switch (page) {
       case "home":
         return HOME.generatedAt || null;
+      case "graphics":
+        return TEAM_NEWS.generatedAt || null;
       case "live":
         return latestDataIso(HOME.generatedAt, DATA.generatedAt);
       case "report":
@@ -31972,7 +32597,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Weekly Report is ready to show in nav again.
   const REPORT_NAV_ENABLED = false;
-  const PAGES = ["home", "live", "report", "opta", "rankings", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
+  const PAGES = ["home", "graphics", "live", "report", "opta", "rankings", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
@@ -32017,6 +32642,7 @@
 
   function pagePaneFor(page) {
     if (page === "home") return el.homePage;
+    if (page === "graphics") return el.graphicsPage;
     if (page === "live") return el.livePage;
     if (page === "report") return el.reportPage;
     if (page === "opta") return el.optaPage;
@@ -32485,6 +33111,7 @@
     el.pageOpta.classList.toggle("active", page === "opta");
     el.pageRankings.classList.toggle("active", page === "rankings");
     if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
+    if (el.pageGraphics) el.pageGraphics.classList.toggle("active", page === "graphics");
     if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
     if (el.pageReport) el.pageReport.classList.toggle("active", page === "report");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
@@ -32499,6 +33126,7 @@
     syncPageTrayTrigger();
     setPageTrayOpen(false);
     if (el.homePage) el.homePage.style.display = page === "home" ? "" : "none";
+    if (el.graphicsPage) el.graphicsPage.style.display = page === "graphics" ? "" : "none";
     if (el.livePage) el.livePage.style.display = page === "live" ? "" : "none";
     if (el.reportPage) el.reportPage.style.display = page === "report" ? "" : "none";
     el.optaPage.style.display = page === "opta" ? "" : "none";
@@ -32512,17 +33140,18 @@
     if (el.marketsPage) el.marketsPage.style.display = page === "markets" ? "" : "none";
     const isMarkets = page === "markets";
     const isHome = page === "home";
+    const isGraphics = page === "graphics";
     const isLive = page === "live";
     const isReport = page === "report";
     // Schedule hides the subtoolbar. Markets desktop uses it for card view + compare.
     syncSubtoolbarViewport(page);
     syncFiltersChrome();
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isReport || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isGraphics || isReport || page === "fixtures" ? "none" : "";
     if (el.liveModeSeg) {
       el.liveModeSeg.hidden = !isLive;
       el.liveModeSeg.setAttribute("aria-hidden", isLive ? "false" : "true");
     }
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isReport || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isGraphics || isReport || page === "fixtures" ? "none" : "";
     if (el.columnsSidebar) {
       el.columnsSidebar.style.display = "none";
     }
@@ -32655,6 +33284,8 @@
       primeHomeRankSatEnter(el.homePage);
       syncHomeLivePolling({ skipImmediate: false });
       renderHome({ leaveRollsPending: true });
+    } else if (page === "graphics") {
+      renderGraphicsPage();
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
       liveEnterAwaitingPlay = true;
@@ -32708,6 +33339,7 @@
   }
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
+  if (el.pageGraphics) el.pageGraphics.addEventListener("click", () => setPage("graphics"));
   if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
   document.addEventListener("click", openLiveFromBadge);
   if (el.pageReport) {
@@ -32739,6 +33371,19 @@
     el.homeAutosubPreviewBtn.addEventListener("click", (e) => {
       e.preventDefault();
       toggleHomeAutosubBreakdown();
+    });
+  }
+  if (el.homeManagerPointsToggle) {
+    el.homeManagerPointsToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      setHomeManagerPointsDetail(!homeManagerPointsDetail());
+    });
+  }
+  if (el.homeManagerPointsChart) {
+    el.homeManagerPointsChart.addEventListener("click", (e) => {
+      const bar = e.target.closest("[data-mp-gw]");
+      if (!bar || !el.homeManagerPointsChart.contains(bar)) return;
+      homeManagerPointsSelectGw(Number(bar.getAttribute("data-mp-gw")));
     });
   }
   if (el.homeSearchBtn) {
@@ -33290,6 +33935,7 @@
     if (!btn) return null;
     const id = btn.id || "";
     if (id === "page-home") return "home";
+    if (id === "page-graphics") return "graphics";
     if (id === "page-opta") return "opta";
     if (id === "page-rankings") return "rankings";
     if (id === "page-ownership") return "ownership";

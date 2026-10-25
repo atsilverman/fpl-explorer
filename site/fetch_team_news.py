@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Current-GW club team-news graphics → site/team-news/ + site/team_news_data.js.
+Current-GW club team-news graphics → site/team-news/ + site/team_news_data.js
+(Graphics page).
 
 Uses FPL fixture kickoff times to score posts (graphics typically ~75 min pre-KO)
 and X recent search (`X_BEARER_TOKEN`) for each club in the active gameweek.
@@ -162,6 +163,8 @@ NON_LINEUP_ALT = re.compile(
 
 # Weak-wording posts must OCR as a dense name sheet (~8+ surnames) to count.
 WEAK_MIN_OCR = 40.0
+# OCR-only (no XI caption / alt) needs a real name sheet, not stadium chrome.
+OCR_ONLY_MIN_NAMES = 8
 
 # Clubs often caption the XI with just a nickname ("The Tigers. 👊"), so photo
 # posts in the usual XI slot get an OCR-only chance at a stricter bar.
@@ -174,7 +177,10 @@ NON_LINEUP_CAPTION = re.compile(
     r"\b(arriv\w*|check(ed|ing)\s+in|in\s+the\s+building|warm(s|ing)?[\s-]*up|"
     r"scene|setting|minutes\s+(until|to\s+go)|from\s+above|appearances?|"
     r"racism|stadium|tickets?|kit|kick[\s-]?off|build(ing)?[\s-]+up|"
-    r"fan\s*zone|times|here\s+come)\b",
+    r"fan\s*zone|times|here\s+come|amex|anfield|etihad|old\s*trafford|"
+    r"emirates|stamford|selhurst|craven|goodison|villa\s+park|"
+    r"atmosphere|gates?\s+open|welcome\s+to|matchday\s+(vibes?|ready)|"
+    r"looks\s+(a\s+)?(picture|treat)|the\s+stage\s+is|empty\s+seats)\b",
     re.I,
 )
 # Countdown teasers ("Team news in 🔟...", "team news coming soon") precede the XI.
@@ -255,17 +261,23 @@ def score_candidate(
     return score
 
 
-def fxtwitter_photos(tweet_id: str) -> list[dict]:
-    """Some club XI posts omit attachments in X API — fxtwitter still has photos."""
+def fxtwitter_tweet(tweet_id: str) -> dict | None:
+    """Unfurl a public status when X recent-search missed it or hid media."""
     url = f"{FXTWITTER}/status/{tweet_id}"
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except Exception:
-        return []
+        return None
     tweet = payload.get("tweet") if isinstance(payload, dict) else None
-    if not isinstance(tweet, dict):
+    return tweet if isinstance(tweet, dict) else None
+
+
+def fxtwitter_photos(tweet_id: str) -> list[dict]:
+    """Some club XI posts omit attachments in X API — fxtwitter still has photos."""
+    tweet = fxtwitter_tweet(tweet_id)
+    if not tweet:
         return []
     photos = ((tweet.get("media") or {}).get("photos") or []) if isinstance(tweet.get("media"), dict) else []
     out: list[dict] = []
@@ -287,16 +299,97 @@ def fxtwitter_photos(tweet_id: str) -> list[dict]:
     return out
 
 
-def ocr_lineup_score(image_url: str) -> float:
-    """Score how much an image looks like a starting-XI graphic via OCR.
+def fxtwitter_created(tweet: dict) -> datetime | None:
+    raw = tweet.get("created_at")
+    if isinstance(raw, str) and raw:
+        # "Sun Oct 25 12:45:30 +0000 2026"
+        try:
+            return datetime.strptime(raw, "%a %b %d %H:%M:%S %z %Y")
+        except ValueError:
+            pass
+    ts = tweet.get("created_timestamp")
+    if ts is not None:
+        try:
+            return datetime.fromtimestamp(int(ts), tz=timezone.utc)
+        except (TypeError, ValueError, OSError):
+            return None
+    return None
+
+
+def parse_ingest_specs(argv: list[str]) -> list[tuple[str, str]]:
+    """--ingest BHA:2114…  (repeatable). Lets us seed a known XI tweet."""
+    out: list[tuple[str, str]] = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        spec = ""
+        if arg.startswith("--ingest="):
+            spec = arg.split("=", 1)[1]
+        elif arg == "--ingest" and i + 1 < len(argv):
+            spec = argv[i + 1]
+            i += 1
+        i += 1
+        if not spec or ":" not in spec:
+            continue
+        code, tid = spec.split(":", 1)
+        code = code.strip().upper()
+        tid = tid.strip()
+        if code and tid.isdigit():
+            out.append((code, tid))
+    return out
+
+
+def pick_from_fxtwitter(tweet_id: str, ko: datetime) -> dict | None:
+    """Score a known status (used by --ingest and as a search miss fallback)."""
+    tweet = fxtwitter_tweet(tweet_id)
+    if not tweet:
+        return None
+    created = fxtwitter_created(tweet)
+    if not created:
+        return None
+    text = tweet.get("text") or tweet.get("raw_text") or ""
+    if isinstance(text, dict):
+        text = text.get("text") or ""
+    photos = []
+    media = tweet.get("media") if isinstance(tweet.get("media"), dict) else {}
+    for photo in media.get("photos") or []:
+        if not isinstance(photo, dict):
+            continue
+        url = (photo.get("url") or "").split("?")[0]
+        if not url:
+            continue
+        photos.append(
+            {
+                "url": url,
+                "alt_text": photo.get("altText") or photo.get("alt_text") or "",
+                "width": photo.get("width"),
+                "height": photo.get("height"),
+            }
+        )
+    if not photos:
+        return None
+    fake = {
+        "id": str(tweet.get("id") or tweet_id),
+        "created_at": created.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "text": str(text),
+        "attachments": {"media_keys": [f"fx-{i}" for i in range(len(photos))]},
+    }
+    media_by_key = {f"fx-{i}": {**p, "type": "photo", "url": p["url"]} for i, p in enumerate(photos)}
+    return pick_best([fake], media_by_key, ko)
+
+
+def ocr_lineup_stats(image_url: str) -> dict:
+    """OCR a candidate photo. Lineup cards are dense with surnames.
 
     Multi-image posts often lead with a promo still; the lineup card is later.
+    Stadium / kickoff teasers can OCR 'TEAM NEWS' chrome without naming anyone.
     """
+    empty = {"score": 0.0, "nameCount": 0, "text": ""}
     import shutil
     import subprocess
 
     if not shutil.which("tesseract"):
-        return 0.0
+        return empty
     fetch_url = image_url
     if "pbs.twimg.com" in image_url and "name=" not in image_url:
         fetch_url = f"{image_url}?name=large"
@@ -305,7 +398,7 @@ def ocr_lineup_score(image_url: str) -> float:
         with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read()
     except Exception:
-        return 0.0
+        return empty
     # Keep OCR temps inside the repo — system /tmp can be unusable when the
     # Data volume is near-full (macOS still routes NamedTemporaryFile there).
     ocr_dir = MEDIA_DIR / ".ocr-tmp"
@@ -322,7 +415,7 @@ def ocr_lineup_score(image_url: str) -> float:
             )
             text = proc.stdout or ""
         except Exception:
-            return 0.0
+            return empty
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
@@ -331,10 +424,12 @@ def ocr_lineup_score(image_url: str) -> float:
     text_n = normalize_text(text).upper()
     # Surname-like tokens (lineup cards are dense with these)
     tokens = re.findall(r"\b[A-Z][A-Z'’\-]{2,}\b", text_n)
-    # Drop very common OCR junk / short UI words
+    # Drop very common OCR junk / short UI words / venue chrome
     stop = {
         "THE", "AND", "FOR", "YOU", "OUR", "VIA", "WITH", "FROM", "THIS",
-        "THAT", "YOUR", "TEAM", "NEWS", "PRESENTED", "SPONSORED",
+        "THAT", "YOUR", "TEAM", "NEWS", "PRESENTED", "SPONSORED", "KICK",
+        "OFF", "STADIUM", "AMEX", "ANFIELD", "PREMIER", "LEAGUE", "LIVE",
+        "VERSUS", "KICKOFF",
     }
     names = [t for t in tokens if t not in stop]
     score = float(min(len(names), 18) * 4.0)  # up to +72
@@ -342,12 +437,16 @@ def ocr_lineup_score(image_url: str) -> float:
         score += 25.0
     if re.search(r"\b(TEAM\s*NEWS|STARTING\s*XI|LINE[\s-]?UP)\b", text_n):
         score += 20.0
-    # Dense name block = real sheet; sparse OCR = promo photo
+    # Dense name block = real sheet; sparse OCR = promo / stadium photo
     if len(names) >= 8:
         score += 20.0
     elif len(names) <= 2:
         score -= 30.0
-    return score
+    return {"score": score, "nameCount": len(names), "text": text}
+
+
+def ocr_lineup_score(image_url: str) -> float:
+    return float(ocr_lineup_stats(image_url).get("score") or 0.0)
 
 
 def merge_tweets(*groups: list[dict]) -> list[dict]:
@@ -418,10 +517,13 @@ def pick_best(
 
         # Multi-image posts: OCR each photo and boost the lineup sheet
         ocr_bonus: dict[str, float] = {}
+        ocr_names: dict[str, int] = {}
         if len(candidates) > 1:
             for media in candidates:
                 u = media["url"]
-                ocr_bonus[u] = ocr_lineup_score(u)
+                stats = ocr_lineup_stats(u)
+                ocr_bonus[u] = float(stats["score"])
+                ocr_names[u] = int(stats["nameCount"])
                 time.sleep(0.05)
 
         for media in candidates:
@@ -439,14 +541,23 @@ def pick_best(
                 if not slot_ok or (alt and NON_LINEUP_ALT.search(normalize_text(alt))):
                     continue
                 if media["url"] not in ocr_bonus:
-                    ocr_bonus[media["url"]] = ocr_lineup_score(media["url"])
-                if ocr_bonus[media["url"]] < SLOT_MIN_OCR:
+                    stats = ocr_lineup_stats(media["url"])
+                    ocr_bonus[media["url"]] = float(stats["score"])
+                    ocr_names[media["url"]] = int(stats["nameCount"])
+                # Stadium teasers often OCR "TEAM NEWS" / "KICK OFF" chrome
+                # without listing an XI — require a dense name sheet.
+                if (
+                    ocr_bonus[media["url"]] < SLOT_MIN_OCR
+                    or ocr_names.get(media["url"], 0) < OCR_ONLY_MIN_NAMES
+                ):
                     continue
                 mins_before = (ko - created).total_seconds() / 60.0
                 sc = 100.0 - abs(mins_before - 75.0) * 0.6 - SLOT_OCR_PENALTY
             elif evidence == "weak":
                 if media["url"] not in ocr_bonus:
-                    ocr_bonus[media["url"]] = ocr_lineup_score(media["url"])
+                    stats = ocr_lineup_stats(media["url"])
+                    ocr_bonus[media["url"]] = float(stats["score"])
+                    ocr_names[media["url"]] = int(stats["nameCount"])
                 if ocr_bonus[media["url"]] < WEAK_MIN_OCR:
                     continue
             # Weak wording only uses OCR as a gate: busy photos (bus livery,
@@ -551,6 +662,10 @@ def club_is_done(state: dict, gw: int, code: str) -> bool:
     row = (state.get("teams") or {}).get(code) or {}
     if row.get("evidence") in ("weak", "ocr"):
         return False
+    # Stadium teasers can score on timing alone — require a named XI sheet.
+    named_n = int(row.get("namedCount") or 0)
+    if not (row.get("namedReady") or named_n >= 8):
+        return False
     return bool(row.get("localPath")) and float(row.get("score") or 0) >= DONE_MIN_SCORE
 
 
@@ -584,10 +699,68 @@ def load_bootstrap_local() -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def persist_pick(
+    state: dict,
+    *,
+    gw: int,
+    code: str,
+    club: dict,
+    fxinfo: dict,
+    best: dict,
+    now: str,
+) -> bool:
+    """Download + store a scored pick. Returns True when the file changed."""
+    prev = (state.get("teams") or {}).get(code) or {}
+    if (
+        prev.get("tweetId") == best["tweetId"]
+        and prev.get("mediaUrl") == best.get("mediaUrl")
+        and prev.get("localPath")
+    ):
+        local = SITE / prev["localPath"]
+        if local.exists():
+            print(
+                f"  ✓ {code} @{club['xHandle']}: unchanged {best['tweetId']} "
+                f"(Δko={best['minsBeforeKo']}m)"
+            )
+            return False
+    dest = download_image(best["mediaUrl"], MEDIA_DIR / f"gw{gw}" / code)
+    rel = str(dest.relative_to(SITE)).replace("\\", "/")
+    opp = fxinfo["away"] if fxinfo["ha"] == "H" else fxinfo["home"]
+    row = {
+        "code": code,
+        "name": club["name"],
+        "handle": club["xHandle"],
+        "tweetId": best["tweetId"],
+        "tweetUrl": f"https://x.com/{club['xHandle']}/status/{best['tweetId']}",
+        "postedAt": best["postedAt"],
+        "kickoff": fxinfo["ko"],
+        "minsBeforeKo": best["minsBeforeKo"],
+        "match": f"{fxinfo['home']} v {fxinfo['away']}",
+        "opp": opp,
+        "ha": fxinfo["ha"],
+        "text": (best.get("text") or "")[:240],
+        "altText": (best.get("altText") or "")[:800],
+        "localPath": rel,
+        "mediaUrl": best["mediaUrl"],
+        "width": best.get("width"),
+        "height": best.get("height"),
+        "score": best["score"],
+        "evidence": best.get("evidence"),
+        "fetchedAt": now,
+    }
+    state.setdefault("teams", {})[code] = row
+    print(
+        f"  ✓ {code} @{club['xHandle']}: saved {rel} "
+        f"(Δko={best['minsBeforeKo']}m score={best['score']})"
+    )
+    return True
+
+
 def main() -> int:
     active_only = "--active-only" in sys.argv[1:]
     next_poll = "--next-poll" in sys.argv[1:]
     annotate_only = "--annotate-only" in sys.argv[1:]
+    ingest_specs = parse_ingest_specs(sys.argv[1:])
     bearer = os.environ.get("X_BEARER_TOKEN", "").strip()
     if annotate_only:
         bootstrap = None
@@ -609,7 +782,7 @@ def main() -> int:
         ready = sum(1 for t in annotated if t.get("namedReady"))
         print(f"Annotated {len(annotated)} graphics ({ready} lineup-ready) → {OUT_JS.name}")
         return 0
-    if not bearer:
+    if not bearer and not ingest_specs:
         print("No X_BEARER_TOKEN in .env — cannot fetch team news.", file=sys.stderr)
         return 1
 
@@ -668,6 +841,44 @@ def main() -> int:
     now = generated_at()
     updated = 0
     errors = 0
+
+    if ingest_specs:
+        for code, tweet_id in ingest_specs:
+            fxinfo = club_fixtures.get(code)
+            club = by_code.get(code)
+            if not fxinfo or not club:
+                print(f"  · {code}: no fixture / handle for ingest {tweet_id}")
+                errors += 1
+                continue
+            ko = parse_iso(fxinfo["ko"])
+            if not ko:
+                print(f"  · {code}: bad kickoff for ingest")
+                errors += 1
+                continue
+            best = pick_from_fxtwitter(tweet_id, ko)
+            if not best:
+                print(f"  · {code}: fxtwitter miss for {tweet_id}")
+                errors += 1
+                continue
+            try:
+                if persist_pick(
+                    state, gw=gw, code=code, club=club, fxinfo=fxinfo, best=best, now=now
+                ):
+                    updated += 1
+            except Exception as e:
+                print(f"  · {code}: ingest download failed: {e}")
+                errors += 1
+        teams = [t for t in (state.get("teams") or {}).values() if t.get("code") in club_fixtures]
+        annotated = write_bundle(gw, teams, now, bootstrap)
+        state["gw"] = gw
+        state["teams"] = {t["code"]: t for t in annotated if t.get("code")}
+        state["generatedAt"] = now
+        save_state(state)
+        print(
+            f"\nIngest GW{gw}: {len(teams)} graphics stored, {updated} new/updated, "
+            f"{errors} errors → {OUT_JS.name}"
+        )
+        return 0 if errors == 0 or teams else 1
 
     for code, fxinfo in sorted(club_fixtures.items(), key=lambda kv: kv[1]["ko"]):
         club = by_code[code]
@@ -744,57 +955,15 @@ def main() -> int:
             print(f"  · {code} @{handle}: no graphic ({mark})")
             continue
 
-        prev = (state.get("teams") or {}).get(code) or {}
-        if (
-            prev.get("tweetId") == best["tweetId"]
-            and prev.get("mediaUrl") == best.get("mediaUrl")
-            and prev.get("localPath")
-        ):
-            local = SITE / prev["localPath"]
-            if local.exists():
-                print(
-                    f"  ✓ {code} @{handle}: unchanged {best['tweetId']} "
-                    f"(Δko={best['minsBeforeKo']}m)"
-                )
-                continue
-
         try:
-            dest = download_image(best["mediaUrl"], MEDIA_DIR / f"gw{gw}" / code)
-            rel = str(dest.relative_to(SITE)).replace("\\", "/")
+            if persist_pick(
+                state, gw=gw, code=code, club=club, fxinfo=fxinfo, best=best, now=now
+            ):
+                updated += 1
         except Exception as e:
             print(f"  · {code} @{handle}: download failed: {e}")
             errors += 1
             continue
-
-        opp = fxinfo["away"] if fxinfo["ha"] == "H" else fxinfo["home"]
-        row = {
-            "code": code,
-            "name": club["name"],
-            "handle": handle,
-            "tweetId": best["tweetId"],
-            "tweetUrl": f"https://x.com/{handle}/status/{best['tweetId']}",
-            "postedAt": best["postedAt"],
-            "kickoff": fxinfo["ko"],
-            "minsBeforeKo": best["minsBeforeKo"],
-            "match": f"{fxinfo['home']} v {fxinfo['away']}",
-            "opp": opp,
-            "ha": fxinfo["ha"],
-            "text": best["text"][:240],
-            "altText": best["altText"][:800] if best["altText"] else "",
-            "localPath": rel,
-            "mediaUrl": best["mediaUrl"],
-            "width": best.get("width"),
-            "height": best.get("height"),
-            "score": best["score"],
-            "evidence": best.get("evidence"),
-            "fetchedAt": now,
-        }
-        state.setdefault("teams", {})[code] = row
-        updated += 1
-        print(
-            f"  ✓ {code} @{handle}: saved {rel} "
-            f"(Δko={best['minsBeforeKo']}m score={best['score']})"
-        )
 
     if active_only and not updated and not gw_changed:
         existing = list((state.get("teams") or {}).values())
