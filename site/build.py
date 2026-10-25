@@ -467,6 +467,10 @@ def live_gw_aggregates_by_element(bootstrap: dict) -> tuple[dict, dict]:
     by_split = {"home": {}, "away": {}, "combined": {}}
     # Per-element GW points in gameweek order — Planner Form sparkline.
     form_pts: dict[int, list[int]] = {}
+    # Compact per-GW FPL stats for client GW-range slices (minutes > 0 only).
+    # Values: pts, mins, apps, goals, assists, xg, xa, xgi, xgc, cs, gc,
+    # saves, bps, bonus, defCon, cbit, cbitr, venue.
+    gw_stats: dict[str, dict[str, list]] = {}
     fetched = 0
     cached = 0
     failed = []
@@ -522,6 +526,30 @@ def live_gw_aggregates_by_element(bootstrap: dict) -> tuple[dict, dict]:
             tid = element_team.get(eid)
             venue = venue_by_team.get(tid) if tid is not None else None
             form_pts.setdefault(eid, []).append(_inum(stats, "total_points"))
+            rec = normalize_element_gw_record(
+                stats, element_type=etype or 0, team_id=tid or 0
+            )
+            if rec["minutes"] > 0:
+                gw_stats.setdefault(str(eid), {})[str(gw)] = [
+                    rec["pts"],
+                    rec["minutes"],
+                    1,
+                    rec["goals"],
+                    rec["assists"],
+                    rec["xg"],
+                    rec["xa"],
+                    rec["xgi"],
+                    rec["xgc"],
+                    rec["cleanSheets"],
+                    rec["goalsConceded"],
+                    rec["saves"],
+                    rec["bps"],
+                    rec["bonus"],
+                    2 if rec.get("defConHit") else 0,
+                    rec["cbit"],
+                    rec["cbitr"],
+                    venue or "",
+                ]
 
             _add_live_stats(bucket_for("combined", eid), stats, etype)
             if venue in ("H", "A"):
@@ -564,6 +592,7 @@ def live_gw_aggregates_by_element(bootstrap: dict) -> tuple[dict, dict]:
         "homePlayers": len(by_split["home"]),
         "awayPlayers": len(by_split["away"]),
         "formPtsByElement": form_pts,
+        "gwStats": gw_stats,
     }
     return by_split, meta
 
@@ -676,6 +705,7 @@ def build_next_season_squad():
     by_split, live_meta = live_gw_aggregates_by_element(snap)
     combined_live = by_split.get("combined") or {}
     form_pts_by_element = live_meta.pop("formPtsByElement", {}) or {}
+    gw_stats = live_meta.pop("gwStats", {}) or {}
 
     # Games played per club by venue from finished/provisional fixtures.
     fx_path = latest_fixtures_snapshot()
@@ -864,6 +894,9 @@ def build_next_season_squad():
         "statsFrom": "bootstrap-static+event-live",
         "liveAggregates": live_meta,
         "splits": True,
+        "gwStats": gw_stats,
+        "gwStatsPlayers": len(gw_stats),
+        "gwStatsRows": sum(len(v) for v in gw_stats.values()),
     }
     return players_by_split, team_names, meta, teams_by_split
 
@@ -1503,6 +1536,7 @@ def main():
     next_season_players, next_season_team_names, next_season_meta, next_season_teams = (
         build_next_season_squad()
     )
+    next_season_gw_stats = next_season_meta.pop("gwStats", {}) or {}
     defcon_by_gw = build_defcon_by_gw()
     live_fixtures_by_gw = build_live_fixtures_by_gw()
     fpl_identity = build_fpl_identity(next_season_players, next_season_meta.get("source"))
@@ -1542,6 +1576,7 @@ def main():
         "nextSeasonTeams": next_season_teams,
         "nextSeasonTeamNames": next_season_team_names,
         "nextSeasonMeta": next_season_meta,
+        "nextSeasonGwStats": next_season_gw_stats,
         "defconByGw": defcon_by_gw,
         # Finished/current GW matchups for Gameweek Bonus (fixturesByTeam is upcoming-only).
         "liveFixturesByGw": live_fixtures_by_gw,

@@ -38,28 +38,14 @@
     chipWindow: null,
     ownersByElement: {},
     elementGw: {},
-    managerPointsByEntry: {},
     leaguePicksStatus: null,
     transfersSchemaVersion: 0,
     transfersByEntry: {},
     gwAwaitingKickoff: null,
     error: null,
   };
-  const MANAGER_POINTS = window.FPL_MANAGER_POINTS || {
-    generatedAt: null,
-    gw: null,
-    leagueId: null,
-    byEntry: {},
-  };
-  if (!window.FPL_MANAGER_POINTS) window.FPL_MANAGER_POINTS = MANAGER_POINTS;
   if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
   if (HOME.gwAwaitingKickoff == null) HOME.gwAwaitingKickoff = null;
-  if (!HOME.managerPointsByEntry || typeof HOME.managerPointsByEntry !== "object") {
-    HOME.managerPointsByEntry = {};
-  }
-  if (!Object.keys(HOME.managerPointsByEntry).length && MANAGER_POINTS.byEntry) {
-    HOME.managerPointsByEntry = { ...MANAGER_POINTS.byEntry };
-  }
   window.FPL_HOME = HOME;
   const REPORT = window.FPL_REPORT || {
     generatedAt: null,
@@ -832,6 +818,8 @@
     expectedSortKey: "actual", // diff | expected | actual | name
     expectedSortDir: "desc",
     expectedSplit: "combined", // combined | home | away | compare
+    statsGwMin: 1,
+    statsGwMax: 38,
     scheduleGwMin: SCHEDULE_GW_DEFAULT_MIN,
     scheduleGwMax: SCHEDULE_GW_DEFAULT_MAX,
     scheduleMatchups: true,
@@ -868,6 +856,7 @@
     pricesProgressMinAbs: 90, // |progress| floor — slider 90…200
     liveMode: "feed", // feed | defcon | points | bonus
     liveMatchups: new Set(), // empty = all matchups
+    graphicsMatchup: "", // "" = all fixtures; one id at a time
     liveStatus: "all", // all | live | owned
     liveFeedOwnedFilter: "league", // all | league — league = hide players nobody in league owns
     liveSortKey: "ts", // feed: ts|impact|name; defcon: actions|…; points: pts|…; bonus: bps
@@ -1106,13 +1095,9 @@
     homePage: $("#home-page"),
     graphicsPage: $("#graphics-page"),
     graphicsCountLabel: $("#graphics-count-label"),
-    graphicsViewLabel: $("#graphics-view-label"),
-    graphicsMeta: $("#graphics-meta"),
     graphicsChips: $("#graphics-chips"),
     graphicsTrack: $("#graphics-track"),
-    graphicsDots: $("#graphics-dots"),
     graphicsEmpty: $("#graphics-empty"),
-    graphicsPager: $("#graphics-pager"),
     graphicsUpdatedFooter: $("#graphics-updated-footer"),
     leaguePage: $("#league-page"),
     leagueEmpty: $("#league-empty"),
@@ -1231,12 +1216,6 @@
     homeSummaryCards: $("#home-summary-cards"),
     homeSquadPanel: $("#home-squad-panel"),
     homeStandingsPanel: $("#home-standings-panel"),
-    homeManagerPointsPanel: $("#home-manager-points-panel"),
-    homeManagerPointsViewLabel: $("#home-manager-points-view-label"),
-    homeManagerPointsToggle: $("#home-manager-points-toggle"),
-    homeManagerPointsChart: $("#home-manager-points-chart"),
-    homeManagerPointsTable: $("#home-manager-points-table"),
-    homeManagerPointsLegend: $("#home-manager-points-legend"),
     homeFeedPanel: $("#home-feed-panel"),
     homeFeedTrack: $("#home-feed-track"),
     homeFeedDots: $("#home-feed-dots"),
@@ -1498,6 +1477,12 @@
     minutesFilterGroup: $("#minutes-filter-group"),
     priceFilterGroup: $("#price-filter-group"),
     ownedFilterGroup: $("#owned-filter-group"),
+    statsGwFilterGroup: $("#stats-gw-filter-group"),
+    statsGwMin: $("#stats-gw-min"),
+    statsGwMax: $("#stats-gw-max"),
+    statsGwMinLabel: $("#stats-gw-min-label"),
+    statsGwMaxLabel: $("#stats-gw-max-label"),
+    statsGwFill: $("#stats-gw-fill"),
   };
 
   // ---------------------------------------------------------------------
@@ -1572,6 +1557,7 @@
     if (state.priceMin !== coreDefaults.priceMin || state.priceMax !== coreDefaults.priceMax) return true;
     if (state.ownedMin !== coreDefaults.ownedMin) return true;
     if (state.minsMin !== coreDefaults.minsMin || state.minsMax !== coreDefaults.minsMax) return true;
+    if (statsGwRangeActive()) return true;
     if (state.hideLowMins !== (state.valueMode === "per90")) return true;
     if (state.setPieceTakersOnly) return true;
     if (state.valueMode !== "total") return true;
@@ -1627,6 +1613,11 @@
     updatePriceSlider();
     updateOwnedSlider();
     updateMinsSlider();
+    const gwBounds = nextSeasonGwBounds();
+    state.statsGwMin = gwBounds.min;
+    state.statsGwMax = gwBounds.max;
+    gwSliceRowsCache = { key: "", players: null, teams: null };
+    if (typeof updateStatsGwSlider === "function") updateStatsGwSlider();
     state.pricesProgressMinAbs = PRICES_PROGRESS_DEFAULT;
     if (typeof updatePricesProgressSlider === "function") updatePricesProgressSlider();
     syncFilterChipUI();
@@ -1644,10 +1635,119 @@
   // ---------------------------------------------------------------------
   // Filtering / sorting / grouping
   // ---------------------------------------------------------------------
+  const NEXT_SEASON_GW_STAT_KEYS = [
+    "pts", "mins", "apps", "goals", "assists", "xg", "xa", "xgi", "xgc",
+    "cleanSheets", "goalsConceded", "saves", "bps", "bonus", "defCon", "cbit", "cbitr",
+  ];
+  let gwSliceRowsCache = { key: "", players: null, teams: null };
+
+  function nextSeasonGwBounds() {
+    const stats = DATA.nextSeasonGwStats || {};
+    let lo = Infinity;
+    let hi = 0;
+    for (const byGw of Object.values(stats)) {
+      if (!byGw || typeof byGw !== "object") continue;
+      for (const gw of Object.keys(byGw)) {
+        const n = Number(gw);
+        if (!Number.isFinite(n)) continue;
+        if (n < lo) lo = n;
+        if (n > hi) hi = n;
+      }
+    }
+    if (!Number.isFinite(lo) || hi < lo) return { min: 1, max: 1 };
+    return { min: lo, max: hi };
+  }
+
+  function statsGwRangeActive() {
+    if (!isNextSeason() || !DATA.nextSeasonGwStats) return false;
+    const b = nextSeasonGwBounds();
+    return Number(state.statsGwMin) > b.min || Number(state.statsGwMax) < b.max;
+  }
+
+  function statsGwFilterVisible() {
+    return (
+      isNextSeason() &&
+      !!DATA.nextSeasonGwStats &&
+      (state.page === "opta" || state.page === "rankings" || state.page === "expected")
+    );
+  }
+
+  function emptyGwSlice() {
+    const out = {};
+    NEXT_SEASON_GW_STAT_KEYS.forEach((key) => {
+      out[key] = 0;
+    });
+    return out;
+  }
+
+  function sliceElementGwStats(elementId, gwMin, gwMax, split) {
+    const byGw = (DATA.nextSeasonGwStats || {})[String(elementId)] || {};
+    const out = emptyGwSlice();
+    for (const [gw, rec] of Object.entries(byGw)) {
+      const g = Number(gw);
+      if (!Number.isFinite(g) || g < gwMin || g > gwMax) continue;
+      if (!Array.isArray(rec)) continue;
+      const venue = rec[17];
+      if (split === "home" && venue !== "H") continue;
+      if (split === "away" && venue !== "A") continue;
+      NEXT_SEASON_GW_STAT_KEYS.forEach((key, i) => {
+        out[key] += Number(rec[i]) || 0;
+      });
+    }
+    for (const key of ["xg", "xa", "xgi", "xgc"]) {
+      out[key] = Math.round((out[key] || 0) * 1000) / 1000;
+    }
+    return out;
+  }
+
+  function applyGwSliceToPlayer(row, split) {
+    const eid = fplElementIdForRow(row);
+    if (!eid) return row;
+    const sliced = sliceElementGwStats(eid, state.statsGwMin, state.statsGwMax, split);
+    const next = { ...row, ...sliced };
+    deriveExtra(next, false);
+    return next;
+  }
+
+  function applyGwSliceToTeam(row, split, slicedPlayers) {
+    const mine = (slicedPlayers || []).filter((p) => p.team === row.team);
+    const next = { ...row };
+    TEAM_FPL_STAT_KEYS.forEach((key) => {
+      if (key === "gp" || key === "xgd" || key === "gd") return;
+      next[key] = mine.reduce((sum, p) => sum + (Number(p[key]) || 0), 0);
+    });
+    next.gp = Math.max(0, ...mine.map((p) => Number(p.apps) || 0));
+    next.xgd = Math.round(((next.xg || 0) - (next.xgc || 0)) * 1000) / 1000;
+    next.gd = (next.goals || 0) - (next.goalsConceded || 0);
+    deriveExtra(next, true);
+    return next;
+  }
+
+  function applyStatsGwSlice(rows, view, split) {
+    if (!statsGwRangeActive()) return rows;
+    const key = `${view}|${split}|${state.statsGwMin}|${state.statsGwMax}`;
+    if (gwSliceRowsCache.key === key && gwSliceRowsCache[view]) return gwSliceRowsCache[view];
+    const next = season2627Data();
+    const players = (next.players[split] || []).map((row) => applyGwSliceToPlayer(row, split));
+    if (view === "players") {
+      gwSliceRowsCache = { key, players, teams: null };
+      return players;
+    }
+    const teams = (next.teams[split] || []).map((row) => applyGwSliceToTeam(row, split, players));
+    gwSliceRowsCache = { key, players, teams };
+    return teams;
+  }
+
+  function syncStatsGwFilterGroup() {
+    if (!el.statsGwFilterGroup) return;
+    el.statsGwFilterGroup.style.display = statsGwFilterVisible() ? "" : "none";
+  }
+
   function getRows() {
     if (isNextSeason()) {
       const next = season2627Data();
-      return state.view === "players" ? next.players[state.split] : next.teams[state.split];
+      const raw = state.view === "players" ? next.players[state.split] : next.teams[state.split];
+      return applyStatsGwSlice(raw, state.view, state.split);
     }
     return state.view === "players" ? DATA.players[state.split] : DATA.teams[state.split];
   }
@@ -3168,14 +3268,6 @@
     HOME.elementGw = payload.elementGw && typeof payload.elementGw === "object"
       ? payload.elementGw
       : {};
-    const incomingManagerPoints =
-      payload.managerPointsByEntry && typeof payload.managerPointsByEntry === "object"
-        ? payload.managerPointsByEntry
-        : null;
-    HOME.managerPointsByEntry = mergeManagerPointsByEntry(
-      incomingManagerPoints,
-      priorHome.managerPointsByEntry
-    );
     if (!skipFeedIngest && payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
       const onFeedPage = state.page === "live" || state.page === "home";
       if (onFeedPage) {
@@ -8207,230 +8299,169 @@
     requestAnimationFrame(() => syncHomeFeedPagerDots(0));
   }
 
-  let graphicsPagerReady = false;
-  let graphicsPagerTarget = null;
+  let graphicsChipsReady = false;
   let graphicsRenderKey = "";
-  /** False until the user swipes / taps — browser scroll restoration (reload,
-   *  bfcache) can land mid-carousel after render; snap those back to newest. */
-  let graphicsUserMoved = false;
 
-  function resetGraphicsToNewest() {
-    const track = el.graphicsTrack;
-    if (!track) return;
-    graphicsUserMoved = false;
-    graphicsPagerTarget = null;
-    if (track.scrollLeft > 1) track.scrollTo({ left: 0, behavior: "instant" });
-    syncGraphicsPager(0);
-  }
-
-  function graphicsTeams() {
+  function graphicsAllTeams() {
     const teams = Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : [];
     const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : null;
     const homeGw = HOME && HOME.gw != null ? Number(HOME.gw) : null;
     if (gw != null && homeGw != null && gw !== homeGw) return [];
-    // Bundle already sorted newest-first; keep that for left-most = most recent.
     return teams.filter((t) => t && t.localPath);
   }
 
-  function graphicsActivePageIndex() {
-    if (!el.graphicsTrack) return 0;
-    const pages = [...el.graphicsTrack.querySelectorAll(".graphics-slide")];
-    if (!pages.length) return 0;
-    const w = el.graphicsTrack.clientWidth || 1;
-    return Math.max(0, Math.min(pages.length - 1, Math.round(el.graphicsTrack.scrollLeft / w)));
+  function graphicsParseMatch(team) {
+    const raw = String(team && team.match ? team.match : "").trim();
+    const m = raw.match(/^([A-Za-z]{2,3})\s+v\s+([A-Za-z]{2,3})$/);
+    if (m) {
+      const home = m[1].toUpperCase();
+      const away = m[2].toUpperCase();
+      return { home, away, id: `${home} v ${away}` };
+    }
+    const code = String(team && team.code ? team.code : "").toUpperCase();
+    const opp = String(team && team.opp ? team.opp : "").toUpperCase();
+    if (code && opp) {
+      const home = team.ha === "A" ? opp : code;
+      const away = team.ha === "A" ? code : opp;
+      return { home, away, id: `${home} v ${away}` };
+    }
+    return code ? { home: code, away: "", id: code } : null;
   }
 
-  function syncGraphicsPager(activeIndex) {
-    const teams = graphicsTeams();
-    const team = teams[activeIndex];
-    if (el.graphicsDots) {
-      el.graphicsDots.querySelectorAll(".graphics-dot").forEach((dot, i) => {
-        const on = i === activeIndex;
-        dot.classList.toggle("is-active", on);
-        dot.setAttribute("aria-selected", on ? "true" : "false");
-      });
-    }
-    if (el.graphicsChips) {
-      el.graphicsChips.querySelectorAll(".graphics-chip").forEach((chip, i) => {
-        const on = i === activeIndex;
-        chip.classList.toggle("is-active", on);
-        chip.setAttribute("aria-selected", on ? "true" : "false");
-      });
-    }
-    if (el.graphicsViewLabel) {
-      el.graphicsViewLabel.textContent = team
-        ? (team.name || team.code || "")
-        : "";
-    }
-    if (el.graphicsMeta) {
-      const match = team && team.match ? String(team.match) : "";
-      const mins = team && team.minsBeforeKo != null ? Number(team.minsBeforeKo) : null;
-      const when =
-        Number.isFinite(mins)
-          ? `${mins >= 0 ? `${mins.toFixed(mins % 1 ? 1 : 0)}m before KO` : `${Math.abs(mins).toFixed(0)}m after KO`}`
-          : "";
-      el.graphicsMeta.textContent = [match, when].filter(Boolean).join(" · ");
-    }
+  function graphicsMatchupId(team) {
+    const parsed = graphicsParseMatch(team);
+    return parsed ? parsed.id : "";
   }
 
-  function snapGraphicsPage(index) {
-    if (!el.graphicsTrack) return;
-    const pages = [...el.graphicsTrack.querySelectorAll(".graphics-slide")];
-    if (!pages[index]) return;
-    const w = el.graphicsTrack.clientWidth || 1;
-    const target = Math.max(0, index) * w;
-    if (Math.abs(el.graphicsTrack.scrollLeft - target) > 1) {
-      el.graphicsTrack.scrollTo({ left: target, behavior: "instant" });
+  function graphicsMatchups() {
+    const byId = new Map();
+    for (const team of graphicsAllTeams()) {
+      const parsed = graphicsParseMatch(team);
+      if (!parsed) continue;
+      if (!byId.has(parsed.id)) {
+        byId.set(parsed.id, {
+          id: parsed.id,
+          home: parsed.home,
+          away: parsed.away,
+          label: parsed.away ? `${parsed.home} v ${parsed.away}` : parsed.home,
+        });
+      }
     }
+    return [...byId.values()];
   }
 
-  function setGraphicsPageIndex(index, { smooth = true } = {}) {
-    if (!el.graphicsTrack) return;
-    const pages = [...el.graphicsTrack.querySelectorAll(".graphics-slide")];
-    if (!pages.length) return;
-    const i = Math.max(0, Math.min(pages.length - 1, index));
-    graphicsPagerTarget = i;
-    graphicsUserMoved = true;
-    const w = el.graphicsTrack.clientWidth || 1;
-    el.graphicsTrack.scrollTo({
-      left: i * w,
-      behavior: smooth ? "smooth" : "auto",
+  function graphicsTeams() {
+    const teams = graphicsAllTeams();
+    const id = state.graphicsMatchup;
+    if (!id) return teams;
+    return teams.filter((t) => graphicsMatchupId(t) === id);
+  }
+
+  function graphicsWhenLabel(team) {
+    const mins = team && team.minsBeforeKo != null ? Number(team.minsBeforeKo) : null;
+    if (!Number.isFinite(mins)) return "";
+    return mins >= 0
+      ? `${mins.toFixed(mins % 1 ? 1 : 0)}m before KO`
+      : `${Math.abs(mins).toFixed(0)}m after KO`;
+  }
+
+  function syncGraphicsMatchupChips() {
+    if (!el.graphicsChips) return;
+    el.graphicsChips.querySelectorAll("[data-graphics-matchup]").forEach((chip) => {
+      const on = chip.dataset.graphicsMatchup === state.graphicsMatchup;
+      chip.classList.toggle("active", on);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
     });
-    syncGraphicsPager(i);
-    if (!smooth) graphicsPagerTarget = null;
   }
 
   function graphicsSlideHTML(team) {
     const code = escapeHtml(String(team.code || ""));
     const src = escapeHtml(String(team.localPath || ""));
     const href = escapeHtml(String(team.tweetUrl || ""));
+    const name = escapeHtml(String(team.name || team.code || "Team"));
+    const match = escapeHtml(String(team.match || graphicsMatchupId(team) || ""));
+    const when = escapeHtml(graphicsWhenLabel(team));
     const alt = escapeHtml(
       String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
     );
-    const img = `<img class="graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" draggable="false" />`;
+    const img = `<img class="graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
     const inner = href
       ? `<a class="graphics-link" href="${href}" target="_blank" rel="noopener noreferrer">${img}</a>`
       : img;
-    return `<div class="graphics-slide" data-team="${code}">
+    const meta = [match, when].filter(Boolean).join(" · ");
+    return `<article class="graphics-slide" data-team="${code}">
+      <header class="graphics-slide-head">
+        <span class="graphics-slide-team">${name}</span>
+        ${meta ? `<span class="graphics-slide-meta">${meta}</span>` : ""}
+      </header>
       <div class="graphics-slide-inner">${inner}</div>
-    </div>`;
+    </article>`;
+  }
+
+  function renderGraphicsMatchupChips() {
+    if (!el.graphicsChips) return;
+    const matchups = graphicsMatchups();
+    const valid = new Set(matchups.map((m) => m.id));
+    if (state.graphicsMatchup && !valid.has(state.graphicsMatchup)) state.graphicsMatchup = "";
+    el.graphicsChips.innerHTML = matchups
+      .map((m) => {
+        const on = state.graphicsMatchup === m.id;
+        const home = escapeHtml(m.home);
+        const away = escapeHtml(m.away);
+        const awaySide = m.away
+          ? `<span class="graphics-matchup-vs">v</span>
+            <span class="graphics-matchup-side">${badgeHTML(m.away, "graphics-matchup-badge")}<span class="graphics-matchup-abbr">${away}</span></span>`
+          : "";
+        return `<button type="button" class="chip graphics-matchup-chip${on ? " active" : ""}" data-graphics-matchup="${escapeHtml(m.id)}"${tipAttr(m.label)} aria-pressed="${on ? "true" : "false"}">
+          <span class="graphics-matchup-badges">
+            <span class="graphics-matchup-side">${badgeHTML(m.home, "graphics-matchup-badge")}<span class="graphics-matchup-abbr">${home}</span></span>
+            ${awaySide}
+          </span>
+        </button>`;
+      })
+      .join("");
   }
 
   function renderGraphicsPage() {
-    if (!el.graphicsTrack || !el.graphicsDots) return;
+    if (!el.graphicsTrack) return;
+    bindGraphicsChips();
+    const allTeams = graphicsAllTeams();
     const teams = graphicsTeams();
     const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : (HOME && HOME.gw);
     if (el.graphicsCountLabel) {
-      el.graphicsCountLabel.textContent = teams.length
-        ? `${teams.length} club${teams.length === 1 ? "" : "s"}${Number.isFinite(gw) ? ` · GW${gw}` : ""}`
+      el.graphicsCountLabel.textContent = allTeams.length
+        ? `${allTeams.length} club${allTeams.length === 1 ? "" : "s"}${Number.isFinite(gw) ? ` · GW${gw}` : ""}`
         : Number.isFinite(gw) ? `GW${gw}` : "";
     }
     syncPageUpdatedFooter(el.graphicsUpdatedFooter, pageDataUpdatedIso("graphics"));
+    renderGraphicsMatchupChips();
     if (!teams.length) {
       graphicsRenderKey = "";
       el.graphicsTrack.innerHTML = "";
-      el.graphicsDots.innerHTML = "";
-      if (el.graphicsChips) el.graphicsChips.innerHTML = "";
-      if (el.graphicsPager) el.graphicsPager.hidden = true;
       if (el.graphicsEmpty) el.graphicsEmpty.hidden = false;
-      syncGraphicsPager(0);
       return;
     }
-    if (el.graphicsPager) el.graphicsPager.hidden = false;
     if (el.graphicsEmpty) el.graphicsEmpty.hidden = true;
-    const key = `${TEAM_NEWS.gw || ""}:${teams.map((t) => t.tweetId || t.localPath).join(",")}`;
+    const key = `${TEAM_NEWS.gw || ""}:${state.graphicsMatchup}:${teams.map((t) => t.tweetId || t.localPath).join(",")}`;
     if (key === graphicsRenderKey && el.graphicsTrack.children.length === teams.length) {
-      syncGraphicsPager(graphicsActivePageIndex());
+      syncGraphicsMatchupChips();
       return;
     }
     graphicsRenderKey = key;
     el.graphicsTrack.innerHTML = teams.map(graphicsSlideHTML).join("");
-    el.graphicsDots.innerHTML = teams
-      .map(
-        (t, i) =>
-          `<button type="button" class="graphics-dot${i === 0 ? " is-active" : ""}" role="tab" aria-selected="${i === 0 ? "true" : "false"}" aria-label="${escapeHtml(String(t.name || t.code || "Team"))}" data-page="${i}"></button>`
-      )
-      .join("");
-    if (el.graphicsChips) {
-      el.graphicsChips.innerHTML = teams
-        .map(
-          (t, i) =>
-            `<button type="button" class="graphics-chip${i === 0 ? " is-active" : ""}" role="tab" aria-selected="${i === 0 ? "true" : "false"}" data-page="${i}">${escapeHtml(String(t.code || ""))}</button>`
-        )
-        .join("");
-      el.graphicsChips.querySelectorAll(".graphics-chip").forEach((chip, i) => {
-        chip.addEventListener("click", () => setGraphicsPageIndex(i));
-      });
-    }
-    el.graphicsDots.querySelectorAll(".graphics-dot").forEach((dot, i) => {
-      dot.addEventListener("click", () => setGraphicsPageIndex(i));
-    });
-    bindGraphicsPager();
-    resetGraphicsToNewest();
-    requestAnimationFrame(resetGraphicsToNewest);
   }
 
-  function bindGraphicsPager() {
-    if (graphicsPagerReady) return;
-    if (!el.graphicsTrack || !el.graphicsDots) return;
-    graphicsPagerReady = true;
-    let scrollSettleTimer = null;
-    const onScrollSettled = () => {
-      clearTimeout(scrollSettleTimer);
-      scrollSettleTimer = null;
-      graphicsPagerTarget = null;
-      const idx = graphicsActivePageIndex();
-      snapGraphicsPage(idx);
-      syncGraphicsPager(idx);
-    };
-    const onScrollTick = () => {
-      if (!graphicsUserMoved) {
-        resetGraphicsToNewest();
-        return;
-      }
-      const idx =
-        graphicsPagerTarget != null
-          ? graphicsPagerTarget
-          : graphicsActivePageIndex();
-      syncGraphicsPager(idx);
-      clearTimeout(scrollSettleTimer);
-      scrollSettleTimer = setTimeout(onScrollSettled, 140);
-    };
-    const markUserMoved = () => {
-      graphicsUserMoved = true;
-    };
-    for (const type of ["touchstart", "pointerdown", "wheel", "keydown"]) {
-      el.graphicsTrack.addEventListener(type, markUserMoved, { passive: true, capture: true });
-    }
-    el.graphicsTrack.addEventListener("scroll", onScrollTick, { passive: true });
-    el.graphicsTrack.addEventListener("scrollend", () => {
-      if (graphicsUserMoved) onScrollSettled();
-    }, { passive: true });
-    window.addEventListener("pageshow", (e) => {
-      if (e.persisted) resetGraphicsToNewest();
-    });
-    if (typeof bindHomePagerTrackpad === "function") {
-      bindHomePagerTrackpad(el.graphicsTrack, {
-        getIndex: () =>
-          graphicsPagerTarget != null
-            ? graphicsPagerTarget
-            : graphicsActivePageIndex(),
-        setPage: (i) => setGraphicsPageIndex(i, { smooth: true }),
-        pageCount: () =>
-          el.graphicsTrack.querySelectorAll(".graphics-slide").length,
-      });
-    }
-    if (typeof bindHomePagerEdgeLock === "function") {
-      bindHomePagerEdgeLock(el.graphicsTrack);
-    }
-    window.addEventListener("resize", () => {
-      if (state.page !== "graphics") return;
+  function bindGraphicsChips() {
+    if (graphicsChipsReady || !el.graphicsChips) return;
+    graphicsChipsReady = true;
+    el.graphicsChips.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-graphics-matchup]");
+      if (!btn || !el.graphicsChips.contains(btn)) return;
+      const id = btn.dataset.graphicsMatchup;
+      if (!id) return;
+      state.graphicsMatchup = state.graphicsMatchup === id ? "" : id;
+      graphicsRenderKey = "";
       renderGraphicsPage();
-      if (el.graphicsTrack && el.graphicsTrack.children.length) {
-        const idx = graphicsActivePageIndex();
-        snapGraphicsPage(idx);
-        syncGraphicsPager(idx);
-      }
     });
   }
 
@@ -17462,609 +17493,6 @@
     applyHomeSummaryRankChrome(summary, { viewingOther: homeIsViewingOtherManager() });
   }
 
-  const HOME_MP_VIEW_KEY = "fpl.homeManagerPoints.view";
-  const HOME_MP_STACK_KEYS = [
-    "minutes",
-    "goals",
-    "assists",
-    "cleanSheets",
-    "defcon",
-    "bonus",
-    "saves",
-    "discipline",
-  ];
-  const HOME_MP_STACK_META = [
-    { key: "minutes", label: "Minutes" },
-    { key: "goals", label: "Goals" },
-    { key: "assists", label: "Assists" },
-    { key: "cleanSheets", label: "Clean sheets" },
-    { key: "defcon", label: "DefCon" },
-    { key: "bonus", label: "Bonus" },
-    { key: "saves", label: "Saves" },
-    { key: "discipline", label: "Discipline" },
-    { key: "hits", label: "Hits" },
-  ];
-  let homeManagerPointsRenderKey = "";
-  let homeManagerPointsSelectedGw = null;
-
-  function homeEmptyPointsStack() {
-    return {
-      minutes: 0,
-      goals: 0,
-      assists: 0,
-      cleanSheets: 0,
-      defcon: 0,
-      bonus: 0,
-      saves: 0,
-      discipline: 0,
-    };
-  }
-
-  function homeEmptyPointsCounts() {
-    return homeEmptyPointsStack();
-  }
-
-  function homeScoreRecordStack(rec, row) {
-    const etype = Number(rec && rec.elementType) || Number(row && row.elementType) || 0;
-    const pos = LIVE_POS_BY_TYPE[etype] || null;
-    const stack = homeEmptyPointsStack();
-    const counts = homeEmptyPointsCounts();
-    const mins = Math.max(Number(rec && rec.minutes) || 0, Number(row && row.minutes) || 0);
-    if (mins > 0) {
-      stack.minutes = mins >= 60 ? 2 : 1;
-      counts.minutes = 1;
-    }
-    const goals = Number(rec && rec.goals) || 0;
-    if (goals) {
-      stack.goals = goals * liveFeedGoalPts(pos);
-      counts.goals = goals;
-    }
-    const assists = Number(rec && rec.assists) || 0;
-    if (assists) {
-      stack.assists = assists * 3;
-      counts.assists = assists;
-    }
-    const cs = Number(rec && rec.cleanSheets) || 0;
-    const csPts = liveFeedCleanSheetPts(pos);
-    if (cs && csPts) {
-      stack.cleanSheets = cs * csPts;
-      counts.cleanSheets = cs;
-    }
-    const gc = Number(rec && rec.goalsConceded) || 0;
-    const gcDock = liveFeedGoalsConcededDockPts(pos);
-    if (gc && gcDock) {
-      const docks = Math.floor(gc / 2);
-      stack.discipline -= docks * gcDock;
-      counts.discipline += docks;
-    }
-    const saves = Number(rec && rec.saves) || 0;
-    if (saves) {
-      stack.saves += Math.floor(saves / 3);
-      counts.saves += saves;
-    }
-    const penSaved = Number(rec && rec.penaltiesSaved) || 0;
-    if (penSaved) {
-      stack.saves += penSaved * 5;
-      counts.saves += penSaved;
-    }
-    const penMiss = Number(rec && rec.penaltiesMissed) || 0;
-    if (penMiss) {
-      stack.discipline += penMiss * -2;
-      counts.discipline += penMiss;
-    }
-    const yc = Number(rec && rec.yellowCards) || 0;
-    if (yc) {
-      stack.discipline += yc * -1;
-      counts.discipline += yc;
-    }
-    const rc = Number(rec && rec.redCards) || 0;
-    if (rc) {
-      stack.discipline += rc * -3;
-      counts.discipline += rc;
-    }
-    const og = Number(rec && rec.ownGoals) || 0;
-    if (og) {
-      stack.discipline += og * -2;
-      counts.discipline += og;
-    }
-    if (rec && rec.defConHit) {
-      stack.defcon = 2;
-      counts.defcon = 1;
-    }
-    const bonus = Number(rec && rec.bonus) || 0;
-    if (bonus) {
-      stack.bonus = bonus;
-      counts.bonus = bonus;
-    }
-    return { stack, counts };
-  }
-
-  function homeIsBenchBoostChip(chip) {
-    const c = String(chip || "").toLowerCase();
-    return c === "bboost" || c === "benchboost" || c === "bench_boost" || c === "bb";
-  }
-
-  /** Scoring multiplier: starters + auto-subs in; bench out unless Bench Boost. */
-  function homeManagerPointsMult(row, chip) {
-    if (!row) return 0;
-    if (homeIsBenchBoostChip(chip)) {
-      const m = Number(row.multiplier);
-      return Number.isFinite(m) && m > 0 ? m : 1;
-    }
-    if (row.autoSubOut) return 0;
-    let m = Number(row.multiplier) || 0;
-    if (row.autoSubIn && m <= 0) m = 1;
-    return m > 0 ? m : 0;
-  }
-
-  function homeStackFromSquad(squad, entryId) {
-    const chip = homeEntryActiveChip(entryId);
-    const stack = homeEmptyPointsStack();
-    const counts = homeEmptyPointsCounts();
-    for (const row of squad || []) {
-      const mult = homeManagerPointsMult(row, chip);
-      if (mult <= 0) continue;
-      const rec = homeElementGwRecord(row.element);
-      const one = homeScoreRecordStack(rec, row);
-      for (const key of HOME_MP_STACK_KEYS) {
-        stack[key] += (Number(one.stack[key]) || 0) * mult;
-        counts[key] += Number(one.counts[key]) || 0;
-      }
-    }
-    return { stack, counts };
-  }
-
-  function homeManagerPointsDetail() {
-    try {
-      return sessionStorage.getItem(HOME_MP_VIEW_KEY) === "detail";
-    } catch {
-      return false;
-    }
-  }
-
-  function setHomeManagerPointsDetail(on) {
-    try {
-      sessionStorage.setItem(HOME_MP_VIEW_KEY, on ? "detail" : "gameweek");
-    } catch {
-      /* ignore */
-    }
-    homeManagerPointsRenderKey = "";
-    renderHomeManagerPoints();
-  }
-
-  function homeChipAbbr(chip) {
-    if (!chip) return null;
-    const raw = String(chip).trim();
-    if (!raw) return null;
-    const lower = raw.toLowerCase();
-    if (HOME_CHIP_ABBR[lower]) return HOME_CHIP_ABBR[lower];
-    const upper = raw.toUpperCase();
-    return ["WC", "FH", "BB", "TC"].includes(upper) ? upper : null;
-  }
-
-  function homeCurrentGwPointsForEntry(entryId) {
-    if (HOME.gwAwaitingKickoff) return 0;
-    const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
-    const row = rows.find((r) => Number(r && r.entry) === Number(entryId));
-    let pts = 0;
-    if (row && row.gwPointsLive != null) pts = Number(row.gwPointsLive) || 0;
-    else if (Number(entryId) === Number(HOME.managerId) && HOME.summary) {
-      pts = Number(HOME.summary.gwPoints) || 0;
-    }
-    if (homeAutosubPreviewActive()) {
-      pts += homeAutosubPendingGwDelta(homeSquadForEntry(entryId) || []);
-    }
-    return pts;
-  }
-
-  function homeNormalizePointsStack(raw) {
-    const stack = homeEmptyPointsStack();
-    if (!raw || typeof raw !== "object") return stack;
-    for (const key of HOME_MP_STACK_KEYS) {
-      stack[key] = Number(raw[key]) || 0;
-    }
-    return stack;
-  }
-
-  function managerPointsSeedByEntry() {
-    const baked = MANAGER_POINTS.byEntry;
-    return baked && typeof baked === "object" ? baked : {};
-  }
-
-  function mergeManagerPointsByEntry(incoming, prior) {
-    const seed = managerPointsSeedByEntry();
-    const base =
-      prior && typeof prior === "object" && Object.keys(prior).length ? prior : seed;
-    const live = incoming && typeof incoming === "object" ? incoming : null;
-    if (!live || !Object.keys(live).length) {
-      return { ...seed, ...base };
-    }
-    const out = { ...seed, ...base };
-    for (const [eid, payload] of Object.entries(live)) {
-      const liveGws = Array.isArray(payload && payload.gws) ? payload.gws : [];
-      const priorGws = Array.isArray((out[eid] || {}).gws) ? out[eid].gws : [];
-      const byGw = new Map();
-      for (const row of priorGws) {
-        const gw = Number(row && row.gw);
-        if (Number.isFinite(gw) && gw > 0) byGw.set(gw, row);
-      }
-      for (const row of liveGws) {
-        const gw = Number(row && row.gw);
-        if (Number.isFinite(gw) && gw > 0) byGw.set(gw, row);
-      }
-      out[eid] = { gws: [...byGw.values()].sort((a, b) => a.gw - b.gw) };
-    }
-    return out;
-  }
-
-  function homeManagerPointsSeries(entryId) {
-    const baked = HOME.managerPointsByEntry && HOME.managerPointsByEntry[String(entryId)];
-    const rows = Array.isArray(baked && baked.gws) ? baked.gws : [];
-    const byGw = new Map();
-    for (const row of rows) {
-      const gw = Number(row && row.gw);
-      if (!Number.isFinite(gw) || gw <= 0) continue;
-      byGw.set(gw, {
-        gw,
-        points: Number(row.points) || 0,
-        hits: Math.max(0, Number(row.hits) || 0),
-        chip: homeChipAbbr(row.chip),
-        stack: homeNormalizePointsStack(row.stack),
-        counts: homeNormalizePointsStack(row.counts),
-      });
-    }
-    const currentGw = Number(HOME.gw);
-    if (Number.isFinite(currentGw) && currentGw > 0) {
-      const standing = (Array.isArray(HOME.standings) ? HOME.standings : []).find(
-        (r) => Number(r && r.entry) === Number(entryId)
-      );
-      const chip = homeChipAbbr(standing && standing.activeChip);
-      const existing = byGw.get(currentGw);
-      const live = HOME.gwAwaitingKickoff
-        ? { stack: homeEmptyPointsStack(), counts: homeEmptyPointsCounts() }
-        : homeStackFromSquad(homeSquadForEntry(entryId) || [], entryId);
-      byGw.set(currentGw, {
-        gw: currentGw,
-        points: homeCurrentGwPointsForEntry(entryId),
-        hits: existing ? existing.hits : 0,
-        chip: chip || (existing && existing.chip) || null,
-        stack: live.stack,
-        counts: live.counts,
-      });
-    }
-    return [...byGw.values()].sort((a, b) => a.gw - b.gw);
-  }
-
-  function homeManagerPointsFingerprint(series) {
-    return series
-      .map((row) => {
-        const stack = HOME_MP_STACK_KEYS.map((key) => Number(row.stack[key]) || 0).join(",");
-        return `${row.gw}:${row.points}:${row.hits}:${row.chip || ""}:${stack}`;
-      })
-      .join("|");
-  }
-
-  function homeManagerPointsPosSum(stack) {
-    let n = 0;
-    for (const key of HOME_MP_STACK_KEYS) {
-      if (key === "discipline") continue;
-      n += Math.max(0, Number(stack[key]) || 0);
-    }
-    return n;
-  }
-
-  function homeManagerPointsNegSum(row) {
-    const disc = Number(row.stack && row.stack.discipline) || 0;
-    const hits = Math.max(0, Number(row.hits) || 0);
-    return Math.min(0, disc) - hits;
-  }
-
-  function homeManagerPointsHitsCount(hits) {
-    const n = Math.max(0, Number(hits) || 0);
-    if (!n) return 0;
-    return Math.max(1, Math.round(n / 4));
-  }
-
-  function homeManagerPointsFmtPts(n) {
-    const v = Number(n) || 0;
-    if (v > 0) return `+${v}`;
-    return String(v);
-  }
-
-  function homeManagerPointsRowLines(row) {
-    const lines = [];
-    for (const meta of HOME_MP_STACK_META) {
-      const pts = meta.key === "hits"
-        ? -Math.max(0, Number(row.hits) || 0)
-        : Number(row.stack && row.stack[meta.key]) || 0;
-      const count = meta.key === "hits"
-        ? homeManagerPointsHitsCount(row.hits)
-        : Number(row.counts && row.counts[meta.key]) || 0;
-      if (!pts && !count) continue;
-      lines.push({ key: meta.key, label: meta.label, count, pts });
-    }
-    return lines;
-  }
-
-  function homeManagerPointsTableHTML(row) {
-    const lines = homeManagerPointsRowLines(row);
-    const chip = row.chip ? ` · ${escapeHtml(row.chip)}` : "";
-    const body = lines.length
-      ? lines.map((line) => (
-          `<tr>` +
-          `<td class="home-mp-col-cat"><span class="home-mp-swatch is-${line.key}" aria-hidden="true"></span>${escapeHtml(line.label)}</td>` +
-          `<td class="home-mp-col-n">${line.count || "—"}</td>` +
-          `<td class="home-mp-col-pts">${homeManagerPointsFmtPts(line.pts)}</td>` +
-          `</tr>`
-        )).join("")
-      : `<tr><td colspan="3" class="home-mp-col-empty">No returns this gameweek.</td></tr>`;
-    return `<div class="home-mp-gw-table-head">GW${row.gw}${chip}</div>
-      <table class="home-data-table home-mp-gw-table">
-        <thead>
-          <tr>
-            <th scope="col" class="home-mp-col-cat">Category</th>
-            <th scope="col" class="home-mp-col-n">Count</th>
-            <th scope="col" class="home-mp-col-pts">Pts</th>
-          </tr>
-        </thead>
-        <tbody>${body}</tbody>
-        <tfoot>
-          <tr>
-            <th scope="row" class="home-mp-col-cat">Total</th>
-            <td class="home-mp-col-n"></td>
-            <td class="home-mp-col-pts">${Number(row.points) || 0}</td>
-          </tr>
-        </tfoot>
-      </table>`;
-  }
-
-  function homeManagerPointsSyncSelection() {
-    const gw = homeManagerPointsSelectedGw;
-    el.homeManagerPointsChart?.querySelectorAll("[data-mp-gw]").forEach((node) => {
-      node.classList.toggle("is-active", gw != null && Number(node.getAttribute("data-mp-gw")) === Number(gw));
-    });
-    if (!el.homeManagerPointsTable) return;
-    if (gw == null) {
-      el.homeManagerPointsTable.hidden = true;
-      el.homeManagerPointsTable.innerHTML = "";
-      return;
-    }
-    const series = homeManagerPointsSeries(homeActiveViewEntryId());
-    const row = series.find((r) => Number(r.gw) === Number(gw));
-    if (!row) {
-      homeManagerPointsSelectedGw = null;
-      el.homeManagerPointsTable.hidden = true;
-      el.homeManagerPointsTable.innerHTML = "";
-      return;
-    }
-    el.homeManagerPointsTable.hidden = false;
-    el.homeManagerPointsTable.innerHTML = homeManagerPointsTableHTML(row);
-  }
-
-  function homeManagerPointsSelectGw(gw) {
-    const next = Number(gw);
-    if (!Number.isFinite(next)) return;
-    homeManagerPointsSelectedGw = homeManagerPointsSelectedGw === next ? null : next;
-    homeManagerPointsSyncSelection();
-  }
-
-  function homeManagerPointsScroller() {
-    return el.homeManagerPointsChart?.querySelector(".home-mp-plot-scroll") || null;
-  }
-
-  function homeManagerPointsPinLatest() {
-    const scroller = homeManagerPointsScroller();
-    if (!scroller) return;
-    scroller.scrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-  }
-
-  function homeManagerPointsChartHTML(series, detail) {
-    const n = series.length;
-    const H = 232;
-    const YW = 28;
-    const padT = 22;
-    const padB = 38;
-    const padL = 6;
-    const padR = 12;
-    const SLOT = 48;
-    const BAR_W = 26;
-    const plotW = padL + n * SLOT + padR;
-    const plotH = H - padT - padB;
-    const posMax = Math.max(
-      1,
-      ...series.map((row) => (detail ? homeManagerPointsPosSum(row.stack) : Number(row.points) || 0))
-    );
-    const negMin = detail ? Math.min(0, ...series.map(homeManagerPointsNegSum)) : 0;
-    const yRange = Math.max(1, posMax - negMin);
-    const zeroY = padT + (posMax / yRange) * plotH;
-    const yAt = (val) => zeroY - (val / yRange) * plotH;
-    const niceTicks = (() => {
-      const step = posMax <= 20 ? 5 : posMax <= 40 ? 10 : posMax <= 80 ? 20 : 25;
-      const ticks = [0];
-      for (let v = step; v <= posMax; v += step) ticks.push(v);
-      if (negMin < 0) {
-        for (let v = -step; v >= negMin; v -= step) ticks.push(v);
-      }
-      return ticks;
-    })();
-
-    const yLabels = niceTicks
-      .map((t) => {
-        const y = yAt(t);
-        return `<text class="home-mp-y-label" x="${YW - 4}" y="${(y + 3).toFixed(1)}" text-anchor="end">${t}</text>`;
-      })
-      .join("");
-    const grid = niceTicks
-      .map((t) => {
-        const y = yAt(t);
-        return `<line class="home-mp-grid" x1="0" y1="${y.toFixed(1)}" x2="${plotW}" y2="${y.toFixed(1)}" />`;
-      })
-      .join("");
-
-    const bars = series
-      .map((row, i) => {
-        const cx = padL + SLOT * i + SLOT / 2;
-        const x = cx - BAR_W / 2;
-        const chip = row.chip
-          ? `<text class="home-mp-chip" x="${cx.toFixed(1)}" y="${(H - 22).toFixed(1)}" text-anchor="middle">${escapeHtml(row.chip)}</text>`
-          : "";
-        const tick = `<text class="home-mp-x-label" x="${cx.toFixed(1)}" y="${(H - 4).toFixed(1)}" text-anchor="middle">${row.gw}</text>`;
-        let segs = "";
-        if (detail) {
-          let yPos = zeroY;
-          for (const meta of HOME_MP_STACK_META) {
-            if (meta.key === "discipline" || meta.key === "hits") continue;
-            const val = Number(row.stack[meta.key]) || 0;
-            if (val <= 0) continue;
-            const h = (val / yRange) * plotH;
-            yPos -= h;
-            segs += `<rect class="home-mp-seg is-${meta.key}" x="${x.toFixed(1)}" y="${yPos.toFixed(1)}" width="${BAR_W}" height="${Math.max(1, h).toFixed(1)}" rx="1.5" />`;
-          }
-          let yNeg = zeroY;
-          const disc = Number(row.stack.discipline) || 0;
-          if (disc < 0) {
-            const h = (Math.abs(disc) / yRange) * plotH;
-            segs += `<rect class="home-mp-seg is-discipline" x="${x.toFixed(1)}" y="${yNeg.toFixed(1)}" width="${BAR_W}" height="${Math.max(1, h).toFixed(1)}" rx="1.5" />`;
-            yNeg += h;
-          }
-          if (row.hits > 0) {
-            const h = (row.hits / yRange) * plotH;
-            segs += `<rect class="home-mp-seg is-hits" x="${x.toFixed(1)}" y="${yNeg.toFixed(1)}" width="${BAR_W}" height="${Math.max(1, h).toFixed(1)}" rx="1.5" />`;
-          }
-        } else {
-          const val = Math.max(0, Number(row.points) || 0);
-          const h = val > 0 ? Math.max(2, (val / yRange) * plotH) : 2;
-          const y = val > 0 ? zeroY - h : zeroY - 2;
-          segs = `<rect class="home-mp-seg is-solid${val ? "" : " is-empty"}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${BAR_W}" height="${h.toFixed(1)}" rx="2.5" />`;
-        }
-        const total = Number(row.points) || 0;
-        const valH = detail ? homeManagerPointsPosSum(row.stack) : total;
-        const pill = valH > 0 || total
-          ? (() => {
-              const text = String(total);
-              const pillH = 16;
-              const pillX = x;
-              const pillY = Math.max(1, yAt(valH) - pillH - 3);
-              return `<g class="home-mp-val" style="--bar-i:${i}">
-                <rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${BAR_W}" height="${pillH}" rx="3" />
-                <text x="${cx.toFixed(1)}" y="${(pillY + pillH / 2 + 3.6).toFixed(1)}" text-anchor="middle">${escapeHtml(text)}</text>
-              </g>`;
-            })()
-          : "";
-        return `<g class="home-mp-bar" data-mp-gw="${row.gw}" style="--bar-i:${i}">
-          <rect class="home-mp-hit" x="${(x - 4).toFixed(1)}" y="${padT}" width="${BAR_W + 8}" height="${plotH}" />
-          ${segs}
-          ${pill}
-          ${chip}
-          ${tick}
-        </g>`;
-      })
-      .join("");
-
-    const enterCls = prefersReducedMotion() ? "" : " is-enter";
-    const label = detail ? "Stacked manager points by gameweek" : "Manager points by gameweek";
-    return `<div class="home-mp-frame">
-      <div class="home-mp-y-col">
-        <svg class="home-mp-y-svg" viewBox="0 0 ${YW} ${H}" width="${YW}" height="${H}" aria-hidden="true">
-          ${yLabels}
-        </svg>
-      </div>
-      <div class="home-mp-plot-scroll">
-        <div class="home-mp-plot-inner" style="min-width:${plotW}px">
-          <svg class="home-mp-svg${enterCls}" style="--mp-bar-n:${n}" viewBox="0 0 ${plotW} ${H}" width="${plotW}" height="${H}" role="img" aria-label="${escapeHtml(label)}">
-            ${grid}
-            <line class="home-mp-axis" x1="0" y1="${zeroY.toFixed(1)}" x2="${plotW}" y2="${zeroY.toFixed(1)}" />
-            ${bars}
-          </svg>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  function homeManagerPointsLegendHTML(series) {
-    const present = new Set();
-    for (const row of series) {
-      for (const meta of HOME_MP_STACK_META) {
-        const n = meta.key === "hits"
-          ? Number(row.hits) || 0
-          : Number(row.stack && row.stack[meta.key]) || 0;
-        if (n) present.add(meta.key);
-      }
-    }
-    const items = HOME_MP_STACK_META.filter((meta) => {
-      if (meta.key === "hits") return present.has("hits");
-      return true;
-    }).map((meta) => (
-      `<span class="home-mp-legend-item"><span class="home-mp-swatch is-${meta.key}" aria-hidden="true"></span>${escapeHtml(meta.label)}</span>`
-    ));
-    return items.join("");
-  }
-
-  function renderHomeManagerPoints() {
-    if (!el.homeManagerPointsChart) return;
-    const entryId = homeActiveViewEntryId();
-    const detail = homeManagerPointsDetail();
-    const series = homeManagerPointsSeries(entryId);
-    const fp = homeManagerPointsFingerprint(series);
-    const key = `${entryId || ""}|${detail ? "d" : "g"}|${fp}`;
-    if (el.homeManagerPointsToggle) {
-      el.homeManagerPointsToggle.setAttribute("aria-pressed", detail ? "true" : "false");
-    }
-    if (el.homeManagerPointsViewLabel) {
-      el.homeManagerPointsViewLabel.textContent = detail ? "Detail" : "Gameweek";
-    }
-    if (key === homeManagerPointsRenderKey && el.homeManagerPointsChart.childElementCount) {
-      homeManagerPointsSyncSelection();
-      return;
-    }
-    const prevKey = homeManagerPointsRenderKey;
-    const prevEntry = String(prevKey.split("|")[0] || "");
-    const sameEntry = prevEntry !== "" && prevEntry === String(entryId || "");
-    if (!sameEntry) homeManagerPointsSelectedGw = null;
-    const scroller = homeManagerPointsScroller();
-    const prevScroll = scroller ? scroller.scrollLeft : null;
-    homeManagerPointsRenderKey = key;
-    if (!series.length) {
-      el.homeManagerPointsChart.innerHTML = `<p class="home-manager-points-empty">No gameweek points yet.</p>`;
-      if (el.homeManagerPointsLegend) {
-        el.homeManagerPointsLegend.hidden = true;
-        el.homeManagerPointsLegend.innerHTML = "";
-      }
-      if (el.homeManagerPointsTable) {
-        el.homeManagerPointsTable.hidden = true;
-        el.homeManagerPointsTable.innerHTML = "";
-      }
-      return;
-    }
-    el.homeManagerPointsChart.innerHTML = homeManagerPointsChartHTML(series, detail);
-    const nextScroll = homeManagerPointsScroller();
-    if (nextScroll) bindHomePagerEdgeLock(nextScroll);
-    requestAnimationFrame(() => {
-      const plot = homeManagerPointsScroller();
-      if (!plot) return;
-      if (sameEntry && prevScroll != null) {
-        const max = Math.max(0, plot.scrollWidth - plot.clientWidth);
-        plot.scrollLeft = Math.min(max, Math.max(0, prevScroll));
-      } else {
-        homeManagerPointsPinLatest();
-      }
-    });
-    if (el.homeManagerPointsLegend) {
-      if (detail) {
-        el.homeManagerPointsLegend.hidden = false;
-        el.homeManagerPointsLegend.innerHTML = homeManagerPointsLegendHTML(series);
-      } else {
-        el.homeManagerPointsLegend.hidden = true;
-        el.homeManagerPointsLegend.innerHTML = "";
-      }
-    }
-    if (homeManagerPointsSelectedGw != null) {
-      const still = series.some((row) => row.gw === homeManagerPointsSelectedGw);
-      if (!still) homeManagerPointsSelectedGw = null;
-    }
-    homeManagerPointsSyncSelection();
-  }
-
   function renderHomeUnlinked() {
     if (el.homeEmpty) el.homeEmpty.hidden = true;
     if (el.homeBento) el.homeBento.hidden = true;
@@ -18384,7 +17812,6 @@
     if (leaveRollsPending || homePageEnterArmed || homeIsEnterBusy()) {
       finishHomeStatRolls(el.homePage, { summary: false, tables: true });
     }
-    renderHomeManagerPoints();
     bindHomeOwnerHighlighting();
     if (homeAutosubModalOpen()) fillHomeAutosubBreakdown();
     syncHomeViewBanner();
@@ -22060,21 +21487,7 @@
         ${spitKeySection("Status", status)}
         ${spitKeySection("Auto-subs", autosubs)}
         ${spitKeySection("League", league)}
-        ${spitKeySection("Chips", chips)}
-        ${spitKeySection("Manager Points", [
-          spitKeyRow(
-            `<span class="home-mp-swatch is-solid spit-home-swatch" aria-hidden="true"></span>`,
-            "Gameweek pts"
-          ),
-          spitKeyRow(
-            `<span class="home-mp-swatch is-minutes spit-home-swatch" aria-hidden="true"></span><span class="home-mp-swatch is-goals spit-home-swatch" aria-hidden="true"></span><span class="home-mp-swatch is-assists spit-home-swatch" aria-hidden="true"></span>`,
-            "Return type"
-          ),
-          spitKeyRow(
-            `<span class="home-mp-chip-tick spit-home-swatch" aria-hidden="true">WC</span>`,
-            "Chip week"
-          ),
-        ])}`;
+        ${spitKeySection("Chips", chips)}`;
     }
 
     if (state.page === "graphics") {
@@ -23546,7 +22959,8 @@
   function expectedSplitRows(split) {
     if (isNextSeason()) {
       const next = season2627Data();
-      return state.view === "players" ? next.players[split] : next.teams[split];
+      const raw = state.view === "players" ? next.players[split] : next.teams[split];
+      return applyStatsGwSlice(raw, state.view, split);
     }
     return state.view === "players" ? DATA.players[split] : DATA.teams[split];
   }
@@ -31105,22 +30519,27 @@
       return;
     }
 
-    const visibleWraps = wraps.filter((wrap) => wrap && !wrap.hidden && wrap.offsetParent !== null);
-    if (!visibleWraps.length) return;
+    const measureWraps = wraps.filter(Boolean);
+    const visibleWraps = measureWraps.filter((wrap) => !wrap.hidden && wrap.offsetParent !== null);
+    if (!measureWraps.length) return;
 
     const dateRef =
-      visibleWraps[0].querySelector("th.prices-col-date") ||
-      visibleWraps[0].querySelector("td.prices-col-date, td.prices-actual-day") ||
-      visibleWraps[0];
+      (visibleWraps[0] || measureWraps[0]).querySelector("th.prices-col-date") ||
+      (visibleWraps[0] || measureWraps[0]).querySelector("td.prices-col-date, td.prices-actual-day") ||
+      visibleWraps[0] ||
+      measureWraps[0];
     const tsbRef =
-      visibleWraps[0].querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
-    const afterRef = visibleWraps[0].querySelector("th.prices-col-after");
+      (visibleWraps[0] || measureWraps[0]).querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
+    const afterRef = (visibleWraps[0] || measureWraps[0]).querySelector("th.prices-col-after");
 
-    let maxDate = measurePricesTextWidth("Date", dateRef);
+    let maxDate = Math.max(
+      measurePricesTextWidth("Date", dateRef),
+      measurePricesTextWidth("Oct 25", dateRef)
+    );
     let maxTsb = 0;
     let maxAfter = measurePricesTextWidth("After", afterRef);
 
-    visibleWraps.forEach((wrap) => {
+    measureWraps.forEach((wrap) => {
       wrap
         .querySelectorAll("td.prices-col-date, td.prices-actual-day")
         .forEach((cell) => {
@@ -31149,9 +30568,10 @@
     if (mobile) {
       const tableW = Math.max(
         ...visibleWraps.map((wrap) => wrap.clientWidth || 0),
+        ...measureWraps.map((wrap) => wrap.clientWidth || 0),
         280
       );
-      const dateW = Math.ceil(maxDate + 18);
+      const dateW = Math.max(52, Math.ceil(maxDate + 18));
       const afterPad = Math.max(14, measurePricesCellPadding(afterRef));
       let afterW = Math.max(
         PRICES_ACTUAL_MOBILE_AFTER_MIN,
@@ -31161,7 +30581,7 @@
       const playerW = MOBILE_COMPACT_NAME_COL_W;
       afterW = Math.max(afterW, Math.floor((tableW - dateW - playerW) / 3));
 
-      visibleWraps.forEach((wrap) => {
+      measureWraps.forEach((wrap) => {
         wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
         wrap.style.setProperty("--prices-actual-player-col-w", `${playerW}px`);
         wrap.style.setProperty("--prices-actual-metric-col-w", `${afterW}px`);
@@ -33126,6 +32546,7 @@
     state.posFilter.clear();
     state.teamFilter.clear();
     state.liveMatchups.clear();
+    state.graphicsMatchup = "";
     liveStatusUserPicked = false;
     state.liveStatus = "all";
     state.setPieceTakersOnly = false;
@@ -33411,6 +32832,7 @@
     } else if (el.pricesProgressFilterGroup) {
       el.pricesProgressFilterGroup.style.display = "none";
     }
+    syncStatsGwFilterGroup();
     if (page !== "home") {
       setHomeManagerModalOpen(false);
       clearHomePlayerLookup({ rerender: false });
@@ -33535,19 +32957,6 @@
     el.homeAutosubPreviewBtn.addEventListener("click", (e) => {
       e.preventDefault();
       toggleHomeAutosubBreakdown();
-    });
-  }
-  if (el.homeManagerPointsToggle) {
-    el.homeManagerPointsToggle.addEventListener("click", (e) => {
-      e.preventDefault();
-      setHomeManagerPointsDetail(!homeManagerPointsDetail());
-    });
-  }
-  if (el.homeManagerPointsChart) {
-    el.homeManagerPointsChart.addEventListener("click", (e) => {
-      const bar = e.target.closest("[data-mp-gw]");
-      if (!bar || !el.homeManagerPointsChart.contains(bar)) return;
-      homeManagerPointsSelectGw(Number(bar.getAttribute("data-mp-gw")));
     });
   }
   if (el.homeSearchBtn) {
@@ -34508,6 +33917,7 @@
       if (el.ownedFilterGroup) el.ownedFilterGroup.style.display = view === "players" ? "" : "none";
       el.positionFilterGroup.style.display = view === "players" ? "" : "none";
     }
+    syncStatsGwFilterGroup();
     if (state.page === "prices") {
       el.valueModeGroup.style.display = "none";
       el.minutesFilterGroup.style.display = "none";
@@ -34751,6 +34161,28 @@
     return Math.min(max, Math.max(min, v));
   }
 
+  function ensureSliderTicks(slider, count = 13) {
+    if (!slider || slider.querySelector(".slider-ticks")) return;
+    const ticks = document.createElement("div");
+    ticks.className = "slider-ticks";
+    ticks.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < count; i++) ticks.appendChild(document.createElement("span"));
+    slider.insertBefore(ticks, slider.firstChild);
+  }
+
+  function formatSliderRange(format, lo, hi) {
+    if (lo === hi) return format(lo);
+    const a = format(lo);
+    const b = format(hi);
+    if (typeof a === "string" && a.startsWith("GW") && typeof b === "string" && b.startsWith("GW")) {
+      return `GW${lo}–${hi}`;
+    }
+    if (typeof a === "string" && a.startsWith("£") && Number.isFinite(lo) && Number.isFinite(hi)) {
+      return `£${Number(lo).toFixed(1)}–${Number(hi).toFixed(1)}`;
+    }
+    return `${a}–${b}`;
+  }
+
   function bindSliderTrackPointer(slider) {
     if (!slider || slider.dataset.sliderPointerBound === "1") return;
     slider.dataset.sliderPointerBound = "1";
@@ -34857,8 +34289,13 @@
       fillEl.style.left = pctMin + "%";
       fillEl.style.right = 100 - pctMax + "%";
       // boundLabels: axis ends (e.g. Fixtures GW floor→38); else selected range.
-      minLabelEl.textContent = format(boundLabels ? bMin : curMin);
-      maxLabelEl.textContent = format(boundLabels ? bMax : curMax);
+      const lo = boundLabels ? bMin : curMin;
+      const hi = boundLabels ? bMax : curMax;
+      if (minLabelEl) minLabelEl.textContent = formatSliderRange(format, lo, hi);
+      if (maxLabelEl) {
+        maxLabelEl.textContent = "";
+        maxLabelEl.hidden = true;
+      }
     }
 
     let sliding = false;
@@ -34892,7 +34329,9 @@
     maxInput.addEventListener("pointerup", endLive);
 
     updateUI();
-    bindSliderTrackPointer(minInput.closest(".dual-slider"));
+    const slider = minInput.closest(".dual-slider");
+    ensureSliderTicks(slider);
+    bindSliderTrackPointer(slider);
     return updateUI;
   }
 
@@ -34927,6 +34366,32 @@
     },
     format: (v) => fmtNum(v, 0),
   });
+
+  let updateStatsGwSlider = () => {};
+  if (el.statsGwMin && el.statsGwMax && el.statsGwFill) {
+    updateStatsGwSlider = setupDualSlider({
+      minInput: el.statsGwMin,
+      maxInput: el.statsGwMax,
+      fillEl: el.statsGwFill,
+      minLabelEl: el.statsGwMinLabel,
+      maxLabelEl: el.statsGwMaxLabel,
+      getBounds: () => nextSeasonGwBounds(),
+      step: 1,
+      get: () => [state.statsGwMin, state.statsGwMax],
+      set: (lo, hi) => {
+        state.statsGwMin = lo;
+        state.statsGwMax = hi;
+        gwSliceRowsCache = { key: "", players: null, teams: null };
+      },
+      format: (v) => `GW${v}`,
+      onInput: ({ live } = {}) => {
+        if (live) return;
+        if (state.page === "expected") renderExpected();
+        else if (state.page === "rankings") renderRankings({ animateBars: false });
+        else renderTable();
+      },
+    });
+  }
 
   const updateScheduleGwSlider = setupDualSlider({
     minInput: el.scheduleGwMin,
@@ -35049,7 +34514,9 @@
     input.addEventListener("pointerup", endLive);
 
     updateUI();
-    bindSliderTrackPointer(input.closest(".dual-slider"));
+    const slider = input.closest(".dual-slider");
+    ensureSliderTicks(slider);
+    bindSliderTrackPointer(slider);
     return updateUI;
   }
 
@@ -35403,6 +34870,11 @@
     bounds.mins.min = next.mins.min;
     bounds.mins.max = next.mins.max;
     applyStatisticsCoreFilterDefaults(state.valueMode);
+    const gw = nextSeasonGwBounds();
+    state.statsGwMin = gw.min;
+    state.statsGwMax = gw.max;
+    gwSliceRowsCache = { key: "", players: null, teams: null };
+    if (typeof updateStatsGwSlider === "function") updateStatsGwSlider();
   }
 
   function syncSeasonSeg() {
@@ -35784,6 +35256,13 @@
     meta.setAttribute("content", themePrefersDark(mode) ? "black" : "default");
   }
 
+  function syncThemeColor(mode = currentThemeMode()) {
+    const color = themePrefersDark(mode) ? "#121214" : "#ffffff";
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      if (!meta.media) meta.setAttribute("content", color);
+    });
+  }
+
   function applyTheme(mode, { repaint = false } = {}) {
     const next = THEME_ORDER.includes(mode) ? mode : "system";
     if (next === "system") {
@@ -35795,6 +35274,7 @@
     syncThemeCycleButton(next);
     syncThemeSeg(next);
     syncAppleStatusBarStyle(next);
+    syncThemeColor(next);
     // Ownership Δ pills bake light/dark contrast into inline vars — refresh.
     if (repaint) {
       if (state.page === "home") renderHome({ settleQuiet: true, deferDuringEnter: true });

@@ -2533,35 +2533,10 @@ def main() -> int:
                 status=status,
             )
 
-        manager_points_cache = load_json(MANAGER_POINTS_CACHE_PATH)
-        settled = settled_gameweeks(bootstrap)
-        if backfill_manager_points(
-            entry_ids, settled, manager_points_cache, etypes, history_by_entry
-        ):
-            save_json(MANAGER_POINTS_CACHE_PATH, manager_points_cache)
-            cached_n = sum(
-                len(v) for v in (manager_points_cache.get("entries") or {}).values()
-                if isinstance(v, dict)
-            )
-            print(f"  manager points cache: {cached_n} settled GW stacks")
-        live_points_by_entry: dict[int, int] = {}
-        for row in standing_rows:
-            try:
-                live_points_by_entry[int(row["entry"])] = int(row.get("gwPointsLive") or 0)
-            except (KeyError, TypeError, ValueError):
-                continue
-        manager_points_by_entry = build_manager_points_by_entry(
-            entry_ids,
-            current_gw=gw,
-            settled=settled,
-            history_by_entry=history_by_entry,
-            cache=manager_points_cache,
-            squads_by_entry=squads_by_entry,
-            element_gw=element_gw,
-            live_points_by_entry=live_points_by_entry,
-            chip_by_entry=chip_by_entry,
-            gw_awaiting_kickoff=gw_awaiting_kickoff,
-        )
+        # Manager Points Home card is parked — see docs/manager-points-card.md.
+        # backfill_manager_points / build_manager_points_by_entry stay in this
+        # file for a mid- or end-season recap; do not put stacks on the live
+        # Home payload until that surface exists.
 
         payload = {
             "generatedAt": generated_at(),
@@ -2610,7 +2585,6 @@ def main() -> int:
                 for el_id, entry_ids in sorted(owners_by_element.items())
             },
             "elementGw": element_gw,
-            "managerPointsByEntry": manager_points_by_entry,
             "leaguePicksStatus": league_picks_status,
             # v2 = official/same-position pairing with elementType on moves.
             "transfersSchemaVersion": 2,
