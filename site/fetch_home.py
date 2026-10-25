@@ -852,6 +852,10 @@ def stack_from_squad(
             mult = int(row.get("multiplier") or 0)
         except (KeyError, TypeError, ValueError):
             continue
+        if row.get("autoSubOut"):
+            continue
+        if row.get("autoSubIn") and mult <= 0:
+            mult = 1
         if mult <= 0:
             continue
         rec = element_gw.get(str(eid)) if isinstance(element_gw, dict) else None

@@ -552,6 +552,7 @@
       gd: "Goal difference",
       xgd: "Expected goal difference",
       __ppg: "Points per GW",
+      cleanSheets: "Team clean sheets",
     },
   };
 
@@ -1013,7 +1014,7 @@
     { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded" },
     { key: "xcs", label: "xCS", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected clean sheets" },
     { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded" },
-    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Team clean sheets — max of (sum of GK FPL CS, best DEF/MID CS). Outfield fallback covers keepers subbed before 60′." },
+    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Team clean sheets" },
     { key: "xgd", label: "xGD", decimals: 1, group: "Overall", section: "Overall", rate: true, title: "Expected goal difference (xG − xGC)" },
     { key: "gd", label: "GD", decimals: 0, group: "Overall", section: "Overall", title: "Goal difference (goals − conceded)" },
     { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points scored by the squad", strong: true },
@@ -1077,6 +1078,7 @@
   const el = {
     pageHome: $("#page-home"),
     pageGraphics: $("#page-graphics"),
+    pageLeague: $("#page-league"),
     pageLive: $("#page-live"),
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
@@ -1112,6 +1114,9 @@
     graphicsEmpty: $("#graphics-empty"),
     graphicsPager: $("#graphics-pager"),
     graphicsUpdatedFooter: $("#graphics-updated-footer"),
+    leaguePage: $("#league-page"),
+    leagueEmpty: $("#league-empty"),
+    leagueUpdatedFooter: $("#league-updated-footer"),
     livePage: $("#live-page"),
     livePageSubtitle: $("#live-page-subtitle"),
     liveCountLabel: $("#live-count-label"),
@@ -6765,6 +6770,7 @@
   let gwRecapCloseTimer = null;
   let gwRecapBound = false;
   let gwRecapForcedShown = false;
+  let gwRecapAutoOpened = false;
 
   function gwRecapKey() {
     return `${HOME.leagueId}:${HOME.gw}`;
@@ -7195,8 +7201,28 @@
       prev: document.getElementById("gw-recap-prev"),
       next: document.getElementById("gw-recap-next"),
       count: document.getElementById("gw-recap-count"),
-      btn: document.getElementById("gw-recap-btn"),
+      btn: null,
+      empty: document.getElementById("league-empty"),
     };
+  }
+
+  function renderLeagueReport() {
+    bindGwRecapOnce();
+    const e = gwRecapEls();
+    const ready = gwRecapReady();
+    if (e.empty) e.empty.hidden = ready;
+    if (e.root) e.root.hidden = !ready;
+    syncPageUpdatedFooter(el.leagueUpdatedFooter, pageDataUpdatedIso("league"));
+    if (!ready || !e.stack) {
+      gwRecapOpen = false;
+      gwRecapPages = [];
+      return;
+    }
+    gwRecapPages = buildGwRecapPages(buildGwRecapData());
+    renderGwRecapStack();
+    gwRecapOpen = true;
+    markGwRecapSeen();
+    showGwRecapPage(gwRecapPages.length ? Math.min(gwRecapIndex, gwRecapPages.length - 1) : 0);
   }
 
   function renderGwRecapStack() {
@@ -7239,47 +7265,20 @@
   }
 
   function openGwRecap() {
-    const e = gwRecapEls();
-    if (!e.root || !e.panel || !gwRecapReady()) return;
-    bindGwRecapOnce();
-    if (gwRecapCloseTimer) {
-      clearTimeout(gwRecapCloseTimer);
-      gwRecapCloseTimer = null;
-    }
-    gwRecapPages = buildGwRecapPages(buildGwRecapData());
-    renderGwRecapStack();
-    gwRecapOpen = true;
+    if (!gwRecapReady()) return;
     markGwRecapSeen();
-    e.root.hidden = false;
-    document.documentElement.classList.add("is-gw-recap-open");
-    showGwRecapPage(0);
-    e.panel.classList.remove("is-closing");
-    void e.panel.offsetWidth;
-    e.root.classList.add("is-open");
-    e.panel.classList.add("is-open");
-    if (e.next) e.next.focus({ preventScroll: true });
+    if (state.page !== "league") setPage("league");
+    else renderLeagueReport();
   }
 
   function closeGwRecap() {
-    const e = gwRecapEls();
-    if (!gwRecapOpen || !e.root || !e.panel) return;
-    gwRecapOpen = false;
-    const closeMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--modal-close-dur")) || 150;
-    e.root.classList.remove("is-open");
-    e.panel.classList.remove("is-open");
-    e.panel.classList.add("is-closing");
-    document.documentElement.classList.remove("is-gw-recap-open");
-    gwRecapCloseTimer = setTimeout(() => {
-      gwRecapCloseTimer = null;
-      e.panel.classList.remove("is-closing");
-      e.root.hidden = true;
-    }, closeMs);
-    if (e.btn && !e.btn.hidden) e.btn.focus({ preventScroll: true });
+    gwRecapAutoOpened = false;
+    if (state.page === "league") setPage("home");
   }
 
   function stepGwRecap(dir) {
     if (dir > 0 && gwRecapIndex >= gwRecapPages.length - 1) {
-      closeGwRecap();
+      if (gwRecapAutoOpened) closeGwRecap();
       return;
     }
     showGwRecapPage(gwRecapIndex + dir);
@@ -7293,21 +7292,14 @@
     e.root.addEventListener("click", (ev) => {
       const t = ev.target;
       if (!(t instanceof Element)) return;
-      if (t.closest("[data-recap-close]")) {
-        closeGwRecap();
-        return;
-      }
       const go = t.closest("[data-recap-go]");
       if (go) showGwRecapPage(Number(go.getAttribute("data-recap-go")));
     });
     if (e.prev) e.prev.addEventListener("click", () => stepGwRecap(-1));
     if (e.next) e.next.addEventListener("click", () => stepGwRecap(1));
     document.addEventListener("keydown", (ev) => {
-      if (!gwRecapOpen) return;
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        closeGwRecap();
-      } else if (ev.key === "ArrowRight") {
+      if (state.page !== "league" || !gwRecapOpen) return;
+      if (ev.key === "ArrowRight") {
         stepGwRecap(1);
       } else if (ev.key === "ArrowLeft") {
         stepGwRecap(-1);
@@ -7331,23 +7323,32 @@
         stepGwRecap(dx < 0 ? 1 : -1);
       }, { passive: true });
     }
-    if (e.btn) e.btn.addEventListener("click", () => openGwRecap());
   }
 
-  /** Show the header button when the recap has data; auto-open once per league + GW per device. */
+  /** Auto-open League Report once per league + GW; later visits are from Pages. */
   function syncGwRecap() {
     const e = gwRecapEls();
     if (!e.root) return;
     bindGwRecapOnce();
+    if (state.page === "league") renderLeagueReport();
     const ready = gwRecapReady();
-    if (e.btn) e.btn.hidden = !ready;
     const forced = !gwRecapForcedShown && /[?&]recap(=|&|$)/.test(window.location.search);
-    if (!ready || !savedManagerId || gwRecapOpen || gwRecapAutoTimer || (!forced && gwRecapHasSeen())) return;
+    if (!ready || !savedManagerId || gwRecapAutoTimer) return;
+    if (!forced && gwRecapHasSeen()) return;
+    if (state.page === "league") {
+      gwRecapForcedShown = true;
+      markGwRecapSeen();
+      return;
+    }
     gwRecapAutoTimer = setTimeout(() => {
       gwRecapAutoTimer = null;
-      if (gwRecapOpen || !savedManagerId || !gwRecapReady() || (!forced && gwRecapHasSeen())) return;
+      if (!savedManagerId || !gwRecapReady()) return;
+      const stillForced = forced || /[?&]recap(=|&|$)/.test(window.location.search);
+      if (!stillForced && gwRecapHasSeen()) return;
       gwRecapForcedShown = true;
-      openGwRecap();
+      gwRecapAutoOpened = true;
+      markGwRecapSeen();
+      setPage("league");
     }, 900);
   }
 
@@ -14003,7 +14004,8 @@
         showMatchups: true,
         showMatchupEdges: false,
       }
-    )}</article>`;
+    )}</article>
+    <p class="ftt-note home-schedule-detail-note">Ranks use the opponent’s home or away record · 1 is best in that category</p>`;
   }
 
   /** Re-paint open Home player/team Schedule when custom FDR toggle or ratings change. */
@@ -17577,11 +17579,30 @@
     return { stack, counts };
   }
 
-  function homeStackFromSquad(squad) {
+  function homeIsBenchBoostChip(chip) {
+    const c = String(chip || "").toLowerCase();
+    return c === "bboost" || c === "benchboost" || c === "bench_boost" || c === "bb";
+  }
+
+  /** Scoring multiplier: starters + auto-subs in; bench out unless Bench Boost. */
+  function homeManagerPointsMult(row, chip) {
+    if (!row) return 0;
+    if (homeIsBenchBoostChip(chip)) {
+      const m = Number(row.multiplier);
+      return Number.isFinite(m) && m > 0 ? m : 1;
+    }
+    if (row.autoSubOut) return 0;
+    let m = Number(row.multiplier) || 0;
+    if (row.autoSubIn && m <= 0) m = 1;
+    return m > 0 ? m : 0;
+  }
+
+  function homeStackFromSquad(squad, entryId) {
+    const chip = homeEntryActiveChip(entryId);
     const stack = homeEmptyPointsStack();
     const counts = homeEmptyPointsCounts();
     for (const row of squad || []) {
-      const mult = Number(row && row.multiplier) || 0;
+      const mult = homeManagerPointsMult(row, chip);
       if (mult <= 0) continue;
       const rec = homeElementGwRecord(row.element);
       const one = homeScoreRecordStack(rec, row);
@@ -17625,11 +17646,15 @@
     if (HOME.gwAwaitingKickoff) return 0;
     const rows = Array.isArray(HOME.standings) ? HOME.standings : [];
     const row = rows.find((r) => Number(r && r.entry) === Number(entryId));
-    if (row && row.gwPointsLive != null) return Number(row.gwPointsLive) || 0;
-    if (Number(entryId) === Number(HOME.managerId) && HOME.summary) {
-      return Number(HOME.summary.gwPoints) || 0;
+    let pts = 0;
+    if (row && row.gwPointsLive != null) pts = Number(row.gwPointsLive) || 0;
+    else if (Number(entryId) === Number(HOME.managerId) && HOME.summary) {
+      pts = Number(HOME.summary.gwPoints) || 0;
     }
-    return 0;
+    if (homeAutosubPreviewActive()) {
+      pts += homeAutosubPendingGwDelta(homeSquadForEntry(entryId) || []);
+    }
+    return pts;
   }
 
   function homeNormalizePointsStack(raw) {
@@ -17697,7 +17722,7 @@
       const existing = byGw.get(currentGw);
       const live = HOME.gwAwaitingKickoff
         ? { stack: homeEmptyPointsStack(), counts: homeEmptyPointsCounts() }
-        : homeStackFromSquad(homeSquadForEntry(entryId) || []);
+        : homeStackFromSquad(homeSquadForEntry(entryId) || [], entryId);
       byGw.set(currentGw, {
         gw: currentGw,
         points: homeCurrentGwPointsForEntry(entryId),
@@ -19354,6 +19379,7 @@
     const page = state.page;
     if (page === "home") return null;
     if (page === "graphics") return null;
+    if (page === "league") return null;
     if (page === "report") return null;
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
@@ -19371,13 +19397,18 @@
       page === "markets" ||
       page === "home" ||
       page === "graphics" ||
+      page === "league" ||
       page === "report" ||
+      page === "prices" ||
       (page === "live" && state.liveMode === "bonus")
     );
   }
 
   function filtersToggleHidden() {
-    return state.page === "live" && state.liveMode === "bonus";
+    return (
+      state.page === "prices" ||
+      (state.page === "live" && state.liveMode === "bonus")
+    );
   }
 
   function syncFiltersChrome() {
@@ -19403,6 +19434,7 @@
       if (
       page === "home" ||
       page === "graphics" ||
+      page === "league" ||
       page === "report" ||
       page === "markets" ||
       page === "schedule" ||
@@ -19542,6 +19574,7 @@
       (isMarkets && preferMobileSheet()) ||
       isHome ||
       page === "graphics" ||
+      page === "league" ||
       page === "report" ||
       (preferMobileSheet() && page === "rankings");
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
@@ -21646,18 +21679,8 @@
     // Score chips + per-row swords/shield edges — Matchups page only unless forced.
     const showMatchupEdges =
       options.showMatchupEdges != null ? options.showMatchupEdges === true : showMatchups;
-    const matchupProfile = showMatchupEdges ? options.matchupProfile || null : null;
     const teamLabel = TEAM_NAMES[teamCode] || teamCode;
-    const scoreSummary = matchupProfile
-      ? `<div class="matchup-score-summary" aria-label="Attack advantage ${fmtMatchupScore(matchupProfile.attackScore)} across ${matchupProfile.attackCount} fixtures; defence advantage ${fmtMatchupScore(matchupProfile.defenceScore)} across ${matchupProfile.defenceCount} fixtures">
-          <span class="matchup-score matchup-score-attack" aria-label="Attack advantage ${fmtMatchupScore(matchupProfile.attackScore)}, ${matchupProfile.attackCount} favorable fixture${matchupProfile.attackCount === 1 ? "" : "s"}">
-            ${iconHTML("swords", "ftt-attack-icon")}<strong>${fmtMatchupScore(matchupProfile.attackScore)}</strong><small>· ${matchupProfile.attackCount}</small>
-          </span>
-          <span class="matchup-score matchup-score-defence" aria-label="Defence advantage ${fmtMatchupScore(matchupProfile.defenceScore)}, ${matchupProfile.defenceCount} favorable fixture${matchupProfile.defenceCount === 1 ? "" : "s"}">
-            ${iconHTML("shield-half", "ftt-defence-icon")}<strong>${fmtMatchupScore(matchupProfile.defenceScore)}</strong><small>· ${matchupProfile.defenceCount}</small>
-          </span>
-        </div>`
-      : "";
+    const scoreSummary = "";
     const infoButton = showTeamInfo
       ? `<button type="button" class="team-rank-info" data-team="${escapeHtml(teamCode)}"
           aria-label="Show ${escapeHtml(teamLabel)} home and away ranks">${iconHTML("info")}</button>`
@@ -21880,32 +21903,66 @@
     return `<i class="spit-medal gold"></i><i class="spit-medal silver"></i><i class="spit-medal bronze"></i>`;
   }
 
+  function matchupGuideCardHTML() {
+    const highlightMaps = fixtureHighlightMaps();
+    const rankMaps = fixtureRankMaps();
+    const teamCodes = Object.keys(FIXTURES_BY_TEAM || {});
+    if (!teamCodes.length) return "";
+    const inWindow = (code) =>
+      (FIXTURES_BY_TEAM[code] || []).filter(
+        (fx) => fx.gw >= state.scheduleGwMin && fx.gw <= state.scheduleGwMax
+      );
+    let team = teamCodes.includes("ARS") ? "ARS" : teamCodes[0];
+    let fixtures = inWindow(team);
+    let profile = teamMatchupProfile(team, fixtures, rankMaps);
+    if (!profile.edgeCount) {
+      for (const code of teamCodes) {
+        const next = inWindow(code);
+        const nextProfile = teamMatchupProfile(code, next, rankMaps);
+        if (nextProfile.edgeCount) {
+          team = code;
+          fixtures = next;
+          profile = nextProfile;
+          break;
+        }
+      }
+    }
+    const shown = fixtures.slice(0, 6);
+    return `<article class="schedule-card spit-guide-card">${fixtureCardHTML(
+      team,
+      highlightMaps,
+      rankMaps,
+      {
+        fixtures: shown,
+        showMeta: false,
+        showTeamInfo: false,
+        showMatchups: true,
+        matchupProfile: { ...profile, fixtures: shown },
+      }
+    )}</article>`;
+  }
+
   function matchupPageInfoHTML() {
-    const marks = [
+    const card = [
       spitKeyRow(
-        `${iconHTML("swords", "ftt-attack-icon")}${iconHTML("shield-half", "ftt-defence-icon")}`,
-        "Attack / defence flag"
+        `<span class="spit-pin" aria-hidden="true">1</span>`,
+        "Home fixture (house). Away opponents are lowercase."
+      ),
+      spitKeyRow(
+        `<span class="spit-pin" aria-hidden="true">2</span>`,
+        "Opp ranks, venue-split. 1 is best. Pink = tougher, blue = easier."
+      ),
+      spitKeyRow(
+        `<span class="spit-pin" aria-hidden="true">3</span>${iconHTML("swords", "ftt-attack-icon")}${iconHTML("shield-half", "ftt-defence-icon")}`,
+        "Suggested matchup edge. Swords: start attackers. Shield: start defenders.",
+        "is-wide"
       ),
     ];
-    const card = [
-      spitKeyRow(`<span class="spit-pin" aria-hidden="true">1</span>`, "Score chips"),
-      spitKeyRow(`<span class="spit-pin" aria-hidden="true">3</span>`, "Home"),
-      spitKeyRow(`<span class="spit-pin" aria-hidden="true">4</span>`, "Opp ranks"),
-      spitKeyRow(`<span class="spit-pin" aria-hidden="true">5</span>`, "Attack / defence"),
-    ];
     return `${spitHead("calendar-search", "How Strength of Schedule works")}
-      ${spitKeySection("Marks", marks)}
       ${spitKeySection("Card", card)}
       <div class="spit-annotate">
-        <div class="spit-annotate-figure" aria-hidden="true">
-          <img class="spit-annotate-img spit-annotate-img-dark" src="img/matchup-card-guide-dark.png" width="888" height="670" alt="" decoding="async" />
-          <img class="spit-annotate-img spit-annotate-img-light" src="img/matchup-card-guide-light.png" width="888" height="670" alt="" decoding="async" />
-          <ol class="spit-pins">
-            <li class="spit-pin" style="--x:74%;--y:6.5%">1</li>
-            <li class="spit-pin" style="--x:21%;--y:20%">3</li>
-            <li class="spit-pin" style="--x:41%;--y:20%">4</li>
-            <li class="spit-pin" style="--x:93%;--y:20%">5</li>
-          </ol>
+        <div class="spit-annotate-figure spit-guide-live" aria-hidden="true">
+          ${matchupGuideCardHTML()}
         </div>
       </div>`;
   }
@@ -22034,6 +22091,20 @@
         ])}`;
     }
 
+    if (state.page === "league") {
+      return `${spitHead("file-user", "How League Report works")}
+        ${spitKeySection("Walkthrough", [
+          spitKeyRow(
+            `${iconHTML("file-user", "spit-home-swatch")}`,
+            "Captains, transfers, chips, differentials"
+          ),
+          spitKeyRow(
+            `${iconHTML("house", "spit-home-swatch")}`,
+            "Opens once after the deadline, then from Pages"
+          ),
+        ])}`;
+    }
+
     if (state.page === "rankings") {
       return `${spitHead("podium", "How Rankings works")}
         ${spitKeySection("Board", [
@@ -22048,9 +22119,9 @@
       return `${spitHead("chart-gantt", "How xData works")}
         ${spitKeySection("Track", [
           spitKeyRow(spitBarbellTrackSwatch(), "Expected → actual"),
-          spitKeyRow(`<i class="spit-easy"></i>`, "Over"),
-          spitKeyRow(`<i class="spit-tough"></i>`, "Under"),
-          spitKeyRow(`<i class="spit-even"></i>`, "Even"),
+          spitKeyRow(`<i class="spit-easy"></i>`, "Outperform Expected"),
+          spitKeyRow(`<i class="spit-tough"></i>`, "Underperform Expected"),
+          spitKeyRow(`<i class="spit-even"></i>`, "Neutral"),
         ])}
         ${spitKeySection("Diff", [
           spitKeyRow(spitDiffPillSwatch("over"), "Above expected"),
@@ -22854,6 +22925,7 @@
     const labels = {
       home: "How Home works",
       graphics: "How Graphics works",
+      league: "How League Report works",
       live: "How Gameweek works",
       report: "How Report works",
       opta: "How Statistics works",
@@ -22872,6 +22944,7 @@
       if (pane) {
         if (pane.id === "home-page") page = "home";
         else if (pane.id === "graphics-page") page = "graphics";
+        else if (pane.id === "league-page") page = "league";
         else if (pane.id === "live-page") page = "live";
         else if (pane.id === "report-page") page = "report";
         else if (pane.id === "opta-page") page = "opta";
@@ -25950,6 +26023,8 @@
         return HOME.generatedAt || null;
       case "graphics":
         return TEAM_NEWS.generatedAt || null;
+      case "league":
+        return HOME.generatedAt || null;
       case "live":
         return latestDataIso(HOME.generatedAt, DATA.generatedAt);
       case "report":
@@ -30124,11 +30199,20 @@
       return { bg: "hsl(var(--muted))", fg: "var(--text-dim)", tone };
     }
     const t = ownershipDeltaIntensity(delta);
-    const a = (0.22 + t * 0.78).toFixed(3);
-    if (tone === "is-up") {
-      return { bg: `hsl(var(--delta-rise) / ${a})`, fg: "#fff", tone };
+    const dark = themePrefersDark();
+    const hue = tone === "is-up" ? "var(--spectrum-rise)" : "var(--schedule-spectrum-fall)";
+    if (dark) {
+      const a = (0.28 + t * 0.62).toFixed(3);
+      const fg = t < 0.38
+        ? (tone === "is-up" ? "hsl(217 80% 80%)" : "hsl(328 80% 82%)")
+        : "#fff";
+      return { bg: `hsl(${hue} / ${a})`, fg, tone };
     }
-    return { bg: `hsl(var(--delta-fall) / ${a})`, fg: "#fff", tone };
+    const a = (0.16 + t * 0.70).toFixed(3);
+    const fg = t < 0.42
+      ? (tone === "is-up" ? "hsl(217 72% 28%)" : "hsl(328 70% 32%)")
+      : "#fff";
+    return { bg: `hsl(${hue} / ${a})`, fg, tone };
   }
 
   function ownershipTreemapCellHTML(cell, layoutW, layoutH, windowKey) {
@@ -30142,27 +30226,19 @@
     const showName = isWide
       ? cell.w > 54 && cell.h > 22
       : cell.w > 48 && cell.h > 30;
-    const showThumb = isWide
-      ? cell.w > 100 && cell.h > 30
-      : cell.w > 70 && cell.h > 52;
+    const showBadge = isWide
+      ? cell.w > 72 && cell.h > 26
+      : cell.w > 44 && cell.h > 40;
     const delta = cell.delta;
     const paint = ownershipTreeFill(delta);
     const deltaLbl = fmtOwnershipTrendDelta(delta);
-    const charBudget = Math.max(3, Math.floor((cell.w - (showThumb ? 36 : 10)) / 7.2));
+    const charBudget = Math.max(3, Math.floor((cell.w - (showBadge ? 28 : 10)) / 7.2));
     const short = ownershipTreemapShortName(cell.row, charBudget);
-    let thumb = "";
-    if (showThumb) {
-      if (cell.row.kind === "team") {
-        thumb =
-          badgeHTML(cell.row.team, "ownership-treemap-crest") ||
-          teamCrestFallbackHTML(cell.row.team, "ownership-treemap-crest ownership-photo-fallback");
-      } else {
-        thumb = ownershipPhotoHTML(cell.row, null, { eager: true }).replace(
-          /class="ownership-photo/g,
-          'class="ownership-photo ownership-treemap-photo'
-        );
-      }
-    }
+    const badge = showBadge
+      ? (badgeHTML(cell.row.team, "ownership-treemap-crest") ||
+        teamCrestFallbackHTML(cell.row.team, "ownership-treemap-crest ownership-photo-fallback"))
+      : "";
+    const thumb = badge ? `<span class="ownership-treemap-badge" aria-hidden="true">${badge}</span>` : "";
     const tip = `${cell.row.name} · live ${fmtOwnedPct(cell.row.live)} · ${ownershipTreeWindowLabel(windowKey)} ${deltaLbl}`;
     const cls = [
       "ownership-treemap-cell",
@@ -32678,7 +32754,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Weekly Report is ready to show in nav again.
   const REPORT_NAV_ENABLED = false;
-  const PAGES = ["home", "graphics", "live", "report", "opta", "rankings", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
+  const PAGES = ["home", "graphics", "league", "live", "report", "opta", "rankings", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
@@ -32724,6 +32800,7 @@
   function pagePaneFor(page) {
     if (page === "home") return el.homePage;
     if (page === "graphics") return el.graphicsPage;
+    if (page === "league") return el.leaguePage;
     if (page === "live") return el.livePage;
     if (page === "report") return el.reportPage;
     if (page === "opta") return el.optaPage;
@@ -33193,6 +33270,7 @@
     el.pageRankings.classList.toggle("active", page === "rankings");
     if (el.pageHome) el.pageHome.classList.toggle("active", page === "home");
     if (el.pageGraphics) el.pageGraphics.classList.toggle("active", page === "graphics");
+    if (el.pageLeague) el.pageLeague.classList.toggle("active", page === "league");
     if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
     if (el.pageReport) el.pageReport.classList.toggle("active", page === "report");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
@@ -33208,6 +33286,7 @@
     setPageTrayOpen(false);
     if (el.homePage) el.homePage.style.display = page === "home" ? "" : "none";
     if (el.graphicsPage) el.graphicsPage.style.display = page === "graphics" ? "" : "none";
+    if (el.leaguePage) el.leaguePage.style.display = page === "league" ? "" : "none";
     if (el.livePage) el.livePage.style.display = page === "live" ? "" : "none";
     if (el.reportPage) el.reportPage.style.display = page === "report" ? "" : "none";
     el.optaPage.style.display = page === "opta" ? "" : "none";
@@ -33222,17 +33301,18 @@
     const isMarkets = page === "markets";
     const isHome = page === "home";
     const isGraphics = page === "graphics";
+    const isLeague = page === "league";
     const isLive = page === "live";
     const isReport = page === "report";
     // Schedule hides the subtoolbar. Markets desktop uses it for card view + compare.
     syncSubtoolbarViewport(page);
     syncFiltersChrome();
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isGraphics || isReport || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isGraphics || isLeague || isReport || page === "fixtures" ? "none" : "";
     if (el.liveModeSeg) {
       el.liveModeSeg.hidden = !isLive;
       el.liveModeSeg.setAttribute("aria-hidden", isLive ? "false" : "true");
     }
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isGraphics || isReport || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isGraphics || isLeague || isReport || page === "fixtures" ? "none" : "";
     if (el.columnsSidebar) {
       el.columnsSidebar.style.display = "none";
     }
@@ -33367,6 +33447,8 @@
       renderHome({ leaveRollsPending: true });
     } else if (page === "graphics") {
       renderGraphicsPage();
+    } else if (page === "league") {
+      renderLeagueReport();
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
       liveEnterAwaitingPlay = true;
@@ -33421,6 +33503,7 @@
 
   if (el.pageHome) el.pageHome.addEventListener("click", () => setPage("home"));
   if (el.pageGraphics) el.pageGraphics.addEventListener("click", () => setPage("graphics"));
+  if (el.pageLeague) el.pageLeague.addEventListener("click", () => setPage("league"));
   if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
   document.addEventListener("click", openLiveFromBadge);
   if (el.pageReport) {
@@ -34019,6 +34102,7 @@
     const id = btn.id || "";
     if (id === "page-home") return "home";
     if (id === "page-graphics") return "graphics";
+    if (id === "page-league") return "league";
     if (id === "page-opta") return "opta";
     if (id === "page-rankings") return "rankings";
     if (id === "page-ownership") return "ownership";
@@ -34512,7 +34596,6 @@
     return (
       !preferMobileSheet() &&
       (state.page === "opta" ||
-        state.page === "ownership" ||
         state.page === "defcon" ||
         state.page === "expected")
     );
@@ -34521,8 +34604,7 @@
   function mobileSearchAlwaysOpen() {
     return (
       preferMobileSheet() &&
-      (state.page === "ownership" ||
-        state.page === "defcon" ||
+      (state.page === "defcon" ||
         state.page === "expected" ||
         state.page === "opta")
     );
@@ -34534,15 +34616,22 @@
     if (home && el.searchWrap.parentElement !== home) {
       home.appendChild(el.searchWrap);
     }
-    // Rankings / Live / Prices: no search — hide the control entirely.
+    // Rankings / Live / Prices / Ownership: no search — hide the control entirely.
     const hideSearch =
       state.page === "rankings" ||
       state.page === "live" ||
-      state.page === "prices";
+      state.page === "prices" ||
+      state.page === "ownership" ||
+      state.page === "league";
     el.searchWrap.style.display = hideSearch ? "none" : "";
     el.searchWrap.classList.toggle("stats-search-always-open", mainSearchAlwaysOpen());
     el.searchWrap.classList.toggle("mobile-search-always-open", mobileSearchAlwaysOpen());
-    if (state.page === "rankings" || state.page === "live" || state.page === "prices") {
+    if (
+      state.page === "rankings" ||
+      state.page === "live" ||
+      state.page === "prices" ||
+      state.page === "ownership"
+    ) {
       el.searchWrap.classList.remove("search-open");
       if (el.searchToggle) el.searchToggle.setAttribute("aria-expanded", "false");
     } else if (mainSearchAlwaysOpen() || mobileSearchAlwaysOpen()) {

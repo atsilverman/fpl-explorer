@@ -452,8 +452,11 @@ html[data-page="opta"] {
   background: var(--team-accent);
 }
 .ownership-treemap-photo.has-team-ring,
-.ownership-treemap-crest.has-team-ring {
+.ownership-treemap-crest.has-team-ring,
+.ownership-treemap-badge .badge-img.has-team-ring {
   margin: 0;
+  border: none;
+  box-shadow: none;
 }
 /* Tall art (see CREST_FIT_PCT in app.js) shrinks so it doesn't dominate roundels.
    Scale rather than width/height: percentage sizing on tall art resolves against
@@ -6442,8 +6445,8 @@ html[data-page="defcon"] .layout .main {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: flex-end;
-  gap: 2px;
+  justify-content: flex-start;
+  gap: 6px;
   margin: 0;
   padding: 6px 7px;
   border: 1px solid hsl(var(--border-hsl) / 0.55);
@@ -6465,29 +6468,29 @@ html[data-page="defcon"] .layout .main {
 .ownership-treemap-cell:focus-visible {
   box-shadow: var(--focus-ring);
 }
-.ownership-treemap-photo,
-.ownership-treemap-crest {
-  width: 28px;
-  height: 28px;
+.ownership-treemap-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   flex: none;
-  border-radius: 50%;
-  object-fit: cover;
-  object-position: top center;
-  background: #fff;
-  margin-bottom: auto;
+}
+.ownership-treemap-crest,
+.ownership-treemap-badge .badge-img {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  object-fit: contain;
+  object-position: center;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .ownership-treemap-cell > .ownership-photo-frame {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border-radius: 50%;
-  margin-bottom: auto;
-}
-.ownership-treemap-crest {
-  border-radius: 6px;
-  object-fit: contain;
-  padding: 2px;
-  background: hsl(var(--muted));
+  display: none;
 }
 :root[data-theme="dark"] .ownership-treemap-photo {
   background: hsl(220 18% 10%);
@@ -6537,7 +6540,7 @@ html[data-page="defcon"] .layout .main {
   gap: 8px;
   padding: 6px 10px;
 }
-.ownership-treemap-cell.is-wide .ownership-treemap-photo,
+.ownership-treemap-cell.is-wide .ownership-treemap-badge,
 .ownership-treemap-cell.is-wide .ownership-treemap-crest {
   margin-bottom: 0;
 }
@@ -7323,10 +7326,11 @@ html.has-defcon-opponents-fab[data-page="defcon"] .main {
     flex: none;
     margin-top: 8px;
   }
-  .ownership-treemap-photo,
-  .ownership-treemap-crest {
-    width: 24px;
-    height: 24px;
+  .ownership-treemap-badge,
+  .ownership-treemap-crest,
+  .ownership-treemap-badge .badge-img {
+    width: 20px;
+    height: 20px;
   }
   .ownership-treemap-name {
     font-size: 11px;
@@ -8536,7 +8540,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
 .barbell-dot.expected { background: var(--text-faint); }
 .barbell-dot.actual.over { background: hsl(var(--positive)); }
 .barbell-dot.actual.under { background: hsl(var(--negative)); }
-.barbell-dot.actual.even { background: var(--blue); }
+.barbell-dot.actual.even { background: hsl(var(--muted-foreground) / 0.55); }
 
 .barbell-value {
   align-self: center;
@@ -9556,6 +9560,64 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   height: auto;
   vertical-align: top;
 }
+.spit-annotate-figure.spit-guide-live {
+  overflow: visible;
+}
+.spit-guide-live {
+  padding: 14px 12px 8px;
+}
+.spit-guide-live .spit-guide-card,
+.spit-guide-live .schedule-card {
+  margin: 0;
+  pointer-events: none;
+  box-shadow: none;
+  overflow: visible;
+}
+.spit-guide-live .ftt-head,
+.spit-guide-live thead th:nth-child(2),
+.spit-guide-live thead th:nth-child(3),
+.spit-guide-live thead th.ftt-verdict {
+  position: relative;
+  overflow: visible;
+}
+.spit-guide-live thead th:nth-child(2)::after,
+.spit-guide-live thead th:nth-child(3)::after,
+.spit-guide-live thead th.ftt-verdict::after {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px hsl(var(--card));
+  z-index: 2;
+}
+.spit-guide-live thead th:nth-child(2)::after {
+  content: "1";
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.spit-guide-live thead th:nth-child(3)::after {
+  content: "2";
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.spit-guide-live thead th.ftt-verdict::after {
+  content: "3";
+  top: -10px;
+  right: 4px;
+  left: auto;
+  transform: none;
+}
 /* Theme-matched captures (system follows prefers-color-scheme). */
 .spit-annotate-img-light { display: none; }
 .spit-annotate-img-dark { display: block; }
@@ -9985,7 +10047,7 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   height: 14px;
   margin-top: 2px;
   border-radius: 3px;
-  background: hsl(var(--blue-hsl) / 0.55);
+  background: hsl(var(--muted-foreground) / 0.45);
 }
 
 /* Page-info legend swatches — mirror live UI chrome (see Home .spit-home-swatch). */
@@ -11022,6 +11084,10 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   font-size: 11.5px;
   color: var(--text-faint);
   line-height: 1.35;
+}
+.home-schedule-detail-note {
+  margin: 8px 2px 0;
+  text-align: left;
 }
 
 /* Opaque fallback when the OS asks to reduce transparency. */
@@ -19795,6 +19861,21 @@ html.home-squad-wide #home-feed-panel {
 html[data-page="graphics"] #graphics-page {
   display: flex;
 }
+#league-page {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+html[data-page="league"] #league-page {
+  display: flex;
+}
+.league-report-empty {
+  margin: 8px 2px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
 .graphics-toolbar {
   display: flex;
   align-items: baseline;
@@ -28488,20 +28569,22 @@ html.player-thumbs-kit img.home-pitch-photo {
 .gw-recap-btn[hidden] {
   display: none !important;
 }
-html.is-gw-recap-open,
-html.is-gw-recap-open body {
-  overflow: hidden;
-}
 .gw-recap {
-  position: fixed;
-  inset: 0;
-  z-index: 600;
+  position: relative;
+  inset: auto;
+  z-index: auto;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  padding: 0 0 16px;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 .gw-recap[hidden] {
+  display: none;
+}
+.gw-recap.is-page .gw-recap-backdrop,
+.gw-recap.is-page .gw-recap-close {
   display: none;
 }
 .gw-recap-backdrop {
@@ -28520,13 +28603,14 @@ html.is-gw-recap-open body {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  width: min(100%, 520px);
-  height: min(100%, 680px);
+  width: min(100%, 560px);
+  min-height: min(620px, calc(100dvh - 220px));
+  height: min(680px, calc(100dvh - 200px));
   background: hsl(var(--card));
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: none;
   overflow: hidden;
 }
 .gw-recap-progress {
