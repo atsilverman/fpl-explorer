@@ -22078,11 +22078,11 @@
     }
 
     if (state.page === "graphics") {
-      return `${spitHead("images", "How Graphics works")}
+      return `${spitHead("images", "How Lineups works")}
         ${spitKeySection("Source", [
           spitKeyRow(
             `${iconHTML("images", "spit-home-swatch")}`,
-            "Club XI graphic"
+            "Club XI lineup"
           ),
           spitKeyRow(
             `${iconHTML("x-logo", "spit-home-swatch")}`,
@@ -22924,7 +22924,7 @@
   function syncPageInfoButton() {
     const labels = {
       home: "How Home works",
-      graphics: "How Graphics works",
+      graphics: "How Lineups works",
       league: "How League Report works",
       live: "How Gameweek works",
       report: "How Report works",
@@ -32754,7 +32754,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Weekly Report is ready to show in nav again.
   const REPORT_NAV_ENABLED = false;
-  const PAGES = ["home", "graphics", "league", "live", "report", "opta", "rankings", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
+  const PAGES = ["home", "opta", "live", "report", "rankings", "graphics", "league", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
