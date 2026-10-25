@@ -58,6 +58,7 @@ PREFS_PATH = SITE / "home_prefs.json"
 BASELINES_PATH = SITE / "home_rank_baselines.json"
 AUTOSUB_CACHE_PATH = SITE / "autosub_points_cache.json"
 MANAGER_POINTS_CACHE_PATH = SITE / "manager_points_cache.json"
+MANAGER_POINTS_JS_PATH = SITE / "manager_points_data.js"
 TEAM_NEWS_PATH = SITE / "team_news_data.json"
 OUT_PATH = SITE / "home_data.js"
 JSON_PATH = SITE / "home_data.json"
@@ -1352,6 +1353,23 @@ def resolve_rank_baselines(
     return overall, league, changed
 
 
+def write_manager_points_js(payload: dict) -> None:
+    """Slim historical Manager Points bundle for Vercel — not the live Home cache."""
+    by_entry = payload.get("managerPointsByEntry") or {}
+    if not isinstance(by_entry, dict) or not by_entry:
+        return
+    body = {
+        "generatedAt": payload.get("generatedAt") or generated_at(),
+        "gw": payload.get("gw"),
+        "leagueId": payload.get("leagueId"),
+        "byEntry": by_entry,
+    }
+    MANAGER_POINTS_JS_PATH.write_text(
+        f"window.FPL_MANAGER_POINTS = {json.dumps(body, separators=(',', ':'))};\n",
+        encoding="utf-8",
+    )
+
+
 def write_home_outputs(payload: dict) -> None:
     """Write Home cache for static embed (JS) and live server API (JSON)."""
     OUT_PATH.write_text(
@@ -1362,6 +1380,7 @@ def write_home_outputs(payload: dict) -> None:
         json.dumps(payload, separators=(",", ":")),
         encoding="utf-8",
     )
+    write_manager_points_js(payload)
 
 
 def resolve_targets(args: argparse.Namespace) -> tuple[int | None, int | None]:

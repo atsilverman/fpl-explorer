@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1685" />
+<link rel="stylesheet" href="styles.css?v=1687" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1447,6 +1447,14 @@
         </p>
       </div>
       <div class="ownership-mover-bar prices-mover-bar">
+        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Price Change view">
+          <button type="button" data-prices-view="prediction" class="active">
+            Predicted
+          </button>
+          <button type="button" data-prices-view="actual">
+            Actual
+          </button>
+        </div>
         <div class="segmented ownership-mover-seg prices-mover-kind-seg" id="prices-mover-kind-seg" role="group" aria-label="Risers or fallers" hidden>
           <button type="button" data-prices-mover-kind="risers" class="active" aria-label="Risers" title="Risers">
             <svg class="icon" aria-hidden="true"><use href="#i-trending-up"/></svg>
@@ -1457,18 +1465,11 @@
             <span class="prices-mover-kind-label">Fallers</span>
           </button>
         </div>
-        <div class="segmented ownership-mover-seg" id="prices-view-seg" role="group" aria-label="Price Change view">
-          <button type="button" data-prices-view="prediction" class="active">
-            Predicted
-          </button>
-          <button type="button" data-prices-view="actual">
-            Actual
-          </button>
-        </div>
         <div class="ownership-mover-end">
           <span class="count-label" id="prices-count-label"></span>
         </div>
       </div>
+      <p class="prices-actual-window-note" id="prices-actual-window-note" hidden>Limited to the last 7 days.</p>
       <div id="prices-prediction-wrap" class="prices-prediction-wrap">
         <div class="prices-mover-pager">
           <div class="prices-prediction-panels prices-mover-track" id="prices-prediction-track">
@@ -1982,6 +1983,7 @@
 <script src="price_changes_data.js?v=313"></script>
 <script src="leagues_data.js?v=6"></script>
 <script src="home_data.js?v=51"></script>
+<script src="manager_points_data.js?v=1"></script>
 <script src="team_news_data.js?v=20"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
@@ -2005,7 +2007,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1556"></script>
+<script src="app.js?v=1559"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

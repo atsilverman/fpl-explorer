@@ -45,10 +45,20 @@
     gwAwaitingKickoff: null,
     error: null,
   };
+  const MANAGER_POINTS = window.FPL_MANAGER_POINTS || {
+    generatedAt: null,
+    gw: null,
+    leagueId: null,
+    byEntry: {},
+  };
+  if (!window.FPL_MANAGER_POINTS) window.FPL_MANAGER_POINTS = MANAGER_POINTS;
   if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
   if (HOME.gwAwaitingKickoff == null) HOME.gwAwaitingKickoff = null;
   if (!HOME.managerPointsByEntry || typeof HOME.managerPointsByEntry !== "object") {
     HOME.managerPointsByEntry = {};
+  }
+  if (!Object.keys(HOME.managerPointsByEntry).length && MANAGER_POINTS.byEntry) {
+    HOME.managerPointsByEntry = { ...MANAGER_POINTS.byEntry };
   }
   window.FPL_HOME = HOME;
   const REPORT = window.FPL_REPORT || {
@@ -1280,6 +1290,7 @@
     pricesMoverKindSeg: $("#prices-mover-kind-seg"),
     pricesCountdownBar: $("#prices-countdown-bar"),
     pricesCountLabel: $("#prices-count-label"),
+    pricesActualWindowNote: $("#prices-actual-window-note"),
     pricesPredictionWrap: $("#prices-prediction-wrap"),
     pricesPredictionPanels: $("#prices-prediction-track"),
     pricesPredictionTrack: $("#prices-prediction-track"),
@@ -3156,10 +3167,10 @@
       payload.managerPointsByEntry && typeof payload.managerPointsByEntry === "object"
         ? payload.managerPointsByEntry
         : null;
-    HOME.managerPointsByEntry = incomingManagerPoints
-      || (priorHome.managerPointsByEntry && typeof priorHome.managerPointsByEntry === "object"
-        ? priorHome.managerPointsByEntry
-        : {});
+    HOME.managerPointsByEntry = mergeManagerPointsByEntry(
+      incomingManagerPoints,
+      priorHome.managerPointsByEntry
+    );
     if (!skipFeedIngest && payload.gw != null && payload.elementGw && typeof payload.elementGw === "object") {
       const onFeedPage = state.page === "live" || state.page === "home";
       if (onFeedPage) {
@@ -17630,6 +17641,37 @@
     return stack;
   }
 
+  function managerPointsSeedByEntry() {
+    const baked = MANAGER_POINTS.byEntry;
+    return baked && typeof baked === "object" ? baked : {};
+  }
+
+  function mergeManagerPointsByEntry(incoming, prior) {
+    const seed = managerPointsSeedByEntry();
+    const base =
+      prior && typeof prior === "object" && Object.keys(prior).length ? prior : seed;
+    const live = incoming && typeof incoming === "object" ? incoming : null;
+    if (!live || !Object.keys(live).length) {
+      return { ...seed, ...base };
+    }
+    const out = { ...seed, ...base };
+    for (const [eid, payload] of Object.entries(live)) {
+      const liveGws = Array.isArray(payload && payload.gws) ? payload.gws : [];
+      const priorGws = Array.isArray((out[eid] || {}).gws) ? out[eid].gws : [];
+      const byGw = new Map();
+      for (const row of priorGws) {
+        const gw = Number(row && row.gw);
+        if (Number.isFinite(gw) && gw > 0) byGw.set(gw, row);
+      }
+      for (const row of liveGws) {
+        const gw = Number(row && row.gw);
+        if (Number.isFinite(gw) && gw > 0) byGw.set(gw, row);
+      }
+      out[eid] = { gws: [...byGw.values()].sort((a, b) => a.gw - b.gw) };
+    }
+    return out;
+  }
+
   function homeManagerPointsSeries(entryId) {
     const baked = HOME.managerPointsByEntry && HOME.managerPointsByEntry[String(entryId)];
     const rows = Array.isArray(baked && baked.gws) ? baked.gws : [];
@@ -19555,10 +19597,10 @@
       syncBarbellCompareNameWidth();
       syncFixturesSosFabVisibility();
       scheduleOwnershipTreemapRelayout();
-      if (!breakpointFlip && state.page === "prices" && pricesViewMode() === "prediction") {
+      if (!breakpointFlip && !NARROW_MQ.matches && state.page === "prices" && pricesViewMode() === "prediction") {
         schedulePricesPredictionColumnsSync();
       }
-      if (!breakpointFlip && state.page === "prices" && pricesViewMode() === "actual") {
+      if (!breakpointFlip && !NARROW_MQ.matches && state.page === "prices" && pricesViewMode() === "actual") {
         schedulePricesActualColumnsSync();
       }
       if (state.page === "opta") {
@@ -19611,6 +19653,7 @@
     function pageOwnsVerticalScroll() {
       return (
         state.page === "expected" ||
+        state.page === "prices" ||
         (state.page === "ownership" && ownershipIsTreemap())
       );
     }
@@ -19620,7 +19663,6 @@
         NARROW_MQ.matches &&
         (state.page === "opta" ||
           state.page === "live" ||
-          state.page === "prices" ||
           state.page === "fixtures" ||
           (state.page === "ownership" && !ownershipIsTreemap()) ||
           state.page === "defcon")
@@ -22062,7 +22104,13 @@
       ];
       if (isActual) {
         return `${spitHead("pound-sterling-circle", "How Price Change works")}
-          ${spitKeySection("Moves", direction)}`;
+          ${spitKeySection("Moves", [
+            ...direction,
+            spitKeyRow(
+              `<span class="spit-ui-swatch">${iconHTML("calendar-search")}</span>`,
+              "Last 7 days"
+            ),
+          ])}`;
       }
       return `${spitHead("pound-sterling-circle", "How Price Change works")}
         ${spitKeySection("Signal", [
@@ -31136,7 +31184,7 @@
   function bindPricesActualColumnsObserver() {
     if (pricesActualColumnsObserver || !el.pricesActualWrap) return;
     pricesActualColumnsObserver = new ResizeObserver(() => {
-      if (state.page === "prices" && pricesViewMode() === "actual") {
+      if (state.page === "prices" && pricesViewMode() === "actual" && !NARROW_MQ.matches) {
         schedulePricesActualColumnsSync();
       }
     });
@@ -31192,9 +31240,36 @@
     );
   }
 
-  /** Actual always shows every change; default sort keeps high-owned first within each day. */
+  const PRICES_ACTUAL_WINDOW_DAYS = 7;
+
+  function pricesUkCalendarDateKey(date = new Date()) {
+    try {
+      return date.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+    } catch {
+      return date.toISOString().slice(0, 10);
+    }
+  }
+
+  function pricesActualWindowStartUk() {
+    const today = pricesUkCalendarDateKey();
+    const parts = String(today).split("-").map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return today;
+    const start = pricesAddLondonDays(
+      parts[0],
+      parts[1],
+      parts[2],
+      -(PRICES_ACTUAL_WINDOW_DAYS - 1)
+    );
+    return `${String(start.year).padStart(4, "0")}-${String(start.month).padStart(2, "0")}-${String(start.day).padStart(2, "0")}`;
+  }
+
+  /** Actual rise/fall lists only the last 7 UK calendar days. */
   function limitPricesActualRows(rows) {
-    return rows;
+    const start = pricesActualWindowStartUk();
+    return rows.filter((row) => {
+      const day = pricesActualDayKey(row);
+      return !!day && day >= start;
+    });
   }
 
   function limitPricesPredictionMovers(rows) {
@@ -31697,6 +31772,9 @@
     if (el.pricesActualWrap) {
       el.pricesActualWrap.hidden = mode !== "actual";
     }
+    if (el.pricesActualWindowNote) {
+      el.pricesActualWindowNote.hidden = mode !== "actual";
+    }
     if (el.pricesProgressFilterGroup) {
       el.pricesProgressFilterGroup.style.display =
         state.page === "prices" && mode === "prediction" ? "" : "none";
@@ -31930,15 +32008,18 @@
         el.pricesCountLabel.textContent = "No changes yet";
       } else if (!filtered.length) {
         el.pricesCountLabel.textContent = "No changes match filters";
+      } else if (!visible.length) {
+        el.pricesCountLabel.textContent = `No changes in ${PRICES_ACTUAL_WINDOW_DAYS}d`;
       } else {
-        const noun = filtered.length === 1 ? "change" : "changes";
-        el.pricesCountLabel.textContent = `${filtered.length} ${noun}`;
+        const noun = visible.length === 1 ? "change" : "changes";
+        el.pricesCountLabel.textContent = `${visible.length} ${noun} · ${PRICES_ACTUAL_WINDOW_DAYS}d`;
       }
     }
 
     const emptyPoolMsg =
       "No actual price changes recorded yet. Changes appear after the next bootstrap check-in detects a £0.1m move.";
     const emptyFilterMsg = "No price changes match the current filters.";
+    const emptyWindowMsg = `No price changes in the last ${PRICES_ACTUAL_WINDOW_DAYS} days.`;
 
     if (!pool.length) {
       renderPricesActualTable(
@@ -31961,14 +32042,14 @@
         el.pricesActualRisersHead,
         el.pricesActualRisersBody,
         [],
-        emptyFilterMsg
+        filtered.length ? emptyWindowMsg : emptyFilterMsg
       );
       renderPricesActualTable(
         el.pricesActualFallersWrap,
         el.pricesActualFallersHead,
         el.pricesActualFallersBody,
         [],
-        emptyFilterMsg
+        filtered.length ? emptyWindowMsg : emptyFilterMsg
       );
     } else {
       renderPricesActualTable(
@@ -33682,7 +33763,7 @@
       }
       state.pricesViewMode = next;
       syncPricesViewUI();
-      if (state.page === "prices") renderPrices({ animateEnter: true });
+      if (state.page === "prices") renderPrices();
     });
   }
   if (el.pricesMoverKindSeg) {
@@ -33693,10 +33774,12 @@
       if (kind === pricesMoverKind()) return;
       state.pricesMoverKind = kind;
       syncPricesMoverPagerUI({ animate: true });
-      requestAnimationFrame(() => {
-        syncPricesActualColumnWidths();
-        syncMobileScrollportHeight();
-      });
+      if (!NARROW_MQ.matches) {
+        requestAnimationFrame(() => {
+          syncPricesActualColumnWidths();
+          syncMobileScrollportHeight();
+        });
+      }
     });
   }
   bindPricesMoverPager();
