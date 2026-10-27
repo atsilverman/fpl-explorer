@@ -15,3 +15,6 @@ venv/
 site/home_rank_baselines.json
 # Live-server runtime cache (DO / VPS); static fallback stays home_data.js in git.
 site/home_data.json
+# Rolling post-FT stat diffs (droplet / local fetch_home); not a git bundle.
+site/stat_adjustments_cache.json
+site/stat_adjustments_cache.tmp

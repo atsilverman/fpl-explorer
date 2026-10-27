@@ -21,7 +21,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, time as dtime, timedelta, timezone
 from pathlib import Path
 
 from fpl_gameweeks import (
@@ -30,6 +30,7 @@ from fpl_gameweeks import (
     picks_gameweek_id,
 )
 from gw_element_stats import normalize_element_gw_record
+from stat_adjustments import empty_stat_log, update_stat_log
 from player_availability import player_availability_fields
 from live_scoring import (
     apply_auto_substitution,
@@ -580,6 +581,64 @@ def settled_gameweeks(bootstrap: dict) -> set[int]:
         if ev.get("finished") and ev.get("data_checked"):
             out.add(eid)
     return out
+
+
+def gw_lock_at_iso(last_kickoff: str | None) -> str | None:
+    """09:00 Europe/London the calendar day after the last kickoff (2026/27 lockdown)."""
+    if not last_kickoff or not isinstance(last_kickoff, str):
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+
+        london = ZoneInfo("Europe/London")
+        raw = last_kickoff.strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        nxt = dt.astimezone(london).date() + timedelta(days=1)
+        lock = datetime.combine(nxt, dtime(9, 0), tzinfo=london)
+        return lock.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        return None
+
+
+def summarize_gw_progress(
+    fixtures: list,
+    *,
+    deadline_time: str | None,
+    gw_settled: bool,
+) -> dict:
+    """Compact GW pipeline for the Home progress bar."""
+    total = 0
+    started = 0
+    provisional_ft = 0
+    final = 0
+    last_ko = None
+    for fx in fixtures or []:
+        if not isinstance(fx, dict):
+            continue
+        total += 1
+        ko = fx.get("kickoff_time")
+        if isinstance(ko, str) and ko and (last_ko is None or ko > last_ko):
+            last_ko = ko
+        if fx.get("started") or fixture_is_finished(fx) or fixture_is_live(fx):
+            started += 1
+        if fixture_is_finished(fx):
+            provisional_ft += 1
+        if fixture_is_final(fx):
+            final += 1
+    return {
+        "deadlineTime": deadline_time,
+        "lastKickoff": last_ko,
+        "lockAt": gw_lock_at_iso(last_ko),
+        "fixturesTotal": total,
+        "fixturesStarted": started,
+        "fixturesProvisionalFt": provisional_ft,
+        "fixturesFinal": final,
+        "gwSettled": bool(gw_settled),
+    }
 
 
 def score_autosubs(subs: list[dict], points_by_element: dict[int, int]) -> dict:
@@ -2538,6 +2597,38 @@ def main() -> int:
         # file for a mid- or end-season recap; do not put stacks on the live
         # Home payload until that surface exists.
 
+        gw_settled = gw in settled_gameweeks(bootstrap)
+        gw_deadline = None
+        cur_gw = gws.get("current") or {}
+        try:
+            if int(cur_gw.get("id") or 0) == int(gw):
+                gw_deadline = cur_gw.get("deadlineTime")
+        except (TypeError, ValueError):
+            gw_deadline = None
+        if not gw_deadline:
+            for ev in bootstrap.get("events") or []:
+                try:
+                    if int(ev.get("id") or 0) == int(gw):
+                        gw_deadline = ev.get("deadline_time")
+                        break
+                except (TypeError, ValueError):
+                    continue
+
+        try:
+            stat_log = update_stat_log(
+                gw=int(gw),
+                checked_at=generated_at(),
+                live=live,
+                fixtures=fixtures,
+                elements=elements,
+                teams=teams,
+                owners_by_element=owners_by_element,
+                gw_settled=gw_settled,
+            )
+        except Exception as stat_exc:
+            print(f"  stat log failed: {stat_exc}", file=sys.stderr)
+            stat_log = empty_stat_log(gw)
+
         payload = {
             "generatedAt": generated_at(),
             "gw": gw,
@@ -2580,6 +2671,14 @@ def main() -> int:
             "standings": standing_rows,
             "chipWindow": chip_window_meta(chip_half, chip_windows, gw),
             "gwAwaitingKickoff": gw_awaiting_kickoff,
+            # FPL has stamped autosubs, bonus, and official ranks for this GW.
+            "gwSettled": gw_settled,
+            "gwProgress": summarize_gw_progress(
+                fixtures,
+                deadline_time=gw_deadline,
+                gw_settled=gw_settled,
+            ),
+            "statLog": stat_log,
             "ownersByElement": {
                 str(el_id): entry_ids
                 for el_id, entry_ids in sorted(owners_by_element.items())

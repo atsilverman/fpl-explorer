@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1704" />
+<link rel="stylesheet" href="styles.css?v=1709" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1215,6 +1215,43 @@
           </div>
         </article>
 
+        <article class="home-panel home-gw-progress-panel" id="home-gw-progress-panel" hidden>
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker" id="home-gw-progress-kicker">Gameweek Status</span>
+              <span class="home-panel-heading-view" id="home-gw-progress-stage"></span>
+            </span>
+            <span class="home-panel-heading-meta" id="home-gw-progress-meta"></span>
+          </h3>
+          <div class="home-gw-prog" id="home-gw-prog">
+            <div class="home-gw-prog-labels" id="home-gw-prog-labels"></div>
+            <div class="home-gw-prog-bar">
+              <div class="home-gw-prog-track">
+                <span class="home-gw-prog-fill" id="home-gw-prog-fill"></span>
+              </div>
+              <ol class="home-gw-prog-ticks" id="home-gw-prog-ticks"></ol>
+            </div>
+            <p class="home-gw-prog-copy" id="home-gw-prog-copy"></p>
+          </div>
+        </article>
+
+        <article class="home-panel home-stat-log-panel" id="home-stat-log-panel" hidden>
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker" id="home-stat-log-kicker">Adjustments</span>
+              <span class="home-panel-heading-view" id="home-stat-log-stage"></span>
+            </span>
+            <span class="home-panel-heading-meta">
+              <span class="home-stat-log-filters" role="group" aria-label="Adjustment filter">
+                <button type="button" class="home-stat-log-filter is-active" data-stat-log-filter="league" aria-pressed="true">League</button>
+                <button type="button" class="home-stat-log-filter" data-stat-log-filter="all" aria-pressed="false">All</button>
+              </span>
+              <span id="home-stat-log-meta"></span>
+            </span>
+          </h3>
+          <div class="home-stat-log-body" id="home-stat-log-body"></div>
+        </article>
+
         <article class="home-panel home-table-panel" id="home-feed-panel">
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
@@ -2011,7 +2048,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1572"></script>
+<script src="app.js?v=1578"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

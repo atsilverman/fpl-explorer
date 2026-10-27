@@ -65,6 +65,12 @@ class LiveState:
 STATE = LiveState()
 INTERVAL_LIVE_SEC = 15
 INTERVAL_IDLE_SEC = 3600
+# After full-time: frequent while Opta is hottest, then 10 min through Review.
+REVIEW_FAST_SEC = 120
+REVIEW_MID_SEC = 300
+REVIEW_SLOW_SEC = 600
+REVIEW_FAST_AGE_SEC = 20 * 60
+REVIEW_MID_AGE_SEC = 90 * 60
 
 
 def fpl_get(path: str) -> dict | list:
@@ -127,6 +133,54 @@ def fixture_in_play_for_poll(fx: dict | None) -> bool:
 
 def fixtures_have_live_action(fixtures: list[dict]) -> bool:
     return any(fixture_in_play_for_poll(fx) for fx in fixtures)
+
+
+def fixtures_have_completed(fixtures: list[dict]) -> bool:
+    return any(fixture_is_finished(fx) for fx in fixtures)
+
+
+def home_gw_settled_cached() -> bool:
+    payload = read_home_payload()
+    return bool(payload and payload.get("gwSettled") is True)
+
+
+def newest_full_time_age_sec(fixtures: list[dict], now: float | None = None) -> float | None:
+    """Seconds since the most recently completed fixture's estimated full-time."""
+    now_ts = time.time() if now is None else now
+    newest: float | None = None
+    for fx in fixtures:
+        if not fixture_is_finished(fx):
+            continue
+        ko = parse_kickoff_unix(fx.get("kickoff_time") if isinstance(fx, dict) else None)
+        if ko is None:
+            continue
+        try:
+            mins = int(fx.get("minutes") or 0)
+        except (TypeError, ValueError):
+            mins = 0
+        match_len = (max(mins, 90) if mins else 105) * 60
+        ft = min(now_ts, ko + match_len)
+        if newest is None or ft > newest:
+            newest = ft
+    if newest is None:
+        return None
+    return max(0.0, now_ts - newest)
+
+
+def review_interval_sec(fixtures: list[dict]) -> int | None:
+    """Poll cadence from first full-time through FPL lock; None if not in that window."""
+    if home_gw_settled_cached():
+        return None
+    if not fixtures_have_completed(fixtures):
+        return None
+    age = newest_full_time_age_sec(fixtures)
+    if age is None:
+        return REVIEW_SLOW_SEC
+    if age < REVIEW_FAST_AGE_SEC:
+        return REVIEW_FAST_SEC
+    if age < REVIEW_MID_AGE_SEC:
+        return REVIEW_MID_SEC
+    return REVIEW_SLOW_SEC
 
 
 def parse_kickoff_unix(iso: str | None) -> float | None:
@@ -269,17 +323,23 @@ def run_fetch_home(manager_id: int, league_id: int) -> tuple[bool, str | None]:
 
 
 def maybe_trigger_refresh_if_stale() -> None:
-    """Kick off a background fetch when clients hit stale cache during live play."""
+    """Kick off a background fetch when clients hit stale cache during live/review."""
+    with STATE.lock:
+        if STATE.fetching:
+            return
+    gw = resolve_active_gw()
+    fixtures = load_gw_fixtures(gw)
+    live = fixtures_have_live_action(fixtures)
+    review = review_interval_sec(fixtures) if not live else None
+    if not live and review is None:
+        return
+    min_age = INTERVAL_LIVE_SEC if live else review
     with STATE.lock:
         if STATE.fetching:
             return
         last = STATE.last_fetch_sec
-        if last is not None and time.time() - last < INTERVAL_LIVE_SEC:
+        if last is not None and time.time() - last < min_age:
             return
-    gw = resolve_active_gw()
-    fixtures = load_gw_fixtures(gw)
-    if not fixtures_have_live_action(fixtures):
-        return
     threading.Thread(
         target=refresh_once,
         args=(INTERVAL_LIVE_SEC, INTERVAL_IDLE_SEC),
@@ -300,11 +360,16 @@ def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOF
     if fixtures_have_live_action(fixtures):
         return max(15, live_sec)
     until = seconds_until_next_kickoff(fixtures)
+    if until is not None and until <= kickoff_lead_sec:
+        return max(15, live_sec)
+    review = review_interval_sec(fixtures)
+    if review is not None:
+        if until is None:
+            return max(15, review)
+        wake = max(15, int(until) - kickoff_lead_sec)
+        return min(max(15, review), wake)
     if until is None:
         return max(15, idle_sec)
-    # KO imminent or overdue (API lag on `started`) — keep live cadence.
-    if until <= kickoff_lead_sec:
-        return max(15, live_sec)
     # Wake ~kickoff_lead_sec before KO; never sleep longer than idle_sec.
     wake = max(15, int(until) - kickoff_lead_sec)
     return min(max(15, idle_sec), wake)

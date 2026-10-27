@@ -42,10 +42,16 @@
     transfersSchemaVersion: 0,
     transfersByEntry: {},
     gwAwaitingKickoff: null,
+    gwSettled: null,
+    gwProgress: null,
+    statLog: null,
     error: null,
   };
   if (HOME.transfersSchemaVersion == null) HOME.transfersSchemaVersion = 0;
   if (HOME.gwAwaitingKickoff == null) HOME.gwAwaitingKickoff = null;
+  if (HOME.gwSettled == null) HOME.gwSettled = null;
+  if (HOME.gwProgress == null) HOME.gwProgress = null;
+  if (HOME.statLog == null) HOME.statLog = null;
   window.FPL_HOME = HOME;
   const REPORT = window.FPL_REPORT || {
     generatedAt: null,
@@ -1329,6 +1335,20 @@
     prefsDifficultyBtn: $("#prefs-difficulty-btn"),
     prefsHomeBadgePreview: $("#prefs-home-badge-preview"),
     homeBadgeStyleSeg: $("#home-badge-style-seg"),
+    homeGwProgressPanel: $("#home-gw-progress-panel"),
+    homeGwProgressKicker: $("#home-gw-progress-kicker"),
+    homeGwProgressStage: $("#home-gw-progress-stage"),
+    homeGwProgressMeta: $("#home-gw-progress-meta"),
+    homeGwProg: $("#home-gw-prog"),
+    homeGwProgLabels: $("#home-gw-prog-labels"),
+    homeGwProgFill: $("#home-gw-prog-fill"),
+    homeGwProgTicks: $("#home-gw-prog-ticks"),
+    homeGwProgCopy: $("#home-gw-prog-copy"),
+    homeStatLogPanel: $("#home-stat-log-panel"),
+    homeStatLogKicker: $("#home-stat-log-kicker"),
+    homeStatLogStage: $("#home-stat-log-stage"),
+    homeStatLogMeta: $("#home-stat-log-meta"),
+    homeStatLogBody: $("#home-stat-log-body"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
     marketsAttribution: $("#markets-attribution"),
@@ -3279,7 +3299,20 @@
       : null;
     HOME.gwAwaitingKickoff = Object.prototype.hasOwnProperty.call(payload, "gwAwaitingKickoff")
       ? payload.gwAwaitingKickoff === true
-      : null;
+      : HOME.gwAwaitingKickoff;
+    if (Object.prototype.hasOwnProperty.call(payload, "gwSettled")) {
+      HOME.gwSettled = payload.gwSettled === true;
+    }
+    if (payload.gwProgress && typeof payload.gwProgress === "object") {
+      HOME.gwProgress = payload.gwProgress;
+    } else if (gwChanged) {
+      HOME.gwProgress = null;
+    }
+    if (payload.statLog && typeof payload.statLog === "object") {
+      HOME.statLog = payload.statLog;
+    } else if (gwChanged) {
+      HOME.statLog = null;
+    }
     const incomingTransfers = payload.transfersByEntry && typeof payload.transfersByEntry === "object"
       ? payload.transfersByEntry
       : {};
@@ -3900,6 +3933,9 @@
           : home.gwAwaitingKickoff === false
             ? false
             : null,
+      gwSettled: home.gwSettled === true,
+      gwProgress: home.gwProgress && typeof home.gwProgress === "object" ? home.gwProgress : null,
+      statLog: home.statLog && typeof home.statLog === "object" ? home.statLog : null,
     };
   }
 
@@ -4198,9 +4234,33 @@
     const homeUpdatedIso = pageDataUpdatedIso("home");
     const text = when ? `Updated ${when}` : "";
     const title = homeUpdatedIso
-      ? `Data refreshed ${String(homeUpdatedIso).replace("T", " ").replace("Z", " UTC")}`
+      ? `Data refreshed ${fmtMarketsUpdated(homeUpdatedIso) || formatHomeLocalWhen(homeUpdatedIso)}`
       : null;
     setLabels(text, { title, showFooter: !!text });
+  }
+
+  function formatHomeLocalWhen(iso, { includeDate = true, includeZone = false } = {}) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    try {
+      const timeOpts = { ...localeTimeOptions() };
+      if (includeZone) timeOpts.timeZoneName = "short";
+      const time = d.toLocaleTimeString(undefined, timeOpts);
+      if (!includeDate) return time;
+      const today = new Date();
+      const sameDay = d.toLocaleDateString() === today.toLocaleDateString();
+      if (sameDay) return time;
+      const day = d.toLocaleDateString(undefined, { weekday: "short" });
+      const far = Math.abs(d.getTime() - today.getTime()) > 6 * 24 * 60 * 60 * 1000;
+      if (far) {
+        const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        return `${day} ${date} ${time}`;
+      }
+      return `${day} ${time}`;
+    } catch {
+      return "";
+    }
   }
 
   function homeKickoffParts(iso) {
@@ -10909,8 +10969,409 @@
     return false;
   }
 
+  function homeGwSettled() {
+    if (HOME && HOME.gwSettled === true) return true;
+    return false;
+  }
+
+  /** True when the auto-sub modal would actually change GW / total / league place. */
+  function homeAutosubPreviewHasEffect() {
+    const standings = homeStandingsRows();
+    if (!standings.length) return false;
+    let ranks = null;
+    try {
+      ranks = homeStandingsProjectedRanks(standings);
+    } catch (err) {
+      ranks = null;
+    }
+    for (const row of standings) {
+      const sq = homeSquadForEntry(row.entry) || [];
+      if (homeCaptaincySwapPending(sq)) return true;
+      if (homeAutosubPendingGwDelta(sq) !== 0) return true;
+      if (!ranks) continue;
+      const eid = Number(row.entry);
+      const before = ranks.current.get(eid);
+      const after = ranks.projected.get(eid);
+      if (before && after && before !== after) return true;
+    }
+    return false;
+  }
+
   function homeAutosubPreviewAvailable() {
-    return homeAutosubLeagueReshufflePending();
+    if (homeGwSettled()) return false;
+    if (!homeAutosubLeagueReshufflePending()) return false;
+    return homeAutosubPreviewHasEffect();
+  }
+
+  const HOME_GW_PROG_STAGES = [
+    { id: "deadline", label: "Deadline" },
+    { id: "matches", label: "Matches" },
+    { id: "review", label: "Review" },
+    { id: "locked", label: "Locked" },
+  ];
+  // Fill is relative to a track that runs Deadline → Locked (dots sit on the ends).
+  const HOME_GW_PROG_TICK = [0, 1 / 3, 2 / 3, 1];
+  let homeGwProgPaintKey = "";
+
+  function homeGwProgN(v) {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function homeGwDeadlineIso(gw) {
+    const id = Number(gw);
+    const cur = GAMEWEEKS && GAMEWEEKS.current;
+    if (cur && Number(cur.id) === id && cur.deadlineTime) return cur.deadlineTime;
+    const nxt = GAMEWEEKS && GAMEWEEKS.next;
+    if (nxt && Number(nxt.id) === id && nxt.deadlineTime) return nxt.deadlineTime;
+    return null;
+  }
+
+  function homeGwLockAtIso(lastKickoff) {
+    if (!lastKickoff) return null;
+    const d = new Date(lastKickoff);
+    if (Number.isNaN(d.getTime())) return null;
+    try {
+      const p = pricesLondonParts(d);
+      const next = pricesAddLondonDays(p.year, p.month, p.day, 1);
+      return pricesLondonWallToUtc(next.year, next.month, next.day, 9, 0, 0)
+        .toISOString()
+        .replace(".000Z", "Z");
+    } catch {
+      return null;
+    }
+  }
+
+  function homeGwProgressFromSquads() {
+    const byEntry = (HOME && HOME.squadsByEntry) || {};
+    const seen = new Map();
+    const addFx = (fx) => {
+      if (!fx || typeof fx !== "object") return;
+      const ko = fx.kickoff || fx.kickoff_time || "";
+      const key = `${ko}|${fx.opp || ""}|${fx.oppHa || ""}`;
+      if (!ko && key === "||") return;
+      if (seen.has(key)) return;
+      seen.set(key, fx);
+    };
+    Object.values(byEntry).forEach((squad) => {
+      (Array.isArray(squad) ? squad : []).forEach((row) => {
+        homeSquadFixtures(row).forEach(addFx);
+      });
+    });
+    (Array.isArray(HOME && HOME.squad) ? HOME.squad : []).forEach((row) => {
+      homeSquadFixtures(row).forEach(addFx);
+    });
+    let started = 0;
+    let ft = 0;
+    let final = 0;
+    let lastKo = null;
+    seen.forEach((fx) => {
+      const ko = fx.kickoff || fx.kickoff_time || null;
+      if (typeof ko === "string" && ko && (lastKo == null || ko > lastKo)) lastKo = ko;
+      const isFt = !!fx.finished;
+      const isLive = !!fx.live;
+      if (isFt || isLive) started += 1;
+      if (isFt) ft += 1;
+      if (fx.final === true) final += 1;
+    });
+    return {
+      deadlineTime: homeGwDeadlineIso(HOME && HOME.gw),
+      lastKickoff: lastKo,
+      lockAt: homeGwLockAtIso(lastKo),
+      fixturesTotal: seen.size,
+      fixturesStarted: started,
+      fixturesProvisionalFt: ft,
+      fixturesFinal: final,
+      gwSettled: homeGwSettled(),
+    };
+  }
+
+  function homeGwProgressSnapshot() {
+    const baked = HOME && HOME.gwProgress && typeof HOME.gwProgress === "object"
+      ? HOME.gwProgress
+      : null;
+    const derived = homeGwProgressFromSquads();
+    const pickN = (key) => {
+      if (baked && baked[key] != null && Number.isFinite(Number(baked[key]))) {
+        return Math.max(0, Number(baked[key]));
+      }
+      return homeGwProgN(derived[key]);
+    };
+    const total = pickN("fixturesTotal");
+    const started = pickN("fixturesStarted");
+    const ft = pickN("fixturesProvisionalFt");
+    const final = pickN("fixturesFinal");
+    const deadlineTime = (baked && baked.deadlineTime) || derived.deadlineTime;
+    const lastKickoff = (baked && baked.lastKickoff) || derived.lastKickoff;
+    const lockAt = (baked && baked.lockAt) || derived.lockAt || homeGwLockAtIso(lastKickoff);
+    return {
+      deadlineTime,
+      lastKickoff,
+      lockAt,
+      fixturesTotal: total,
+      fixturesStarted: total > 0 ? Math.min(started, total) : started,
+      fixturesProvisionalFt: total > 0 ? Math.min(ft, total) : ft,
+      fixturesFinal: total > 0 ? Math.min(final, total) : final,
+      gwSettled: !!(baked && baked.gwSettled) || homeGwSettled(),
+    };
+  }
+
+  function homeGwProgressResolve(snap) {
+    const total = homeGwProgN(snap.fixturesTotal);
+    const started = homeGwProgN(snap.fixturesStarted);
+    const ft = homeGwProgN(snap.fixturesProvisionalFt);
+    const final = homeGwProgN(snap.fixturesFinal);
+    const deadlineMs = snap.deadlineTime ? Date.parse(snap.deadlineTime) : NaN;
+    const pastDeadline = Number.isFinite(deadlineMs) ? Date.now() >= deadlineMs : started > 0 || ft > 0;
+    const allFt = total > 0 && ft >= total;
+    const allFinal = total > 0 && final >= total;
+    if (snap.gwSettled || allFinal) {
+      return { stage: "locked", done: 4, fill: HOME_GW_PROG_TICK[3] };
+    }
+    if (allFt && pastDeadline) {
+      return { stage: "review", done: 3, fill: HOME_GW_PROG_TICK[2] };
+    }
+    if (pastDeadline) {
+      const ratio = total > 0 ? Math.min(1, Math.max(0, started / total)) : 0;
+      return {
+        stage: "matches",
+        done: 2,
+        fill: HOME_GW_PROG_TICK[1] + (HOME_GW_PROG_TICK[2] - HOME_GW_PROG_TICK[1]) * ratio,
+      };
+    }
+    return { stage: "deadline", done: 1, fill: HOME_GW_PROG_TICK[0] };
+  }
+
+  function homeGwProgressCopy(stage, snap) {
+    const deadline = formatHomeLocalWhen(snap.deadlineTime, { includeZone: true });
+    const lock = formatHomeLocalWhen(snap.lockAt, { includeZone: true });
+    const total = homeGwProgN(snap.fixturesTotal);
+    const started = homeGwProgN(snap.fixturesStarted);
+    const ft = homeGwProgN(snap.fixturesProvisionalFt);
+    if (stage === "deadline") {
+      return deadline
+        ? `Set your team by ${deadline}.`
+        : "Deadline hasn’t been posted yet.";
+    }
+    if (stage === "matches") {
+      if (total > 0 && started >= total && ft < total) {
+        return `${ft} of ${total} finished · points still live.`;
+      }
+      if (total > 0) return `${started} of ${total} started.`;
+      return "Waiting for the first kickoff.";
+    }
+    if (stage === "review") {
+      return lock
+        ? `Bonus, DefCon, and auto-subs can still change. Locks ${lock}.`
+        : "Bonus, DefCon, and auto-subs can still change until FPL locks the gameweek.";
+    }
+    return "Official points, bonus, and auto-subs are in.";
+  }
+
+  function homeGwProgressMeta(stage, snap) {
+    const total = homeGwProgN(snap.fixturesTotal);
+    const started = homeGwProgN(snap.fixturesStarted);
+    const ft = homeGwProgN(snap.fixturesProvisionalFt);
+    if (stage === "deadline") return formatHomeLocalWhen(snap.deadlineTime) || "";
+    if (stage === "matches") {
+      if (total > 0 && started >= total) return ft === total ? `${total} FT` : `${ft}/${total} FT`;
+      return total > 0 ? `${started}/${total}` : "";
+    }
+    if (stage === "review") return formatHomeLocalWhen(snap.lockAt) || "";
+    return "";
+  }
+
+  function homeGwProgressTitle(stage, snap) {
+    const deadline = formatHomeLocalWhen(snap.deadlineTime, { includeZone: true });
+    const lock = formatHomeLocalWhen(snap.lockAt, { includeZone: true });
+    if (stage === "review" && lock) {
+      return `Official lock is 09:00 UK the morning after the last match (${lock} on this device).`;
+    }
+    if (stage === "deadline" && deadline) return `Deadline ${deadline}`;
+    if (stage === "locked") return "FPL has stamped official points for this gameweek.";
+    return "";
+  }
+
+  function homeGwProgLegendMark(kind) {
+    const scale = kind === "locked" ? "1" : kind === "review" ? "0.62" : kind === "matches" ? "0.42" : "0.18";
+    const cls = kind === "review" ? " is-review" : kind === "locked" ? " is-locked" : "";
+    return (
+      `<span class="home-gw-prog${cls}" aria-hidden="true">` +
+      `<span class="home-gw-prog-track"><span class="home-gw-prog-fill is-drawn" style="--home-gw-prog-scale:${scale}"></span></span>` +
+      `</span>`
+    );
+  }
+
+  function hideHomeGwProgressPanel() {
+    if (el.homeGwProgressPanel) el.homeGwProgressPanel.hidden = true;
+    homeGwProgPaintKey = "";
+  }
+
+  function paintHomeGwProgress({ animate = true } = {}) {
+    const panel = el.homeGwProgressPanel;
+    const fill = el.homeGwProgFill;
+    const bar = el.homeGwProg;
+    if (!panel || !fill || !bar) return;
+    const onHome =
+      state.page === "home" || document.documentElement.dataset.page === "home";
+    const show =
+      onHome
+      && !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId)
+      && !!(el.homeBento && !el.homeBento.hidden);
+    if (!show) {
+      hideHomeGwProgressPanel();
+      return;
+    }
+    const snap = homeGwProgressSnapshot();
+    const resolved = homeGwProgressResolve(snap);
+    const gw = HOME && HOME.gw != null ? `GW${HOME.gw}` : "";
+    panel.hidden = false;
+    if (el.homeGwProgressKicker) el.homeGwProgressKicker.textContent = "Gameweek Status";
+    if (el.homeGwProgressStage) el.homeGwProgressStage.textContent = gw;
+    if (el.homeGwProgressMeta) {
+      el.homeGwProgressMeta.textContent = homeGwProgressMeta(resolved.stage, snap);
+    }
+    const title = homeGwProgressTitle(resolved.stage, snap);
+    if (title) panel.setAttribute("title", title);
+    else panel.removeAttribute("title");
+    bar.classList.toggle("is-review", resolved.stage === "review");
+    bar.classList.toggle("is-locked", resolved.stage === "locked");
+    if (el.homeGwProgLabels) {
+      el.homeGwProgLabels.innerHTML = HOME_GW_PROG_STAGES.map((s, i) => {
+        const done = i < resolved.done;
+        const active = s.id === resolved.stage;
+        const cls = active ? " is-active" : done ? " is-done" : "";
+        return `<p class="home-gw-prog-label${cls}">${escapeHtml(s.label)}</p>`;
+      }).join("");
+    }
+    if (el.homeGwProgTicks) {
+      el.homeGwProgTicks.innerHTML = HOME_GW_PROG_STAGES.map((s, i) => {
+        const done = i < resolved.done;
+        const active = s.id === resolved.stage;
+        const cls = [
+          done ? "is-done" : "",
+          active ? "is-active" : "",
+          s.id === "review" && active ? "is-review" : "",
+        ].filter(Boolean).join(" ");
+        return (
+          `<li class="home-gw-prog-tick${cls ? ` ${cls}` : ""}">` +
+          `<span class="home-gw-prog-tick-dot"></span></li>`
+        );
+      }).join("");
+    }
+    if (el.homeGwProgCopy) {
+      el.homeGwProgCopy.textContent = homeGwProgressCopy(resolved.stage, snap);
+    }
+    const scale = Math.max(0, Math.min(1, Number(resolved.fill) || 0));
+    fill.style.setProperty("--home-gw-prog-scale", String(scale));
+    const key = `${resolved.stage}:${scale.toFixed(3)}`;
+    const changed = key !== homeGwProgPaintKey;
+    homeGwProgPaintKey = key;
+    const motionOff = prefersReducedMotion() || !animate;
+    if (changed && !motionOff) {
+      fill.classList.remove("is-drawn");
+      void fill.offsetWidth;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (homeGwProgPaintKey !== key) return;
+          fill.classList.add("is-drawn");
+        });
+      });
+    } else {
+      fill.classList.add("is-drawn");
+    }
+  }
+
+  let homeStatLogFilter = "league";
+
+  function hideHomeStatLogPanel() {
+    if (el.homeStatLogPanel) el.homeStatLogPanel.hidden = true;
+  }
+
+  function homeStatLogEntries() {
+    const log = HOME && HOME.statLog && typeof HOME.statLog === "object" ? HOME.statLog : null;
+    const rows = log && Array.isArray(log.entries) ? log.entries : [];
+    return rows.filter((row) => row && typeof row === "object");
+  }
+
+  function homeStatLogChipHTML(change) {
+    if (!change || typeof change !== "object") return "";
+    const label = String(change.label || change.stat || "");
+    const from = change.from;
+    const to = change.to;
+    const flag = change.threshold === "hit" || change.threshold === "lost" ? change.threshold : "";
+    const flagText = flag === "hit" ? " · hit" : flag === "lost" ? " · lost" : "";
+    const cls = flag === "hit" ? " is-hit" : flag === "lost" ? " is-lost" : "";
+    return (
+      `<span class="home-stat-log-chip${cls}">` +
+      `${escapeHtml(label)} ${escapeHtml(String(from))}→${escapeHtml(String(to))}${flagText}` +
+      `</span>`
+    );
+  }
+
+  function homeStatLogRowHTML(row) {
+    const team = row.team || "";
+    const teamBadge = badgeHTML(team, "home-crest") ||
+      teamCrestFallbackHTML(team, "home-crest-fallback");
+    const name = row.name || "—";
+    const pos = row.pos || "";
+    const when = formatHomeLocalWhen(row.at, { includeDate: true }) || "";
+    const chips = (Array.isArray(row.changes) ? row.changes : [])
+      .map(homeStatLogChipHTML)
+      .filter(Boolean)
+      .join("");
+    return (
+      `<li class="home-stat-log-row">` +
+      `<div class="home-stat-log-player">` +
+      `${teamBadge}` +
+      `<div class="home-player-text"><div class="home-player-name">` +
+      `<span class="home-player-name-text">${escapeHtml(name)}</span>` +
+      (pos ? `<span class="home-stat-log-pos">${escapeHtml(pos)}</span>` : "") +
+      `</div></div></div>` +
+      `<span class="home-stat-log-when">${escapeHtml(when)}</span>` +
+      `<div class="home-stat-log-chips">${chips}</div>` +
+      `</li>`
+    );
+  }
+
+  function paintHomeStatLog() {
+    const panel = el.homeStatLogPanel;
+    if (!panel) return;
+    const onHome =
+      state.page === "home" || document.documentElement.dataset.page === "home";
+    const show =
+      onHome
+      && !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId)
+      && !!(el.homeBento && !el.homeBento.hidden);
+    if (!show) {
+      hideHomeStatLogPanel();
+      return;
+    }
+    const all = homeStatLogEntries();
+    const league = all.filter((row) => row.owned);
+    const useLeague = homeStatLogFilter === "league";
+    const rows = useLeague ? league : all;
+    const gw = HOME && HOME.gw != null ? `GW${HOME.gw}` : "";
+    panel.hidden = false;
+    if (el.homeStatLogKicker) el.homeStatLogKicker.textContent = "Adjustments";
+    if (el.homeStatLogStage) el.homeStatLogStage.textContent = gw;
+    panel.querySelectorAll("[data-stat-log-filter]").forEach((btn) => {
+      const on = btn.getAttribute("data-stat-log-filter") === homeStatLogFilter;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    if (el.homeStatLogMeta) {
+      el.homeStatLogMeta.textContent = rows.length ? String(rows.length) : "";
+    }
+    if (!el.homeStatLogBody) return;
+    if (!rows.length) {
+      const empty = useLeague && all.length
+        ? "No league players in the log — switch to All."
+        : "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
+      el.homeStatLogBody.innerHTML = `<p class="home-stat-log-empty">${empty}</p>`;
+      return;
+    }
+    el.homeStatLogBody.innerHTML = `<ul class="home-stat-log-list">${rows.map(homeStatLogRowHTML).join("")}</ul>`;
   }
 
   /** Always bake projected autosubs / C→VC into points + ranks when they are pending. */
@@ -11317,9 +11778,12 @@
     const onHome =
       state.page === "home" || document.documentElement.dataset.page === "home";
     const modalOpen = !!(el.homePlayerModal && !el.homePlayerModal.hidden);
+    if (!available && homeAutosubModalOpen()) {
+      closeHomeAutosubBreakdown({ instant: true });
+    }
     const btn = el.homeAutosubPreviewBtn;
     if (btn) {
-      const show = !!(available && onHome && !modalOpen);
+      const show = !!(available && onHome && !modalOpen && !homeAutosubModalOpen());
       btn.hidden = !show;
       btn.setAttribute("aria-expanded", homeAutosubModalOpen() ? "true" : "false");
       btn.setAttribute("aria-hidden", show ? "false" : "true");
@@ -17496,6 +17960,8 @@
   function renderHomeUnlinked() {
     if (el.homeEmpty) el.homeEmpty.hidden = true;
     if (el.homeBento) el.homeBento.hidden = true;
+    hideHomeGwProgressPanel();
+    hideHomeStatLogPanel();
     clearHomeDashboardStats();
     syncHomeNavIdentity("Link a manager to personalize Home");
     setHomeManagerModalOpen(true);
@@ -17562,6 +18028,8 @@
       if (el.homeViewBanner) el.homeViewBanner.hidden = true;
       if (el.homeOwnerBanner) el.homeOwnerBanner.hidden = true;
       if (el.homeAutosubPreviewBtn) el.homeAutosubPreviewBtn.hidden = true;
+      hideHomeGwProgressPanel();
+      hideHomeStatLogPanel();
       return;
     }
 
@@ -17578,6 +18046,8 @@
       el.homeGwHeading.textContent = "GW PTS";
     }
     syncHomeAutosubPreviewChrome();
+    paintHomeGwProgress({ animate: !settleQuiet });
+    paintHomeStatLog();
     renderHomeSummaryStats(summary, {
       enterPending: leaveRollsPending || homePageEnterArmed || homeIsEnterBusy(),
     });
@@ -21487,7 +21957,33 @@
         ${spitKeySection("Status", status)}
         ${spitKeySection("Auto-subs", autosubs)}
         ${spitKeySection("League", league)}
-        ${spitKeySection("Chips", chips)}`;
+        ${spitKeySection("Chips", chips)}
+        ${spitKeySection("Gameweek", [
+          spitKeyRow(
+            homeGwProgLegendMark("matches"),
+            "In progress",
+            "is-wide"
+          ),
+          spitKeyRow(
+            homeGwProgLegendMark("review"),
+            "Review — bonus / DefCon / autosubs can still change",
+            "is-wide"
+          ),
+          spitKeyRow(
+            homeGwProgLegendMark("locked"),
+            "Locked — official points stamped",
+            "is-wide"
+          ),
+          spitKeyRow(
+            `<span class="spit-home-swatch" aria-hidden="true">09:00</span>`,
+            "Lock is 09:00 UK the morning after the last match — times show on your device"
+          ),
+          spitKeyRow(
+            `<span class="home-stat-log-chip is-hit" aria-hidden="true">DefCon · hit</span>`,
+            "Adjustments — FPL API diffs after full-time (BPS, DefCon, bonus, scoring). Hit / lost marks a threshold cross",
+            "is-wide"
+          ),
+        ])}`;
     }
 
     if (state.page === "graphics") {
@@ -25474,7 +25970,7 @@
     if (!when) return { text: "", title: null };
     return {
       text: `Updated ${when}`,
-      title: `Data refreshed ${String(iso).replace("T", " ").replace("Z", " UTC")}`,
+      title: `Data refreshed ${when}`,
     };
   }
 
@@ -32920,6 +33416,8 @@
     syncHomeLivePolling();
     if (typeof syncHomeViewStatus === "function") syncHomeViewStatus();
     if (typeof syncHomeAutosubPreviewChrome === "function") syncHomeAutosubPreviewChrome();
+    if (typeof paintHomeGwProgress === "function") paintHomeGwProgress({ animate: false });
+    if (typeof paintHomeStatLog === "function") paintHomeStatLog();
     if (pageTabWheelEnabled() && pageTabWheelBuilt) recenterActivePageTabSoon();
   }
 
@@ -35307,6 +35805,16 @@
   applyHomeBadgePreview();
   if (el.prefsHomeBadgePreview) {
     el.prefsHomeBadgePreview.addEventListener("change", () => applyHomeBadgePrefs({ persist: true }));
+  }
+  if (el.homeStatLogPanel) {
+    el.homeStatLogPanel.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-stat-log-filter]");
+      if (!btn || !el.homeStatLogPanel.contains(btn)) return;
+      const next = btn.getAttribute("data-stat-log-filter") === "all" ? "all" : "league";
+      if (next === homeStatLogFilter) return;
+      homeStatLogFilter = next;
+      paintHomeStatLog();
+    });
   }
   if (el.homeBadgeStyleSeg) {
     el.homeBadgeStyleSeg.addEventListener("click", (e) => {
