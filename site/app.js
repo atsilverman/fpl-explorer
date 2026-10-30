@@ -3102,6 +3102,45 @@
    * Autosubs are 1:1 — keep only IN/OUT rows whose partners point at each
    * other, so subs-on always equals subs-off (drops stale or orphan flags).
    */
+  function homeClearAutosubFlagRow(row) {
+    if (!row) return row;
+    if (!row.autoSubIn && !row.autoSubOut && row.autoSubSource == null) return row;
+    return {
+      ...row,
+      autoSubIn: false,
+      autoSubOut: false,
+      autoSubWith: null,
+      autoSubWithName: null,
+      autoSubSource: null,
+    };
+  }
+
+  function homeAutosubFlagQuality(squad, { settled = false } = {}) {
+    const rows = Array.isArray(squad) ? squad : [];
+    let hasOfficial = false;
+    let hasFlags = false;
+    for (const row of rows) {
+      if (!row || !(row.autoSubIn || row.autoSubOut)) continue;
+      hasFlags = true;
+      if (row.autoSubSource === "official") hasOfficial = true;
+    }
+    if (hasOfficial) return 3;
+    if (settled && !hasFlags) return 3;
+    if (hasFlags) return 1;
+    return 0;
+  }
+
+  function homeAutosubFlagStamp(row) {
+    if (!row || !(row.autoSubIn || row.autoSubOut)) return null;
+    return {
+      autoSubIn: !!row.autoSubIn,
+      autoSubOut: !!row.autoSubOut,
+      autoSubWith: row.autoSubWith ?? null,
+      autoSubWithName: row.autoSubWithName ?? null,
+      autoSubSource: row.autoSubSource ?? null,
+    };
+  }
+
   function homeReconcileAutosubPairs(squad) {
     const rows = Array.isArray(squad) ? squad : [];
     const byEl = new Map();
@@ -3118,31 +3157,40 @@
     const out = rows.map((row) => {
       if (!row || !(row.autoSubIn || row.autoSubOut) || paired(row)) return row;
       changed = true;
-      return { ...row, autoSubIn: false, autoSubOut: false, autoSubWith: null, autoSubWithName: null };
+      return homeClearAutosubFlagRow(row);
     });
     return changed ? out : rows;
   }
 
-  function homeMergeAutosubFlags(squad, priorSquad, { sameGw = true } = {}) {
+  function homeMergeAutosubFlags(squad, priorSquad, { sameGw = true, settled = false } = {}) {
     const incoming = Array.isArray(squad) ? squad : [];
-    // Only backfill when the poll cleared every flag (older droplet); never
-    // mix per-player — a stale IN from an earlier projection would stick.
+    const priorRows = Array.isArray(priorSquad) ? priorSquad : [];
     // Never across gameweeks: last GW's pair stays valid when both players
     // are still in the squad (e.g. baked GW6 cache vs first GW7 poll).
-    if (!sameGw || incoming.some((row) => row && (row.autoSubIn || row.autoSubOut))) {
-      return homeReconcileAutosubPairs(incoming);
+    if (!sameGw) return homeReconcileAutosubPairs(incoming);
+    const inQ = homeAutosubFlagQuality(incoming, { settled });
+    const prQ = homeAutosubFlagQuality(priorRows, { settled });
+    const stampFrom = (rows) => {
+      const map = new Map();
+      for (const row of rows) {
+        if (!row || row.element == null) continue;
+        const flags = homeAutosubFlagStamp(row);
+        if (flags) map.set(Number(row.element), flags);
+      }
+      return map;
+    };
+    // Official (or settled-empty) beats leftover graphic/minutes preview.
+    if (prQ > inQ) {
+      const prior = stampFrom(priorRows);
+      return homeReconcileAutosubPairs(incoming.map((row) => {
+        if (!row || row.element == null) return row;
+        const flags = prior.get(Number(row.element));
+        return flags ? { ...row, ...flags } : homeClearAutosubFlagRow(row);
+      }));
     }
-    const prior = new Map();
-    for (const row of Array.isArray(priorSquad) ? priorSquad : []) {
-      if (!row || row.element == null) continue;
-      if (!(row.autoSubIn || row.autoSubOut)) continue;
-      prior.set(Number(row.element), {
-        autoSubIn: !!row.autoSubIn,
-        autoSubOut: !!row.autoSubOut,
-        autoSubWith: row.autoSubWith ?? null,
-        autoSubWithName: row.autoSubWithName ?? null,
-      });
-    }
+    if (inQ > 0) return homeReconcileAutosubPairs(incoming);
+    // Incoming poll cleared every flag (older droplet) — restore prior preview.
+    const prior = stampFrom(priorRows);
     if (!prior.size) return incoming;
     return homeReconcileAutosubPairs(incoming.map((row) => {
       if (!row || row.element == null) return row;
@@ -3152,14 +3200,14 @@
     }));
   }
 
-  function homeMergeAutosubByEntry(byEntry, priorByEntry, { sameGw = true } = {}) {
+  function homeMergeAutosubByEntry(byEntry, priorByEntry, { sameGw = true, settled = false } = {}) {
     const src = byEntry && typeof byEntry === "object" ? byEntry : {};
     const prior = priorByEntry && typeof priorByEntry === "object" ? priorByEntry : {};
     const out = {};
     const keys = new Set([...Object.keys(src), ...Object.keys(prior)]);
     keys.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(src, key)) {
-        out[key] = homeMergeAutosubFlags(src[key], prior[key] || [], { sameGw });
+        out[key] = homeMergeAutosubFlags(src[key], prior[key] || [], { sameGw, settled });
       } else {
         out[key] = prior[key];
       }
@@ -3245,13 +3293,14 @@
       Number.isFinite(Number(priorHome.gw))
       && Number(priorHome.gw) > 0
       && Number(priorHome.gw) === Number(payload.gw);
+    const autosubSettled = payload.gwSettled === true || priorHome.gwSettled === true;
     HOME.squad = homeMergeAutosubFlags(
       homeNormalizeSquadFixtureFinal(
         Array.isArray(payload.squad) ? payload.squad : [],
         Array.isArray(priorHome.squad) ? priorHome.squad : []
       ),
       Array.isArray(priorHome.squad) ? priorHome.squad : [],
-      { sameGw: autosubSameGw }
+      { sameGw: autosubSameGw, settled: autosubSettled }
     );
     HOME.squadsByEntry = homeMergeAutosubByEntry(
       homeNormalizeSquadsByEntryFinal(
@@ -3265,7 +3314,7 @@
       priorHome.squadsByEntry && typeof priorHome.squadsByEntry === "object"
         ? priorHome.squadsByEntry
         : {},
-      { sameGw: autosubSameGw }
+      { sameGw: autosubSameGw, settled: autosubSettled }
     );
     homeObserveAllHomeMinutes(HOME);
     HOME.standings = mergeHomeGwRank(
@@ -5091,8 +5140,7 @@
   function homeSquadForEntry(entryId) {
     const squad = homeSquadRawForEntry(entryId);
     if (!squad.length) return [];
-    // Always project graphic autosubs + C→VC onto the viewed squad so pitch
-    // frames and badges persist. Preview mode still gates baked totals.
+    // Preview graphics overlay until FPL stamps official pairs; C→VC always.
     return homeApplyCaptaincySwap(homeApplyTeamNewsAutosubs(squad, entryId), entryId);
   }
 
@@ -5182,10 +5230,36 @@
     return pairs;
   }
 
+  function homeAutosubSourceIsPreview(row) {
+    const src = row && row.autoSubSource;
+    return src === "graphic" || src === "minutes" || src == null;
+  }
+
+  function homeDropStalePreviewAutosubs(squad) {
+    const rows = Array.isArray(squad) ? squad : [];
+    const drop = new Set();
+    for (const row of rows) {
+      if (!row || !row.autoSubOut) continue;
+      if (!homeAutosubSourceIsPreview(row)) continue;
+      if ((Number(row.minutes) || 0) <= 0) continue;
+      drop.add(Number(row.element));
+      if (row.autoSubWith != null) drop.add(Number(row.autoSubWith));
+    }
+    if (!drop.size) return rows;
+    return rows.map((row) => {
+      if (!row || !drop.has(Number(row.element))) return row;
+      return homeClearAutosubFlagRow(row);
+    });
+  }
+
   function homeApplyTeamNewsAutosubs(squad, entryId) {
     const chip = String(homeEntryActiveChip(entryId) || "").toLowerCase();
     if (chip === "bboost" || chip === "benchboost" || chip === "bench_boost") return squad;
-    const rows = Array.isArray(squad) ? squad : [];
+    let rows = homeDropStalePreviewAutosubs(Array.isArray(squad) ? squad : []);
+    // After lock (or once FPL stamped pairs), do not re-project graphics —
+    // official IN/OUT stay on those players even after they swap XI ↔ bench.
+    if (homeGwSettled()) return rows;
+    if (rows.some((row) => row && row.autoSubSource === "official")) return rows;
     const pairs = homeTeamNewsAutosubPairs(rows);
     if (!pairs.length) return rows;
     const flagged = new Set();
@@ -21909,7 +21983,7 @@
       const autosubs = [
         spitKeyRow(
           `<span class="home-autosub-tag is-in spit-home-swatch" aria-hidden="true">${iconHTML("caret-up", "home-autosub-icon")}</span><span class="home-autosub-tag is-out spit-home-swatch" aria-hidden="true">${iconHTML("caret-down", "home-autosub-icon")}</span>`,
-          "Auto-sub on / off"
+          "Auto-sub on / off — FPL swap, even after they move XI ↔ bench"
         ),
         spitKeyRow(
           `<span class="home-autosub-impact-dot spit-home-swatch" aria-hidden="true"></span>`,

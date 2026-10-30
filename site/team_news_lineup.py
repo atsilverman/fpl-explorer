@@ -28,6 +28,7 @@ def fold_name(value: str) -> str:
         return ""
     text = unicodedata.normalize("NFKD", str(value))
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.replace("ß", "ss").replace("ẞ", "ss")
     text = text.replace("'", "").replace("’", "").replace("-", " ")
     return re.sub(r"[^a-z0-9 ]+", " ", text.lower()).strip()
 

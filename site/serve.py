@@ -308,17 +308,31 @@ def merge_fixture_final_flags(live_home: dict, local_home: dict | None) -> dict:
 
 
 def merge_autosub_flags(live_home: dict, local_home: dict | None) -> dict:
-    """Copy projected autosub icon flags from local fetch_home onto live payload.
+    """Reconcile autosub icon flags between the live droplet and local fetch_home.
 
-    Live droplet may still gate autosubs on final-only fixtures; local cache
-    lights icons at provisional FT. Prefer live when it already has flags.
+    Official FPL pairs (and a settled GW with no pairs) beat leftover graphic
+    preview flags. During an open GW, prefer live when it already projected
+    icons; otherwise copy local preview onto an empty live squad.
     """
     if not local_home or not isinstance(live_home, dict):
         return live_home
     if str(local_home.get("gw")) != str(live_home.get("gw")):
         return live_home
 
-    AUTOSUB_KEYS = ("autoSubIn", "autoSubOut", "autoSubWith", "autoSubWithName")
+    AUTOSUB_KEYS = (
+        "autoSubIn",
+        "autoSubOut",
+        "autoSubWith",
+        "autoSubWithName",
+        "autoSubSource",
+    )
+    CLEARED = {
+        "autoSubIn": False,
+        "autoSubOut": False,
+        "autoSubWith": None,
+        "autoSubWithName": None,
+        "autoSubSource": None,
+    }
 
     def index_autosubs(home: dict) -> dict[str, dict]:
         out: dict[str, dict] = {}
@@ -343,29 +357,70 @@ def merge_autosub_flags(live_home: dict, local_home: dict | None) -> dict:
                 ingest(str(entry_id), rows if isinstance(rows, list) else None)
         return out
 
+    def flag_quality(home: dict) -> int:
+        has_official = False
+        has_flags = False
+
+        def scan(rows: list | None) -> None:
+            nonlocal has_official, has_flags
+            if not isinstance(rows, list):
+                return
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if not (row.get("autoSubIn") or row.get("autoSubOut")):
+                    continue
+                has_flags = True
+                if row.get("autoSubSource") == "official":
+                    has_official = True
+
+        scan(home.get("squad") if isinstance(home.get("squad"), list) else None)
+        by_entry = home.get("squadsByEntry") or {}
+        if isinstance(by_entry, dict):
+            for rows in by_entry.values():
+                scan(rows if isinstance(rows, list) else None)
+        if has_official:
+            return 3
+        if home.get("gwSettled") is True and not has_flags:
+            return 3
+        if has_flags:
+            return 1
+        return 0
+
+    local_q = flag_quality(local_home)
+    live_q = flag_quality(live_home)
     local_flags = index_autosubs(local_home)
-    if not local_flags:
+    replace = local_q > live_q
+    fill_empty = live_q == 0 and bool(local_flags)
+    if not replace and not fill_empty:
         return live_home
 
     def apply_rows(entry_key: str, rows: list | None) -> list | None:
         if not isinstance(rows, list):
             return rows
-        # Live already projected subs for this squad — never mix in per-player
-        # local flags (a stale IN would leave more subs-on than subs-off).
-        if any(isinstance(r, dict) and (r.get("autoSubIn") or r.get("autoSubOut")) for r in rows):
-            return rows
+        if fill_empty and not replace:
+            if any(
+                isinstance(r, dict) and (r.get("autoSubIn") or r.get("autoSubOut"))
+                for r in rows
+            ):
+                return rows
         next_rows = []
         changed = False
         for row in rows:
             if not isinstance(row, dict):
                 next_rows.append(row)
                 continue
-            if row.get("autoSubIn") or row.get("autoSubOut"):
-                next_rows.append(row)
-                continue
             eid = row.get("element")
-            flags = local_flags.get(f"{entry_key}|{eid}")
-            if not flags:
+            flags = local_flags.get(f"{entry_key}|{eid}") if eid is not None else None
+            if replace:
+                stamped = flags if flags else CLEARED
+                if all(row.get(k) == stamped.get(k) for k in AUTOSUB_KEYS):
+                    next_rows.append(row)
+                    continue
+                changed = True
+                next_rows.append({**row, **stamped})
+                continue
+            if row.get("autoSubIn") or row.get("autoSubOut") or not flags:
                 next_rows.append(row)
                 continue
             changed = True

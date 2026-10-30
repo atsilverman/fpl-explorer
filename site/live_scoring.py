@@ -118,7 +118,7 @@ def apply_auto_substitution(
             subbed["substituted_for"] = starter_id
             active.append(subbed)
             used_bench.add(bench_id)
-            auto_subs.append({"out": starter_id, "in": bench_id})
+            auto_subs.append({"out": starter_id, "in": bench_id, "source": "minutes"})
             found = True
             break
 
@@ -171,7 +171,10 @@ def project_graphic_auto_subs(
     for idx, starter in enumerate(starting):
         starter_id = int(starter["element"])
         starter_etype = element_types.get(starter_id)
-        if not sheet_ready(starter_id) or on_sheet(starter_id):
+        starter_mins = _minutes((live_stats or {}).get(starter_id))
+        # Minutes already recorded → this starter played; graphics must not
+        # mark them off (named-ID misses like Groß / Thomas).
+        if not sheet_ready(starter_id) or on_sheet(starter_id) or starter_mins > 0:
             active.append(starter)
             continue
 

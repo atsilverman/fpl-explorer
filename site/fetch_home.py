@@ -667,7 +667,11 @@ def official_autosubs(picks_payload: dict | None, gw: int) -> list[dict]:
         try:
             if int(row.get("event") or gw) != int(gw):
                 continue
-            out.append({"in": int(row["element_in"]), "out": int(row["element_out"])})
+            out.append({
+                "in": int(row["element_in"]),
+                "out": int(row["element_out"]),
+                "source": "official",
+            })
         except (KeyError, TypeError, ValueError):
             continue
     return out
@@ -1595,6 +1599,17 @@ def team_code_by_element_map(elements: dict, teams: dict) -> dict[int, str]:
     return out
 
 
+def _with_sub_source(subs: list[dict] | None, source: str) -> list[dict]:
+    out: list[dict] = []
+    for row in subs or []:
+        if not isinstance(row, dict):
+            continue
+        tagged = dict(row)
+        tagged["source"] = tagged.get("source") or source
+        out.append(tagged)
+    return out
+
+
 def resolve_ui_auto_subs(
     picks: list[dict],
     stats: dict[int, dict],
@@ -1604,10 +1619,25 @@ def resolve_ui_auto_subs(
     *,
     team_codes: dict[int, str],
     graphic_named: dict[str, set[int]],
+    official_subs: list[dict] | None = None,
+    gw_settled: bool = False,
 ) -> list[dict]:
+    """Pitch/list auto-sub icons.
+
+    Official FPL ``automatic_subs`` wins as soon as it exists — including after
+    lock, when the bodies have already moved (IN sits in the XI, OUT on the
+    bench). Preview (0′ + FT, then graphics) only runs before that stamp.
+    Once the GW is settled with no official pairs, return empty so leftover
+    graphic projections cannot invent a second swap.
+    """
+    official = _with_sub_source(official_subs, "official")
+    if official:
+        return official
+    if gw_settled:
+        return []
     ui = projected_auto_subs_for_ui(picks, stats, match_status, etypes, chip)
     if ui:
-        return ui
+        return _with_sub_source(ui, "minutes")
     return project_graphic_auto_subs(
         picks, etypes, team_codes, graphic_named, chip, live_stats=stats
     )
@@ -1685,6 +1715,7 @@ def build_squad_rows(
     auto_sub_in = {int(s["in"]) for s in (flag_subs or []) if s.get("in") is not None}
     auto_sub_out = {int(s["out"]) for s in (flag_subs or []) if s.get("out") is not None}
     partner_for: dict[int, int] = {}
+    source_for: dict[int, str] = {}
     for s in flag_subs or []:
         try:
             out_id = int(s["out"])
@@ -1693,6 +1724,10 @@ def build_squad_rows(
             continue
         partner_for[out_id] = in_id
         partner_for[in_id] = out_id
+        src = str(s.get("source") or "") or None
+        if src:
+            source_for[out_id] = src
+            source_for[in_id] = src
 
     def partner_name(eid: int) -> str | None:
         other = partner_for.get(eid)
@@ -1783,6 +1818,7 @@ def build_squad_rows(
                 "autoSubOut": eid in auto_sub_out,
                 "autoSubWith": with_id,
                 "autoSubWithName": with_name,
+                "autoSubSource": source_for.get(eid),
                 **player_availability_fields(el),
             }
         )
@@ -2044,6 +2080,8 @@ def main() -> int:
         gw_awaiting_kickoff = gw_fixtures_awaiting_kickoff(fixtures)
         graphic_named = load_graphic_named_ids(gw)
         team_codes = team_code_by_element_map(elements, teams)
+        settled = settled_gameweeks(bootstrap)
+        gw_settled = gw in settled
 
         focus_picks_payload = picks_by_entry.get(manager_id)
         focus_picks = (focus_picks_payload or {}).get("picks") or []
@@ -2103,7 +2141,7 @@ def main() -> int:
         history_by_entry: dict[int, dict] = {manager_id: history_payload}
         cached_standings = cached_standings_by_entry(cached, league_id)
         autosub_cache = load_json(AUTOSUB_CACHE_PATH)
-        if backfill_autosub_points(entry_ids, settled_gameweeks(bootstrap), autosub_cache):
+        if backfill_autosub_points(entry_ids, settled, autosub_cache):
             save_json(AUTOSUB_CACHE_PATH, autosub_cache)
         autosub_entries = autosub_cache.get("entries") or {}
         current_points = element_points_map(live)
@@ -2161,6 +2199,8 @@ def main() -> int:
                     focus_chip,
                     team_codes=team_codes,
                     graphic_named=graphic_named,
+                    official_subs=official_autosubs(focus_picks_payload, gw),
+                    gw_settled=gw_settled,
                 ),
                 "chip": focus_chip,
                 "live_gw": focus_pts,
@@ -2256,6 +2296,8 @@ def main() -> int:
                             chip,
                             team_codes=team_codes,
                             graphic_named=graphic_named,
+                            official_subs=official_autosubs(mp, gw),
+                            gw_settled=gw_settled,
                         ),
                         "chip": chip,
                         "live_gw": live_gw_pts,
@@ -2597,7 +2639,6 @@ def main() -> int:
         # file for a mid- or end-season recap; do not put stacks on the live
         # Home payload until that surface exists.
 
-        gw_settled = gw in settled_gameweeks(bootstrap)
         gw_deadline = None
         cur_gw = gws.get("current") or {}
         try:
