@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1709" />
+<link rel="stylesheet" href="styles.css?v=1710" />
 <link rel="stylesheet" href="motion-enhanced.css?v=15" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -744,6 +744,16 @@
     <div class="filters-reset-row" id="filters-reset-row" hidden>
       <button type="button" class="reset filters-reset-btn" id="reset-filters">Reset</button>
     </div>
+    <div class="filter-group" id="stats-gw-filter-group" style="display:none;">
+      <h3>Gameweek range</h3>
+      <div class="slider-values"><span id="stats-gw-min-label"></span><span id="stats-gw-max-label"></span></div>
+      <div class="dual-slider">
+        <div class="slider-track"></div>
+        <div class="slider-fill" id="stats-gw-fill"></div>
+        <input type="range" id="stats-gw-min" step="1" aria-label="First gameweek" />
+        <input type="range" id="stats-gw-max" step="1" class="slider-top" aria-label="Last gameweek" />
+      </div>
+    </div>
     <div class="filter-group" id="value-mode-group">
       <h3>Values</h3>
       <div class="segmented segmented-block" id="value-mode-seg">
@@ -856,17 +866,6 @@
         <span class="check-row-line"><input type="checkbox" id="hide-low-mins-check" /> Hide low minutes (≥90′)</span>
         <span class="check-row-note">Auto-on with Per 90 — drops tiny samples that inflate rates</span>
       </label>
-    </div>
-
-    <div class="filter-group" id="stats-gw-filter-group" style="display:none;">
-      <h3>Gameweek range</h3>
-      <div class="slider-values"><span id="stats-gw-min-label"></span><span id="stats-gw-max-label"></span></div>
-      <div class="dual-slider">
-        <div class="slider-track"></div>
-        <div class="slider-fill" id="stats-gw-fill"></div>
-        <input type="range" id="stats-gw-min" step="1" aria-label="First gameweek" />
-        <input type="range" id="stats-gw-max" step="1" class="slider-top" aria-label="Last gameweek" />
-      </div>
     </div>
 
     <div class="filter-group" id="enhance-pct-group" style="display:none;">
@@ -2018,7 +2017,7 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
-<script src="data.js?v=376"></script>
+<script src="data.js?v=377"></script>
 <script src="markets_data.js?v=141"></script>
 <script src="calendar_data.js?v=57"></script>
 <script src="ownership_data.js?v=279"></script>
@@ -2048,7 +2047,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1578"></script>
+<script src="app.js?v=1581"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

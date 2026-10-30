@@ -2035,23 +2035,23 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   font-weight: 400;
 }
 .dual-slider {
-  --slider-h: 30px;
-  --slider-thumb: 24px;
+  --slider-h: 28px;
+  --slider-thumb: 20px;
+  --slider-rail: 6px;
   position: relative;
   height: var(--slider-h);
   margin-bottom: 4px;
   touch-action: none;
   user-select: none;
   cursor: grab;
-  border-radius: 9px;
-  background: hsl(var(--foreground) / 0.06);
+  background: transparent;
 }
 .dual-slider:active {
   cursor: grabbing;
 }
 .dual-slider .slider-ticks {
   position: absolute;
-  inset: 0 6px;
+  inset: 0 calc(var(--slider-thumb) / 2);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2059,32 +2059,33 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   z-index: 1;
 }
 .dual-slider .slider-ticks > span {
-  width: 2px;
-  height: 8px;
-  border-radius: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: hsl(var(--foreground) / 0.22);
 }
 .dual-slider .slider-track {
   position: absolute;
-  inset: 0;
-  height: auto;
-  transform: none;
-  background: transparent;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--slider-rail);
+  transform: translateY(-50%);
+  background: hsl(var(--foreground) / 0.1);
   border: 0;
-  border-radius: 9px;
+  border-radius: 999px;
   pointer-events: none;
 }
 .dual-slider .slider-fill {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
-  height: auto;
-  transform: none;
-  background: hsl(var(--blue-hsl) / 0.2);
-  border: 1.5px solid hsl(var(--blue-hsl));
-  border-radius: 7px;
+  top: 50%;
+  height: var(--slider-rail);
+  transform: translateY(-50%);
+  background: hsl(var(--blue-hsl));
+  border: 0;
+  border-radius: 999px;
   box-sizing: border-box;
-  box-shadow: 0 1px 4px hsl(var(--blue-hsl) / 0.25);
+  box-shadow: none;
   pointer-events: none;
   z-index: 2;
   transition: left 0.22s var(--ease-out), right 0.22s var(--ease-out), width 0.22s var(--ease-out);
@@ -2128,9 +2129,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   height: var(--slider-thumb);
   margin-top: calc((var(--slider-h) - var(--slider-thumb)) / 2);
   border-radius: 50%;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  background: hsl(var(--card));
+  border: 2px solid hsl(var(--blue-hsl));
+  box-shadow: 0 1px 3px hsl(240 10% 10% / 0.22);
   cursor: grab;
 }
 .dual-slider input[type="range"]::-moz-range-track {
@@ -2142,15 +2143,15 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   width: var(--slider-thumb);
   height: var(--slider-thumb);
   border-radius: 50%;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  background: hsl(var(--card));
+  border: 2px solid hsl(var(--blue-hsl));
+  box-shadow: 0 1px 3px hsl(240 10% 10% / 0.22);
   cursor: grab;
 }
 @media (max-width: 720px), (hover: none), (pointer: coarse) {
   .dual-slider {
-    --slider-h: 30px;
-    --slider-thumb: 24px;
+    --slider-h: 32px;
+    --slider-thumb: 22px;
   }
 }
 .slider-values span[hidden],

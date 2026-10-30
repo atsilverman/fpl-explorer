@@ -980,18 +980,18 @@
     { key: "bigChancesCreated", label: "BCC", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Big chances created" },
     { key: "xa", label: "xA", decimals: 1, group: "Creativity", section: "Creativity", rate: true, title: "Expected assists" },
     { key: "assists", label: "A", decimals: 0, group: "Creativity", section: "Creativity", rate: true, title: "Assists" },
-    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets (FPL API, 2025/26 combined only)" },
-    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded while on the pitch — recorded for every position, though only keepers and defenders are docked points for them (FPL API, 2025/26 combined only)" },
-    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded while on the pitch — recorded for every position (FPL API, 2025/26 combined only)" },
-    { key: "saves", label: "Saves", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Saves — goalkeepers (FPL API, 2025/26 combined only)" },
-    { key: "__cbitr", label: "CBIT/R", decimals: 0, group: "Defence", section: "Defensive", rate: true, derived: true, title: "Clearances, blocks, interceptions & tackles (+ recoveries for MID/FWD). Combined view only." },
+    { key: "cleanSheets", label: "CS", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Clean sheets (official FPL). Home/Away from match venue." },
+    { key: "goalsConceded", label: "GC", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Goals conceded while on the pitch — recorded for every position, though only keepers and defenders are docked points for them (official FPL). Home/Away from match venue." },
+    { key: "xgc", label: "xGC", decimals: 1, group: "Defence", section: "Defensive", rate: true, title: "Expected goals conceded while on the pitch — recorded for every position (official FPL). Home/Away from match venue." },
+    { key: "saves", label: "Saves", decimals: 0, group: "Defence", section: "Defensive", rate: true, title: "Saves — goalkeepers (official FPL). Home/Away from match venue." },
+    { key: "__cbitr", label: "CBIT/R", decimals: 0, group: "Defence", section: "Defensive", rate: true, derived: true, title: "Clearances, blocks, interceptions & tackles (+ recoveries for MID/FWD). Home/Away from match venue." },
     { key: "xPts", label: "xPts", decimals: 1, group: "Points", section: "FPL", rate: true, title: "Expected FPL points" },
     { key: "bps", label: "BPS", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points system score" },
     { key: "bonus", label: "B", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Bonus points" },
     { key: "defCon", label: "DC", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Defensive contribution points earned (2 per match at the position's action threshold)" },
     { key: "pts", label: "Pts", decimals: 0, group: "Points", section: "FPL", rate: true, title: "Total FPL points", strong: true },
     { key: "__gi", label: "G+A", decimals: 0, group: "Combined", section: "Combined", derived: true, rate: true, title: "Goals + assists" },
-    { key: "xgi", label: "xGI", decimals: 1, group: "Combined", section: "Combined", rate: true, title: "Expected goal involvements (FPL API, 2025/26 combined only)" },
+    { key: "xgi", label: "xGI", decimals: 1, group: "Combined", section: "Combined", rate: true, title: "Expected goal involvements (official FPL). Home/Away from match venue." },
     { key: "penaltiesOrder", label: "PK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice penalty taker" },
     { key: "directFreekicksOrder", label: "FK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice direct free kick taker" },
     { key: "cornersOrder", label: "CK", type: "check", group: "Set Pieces", section: "Set Pieces", title: "1st-choice corners & indirect free kick taker" },
@@ -22016,6 +22016,12 @@
 
     if (state.page === "rankings") {
       return `${spitHead("podium", "How Rankings works")}
+        ${spitKeySection("Range", [
+          spitKeyRow(
+            `<span class="spit-home-swatch" aria-hidden="true">GW</span>`,
+            "Gameweek range slices 2026/27 FPL stats"
+          ),
+        ])}
         ${spitKeySection("Board", [
           spitKeyRow(spitMedalsHTML(), "1st / 2nd / 3rd"),
           spitKeyRow(spitRankingsBarSwatch(), "Card value"),
@@ -22026,6 +22032,12 @@
 
     if (state.page === "expected") {
       return `${spitHead("chart-gantt", "How xData works")}
+        ${spitKeySection("Range", [
+          spitKeyRow(
+            `<span class="spit-home-swatch" aria-hidden="true">GW</span>`,
+            "Gameweek range slices 2026/27 FPL stats"
+          ),
+        ])}
         ${spitKeySection("Track", [
           spitKeyRow(spitBarbellTrackSwatch(), "Expected → actual"),
           spitKeyRow(`<i class="spit-easy"></i>`, "Outperform Expected"),
@@ -22191,6 +22203,12 @@
     }
 
     return `${spitHead("table", "How Statistics works")}
+      ${spitKeySection("Range", [
+        spitKeyRow(
+          `<span class="spit-home-swatch" aria-hidden="true">GW</span>`,
+          "Gameweek range slices 2026/27 FPL stats"
+        ),
+      ])}
       ${spitKeySection("Highlight", [
         spitKeyRow(spitHighlightSwatch("top"), "Top band"),
         spitKeyRow(spitHighlightSwatch("bottom"), "Bottom band"),
@@ -34668,6 +34686,23 @@
     slider.insertBefore(ticks, slider.firstChild);
   }
 
+  function setDualSliderFill(fillEl, pctMin, pctMax) {
+    if (!fillEl) return;
+    const lo = Math.max(0, Math.min(100, Number(pctMin) || 0));
+    const hi = Math.max(lo, Math.min(100, Number(pctMax) || 0));
+    fillEl.style.left = `calc(var(--slider-thumb) * 0.5 + (100% - var(--slider-thumb)) * ${lo / 100})`;
+    fillEl.style.right = `calc(var(--slider-thumb) * 0.5 + (100% - var(--slider-thumb)) * ${(100 - hi) / 100})`;
+    fillEl.style.width = "auto";
+  }
+
+  function setSingleSliderFill(fillEl, pct) {
+    if (!fillEl) return;
+    const p = Math.max(0, Math.min(100, Number(pct) || 0));
+    fillEl.style.left = "0px";
+    fillEl.style.right = "auto";
+    fillEl.style.width = `calc(var(--slider-thumb) * 0.5 + (100% - var(--slider-thumb)) * ${p / 100})`;
+  }
+
   function formatSliderRange(format, lo, hi) {
     if (lo === hi) return format(lo);
     const a = format(lo);
@@ -34784,8 +34819,7 @@
       const span = bMax - bMin || 1;
       const pctMin = ((curMin - bMin) / span) * 100;
       const pctMax = ((curMax - bMin) / span) * 100;
-      fillEl.style.left = pctMin + "%";
-      fillEl.style.right = 100 - pctMax + "%";
+      setDualSliderFill(fillEl, pctMin, pctMax);
       // boundLabels: axis ends (e.g. Fixtures GW floor→38); else selected range.
       const lo = boundLabels ? bMin : curMin;
       const hi = boundLabels ? bMax : curMax;
@@ -34989,8 +35023,7 @@
       const v = get();
       input.value = v;
       const span = boundsMax - boundsMin || 1;
-      fillEl.style.left = "0%";
-      fillEl.style.width = ((v - boundsMin) / span) * 100 + "%";
+      setSingleSliderFill(fillEl, ((v - boundsMin) / span) * 100);
       labelEl.textContent = format(v);
     }
 
