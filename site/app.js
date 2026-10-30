@@ -10641,6 +10641,18 @@
     setHomeFxPos(homeFxPos, { snap: true });
   }
 
+  function homePitchFormPtsClass(pts) {
+    const n = Number(pts);
+    if (!Number.isFinite(n)) return " is-blank";
+    if (n < 0) return " is-neg";
+    if (n === 0) return " is-zero";
+    if (n >= 15) return " is-haul";
+    if (n >= 10) return " is-hot";
+    if (n >= 6) return " is-good";
+    if (n >= 3) return " is-warm";
+    return "";
+  }
+
   function homeSquadPitchFormStripHTML(row) {
     const { start, n } = homeFormGwRange();
     const cells = [];
@@ -10655,9 +10667,8 @@
       if (pts == null) {
         cells.push(`<span class="home-pitch-form-cell is-blank" title="GW${gw}">–</span>`);
       } else {
-        const zero = pts === 0;
         cells.push(
-          `<span class="home-pitch-form-cell${zero ? " is-zero" : ""}" title="GW${gw} · ${pts} pts">${escapeHtml(String(pts))}</span>`
+          `<span class="home-pitch-form-cell${homePitchFormPtsClass(pts)}" title="GW${gw} · ${pts} pts">${escapeHtml(String(pts))}</span>`
         );
       }
     }

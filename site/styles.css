@@ -21611,6 +21611,34 @@ html.is-home-fx-scrubbing .home-pitch-price-track {
   background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.05));
   font-weight: 600;
 }
+.home-pitch-form-cell.is-neg {
+  color: #fff;
+  background: hsl(var(--delta-fall));
+}
+.home-pitch-form-cell.is-warm {
+  color: hsl(var(--delta-rise));
+  background: hsl(var(--delta-rise) / 0.22);
+}
+.home-pitch-form-cell.is-good {
+  color: #fff;
+  background: hsl(var(--delta-rise));
+}
+.home-pitch-form-cell.is-hot {
+  color: #fff;
+  background: hsl(142 52% 32%);
+}
+.home-pitch-form-cell.is-haul {
+  color: #fff;
+  background: hsl(var(--amber-hsl));
+}
+html[data-theme="dark"] .home-dashboard .home-pitch-form-cell.is-hot {
+  background: hsl(142 48% 38%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .home-dashboard .home-pitch-form-cell.is-hot {
+    background: hsl(142 48% 38%);
+  }
+}
 .home-pitch-price-cell.is-blank {
   color: var(--home-pitch-ink-idle-fg, var(--home-pitch-card-muted));
   background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.04));
