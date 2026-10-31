@@ -19672,6 +19672,34 @@ html[data-theme="dark"] .home-dashboard {
   font-size: 15px;
   border-radius: 12px;
 }
+.mobile-sheet-body > #home-pitch-mode-menu.mobile-sheet-hosted {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 6px;
+}
+.mobile-sheet-body > #home-pitch-mode-menu.mobile-sheet-hosted .home-pitch-mode-option {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+  background: hsl(var(--muted) / 0.38);
+}
+.mobile-sheet-body > #home-pitch-mode-menu.mobile-sheet-hosted .home-pitch-mode-option:hover {
+  background: hsl(var(--muted) / 0.55);
+  color: var(--text);
+}
+.mobile-sheet-body > #home-pitch-mode-menu.mobile-sheet-hosted .home-pitch-mode-option.active {
+  background: hsl(var(--blue-hsl) / 0.12);
+  color: hsl(var(--blue-hsl));
+}
 .home-panel-heading-meta:not(:empty)::before {
   content: none;
 }
@@ -20515,9 +20543,6 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   padding: 14px 14px 14px;
   overflow: hidden;
 }
-.home-rank-chart-panel .home-squad-heading-end {
-  max-width: min(48%, 8.5rem);
-}
 .t-dropdown {
   transform-origin: top left;
   transform: scale(var(--dropdown-pre-scale));
@@ -20557,13 +20582,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 @media (prefers-reduced-motion: reduce) {
   .t-dropdown { transition: none !important; }
 }
-.home-rank-chart-panel.is-table-view .home-rank-chart-legend,
-.home-rank-chart-panel.is-table-view .home-rank-chart {
-  display: none;
-}
-.home-rank-chart-panel.is-pts-open .home-rank-chart-hint,
-.home-rank-chart-panel.is-table-view .home-rank-chart-hint,
-.home-rank-chart-panel.is-table-view .home-rank-chart-pts {
+.home-rank-chart-panel.is-pts-open .home-rank-chart-hint {
   display: none;
 }
 .home-rank-chart-hint {
@@ -20583,104 +20602,6 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   width: 12px;
   height: 12px;
   opacity: 0.72;
-}
-.home-rank-chart-table-wrap {
-  margin: 2px -2px 0;
-  max-height: min(64vh, 28rem);
-  overflow: auto;
-}
-.home-rank-chart-table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 11px;
-}
-.home-rank-chart-panel .home-data-table.home-rank-chart-table :is(th, td),
-.home-rank-chart-panel .home-data-table.home-rank-chart-table :is(th, td).home-col-gw,
-.home-rank-chart-panel .home-data-table.home-rank-chart-table :is(th, td).home-col-stat,
-.home-rank-chart-panel .home-data-table.home-rank-chart-table :is(th, td).col-num {
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  text-align: center;
-  vertical-align: middle;
-  font-size: 11px;
-  font-weight: 550;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  line-height: 1.2;
-  overflow: visible;
-}
-.home-rank-chart-panel .home-data-table.home-rank-chart-table th {
-  padding: 8px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-.home-rank-chart-panel .home-data-table.home-rank-chart-table td {
-  padding: 13px 6px;
-}
-.home-rank-chart-panel .home-rank-chart-table td.highlight-top,
-.home-rank-chart-panel .home-rank-chart-table td.highlight-bottom,
-.home-rank-chart-panel .home-rank-chart-table td.highlight-strong {
-  font-weight: 550;
-}
-.home-rank-chart-table .home-rank-delta,
-.home-rank-chart-table .home-rank-delta.is-compact,
-.home-rank-chart-table .home-rank-delta .home-rank-delta-n,
-.home-rank-chart-table .home-rank-delta.is-compact .home-rank-delta-n {
-  font-size: 11px;
-  font-weight: 550;
-  letter-spacing: 0;
-}
-.home-rank-chart-table .home-rank-delta,
-.home-rank-chart-table .home-rank-delta.is-compact {
-  justify-content: center;
-}
-.home-rank-chart-table .home-rank-delta .icon,
-.home-rank-chart-table .home-rank-delta.is-compact .icon {
-  width: 11px;
-  height: 11px;
-}
-.home-rank-chart-table-row {
-  cursor: pointer;
-}
-.home-rank-chart-panel.is-table-view .home-rank-chart-table-row {
-  cursor: default;
-}
-.home-rank-chart-table-row:hover td {
-  filter: brightness(0.98);
-}
-.home-rank-chart-panel.is-table-view .home-rank-chart-table-row:hover td {
-  filter: none;
-}
-.home-rank-chart-table-row.is-selected td {
-  box-shadow: inset 0 1.5px 0 var(--text), inset 0 -1.5px 0 var(--text);
-}
-.home-rank-chart-table-row.is-selected td:first-child {
-  box-shadow: inset 1.5px 0 0 var(--text), inset 0 1.5px 0 var(--text), inset 0 -1.5px 0 var(--text);
-}
-.home-rank-chart-table-row.is-selected td:last-child {
-  box-shadow: inset -1.5px 0 0 var(--text), inset 0 1.5px 0 var(--text), inset 0 -1.5px 0 var(--text);
-}
-.home-rank-chart-table-gw {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-.home-rank-chart-table .home-status-dot.is-live {
-  margin: 0;
-}
-.home-rank-chart-table-empty {
-  color: var(--text-faint);
-}
-.home-rank-chart-table td.highlight-strong {
-  color: #fff;
-}
-.home-rank-chart-table td.highlight-strong .home-rank-delta {
-  color: inherit;
 }
 .home-rank-chart-legend {
   display: flex;

@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Libre+Franklin:wght@400;500;600;700&family=Roboto:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=1761" />
+<link rel="stylesheet" href="styles.css?v=1763" />
 <link rel="stylesheet" href="motion-enhanced.css?v=17" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1277,20 +1277,6 @@
               <span class="home-panel-heading-view" id="home-rank-chart-stage"></span>
               <span class="home-rank-chart-mini-chip" id="home-rank-chart-mini-chip" hidden></span>
             </span>
-            <span class="home-squad-heading-end">
-              <button type="button" class="home-pitch-mode-btn" id="home-rank-chart-view-btn"
-                aria-haspopup="listbox" aria-expanded="false"
-                aria-controls="home-rank-chart-view-menu" aria-label="Rank History view, Graph">
-                <span class="home-pitch-mode-current">
-                  <span id="home-rank-chart-view-label">Graph</span>
-                  <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevrons-up-down"/></svg>
-                </span>
-              </button>
-              <div id="home-rank-chart-view-menu" class="home-pitch-mode-menu t-dropdown" hidden role="listbox" aria-label="Rank History view" data-origin="top-right">
-                <button type="button" role="option" class="home-pitch-mode-option active" data-rank-chart-view="graph" aria-selected="true">Graph</button>
-                <button type="button" role="option" class="home-pitch-mode-option" data-rank-chart-view="table" aria-selected="false">Table</button>
-              </div>
-            </span>
           </h3>
           <div class="home-rank-chart-legend" aria-hidden="true">
             <span class="home-rank-chart-legend-item is-rank"><span class="home-rank-chart-legend-swatch"></span>Rank</span>
@@ -1302,20 +1288,6 @@
               <div class="home-rank-chart-track" id="home-rank-chart-track"></div>
             </div>
             <div class="home-rank-chart-y is-right" id="home-rank-chart-y-pts" aria-hidden="true"></div>
-          </div>
-          <div class="home-table-wrap home-rank-chart-table-wrap" id="home-rank-chart-table-wrap" hidden>
-            <table class="home-data-table home-rank-chart-table">
-              <thead>
-                <tr>
-                  <th scope="col" class="home-col-gw">GW</th>
-                  <th scope="col" class="home-col-stat col-num">GW pts</th>
-                  <th scope="col" class="home-col-stat col-num">Overall</th>
-                  <th scope="col" class="home-col-stat col-num">Δ</th>
-                  <th scope="col" class="home-col-stat col-num">%</th>
-                </tr>
-              </thead>
-              <tbody id="home-rank-chart-table-body"></tbody>
-            </table>
           </div>
           <p class="home-rank-chart-hint" id="home-rank-chart-hint">
             <svg class="icon" aria-hidden="true"><use href="#i-mouse-pointer-click"></use></svg>
@@ -1366,14 +1338,15 @@
               <span class="home-panel-heading-meta" id="home-stat-log-meta" hidden></span>
               <button type="button" class="home-pitch-mode-btn" id="home-stat-log-mode-btn"
                 aria-haspopup="listbox" aria-expanded="false"
-                aria-controls="home-stat-log-mode-menu" aria-label="Adjustment filter, League">
+                aria-controls="home-stat-log-mode-menu" aria-label="Adjustment filter, Owned">
                 <span class="home-pitch-mode-current">
-                  <span id="home-stat-log-mode-label">League</span>
+                  <span id="home-stat-log-mode-label">Owned</span>
                   <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevrons-up-down"/></svg>
                 </span>
               </button>
               <div id="home-stat-log-mode-menu" class="home-pitch-mode-menu" hidden role="listbox" aria-label="Adjustment filter">
-                <button type="button" role="option" class="home-pitch-mode-option active" data-stat-log-filter="league" aria-selected="true">League</button>
+                <button type="button" role="option" class="home-pitch-mode-option active" data-stat-log-filter="owned" aria-selected="true">Owned</button>
+                <button type="button" role="option" class="home-pitch-mode-option" data-stat-log-filter="league" aria-selected="false">League</button>
                 <button type="button" role="option" class="home-pitch-mode-option" data-stat-log-filter="all" aria-selected="false">All</button>
               </div>
             </span>
@@ -2212,7 +2185,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1631"></script>
+<script src="app.js?v=1633"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

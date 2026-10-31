@@ -1369,9 +1369,6 @@
     homeStatLogBody: $("#home-stat-log-body"),
     homeRankChartPanel: $("#home-rank-chart-panel"),
     homeRankChartStage: $("#home-rank-chart-stage"),
-    homeRankChartViewBtn: $("#home-rank-chart-view-btn"),
-    homeRankChartViewLabel: $("#home-rank-chart-view-label"),
-    homeRankChartViewMenu: $("#home-rank-chart-view-menu"),
     homeRankChart: $("#home-rank-chart"),
     homeRankChartYRank: $("#home-rank-chart-y-rank"),
     homeRankChartYPts: $("#home-rank-chart-y-pts"),
@@ -1379,8 +1376,6 @@
     homeRankChartTrack: $("#home-rank-chart-track"),
     homeRankChartHint: $("#home-rank-chart-hint"),
     homeRankChartHintLabel: $("#home-rank-chart-hint-label"),
-    homeRankChartTableWrap: $("#home-rank-chart-table-wrap"),
-    homeRankChartTableBody: $("#home-rank-chart-table-body"),
     homeRankChartPts: $("#home-rank-chart-pts"),
     homeRankChartMiniChip: $("#home-rank-chart-mini-chip"),
     homeRankChartMiniRank: $("#home-rank-chart-mini-rank"),
@@ -8845,11 +8840,10 @@
       return;
     }
     if (typeof closeHomeStatLogModePicker === "function") closeHomeStatLogModePicker();
-    if (typeof closeHomeRankChartViewPicker === "function") closeHomeRankChartViewPicker();
     syncHomePitchModeUI();
     if (preferMobileSheet()) {
       openMobileSheetHost({
-        title: "Pitch data",
+        title: "Pitch Data",
         key: "home-pitch-mode",
         hostEl: el.homePitchModeMenu,
         prepare: (node) => {
@@ -8883,10 +8877,15 @@
     else openHomePitchModePicker();
   }
 
-  const HOME_STAT_LOG_FILTER_LABELS = { league: "League", all: "All" };
+  const HOME_STAT_LOG_FILTER_LABELS = { owned: "Owned", league: "League", all: "All" };
+
+  function homeStatLogFilterFromValue(value) {
+    if (value === "all" || value === "league" || value === "owned") return value;
+    return "owned";
+  }
 
   function homeStatLogFilterLabel(filter = homeStatLogFilter) {
-    return HOME_STAT_LOG_FILTER_LABELS[filter] || HOME_STAT_LOG_FILTER_LABELS.league;
+    return HOME_STAT_LOG_FILTER_LABELS[filter] || HOME_STAT_LOG_FILTER_LABELS.owned;
   }
 
   function homeStatLogModePickerIsOpen() {
@@ -8932,7 +8931,6 @@
       return;
     }
     closeHomePitchModePicker();
-    if (typeof closeHomeRankChartViewPicker === "function") closeHomeRankChartViewPicker();
     syncHomeStatLogModeUI();
     if (preferMobileSheet()) {
       openMobileSheetHost({
@@ -8967,155 +8965,6 @@
   function toggleHomeStatLogModePicker() {
     if (homeStatLogModePickerIsOpen()) closeHomeStatLogModePicker();
     else openHomeStatLogModePicker();
-  }
-
-  const HOME_RANK_CHART_VIEW_KEY = "fpl.homeRankChartView";
-  const HOME_RANK_CHART_VIEW_LABELS = { graph: "Graph", table: "Table" };
-  let homeRankChartView = "graph";
-  try {
-    const storedView = localStorage.getItem(HOME_RANK_CHART_VIEW_KEY);
-    if (storedView === "table" || storedView === "graph") homeRankChartView = storedView;
-  } catch {
-    /* ignore */
-  }
-
-  function homeRankChartViewLabel(view = homeRankChartView) {
-    return HOME_RANK_CHART_VIEW_LABELS[view] || HOME_RANK_CHART_VIEW_LABELS.graph;
-  }
-
-  function homeRankChartViewPickerIsOpen() {
-    return !!(mobileSheetOpen && mobileSheetKey === "home-rank-chart-view")
-      || !!(el.homeRankChartViewMenu && el.homeRankChartViewMenu.classList.contains("is-open"));
-  }
-
-  function closeHomeRankChartViewPicker() {
-    if (mobileSheetOpen && mobileSheetKey === "home-rank-chart-view") {
-      closeMobileSheet();
-    }
-    const menu = el.homeRankChartViewMenu;
-    if (menu) {
-      if (menu.classList.contains("is-open")) {
-        menu.classList.remove("is-open");
-        menu.classList.add("is-closing");
-        const closeMs = parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
-        ) || 150;
-        window.setTimeout(() => {
-          menu.classList.remove("is-closing");
-          menu.hidden = true;
-          menu.style.top = "";
-          menu.style.right = "";
-          menu.style.left = "";
-        }, closeMs);
-      } else {
-        menu.classList.remove("is-closing");
-        menu.hidden = true;
-        menu.style.top = "";
-        menu.style.right = "";
-        menu.style.left = "";
-      }
-    }
-    if (el.homeRankChartViewBtn) {
-      el.homeRankChartViewBtn.setAttribute("aria-expanded", "false");
-    }
-  }
-
-  function syncHomeRankChartViewUI() {
-    const label = homeRankChartViewLabel();
-    if (el.homeRankChartViewLabel) el.homeRankChartViewLabel.textContent = label;
-    if (el.homeRankChartViewBtn) {
-      el.homeRankChartViewBtn.setAttribute("aria-label", `Rank History view, ${label}`);
-    }
-    if (el.homeRankChartPanel) {
-      el.homeRankChartPanel.classList.toggle("is-table-view", homeRankChartView === "table");
-    }
-    if (el.homeRankChartTableWrap) {
-      el.homeRankChartTableWrap.hidden = homeRankChartView !== "table";
-    }
-    if (el.homeRankChartHint) {
-      el.homeRankChartHint.hidden = homeRankChartView === "table";
-    }
-    if (el.homeRankChartHintLabel) {
-      el.homeRankChartHintLabel.textContent = "Tap a bar for details";
-    }
-    const menu = el.homeRankChartViewMenu;
-    if (!menu) return;
-    menu.querySelectorAll("[data-rank-chart-view]").forEach((btn) => {
-      const on = btn.getAttribute("data-rank-chart-view") === homeRankChartView;
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-    });
-  }
-
-  function setHomeRankChartView(next) {
-    const view = next === "table" ? "table" : "graph";
-    if (view === homeRankChartView) {
-      closeHomeRankChartViewPicker();
-      return;
-    }
-    homeRankChartView = view;
-    try {
-      localStorage.setItem(HOME_RANK_CHART_VIEW_KEY, view);
-    } catch {
-      /* ignore */
-    }
-    syncHomeRankChartViewUI();
-    closeHomeRankChartViewPicker();
-    if (view === "table") {
-      closeHomeRankChartPts({ animate: false });
-      syncHomeRankChartSelection();
-      paintHomeRankChartTable();
-      if (el.homeRankChartTableWrap) el.homeRankChartTableWrap.scrollTop = 0;
-      return;
-    }
-    paintHomeRankChart({ pinEnd: true });
-  }
-
-  function openHomeRankChartViewPicker() {
-    if (!el.homeRankChartViewBtn || !el.homeRankChartViewMenu) return;
-    if (homeRankChartViewPickerIsOpen()) {
-      closeHomeRankChartViewPicker();
-      return;
-    }
-    closeHomePitchModePicker();
-    if (typeof closeHomeStatLogModePicker === "function") closeHomeStatLogModePicker();
-    syncHomeRankChartViewUI();
-    if (preferMobileSheet()) {
-      openMobileSheetHost({
-        title: "Rank History",
-        key: "home-rank-chart-view",
-        hostEl: el.homeRankChartViewMenu,
-        prepare: (node) => {
-          node.hidden = false;
-          node.classList.remove("is-open", "is-closing");
-        },
-        cleanup: (node) => {
-          node.hidden = true;
-          node.classList.remove("is-open", "is-closing");
-        },
-      });
-      el.homeRankChartViewBtn.setAttribute(
-        "aria-expanded",
-        homeRankChartViewPickerIsOpen() ? "true" : "false"
-      );
-      return;
-    }
-    const rect = el.homeRankChartViewBtn.getBoundingClientRect();
-    const menu = el.homeRankChartViewMenu;
-    menu.hidden = false;
-    menu.classList.remove("is-closing");
-    menu.style.top = `${Math.round(rect.bottom + 6)}px`;
-    menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
-    menu.style.left = "auto";
-    requestAnimationFrame(() => {
-      menu.classList.add("is-open");
-    });
-    el.homeRankChartViewBtn.setAttribute("aria-expanded", "true");
-  }
-
-  function toggleHomeRankChartViewPicker() {
-    if (homeRankChartViewPickerIsOpen()) closeHomeRankChartViewPicker();
-    else openHomeRankChartViewPicker();
   }
 
   function homeSquadLogicalPageIndex(physicalIndex) {
@@ -10044,50 +9893,12 @@
         if (!option || !el.homeStatLogModeMenu.contains(option)) return;
         e.preventDefault();
         e.stopPropagation();
-        const next = option.getAttribute("data-stat-log-filter") === "all" ? "all" : "league";
+        const next = homeStatLogFilterFromValue(option.getAttribute("data-stat-log-filter"));
         homeStatLogFilter = next;
+        homeStatLogFilterChosen = true;
         syncHomeStatLogModeUI();
         closeHomeStatLogModePicker();
         paintHomeStatLog();
-      });
-    }
-    if (el.homeRankChartPanel) {
-      el.homeRankChartPanel.addEventListener("click", (e) => {
-        const modeBtn = e.target.closest("#home-rank-chart-view-btn");
-        if (modeBtn && el.homeRankChartPanel.contains(modeBtn)) {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleHomeRankChartViewPicker();
-          return;
-        }
-        const row = e.target.closest("tr[data-gw]");
-        if (!row || !el.homeRankChartTableBody || !el.homeRankChartTableBody.contains(row)) return;
-        if (homeRankChartView === "table") return;
-        const gw = Number(row.getAttribute("data-gw"));
-        if (!Number.isFinite(gw) || gw <= 0) return;
-        e.preventDefault();
-        toggleHomeRankChartPts(gw);
-      });
-    }
-    if (el.homeRankChartTableBody) {
-      el.homeRankChartTableBody.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        if (homeRankChartView === "table") return;
-        const row = e.target.closest("tr[data-gw]");
-        if (!row || !el.homeRankChartTableBody.contains(row)) return;
-        const gw = Number(row.getAttribute("data-gw"));
-        if (!Number.isFinite(gw) || gw <= 0) return;
-        e.preventDefault();
-        toggleHomeRankChartPts(gw);
-      });
-    }
-    if (el.homeRankChartViewMenu) {
-      el.homeRankChartViewMenu.addEventListener("click", (e) => {
-        const option = e.target.closest("[data-rank-chart-view]");
-        if (!option || !el.homeRankChartViewMenu.contains(option)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setHomeRankChartView(option.getAttribute("data-rank-chart-view"));
       });
     }
     document.addEventListener("click", (e) => {
@@ -10100,11 +9911,6 @@
       if (e.target.closest("#home-stat-log-mode-btn, #home-stat-log-mode-menu")) return;
       closeHomeStatLogModePicker();
     });
-    document.addEventListener("click", (e) => {
-      if (!el.homeRankChartViewMenu || !el.homeRankChartViewMenu.classList.contains("is-open")) return;
-      if (e.target.closest("#home-rank-chart-view-btn, #home-rank-chart-view-menu")) return;
-      closeHomeRankChartViewPicker();
-    });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (el.homePitchModeMenu && el.homePitchModeMenu.classList.contains("is-open")) {
@@ -10112,9 +9918,6 @@
       }
       if (el.homeStatLogModeMenu && el.homeStatLogModeMenu.classList.contains("is-open")) {
         closeHomeStatLogModePicker();
-      }
-      if (el.homeRankChartViewMenu && el.homeRankChartViewMenu.classList.contains("is-open")) {
-        closeHomeRankChartViewPicker();
       }
     });
     window.addEventListener(
@@ -10125,9 +9928,6 @@
         }
         if (el.homeStatLogModeMenu && el.homeStatLogModeMenu.classList.contains("is-open")) {
           closeHomeStatLogModePicker();
-        }
-        if (el.homeRankChartViewMenu && el.homeRankChartViewMenu.classList.contains("is-open")) {
-          closeHomeRankChartViewPicker();
         }
       },
       { passive: true }
@@ -12023,7 +11823,8 @@
     }
   }
 
-  let homeStatLogFilter = "league";
+  let homeStatLogFilter = "owned";
+  let homeStatLogFilterChosen = false;
   const HOME_STAT_LOG_GEN = 3;
 
   function hideHomeStatLogPanel() {
@@ -12208,6 +12009,41 @@
     );
   }
 
+  function homeStatLogOwnedKeys() {
+    const squad = homeSquadForEntry(homeActiveViewEntryId()) || [];
+    const elements = new Set();
+    const codes = new Set();
+    for (const p of squad) {
+      const eid = Number(p && p.element);
+      const code = Number(p && p.code);
+      if (Number.isFinite(eid) && eid > 0) elements.add(eid);
+      if (Number.isFinite(code) && code > 0) codes.add(code);
+    }
+    if (!codes.size && Number(homeActiveViewEntryId()) === Number(homeConfiguredEntryId())) {
+      for (const code of ownedCodes) {
+        const n = Number(code);
+        if (Number.isFinite(n) && n > 0) codes.add(n);
+      }
+    }
+    return { elements, codes };
+  }
+
+  function homeStatLogRowIsOwned(row, keys = homeStatLogOwnedKeys()) {
+    const eid = Number(row && row.element);
+    const code = Number(row && row.code);
+    return (Number.isFinite(eid) && keys.elements.has(eid))
+      || (Number.isFinite(code) && keys.codes.has(code));
+  }
+
+  function resolveHomeStatLogFilter(owned, league) {
+    if (homeStatLogFilterChosen && HOME_STAT_LOG_FILTER_LABELS[homeStatLogFilter]) {
+      return homeStatLogFilter;
+    }
+    if (owned.length) return "owned";
+    if (league.length) return "league";
+    return "all";
+  }
+
   function paintHomeStatLog() {
     const panel = el.homeStatLogPanel;
     if (!panel) return;
@@ -12222,9 +12058,15 @@
       return;
     }
     const all = homeStatLogEntries();
+    const keys = homeStatLogOwnedKeys();
+    const owned = all.filter((row) => homeStatLogRowIsOwned(row, keys));
     const league = all.filter((row) => row.owned);
-    const useLeague = homeStatLogFilter === "league";
-    const rows = useLeague ? league : all;
+    homeStatLogFilter = resolveHomeStatLogFilter(owned, league);
+    const rows = homeStatLogFilter === "owned"
+      ? owned
+      : homeStatLogFilter === "league"
+        ? league
+        : all;
     const gw = HOME && HOME.gw != null ? `GW${HOME.gw}` : "";
     panel.hidden = false;
     if (el.homeStatLogKicker) el.homeStatLogKicker.textContent = "Adjustments";
@@ -12237,9 +12079,12 @@
     }
     if (!el.homeStatLogBody) return;
     if (!cards.length) {
-      const empty = useLeague && all.length
-        ? "No league players in the log — switch to All."
-        : "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
+      let empty = "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
+      if (all.length && homeStatLogFilter === "owned") {
+        empty = "No owned players in the log — switch to League or All.";
+      } else if (all.length && homeStatLogFilter === "league") {
+        empty = "No league players in the log — switch to All.";
+      }
       el.homeStatLogBody.innerHTML = `<p class="home-stat-log-empty">${empty}</p>`;
       return;
     }
@@ -12583,11 +12428,6 @@
         }
       });
     }
-    if (el.homeRankChartTableBody) {
-      el.homeRankChartTableBody.querySelectorAll(".home-rank-chart-table-row").forEach((row) => {
-        row.classList.toggle("is-selected", picking && Number(row.getAttribute("data-gw")) === Number(gw));
-      });
-    }
     syncHomeRankChartWindowLabel();
   }
 
@@ -12614,7 +12454,6 @@
   }
 
   async function openHomeRankChartPts(gw) {
-    if (homeRankChartView === "table") return;
     const eventGw = Number(gw);
     if (!Number.isFinite(eventGw) || eventGw <= 0) return;
     const entryId = homeActiveViewEntryId();
@@ -12783,91 +12622,6 @@
       .sort((a, b) => a.gw - b.gw);
   }
 
-  function homeRankChartEnriched(entryId = homeActiveViewEntryId()) {
-    const rows = homeRankChartSeries(entryId);
-    return rows.map((row, i) => {
-      const prev = i > 0 ? rows[i - 1] : null;
-      const delta = prev ? homeRankDeltaPlaces(row.overallRank, prev.overallRank) : null;
-      const pct = prev && prev.overallRank > 0 && delta != null
-        ? (delta / prev.overallRank) * 100
-        : null;
-      return { ...row, delta, pct };
-    });
-  }
-
-  function formatHomeRankPct(pct) {
-    if (pct == null || !Number.isFinite(pct)) return "—";
-    const abs = Math.abs(pct);
-    const n = abs >= 10 ? abs.toFixed(0) : abs.toFixed(1);
-    if (Math.abs(pct) < 0.05) return "0%";
-    return `${pct > 0 ? "+" : "−"}${n}%`;
-  }
-
-  function homeRankChartHeatCell(kind, intensity) {
-    const paint = spectrumHighlightPaint(kind !== "bottom", intensity, {
-      easy: "hsl(var(--blue-hsl))",
-      hard: "hsl(var(--delta-fall))",
-      easyFill: (alpha) => `hsl(var(--blue-hsl) / ${alpha})`,
-      hardFill: (alpha) => `hsl(var(--delta-fall) / ${alpha})`,
-    });
-    if (paint.skip) return { style: "", cls: "" };
-    const color = paint.color ? `;color:${paint.color}` : "";
-    const kindClass = paint.emphasize || paint.strong
-      ? (kind === "bottom" ? " highlight-bottom" : " highlight-top")
-      : "";
-    const strong = paint.strong ? " highlight-strong" : "";
-    return {
-      style: ` style="background-color:${paint.backgroundColor}${color}"`,
-      cls: `${kindClass}${strong}`,
-    };
-  }
-
-  function paintHomeRankChartTable(entryId = homeActiveViewEntryId()) {
-    if (!el.homeRankChartTableBody) return;
-    const rows = homeRankChartEnriched(entryId)
-      .slice()
-      .sort((a, b) => Number(b.gw) - Number(a.gw));
-    if (!rows.length) {
-      el.homeRankChartTableBody.innerHTML = "";
-      return;
-    }
-    const ptsMax = Math.max(1, ...rows.map((r) => Number(r.points) || 0));
-    const ranks = rows.map((r) => r.overallRank).filter((n) => n > 0);
-    const minR = ranks.length ? Math.min(...ranks) : 0;
-    const maxR = ranks.length ? Math.max(...ranks) : 0;
-    const rankSpan = Math.max(1, maxR - minR);
-    const dMax = Math.max(0, ...rows.map((r) => (r.delta == null ? 0 : Math.abs(r.delta))));
-    const pMax = Math.max(0, ...rows.map((r) => (r.pct == null ? 0 : Math.abs(r.pct))));
-    el.homeRankChartTableBody.innerHTML = rows.map((row) => {
-      const selected = homeRankChartSelectedGw != null
-        && Number(row.gw) === Number(homeRankChartSelectedGw);
-      const ptsHeat = homeRankChartHeatCell("top", (Number(row.points) || 0) / ptsMax);
-      const rankHeat = homeRankChartHeatCell("top", 1 - ((row.overallRank - minR) / rankSpan));
-      const deltaHeat = row.delta
-        ? homeRankChartHeatCell(row.delta > 0 ? "top" : "bottom", Math.abs(row.delta) / (dMax || 1))
-        : { style: "", cls: "" };
-      const pctHeat = row.pct
-        ? homeRankChartHeatCell(row.pct > 0 ? "top" : "bottom", Math.abs(row.pct) / (pMax || 1))
-        : { style: "", cls: "" };
-      const live = row.live
-        ? ` <span class="home-status-dot is-live" title="Live" aria-hidden="true"></span>`
-        : "";
-      const deltaHTML = homeRankDeltaHTML(row.delta, { compact: true })
-        || `<span class="home-rank-chart-table-empty">—</span>`;
-      const interactive = homeRankChartView !== "table";
-      const rowAttrs = interactive
-        ? ` role="button" tabindex="0" aria-label="GW${row.gw} rank history${row.live ? ", live" : ""}"`
-        : "";
-      return `<tr class="home-rank-chart-table-row${selected && interactive ? " is-selected" : ""}${row.live ? " is-live" : ""}" data-gw="${row.gw}"${rowAttrs}>
-        <td class="home-col-gw"><span class="home-rank-chart-table-gw">GW${row.gw}${live}</span></td>
-        <td class="home-col-stat col-num${ptsHeat.cls}"${ptsHeat.style}>${escapeHtml(String(row.points))}</td>
-        <td class="home-col-stat col-num${rankHeat.cls}"${rankHeat.style}>${escapeHtml(formatHomeRank(row.overallRank))}</td>
-        <td class="home-col-stat col-num${deltaHeat.cls}"${deltaHeat.style}>${deltaHTML}</td>
-        <td class="home-col-stat col-num${pctHeat.cls}"${pctHeat.style}>${escapeHtml(formatHomeRankPct(row.pct))}</td>
-      </tr>`;
-    }).join("");
-  }
-
   function homeRankChartWindowFromScroll() {
     const scroller = el.homeRankChartScroller;
     const rows = homeRankChartSeries();
@@ -12889,11 +12643,8 @@
     }
     const rows = homeRankChartSeries();
     if (!rows.length) return;
-    let visible = rows;
-    if (homeRankChartView !== "table") {
-      const { start, end } = homeRankChartWindowFromScroll();
-      visible = rows.slice(start, end);
-    }
+    const { start, end } = homeRankChartWindowFromScroll();
+    const visible = rows.slice(start, end);
     if (!visible.length) return;
     const a = visible[0].gw;
     const b = visible[visible.length - 1].gw;
@@ -13043,7 +12794,6 @@
     const reset = pinEnd || structureKey !== homeRankChartPaintKey;
     homeRankChartPaintKey = structureKey;
     if (!reset && dataKey === homeRankChartDataPaintKey && el.homeRankChartTrack && el.homeRankChartTrack.querySelector(".home-rank-chart-svg")) {
-      syncHomeRankChartViewUI();
       syncHomeRankChartSelection();
       if (homeRankChartPtsOpen() && homeRankChartSelectedGw != null) {
         if (Number(homeRankChartSelectedGw) === Number(HOME && HOME.gw)) {
@@ -13055,8 +12805,6 @@
     homeRankChartDataPaintKey = dataKey;
     if (reset) homeRankChartPinEnd = true;
     const shouldPin = reset || homeRankChartPinEnd;
-    syncHomeRankChartViewUI();
-    paintHomeRankChartTable(entryId);
     if (el.homeRankChartYRank) {
       el.homeRankChartYRank.innerHTML = painted.rankTicks
         .map((v) => `<span>${escapeHtml(formatHomeRankChartTick(v))}</span>`)
@@ -38490,9 +38238,10 @@
       if (e.target.closest("#home-stat-log-mode-btn, #home-stat-log-mode-menu")) return;
       const btn = e.target.closest("[data-stat-log-filter]");
       if (!btn || !el.homeStatLogPanel.contains(btn)) return;
-      const next = btn.getAttribute("data-stat-log-filter") === "all" ? "all" : "league";
+      const next = homeStatLogFilterFromValue(btn.getAttribute("data-stat-log-filter"));
       if (next === homeStatLogFilter) return;
       homeStatLogFilter = next;
+      homeStatLogFilterChosen = true;
       paintHomeStatLog();
     });
   }
