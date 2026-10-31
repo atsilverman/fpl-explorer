@@ -9284,6 +9284,15 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   font-size: 13px;
 }
 
+.schedule-venue-seg {
+  width: 100%;
+  margin-top: 8px;
+}
+.schedule-venue-seg button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .schedule-controls .slider-values {
   margin: 3px 0 0;
   font-size: 11px;
@@ -20007,6 +20016,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 }
 .home-gw-prog {
   --autosub-amber: 34 78% 46%;
+  --home-gw-prog-halo: hsl(var(--card));
 }
 .home-gw-prog {
   display: flex;
@@ -20045,10 +20055,10 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   position: relative;
   width: calc(100% - 2 * var(--home-gw-prog-inset));
   margin-inline: var(--home-gw-prog-inset);
-  height: 8px;
+  height: 4px;
   border-radius: 999px;
   overflow: hidden;
-  background: hsl(var(--muted) / 0.7);
+  background: hsl(var(--muted-foreground) / 0.22);
 }
 .home-gw-prog-fill {
   position: absolute;
@@ -20075,6 +20085,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   padding: 0;
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
@@ -20086,25 +20097,25 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   align-items: center;
 }
 .home-gw-prog-tick-dot {
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   box-sizing: border-box;
-  background: hsl(var(--card));
-  border: 2px solid hsl(var(--muted-foreground) / 0.35);
+  background: var(--home-gw-prog-halo);
+  border: 2.5px solid hsl(var(--muted-foreground) / 0.55);
 }
 .home-gw-prog-tick.is-done .home-gw-prog-tick-dot {
   background: hsl(var(--positive));
-  border-color: hsl(var(--positive));
+  border-color: var(--home-gw-prog-halo);
 }
 .home-gw-prog.is-review .home-gw-prog-tick.is-done .home-gw-prog-tick-dot,
 .home-gw-prog-tick.is-review .home-gw-prog-tick-dot {
   background: hsl(var(--autosub-amber));
-  border-color: hsl(var(--autosub-amber));
+  border-color: var(--home-gw-prog-halo);
 }
 .home-gw-prog.is-locked .home-gw-prog-tick.is-done .home-gw-prog-tick-dot {
   background: hsl(var(--positive));
-  border-color: hsl(var(--positive));
+  border-color: var(--home-gw-prog-halo);
 }
 .home-gw-prog {
   --home-gw-prog-pulse: hsl(var(--positive) / 0.28);
@@ -20113,7 +20124,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   --home-gw-prog-pulse: hsl(var(--autosub-amber) / 0.36);
 }
 .home-gw-prog-tick.is-active .home-gw-prog-tick-dot {
-  box-shadow: 0 0 0 3px var(--home-gw-prog-pulse);
+  box-shadow: 0 0 0 4px var(--home-gw-prog-pulse);
   animation: home-gw-prog-pulse 1.6s ease-in-out infinite;
 }
 .home-gw-prog.is-locked .home-gw-prog-tick.is-active .home-gw-prog-tick-dot {

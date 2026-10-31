@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1711" />
+<link rel="stylesheet" href="styles.css?v=1713" />
 <link rel="stylesheet" href="motion-enhanced.css?v=16" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1646,6 +1646,17 @@
         </div>
 
         <div class="schedule-controls is-collapsed" id="schedule-controls" hidden>
+          <div class="schedule-control" id="schedule-venue-group">
+            <div class="schedule-control-head">
+              <strong>Fixture location</strong>
+              <span id="schedule-venue-label">Home / Away</span>
+            </div>
+            <div class="segmented schedule-venue-seg" id="schedule-venue-seg" role="group" aria-label="Use fixture location for ranks">
+              <button type="button" data-schedule-venue="on" class="active">On</button>
+              <button type="button" data-schedule-venue="off">Off</button>
+            </div>
+          </div>
+
           <div class="schedule-control">
             <div class="schedule-control-head">
               <strong>Gameweek range</strong>
@@ -2047,7 +2058,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1583"></script>
+<script src="app.js?v=1584"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

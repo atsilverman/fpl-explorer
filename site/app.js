@@ -831,6 +831,7 @@
     scheduleMatchups: true,
     scheduleExpectedWeight: SCHEDULE_EXPECTED_WEIGHT_DEFAULT,
     scheduleEdgeMin: SCHEDULE_EDGE_DEFAULT,
+    scheduleVenueSplit: true,
     matchupsSeason: "2627", // locked to 2026/27 FPL season-to-date ranks
     fixturesWindowStart: null,
     fixturesWindowLen: 7,
@@ -1393,6 +1394,9 @@
     scheduleEnhancePct: $("#schedule-enhance-pct"),
     scheduleEnhancePctLabel: $("#schedule-enhance-pct-label"),
     scheduleEnhancePctFill: $("#schedule-enhance-pct-fill"),
+    scheduleVenueGroup: $("#schedule-venue-group"),
+    scheduleVenueSeg: $("#schedule-venue-seg"),
+    scheduleVenueLabel: $("#schedule-venue-label"),
     scheduleExpectedWeightGroup: $("#schedule-expected-weight-group"),
     scheduleExpectedWeight: $("#schedule-expected-weight"),
     scheduleExpectedWeightLabel: $("#schedule-expected-weight-label"),
@@ -21364,11 +21368,22 @@
     return row.newTeam || row.team || null;
   }
 
+  function scheduleUsesVenueSplit() {
+    if (state.page !== "schedule") return true;
+    return state.scheduleVenueSplit !== false;
+  }
+
+  function fixtureStatSplit(fx, role = "opp") {
+    if (!scheduleUsesVenueSplit()) return "combined";
+    if (role === "team") return fx.ha === "H" ? "home" : "away";
+    return fx.ha === "H" ? "away" : "home";
+  }
+
   function opponentStatsForFixture(fx) {
-    // Opponent's venue-split profile: if we are home they are away, and vice versa.
-    const split = fx.ha === "H" ? "away" : "home";
+    // Venue on: opponent’s opposite-home/away profile. Off: season totals.
+    const split = fixtureStatSplit(fx, "opp");
     const stats = matchupsTeamStats();
-    return stats[split][fx.opp] || stats.combined[fx.opp] || null;
+    return (stats[split] && stats[split][fx.opp]) || stats.combined[fx.opp] || null;
   }
 
   function fmtTtStat(v, decimals) {
@@ -21389,10 +21404,10 @@
   // rank maps (prior OPTA or current FPL season-to-date).
   // topN is absolute (top & bottom N ranks), not a percentage.
   function fixtureHighlightMaps(topN = state.scheduleEnhanceTopN) {
-    const maps = { home: {}, away: {} };
+    const maps = { home: {}, away: {}, combined: {} };
     const rankMaps = fixtureRankMaps();
     const band = Math.max(1, Math.round(topN));
-    ["home", "away"].forEach((split) => {
+    ["home", "away", "combined"].forEach((split) => {
       FIXTURE_TT_STATS.forEach(({ key }) => {
         const rankMap = rankMaps[split][key];
         if (!rankMap || rankMap.size < 2) return;
@@ -21413,10 +21428,10 @@
   // Competition ranks for measured clubs. Prior season also stamps provisional
   // ranks for promoted clubs with no OPTA row.
   function fixtureRankMaps() {
-    const maps = { home: {}, away: {} };
+    const maps = { home: {}, away: {}, combined: {} };
     const statsRoot = matchupsTeamStats();
     const useProvisional = !matchupsUsesCurrentSeason();
-    ["home", "away"].forEach((split) => {
+    ["home", "away", "combined"].forEach((split) => {
       const teams = Object.values(statsRoot[split] || {});
       FIXTURE_TT_STATS.forEach(({ key }) => {
         const lowerBetter = LOWER_BETTER.has(key);
@@ -21519,8 +21534,8 @@
   // attack to their defence; defence compares our defence to their attack.
   // Ranks are already 1 = strongest on every key, so no sign flip is needed.
   function matchupEdges(teamCode, fx, rankMaps) {
-    const tSplit = fx.ha === "H" ? "home" : "away";
-    const oSplit = fx.ha === "H" ? "away" : "home";
+    const tSplit = fixtureStatSplit(fx, "team");
+    const oSplit = fixtureStatSplit(fx, "opp");
     const ourAttack = compositeAttackRank(rankMaps, tSplit, teamCode);
     const ourDefence = compositeDefenceRank(rankMaps, tSplit, teamCode);
     const theirAttack = compositeAttackRank(rankMaps, oSplit, fx.opp);
@@ -21693,7 +21708,7 @@
     }
     const rows = fixtures.map((fx) => {
       const stats = opponentStatsForFixture(fx);
-      const split = fx.ha === "H" ? "away" : "home";
+      const split = fixtureStatSplit(fx, "opp");
       const verdict = showMatchupEdges ? matchupVerdictCell(teamCode, fx, rankMaps) : null;
       const cellOpts = {
         schedulePalette: showMatchups,
@@ -21719,18 +21734,20 @@
           <tr>
             <th>GW</th>
             <th>Opp</th>
-            <th title="Opponent expected goals rank (venue split)">xG</th>
-            <th title="Opponent goals rank (venue split)">G</th>
-            <th class="ftt-def-start" title="Opponent expected goals conceded rank (venue split)">xGC</th>
-            <th title="Opponent goals conceded rank (venue split)">GC</th>
-            <th title="Opponent clean sheets rank (venue split)">CS</th>
+            <th title="Opponent expected goals rank (${scheduleUsesVenueSplit() ? "venue split" : "season totals"})">xG</th>
+            <th title="Opponent goals rank (${scheduleUsesVenueSplit() ? "venue split" : "season totals"})">G</th>
+            <th class="ftt-def-start" title="Opponent expected goals conceded rank (${scheduleUsesVenueSplit() ? "venue split" : "season totals"})">xGC</th>
+            <th title="Opponent goals conceded rank (${scheduleUsesVenueSplit() ? "venue split" : "season totals"})">GC</th>
+            <th title="Opponent clean sheets rank (${scheduleUsesVenueSplit() ? "venue split" : "season totals"})">CS</th>
             ${showMatchupEdges ? `<th class="ftt-verdict" title="Favorable matchups for ${escapeHtml(teamLabel)}"></th>` : ""}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
       ${showMeta
-        ? `<div class="ftt-note">Opp ranks vs all teams on that venue split (1 = best · ${
+        ? `<div class="ftt-note">Opp ranks vs all teams${
+            scheduleUsesVenueSplit() ? " on that venue split" : " (season totals)"
+          } (1 = best · ${
             matchupsUsesCurrentSeason()
               ? "2026/27 FPL season-to-date"
               : "2025/26 OPTA; promoted provisional"
@@ -21932,7 +21949,9 @@
       ),
       spitKeyRow(
         `<span class="spit-pin" aria-hidden="true">2</span>`,
-        "Opp ranks, venue-split. 1 is best. Pink = tougher, blue = easier."
+        scheduleUsesVenueSplit()
+          ? "Opp ranks, venue-split. 1 is best. Pink = tougher, blue = easier."
+          : "Opp ranks, season totals. 1 is best. Pink = tougher, blue = easier."
       ),
       spitKeyRow(
         `<span class="spit-pin" aria-hidden="true">3</span>${iconHTML("swords", "ftt-attack-icon")}${iconHTML("shield-half", "ftt-defence-icon")}`,
@@ -22476,6 +22495,7 @@
     hideScheduleScatterTooltip();
     hidePageInfoTooltip();
     syncScheduleMatchupControls();
+    syncScheduleVenueSeg();
     const teamCodes = Object.keys(FIXTURES_BY_TEAM).sort((a, b) =>
       (TEAM_NAMES[a] || a).localeCompare(TEAM_NAMES[b] || b)
     );
@@ -23106,7 +23126,7 @@
         </div>
       </div>
       <div class="sst-context">
-        <span>${range}</span><span>${state.scheduleExpectedWeight}% expected / ${100 - state.scheduleExpectedWeight}% actual</span>
+        <span>${range}</span><span>${state.scheduleExpectedWeight}% expected / ${100 - state.scheduleExpectedWeight}% actual</span><span>${scheduleUsesVenueSplit() ? "Venue ranks" : "Overall ranks"}</span>
       </div>
       <div class="sst-note">Position uses the average advantage across every fixture — tough games pull a team left or down. Flag threshold only affects icons and counts, not badge placement.</div>`;
   }
@@ -35203,6 +35223,31 @@
     onInput: renderSchedule,
   });
 
+  function syncScheduleVenueSeg({ animate = false } = {}) {
+    if (!el.scheduleVenueSeg) return;
+    const on = state.scheduleVenueSplit !== false;
+    $$("#schedule-venue-seg button[data-schedule-venue]").forEach((btn) => {
+      btn.classList.toggle("active", (btn.dataset.scheduleVenue === "on") === on);
+    });
+    if (el.scheduleVenueLabel) {
+      el.scheduleVenueLabel.textContent = on ? "Home / Away" : "Overall";
+    }
+    syncSegThumb(el.scheduleVenueSeg, { animate });
+  }
+
+  if (el.scheduleVenueSeg) {
+    el.scheduleVenueSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-schedule-venue]");
+      if (!btn || !el.scheduleVenueSeg.contains(btn)) return;
+      const next = btn.dataset.scheduleVenue !== "off";
+      if (next === (state.scheduleVenueSplit !== false)) return;
+      state.scheduleVenueSplit = next;
+      syncScheduleVenueSeg({ animate: true });
+      renderSchedule();
+    });
+  }
+  syncScheduleVenueSeg();
+
   const updateScheduleExpectedWeightSlider = setupSingleSlider({
     input: el.scheduleExpectedWeight,
     fillEl: el.scheduleExpectedWeightFill,
@@ -35371,6 +35416,7 @@
           updateScheduleEnhancePctSlider();
           updateScheduleExpectedWeightSlider();
           updateScheduleEdgeMinSlider();
+          syncScheduleVenueSeg();
         });
       } else if (mobileSheetKey === "schedule-filters") {
         closeMobileSheet();
@@ -35400,6 +35446,7 @@
         updateScheduleEnhancePctSlider();
         updateScheduleExpectedWeightSlider();
         updateScheduleEdgeMinSlider();
+        syncScheduleVenueSeg();
       });
     }
   }
