@@ -13468,6 +13468,7 @@
         // Team Strength uses home-form-card chrome but isn't paginated.
         if (formCard.classList.contains("home-team-strength-card")) return null;
         if (formCard.classList.contains("home-own-card")) return null;
+        if (formCard.hasAttribute("data-price-chart")) return null;
         return { kind: "form", el: formCard };
       }
       const card = target.closest(".home-lookup-card");
@@ -14517,6 +14518,225 @@
     });
   }
 
+  function homePriceByGwSourceMs(source) {
+    const m = String(source || "").match(/(\d{4}-\d{2}-\d{2})/);
+    if (!m) return null;
+    const ms = Date.parse(`${m[1]}T12:00:00Z`);
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  function homePlayerPriceSeries(row) {
+    const code = Number(row && row.code);
+    if (!Number.isFinite(code)) return null;
+    const bundle = PRICES && PRICES.priceByGw && typeof PRICES.priceByGw === "object"
+      ? PRICES.priceByGw
+      : null;
+    const gws = bundle && Array.isArray(bundle.gws) ? bundle.gws : [];
+    const series = bundle && bundle.prices ? bundle.prices[String(code)] : null;
+    const sources = (bundle && bundle.sources) || {};
+    const pts = [];
+    if (Array.isArray(series)) {
+      series.forEach((tenths, i) => {
+        const n = Number(tenths);
+        if (!Number.isFinite(n)) return;
+        const gw = Number(gws[i]);
+        const fromSource = homePriceByGwSourceMs(sources[String(gw)]);
+        const ms = fromSource != null
+          ? fromSource
+          : Date.now() - Math.max(0, series.length - 1 - i) * 7 * 24 * 60 * 60 * 1000;
+        pts.push({ ms, price: n / 10, gw: Number.isFinite(gw) ? gw : null, kind: "gw" });
+      });
+    }
+    for (const ev of PRICES.actualChanges || []) {
+      if (!ev || Number(ev.code) !== code) continue;
+      const ms = Date.parse(ev.changedAt);
+      const price = Number(ev.after);
+      if (!Number.isFinite(ms) || !Number.isFinite(price)) continue;
+      pts.push({ ms, price, gw: null, kind: "actual" });
+    }
+    const live = effectivePrice(row);
+    if (Number.isFinite(Number(live)) && Number(live) > 0) {
+      pts.push({ ms: Date.now(), price: Number(live), gw: null, kind: "live" });
+    }
+    const rank = { gw: 0, actual: 1, live: 2 };
+    const byMs = new Map();
+    pts
+      .sort((a, b) => a.ms - b.ms || (rank[a.kind] || 0) - (rank[b.kind] || 0))
+      .forEach((p) => byMs.set(p.ms, p));
+    const ordered = [...byMs.values()].sort((a, b) => a.ms - b.ms);
+    const slim = [];
+    for (const p of ordered) {
+      const last = slim[slim.length - 1];
+      if (last && Math.abs(last.price - p.price) < 0.05) {
+        slim[slim.length - 1] = { ...last, ms: p.ms, kind: p.kind, gw: last.gw || p.gw };
+        continue;
+      }
+      slim.push(p);
+    }
+    if (slim.length < 1) return null;
+    const first = slim[0].price;
+    const last = slim[slim.length - 1].price;
+    return {
+      points: slim,
+      live: last,
+      first,
+      delta: Math.round((last - first) * 10) / 10,
+      updatedAt: (PRICES && PRICES.generatedAt) || null,
+    };
+  }
+
+  function homePriceStepPathD(coords) {
+    if (!coords || coords.length < 2) return "";
+    const fmt = (n) => Number(n).toFixed(1);
+    let d = `M${fmt(coords[0].x)} ${fmt(coords[0].y)}`;
+    for (let i = 1; i < coords.length; i++) {
+      d += ` L${fmt(coords[i].x)} ${fmt(coords[i - 1].y)} L${fmt(coords[i].x)} ${fmt(coords[i].y)}`;
+    }
+    return d;
+  }
+
+  function homePriceChartNiceTicks(vals) {
+    const nums = (vals || []).filter((v) => Number.isFinite(Number(v))).map(Number);
+    if (!nums.length) return { yLo: 0, yHi: 1, rng: 1, ticks: [0, 1], decimals: 1 };
+    const lo = Math.min(...nums);
+    const hi = Math.max(...nums);
+    const raw = Math.max(hi - lo, 0.3);
+    const steps = [0.1, 0.2, 0.5, 1, 2];
+    const step = steps.find((s) => raw / s <= 4) || 2;
+    let yLo = Math.round((lo - step * 0.4) / step) * step;
+    let yHi = Math.round((hi + step * 0.4) / step) * step;
+    if (yHi - yLo < step) yHi = yLo + step;
+    yLo = Math.max(0, Math.round(yLo * 10) / 10);
+    yHi = Math.round(yHi * 10) / 10;
+    const ticks = [];
+    for (let v = yLo; v <= yHi + step * 0.01; v += step) {
+      ticks.push(Math.round(v * 10) / 10);
+    }
+    return { yLo, yHi, rng: yHi - yLo || 1, ticks, decimals: 1 };
+  }
+
+  function homePlayerPriceChartSvg(series, { accent = "" } = {}) {
+    const points = (series && series.points) || [];
+    if (points.length < 2) return "";
+    const w = 320;
+    const h = 132;
+    const padL = 32;
+    const padR = 14;
+    const padT = 12;
+    const padB = 26;
+    const timed = points
+      .map((pt) => ({
+        ms: Number(pt.ms),
+        price: Number(pt.price),
+        gw: pt.gw,
+        kind: pt.kind,
+      }))
+      .filter((pt) => Number.isFinite(pt.ms) && Number.isFinite(pt.price))
+      .sort((a, b) => a.ms - b.ms);
+    if (timed.length < 2) return "";
+    const t0 = timed[0].ms;
+    const t1 = timed[timed.length - 1].ms;
+    const span = Math.max(t1 - t0, 1);
+    const { yLo, rng, ticks: yTicks, decimals } = homePriceChartNiceTicks(timed.map((p) => p.price));
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const xAt = (ms) => padL + ((ms - t0) / span) * plotW;
+    const yAt = (v) => padT + (1 - (v - yLo) / rng) * plotH;
+    const coords = timed.map((p) => ({
+      x: xAt(p.ms),
+      y: yAt(p.price),
+      price: p.price,
+      gw: p.gw,
+      kind: p.kind,
+      isLast: false,
+    }));
+    coords[coords.length - 1].isLast = true;
+    const pathD = homePriceStepPathD(coords);
+    const baseY = padT + plotH;
+    const areaD = `${pathD} L${coords[coords.length - 1].x.toFixed(1)} ${baseY} L${coords[0].x.toFixed(1)} ${baseY} Z`;
+    const tone = ownershipDeltaClass(series.delta);
+    const stroke =
+      tone === "is-up"
+        ? "hsl(var(--delta-rise))"
+        : tone === "is-down"
+          ? "hsl(var(--delta-fall))"
+          : accent || "hsl(var(--foreground) / 0.55)";
+    const grid = yTicks
+      .map((v) => {
+        const y = yAt(v).toFixed(1);
+        return `<line class="home-own-grid" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" />
+      <text class="home-own-y-label" x="${padL - 6}" y="${(Number(y) + 3).toFixed(1)}" text-anchor="end">${escapeHtml(v.toFixed(decimals))}</text>`;
+      })
+      .join("");
+    const labelCandidates = coords.filter((c, i) => c.gw != null || c.isLast || i === 0);
+    const labelEvery = labelCandidates.length > 6 ? 2 : 1;
+    const xLabels = labelCandidates
+      .filter((c, i) => c.isLast || i % labelEvery === 0)
+      .map((c) => {
+        const anchor = c.isLast ? "end" : c.x - padL < 18 ? "start" : "middle";
+        const lx = c.isLast ? w - padR + 4 : c.x;
+        const text = c.isLast && c.gw == null ? "Now" : c.gw != null ? `GW${c.gw}` : "";
+        if (!text) return "";
+        return `<line class="home-own-x-tick" x1="${c.x.toFixed(1)}" y1="${baseY + 2}" x2="${c.x.toFixed(1)}" y2="${baseY + 5}" />
+      <text class="home-own-x-label" x="${lx.toFixed(1)}" y="${h - 6}" text-anchor="${anchor}">${escapeHtml(text)}</text>`;
+      })
+      .join("");
+    const changeDots = coords
+      .filter((c, i) => i === 0 || c.isLast || (coords[i - 1] && Math.abs(coords[i - 1].price - c.price) >= 0.05))
+      .map(
+        (c) =>
+          `<circle class="home-own-dot${c.isLast ? " is-live" : ""}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${c.isLast ? 4 : 3}" />`
+      )
+      .join("");
+    const last = coords[coords.length - 1];
+    const pulse = prefersReducedMotion()
+      ? ""
+      : `<circle class="home-own-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4" />`;
+    const gradId = `home-price-fill-${++homeOwnChartSeq}`;
+    return `<svg class="home-own-svg home-price-svg ${tone}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="--home-own-stroke:${stroke}">
+      <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${stroke}" stop-opacity="0.22" />
+        <stop offset="1" stop-color="${stroke}" stop-opacity="0" />
+      </linearGradient></defs>
+      ${grid}
+      ${xLabels}
+      <path class="home-own-area" d="${areaD}" fill="url(#${gradId})" />
+      <path class="home-own-line" d="${pathD}" />
+      ${changeDots}
+      ${pulse}
+    </svg>`;
+  }
+
+  function homePlayerPriceChartHTML(row) {
+    if (!row) return "";
+    const series = homePlayerPriceSeries(row);
+    const accent = TEAM_SCATTER_ACCENT[row.team] || "";
+    if (!series || !series.points || series.points.length < 2) {
+      return `<article class="home-form-card home-own-card is-empty" data-price-chart="1">
+        <div class="home-form-head">
+          <span class="home-form-kicker">Price</span>
+          <span class="home-form-stat-label">Season</span>
+        </div>
+        <p class="home-own-empty">No price history yet. GW prices backfill from bootstrap snapshots.</p>
+      </article>`;
+    }
+    const liveLbl = `£${Number(series.live).toFixed(1)}`;
+    const deltaLbl =
+      series.delta == null || Math.abs(series.delta) < 0.05
+        ? ""
+        : ` · ${series.delta > 0 ? "+" : ""}${Number(series.delta).toFixed(1)}`;
+    const updated = fmtOwnershipDate(series.updatedAt);
+    const tone = ownershipDeltaClass(series.delta);
+    return `<article class="home-form-card home-own-card ${tone}" data-price-chart="1">
+      <div class="home-form-head">
+        <span class="home-form-kicker">Price <span class="home-own-window-inline">(Season)</span></span>
+        <span class="home-form-stat-label">${escapeHtml(liveLbl)}${escapeHtml(deltaLbl)}</span>
+      </div>
+      <div class="home-own-chart">${homePlayerPriceChartSvg(series, { accent })}</div>
+      ${updated ? `<p class="home-own-updated">Updated ${escapeHtml(updated)}</p>` : ""}
+    </article>`;
+  }
+
   function setHomeOwnChartWindow(idx, { animate = true } = {}) {
     const ctx = homeOwnChartContext();
     if (!ctx) return;
@@ -14797,6 +15017,7 @@
       <div class="home-player-detail-matchup">${homePlayerMatchupHTML(row.team)}</div>
       <div class="home-player-detail-owners">${homePlayerOwnersHTML(homeLookupElementId(row))}</div>
       <div class="home-player-detail-ownership">${homePlayerOwnershipChartHTML(row)}</div>
+      <div class="home-player-detail-price">${homePlayerPriceChartHTML(row)}</div>
     </div>`;
   }
 

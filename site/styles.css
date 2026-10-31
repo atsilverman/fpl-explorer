@@ -15249,7 +15249,7 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
   height: 40px;
   width: 40px;
 }
-/* Wide desktop: 3×2 — Ownership sits beside Form; bottom-right slot left open. */
+/* Wide desktop: 3×2 — TSB beside Form; Price fills the slot under TSB. */
 @media (min-width: 900px) {
   .home-player-modal-panel {
     width: min(1360px, 96vw);
@@ -15275,7 +15275,8 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
   .home-player-modal-body > .home-player-detail .home-player-detail-form,
   .home-player-modal-body > .home-player-detail .home-player-detail-matchup,
   .home-player-modal-body > .home-player-detail .home-player-detail-owners,
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership {
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership,
+  .home-player-modal-body > .home-player-detail .home-player-detail-price {
     min-width: 0;
     min-height: 0;
     height: 100%;
@@ -15303,6 +15304,10 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
     grid-column: 2;
     grid-row: 2;
   }
+  .home-player-modal-body > .home-player-detail .home-player-detail-price {
+    grid-column: 3;
+    grid-row: 2;
+  }
   .home-player-modal-body > .home-player-detail.home-team-detail .home-player-detail-owners {
     grid-column: 2 / -1;
   }
@@ -15321,6 +15326,9 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
   .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-owners {
     grid-row: 3;
   }
+  .home-player-modal-body > .home-player-detail:has(> .home-player-flag-banner) .home-player-detail-price {
+    grid-row: 3;
+  }
   /* Measuring pass: Schedule content-sized; hide ownership so it doesn't inflate rows. */
   .home-player-modal-body > .home-player-detail.is-measuring {
     grid-template-rows: auto auto;
@@ -15328,7 +15336,8 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
   .home-player-modal-body > .home-player-detail.is-measuring:has(> .home-player-flag-banner) {
     grid-template-rows: auto auto auto;
   }
-  .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-ownership {
+  .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-ownership,
+  .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-price {
     display: none;
   }
   .home-player-modal-body > .home-player-detail.is-measuring .home-player-detail-matchup {
@@ -15350,7 +15359,8 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
   .home-player-modal-body > .home-player-detail .home-form-card,
   .home-player-modal-body > .home-player-detail .home-player-detail-matchup > *,
   .home-player-modal-body > .home-player-detail .home-player-owners,
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-card {
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-card,
+  .home-player-modal-body > .home-player-detail .home-player-detail-price .home-own-card {
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
@@ -15358,7 +15368,8 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
     flex-direction: column;
     overflow: hidden;
   }
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-chart {
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-chart,
+  .home-player-modal-body > .home-player-detail .home-player-detail-price .home-own-chart {
     flex: 1 1 auto;
     min-height: 0;
     margin: 0;
@@ -15367,7 +15378,8 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
     align-items: stretch;
     justify-content: center;
   }
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-svg {
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-svg,
+  .home-player-modal-body > .home-player-detail .home-player-detail-price .home-own-svg {
     flex: 1 1 auto;
     width: 100%;
     height: auto;
@@ -15377,7 +15389,9 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-form-head,
   .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-trend-row,
-  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-updated {
+  .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-updated,
+  .home-player-modal-body > .home-player-detail .home-player-detail-price .home-form-head,
+  .home-player-modal-body > .home-player-detail .home-player-detail-price .home-own-updated {
     flex: none;
   }
   .home-player-modal-body > .home-player-detail .home-lookup-stats {
@@ -15922,6 +15936,11 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.home-price-svg .home-own-line {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-miterlimit: 8;
 }
 .home-own-area {
   pointer-events: none;
