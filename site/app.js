@@ -1347,11 +1347,8 @@
     difficultyTeamList: $("#difficulty-team-list"),
     difficultyAxisSeg: $("#difficulty-axis-seg"),
     prefsDifficultyBtn: $("#prefs-difficulty-btn"),
-    prefsHomeBadgePreview: $("#prefs-home-badge-preview"),
     homeBadgeStyleSeg: $("#home-badge-style-seg"),
-    prefsHomePitchFlashPreview: $("#prefs-home-pitch-flash-preview"),
     homePitchFlashSeg: $("#home-pitch-flash-seg"),
-    prefsHomePitchFlashHint: $("#prefs-home-pitch-flash-hint"),
     homePitchFlashToastRoot: $("#home-pitch-flash-toast-root"),
     homeGwProgressPanel: $("#home-gw-progress-panel"),
     homeGwProgressKicker: $("#home-gw-progress-kicker"),
@@ -1372,14 +1369,19 @@
     homeStatLogBody: $("#home-stat-log-body"),
     homeRankChartPanel: $("#home-rank-chart-panel"),
     homeRankChartStage: $("#home-rank-chart-stage"),
-    homeRankChartMeta: $("#home-rank-chart-meta"),
+    homeRankChartViewBtn: $("#home-rank-chart-view-btn"),
+    homeRankChartViewLabel: $("#home-rank-chart-view-label"),
+    homeRankChartViewMenu: $("#home-rank-chart-view-menu"),
     homeRankChart: $("#home-rank-chart"),
     homeRankChartYRank: $("#home-rank-chart-y-rank"),
     homeRankChartYPts: $("#home-rank-chart-y-pts"),
     homeRankChartScroller: $("#home-rank-chart-scroller"),
     homeRankChartTrack: $("#home-rank-chart-track"),
+    homeRankChartHint: $("#home-rank-chart-hint"),
+    homeRankChartHintLabel: $("#home-rank-chart-hint-label"),
+    homeRankChartTableWrap: $("#home-rank-chart-table-wrap"),
+    homeRankChartTableBody: $("#home-rank-chart-table-body"),
     homeRankChartPts: $("#home-rank-chart-pts"),
-    homeRankChartMiniGw: $("#home-rank-chart-mini-gw"),
     homeRankChartMiniChip: $("#home-rank-chart-mini-chip"),
     homeRankChartMiniRank: $("#home-rank-chart-mini-rank"),
     homeRankChartMiniDelta: $("#home-rank-chart-mini-delta"),
@@ -1482,6 +1484,8 @@
     homeSummarySeg: $("#home-summary-seg"),
     homeSurfaceSeg: $("#home-surface-seg"),
     fontPairSelect: $("#font-pair-select"),
+    fontPairPrev: $("#font-pair-prev"),
+    fontPairNext: $("#font-pair-next"),
     prefsBtn: $("#prefs-btn"),
     prefsPanel: $("#prefs-panel"),
     fplManagerSelect: $("#fpl-manager-select"),
@@ -4267,6 +4271,7 @@
         && String(HOME.managerId || "") === String(data.home.managerId || "")
         && String(HOME.leagueId || "") === String(data.home.leagueId || "");
       const priorWarnFp = homeMinutesWarningFingerprint(HOME);
+      const priorStatFp = homeStatLogFingerprint(HOME.statLog);
       applyHomePayload(data.home, { skipFeedIngest: sameElementGw, fromLivePoll: true });
       const standingsChanged = priorStandingsFp !== homeStandingsFingerprint(HOME.standings);
       const summaryChanged = priorSummaryFp !== homeSummaryFingerprint(HOME.summary);
@@ -4274,8 +4279,10 @@
       const squadChanged = priorSquadFp !== homeSquadFingerprint(HOME.squad);
       const transfersChanged = priorTransfersFp !== homeTransfersFingerprint(HOME.transfersByEntry);
       const warnChanged = priorWarnFp !== homeMinutesWarningFingerprint(HOME);
+      const statLogChanged = priorStatFp !== homeStatLogFingerprint(HOME.statLog);
       resyncHomeLivePollInterval();
       if (!standingsChanged && !summaryChanged && !elementGwChanged && !squadChanged && !transfersChanged && !warnChanged) {
+        if (statLogChanged) paintHomeStatLog();
         syncLiveNavChrome();
         settleHomeAfterLivePoll({ rerender: false });
         return;
@@ -8837,6 +8844,7 @@
       return;
     }
     if (typeof closeHomeStatLogModePicker === "function") closeHomeStatLogModePicker();
+    if (typeof closeHomeRankChartViewPicker === "function") closeHomeRankChartViewPicker();
     syncHomePitchModeUI();
     if (preferMobileSheet()) {
       openMobileSheetHost({
@@ -8923,6 +8931,7 @@
       return;
     }
     closeHomePitchModePicker();
+    if (typeof closeHomeRankChartViewPicker === "function") closeHomeRankChartViewPicker();
     syncHomeStatLogModeUI();
     if (preferMobileSheet()) {
       openMobileSheetHost({
@@ -8957,6 +8966,152 @@
   function toggleHomeStatLogModePicker() {
     if (homeStatLogModePickerIsOpen()) closeHomeStatLogModePicker();
     else openHomeStatLogModePicker();
+  }
+
+  const HOME_RANK_CHART_VIEW_KEY = "fpl.homeRankChartView";
+  const HOME_RANK_CHART_VIEW_LABELS = { graph: "Graph", table: "Table" };
+  let homeRankChartView = "graph";
+  try {
+    const storedView = localStorage.getItem(HOME_RANK_CHART_VIEW_KEY);
+    if (storedView === "table" || storedView === "graph") homeRankChartView = storedView;
+  } catch {
+    /* ignore */
+  }
+
+  function homeRankChartViewLabel(view = homeRankChartView) {
+    return HOME_RANK_CHART_VIEW_LABELS[view] || HOME_RANK_CHART_VIEW_LABELS.graph;
+  }
+
+  function homeRankChartViewPickerIsOpen() {
+    return !!(mobileSheetOpen && mobileSheetKey === "home-rank-chart-view")
+      || !!(el.homeRankChartViewMenu && el.homeRankChartViewMenu.classList.contains("is-open"));
+  }
+
+  function closeHomeRankChartViewPicker() {
+    if (mobileSheetOpen && mobileSheetKey === "home-rank-chart-view") {
+      closeMobileSheet();
+    }
+    const menu = el.homeRankChartViewMenu;
+    if (menu) {
+      if (menu.classList.contains("is-open")) {
+        menu.classList.remove("is-open");
+        menu.classList.add("is-closing");
+        const closeMs = parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")
+        ) || 150;
+        window.setTimeout(() => {
+          menu.classList.remove("is-closing");
+          menu.hidden = true;
+          menu.style.top = "";
+          menu.style.right = "";
+          menu.style.left = "";
+        }, closeMs);
+      } else {
+        menu.classList.remove("is-closing");
+        menu.hidden = true;
+        menu.style.top = "";
+        menu.style.right = "";
+        menu.style.left = "";
+      }
+    }
+    if (el.homeRankChartViewBtn) {
+      el.homeRankChartViewBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function syncHomeRankChartViewUI() {
+    const label = homeRankChartViewLabel();
+    if (el.homeRankChartViewLabel) el.homeRankChartViewLabel.textContent = label;
+    if (el.homeRankChartViewBtn) {
+      el.homeRankChartViewBtn.setAttribute("aria-label", `Rank History view, ${label}`);
+    }
+    if (el.homeRankChartPanel) {
+      el.homeRankChartPanel.classList.toggle("is-table-view", homeRankChartView === "table");
+    }
+    if (el.homeRankChartTableWrap) {
+      el.homeRankChartTableWrap.hidden = homeRankChartView !== "table";
+    }
+    if (el.homeRankChartHintLabel) {
+      el.homeRankChartHintLabel.textContent = homeRankChartView === "table"
+        ? "Tap a GW row for details"
+        : "Tap a bar for details";
+    }
+    const menu = el.homeRankChartViewMenu;
+    if (!menu) return;
+    menu.querySelectorAll("[data-rank-chart-view]").forEach((btn) => {
+      const on = btn.getAttribute("data-rank-chart-view") === homeRankChartView;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  }
+
+  function setHomeRankChartView(next) {
+    const view = next === "table" ? "table" : "graph";
+    if (view === homeRankChartView) {
+      closeHomeRankChartViewPicker();
+      return;
+    }
+    homeRankChartView = view;
+    try {
+      localStorage.setItem(HOME_RANK_CHART_VIEW_KEY, view);
+    } catch {
+      /* ignore */
+    }
+    syncHomeRankChartViewUI();
+    closeHomeRankChartViewPicker();
+    if (view === "graph") {
+      paintHomeRankChart({ pinEnd: true });
+    } else {
+      paintHomeRankChartTable();
+      if (el.homeRankChartTableWrap) el.homeRankChartTableWrap.scrollTop = 0;
+    }
+  }
+
+  function openHomeRankChartViewPicker() {
+    if (!el.homeRankChartViewBtn || !el.homeRankChartViewMenu) return;
+    if (homeRankChartViewPickerIsOpen()) {
+      closeHomeRankChartViewPicker();
+      return;
+    }
+    closeHomePitchModePicker();
+    if (typeof closeHomeStatLogModePicker === "function") closeHomeStatLogModePicker();
+    syncHomeRankChartViewUI();
+    if (preferMobileSheet()) {
+      openMobileSheetHost({
+        title: "Rank History",
+        key: "home-rank-chart-view",
+        hostEl: el.homeRankChartViewMenu,
+        prepare: (node) => {
+          node.hidden = false;
+          node.classList.remove("is-open", "is-closing");
+        },
+        cleanup: (node) => {
+          node.hidden = true;
+          node.classList.remove("is-open", "is-closing");
+        },
+      });
+      el.homeRankChartViewBtn.setAttribute(
+        "aria-expanded",
+        homeRankChartViewPickerIsOpen() ? "true" : "false"
+      );
+      return;
+    }
+    const rect = el.homeRankChartViewBtn.getBoundingClientRect();
+    const menu = el.homeRankChartViewMenu;
+    menu.hidden = false;
+    menu.classList.remove("is-closing");
+    menu.style.top = `${Math.round(rect.bottom + 6)}px`;
+    menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
+    menu.style.left = "auto";
+    requestAnimationFrame(() => {
+      menu.classList.add("is-open");
+    });
+    el.homeRankChartViewBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function toggleHomeRankChartViewPicker() {
+    if (homeRankChartViewPickerIsOpen()) closeHomeRankChartViewPicker();
+    else openHomeRankChartViewPicker();
   }
 
   function homeSquadLogicalPageIndex(physicalIndex) {
@@ -9892,6 +10047,43 @@
         paintHomeStatLog();
       });
     }
+    if (el.homeRankChartPanel) {
+      el.homeRankChartPanel.addEventListener("click", (e) => {
+        const modeBtn = e.target.closest("#home-rank-chart-view-btn");
+        if (modeBtn && el.homeRankChartPanel.contains(modeBtn)) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleHomeRankChartViewPicker();
+          return;
+        }
+        const row = e.target.closest("tr[data-gw]");
+        if (!row || !el.homeRankChartTableBody || !el.homeRankChartTableBody.contains(row)) return;
+        const gw = Number(row.getAttribute("data-gw"));
+        if (!Number.isFinite(gw) || gw <= 0) return;
+        e.preventDefault();
+        toggleHomeRankChartPts(gw);
+      });
+    }
+    if (el.homeRankChartTableBody) {
+      el.homeRankChartTableBody.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const row = e.target.closest("tr[data-gw]");
+        if (!row || !el.homeRankChartTableBody.contains(row)) return;
+        const gw = Number(row.getAttribute("data-gw"));
+        if (!Number.isFinite(gw) || gw <= 0) return;
+        e.preventDefault();
+        toggleHomeRankChartPts(gw);
+      });
+    }
+    if (el.homeRankChartViewMenu) {
+      el.homeRankChartViewMenu.addEventListener("click", (e) => {
+        const option = e.target.closest("[data-rank-chart-view]");
+        if (!option || !el.homeRankChartViewMenu.contains(option)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setHomeRankChartView(option.getAttribute("data-rank-chart-view"));
+      });
+    }
     document.addEventListener("click", (e) => {
       if (!el.homePitchModeMenu || !el.homePitchModeMenu.classList.contains("is-open")) return;
       if (e.target.closest("#home-pitch-mode-btn, #home-pitch-mode-menu")) return;
@@ -9902,6 +10094,11 @@
       if (e.target.closest("#home-stat-log-mode-btn, #home-stat-log-mode-menu")) return;
       closeHomeStatLogModePicker();
     });
+    document.addEventListener("click", (e) => {
+      if (!el.homeRankChartViewMenu || !el.homeRankChartViewMenu.classList.contains("is-open")) return;
+      if (e.target.closest("#home-rank-chart-view-btn, #home-rank-chart-view-menu")) return;
+      closeHomeRankChartViewPicker();
+    });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       if (el.homePitchModeMenu && el.homePitchModeMenu.classList.contains("is-open")) {
@@ -9909,6 +10106,9 @@
       }
       if (el.homeStatLogModeMenu && el.homeStatLogModeMenu.classList.contains("is-open")) {
         closeHomeStatLogModePicker();
+      }
+      if (el.homeRankChartViewMenu && el.homeRankChartViewMenu.classList.contains("is-open")) {
+        closeHomeRankChartViewPicker();
       }
     });
     window.addEventListener(
@@ -9919,6 +10119,9 @@
         }
         if (el.homeStatLogModeMenu && el.homeStatLogModeMenu.classList.contains("is-open")) {
           closeHomeStatLogModePicker();
+        }
+        if (el.homeRankChartViewMenu && el.homeRankChartViewMenu.classList.contains("is-open")) {
+          closeHomeRankChartViewPicker();
         }
       },
       { passive: true }
@@ -11743,12 +11946,20 @@
 
   function homeStatLogSanitize(log) {
     if (!log || typeof log !== "object") return { gw: null, gen: HOME_STAT_LOG_GEN, updatedAt: null, entries: [] };
-    const gen = Number(log.gen);
+    // Live droplet payloads omitted `gen` after the schema bump; treat missing
+    // as current so we don't throw away a valid same-GW log.
+    const gen = log.gen == null || log.gen === "" ? HOME_STAT_LOG_GEN : Number(log.gen);
     if (!Number.isFinite(gen) || gen < HOME_STAT_LOG_GEN) {
       return { gw: log.gw, gen: HOME_STAT_LOG_GEN, updatedAt: null, entries: [] };
     }
     const entries = Array.isArray(log.entries) ? log.entries.filter((row) => row && typeof row === "object") : [];
-    return { gw: log.gw, gen: log.gen, updatedAt: log.updatedAt || null, entries };
+    return { gw: log.gw, gen, updatedAt: log.updatedAt || null, entries };
+  }
+
+  function homeStatLogFingerprint(log) {
+    const s = homeStatLogSanitize(log);
+    const first = s.entries[0];
+    return [s.updatedAt || "", s.entries.length, first && first.at, first && first.element].join("|");
   }
 
   function homeStatLogEntryKey(row) {
@@ -11937,6 +12148,18 @@
     return HOME_RANK_CHART_CHIP[key] || "";
   }
 
+  function paintHomeRankChartTitleChip(chip) {
+    if (!el.homeRankChartMiniChip) return;
+    const label = homeRankChartChipLabel(chip);
+    if (label && homeRankChartSelectedGw != null) {
+      el.homeRankChartMiniChip.hidden = false;
+      el.homeRankChartMiniChip.textContent = label;
+      return;
+    }
+    el.homeRankChartMiniChip.hidden = true;
+    el.homeRankChartMiniChip.textContent = "";
+  }
+
   function homeRankChartGwAtClientX(clientX) {
     const scroller = el.homeRankChartScroller;
     const rows = homeRankChartSeries();
@@ -12106,7 +12329,7 @@
     if (el.homeRankChartPtsCols) {
       el.homeRankChartPtsCols.innerHTML =
         `<col class="home-col-player" />` +
-        cols.map(() => `<col class="home-col-stat" />`).join("");
+        cols.map((col) => `<col class="home-col-stat${col.key === "defConHit" ? " is-dc-sv" : ""}" />`).join("");
     }
     if (el.homeRankChartPtsHead) {
       el.homeRankChartPtsHead.innerHTML =
@@ -12149,6 +12372,7 @@
   function closeHomeRankChartPts({ animate = true } = {}) {
     homeRankChartPtsToken += 1;
     homeRankChartSelectedGw = null;
+    paintHomeRankChartTitleChip("");
     syncHomeRankChartWindowLabel();
     if (!el.homeRankChartPts) return;
     if (!animate) {
@@ -12180,21 +12404,7 @@
     const pts = payload && payload.points != null && Number.isFinite(Number(payload.points))
       ? Number(payload.points)
       : summary.points;
-    const chip = homeRankChartChipLabel(payload && payload.chip);
-    if (el.homeRankChartMiniGw) {
-      el.homeRankChartMiniGw.textContent = Number.isFinite(summary.gw) && summary.gw > 0
-        ? `GW${summary.gw}`
-        : "GW";
-    }
-    if (el.homeRankChartMiniChip) {
-      if (chip) {
-        el.homeRankChartMiniChip.hidden = false;
-        el.homeRankChartMiniChip.textContent = chip;
-      } else {
-        el.homeRankChartMiniChip.hidden = true;
-        el.homeRankChartMiniChip.textContent = "";
-      }
-    }
+    paintHomeRankChartTitleChip(payload && payload.chip);
     if (el.homeRankChartMiniRank) {
       el.homeRankChartMiniRank.textContent = formatHomeRank(summary.rank);
     }
@@ -12257,6 +12467,7 @@
       const painted = homeRankChartSvg(homeRankChartSeries(entryId), el.homeRankChartScroller && el.homeRankChartScroller.clientWidth);
       if (painted && painted.svg) el.homeRankChartTrack.innerHTML = painted.svg;
     }
+    paintHomeRankChartTable(entryId);
     homeRankChartPtsShowLoading(eventGw);
     setHomeRankChartPtsOpen(true);
     try {
@@ -12288,6 +12499,7 @@
         const painted = homeRankChartSvg(homeRankChartSeries(), el.homeRankChartScroller && el.homeRankChartScroller.clientWidth);
         if (painted && painted.svg) el.homeRankChartTrack.innerHTML = painted.svg;
       }
+      paintHomeRankChartTable();
       return;
     }
     openHomeRankChartPts(eventGw);
@@ -12415,6 +12627,87 @@
       .sort((a, b) => a.gw - b.gw);
   }
 
+  function homeRankChartEnriched(entryId = homeActiveViewEntryId()) {
+    const rows = homeRankChartSeries(entryId);
+    return rows.map((row, i) => {
+      const prev = i > 0 ? rows[i - 1] : null;
+      const delta = prev ? homeRankDeltaPlaces(row.overallRank, prev.overallRank) : null;
+      const pct = prev && prev.overallRank > 0 && delta != null
+        ? (delta / prev.overallRank) * 100
+        : null;
+      return { ...row, delta, pct };
+    });
+  }
+
+  function formatHomeRankPct(pct) {
+    if (pct == null || !Number.isFinite(pct)) return "—";
+    const abs = Math.abs(pct);
+    const n = abs >= 10 ? abs.toFixed(0) : abs.toFixed(1);
+    if (Math.abs(pct) < 0.05) return "0%";
+    return `${pct > 0 ? "+" : "−"}${n}%`;
+  }
+
+  function homeRankChartHeatCell(kind, intensity) {
+    const paint = spectrumHighlightPaint(kind !== "bottom", intensity, {
+      easy: "hsl(var(--blue-hsl))",
+      hard: "hsl(var(--delta-fall))",
+      easyFill: (alpha) => `hsl(var(--blue-hsl) / ${alpha})`,
+      hardFill: (alpha) => `hsl(var(--delta-fall) / ${alpha})`,
+    });
+    if (paint.skip) return { style: "", cls: "" };
+    const color = paint.color ? `;color:${paint.color}` : "";
+    const kindClass = paint.emphasize || paint.strong
+      ? (kind === "bottom" ? " highlight-bottom" : " highlight-top")
+      : "";
+    const strong = paint.strong ? " highlight-strong" : "";
+    return {
+      style: ` style="background-color:${paint.backgroundColor}${color}"`,
+      cls: `${kindClass}${strong}`,
+    };
+  }
+
+  function paintHomeRankChartTable(entryId = homeActiveViewEntryId()) {
+    if (!el.homeRankChartTableBody) return;
+    const rows = homeRankChartEnriched(entryId)
+      .slice()
+      .sort((a, b) => Number(b.gw) - Number(a.gw));
+    if (!rows.length) {
+      el.homeRankChartTableBody.innerHTML = "";
+      return;
+    }
+    const ptsMax = Math.max(1, ...rows.map((r) => Number(r.points) || 0));
+    const ranks = rows.map((r) => r.overallRank).filter((n) => n > 0);
+    const minR = ranks.length ? Math.min(...ranks) : 0;
+    const maxR = ranks.length ? Math.max(...ranks) : 0;
+    const rankSpan = Math.max(1, maxR - minR);
+    const dMax = Math.max(0, ...rows.map((r) => (r.delta == null ? 0 : Math.abs(r.delta))));
+    const pMax = Math.max(0, ...rows.map((r) => (r.pct == null ? 0 : Math.abs(r.pct))));
+    el.homeRankChartTableBody.innerHTML = rows.map((row) => {
+      const selected = homeRankChartSelectedGw != null
+        && Number(row.gw) === Number(homeRankChartSelectedGw);
+      const ptsHeat = homeRankChartHeatCell("top", (Number(row.points) || 0) / ptsMax);
+      const rankHeat = homeRankChartHeatCell("top", 1 - ((row.overallRank - minR) / rankSpan));
+      const deltaHeat = row.delta
+        ? homeRankChartHeatCell(row.delta > 0 ? "top" : "bottom", Math.abs(row.delta) / (dMax || 1))
+        : { style: "", cls: "" };
+      const pctHeat = row.pct
+        ? homeRankChartHeatCell(row.pct > 0 ? "top" : "bottom", Math.abs(row.pct) / (pMax || 1))
+        : { style: "", cls: "" };
+      const live = row.live
+        ? ` <span class="home-status-dot is-live" title="Live" aria-hidden="true"></span>`
+        : "";
+      const deltaHTML = homeRankDeltaHTML(row.delta, { compact: true })
+        || `<span class="home-rank-chart-table-empty">—</span>`;
+      return `<tr class="home-rank-chart-table-row${selected ? " is-selected" : ""}${row.live ? " is-live" : ""}" data-gw="${row.gw}" role="button" tabindex="0" aria-label="GW${row.gw} rank history${row.live ? ", live" : ""}">
+        <td class="home-col-gw"><span class="home-rank-chart-table-gw">GW${row.gw}${live}</span></td>
+        <td class="home-col-stat col-num${ptsHeat.cls}"${ptsHeat.style}>${escapeHtml(String(row.points))}</td>
+        <td class="home-col-stat col-num${rankHeat.cls}"${rankHeat.style}>${escapeHtml(formatHomeRank(row.overallRank))}</td>
+        <td class="home-col-stat col-num${deltaHeat.cls}"${deltaHeat.style}>${deltaHTML}</td>
+        <td class="home-col-stat col-num${pctHeat.cls}"${pctHeat.style}>${escapeHtml(formatHomeRankPct(row.pct))}</td>
+      </tr>`;
+    }).join("");
+  }
+
   function homeRankChartWindowFromScroll() {
     const scroller = el.homeRankChartScroller;
     const rows = homeRankChartSeries();
@@ -12436,8 +12729,11 @@
     }
     const rows = homeRankChartSeries();
     if (!rows.length) return;
-    const { start, end } = homeRankChartWindowFromScroll();
-    const visible = rows.slice(start, end);
+    let visible = rows;
+    if (homeRankChartView !== "table") {
+      const { start, end } = homeRankChartWindowFromScroll();
+      visible = rows.slice(start, end);
+    }
     if (!visible.length) return;
     const a = visible[0].gw;
     const b = visible[visible.length - 1].gw;
@@ -12588,10 +12884,8 @@
     homeRankChartPaintKey = structureKey;
     if (reset) homeRankChartPinEnd = true;
     const shouldPin = reset || homeRankChartPinEnd;
-    if (el.homeRankChartMeta) {
-      const who = homeSummaryForView(entryId);
-      el.homeRankChartMeta.textContent = (who && (who.teamName || who.managerName)) || "";
-    }
+    syncHomeRankChartViewUI();
+    paintHomeRankChartTable(entryId);
     if (el.homeRankChartYRank) {
       el.homeRankChartYRank.innerHTML = painted.rankTicks
         .map((v) => `<span>${escapeHtml(formatHomeRankChartTick(v))}</span>`)
@@ -12609,16 +12903,20 @@
       el.homeRankChartTrack.innerHTML = painted.svg;
     }
     if (scroller) {
-      requestAnimationFrame(() => {
-        const maxLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      const pinNewest = () => {
+        const visW = scroller.clientWidth;
+        const maxLeft = Math.max(0, scroller.scrollWidth - visW);
         if (shouldPin) {
-          scroller.scrollLeft = maxLeft;
-          homeRankChartPinEnd = false;
+          if (visW > 0) {
+            scroller.scrollLeft = maxLeft;
+            homeRankChartPinEnd = false;
+          }
         } else if (prevMax > 0) {
           scroller.scrollLeft = (prevLeft / prevMax) * maxLeft;
         }
         syncHomeRankChartWindowLabel();
-      });
+      };
+      requestAnimationFrame(() => requestAnimationFrame(pinNewest));
     } else {
       syncHomeRankChartWindowLabel();
     }
@@ -13306,7 +13604,6 @@
   }
 
   function syncHomeBadgePrefsUI() {
-    if (el.prefsHomeBadgePreview) el.prefsHomeBadgePreview.checked = homeBadgePreviewOn();
     if (el.homeBadgeStyleSeg) {
       const cur = homeBadgeStyle();
       el.homeBadgeStyleSeg.querySelectorAll("[data-home-badge-style]").forEach((btn) => {
@@ -13318,22 +13615,19 @@
   }
 
   function applyHomeBadgePrefs({ persist = false } = {}) {
-    const preview = el.prefsHomeBadgePreview ? !!el.prefsHomeBadgePreview.checked : homeBadgePreviewOn();
     let style = homeBadgeStyle();
     if (el.homeBadgeStyleSeg) {
       const active = el.homeBadgeStyleSeg.querySelector("[data-home-badge-style].active");
       const next = active && active.getAttribute("data-home-badge-style");
       if (next === "wash" || next === "stamp" || next === "mixed") style = next;
     }
-    document.documentElement.classList.toggle("home-badge-preview", preview);
+    document.documentElement.classList.remove("home-badge-preview");
     if (style === "mixed") document.documentElement.removeAttribute("data-home-badge-style");
     else document.documentElement.setAttribute("data-home-badge-style", style);
     if (persist) {
       try {
-        if (preview) localStorage.setItem(HOME_BADGE_PREVIEW_KEY, "1");
-        else localStorage.removeItem(HOME_BADGE_PREVIEW_KEY);
-        if (style === "mixed") localStorage.removeItem(HOME_BADGE_STYLE_KEY);
-        else localStorage.setItem(HOME_BADGE_STYLE_KEY, style);
+        localStorage.removeItem(HOME_BADGE_PREVIEW_KEY);
+        localStorage.setItem(HOME_BADGE_STYLE_KEY, style);
       } catch {
         /* private browsing */
       }
@@ -13343,19 +13637,17 @@
   }
 
   function loadHomeBadgePrefs() {
-    let preview = false;
-    let style = "mixed";
+    let style = "stamp";
     try {
-      preview = localStorage.getItem(HOME_BADGE_PREVIEW_KEY) === "1";
+      localStorage.removeItem(HOME_BADGE_PREVIEW_KEY);
       const saved = localStorage.getItem(HOME_BADGE_STYLE_KEY);
-      if (saved === "wash" || saved === "stamp") style = saved;
+      if (saved === "wash" || saved === "stamp" || saved === "mixed") style = saved;
     } catch {
       /* ignore */
     }
-    document.documentElement.classList.toggle("home-badge-preview", preview);
+    document.documentElement.classList.remove("home-badge-preview");
     if (style === "mixed") document.documentElement.removeAttribute("data-home-badge-style");
     else document.documentElement.setAttribute("data-home-badge-style", style);
-    if (el.prefsHomeBadgePreview) el.prefsHomeBadgePreview.checked = preview;
     if (el.homeBadgeStyleSeg) {
       el.homeBadgeStyleSeg.querySelectorAll("[data-home-badge-style]").forEach((btn) => {
         const on = (btn.getAttribute("data-home-badge-style") || "mixed") === style;
@@ -13424,28 +13716,18 @@
         btn.setAttribute("aria-pressed", on ? "true" : "false");
       });
     }
-    if (el.prefsHomePitchFlashPreview) {
-      el.prefsHomePitchFlashPreview.checked = homePitchFlashPreviewOn();
-    }
-    if (el.prefsHomePitchFlashHint && !homePitchFlashPreviewOn()) {
-      el.prefsHomePitchFlashHint.textContent =
-        "Test the selected highlight. Switch Both, Cards, or Toast.";
-    }
   }
 
-  function applyHomePitchFlashPrefs({ persist = false, previewTick = false } = {}) {
+  function applyHomePitchFlashPrefs({ persist = false } = {}) {
     let style = homePitchFlashStyle();
     if (el.homePitchFlashSeg) {
       const active = el.homePitchFlashSeg.querySelector("[data-home-pitch-flash].active");
       const next = active && active.getAttribute("data-home-pitch-flash");
       style = homePitchFlashNormalizeStyle(next || style);
     }
-    const preview = el.prefsHomePitchFlashPreview
-      ? !!el.prefsHomePitchFlashPreview.checked
-      : homePitchFlashPreviewOn();
     if (style === "both") document.documentElement.removeAttribute("data-home-pitch-flash");
     else document.documentElement.setAttribute("data-home-pitch-flash", style);
-    document.documentElement.classList.toggle("home-pitch-flash-preview", preview);
+    document.documentElement.classList.remove("home-pitch-flash-preview");
     if (persist) {
       try {
         if (style === "both") localStorage.removeItem(HOME_PITCH_FLASH_KEY);
@@ -13455,8 +13737,7 @@
       }
     }
     syncHomePitchFlashPrefsUI();
-    if (preview) startHomePitchFlashPreview({ jumpTo: style });
-    else stopHomePitchFlashPreview();
+    stopHomePitchFlashPreview();
   }
 
   function loadHomePitchFlashPrefs() {
@@ -13470,7 +13751,6 @@
     if (style === "both") document.documentElement.removeAttribute("data-home-pitch-flash");
     else document.documentElement.setAttribute("data-home-pitch-flash", style);
     document.documentElement.classList.remove("home-pitch-flash-preview");
-    if (el.prefsHomePitchFlashPreview) el.prefsHomePitchFlashPreview.checked = false;
     hideHomePitchFlashToast({ immediate: true });
     syncHomePitchFlashPrefsUI();
   }
@@ -37984,14 +38264,6 @@
   loadHomeBadgePrefs();
   loadHomePitchFlashPrefs();
   applyHomeBadgePreview();
-  if (el.prefsHomeBadgePreview) {
-    el.prefsHomeBadgePreview.addEventListener("change", () => applyHomeBadgePrefs({ persist: true }));
-  }
-  if (el.prefsHomePitchFlashPreview) {
-    el.prefsHomePitchFlashPreview.addEventListener("change", () => {
-      applyHomePitchFlashPrefs({ persist: true });
-    });
-  }
   if (el.homePitchFlashSeg) {
     el.homePitchFlashSeg.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-home-pitch-flash]");
@@ -38001,7 +38273,7 @@
         b.classList.toggle("active", on);
         b.setAttribute("aria-pressed", on ? "true" : "false");
       });
-      applyHomePitchFlashPrefs({ persist: true, previewTick: true });
+      applyHomePitchFlashPrefs({ persist: true });
       btn.blur();
     });
   }
@@ -38195,21 +38467,76 @@
 
   applyHomeSurface();
 
-  const FONT_PAIR_KEY = "fpl-explorer-font-pair-v3";
+  const FONT_PAIR_KEY = "fpl-explorer-font-pair-v4";
   const FONT_PAIR_DEFAULT = "figtree";
+  const FONT_PAIRS = [
+    "figtree",
+    "plex",
+    "source",
+    "inter",
+    "public",
+    "franklin",
+    "roboto",
+    "noto",
+    "geist",
+    "instrument",
+  ];
 
-  function applyFontPair() {
-    document.documentElement.setAttribute("data-font-pair", FONT_PAIR_DEFAULT);
+  function validFontPair(id) {
+    return FONT_PAIRS.includes(id) ? id : FONT_PAIR_DEFAULT;
+  }
+
+  function currentFontPair() {
+    try {
+      return validFontPair(localStorage.getItem(FONT_PAIR_KEY));
+    } catch {
+      return FONT_PAIR_DEFAULT;
+    }
+  }
+
+  function applyFontPair(id = currentFontPair()) {
+    const next = validFontPair(id);
+    document.documentElement.setAttribute("data-font-pair", next);
+    if (el.fontPairSelect) el.fontPairSelect.value = next;
+  }
+
+  function setFontPair(id) {
+    const next = validFontPair(id);
+    try {
+      localStorage.setItem(FONT_PAIR_KEY, next);
+    } catch {
+      /* private browsing */
+    }
+    applyFontPair(next);
+  }
+
+  function stepFontPair(dir) {
+    const cur = currentFontPair();
+    const i = FONT_PAIRS.indexOf(cur);
+    const next = FONT_PAIRS[(i + dir + FONT_PAIRS.length) % FONT_PAIRS.length];
+    setFontPair(next);
   }
 
   applyFontPair();
+
+  if (el.fontPairSelect) {
+    el.fontPairSelect.addEventListener("change", () => {
+      setFontPair(el.fontPairSelect.value);
+    });
+  }
+  if (el.fontPairPrev) {
+    el.fontPairPrev.addEventListener("click", () => stepFontPair(-1));
+  }
+  if (el.fontPairNext) {
+    el.fontPairNext.addEventListener("click", () => stepFontPair(1));
+  }
 
   // Drop legacy prefs so locked defaults stick for returning visitors.
   try {
     localStorage.removeItem("fpl-explorer-ui-scale");
     localStorage.removeItem("fpl-explorer-font-pair");
     localStorage.removeItem("fpl-explorer-font-pair-v2");
-    localStorage.removeItem(FONT_PAIR_KEY);
+    localStorage.removeItem("fpl-explorer-font-pair-v3");
     localStorage.removeItem(HOME_SUMMARY_KEY);
     localStorage.removeItem(HOME_SURFACE_KEY);
     localStorage.removeItem("fpl-explorer-clock-format");
