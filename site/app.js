@@ -1378,6 +1378,15 @@
     homeRankChartYPts: $("#home-rank-chart-y-pts"),
     homeRankChartScroller: $("#home-rank-chart-scroller"),
     homeRankChartTrack: $("#home-rank-chart-track"),
+    homeRankChartPts: $("#home-rank-chart-pts"),
+    homeRankChartMiniGw: $("#home-rank-chart-mini-gw"),
+    homeRankChartMiniChip: $("#home-rank-chart-mini-chip"),
+    homeRankChartMiniRank: $("#home-rank-chart-mini-rank"),
+    homeRankChartMiniDelta: $("#home-rank-chart-mini-delta"),
+    homeRankChartMiniPts: $("#home-rank-chart-mini-pts"),
+    homeRankChartPtsBody: $("#home-rank-chart-pts-body"),
+    homeRankChartPtsHead: $("#home-rank-chart-pts-head"),
+    homeRankChartPtsCols: $("#home-rank-chart-pts-cols"),
     marketsPage: $("#markets-page"),
     marketsGrid: $("#markets-grid"),
     marketsAttribution: $("#markets-attribution"),
@@ -9802,7 +9811,9 @@
     function openHomePlayerLookupFromRow(tr) {
       const inSquad = !!(el.homeSquadTrack && el.homeSquadTrack.contains(tr));
       const inFeed = !!(el.homeFeedTrack && el.homeFeedTrack.contains(tr));
-      if (!tr || (!inSquad && !inFeed)) return;
+      const inRankPts = !!(el.homeRankChartPtsBody && el.homeRankChartPtsBody.contains(tr));
+      if (inRankPts && Number(homeRankChartSelectedGw) !== Number(HOME && HOME.gw)) return;
+      if (!tr || (!inSquad && !inFeed && !inRankPts)) return;
       const eid = Number(tr.dataset.element);
       if (!Number.isFinite(eid)) return;
       if (homeGwPtsLookupRow && homeLookupElementId(homeGwPtsLookupRow) === eid) {
@@ -9829,6 +9840,7 @@
     bindHomeRowTap(el.homeSquadTrack, "tr.home-squad-row", openHomePlayerLookupFromRow);
     bindHomeRowTap(el.homeSquadTrack, ".home-pitch-card", openHomePlayerLookupFromRow);
     bindHomeRowTap(el.homeFeedTrack, "tr.home-feed-row", openHomePlayerLookupFromRow);
+    bindHomeRowTap(el.homeRankChartPtsBody, "tr.home-squad-row", openHomePlayerLookupFromRow);
     bindHomeRowTap(el.homeStandingsTrack, "tr[data-entry]", toggleStandingOwner);
 
     el.homeSquadTrack.addEventListener("click", (e) => {
@@ -11899,9 +11911,433 @@
   let homeRankChartPinEnd = false;
   let homeRankChartScrollBound = false;
   let homeRankChartResizeBound = false;
+  let homeRankChartPtsBound = false;
+  let homeRankChartSelectedGw = null;
+  let homeRankChartBenchCollapsed = true;
+  let homeRankChartPtsToken = 0;
+  const homeRankChartPtsCache = new Map();
+  const HOME_RANK_CHART_CHIP = {
+    bboost: "BB",
+    "3xc": "TC",
+    wildcard: "WC",
+    freehit: "FH",
+  };
 
   function hideHomeRankChartPanel() {
     if (el.homeRankChartPanel) el.homeRankChartPanel.hidden = true;
+    closeHomeRankChartPts({ animate: false });
+  }
+
+  function homeRankChartPtsOpen() {
+    return !!(el.homeRankChartPts && el.homeRankChartPts.getAttribute("data-open") === "true");
+  }
+
+  function homeRankChartChipLabel(chip) {
+    const key = String(chip || "").toLowerCase();
+    return HOME_RANK_CHART_CHIP[key] || "";
+  }
+
+  function homeRankChartGwAtClientX(clientX) {
+    const scroller = el.homeRankChartScroller;
+    const rows = homeRankChartSeries();
+    if (!scroller || !rows.length) return null;
+    const rect = scroller.getBoundingClientRect();
+    const width = scroller.scrollWidth;
+    if (!(width > 0)) return null;
+    const x = clientX - rect.left + scroller.scrollLeft;
+    const i = Math.max(0, Math.min(rows.length - 1, Math.floor((x / width) * rows.length)));
+    return rows[i] ? Number(rows[i].gw) : null;
+  }
+
+  function homeSquadPtsEntryFrom(row, eg) {
+    const rec = eg && typeof eg === "object" ? eg : {};
+    const etype = Number(rec.elementType) || Number(row && row.elementType) || 0;
+    const pos = LIVE_POS_BY_TYPE[etype] || null;
+    const rule = pos && DEFCON_RULES[pos];
+    const threshold = rule ? rule.threshold : null;
+    const actions = pos && pos !== "GK" ? liveDefconActions(rec, pos) : null;
+    return {
+      row,
+      eg: rec,
+      pos,
+      threshold,
+      actions: actions == null ? 0 : actions,
+    };
+  }
+
+  function homeRankChartRowGwPoints(row, eg) {
+    if (row && row.gwPoints != null && Number.isFinite(Number(row.gwPoints))) {
+      return Number(row.gwPoints);
+    }
+    if (eg && eg.pts != null && Number.isFinite(Number(eg.pts))) {
+      const raw = Number(eg.pts);
+      const m = Number(row && row.multiplier);
+      return Number.isFinite(m) && m > 0 ? raw * m : raw;
+    }
+    return homeSquadRowGwPoints(row, eg);
+  }
+
+  function homeRankChartPtsCellHTML(entry, col) {
+    if (col.key === "pts") {
+      const raw = homeRankChartRowGwPoints(entry.row, entry.eg);
+      if (!Number.isFinite(raw)) return "—";
+      return homePtsPillHTML(raw, { minutes: entry.row && entry.row.minutes });
+    }
+    return homeSquadPtsCellHTML(entry, col);
+  }
+
+  function homeRankChartPtsRowHTML(entry, cols) {
+    const cells = cols
+      .map((col) => {
+        const inner = homeRankChartPtsCellHTML(entry, col);
+        const cls = [
+          "home-col-stat",
+          "col-num",
+          col.narrow ? "col-num-narrow" : "",
+          col.key === "defConHit" ? "is-dc-sv" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return `<td class="${cls}">${inner}</td>`;
+      })
+      .join("");
+    const benchCls = entry.row.onBench ? " home-row-bench" : "";
+    const current = Number(HOME && HOME.gw) === Number(homeRankChartSelectedGw);
+    const btn = current ? ` role="button" tabindex="0" aria-label="${escapeHtml(homeSquadRowAriaLabel(entry.row.name))}"` : "";
+    return `<tr class="home-squad-row${benchCls}" data-element="${escapeHtml(String(entry.row.element ?? ""))}"${btn}>
+      ${homeSquadPlayerCellHTML(entry.row)}
+      ${cells}
+    </tr>`;
+  }
+
+  function syncHomeRankChartBenchUI() {
+    if (el.homeRankChartPts) {
+      el.homeRankChartPts.classList.toggle("is-bench-collapsed", homeRankChartBenchCollapsed);
+    }
+    const root = el.homeRankChartPts;
+    if (!root) return;
+    root.querySelectorAll(".home-bench-toggle").forEach((btn) => {
+      const collapsed = homeRankChartBenchCollapsed;
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      const ptsEl = btn.querySelector(".home-bench-pts");
+      const ptsText = ptsEl ? ptsEl.textContent.replace(/[()]/g, "").trim() : "";
+      btn.setAttribute(
+        "aria-label",
+        collapsed
+          ? (ptsText ? `Expand bench, ${ptsText}` : "Expand bench")
+          : (ptsText ? `Collapse bench, ${ptsText}` : "Collapse bench")
+      );
+      const use = btn.querySelector("use");
+      if (use) use.setAttribute("href", collapsed ? "#i-chevron-right" : "#i-chevron-down");
+    });
+  }
+
+  function homeRankChartBenchDividerHTML(colspan, benchPts) {
+    if (!(colspan > 0)) return "";
+    const collapsed = homeRankChartBenchCollapsed;
+    const chevron = collapsed ? "#i-chevron-right" : "#i-chevron-down";
+    const ptsN = benchPts != null && Number.isFinite(Number(benchPts)) ? Math.round(Number(benchPts)) : null;
+    const ptsLabel = ptsN != null ? `${ptsN} pts` : "";
+    const ariaLabel = collapsed
+      ? (ptsLabel ? `Expand bench, ${ptsLabel}` : "Expand bench")
+      : (ptsLabel ? `Collapse bench, ${ptsLabel}` : "Collapse bench");
+    const ptsHTML = ptsN != null
+      ? `<span class="home-bench-pts" aria-hidden="true">(${escapeHtml(String(ptsN))}&nbsp;Pts)</span>`
+      : "";
+    return `<tr class="home-bench-divider">
+      <th scope="rowgroup" colspan="${colspan}">
+        <div class="home-bench-divider-inner">
+          <button type="button" class="home-bench-toggle" aria-expanded="${collapsed ? "false" : "true"}" aria-label="${escapeHtml(ariaLabel)}">
+            <span class="home-bench-toggle-label">Bench</span>${ptsHTML}
+            <svg class="icon home-bench-toggle-icon" aria-hidden="true"><use href="${chevron}"></use></svg>
+          </button>
+        </div>
+      </th>
+    </tr>`;
+  }
+
+  function homeRankChartPtsPayloadFromLive(entryId) {
+    const rows = homeSquadForEntry(entryId) || [];
+    const egMap = homeElementGwMap();
+    let benchPts = homeSquadBenchPointsTotal(rows);
+    if (benchPts == null) {
+      const standing = homeStandingForEntry(entryId);
+      const n = standing && standing.benchPointsGw != null ? Number(standing.benchPointsGw) : NaN;
+      if (Number.isFinite(n)) benchPts = n;
+    }
+    const series = homeRankChartSeries(entryId).find((r) => Number(r.gw) === Number(HOME && HOME.gw));
+    return {
+      rows,
+      egMap,
+      benchPts,
+      points: series ? series.points : null,
+      chip: homeEntryActiveChip(entryId),
+      hit: 0,
+    };
+  }
+
+  function homeRankChartPtsFromApi(data) {
+    const egMap = data && data.elementGw && typeof data.elementGw === "object" ? data.elementGw : {};
+    const rows = Array.isArray(data && data.squad) ? data.squad : [];
+    return {
+      rows,
+      egMap,
+      benchPts: data && data.benchPoints != null && Number.isFinite(Number(data.benchPoints))
+        ? Number(data.benchPoints)
+        : null,
+      points: data && data.points != null && Number.isFinite(Number(data.points))
+        ? Number(data.points)
+        : null,
+      chip: (data && data.activeChip) || "",
+      hit: data && data.hit != null && Number.isFinite(Number(data.hit)) ? Number(data.hit) : 0,
+    };
+  }
+
+  function paintHomeRankChartPtsTable(payload, gw) {
+    if (!el.homeRankChartPtsBody) return;
+    const rows = (payload && payload.rows) || [];
+    const egMap = (payload && payload.egMap) || {};
+    const entries = rows.map((row) => {
+      const eid = row && row.element;
+      return homeSquadPtsEntryFrom(row, egMap[String(eid)] || egMap[eid] || {});
+    });
+    const cols = homeSquadPtsColumns(entries);
+    const colCount = 1 + cols.length;
+    if (el.homeRankChartPtsCols) {
+      el.homeRankChartPtsCols.innerHTML =
+        `<col class="home-col-player" />` +
+        cols.map(() => `<col class="home-col-stat" />`).join("");
+    }
+    if (el.homeRankChartPtsHead) {
+      el.homeRankChartPtsHead.innerHTML =
+        `<th scope="col" class="home-col-player">Player</th>` +
+        cols
+          .map((col) => {
+            const label =
+              col.key === "defConHit"
+                ? `DC<span class="home-pts-dc-sv-dot" aria-hidden="true">·</span>Sv`
+                : escapeHtml(col.label);
+            return `<th scope="col" class="home-col-stat col-num${col.narrow ? " col-num-narrow" : ""}${col.key === "defConHit" ? " is-dc-sv" : ""}"${tipAttr(col.title || col.label)}>${label}</th>`;
+          })
+          .join("");
+    }
+    const parts = [];
+    let benchLabeled = false;
+    for (const entry of entries) {
+      if (entry.row.onBench && !benchLabeled) {
+        parts.push(homeRankChartBenchDividerHTML(colCount, payload.benchPts));
+        benchLabeled = true;
+      }
+      parts.push(homeRankChartPtsRowHTML(entry, cols));
+    }
+    el.homeRankChartPtsBody.innerHTML = parts.join("") || homeSquadEmptyHTML(colCount);
+    syncHomeRankChartBenchUI();
+    paintHomeRankChartMini(gw, payload);
+  }
+
+  function setHomeRankChartPtsOpen(open) {
+    if (!el.homeRankChartPts) return;
+    const next = !!open;
+    const was = homeRankChartPtsOpen();
+    el.homeRankChartPts.setAttribute("data-open", next ? "true" : "false");
+    if (el.homeRankChartPanel) el.homeRankChartPanel.classList.toggle("is-pts-open", next);
+    if (next && !was && NARROW_MQ.matches) {
+      requestAnimationFrame(() => homeScrollPanelIntoView(el.homeRankChartPanel));
+    }
+  }
+
+  function closeHomeRankChartPts({ animate = true } = {}) {
+    homeRankChartPtsToken += 1;
+    homeRankChartSelectedGw = null;
+    syncHomeRankChartWindowLabel();
+    if (!el.homeRankChartPts) return;
+    if (!animate) {
+      el.homeRankChartPts.setAttribute("data-open", "false");
+      if (el.homeRankChartPanel) el.homeRankChartPanel.classList.remove("is-pts-open");
+      if (el.homeRankChartPtsBody) el.homeRankChartPtsBody.innerHTML = "";
+      return;
+    }
+    setHomeRankChartPtsOpen(false);
+  }
+
+  function homeRankChartSelectionSummary(gw) {
+    const eventGw = Number(gw);
+    const rows = homeRankChartSeries();
+    const i = rows.findIndex((r) => Number(r.gw) === eventGw);
+    const row = i >= 0 ? rows[i] : null;
+    const prev = i > 0 ? rows[i - 1] : null;
+    return {
+      gw: eventGw,
+      points: row && Number.isFinite(Number(row.points)) ? Number(row.points) : null,
+      rank: row && row.overallRank > 0 ? row.overallRank : null,
+      delta: row && prev ? homeRankDeltaPlaces(row.overallRank, prev.overallRank) : null,
+      live: !!(row && row.live),
+    };
+  }
+
+  function paintHomeRankChartMini(gw, payload = null) {
+    const summary = homeRankChartSelectionSummary(gw);
+    const pts = payload && payload.points != null && Number.isFinite(Number(payload.points))
+      ? Number(payload.points)
+      : summary.points;
+    const chip = homeRankChartChipLabel(payload && payload.chip);
+    if (el.homeRankChartMiniGw) {
+      el.homeRankChartMiniGw.textContent = Number.isFinite(summary.gw) && summary.gw > 0
+        ? `GW${summary.gw}`
+        : "GW";
+    }
+    if (el.homeRankChartMiniChip) {
+      if (chip) {
+        el.homeRankChartMiniChip.hidden = false;
+        el.homeRankChartMiniChip.textContent = chip;
+      } else {
+        el.homeRankChartMiniChip.hidden = true;
+        el.homeRankChartMiniChip.textContent = "";
+      }
+    }
+    if (el.homeRankChartMiniRank) {
+      el.homeRankChartMiniRank.textContent = formatHomeRank(summary.rank);
+    }
+    if (el.homeRankChartMiniDelta) {
+      el.homeRankChartMiniDelta.innerHTML = homeRankDeltaHTML(summary.delta, { compact: true })
+        || `<span class="home-rank-chart-mini-stat-value is-empty">—</span>`;
+    }
+    if (el.homeRankChartMiniPts) {
+      el.homeRankChartMiniPts.textContent = pts != null && Number.isFinite(pts)
+        ? String(Math.round(pts))
+        : "—";
+    }
+    syncHomeRankChartWindowLabel();
+  }
+
+  function homeRankChartPtsShowLoading(gw) {
+    const colspan = 7;
+    paintHomeRankChartMini(gw);
+    if (el.homeRankChartPtsHead) {
+      el.homeRankChartPtsHead.innerHTML = `<th scope="col" class="home-col-player">Player</th><th scope="col" class="home-col-stat" colspan="${colspan - 1}"></th>`;
+    }
+    if (el.homeRankChartPtsBody) {
+      el.homeRankChartPtsBody.innerHTML = homeSquadLoadingHTML(colspan);
+    }
+  }
+
+  async function fetchHomeRankChartGwSquad(entryId, gw) {
+    const key = `${entryId}:${gw}`;
+    if (homeRankChartPtsCache.has(key)) return homeRankChartPtsCache.get(key);
+    const res = await fetch(`/api/fpl/squad?id=${encodeURIComponent(entryId)}&gw=${encodeURIComponent(gw)}`, {
+      headers: { Accept: "application/json" },
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (!res.ok || !data || !data.ok) {
+      const err = new Error((data && data.error) || `GW${gw} picks failed`);
+      err.status = res.status;
+      throw err;
+    }
+    const payload = homeRankChartPtsFromApi(data);
+    homeRankChartPtsCache.set(key, payload);
+    return payload;
+  }
+
+  async function openHomeRankChartPts(gw) {
+    const eventGw = Number(gw);
+    if (!Number.isFinite(eventGw) || eventGw <= 0) return;
+    const entryId = homeActiveViewEntryId();
+    const currentGw = Number(HOME && HOME.gw);
+    const token = ++homeRankChartPtsToken;
+    homeRankChartSelectedGw = eventGw;
+    homeRankChartBenchCollapsed = true;
+    bindHomeRankChartPts();
+    syncHomeRankChartBenchUI();
+    if (el.homeRankChartTrack) {
+      const painted = homeRankChartSvg(homeRankChartSeries(entryId), el.homeRankChartScroller && el.homeRankChartScroller.clientWidth);
+      if (painted && painted.svg) el.homeRankChartTrack.innerHTML = painted.svg;
+    }
+    homeRankChartPtsShowLoading(eventGw);
+    setHomeRankChartPtsOpen(true);
+    try {
+      const payload = eventGw === currentGw
+        ? homeRankChartPtsPayloadFromLive(entryId)
+        : await fetchHomeRankChartGwSquad(entryId, eventGw);
+      if (token !== homeRankChartPtsToken || homeRankChartSelectedGw !== eventGw) return;
+      if (!payload.rows.length) {
+        if (el.homeRankChartPtsBody) {
+          el.homeRankChartPtsBody.innerHTML = `<tr><td colspan="7">No picks for GW${eventGw}.</td></tr>`;
+        }
+        return;
+      }
+      paintHomeRankChartPtsTable(payload, eventGw);
+    } catch (err) {
+      if (token !== homeRankChartPtsToken) return;
+      if (el.homeRankChartPtsBody) {
+        el.homeRankChartPtsBody.innerHTML = `<tr><td colspan="7">${escapeHtml((err && err.message) || `Couldn’t load GW${eventGw} points.`)}</td></tr>`;
+      }
+    }
+  }
+
+  function toggleHomeRankChartPts(gw) {
+    const eventGw = Number(gw);
+    if (!Number.isFinite(eventGw) || eventGw <= 0) return;
+    if (homeRankChartSelectedGw === eventGw && homeRankChartPtsOpen()) {
+      closeHomeRankChartPts();
+      if (el.homeRankChartTrack) {
+        const painted = homeRankChartSvg(homeRankChartSeries(), el.homeRankChartScroller && el.homeRankChartScroller.clientWidth);
+        if (painted && painted.svg) el.homeRankChartTrack.innerHTML = painted.svg;
+      }
+      return;
+    }
+    openHomeRankChartPts(eventGw);
+  }
+
+  function syncHomeRankChartPtsLive() {
+    if (!homeRankChartPtsOpen()) return;
+    const currentGw = Number(HOME && HOME.gw);
+    if (Number(homeRankChartSelectedGw) !== currentGw) return;
+    paintHomeRankChartPtsTable(homeRankChartPtsPayloadFromLive(homeActiveViewEntryId()), currentGw);
+  }
+
+  function bindHomeRankChartPts() {
+    if (homeRankChartPtsBound) return;
+    homeRankChartPtsBound = true;
+    let ptr = null;
+    const MOVE_PX = 12;
+    const scroller = el.homeRankChartScroller;
+    if (scroller) {
+      scroller.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        ptr = { x: e.clientX, y: e.clientY, moved: false };
+      });
+      scroller.addEventListener("pointermove", (e) => {
+        if (!ptr) return;
+        if (Math.hypot(e.clientX - ptr.x, e.clientY - ptr.y) > MOVE_PX) ptr.moved = true;
+      }, { passive: true });
+      scroller.addEventListener("pointerup", (e) => {
+        const start = ptr;
+        ptr = null;
+        if (!start || start.moved) return;
+        const gw = homeRankChartGwAtClientX(e.clientX);
+        if (gw == null) return;
+        e.preventDefault();
+        toggleHomeRankChartPts(gw);
+      });
+      scroller.addEventListener("pointercancel", () => {
+        ptr = null;
+      });
+    }
+    if (el.homeRankChartPts) {
+      el.homeRankChartPts.addEventListener("click", (e) => {
+        const btn = e.target.closest(".home-bench-toggle");
+        if (!btn || !el.homeRankChartPts.contains(btn)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        homeRankChartBenchCollapsed = !homeRankChartBenchCollapsed;
+        syncHomeRankChartBenchUI();
+      });
+    }
   }
 
   function homeRankChartNiceTicks(min, max, count) {
@@ -11993,8 +12429,13 @@
   }
 
   function syncHomeRankChartWindowLabel() {
+    if (!el.homeRankChartStage) return;
+    if (homeRankChartSelectedGw != null) {
+      el.homeRankChartStage.textContent = `GW${homeRankChartSelectedGw}`;
+      return;
+    }
     const rows = homeRankChartSeries();
-    if (!rows.length || !el.homeRankChartStage) return;
+    if (!rows.length) return;
     const { start, end } = homeRankChartWindowFromScroll();
     const visible = rows.slice(start, end);
     if (!visible.length) return;
@@ -12072,24 +12513,29 @@
       const prevRank = i > 0 ? coords[i - 1].overallRank : null;
       const delta = prevRank != null ? homeRankDeltaPlaces(c.overallRank, prevRank) : null;
       const tone = delta > 0 ? " is-up" : delta < 0 ? " is-down" : "";
-      return `<rect class="home-rank-chart-bar${c.live ? " is-live" : ""}${tone}" x="${x}" y="${y}" width="${bw}" height="${Math.max(0, bh).toFixed(1)}" rx="3" />`;
+      const selected = homeRankChartSelectedGw != null && Number(c.gw) === Number(homeRankChartSelectedGw);
+      return `<rect class="home-rank-chart-bar${c.live ? " is-live" : ""}${tone}${selected ? " is-selected" : ""}" data-gw="${c.gw}" x="${x}" y="${y}" width="${bw}" height="${Math.max(0, bh).toFixed(1)}" rx="3" />`;
     }).join("");
     const pathD = homeOwnSmoothPathD(coords);
-    const dots = coords.map((c) => (
-      `<circle class="home-rank-chart-dot${c.live ? " is-live" : ""}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${c.live ? 4.5 : 3.25}" />`
-    )).join("");
+    const picking = homeRankChartSelectedGw != null;
+    const dots = coords.map((c) => {
+      const selected = picking && Number(c.gw) === Number(homeRankChartSelectedGw);
+      return `<circle class="home-rank-chart-dot${c.live ? " is-live" : ""}${selected ? " is-selected" : ""}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${selected ? 5 : (c.live ? 4.5 : 3.25)}" />`;
+    }).join("");
     const last = coords[coords.length - 1];
-    const pulse = last && last.live && !prefersReducedMotion()
+    const selectedLive = picking && last && Number(last.gw) === Number(homeRankChartSelectedGw);
+    const pulse = last && last.live && selectedLive && !prefersReducedMotion()
       ? `<circle class="home-own-pulse home-rank-chart-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4.5" />`
       : "";
-    const xLabels = coords.map((c) => (
-      `<text class="home-rank-chart-x-label" x="${c.x.toFixed(1)}" y="${h - 6}" text-anchor="middle">GW${c.gw}</text>`
-    )).join("");
+    const xLabels = coords.map((c) => {
+      const selected = picking && Number(c.gw) === Number(homeRankChartSelectedGw);
+      return `<text class="home-rank-chart-x-label${selected ? " is-selected" : ""}" x="${c.x.toFixed(1)}" y="${h - 6}" text-anchor="middle">GW${c.gw}</text>`;
+    }).join("");
     const snapCount = Math.max(1, n - windowN + 1);
     const snaps = Array.from({ length: snapCount }, () => `<div class="home-rank-chart-snap"></div>`).join("");
     return {
       svg:
-        `<svg class="home-rank-chart-svg" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">` +
+        `<svg class="home-rank-chart-svg${picking ? " is-picking" : ""}" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">` +
         grid +
         baseline +
         bars +
@@ -12131,6 +12577,7 @@
     panel.hidden = false;
     bindHomeRankChartScroll();
     bindHomeRankChartResize();
+    bindHomeRankChartPts();
     const scroller = el.homeRankChartScroller;
     const prevLeft = scroller ? scroller.scrollLeft : 0;
     const prevMax = scroller ? Math.max(0, scroller.scrollWidth - scroller.clientWidth) : 0;
@@ -12174,6 +12621,13 @@
       });
     } else {
       syncHomeRankChartWindowLabel();
+    }
+    if (homeRankChartPtsOpen() && homeRankChartSelectedGw != null) {
+      if (reset && Number(homeRankChartSelectedGw) !== Number(HOME && HOME.gw)) {
+        openHomeRankChartPts(homeRankChartSelectedGw);
+      } else {
+        syncHomeRankChartPtsLive();
+      }
     }
   }
 

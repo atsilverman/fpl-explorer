@@ -121,6 +121,183 @@ def map_picks(bootstrap, picks_payload):
     return squad, captain, vice
 
 
+def _inum(stats: dict, key: str) -> int:
+    try:
+        return int((stats or {}).get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _normalize_element_gw(stats: dict, element_type: int = 0, team_id: int = 0) -> dict:
+    cbi = _inum(stats, "clearances_blocks_interceptions")
+    tackles = _inum(stats, "tackles")
+    recoveries = _inum(stats, "recoveries")
+    cbit = cbi + tackles
+    cbitr = cbit + recoveries
+    mins = _inum(stats, "minutes")
+    etype = int(element_type or 0)
+    threshold = 10 if etype == 2 else 12 if etype in (3, 4) else 0
+    actions = cbit if etype == 2 else cbitr
+    return {
+        "pts": _inum(stats, "total_points"),
+        "minutes": mins,
+        "goals": _inum(stats, "goals_scored"),
+        "assists": _inum(stats, "assists"),
+        "cleanSheets": _inum(stats, "clean_sheets"),
+        "saves": _inum(stats, "saves"),
+        "bonus": _inum(stats, "bonus"),
+        "bps": _inum(stats, "bps"),
+        "yellowCards": _inum(stats, "yellow_cards"),
+        "redCards": _inum(stats, "red_cards"),
+        "ownGoals": _inum(stats, "own_goals"),
+        "penaltiesMissed": _inum(stats, "penalties_missed"),
+        "penaltiesSaved": _inum(stats, "penalties_saved"),
+        "cbit": cbit,
+        "cbitr": cbitr,
+        "recoveries": recoveries,
+        "defConHit": bool(threshold and mins > 0 and actions >= threshold),
+        "elementType": etype,
+        "teamId": int(team_id or 0),
+    }
+
+
+def load_event_live(gw: int):
+    snap = ROOT.parent / "snapshots" / f"event-live_{gw}.json"
+    if snap.exists():
+        try:
+            data = json.loads(snap.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+    status, data = fpl_get(f"/event/{gw}/live/")
+    return data if status == 200 and isinstance(data, dict) else None
+
+
+def build_gw_squad_payload(manager_id: str, gw: int):
+    bootstrap = get_bootstrap()
+    status, entry = fpl_get(f"/entry/{manager_id}/")
+    if status == 404:
+        return 404, {"ok": False, "error": "Manager not found"}
+    if status != 200 or not entry:
+        return 502, {"ok": False, "error": "FPL entry lookup failed"}
+    pstatus, picks = fpl_get(f"/entry/{manager_id}/event/{gw}/picks/")
+    has_picks = pstatus == 200 and isinstance((picks or {}).get("picks"), list)
+    by_id = {e["id"]: e for e in bootstrap.get("elements") or []}
+    teams = {t["id"]: t.get("short_name") for t in bootstrap.get("teams") or []}
+    live = load_event_live(gw) if has_picks else None
+    live_by_id = {}
+    for row in (live or {}).get("elements") or []:
+        if isinstance(row, dict) and row.get("id") is not None:
+            live_by_id[int(row["id"])] = row
+    auto_in: set[int] = set()
+    auto_out: set[int] = set()
+    partner: dict[int, int] = {}
+    for sub in (picks or {}).get("automatic_subs") or []:
+        if not isinstance(sub, dict):
+            continue
+        try:
+            inn = int(sub.get("element_in") or 0)
+            out = int(sub.get("element_out") or 0)
+        except (TypeError, ValueError):
+            continue
+        if inn:
+            auto_in.add(inn)
+        if out:
+            auto_out.add(out)
+        if inn and out:
+            partner[inn] = out
+            partner[out] = inn
+    squad = []
+    element_gw = {}
+    captain = None
+    vice = None
+    for pick in (picks or {}).get("picks") or []:
+        if not isinstance(pick, dict):
+            continue
+        try:
+            eid = int(pick.get("element") or 0)
+        except (TypeError, ValueError):
+            continue
+        el = by_id.get(eid)
+        if not el:
+            continue
+        slot_pos = int(pick.get("position") or 0)
+        on_bench = slot_pos > 11
+        starter = 1 <= slot_pos <= 11
+        stats = ((live_by_id.get(eid) or {}).get("stats") or {}) if isinstance(live_by_id.get(eid), dict) else {}
+        eg = _normalize_element_gw(stats, el.get("element_type") or 0, el.get("team") or 0)
+        element_gw[str(eid)] = eg
+        try:
+            multiplier = int(pick.get("multiplier"))
+        except (TypeError, ValueError):
+            multiplier = 0 if on_bench else 1
+        active = multiplier > 0
+        with_id = partner.get(eid)
+        with_el = by_id.get(with_id) if with_id else None
+        code = int(el["code"])
+        if pick.get("is_captain"):
+            captain = code
+        if pick.get("is_vice_captain"):
+            vice = code
+        squad.append(
+            {
+                "code": code,
+                "element": eid,
+                "name": el.get("web_name") or el.get("second_name") or str(eid),
+                "team": teams.get(el.get("team")),
+                "elementType": int(el.get("element_type") or 0),
+                "position": slot_pos,
+                "starter": starter,
+                "onBench": on_bench,
+                "benchOrder": 0 if starter else max(0, slot_pos - 12),
+                "isCaptain": bool(pick.get("is_captain")),
+                "isVice": bool(pick.get("is_vice_captain")),
+                "multiplier": multiplier,
+                "minutes": eg["minutes"],
+                "gwPoints": eg["pts"] * multiplier if active else eg["pts"],
+                "autoSubIn": eid in auto_in,
+                "autoSubOut": eid in auto_out,
+                "autoSubWith": with_id,
+                "autoSubWithName": (with_el or {}).get("web_name") if with_el else None,
+            }
+        )
+    history = (picks or {}).get("entry_history") or {}
+    try:
+        points = int(history.get("points"))
+    except (TypeError, ValueError):
+        points = None
+    try:
+        bench_points = int(history.get("points_on_bench"))
+    except (TypeError, ValueError):
+        bench_points = None
+    try:
+        hit = int(history.get("event_transfers_cost") or 0)
+    except (TypeError, ValueError):
+        hit = 0
+    return 200, {
+        "ok": True,
+        "managerId": manager_id,
+        "teamName": entry.get("name") or "",
+        "managerName": " ".join(
+            p for p in [entry.get("player_first_name"), entry.get("player_last_name")] if p
+        ),
+        "gw": gw,
+        "gwLabel": gw_label(bootstrap, gw, has_picks),
+        "hasPicks": has_picks,
+        "syncedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "squad": squad,
+        "captain": captain,
+        "vice": vice,
+        "elementGw": element_gw,
+        "points": points,
+        "benchPoints": bench_points,
+        "hit": hit,
+        "activeChip": str((picks or {}).get("active_chip") or ""),
+        "message": None if has_picks else f"No published FPL picks for GW{gw}.",
+    }
+
+
 def build_squad_payload(manager_id: str):
     bootstrap = get_bootstrap()
     status, entry = fpl_get(f"/entry/{manager_id}/")
@@ -489,8 +666,12 @@ class Handler(SimpleHTTPRequestHandler):
             mid = (qs.get("id") or [""])[0].strip()
             if not re.fullmatch(r"\d+", mid) or int(mid) <= 0:
                 return self._json(400, {"ok": False, "error": "Invalid manager ID"})
+            gw_raw = (qs.get("gw") or [""])[0].strip()
+            gw = int(gw_raw) if re.fullmatch(r"\d+", gw_raw) and int(gw_raw) > 0 else None
             try:
-                status, body = build_squad_payload(mid)
+                status, body = (
+                    build_gw_squad_payload(mid, gw) if gw else build_squad_payload(mid)
+                )
             except Exception as exc:  # noqa: BLE001
                 return self._json(502, {"ok": False, "error": str(exc)})
             return self._json(status, body)

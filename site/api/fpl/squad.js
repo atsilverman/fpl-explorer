@@ -60,6 +60,49 @@ function gwLabel(bootstrap, gw, hasPicks) {
   return name;
 }
 
+function inum(stats, key) {
+  const n = Number(stats && stats[key]);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+function defconHit(elementType, minutes, cbit, cbitr) {
+  const threshold = elementType === 2 ? 10 : elementType === 3 || elementType === 4 ? 12 : 0;
+  if (minutes <= 0 || !threshold) return false;
+  const actions = elementType === 2 ? cbit : cbitr;
+  return actions >= threshold;
+}
+
+function normalizeElementGw(stats, elementType, teamId) {
+  const cbi = inum(stats, "clearances_blocks_interceptions");
+  const tackles = inum(stats, "tackles");
+  const recoveries = inum(stats, "recoveries");
+  const cbit = cbi + tackles;
+  const cbitr = cbit + recoveries;
+  const mins = inum(stats, "minutes");
+  const etype = Number(elementType) || 0;
+  return {
+    pts: inum(stats, "total_points"),
+    minutes: mins,
+    goals: inum(stats, "goals_scored"),
+    assists: inum(stats, "assists"),
+    cleanSheets: inum(stats, "clean_sheets"),
+    saves: inum(stats, "saves"),
+    bonus: inum(stats, "bonus"),
+    bps: inum(stats, "bps"),
+    yellowCards: inum(stats, "yellow_cards"),
+    redCards: inum(stats, "red_cards"),
+    ownGoals: inum(stats, "own_goals"),
+    penaltiesMissed: inum(stats, "penalties_missed"),
+    penaltiesSaved: inum(stats, "penalties_saved"),
+    cbit,
+    cbitr,
+    recoveries,
+    defConHit: defconHit(etype, mins, cbit, cbitr),
+    elementType: etype,
+    teamId: Number(teamId) || 0,
+  };
+}
+
 function mapPicks(bootstrap, picksPayload) {
   const byId = new Map((bootstrap.elements || []).map((e) => [e.id, e]));
   const picks = Array.isArray(picksPayload && picksPayload.picks) ? picksPayload.picks : [];
@@ -89,6 +132,84 @@ function mapPicks(bootstrap, picksPayload) {
   return { squad, captain, vice };
 }
 
+function mapGwSquad(bootstrap, picksPayload, livePayload) {
+  const byId = new Map((bootstrap.elements || []).map((e) => [e.id, e]));
+  const teamsById = new Map((bootstrap.teams || []).map((t) => [t.id, t.short_name]));
+  const liveById = new Map(
+    (Array.isArray(livePayload && livePayload.elements) ? livePayload.elements : []).map((row) => [
+      Number(row && row.id),
+      row,
+    ])
+  );
+  const autoIn = new Set();
+  const autoOut = new Set();
+  const partner = new Map();
+  for (const sub of Array.isArray(picksPayload && picksPayload.automatic_subs) ? picksPayload.automatic_subs : []) {
+    const inn = Number(sub && sub.element_in);
+    const out = Number(sub && sub.element_out);
+    if (Number.isFinite(inn) && inn > 0) autoIn.add(inn);
+    if (Number.isFinite(out) && out > 0) autoOut.add(out);
+    if (Number.isFinite(inn) && Number.isFinite(out)) {
+      partner.set(inn, out);
+      partner.set(out, inn);
+    }
+  }
+  const elementGw = {};
+  const squad = [];
+  let captain = null;
+  let vice = null;
+  for (const pick of Array.isArray(picksPayload && picksPayload.picks) ? picksPayload.picks : []) {
+    const eid = Number(pick && pick.element);
+    const el = byId.get(eid);
+    if (!el || !Number.isFinite(eid)) continue;
+    const slotPos = Number(pick.position) || 0;
+    const onBench = slotPos > 11;
+    const starter = slotPos >= 1 && slotPos <= 11;
+    const live = liveById.get(eid) || {};
+    const stats = live.stats && typeof live.stats === "object" ? live.stats : {};
+    const eg = normalizeElementGw(stats, el.element_type, el.team);
+    elementGw[String(eid)] = eg;
+    const mult = Number(pick.multiplier);
+    const multiplier = Number.isFinite(mult) ? mult : onBench ? 0 : 1;
+    const active = multiplier > 0;
+    const withId = partner.get(eid);
+    const withEl = withId != null ? byId.get(withId) : null;
+    if (pick.is_captain) captain = Number(el.code);
+    if (pick.is_vice_captain) vice = Number(el.code);
+    squad.push({
+      code: Number(el.code),
+      element: eid,
+      name: el.web_name || el.second_name || String(eid),
+      team: teamsById.get(el.team) || null,
+      elementType: Number(el.element_type) || 0,
+      position: slotPos,
+      starter,
+      onBench,
+      benchOrder: starter ? 0 : Math.max(0, slotPos - 12),
+      isCaptain: !!pick.is_captain,
+      isVice: !!pick.is_vice_captain,
+      multiplier,
+      minutes: eg.minutes,
+      gwPoints: active ? eg.pts * multiplier : eg.pts,
+      autoSubIn: autoIn.has(eid),
+      autoSubOut: autoOut.has(eid),
+      autoSubWith: withId || null,
+      autoSubWithName: withEl ? withEl.web_name || withEl.second_name || null : null,
+    });
+  }
+  const history = (picksPayload && picksPayload.entry_history) || {};
+  return {
+    squad,
+    captain,
+    vice,
+    elementGw,
+    points: Number.isFinite(Number(history.points)) ? Number(history.points) : null,
+    benchPoints: Number.isFinite(Number(history.points_on_bench)) ? Number(history.points_on_bench) : null,
+    hit: Number.isFinite(Number(history.event_transfers_cost)) ? Number(history.event_transfers_cost) : 0,
+    activeChip: picksPayload && picksPayload.active_chip ? String(picksPayload.active_chip) : "",
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -116,9 +237,44 @@ module.exports = async function handler(req, res) {
       });
     }
     const entry = entryRes.data;
-    const gw = resolveGw(bootstrap, entry);
+    const requestedGw = Number((req.query && req.query.gw) || 0);
+    const gw = requestedGw > 0 ? requestedGw : resolveGw(bootstrap, entry);
     const picksRes = await fplGet(`/entry/${id}/event/${gw}/picks/`);
     const hasPicks = !!(picksRes.ok && picksRes.data && Array.isArray(picksRes.data.picks));
+    if (requestedGw > 0) {
+      const liveRes = hasPicks ? await fplGet(`/event/${gw}/live/`) : { ok: false, data: null };
+      const mapped = hasPicks
+        ? mapGwSquad(bootstrap, picksRes.data, liveRes.data)
+        : {
+            squad: [],
+            captain: null,
+            vice: null,
+            elementGw: {},
+            points: null,
+            benchPoints: null,
+            hit: 0,
+            activeChip: "",
+          };
+      return json(res, 200, {
+        ok: true,
+        managerId: id,
+        teamName: entry.name || "",
+        managerName: [entry.player_first_name, entry.player_last_name].filter(Boolean).join(" "),
+        gw,
+        gwLabel: gwLabel(bootstrap, gw, hasPicks),
+        hasPicks,
+        syncedAt: new Date().toISOString(),
+        squad: mapped.squad,
+        captain: mapped.captain,
+        vice: mapped.vice,
+        elementGw: mapped.elementGw,
+        points: mapped.points,
+        benchPoints: mapped.benchPoints,
+        hit: mapped.hit,
+        activeChip: mapped.activeChip,
+        message: hasPicks ? null : `No published FPL picks for GW${gw}.`,
+      });
+    }
     const mapped = hasPicks
       ? mapPicks(bootstrap, picksRes.data)
       : { squad: [], captain: null, vice: null };

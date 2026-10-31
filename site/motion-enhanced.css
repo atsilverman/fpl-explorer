@@ -196,12 +196,14 @@ html.motion-enhanced .home-bench-toggle-icon {
     opacity var(--icon-swap-dur) var(--icon-swap-ease);
 }
 
-html.motion-enhanced #home-squad-panel.is-bench-collapsed .home-bench-toggle-icon {
+html.motion-enhanced #home-squad-panel.is-bench-collapsed .home-bench-toggle-icon,
+html.motion-enhanced #home-rank-chart-pts.is-bench-collapsed .home-bench-toggle-icon {
   transform: rotate(-90deg) scale(0.92);
   filter: blur(0.5px);
 }
 
-html.motion-enhanced #home-squad-panel:not(.is-bench-collapsed) .home-bench-toggle-icon {
+html.motion-enhanced #home-squad-panel:not(.is-bench-collapsed) .home-bench-toggle-icon,
+html.motion-enhanced #home-rank-chart-pts:not(.is-bench-collapsed) .home-bench-toggle-icon {
   transform: rotate(0deg) scale(1);
   filter: blur(0);
 }

@@ -18,8 +18,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1737" />
-<link rel="stylesheet" href="motion-enhanced.css?v=16" />
+<link rel="stylesheet" href="styles.css?v=1741" />
+<link rel="stylesheet" href="motion-enhanced.css?v=17" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
 (() => {
@@ -1248,7 +1248,7 @@
         <article class="home-panel home-rank-chart-panel" id="home-rank-chart-panel" hidden>
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
-              <span class="home-panel-heading-kicker">Overall Rank</span>
+              <span class="home-panel-heading-kicker">Rank History</span>
               <span class="home-panel-heading-view" id="home-rank-chart-stage"></span>
             </span>
             <span class="home-panel-heading-meta" id="home-rank-chart-meta"></span>
@@ -1263,6 +1263,43 @@
               <div class="home-rank-chart-track" id="home-rank-chart-track"></div>
             </div>
             <div class="home-rank-chart-y is-right" id="home-rank-chart-y-pts" aria-hidden="true"></div>
+          </div>
+          <div class="home-rank-chart-pts t-acc" id="home-rank-chart-pts" data-open="false">
+            <div class="t-acc-panel">
+              <div class="t-acc-panel-inner home-rank-chart-pts-inner">
+                <div class="home-rank-chart-pts-head">
+                  <div class="home-rank-chart-mini" id="home-rank-chart-mini">
+                    <div class="home-rank-chart-mini-top">
+                      <p class="home-rank-chart-mini-kicker" id="home-rank-chart-mini-gw">GW</p>
+                      <span class="home-rank-chart-mini-chip" id="home-rank-chart-mini-chip" hidden></span>
+                    </div>
+                    <div class="home-rank-chart-mini-stats">
+                      <div class="home-rank-chart-mini-stat is-pts">
+                        <span class="home-rank-chart-mini-stat-value" id="home-rank-chart-mini-pts">—</span>
+                        <span class="home-rank-chart-mini-stat-label">GW pts</span>
+                      </div>
+                      <div class="home-rank-chart-mini-stat is-rank">
+                        <span class="home-rank-chart-mini-stat-value" id="home-rank-chart-mini-rank">—</span>
+                        <span class="home-rank-chart-mini-stat-label">Overall</span>
+                      </div>
+                      <div class="home-rank-chart-mini-stat is-delta">
+                        <span class="home-rank-chart-mini-delta-slot" id="home-rank-chart-mini-delta"></span>
+                        <span class="home-rank-chart-mini-stat-label">Change</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="home-table-wrap home-rank-chart-pts-mount" id="home-rank-chart-pts-mount">
+                  <table class="home-data-table home-squad-table home-squad-pts-table live-points-table">
+                    <colgroup id="home-rank-chart-pts-cols"></colgroup>
+                    <thead>
+                      <tr id="home-rank-chart-pts-head"></tr>
+                    </thead>
+                    <tbody id="home-rank-chart-pts-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </article>
 
@@ -2122,7 +2159,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1611"></script>
+<script src="app.js?v=1614"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
