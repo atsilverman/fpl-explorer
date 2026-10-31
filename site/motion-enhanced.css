@@ -335,30 +335,14 @@ html.motion-enhanced .stat-roll-digit {
   transition: filter var(--duration-fast) var(--ease-smooth-out);
 }
 
-/* —— Segmented / tab hover lift (desktop fine pointer only) —— */
+/* Segmented / tab hover: color + fill only — no lift / scale. */
 html.motion-enhanced .segmented button,
 html.motion-enhanced .tabs .tab-btn,
 html.motion-enhanced .page-tab-btn {
   transition:
     color 0.18s var(--avatar-ease-in),
     background-color 0.18s var(--avatar-ease-in),
-    box-shadow 0.18s var(--avatar-ease-in),
-    transform var(--avatar-dur) var(--avatar-ease-in);
-}
-
-/* Skip on mobile / narrow — desktop cursor in mobile viewport still has hover:hover. */
-@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
-  html.motion-enhanced:not(.is-mobile-layout) .segmented button:hover,
-  html.motion-enhanced:not(.is-mobile-layout) .tabs .tab-btn:hover,
-  html.motion-enhanced:not(.is-mobile-layout) .page-tab-btn:hover {
-    transform: translateY(var(--avatar-lift)) scale(var(--avatar-scale));
-  }
-
-  html.motion-enhanced:not(.is-mobile-layout) .segmented button:active,
-  html.motion-enhanced:not(.is-mobile-layout) .tabs .tab-btn:active,
-  html.motion-enhanced:not(.is-mobile-layout) .page-tab-btn:active {
-    transform: translateY(0) scale(1);
-  }
+    box-shadow 0.18s var(--avatar-ease-in);
 }
 
 /* Mobile chrome scroll hide / show lives in styles.css — always on with
