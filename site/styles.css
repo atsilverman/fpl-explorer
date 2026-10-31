@@ -151,6 +151,7 @@ html[data-font-pair="figtree"] {
   /* Distinct from blue rise highlights + orange fall washes on cells. */
   --check-setpiece: 38 88% 46%;
   --check-threshold: 168 68% 34%;
+  --status-bar-fill: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -210,6 +211,7 @@ html[data-font-pair="figtree"] {
     --check-on-fill: #111;
     --check-setpiece: 40 92% 56%;
     --check-threshold: 168 58% 48%;
+    --status-bar-fill: #121214;
   }
 }
 
@@ -268,6 +270,7 @@ html[data-font-pair="figtree"] {
   --check-on-fill: #111;
   --check-setpiece: 40 92% 56%;
   --check-threshold: 168 58% 48%;
+  --status-bar-fill: #121214;
 }
 
 /* Forced Light: only set color-scheme. Token values stay on :root —
@@ -2288,8 +2291,14 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     transform: translate3d(0, 0, 0);
     /* Top chrome stays pinned — scroll hide applies to floating docks only. */
   }
+  /* Solid fill matches iOS theme-color / Dynamic Island (no frost, no blue tint). */
+  .page-nav::before {
+    background: var(--status-bar-fill, #ffffff);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   /* Add-to-Home-Screen / installed PWA only — not normal Safari browsing.
-     black-translucent lets this frost paint through the Dynamic Island. */
+     Opaque status bar; keep the title row below the island. */
   html.is-standalone .page-nav {
     padding-top: calc(
       var(--page-nav-pad-y) + constant(safe-area-inset-top, 0px)
@@ -2297,9 +2306,6 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding-top: calc(
       var(--page-nav-pad-y) + env(safe-area-inset-top, 0px)
     );
-  }
-  html.is-standalone .page-nav::before {
-    top: calc(-1 * var(--vv-offset-top, 0px));
   }
   .brand-group {
     display: inline-flex;

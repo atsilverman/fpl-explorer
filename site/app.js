@@ -3366,7 +3366,7 @@
       HOME.gwProgress = null;
     }
     if (payload.statLog && typeof payload.statLog === "object") {
-      HOME.statLog = payload.statLog;
+      HOME.statLog = homeStatLogSanitize(payload.statLog);
     } else if (gwChanged) {
       HOME.statLog = null;
     }
@@ -4050,16 +4050,41 @@
     }
   }
 
+  function homeLiveBonusHeld(row) {
+    if (!row) return false;
+    if (row.matchStatus === "finished") return false;
+    const fxs = typeof homeSquadFixtures === "function" ? homeSquadFixtures(row) : [];
+    const inPlay = fxs.some((fx) =>
+      (typeof homeSquadFixtureIsInPlay === "function" && homeSquadFixtureIsInPlay(fx))
+      || (fx && fx.live && !fx.finished)
+    );
+    if (!inPlay && fxs.some((fx) => fx && (fx.finished || fx.final))) return false;
+    return homePitchFlashMatchMins(row, row.minutes) < 60;
+  }
+
   function homeSquadRowGwPoints(row, eg) {
     if (!homeCanShowVolatileStats()) return null;
     if (homeGwAwaitingKickoff()) return 0;
+    let pts = null;
+    let multiplied = false;
     if (row && row.gwPoints != null && Number.isFinite(Number(row.gwPoints))) {
-      return Number(row.gwPoints);
+      pts = Number(row.gwPoints);
+      multiplied = true;
+    } else if (eg && eg.pts != null && Number.isFinite(Number(eg.pts))) {
+      pts = Number(eg.pts);
+    } else {
+      return null;
     }
-    if (eg && eg.pts != null && Number.isFinite(Number(eg.pts))) {
-      return Number(eg.pts);
+    if (homeLiveBonusHeld(row)) {
+      const rec = eg && typeof eg === "object" ? eg : homeElementGwRecord(row && row.element);
+      const bonus = Number(rec && rec.bonus) || 0;
+      if (bonus) {
+        const m = Number(row && row.multiplier);
+        const mult = multiplied && Number.isFinite(m) && m > 0 ? m : 1;
+        pts -= bonus * mult;
+      }
     }
-    return null;
+    return pts;
   }
 
   function homeDisplayGwPoints({ surface, row, squadRow, eg } = {}) {
@@ -10255,8 +10280,10 @@
         /* keep api bonus */
       }
     }
-    if (bonusPts > 0 || bps !== 0) {
+    if (!homeLiveBonusHeld(row) && (bonusPts > 0 || bps !== 0)) {
       push("Bonus points", `${bps} BPS`, bonusPts);
+    } else if (homeLiveBonusHeld(row) && bps !== 0) {
+      push("Bonus points", `${bps} BPS · after 60′`, 0);
     }
 
     const totalRaw = homeSquadRowGwPoints(row, eg);
@@ -11424,15 +11451,45 @@
   }
 
   let homeStatLogFilter = "league";
+  const HOME_STAT_LOG_GEN = 3;
 
   function hideHomeStatLogPanel() {
     if (el.homeStatLogPanel) el.homeStatLogPanel.hidden = true;
   }
 
+  function homeStatLogSanitize(log) {
+    if (!log || typeof log !== "object") return { gw: null, gen: HOME_STAT_LOG_GEN, updatedAt: null, entries: [] };
+    const gen = Number(log.gen);
+    if (!Number.isFinite(gen) || gen < HOME_STAT_LOG_GEN) {
+      return { gw: log.gw, gen: HOME_STAT_LOG_GEN, updatedAt: null, entries: [] };
+    }
+    return log;
+  }
+
+  function homeStatLogRowStillLive(row) {
+    const eid = Number(row && row.element);
+    const eg = Number.isFinite(eid) ? homeElementGwRecord(eid) : {};
+    if (eg.live || String(eg.status || "").toLowerCase() === "live") return true;
+    const lists = [HOME && HOME.squad].concat(
+      HOME && HOME.squadsByEntry ? Object.values(HOME.squadsByEntry) : []
+    );
+    for (const list of lists) {
+      if (!Array.isArray(list)) continue;
+      const hit = list.find((p) => Number(p.element) === eid);
+      if (!hit) continue;
+      if (hit.matchStatus === "live" || hit.live) return true;
+      const fxs = homeSquadFixtures(hit);
+      if (fxs.some((fx) => homeSquadFixtureIsInPlay(fx) || (fx && fx.live && !fx.finished))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function homeStatLogEntries() {
-    const log = HOME && HOME.statLog && typeof HOME.statLog === "object" ? HOME.statLog : null;
-    const rows = log && Array.isArray(log.entries) ? log.entries : [];
-    return rows.filter((row) => row && typeof row === "object");
+    const log = homeStatLogSanitize(HOME && HOME.statLog && typeof HOME.statLog === "object" ? HOME.statLog : null);
+    const rows = Array.isArray(log.entries) ? log.entries : [];
+    return rows.filter((row) => row && typeof row === "object" && !homeStatLogRowStillLive(row));
   }
 
   function homeStatLogChipHTML(change) {
@@ -36789,9 +36846,8 @@
   function syncAppleStatusBarStyle(mode = currentThemeMode()) {
     const meta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
     if (!meta) return;
-    const standalone = document.documentElement.classList.contains("is-standalone");
-    // Standalone: transparent so .page-nav frost fills the island. Safari ignores this.
-    meta.setAttribute("content", standalone ? "black-translucent" : (themePrefersDark(mode) ? "black" : "default"));
+    // Opaque bars — standalone only; Safari uses theme-color. Match solid title chrome.
+    meta.setAttribute("content", themePrefersDark(mode) ? "black" : "default");
   }
 
   function syncThemeColor(mode = currentThemeMode()) {

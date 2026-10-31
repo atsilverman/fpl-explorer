@@ -15,7 +15,7 @@ from live_scoring import fixture_is_full_time, fixture_is_live, fixtures_for_ele
 
 SITE = Path(__file__).resolve().parent
 CACHE_PATH = SITE / "stat_adjustments_cache.json"
-CACHE_GEN = 2
+CACHE_GEN = 3
 LOG_CAP = 150
 PUBLIC_CAP = 40
 
@@ -180,13 +180,14 @@ def public_stat_log(cache: dict) -> dict:
     log = cache.get("log") if isinstance(cache.get("log"), list) else []
     return {
         "gw": cache.get("gw"),
+        "gen": _inum(cache.get("gen")) or CACHE_GEN,
         "updatedAt": cache.get("updatedAt"),
         "entries": log[:PUBLIC_CAP],
     }
 
 
 def empty_stat_log(gw: int | None = None) -> dict:
-    return {"gw": gw, "updatedAt": None, "entries": []}
+    return {"gw": gw, "gen": CACHE_GEN, "updatedAt": None, "entries": []}
 
 
 def update_stat_log(
