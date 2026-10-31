@@ -4,8 +4,8 @@
   "description": "Fantasy Premier League explorer",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0F0221",
-  "theme_color": "#1a0a3a",
+  "background_color": "#121214",
+  "theme_color": "#121214",
   "icons": [
     {
       "src": "icons/icon-192.png",

@@ -2289,8 +2289,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     /* Top chrome stays pinned — scroll hide applies to floating docks only. */
   }
   /* Add-to-Home-Screen / installed PWA only — not normal Safari browsing.
-     Pairs with opaque apple-mobile-web-app-status-bar-style so the iOS status
-     blur never sits on top of the brand/title row. */
+     black-translucent lets this frost paint through the Dynamic Island. */
   html.is-standalone .page-nav {
     padding-top: calc(
       var(--page-nav-pad-y) + constant(safe-area-inset-top, 0px)
@@ -2298,6 +2297,9 @@ html:not([data-page="opta"]) #enhance-relative-btn {
     padding-top: calc(
       var(--page-nav-pad-y) + env(safe-area-inset-top, 0px)
     );
+  }
+  html.is-standalone .page-nav::before {
+    top: calc(-1 * var(--vv-offset-top, 0px));
   }
   .brand-group {
     display: inline-flex;

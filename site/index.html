@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-<link rel="manifest" href="site.webmanifest" />
+<link rel="manifest" href="site.webmanifest?v=2" />
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#ffffff" />
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1726" />
+<link rel="stylesheet" href="styles.css?v=1727" />
 <link rel="stylesheet" href="motion-enhanced.css?v=16" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -34,8 +34,8 @@
     root.classList.add("motion-enhanced");
     root.classList.add("odometer-sfi");
     root.classList.add("player-thumbs-kit");
-    // Home Screen / PWA only — Safari browser ignores these. Opaque status bar
-    // keeps the title row clear of the iOS status blur (unlike black-translucent).
+    // Home Screen / PWA only — Safari ignores this. black-translucent lets the
+    // frosted .page-nav show through the Dynamic Island (Safari stays solid).
     const standalone = !!(
       window.navigator.standalone ||
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -47,7 +47,7 @@
       theme === "dark" ||
       (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
     if (statusMeta) {
-      statusMeta.setAttribute("content", dark ? "black" : "default");
+      statusMeta.setAttribute("content", standalone ? "black-translucent" : (dark ? "black" : "default"));
     }
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       if (!meta.media) meta.setAttribute("content", dark ? "#121214" : "#ffffff");
@@ -2083,7 +2083,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1600"></script>
+<script src="app.js?v=1602"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

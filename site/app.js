@@ -12474,6 +12474,28 @@
     return false;
   }
 
+  function homePitchFlashMatchMins(row, fallbackMins) {
+    const clock = homePitchMatchClock(row);
+    if (Number.isFinite(clock)) return clock;
+    if (typeof homeSquadRowIsInPlay === "function" && homeSquadRowIsInPlay(row)) {
+      const live = typeof homePitchLiveMinutes === "function" ? homePitchLiveMinutes(row) : null;
+      if (Number.isFinite(live)) return live;
+      return Number(fallbackMins) || 0;
+    }
+    return 90;
+  }
+
+  function homePitchFlashShouldHoldBonus(row, prevStats, nextStats, delta, fallbackMins) {
+    const prevB = Number(prevStats && prevStats.bonus) || 0;
+    const nextB = Number(nextStats && nextStats.bonus) || 0;
+    if (prevB === nextB) return false;
+    const bonusOnly = nextB - prevB === Number(delta);
+    const event = homePitchFlashEventLabel(prevStats, nextStats);
+    const bonusAlone = event === "Bonus" || /^Bonus ×\d+$/.test(event);
+    if (!bonusOnly && !bonusAlone) return false;
+    return homePitchFlashMatchMins(row, fallbackMins) < 60;
+  }
+
   function homePitchFlashSnapStats(row) {
     const eg = homeElementGwRecord(row && row.element);
     return {
@@ -12549,6 +12571,7 @@
       if (preview || style === "off" || !prev) continue;
       if (homePitchFlashShouldSkip(row, prev, pts, mins)) continue;
       const delta = pts - prev.pts;
+      if (homePitchFlashShouldHoldBonus(row, prev.stats, stats, delta, mins)) continue;
       const event = homePitchFlashEventLabel(prev.stats, stats);
       homePitchFlashRecord(eid, delta, style, { name: row.name || "", event });
       batch.push({ eid, delta, name: row.name || "", event });
@@ -36766,8 +36789,9 @@
   function syncAppleStatusBarStyle(mode = currentThemeMode()) {
     const meta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
     if (!meta) return;
-    // Opaque bars (not black-translucent) — standalone only; Safari ignores this.
-    meta.setAttribute("content", themePrefersDark(mode) ? "black" : "default");
+    const standalone = document.documentElement.classList.contains("is-standalone");
+    // Standalone: transparent so .page-nav frost fills the island. Safari ignores this.
+    meta.setAttribute("content", standalone ? "black-translucent" : (themePrefersDark(mode) ? "black" : "default"));
   }
 
   function syncThemeColor(mode = currentThemeMode()) {
