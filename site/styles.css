@@ -10378,6 +10378,14 @@ html[data-page="expected"] #expected-page .barbell-scroll {
   font-weight: 600;
   color: var(--text-faint);
 }
+.spit-pitch-chip.is-dc {
+  background: hsl(var(--positive));
+  color: #fff;
+}
+.spit-pitch-chip.is-dc-hit {
+  background: hsl(var(--delta-rise));
+  color: #fff;
+}
 .spit-pitch-imp {
   position: relative;
   display: inline-flex;
@@ -21688,6 +21696,24 @@ html[data-theme="dark"] .home-dashboard .home-pitch-form-cell.is-hot {
 .home-pitch-pts.is-live.is-idle {
   color: hsl(0 0% 100% / 0.88);
   background: hsl(var(--delta-rise) / 0.82);
+}
+.home-pitch-dc {
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--home-pitch-ink-fg, var(--home-pitch-card-fg));
+  background: var(--home-pitch-ink-bg, hsl(0 0% 100% / 0.08));
+}
+.home-pitch-dc.is-idle {
+  color: var(--home-pitch-ink-idle-fg, var(--home-pitch-card-muted));
+  background: var(--home-pitch-ink-idle-bg, hsl(0 0% 100% / 0.05));
+}
+.home-pitch-dc.is-progress {
+  color: #fff;
+  background: hsl(var(--positive));
+}
+.home-pitch-dc.is-hit {
+  color: #fff;
+  background: hsl(var(--delta-rise));
 }
 .home-pitch-price {
   font-weight: 800;

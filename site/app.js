@@ -8664,6 +8664,7 @@
 
   const HOME_PITCH_MODE_LABELS = {
     gw: "Points",
+    defcon: "DefCon",
     fixtures: "Fixtures",
     form: "Form",
     imp: "Importance",
@@ -10401,8 +10402,20 @@
     return { label, ha, home: ha === "H", fx, fdr };
   }
 
-  /** Pitch card strip mode: gw (default) | fixtures | form | imp | price */
+  /** Pitch card strip mode: gw (default) | defcon | fixtures | form | imp | price */
   let homePitchStripMode = "gw";
+
+  function homeSquadPitchUpcomingOppHTML(row) {
+    const opp = homeSquadPitchOppMeta(row);
+    const homeIcon = opp.home
+      ? `<svg class="home-pitch-ha" viewBox="0 0 24 24" width="8" height="8" aria-hidden="true"><path fill="currentColor" d="M11.47 3.84a.75.75 0 0 1 1.06 0l8.25 7.8a.75.75 0 0 1-1.03 1.09l-.75-.71V19.5A1.5 1.5 0 0 1 17.5 21h-3.75a.75.75 0 0 1-.75-.75V15.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v4.75a.75.75 0 0 1-.75.75H6.5A1.5 1.5 0 0 1 5 19.5v-7.48l-.75.71a.75.75 0 1 1-1.03-1.09l8.25-7.8Z"/></svg>`
+      : "";
+    const ramp =
+      opp.fdr != null
+        ? fdrRampInlineStyle(opp.fdr, { schedulePalette: true })
+        : { className: "", styleAttr: "", strongClass: "" };
+    return `<span class="home-pitch-strip home-pitch-opp${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(opp.label)}${homeIcon}</span>`;
+  }
 
   function homeSquadPitchGwStripHTML(row) {
     if (homeSquadRowIsUnusedLive(row)) {
@@ -10417,15 +10430,33 @@
       const cls = `home-pitch-strip home-pitch-pts${idle ? " is-idle" : ""}${live ? " is-live" : ""}`;
       return `<span class="${cls}">${escapeHtml(String(ptsN))}</span>`;
     }
-    const opp = homeSquadPitchOppMeta(row);
-    const homeIcon = opp.home
-      ? `<svg class="home-pitch-ha" viewBox="0 0 24 24" width="8" height="8" aria-hidden="true"><path fill="currentColor" d="M11.47 3.84a.75.75 0 0 1 1.06 0l8.25 7.8a.75.75 0 0 1-1.03 1.09l-.75-.71V19.5A1.5 1.5 0 0 1 17.5 21h-3.75a.75.75 0 0 1-.75-.75V15.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v4.75a.75.75 0 0 1-.75.75H6.5A1.5 1.5 0 0 1 5 19.5v-7.48l-.75.71a.75.75 0 1 1-1.03-1.09l8.25-7.8Z"/></svg>`
-      : "";
-    const ramp =
-      opp.fdr != null
-        ? fdrRampInlineStyle(opp.fdr, { schedulePalette: true })
-        : { className: "", styleAttr: "", strongClass: "" };
-    return `<span class="home-pitch-strip home-pitch-opp${ramp.className}${ramp.strongClass}"${ramp.styleAttr}>${escapeHtml(opp.label)}${homeIcon}</span>`;
+    return homeSquadPitchUpcomingOppHTML(row);
+  }
+
+  function homeSquadPitchDefconStripHTML(row) {
+    if (homeSquadRowIsUnusedLive(row)) {
+      return `<span class="home-pitch-strip home-pitch-dc is-idle is-unused">–</span>`;
+    }
+    if (!homeSquadPitchPlayed(row)) {
+      return homeSquadPitchUpcomingOppHTML(row);
+    }
+    const eg = homeElementGwRecord(row.element);
+    const etype = Number(eg.elementType) || Number(row.elementType) || 0;
+    const pos = (typeof LIVE_POS_BY_TYPE !== "undefined" && LIVE_POS_BY_TYPE[etype]) || "";
+    const rule = pos && DEFCON_RULES[pos];
+    if (!rule || pos === "GK") {
+      return `<span class="home-pitch-strip home-pitch-dc is-idle" title="Goalkeepers are not eligible for DefCon">–</span>`;
+    }
+    const raw = typeof liveDefconActions === "function" ? liveDefconActions(eg, pos) : eg[rule.field];
+    const acts = Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : 0;
+    const thr = Number(rule.threshold) || 0;
+    const hit = !!eg.defConHit || (thr > 0 && acts >= thr);
+    const idle = acts <= 0 && !hit;
+    const tone = hit ? " is-hit" : idle ? " is-idle" : " is-progress";
+    const tip = hit
+      ? `DefCon ${acts} ≥ ${thr} ${pos} (+2)`
+      : `DefCon ${acts} / ${thr} ${pos} (+2 at threshold)`;
+    return `<span class="home-pitch-strip home-pitch-dc${tone}" title="${escapeHtml(tip)}">${escapeHtml(String(acts))}</span>`;
   }
 
   const HOME_FX_VISIBLE = 3;
@@ -10832,6 +10863,7 @@
     if (homePitchStripMode === "form") return homeSquadPitchFormStripHTML(row);
     if (homePitchStripMode === "imp") return homeSquadPitchImpStripHTML(row);
     if (homePitchStripMode === "price") return homeSquadPitchPriceStripHTML(row);
+    if (homePitchStripMode === "defcon") return homeSquadPitchDefconStripHTML(row);
     return homeSquadPitchGwStripHTML(row);
   }
 
@@ -10855,7 +10887,7 @@
 
   function setHomePitchStripMode(mode) {
     const next =
-      mode === "fixtures" || mode === "form" || mode === "imp" || mode === "price"
+      mode === "fixtures" || mode === "form" || mode === "imp" || mode === "price" || mode === "defcon"
         ? mode
         : "gw";
     if (homePitchStripMode === next) {
@@ -22062,6 +22094,16 @@
         ${spitKeySection("Auto-subs", autosubs)}
         ${spitKeySection("League", league)}
         ${spitKeySection("Chips", chips)}
+        ${spitKeySection("Pitch", [
+          spitKeyRow(
+            `<span class="spit-pitch-chip is-dc spit-home-swatch" aria-hidden="true">7</span>`,
+            "DefCon actions this GW — blue until the position line"
+          ),
+          spitKeyRow(
+            `<span class="spit-pitch-chip is-dc-hit spit-home-swatch" aria-hidden="true">12</span>`,
+            "Threshold hit (+2) — DEF 10 CBIT · MID/FWD 12 CBIRT"
+          ),
+        ])}
         ${spitKeySection("Gameweek", [
           spitKeyRow(
             homeGwProgLegendMark("matches"),
