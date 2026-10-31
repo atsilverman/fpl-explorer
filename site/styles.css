@@ -5953,13 +5953,11 @@ html[data-page="defcon"] .layout .main {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  #prices-page .prices-actual-table-wrap .prices-col-change,
-  #prices-page .prices-actual-table-wrap .prices-col-before,
-  #prices-page .prices-actual-table-wrap .prices-col-after {
+  #prices-page .prices-actual-table-wrap .prices-col-change {
     width: 1%;
     white-space: nowrap;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-left: 4px;
+    padding-right: 4px;
   }
   #prices-page .prices-actual-table-wrap .prices-col-owned,
   #prices-page .prices-actual-table-wrap .prices-col-league-owned {
@@ -6235,11 +6233,11 @@ html[data-page="defcon"] .layout .main {
   color: #fff;
 }
 .prices-status-pill.is-likely-drop {
-  background: hsl(0 55% 52%);
+  background: hsl(0 62% 46%);
   color: #fff;
 }
 .prices-status-pill.is-very-likely-drop {
-  background: hsl(350 45% 36%);
+  background: hsl(0 58% 36%);
   color: #fff;
 }
 .prices-status-pill.is-short {
@@ -6355,12 +6353,43 @@ html[data-page="defcon"] .layout .main {
   }
 }
 .prices-actual-table .prices-col-change {
-  min-width: 3.75rem;
+  min-width: 0;
+  width: 1%;
+  white-space: nowrap;
 }
 .prices-actual-table .prices-col-actual-price {
-  min-width: 5rem;
+  min-width: 0;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+}
+.prices-ba-pair {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.prices-ba-pair.is-head {
+  font-family: inherit;
+  font-variant-numeric: normal;
+}
+.prices-ba-val {
+  display: inline-block;
+}
+.prices-ba-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  color: var(--muted-foreground, hsl(var(--foreground) / 0.45));
+  opacity: 0.55;
+}
+.prices-ba-arrow .icon {
+  width: 10px;
+  height: 10px;
 }
 .prices-actual-table .prices-col-date {
   white-space: nowrap;
@@ -7340,9 +7369,6 @@ html.has-defcon-opponents-fab[data-page="defcon"] .main {
   #prices-page .prices-table-wrap .prices-col-spark {
     display: none;
   }
-  #prices-page .prices-actual-table-wrap .prices-col-before {
-    display: none;
-  }
   #prices-page .prices-actual-table-wrap .prices-col-owned,
   #prices-page .prices-actual-table-wrap .prices-col-league-owned {
     display: none;
@@ -7378,15 +7404,15 @@ html.has-defcon-opponents-fab[data-page="defcon"] .main {
     min-width: 0;
     max-width: 100%;
   }
-  #prices-page .prices-actual-table-wrap .prices-col-after,
-  #prices-page .prices-actual-table-wrap .prices-col-actual-price.prices-col-after,
-  #prices-page .prices-actual-table-wrap th.prices-col-after {
-    width: var(--prices-actual-metric-col-w, var(--prices-actual-after-col-w, 3.5rem));
+  #prices-page .prices-actual-table-wrap .prices-col-change,
+  #prices-page .prices-actual-table-wrap .prices-col-actual-price.prices-col-change,
+  #prices-page .prices-actual-table-wrap th.prices-col-change {
+    width: var(--prices-actual-metric-col-w, var(--prices-actual-change-col-w, 6.25rem));
     min-width: 0;
     max-width: none;
     white-space: nowrap;
     text-align: center;
-    padding-left: 4px;
+    padding-left: 2px;
     padding-right: var(--mobile-gutter-x, 8px);
   }
   #prices-page .prices-actual-table-wrap .prices-actual-table .prices-col-actual-price {
@@ -7397,14 +7423,10 @@ html.has-defcon-opponents-fab[data-page="defcon"] .main {
     text-overflow: ellipsis;
   }
   #prices-page .prices-actual-table-wrap .prices-table > thead tr:not(.section-row) th.prices-col-date,
-  #prices-page .prices-actual-table-wrap .prices-table > thead tr:not(.section-row) th.prices-col-before,
-  #prices-page .prices-actual-table-wrap .prices-table > thead tr:not(.section-row) th.prices-col-after,
+  #prices-page .prices-actual-table-wrap .prices-table > thead tr:not(.section-row) th.prices-col-change,
   #prices-page .prices-actual-table-wrap .prices-table > thead tr:not(.section-row) th.prices-col-owned {
     overflow: visible;
     text-overflow: clip;
-  }
-  #prices-page .prices-actual-table-wrap .prices-col-after .prices-change-arrow {
-    margin-inline: auto;
   }
   #prices-page .prices-actual-table-wrap .ownership-id .player-name,
   #prices-page .prices-actual-table-wrap .ownership-id-text .player-name-line > .player-name {
@@ -20483,14 +20505,14 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   }
 }
 .home-stat-log-panel {
-  padding: 12px 14px 10px;
+  padding: 14px 14px 14px;
   overflow: hidden;
 }
 .home-stat-log-panel .home-squad-heading-end {
   max-width: min(48%, 9.5rem);
 }
 .home-rank-chart-panel {
-  padding: 12px 14px 12px;
+  padding: 14px 14px 14px;
   overflow: hidden;
 }
 .home-rank-chart-panel .home-squad-heading-end {
@@ -20539,7 +20561,9 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 .home-rank-chart-panel.is-table-view .home-rank-chart {
   display: none;
 }
-.home-rank-chart-panel.is-pts-open .home-rank-chart-hint {
+.home-rank-chart-panel.is-pts-open .home-rank-chart-hint,
+.home-rank-chart-panel.is-table-view .home-rank-chart-hint,
+.home-rank-chart-panel.is-table-view .home-rank-chart-pts {
   display: none;
 }
 .home-rank-chart-hint {
@@ -20547,7 +20571,8 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  margin: 6px 0 0;
+  margin: 10px 0 2px;
+  padding: 6px 10px 8px;
   font-size: 10.5px;
   font-weight: 550;
   letter-spacing: 0.01em;
@@ -20561,7 +20586,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 }
 .home-rank-chart-table-wrap {
   margin: 2px -2px 0;
-  max-height: min(58vh, 22rem);
+  max-height: min(64vh, 28rem);
   overflow: auto;
 }
 .home-rank-chart-table {
@@ -20569,7 +20594,7 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 12px;
+  font-size: 11px;
 }
 .home-rank-chart-panel .home-data-table.home-rank-chart-table :is(th, td),
 .home-rank-chart-panel .home-data-table.home-rank-chart-table :is(th, td).home-col-gw,
@@ -20579,15 +20604,22 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   min-width: 0;
   max-width: none;
   text-align: center;
-  font-size: 12px;
+  vertical-align: middle;
+  font-size: 11px;
   font-weight: 550;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  line-height: 1.2;
   overflow: visible;
 }
 .home-rank-chart-panel .home-data-table.home-rank-chart-table th {
+  padding: 8px 6px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.05em;
+}
+.home-rank-chart-panel .home-data-table.home-rank-chart-table td {
+  padding: 13px 6px;
 }
 .home-rank-chart-panel .home-rank-chart-table td.highlight-top,
 .home-rank-chart-panel .home-rank-chart-table td.highlight-bottom,
@@ -20598,9 +20630,13 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 .home-rank-chart-table .home-rank-delta.is-compact,
 .home-rank-chart-table .home-rank-delta .home-rank-delta-n,
 .home-rank-chart-table .home-rank-delta.is-compact .home-rank-delta-n {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 550;
   letter-spacing: 0;
+}
+.home-rank-chart-table .home-rank-delta,
+.home-rank-chart-table .home-rank-delta.is-compact {
+  justify-content: center;
 }
 .home-rank-chart-table .home-rank-delta .icon,
 .home-rank-chart-table .home-rank-delta.is-compact .icon {
@@ -20610,8 +20646,14 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 .home-rank-chart-table-row {
   cursor: pointer;
 }
+.home-rank-chart-panel.is-table-view .home-rank-chart-table-row {
+  cursor: default;
+}
 .home-rank-chart-table-row:hover td {
   filter: brightness(0.98);
+}
+.home-rank-chart-panel.is-table-view .home-rank-chart-table-row:hover td {
+  filter: none;
 }
 .home-rank-chart-table-row.is-selected td {
   box-shadow: inset 0 1.5px 0 var(--text), inset 0 -1.5px 0 var(--text);
@@ -20797,6 +20839,13 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 .home-rank-chart-x-label.is-selected {
   fill: var(--text);
   font-weight: 750;
+}
+.home-rank-chart-bar,
+.home-rank-chart-dot,
+.home-rank-chart-x-label,
+.home-rank-chart-line,
+.home-rank-chart-pulse {
+  transition: opacity 160ms var(--ease-out);
 }
 .home-rank-chart-svg.is-picking .home-rank-chart-bar:not(.is-selected),
 .home-rank-chart-svg.is-picking .home-rank-chart-dot:not(.is-selected),
@@ -21039,13 +21088,18 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
 }
 @media (prefers-reduced-motion: reduce) {
   .home-rank-chart-pts.t-acc .t-acc-panel,
-  .home-rank-chart-pts-inner {
+  .home-rank-chart-pts-inner,
+  .home-rank-chart-bar,
+  .home-rank-chart-dot,
+  .home-rank-chart-x-label,
+  .home-rank-chart-line,
+  .home-rank-chart-pulse {
     transition: none !important;
   }
 }
 .home-stat-log-body {
-  margin-top: 6px;
-  max-height: 240px;
+  margin-top: 10px;
+  max-height: min(56vh, 28rem);
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -21061,18 +21115,25 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 .home-stat-log-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
-  align-items: start;
-  padding: 7px 0;
-  border-top: 1px solid hsl(var(--border) / 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 4.5rem;
+  padding: 12px 12px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 10px;
+  background: hsl(var(--muted) / 0.32);
+  box-sizing: border-box;
 }
-.home-stat-log-list .home-stat-log-row:first-child {
-  border-top: 0;
-  padding-top: 2px;
+.home-stat-log-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 .home-stat-log-player {
   display: flex;
@@ -21097,10 +21158,79 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
   font-size: 11px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
-  padding-top: 2px;
+  flex: 0 0 auto;
+}
+.home-stat-log-change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 2rem;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: hsl(var(--card) / 0.88);
+  border: 1px solid hsl(var(--border) / 0.55);
+}
+.home-stat-log-change.is-empty {
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+}
+.home-stat-log-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+.home-stat-log-flag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  background: hsl(var(--muted) / 0.8);
+  color: inherit;
+}
+.home-stat-log-change.is-hit .home-stat-log-flag {
+  background: hsl(var(--positive) / 0.16);
+  color: hsl(var(--positive));
+}
+.home-stat-log-change.is-lost .home-stat-log-flag {
+  --autosub-amber: 34 78% 46%;
+  background: hsl(var(--autosub-amber) / 0.18);
+  color: hsl(var(--autosub-amber));
+}
+.home-stat-log-vals {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: hsl(var(--foreground));
+}
+.home-stat-log-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  color: var(--muted-foreground, hsl(var(--foreground) / 0.45));
+  opacity: 0.55;
+}
+.home-stat-log-arrow .icon {
+  width: 10px;
+  height: 10px;
 }
 .home-stat-log-chips {
-  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -21985,7 +22115,8 @@ img.home-pitch-photo {
 /* C / A / autosub chips — same size; radius tracks the card corner. */
 .home-pitch-photo-wrap .home-role-tag,
 .home-pitch-photo-wrap .home-autosub-tag,
-.home-pitch-photo-wrap .home-unused-tag {
+.home-pitch-photo-wrap .home-unused-tag,
+.home-pitch-photo-wrap .home-pitch-ga-badge {
   position: absolute;
   z-index: 4;
   box-sizing: border-box;
@@ -22017,6 +22148,77 @@ img.home-pitch-photo {
 .home-pitch-photo-wrap .home-badge-tr {
   right: var(--home-pitch-badge-inset);
   left: auto;
+}
+.home-pitch-photo-wrap .home-badge-bl {
+  top: auto;
+  bottom: calc(var(--home-pitch-nameplate-h, 18px) + var(--home-pitch-badge-inset));
+  left: var(--home-pitch-badge-inset);
+  right: auto;
+}
+.home-pitch-photo-wrap .home-badge-br {
+  top: auto;
+  bottom: calc(var(--home-pitch-nameplate-h, 18px) + var(--home-pitch-badge-inset));
+  right: var(--home-pitch-badge-inset);
+  left: auto;
+}
+.home-pitch-ga-badge {
+  top: var(--home-pitch-badge-inset);
+  width: auto;
+  min-width: var(--home-pitch-badge-size, 15px);
+  padding: 0 3px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.home-pitch-card.is-season .home-role-tag,
+.home-pitch-card.is-season .home-autosub-tag,
+.home-pitch-card.is-season .home-unused-tag,
+.home-pitch-card.is-season .home-pitch-mp-badge,
+.home-pitch-card.is-season .home-pitch-flash-delta {
+  display: none;
+}
+.home-pitch-ga-badge.is-goals {
+  background: hsl(142 55% 36%);
+  color: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+}
+.home-pitch-ga-badge.is-assists {
+  background: hsl(217 72% 44%);
+  color: #fff;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+}
+html[data-home-badge-style="wash"] .home-pitch-ga-badge.is-goals {
+  background: hsl(142 50% 38% / 0.3);
+  color: hsl(142 48% 26%);
+  box-shadow: inset 0 0 0 1px hsl(142 50% 36% / 0.35);
+}
+html[data-home-badge-style="wash"] .home-pitch-ga-badge.is-assists {
+  background: hsl(217 72% 46% / 0.28);
+  color: hsl(217 62% 32%);
+  box-shadow: inset 0 0 0 1px hsl(217 72% 44% / 0.34);
+}
+html[data-theme="dark"][data-home-badge-style="wash"] .home-pitch-ga-badge.is-goals {
+  background: hsl(142 50% 42% / 0.28);
+  color: hsl(142 70% 78%);
+  box-shadow: inset 0 0 0 1px hsl(142 50% 48% / 0.4);
+}
+html[data-theme="dark"][data-home-badge-style="wash"] .home-pitch-ga-badge.is-assists {
+  background: hsl(217 72% 58% / 0.26);
+  color: hsl(217 90% 84%);
+  box-shadow: inset 0 0 0 1px hsl(217 72% 62% / 0.38);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-home-badge-style="wash"] .home-pitch-ga-badge.is-goals {
+    background: hsl(142 50% 42% / 0.28);
+    color: hsl(142 70% 78%);
+    box-shadow: inset 0 0 0 1px hsl(142 50% 48% / 0.4);
+  }
+  html:not([data-theme="light"])[data-home-badge-style="wash"] .home-pitch-ga-badge.is-assists {
+    background: hsl(217 72% 58% / 0.26);
+    color: hsl(217 90% 84%);
+    box-shadow: inset 0 0 0 1px hsl(217 72% 62% / 0.38);
+  }
 }
 /* Unused starter: yellow "!" — 0 minutes; keep clear of Captain orange. */
 .home-pitch-photo-wrap .home-unused-tag {
@@ -30362,20 +30564,15 @@ html.player-thumbs-kit img.home-pitch-photo {
   }
 }
 
-/* Mobile Price Changes (Actual) — xData identity column; Before / After /
+/* Mobile Price Changes (Actual) — xData identity column; Before→After /
    TSB% share the remaining width (JS sets --prices-actual-metric-col-w). */
 @media (max-width: 720px) {
-  #prices-page .prices-actual-table-wrap .prices-col-before,
   #prices-page .prices-actual-table-wrap .prices-col-owned {
     display: table-cell;
   }
-  #prices-actual-wrap[data-actual-hide-before="1"] .prices-actual-table-wrap .prices-col-before {
-    display: none;
-  }
-  #prices-page .prices-actual-table-wrap .prices-col-before,
-  #prices-page .prices-actual-table-wrap .prices-col-after,
+  #prices-page .prices-actual-table-wrap .prices-col-change,
   #prices-page .prices-actual-table-wrap .prices-col-owned {
-    width: var(--prices-actual-metric-col-w, 3.5rem);
+    width: var(--prices-actual-metric-col-w, 6.25rem);
     min-width: 0;
     max-width: none;
     padding-left: 2px;

@@ -8805,6 +8805,7 @@
 
   const HOME_PITCH_MODE_LABELS = {
     gw: "Points",
+    season: "Season",
     defcon: "DefCon",
     fixtures: "Fixtures",
     form: "Form",
@@ -9031,10 +9032,11 @@
     if (el.homeRankChartTableWrap) {
       el.homeRankChartTableWrap.hidden = homeRankChartView !== "table";
     }
+    if (el.homeRankChartHint) {
+      el.homeRankChartHint.hidden = homeRankChartView === "table";
+    }
     if (el.homeRankChartHintLabel) {
-      el.homeRankChartHintLabel.textContent = homeRankChartView === "table"
-        ? "Tap a GW row for details"
-        : "Tap a bar for details";
+      el.homeRankChartHintLabel.textContent = "Tap a bar for details";
     }
     const menu = el.homeRankChartViewMenu;
     if (!menu) return;
@@ -9059,12 +9061,14 @@
     }
     syncHomeRankChartViewUI();
     closeHomeRankChartViewPicker();
-    if (view === "graph") {
-      paintHomeRankChart({ pinEnd: true });
-    } else {
+    if (view === "table") {
+      closeHomeRankChartPts({ animate: false });
+      syncHomeRankChartSelection();
       paintHomeRankChartTable();
       if (el.homeRankChartTableWrap) el.homeRankChartTableWrap.scrollTop = 0;
+      return;
     }
+    paintHomeRankChart({ pinEnd: true });
   }
 
   function openHomeRankChartViewPicker() {
@@ -10058,6 +10062,7 @@
         }
         const row = e.target.closest("tr[data-gw]");
         if (!row || !el.homeRankChartTableBody || !el.homeRankChartTableBody.contains(row)) return;
+        if (homeRankChartView === "table") return;
         const gw = Number(row.getAttribute("data-gw"));
         if (!Number.isFinite(gw) || gw <= 0) return;
         e.preventDefault();
@@ -10067,6 +10072,7 @@
     if (el.homeRankChartTableBody) {
       el.homeRankChartTableBody.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" && e.key !== " ") return;
+        if (homeRankChartView === "table") return;
         const row = e.target.closest("tr[data-gw]");
         if (!row || !el.homeRankChartTableBody.contains(row)) return;
         const gw = Number(row.getAttribute("data-gw"));
@@ -10916,8 +10922,79 @@
     return { label, ha, home: ha === "H", fx, fdr };
   }
 
-  /** Pitch card strip mode: gw (default) | defcon | fixtures | form | imp | price */
+  /** Pitch card strip mode: gw (default) | season | defcon | fixtures | form | imp | price */
   let homePitchStripMode = "gw";
+
+  let homeSeasonStatsByCodeCache = null;
+  function homeSeasonStatsByCodeMap() {
+    if (homeSeasonStatsByCodeCache) return homeSeasonStatsByCodeCache;
+    const map = new Map();
+    const pool = (season2627Data().players && season2627Data().players.combined) || [];
+    for (const p of pool) {
+      const stats = {
+        goals: Number(p.goals) || 0,
+        assists: Number(p.assists) || 0,
+        pts: Number(p.pts) || 0,
+      };
+      const code = Number(p && p.code);
+      if (Number.isFinite(code)) map.set(`c:${code}`, stats);
+      const el = Number(p && p.element);
+      if (Number.isFinite(el)) map.set(`e:${el}`, stats);
+    }
+    homeSeasonStatsByCodeCache = map;
+    return map;
+  }
+
+  function homeSquadSeasonStats(row) {
+    const map = homeSeasonStatsByCodeMap();
+    const code = Number(row && row.code);
+    if (Number.isFinite(code)) {
+      const hit = map.get(`c:${code}`);
+      if (hit) return hit;
+    }
+    const el = Number(row && row.element);
+    if (Number.isFinite(el)) {
+      const hit = map.get(`e:${el}`);
+      if (hit) return hit;
+    }
+    return { goals: 0, assists: 0, pts: 0 };
+  }
+
+  function homeSquadPitchSeasonBadgesHTML(row) {
+    const stats = homeSquadSeasonStats(row);
+    const parts = [];
+    if (stats.goals > 0) {
+      const n = Math.round(stats.goals);
+      const tip = `${n} season goal${n === 1 ? "" : "s"}`;
+      parts.push(
+        `<span class="home-pitch-ga-badge is-goals home-badge-tl" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${escapeHtml(String(n))}G</span>`
+      );
+    }
+    if (stats.assists > 0) {
+      const n = Math.round(stats.assists);
+      const tip = `${n} season assist${n === 1 ? "" : "s"}`;
+      parts.push(
+        `<span class="home-pitch-ga-badge is-assists home-badge-tr" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${escapeHtml(String(n))}A</span>`
+      );
+    }
+    return parts.join("");
+  }
+
+  function homeSquadPitchSeasonStripHTML(row) {
+    const pts = homeSquadSeasonStats(row).pts;
+    const n = Number.isFinite(Number(pts)) ? Math.round(Number(pts)) : 0;
+    const idle = n <= 0;
+    return `<span class="home-pitch-strip home-pitch-pts${idle ? " is-idle" : ""}" title="Season ${n} pts">${escapeHtml(String(n))}</span>`;
+  }
+
+  function syncHomePitchSeasonBadges(card, row) {
+    const wrap = card && card.querySelector(".home-pitch-photo-wrap");
+    if (!wrap) return;
+    wrap.querySelectorAll(".home-pitch-ga-badge").forEach((node) => node.remove());
+    if (homePitchStripMode !== "season") return;
+    const html = homeSquadPitchSeasonBadgesHTML(row);
+    if (html) wrap.insertAdjacentHTML("beforeend", html);
+  }
 
   function homeSquadPitchUpcomingOppHTML(row) {
     const opp = homeSquadPitchOppMeta(row);
@@ -11378,6 +11455,7 @@
     if (homePitchStripMode === "imp") return homeSquadPitchImpStripHTML(row);
     if (homePitchStripMode === "price") return homeSquadPitchPriceStripHTML(row);
     if (homePitchStripMode === "defcon") return homeSquadPitchDefconStripHTML(row);
+    if (homePitchStripMode === "season") return homeSquadPitchSeasonStripHTML(row);
     return homeSquadPitchGwStripHTML(row);
   }
 
@@ -11401,7 +11479,7 @@
 
   function setHomePitchStripMode(mode) {
     const next =
-      mode === "fixtures" || mode === "form" || mode === "imp" || mode === "price" || mode === "defcon"
+      mode === "fixtures" || mode === "form" || mode === "imp" || mode === "price" || mode === "defcon" || mode === "season"
         ? mode
         : "gw";
     if (homePitchStripMode === next) {
@@ -11437,55 +11515,63 @@
         if (meta) meta.innerHTML = homeSquadPitchStripHTML(row);
         const live = homeSquadRowIsInPlay(row);
         const mins = homePitchLiveMinutes(row);
+        const seasonMode = homePitchStripMode === "season";
         card.classList.toggle("is-live", live);
-        card.classList.toggle("has-live-mp", mins != null);
         card.classList.toggle("is-autosub-in", !!row.autoSubIn);
         card.classList.toggle("is-autosub-out", !!row.autoSubOut);
+        card.classList.toggle("is-season", seasonMode);
 
         let mp = card.querySelector(".home-pitch-mp-badge");
-        if (mins != null) {
-          const label = `${mins}'`;
-          const tip = `${mins} minutes played`;
-          if (!mp) {
-            mp = document.createElement("span");
-            mp.className = "home-pitch-mp-badge";
-            card.insertBefore(mp, card.firstChild);
+        if (seasonMode) {
+          if (mp) mp.remove();
+          card.classList.remove("has-live-mp");
+        } else {
+          card.classList.toggle("has-live-mp", mins != null);
+          if (mins != null) {
+            const label = `${mins}'`;
+            const tip = `${mins} minutes played`;
+            if (!mp) {
+              mp = document.createElement("span");
+              mp.className = "home-pitch-mp-badge";
+              card.insertBefore(mp, card.firstChild);
+            }
+            if (mp.textContent !== label) mp.textContent = label;
+            mp.title = tip;
+            mp.setAttribute("aria-label", tip);
+          } else if (mp) {
+            mp.remove();
           }
-          if (mp.textContent !== label) mp.textContent = label;
-          mp.title = tip;
-          mp.setAttribute("aria-label", tip);
-        } else if (mp) {
-          mp.remove();
-        }
 
-        const hasRole = !!card.querySelector(".home-role-tag");
-        const autosub = card.querySelector(".home-autosub-tag");
-        if (autosub) {
-          autosub.classList.remove("home-badge-tl", "home-badge-tr", "home-badge-tr-below");
-          if (hasRole && mins != null) autosub.classList.add("home-badge-tr-below");
-          else if (hasRole) autosub.classList.add("home-badge-tl");
-          else autosub.classList.add("home-badge-tr");
-        }
-
-        const unusedEl = card.querySelector(".home-unused-tag");
-        const unusedHTML = autosub ? "" : homePitchUnusedBadgeHTML(row);
-        if (unusedHTML && !unusedEl) {
-          const wrap = card.querySelector(".home-pitch-photo-wrap");
-          if (wrap) {
-            const corner = hasRole ? "home-badge-tr-below" : "home-badge-tr";
-            wrap.insertAdjacentHTML(
-              "beforeend",
-              unusedHTML.replace('class="home-unused-tag', `class="home-unused-tag ${corner}`)
-            );
+          const hasRole = !!card.querySelector(".home-role-tag");
+          const autosub = card.querySelector(".home-autosub-tag");
+          if (autosub) {
+            autosub.classList.remove("home-badge-tl", "home-badge-tr", "home-badge-tr-below");
+            if (hasRole && mins != null) autosub.classList.add("home-badge-tr-below");
+            else if (hasRole) autosub.classList.add("home-badge-tl");
+            else autosub.classList.add("home-badge-tr");
           }
-        } else if (!unusedHTML && unusedEl) {
-          unusedEl.remove();
+
+          const unusedEl = card.querySelector(".home-unused-tag");
+          const unusedHTML = autosub ? "" : homePitchUnusedBadgeHTML(row);
+          if (unusedHTML && !unusedEl) {
+            const wrap = card.querySelector(".home-pitch-photo-wrap");
+            if (wrap) {
+              const corner = hasRole ? "home-badge-tr-below" : "home-badge-tr";
+              wrap.insertAdjacentHTML(
+                "beforeend",
+                unusedHTML.replace('class="home-unused-tag', `class="home-unused-tag ${corner}`)
+              );
+            }
+          } else if (!unusedHTML && unusedEl) {
+            unusedEl.remove();
+          }
+          card.classList.toggle("is-unused", !!unusedHTML);
         }
-        card.classList.toggle("is-unused", !!unusedHTML);
+        syncHomePitchSeasonBadges(card, row);
       });
     }
     if (homePitchStripMode === "imp") syncHomePitchImpLabels();
-    applyHomeBadgePreviewPitch();
+    if (homePitchStripMode !== "season") applyHomeBadgePreviewPitch();
     paintHomePitchFlashes();
   }
 
@@ -12054,19 +12140,61 @@
     );
   }
 
-  function homeStatLogRowHTML(row) {
+  function homeStatLogChangeHTML(change) {
+    if (!change || typeof change !== "object") return "";
+    const label = String(change.label || change.stat || "");
+    const from = change.from;
+    const to = change.to;
+    const flag = change.threshold === "hit" || change.threshold === "lost" ? change.threshold : "";
+    const flagText = flag === "hit" ? "hit" : flag === "lost" ? "lost" : "";
+    const cls = flag === "hit" ? " is-hit" : flag === "lost" ? " is-lost" : "";
+    return (
+      `<div class="home-stat-log-change${cls}">` +
+      `<span class="home-stat-log-stat">` +
+      `${escapeHtml(label)}` +
+      (flagText ? `<span class="home-stat-log-flag">${escapeHtml(flagText)}</span>` : "") +
+      `</span>` +
+      `<span class="home-stat-log-vals">` +
+      `<span class="is-from">${escapeHtml(String(from))}</span>` +
+      `<span class="home-stat-log-arrow" aria-hidden="true">${iconHTML("chevron-right")}</span>` +
+      `<span class="is-to">${escapeHtml(String(to))}</span>` +
+      `</span>` +
+      `</div>`
+    );
+  }
+
+  function homeStatLogFlatRows(rows) {
+    const out = [];
+    (rows || []).forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const changes = (Array.isArray(row.changes) ? row.changes : []).filter(
+        (change) => change && typeof change === "object"
+      );
+      if (!changes.length) {
+        out.push({ row, change: null });
+        return;
+      }
+      changes.forEach((change) => out.push({ row, change }));
+    });
+    return out;
+  }
+
+  function homeStatLogRowHTML(row, change) {
     const team = row.team || "";
     const teamBadge = badgeHTML(team, "home-crest") ||
       teamCrestFallbackHTML(team, "home-crest-fallback");
     const name = row.name || "—";
     const pos = row.pos || "";
     const when = formatHomeLocalWhen(row.at, { includeDate: true }) || "";
-    const chips = (Array.isArray(row.changes) ? row.changes : [])
-      .map(homeStatLogChipHTML)
-      .filter(Boolean)
-      .join("");
+    const flag = change && (change.threshold === "hit" || change.threshold === "lost")
+      ? change.threshold
+      : "";
+    const rowCls = flag === "hit" ? " is-hit" : flag === "lost" ? " is-lost" : "";
+    const changeHTML = homeStatLogChangeHTML(change)
+      || `<div class="home-stat-log-change is-empty">—</div>`;
     return (
-      `<li class="home-stat-log-row">` +
+      `<li class="home-stat-log-row${rowCls}">` +
+      `<div class="home-stat-log-row-head">` +
       `<div class="home-stat-log-player">` +
       `${teamBadge}` +
       `<div class="home-player-text"><div class="home-player-name">` +
@@ -12074,7 +12202,8 @@
       (pos ? `<span class="home-stat-log-pos">${escapeHtml(pos)}</span>` : "") +
       `</div></div></div>` +
       `<span class="home-stat-log-when">${escapeHtml(when)}</span>` +
-      `<div class="home-stat-log-chips">${chips}</div>` +
+      `</div>` +
+      changeHTML +
       `</li>`
     );
   }
@@ -12101,23 +12230,25 @@
     if (el.homeStatLogKicker) el.homeStatLogKicker.textContent = "Adjustments";
     if (el.homeStatLogStage) el.homeStatLogStage.textContent = gw;
     syncHomeStatLogModeUI();
+    const cards = homeStatLogFlatRows(rows);
     if (el.homeStatLogMeta) {
-      el.homeStatLogMeta.textContent = rows.length ? String(rows.length) : "";
+      el.homeStatLogMeta.textContent = cards.length ? String(cards.length) : "";
       el.homeStatLogMeta.hidden = true;
     }
     if (!el.homeStatLogBody) return;
-    if (!rows.length) {
+    if (!cards.length) {
       const empty = useLeague && all.length
         ? "No league players in the log — switch to All."
         : "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
       el.homeStatLogBody.innerHTML = `<p class="home-stat-log-empty">${empty}</p>`;
       return;
     }
-    el.homeStatLogBody.innerHTML = `<ul class="home-stat-log-list">${rows.map(homeStatLogRowHTML).join("")}</ul>`;
+    el.homeStatLogBody.innerHTML = `<ul class="home-stat-log-list">${cards.map(({ row, change }) => homeStatLogRowHTML(row, change)).join("")}</ul>`;
   }
 
   const HOME_RANK_CHART_WINDOW = 6;
   let homeRankChartPaintKey = "";
+  let homeRankChartDataPaintKey = "";
   let homeRankChartWidth = 0;
   let homeRankChartPinEnd = false;
   let homeRankChartScrollBound = false;
@@ -12136,6 +12267,7 @@
 
   function hideHomeRankChartPanel() {
     if (el.homeRankChartPanel) el.homeRankChartPanel.hidden = true;
+    homeRankChartDataPaintKey = "";
     closeHomeRankChartPts({ animate: false });
   }
 
@@ -12431,6 +12563,34 @@
     }
   }
 
+  function homeRankChartReadyPtsPayload(entryId, gw) {
+    const eventGw = Number(gw);
+    if (eventGw === Number(HOME && HOME.gw)) return homeRankChartPtsPayloadFromLive(entryId);
+    return homeRankChartPtsCache.get(`${entryId}:${eventGw}`) || null;
+  }
+
+  function syncHomeRankChartSelection() {
+    const gw = homeRankChartSelectedGw;
+    const picking = gw != null;
+    const svg = el.homeRankChartTrack && el.homeRankChartTrack.querySelector(".home-rank-chart-svg");
+    if (svg) {
+      svg.classList.toggle("is-picking", picking);
+      svg.querySelectorAll(".home-rank-chart-bar, .home-rank-chart-dot, .home-rank-chart-x-label").forEach((node) => {
+        const on = picking && Number(node.getAttribute("data-gw")) === Number(gw);
+        node.classList.toggle("is-selected", on);
+        if (node.classList.contains("home-rank-chart-dot")) {
+          node.setAttribute("r", on ? "5" : (node.classList.contains("is-live") ? "4.5" : "3.25"));
+        }
+      });
+    }
+    if (el.homeRankChartTableBody) {
+      el.homeRankChartTableBody.querySelectorAll(".home-rank-chart-table-row").forEach((row) => {
+        row.classList.toggle("is-selected", picking && Number(row.getAttribute("data-gw")) === Number(gw));
+      });
+    }
+    syncHomeRankChartWindowLabel();
+  }
+
   async function fetchHomeRankChartGwSquad(entryId, gw) {
     const key = `${entryId}:${gw}`;
     if (homeRankChartPtsCache.has(key)) return homeRankChartPtsCache.get(key);
@@ -12454,26 +12614,26 @@
   }
 
   async function openHomeRankChartPts(gw) {
+    if (homeRankChartView === "table") return;
     const eventGw = Number(gw);
     if (!Number.isFinite(eventGw) || eventGw <= 0) return;
     const entryId = homeActiveViewEntryId();
-    const currentGw = Number(HOME && HOME.gw);
     const token = ++homeRankChartPtsToken;
     homeRankChartSelectedGw = eventGw;
     homeRankChartBenchCollapsed = true;
     bindHomeRankChartPts();
-    syncHomeRankChartBenchUI();
-    if (el.homeRankChartTrack) {
-      const painted = homeRankChartSvg(homeRankChartSeries(entryId), el.homeRankChartScroller && el.homeRankChartScroller.clientWidth);
-      if (painted && painted.svg) el.homeRankChartTrack.innerHTML = painted.svg;
+    syncHomeRankChartSelection();
+    const ready = homeRankChartReadyPtsPayload(entryId, eventGw);
+    if (ready && ready.rows && ready.rows.length) {
+      paintHomeRankChartPtsTable(ready, eventGw);
+      setHomeRankChartPtsOpen(true);
+      return;
     }
-    paintHomeRankChartTable(entryId);
-    homeRankChartPtsShowLoading(eventGw);
+    paintHomeRankChartMini(eventGw);
+    if (!homeRankChartPtsOpen()) homeRankChartPtsShowLoading(eventGw);
     setHomeRankChartPtsOpen(true);
     try {
-      const payload = eventGw === currentGw
-        ? homeRankChartPtsPayloadFromLive(entryId)
-        : await fetchHomeRankChartGwSquad(entryId, eventGw);
+      const payload = await fetchHomeRankChartGwSquad(entryId, eventGw);
       if (token !== homeRankChartPtsToken || homeRankChartSelectedGw !== eventGw) return;
       if (!payload.rows.length) {
         if (el.homeRankChartPtsBody) {
@@ -12495,11 +12655,7 @@
     if (!Number.isFinite(eventGw) || eventGw <= 0) return;
     if (homeRankChartSelectedGw === eventGw && homeRankChartPtsOpen()) {
       closeHomeRankChartPts();
-      if (el.homeRankChartTrack) {
-        const painted = homeRankChartSvg(homeRankChartSeries(), el.homeRankChartScroller && el.homeRankChartScroller.clientWidth);
-        if (painted && painted.svg) el.homeRankChartTrack.innerHTML = painted.svg;
-      }
-      paintHomeRankChartTable();
+      syncHomeRankChartSelection();
       return;
     }
     openHomeRankChartPts(eventGw);
@@ -12698,7 +12854,11 @@
         : "";
       const deltaHTML = homeRankDeltaHTML(row.delta, { compact: true })
         || `<span class="home-rank-chart-table-empty">—</span>`;
-      return `<tr class="home-rank-chart-table-row${selected ? " is-selected" : ""}${row.live ? " is-live" : ""}" data-gw="${row.gw}" role="button" tabindex="0" aria-label="GW${row.gw} rank history${row.live ? ", live" : ""}">
+      const interactive = homeRankChartView !== "table";
+      const rowAttrs = interactive
+        ? ` role="button" tabindex="0" aria-label="GW${row.gw} rank history${row.live ? ", live" : ""}"`
+        : "";
+      return `<tr class="home-rank-chart-table-row${selected && interactive ? " is-selected" : ""}${row.live ? " is-live" : ""}" data-gw="${row.gw}"${rowAttrs}>
         <td class="home-col-gw"><span class="home-rank-chart-table-gw">GW${row.gw}${live}</span></td>
         <td class="home-col-stat col-num${ptsHeat.cls}"${ptsHeat.style}>${escapeHtml(String(row.points))}</td>
         <td class="home-col-stat col-num${rankHeat.cls}"${rankHeat.style}>${escapeHtml(formatHomeRank(row.overallRank))}</td>
@@ -12816,16 +12976,15 @@
     const picking = homeRankChartSelectedGw != null;
     const dots = coords.map((c) => {
       const selected = picking && Number(c.gw) === Number(homeRankChartSelectedGw);
-      return `<circle class="home-rank-chart-dot${c.live ? " is-live" : ""}${selected ? " is-selected" : ""}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${selected ? 5 : (c.live ? 4.5 : 3.25)}" />`;
+      return `<circle class="home-rank-chart-dot${c.live ? " is-live" : ""}${selected ? " is-selected" : ""}" data-gw="${c.gw}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${selected ? 5 : (c.live ? 4.5 : 3.25)}" />`;
     }).join("");
     const last = coords[coords.length - 1];
-    const selectedLive = picking && last && Number(last.gw) === Number(homeRankChartSelectedGw);
-    const pulse = last && last.live && selectedLive && !prefersReducedMotion()
+    const pulse = last && last.live && !prefersReducedMotion()
       ? `<circle class="home-own-pulse home-rank-chart-pulse" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4.5" />`
       : "";
     const xLabels = coords.map((c) => {
       const selected = picking && Number(c.gw) === Number(homeRankChartSelectedGw);
-      return `<text class="home-rank-chart-x-label${selected ? " is-selected" : ""}" x="${c.x.toFixed(1)}" y="${h - 6}" text-anchor="middle">GW${c.gw}</text>`;
+      return `<text class="home-rank-chart-x-label${selected ? " is-selected" : ""}" data-gw="${c.gw}" x="${c.x.toFixed(1)}" y="${h - 6}" text-anchor="middle">GW${c.gw}</text>`;
     }).join("");
     const snapCount = Math.max(1, n - windowN + 1);
     const snaps = Array.from({ length: snapCount }, () => `<div class="home-rank-chart-snap"></div>`).join("");
@@ -12880,8 +13039,20 @@
     if (scroller && scroller.clientWidth) homeRankChartWidth = scroller.clientWidth;
     const painted = homeRankChartSvg(rows, scroller && scroller.clientWidth);
     const structureKey = `${entryId}|${rows.map((r) => r.gw).join(",")}`;
+    const dataKey = `${structureKey}|${scroller && scroller.clientWidth}|${rows.map((r) => `${r.points}:${r.overallRank}:${r.live ? 1 : 0}`).join(",")}`;
     const reset = pinEnd || structureKey !== homeRankChartPaintKey;
     homeRankChartPaintKey = structureKey;
+    if (!reset && dataKey === homeRankChartDataPaintKey && el.homeRankChartTrack && el.homeRankChartTrack.querySelector(".home-rank-chart-svg")) {
+      syncHomeRankChartViewUI();
+      syncHomeRankChartSelection();
+      if (homeRankChartPtsOpen() && homeRankChartSelectedGw != null) {
+        if (Number(homeRankChartSelectedGw) === Number(HOME && HOME.gw)) {
+          syncHomeRankChartPtsLive();
+        }
+      }
+      return;
+    }
+    homeRankChartDataPaintKey = dataKey;
     if (reset) homeRankChartPinEnd = true;
     const shouldPin = reset || homeRankChartPinEnd;
     syncHomeRankChartViewUI();
@@ -13840,12 +14011,12 @@
         const eid = Number(card.getAttribute("data-element"));
         const rec = homePitchFlashByElement.get(eid);
         const updating = !!(rec && rec.style !== "off");
-        card.classList.toggle("is-pitch-flash-dim", hasFocus && !updating);
-        card.classList.toggle("is-pitch-flash-focus", updating);
-        if (!updating) {
+        card.classList.toggle("is-pitch-flash-dim", hasFocus && !updating && homePitchStripMode !== "season");
+        card.classList.toggle("is-pitch-flash-focus", updating && homePitchStripMode !== "season");
+        if (homePitchStripMode === "season" || !updating) {
           if (card.classList.contains("is-pitch-flash")) homePitchFlashClearCard(card);
-      return;
-    }
+          return;
+        }
         paintHomePitchFlashOnCard(card, rec);
       });
     }
@@ -14561,11 +14732,13 @@
         } />`
       : `<span class="home-pitch-photo home-pitch-photo-fallback is-photo-icon" aria-hidden="true">${iconHTML("user", "player-photo-fallback-icon")}</span>`;
     const live = homeSquadRowIsInPlay(row);
+    const seasonMode = homePitchStripMode === "season";
     const mpBadge = homePitchMpBadgeHTML(row);
     const hasRole = !!(row.isCaptain || row.isVice);
     const badges = [];
     // Prefer upper-right for every chip; only use left when C/A already owns TR.
     // Live MP owns TL (overhang) — any TL chip stacks under the rightmost badge.
+    // Season view hides these via CSS so G / A can take the corners.
     if (hasRole) {
       const role = row.isCaptain
         ? `<span class="home-role-tag home-role-c home-badge-tr" title="Captain">C</span>`
@@ -14581,9 +14754,12 @@
     }
     const unused = autosub ? "" : homePitchUnusedBadgeHTML(row);
     if (unused) {
-      // Live MP owns the TL overhang, so stay right; stack under C/A.
       const corner = hasRole ? "home-badge-tr-below" : "home-badge-tr";
       badges.push(unused.replace('class="home-unused-tag', `class="home-unused-tag ${corner}`));
+    }
+    if (seasonMode) {
+      const seasonBadges = homeSquadPitchSeasonBadgesHTML(row);
+      if (seasonBadges) badges.push(seasonBadges);
     }
     const strip = homeSquadPitchStripHTML(row);
     const fullName = row.name || "—";
@@ -14595,6 +14771,7 @@
       live ? "is-live" : "",
       mpBadge ? "has-live-mp" : "",
       unused ? "is-unused" : "",
+      seasonMode ? "is-season" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -22265,7 +22442,7 @@
   const MOBILE_NAME_COL_SLACK = 10;
   /** xData barbell label width — Statistics / DefCon / Fixtures match it on mobile. */
   const MOBILE_COMPACT_NAME_COL_W = 122;
-  const PRICES_ACTUAL_MOBILE_CHANGE_MIN = 44;
+  const PRICES_ACTUAL_MOBILE_CHANGE_MIN = 88;
   const PRICES_ACTUAL_MOBILE_AFTER_MIN = 58;
 
   function measureInlineContentWidth(el) {
@@ -24345,6 +24522,10 @@
           spitKeyRow(
             `<span class="home-pitch-flash-delta is-up spit-home-swatch" aria-hidden="true">+4</span>`,
             "Point update chip — replaces C / V / minutes in the corner. Skips kickoff appearance"
+          ),
+          spitKeyRow(
+            `<span class="home-pitch-ga-badge is-goals spit-home-swatch" aria-hidden="true">5G</span><span class="home-pitch-ga-badge is-assists spit-home-swatch" aria-hidden="true">3A</span>`,
+            "Season view — goals (top left) and assists (top right); hides C / V / minutes"
           ),
         ])}
         ${spitKeySection("Gameweek", [
@@ -33380,7 +33561,7 @@
       if (cell.clientWidth > 0 && cell.scrollWidth > cell.clientWidth + 1) return true;
     }
     const metricCells = wrap.querySelectorAll(
-      "th.prices-col-before, th.prices-col-after, th.prices-col-owned, th.prices-col-league-owned, td.prices-col-before, td.prices-col-after, td.prices-col-owned, td.prices-col-league-owned"
+      "th.prices-col-change, th.prices-col-owned, th.prices-col-league-owned, td.prices-col-change, td.prices-col-owned, td.prices-col-league-owned"
     );
     for (const cell of metricCells) {
       if (cell.offsetParent === null || cell.clientWidth === 0) continue;
@@ -33434,14 +33615,17 @@
       measureWraps[0];
     const tsbRef =
       (visibleWraps[0] || measureWraps[0]).querySelector("th.prices-col-owned, td.prices-col-owned") || dateRef;
-    const afterRef = (visibleWraps[0] || measureWraps[0]).querySelector("th.prices-col-after");
+    const changeRef = (visibleWraps[0] || measureWraps[0]).querySelector("th.prices-col-change");
 
     let maxDate = Math.max(
       measurePricesTextWidth("Date", dateRef),
       measurePricesTextWidth("Oct 25", dateRef)
     );
     let maxTsb = 0;
-    let maxAfter = measurePricesTextWidth("After", afterRef);
+    let maxChange = Math.max(
+      measurePricesTextWidth("Before After", changeRef) + 14,
+      measurePricesTextWidth("£5.5m £5.4m", changeRef) + 14
+    );
 
     measureWraps.forEach((wrap) => {
       wrap
@@ -33449,8 +33633,13 @@
         .forEach((cell) => {
           maxDate = Math.max(maxDate, measurePricesTextWidth(cell.textContent, cell));
         });
-      wrap.querySelectorAll("td.prices-col-after").forEach((cell) => {
-        maxAfter = Math.max(maxAfter, measurePricesTextWidth(cell.textContent, cell));
+      wrap.querySelectorAll("th.prices-col-change, td.prices-col-change").forEach((cell) => {
+        const pair = cell.querySelector(".prices-ba-pair");
+        if (pair) {
+          maxChange = Math.max(maxChange, pair.scrollWidth || pair.getBoundingClientRect().width);
+        } else {
+          maxChange = Math.max(maxChange, measurePricesTextWidth(cell.textContent, cell));
+        }
       });
       if (!mobile) {
         wrap
@@ -33476,19 +33665,19 @@
         280
       );
       const dateW = Math.max(52, Math.ceil(maxDate + 18));
-      const afterPad = Math.max(14, measurePricesCellPadding(afterRef));
-      let afterW = Math.max(
-        PRICES_ACTUAL_MOBILE_AFTER_MIN,
-        Math.ceil(maxAfter + afterPad)
+      const changePad = Math.max(10, measurePricesCellPadding(changeRef));
+      let changeW = Math.max(
+        PRICES_ACTUAL_MOBILE_CHANGE_MIN,
+        Math.ceil(maxChange + changePad)
       );
-      // Player matches the xData identity column; Before / After / TSB% share the rest.
+      // Player matches the xData identity column; Before→After / TSB% share the rest.
       const playerW = MOBILE_COMPACT_NAME_COL_W;
-      afterW = Math.max(afterW, Math.floor((tableW - dateW - playerW) / 3));
+      changeW = Math.max(changeW, Math.floor((tableW - dateW - playerW) / 2));
 
       measureWraps.forEach((wrap) => {
         wrap.style.setProperty("--prices-actual-date-col-w", `${dateW}px`);
         wrap.style.setProperty("--prices-actual-player-col-w", `${playerW}px`);
-        wrap.style.setProperty("--prices-actual-metric-col-w", `${afterW}px`);
+        wrap.style.setProperty("--prices-actual-metric-col-w", `${changeW}px`);
         wrap.style.removeProperty("--prices-actual-change-col-w");
         wrap.style.removeProperty("--prices-actual-after-col-w");
         wrap.style.removeProperty("--prices-actual-tsb-col-w");
@@ -33537,11 +33726,9 @@
     const vw = window.innerWidth;
     const configs = [
       { columns: true, hideBefore: false, hideLeague: false },
-      { columns: true, hideBefore: true, hideLeague: false },
-      { columns: true, hideBefore: true, hideLeague: true },
+      { columns: true, hideBefore: false, hideLeague: true },
       { columns: false, hideBefore: false, hideLeague: false },
-      { columns: false, hideBefore: true, hideLeague: false },
-      { columns: false, hideBefore: true, hideLeague: true },
+      { columns: false, hideBefore: false, hideLeague: true },
     ];
 
     const canTryColumns =
@@ -33804,12 +33991,9 @@
       ? pricesStatusMobileLabel(row.statusKey)
       : pricesStatusDesktopLabel(row.statusKey, full);
     const shortCls = mobile ? " is-short" : "";
-    const up = row.trend === "up";
-    const trendLabel = up ? "More transfers in than out" : "More transfers out than in";
-    const trendIcon = iconHTML(up ? "trending-up" : "trending-down");
-    const tipText =
-      mobile && full !== label ? `${full} · ${trendLabel}` : `${label} · ${trendLabel}`;
-    const tip = ` title="${escapeHtml(tipText)}" aria-label="${escapeHtml(`${label} — ${trendLabel}`)}"`;
+    const rise = pricesIsRiser(row);
+    const trendIcon = iconHTML(rise ? "trending-up" : "trending-down");
+    const tip = ` title="${escapeHtml(full)}" aria-label="${escapeHtml(full)}"`;
     return `<span class="${cls}${shortCls} has-trend"${tip}><span class="prices-status-trend-icon" aria-hidden="true">${trendIcon}</span><span class="prices-status-label">${escapeHtml(label)}</span></span>`;
   }
 
@@ -33903,6 +34087,30 @@
     </tr>`;
   }
 
+  function pricesBaArrowHTML() {
+    return `<span class="prices-ba-arrow" aria-hidden="true">${iconHTML("chevron-right")}</span>`;
+  }
+
+  function pricesActualPricePairHTML(beforeLabel, afterLabel, { head = false } = {}) {
+    const cls = head ? "prices-ba-pair is-head" : "prices-ba-pair";
+    return (
+      `<span class="${cls}">` +
+      `<span class="prices-ba-val is-before">${escapeHtml(beforeLabel)}</span>` +
+      pricesBaArrowHTML() +
+      `<span class="prices-ba-val is-after">${escapeHtml(afterLabel)}</span>` +
+      `</span>`
+    );
+  }
+
+  function pricesActualChangeHeadCellHTML({ sortable = false } = {}) {
+    const pair = pricesActualPricePairHTML("Before", "After", { head: true });
+    if (!sortable) {
+      return `<th class="col-num prices-col-actual-price prices-col-change">${pair}</th>`;
+    }
+    const sorted = state.pricesActualSortKey === "after" ? " sorted" : "";
+    return `<th class="col-num prices-col-actual-price prices-col-change${sorted}" data-prices-actual-sort="after" title="Before → After">${pair}${pricesSortArrow("after")}</th>`;
+  }
+
   function pricesActualHeadHTML() {
     const mobile = NARROW_MQ.matches;
     if (mobile) {
@@ -33910,8 +34118,7 @@
       return `<tr>
         ${th("Date", "col-date prices-col-date")}
         ${th("Player", "col-player")}
-        ${th("Before", "col-num prices-col-actual-price prices-col-before")}
-        ${th("After", "col-num prices-col-actual-price prices-col-after")}
+        ${pricesActualChangeHeadCellHTML()}
         ${th("TSB%", "col-num prices-col-owned")}
       </tr>`;
     }
@@ -33922,8 +34129,7 @@
     return `<tr>
       ${th("changedAt", "Date", "col-date prices-col-date")}
       ${th("name", "Player", "col-player")}
-      ${th("before", "Before", "col-num prices-col-actual-price prices-col-before")}
-      ${th("after", "After", "col-num prices-col-actual-price prices-col-after")}
+      ${pricesActualChangeHeadCellHTML({ sortable: true })}
       ${th("owned", "All(%)", "col-num prices-col-owned", "TSB% (All)")}
       ${th("leagueOwned", "ML(%)", "col-num prices-col-league-owned", "TSB% (Mini-League)")}
     </tr>`;
@@ -34020,9 +34226,11 @@
 
   function pricesActualMetricCellsHTML(row, catalog) {
     const mobile = NARROW_MQ.matches;
-    let html = `<td class="col-num prices-col-actual-price prices-col-before">${escapeHtml(fmtPricesActualPrice(row.before))}</td>`;
-    html += `<td class="col-num prices-col-actual-price prices-col-after">${escapeHtml(fmtPricesActualPrice(row.after))}</td>`;
-      html += `<td class="col-num prices-col-owned">${ownershipPillHTML(pricesActualOwnedPctDisplay(row, catalog), { live: true })}</td>`;
+    let html = `<td class="col-num prices-col-actual-price prices-col-change">${pricesActualPricePairHTML(
+      fmtPricesActualPrice(row.before),
+      fmtPricesActualPrice(row.after)
+    )}</td>`;
+    html += `<td class="col-num prices-col-owned">${ownershipPillHTML(pricesActualOwnedPctDisplay(row, catalog), { live: true })}</td>`;
     if (!mobile) {
       html += `<td class="col-num prices-col-league-owned">${ownershipPillHTML(pricesActualLeagueTsbPct(row), { live: true })}</td>`;
     }
