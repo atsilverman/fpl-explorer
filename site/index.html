@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1735" />
+<link rel="stylesheet" href="styles.css?v=1737" />
 <link rel="stylesheet" href="motion-enhanced.css?v=16" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -943,7 +943,7 @@
       <div id="home-bento" class="home-dashboard" hidden>
         <p class="home-deadline" id="home-deadline" hidden></p>
         <div class="home-summary" id="home-summary" data-home-summary="hero">
-          <div class="home-summary-hero" id="home-summary-hero">
+          <div class="home-summary-hero" id="home-summary-hero" data-home-jump="rank">
             <div class="home-summary-hero-head">
               <span class="home-summary-hero-chip" id="home-hero-chip" hidden></span>
               <p class="home-summary-hero-label">Overall Rank</p>
@@ -2122,7 +2122,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1609"></script>
+<script src="app.js?v=1611"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

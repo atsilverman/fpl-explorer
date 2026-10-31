@@ -19606,7 +19606,8 @@ html[data-theme="dark"] .home-dashboard {
   }
 }
 @media (max-width: 720px) {
-  .home-stat-panel[data-home-jump] {
+  .home-stat-panel[data-home-jump],
+  .home-summary-hero[data-home-jump] {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
@@ -20441,7 +20442,11 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   height: 8px;
   width: 8px;
   border-radius: 2px;
-  background: hsl(var(--blue-hsl) / 0.28);
+  background: linear-gradient(
+    90deg,
+    hsl(var(--delta-rise) / 0.72) 0 50%,
+    hsl(var(--delta-fall) / 0.72) 50% 100%
+  );
 }
 .home-rank-chart {
   display: grid;
@@ -20526,6 +20531,18 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 .home-rank-chart-bar.is-live {
   fill: hsl(var(--blue-hsl) / 0.32);
 }
+.home-rank-chart-bar.is-up {
+  fill: hsl(var(--delta-rise) / 0.42);
+}
+.home-rank-chart-bar.is-down {
+  fill: hsl(var(--delta-fall) / 0.4);
+}
+.home-rank-chart-bar.is-live.is-up {
+  fill: hsl(var(--delta-rise) / 0.58);
+}
+.home-rank-chart-bar.is-live.is-down {
+  fill: hsl(var(--delta-fall) / 0.56);
+}
 .home-rank-chart-line {
   fill: none;
   stroke: hsl(var(--blue-hsl));
@@ -20553,13 +20570,29 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
-html[data-theme="dark"] .home-rank-chart-bar,
-html:not([data-theme="light"]) .home-rank-chart-bar {
+html[data-theme="dark"] .home-rank-chart-bar:not(.is-up):not(.is-down),
+html:not([data-theme="light"]) .home-rank-chart-bar:not(.is-up):not(.is-down) {
   fill: hsl(var(--blue-hsl) / 0.28);
 }
-html[data-theme="dark"] .home-rank-chart-bar.is-live,
-html:not([data-theme="light"]) .home-rank-chart-bar.is-live {
+html[data-theme="dark"] .home-rank-chart-bar.is-live:not(.is-up):not(.is-down),
+html:not([data-theme="light"]) .home-rank-chart-bar.is-live:not(.is-up):not(.is-down) {
   fill: hsl(var(--blue-hsl) / 0.42);
+}
+html[data-theme="dark"] .home-rank-chart-bar.is-up,
+html:not([data-theme="light"]) .home-rank-chart-bar.is-up {
+  fill: hsl(var(--delta-rise) / 0.48);
+}
+html[data-theme="dark"] .home-rank-chart-bar.is-down,
+html:not([data-theme="light"]) .home-rank-chart-bar.is-down {
+  fill: hsl(var(--delta-fall) / 0.46);
+}
+html[data-theme="dark"] .home-rank-chart-bar.is-live.is-up,
+html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-up {
+  fill: hsl(var(--delta-rise) / 0.64);
+}
+html[data-theme="dark"] .home-rank-chart-bar.is-live.is-down,
+html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
+  fill: hsl(var(--delta-fall) / 0.62);
 }
 .home-stat-log-body {
   margin-top: 6px;

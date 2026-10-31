@@ -9448,13 +9448,14 @@
 
   let homeSummaryJumpBound = false;
   function bindHomeSummaryCardJumps() {
-    if (homeSummaryJumpBound || !el.homeSummaryCards) return;
+    if (homeSummaryJumpBound || !el.homeSummary) return;
     homeSummaryJumpBound = true;
     let touchStart = null;
     let touchMoved = false;
     const MOVE_PX = 10;
+    const root = el.homeSummary;
 
-    el.homeSummaryCards.addEventListener(
+    root.addEventListener(
       "touchstart",
       (e) => {
         if (e.touches.length !== 1) return;
@@ -9463,7 +9464,7 @@
       },
       { passive: true }
     );
-    el.homeSummaryCards.addEventListener(
+    root.addEventListener(
       "touchmove",
       (e) => {
         if (!touchStart || e.touches.length !== 1) return;
@@ -9473,17 +9474,18 @@
       },
       { passive: true }
     );
-    el.homeSummaryCards.addEventListener(
+    root.addEventListener(
       "touchend",
       () => {
         touchStart = null;
       },
       { passive: true }
     );
-    el.homeSummaryCards.addEventListener("click", (e) => {
+    root.addEventListener("click", (e) => {
       if (!NARROW_MQ.matches) return;
+      if (e.target.closest("button, a, input, select, textarea, [role='button']")) return;
       const card = e.target.closest("[data-home-jump]");
-      if (!card || !el.homeSummaryCards.contains(card)) return;
+      if (!card || !root.contains(card)) return;
       if (touchMoved) {
         touchMoved = false;
         return;
@@ -9494,7 +9496,9 @@
           ? el.homeSquadPanel
           : jump === "league"
             ? el.homeStandingsPanel
-            : null;
+            : jump === "rank"
+              ? el.homeRankChartPanel
+              : null;
       if (!panel || panel.hidden) return;
       e.preventDefault();
       homeScrollPanelIntoView(panel);
@@ -12060,12 +12064,15 @@
       return `<line class="home-rank-chart-grid" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" />`;
     }).join("");
     const baseline = `<line class="home-rank-chart-baseline" x1="${padL}" y1="${(padT + plotH).toFixed(1)}" x2="${w - padR}" y2="${(padT + plotH).toFixed(1)}" />`;
-    const bars = coords.map((c) => {
+    const bars = coords.map((c, i) => {
       const bh = maxPts > 0 ? (c.points / maxPts) * barMaxH : 0;
       const x = (c.x - colW * 0.28).toFixed(1);
       const bw = Math.max(8, colW * 0.56).toFixed(1);
       const y = (padT + plotH - bh).toFixed(1);
-      return `<rect class="home-rank-chart-bar${c.live ? " is-live" : ""}" x="${x}" y="${y}" width="${bw}" height="${Math.max(0, bh).toFixed(1)}" rx="3" />`;
+      const prevRank = i > 0 ? coords[i - 1].overallRank : null;
+      const delta = prevRank != null ? homeRankDeltaPlaces(c.overallRank, prevRank) : null;
+      const tone = delta > 0 ? " is-up" : delta < 0 ? " is-down" : "";
+      return `<rect class="home-rank-chart-bar${c.live ? " is-live" : ""}${tone}" x="${x}" y="${y}" width="${bw}" height="${Math.max(0, bh).toFixed(1)}" rx="3" />`;
     }).join("");
     const pathD = homeOwnSmoothPathD(coords);
     const dots = coords.map((c) => (
