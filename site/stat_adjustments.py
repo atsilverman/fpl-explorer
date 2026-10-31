@@ -11,10 +11,11 @@ import json
 from pathlib import Path
 
 from gw_element_stats import DEFCON_THRESHOLD_BY_TYPE, defcon_hit, normalize_element_gw_record
-from live_scoring import fixture_is_finished, fixture_is_live, fixtures_for_element
+from live_scoring import fixture_is_full_time, fixture_is_live, fixtures_for_element
 
 SITE = Path(__file__).resolve().parent
 CACHE_PATH = SITE / "stat_adjustments_cache.json"
+CACHE_GEN = 2
 LOG_CAP = 150
 PUBLIC_CAP = 40
 
@@ -48,16 +49,19 @@ def _inum(v) -> int:
 
 
 def _player_watchable(element: dict, fixtures: list[dict]) -> bool:
-    """True once this player's started fixtures are all full-time (no live mix)."""
+    """True once FPL has marked this player's started fixtures full-time.
+
+    Uses official ``finished`` / ``finished_provisional`` only — not minutes ≥ 90.
+    """
     fxs = fixtures_for_element(element, fixtures)
     started = [
         fx
         for fx in fxs
-        if fixture_is_finished(fx) or fixture_is_live(fx) or fx.get("started")
+        if fixture_is_full_time(fx) or fixture_is_live(fx) or fx.get("started")
     ]
     if not started:
         return False
-    return all(fixture_is_finished(fx) for fx in started)
+    return all(fixture_is_full_time(fx) for fx in started)
 
 
 def _defcon_actions(etype: int, cbit: int, cbitr: int) -> int:
@@ -199,8 +203,8 @@ def update_stat_log(
 ) -> dict:
     """Diff completed-match players vs last snapshot; persist + return public log."""
     cache = load_cache(cache_path)
-    if _inum(cache.get("gw")) != int(gw):
-        cache = {"gw": int(gw), "updatedAt": checked_at, "players": {}, "log": []}
+    if _inum(cache.get("gw")) != int(gw) or _inum(cache.get("gen")) != CACHE_GEN:
+        cache = {"gw": int(gw), "gen": CACHE_GEN, "updatedAt": checked_at, "players": {}, "log": []}
 
     if gw_settled and cache.get("frozen"):
         # Already captured the lock snapshot — keep the recap.
@@ -278,6 +282,7 @@ def update_stat_log(
 
     cache = {
         "gw": int(gw),
+        "gen": CACHE_GEN,
         "updatedAt": checked_at,
         "players": next_players or prev_players,
         "log": log,

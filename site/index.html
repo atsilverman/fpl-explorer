@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1717" />
+<link rel="stylesheet" href="styles.css?v=1726" />
 <link rel="stylesheet" href="motion-enhanced.css?v=16" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -607,6 +607,26 @@
                 <button type="button" data-home-badge-style="stamp">Stamps</button>
               </div>
             </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-label">Pitch updates</div>
+            <div class="prefs-field">
+              <span class="prefs-field-label" id="home-pitch-flash-label">Highlight</span>
+              <div class="segmented segmented-block prefs-pitch-flash-seg" id="home-pitch-flash-seg" role="group" aria-labelledby="home-pitch-flash-label">
+                <button type="button" data-home-pitch-flash="both" class="active">Both</button>
+                <button type="button" data-home-pitch-flash="cards">Cards</button>
+                <button type="button" data-home-pitch-flash="toast">Toast</button>
+                <button type="button" data-home-pitch-flash="off">Off</button>
+              </div>
+            </div>
+            <label class="settings-switch-row" for="prefs-home-pitch-flash-preview">
+              <span class="settings-switch-text">
+                <span class="settings-switch-label">Preview</span>
+                <span class="settings-switch-hint" id="prefs-home-pitch-flash-hint">Test the selected highlight. Switch Both, Cards, or Toast.</span>
+              </span>
+              <input type="checkbox" id="prefs-home-pitch-flash-preview" />
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
           </section>
           <!-- Data season UI removed — locked to 2026/27. Restore #season-seg + setSeason wiring to bring 2025/26 back.
           <section class="settings-section">
@@ -1328,6 +1348,9 @@
               <span class="gw-recap-kicker" id="gw-recap-kicker"></span>
               <h3 class="gw-recap-title" id="gw-recap-title"></h3>
             </div>
+            <button type="button" class="icon-btn icon-only-btn gw-recap-close" id="gw-recap-close" hidden aria-label="Close league report">
+              <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
           </header>
           <div class="gw-recap-stack" id="gw-recap-stack"></div>
           <footer class="gw-recap-foot">
@@ -2029,6 +2052,7 @@
   </div>
 </div>
 <div id="toast-root" class="toast-root" aria-live="polite" aria-relevant="additions"></div>
+<div id="home-pitch-flash-toast-root" class="home-pitch-flash-toast-root" aria-live="polite"></div>
 <script src="data.js?v=377"></script>
 <script src="markets_data.js?v=143"></script>
 <script src="calendar_data.js?v=58"></script>
@@ -2036,7 +2060,7 @@
 <script src="price_changes_data.js?v=341"></script>
 <script src="leagues_data.js?v=6"></script>
 <script src="home_data.js?v=51"></script>
-<script src="team_news_data.js?v=20"></script>
+<script src="team_news_data.js?v=22"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
 <script>
@@ -2059,7 +2083,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1588"></script>
+<script src="app.js?v=1600"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

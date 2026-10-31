@@ -827,6 +827,7 @@ def main() -> int:
         secs = next_poll_seconds(club_fixtures, state, gw)
         print("none" if secs is None else secs)
         return 0
+    previous_state = state if isinstance(state, dict) else {}
     gw_changed = state.get("gw") != gw
     if gw_changed:
         # New GW — drop prior stored graphics from the bundle (files can remain for debug)
@@ -974,6 +975,13 @@ def main() -> int:
     teams = list((state.get("teams") or {}).values())
     # Only keep clubs still in this GW fixture list
     teams = [t for t in teams if t.get("code") in club_fixtures]
+    if gw_changed and not teams:
+        prev_gw = previous_state.get("gw")
+        print(
+            f"\nGW{gw}: no graphics yet — keeping GW{prev_gw} bundle "
+            f"(X search missed or rate-limited)."
+        )
+        return 0 if errors == 0 else 1
     annotated = write_bundle(gw, teams, now, bootstrap)
     state["gw"] = gw
     state["teams"] = {t["code"]: t for t in annotated if t.get("code")}

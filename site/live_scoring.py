@@ -211,16 +211,29 @@ def project_graphic_auto_subs(
     return auto_subs
 
 
+def fixture_is_full_time(fx: dict | None) -> bool:
+    """True only when FPL has marked the match over.
+
+    `/fixtures` (same objects on event-live) expose two official flags:
+    ``finished_provisional`` flips shortly after the whistle — stats can still
+    move (BPS / bonus / DefCon). ``finished`` comes later when FPL locks the
+    fixture. Minutes ≥ 90 is not enough: that still happens in stoppage time.
+    """
+    if not fx:
+        return False
+    return bool(fx.get("finished") or fx.get("finished_provisional"))
+
+
 def fixture_is_finished(fx: dict | None) -> bool:
     """True when the match is done for UI progress (incl. provisional FT).
 
     Official `finished` often stays false while `finished_provisional` is true
     right after full time. Also treat started + minutes ≥ 90 as finished when
-    both flags lag.
+    both flags lag — UI only; Adjustments uses ``fixture_is_full_time``.
     """
     if not fx:
         return False
-    if fx.get("finished") or fx.get("finished_provisional"):
+    if fixture_is_full_time(fx):
         return True
     try:
         mins = int(fx.get("minutes") or 0)

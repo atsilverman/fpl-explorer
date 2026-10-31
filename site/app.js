@@ -1336,6 +1336,10 @@
     prefsDifficultyBtn: $("#prefs-difficulty-btn"),
     prefsHomeBadgePreview: $("#prefs-home-badge-preview"),
     homeBadgeStyleSeg: $("#home-badge-style-seg"),
+    prefsHomePitchFlashPreview: $("#prefs-home-pitch-flash-preview"),
+    homePitchFlashSeg: $("#home-pitch-flash-seg"),
+    prefsHomePitchFlashHint: $("#prefs-home-pitch-flash-hint"),
+    homePitchFlashToastRoot: $("#home-pitch-flash-toast-root"),
     homeGwProgressPanel: $("#home-gw-progress-panel"),
     homeGwProgressKicker: $("#home-gw-progress-kicker"),
     homeGwProgressStage: $("#home-gw-progress-stage"),
@@ -7431,9 +7435,17 @@
       prev: document.getElementById("gw-recap-prev"),
       next: document.getElementById("gw-recap-next"),
       count: document.getElementById("gw-recap-count"),
+      close: document.getElementById("gw-recap-close"),
       btn: null,
       empty: document.getElementById("league-empty"),
     };
+  }
+
+  function syncGwRecapCloseBtn() {
+    const e = gwRecapEls();
+    const show = !!gwRecapAutoOpened;
+    if (e.close) e.close.hidden = !show;
+    if (e.root) e.root.classList.toggle("is-forced", show);
   }
 
   function renderLeagueReport() {
@@ -7452,6 +7464,7 @@
     renderGwRecapStack();
     gwRecapOpen = true;
     markGwRecapSeen();
+    syncGwRecapCloseBtn();
     showGwRecapPage(gwRecapPages.length ? Math.min(gwRecapIndex, gwRecapPages.length - 1) : 0);
   }
 
@@ -7503,6 +7516,7 @@
 
   function closeGwRecap() {
     gwRecapAutoOpened = false;
+    syncGwRecapCloseBtn();
     if (state.page === "league") setPage("home");
   }
 
@@ -7527,8 +7541,14 @@
     });
     if (e.prev) e.prev.addEventListener("click", () => stepGwRecap(-1));
     if (e.next) e.next.addEventListener("click", () => stepGwRecap(1));
+    if (e.close) e.close.addEventListener("click", () => closeGwRecap());
     document.addEventListener("keydown", (ev) => {
       if (state.page !== "league" || !gwRecapOpen) return;
+      if (ev.key === "Escape" && gwRecapAutoOpened) {
+        ev.preventDefault();
+        closeGwRecap();
+        return;
+      }
       if (ev.key === "ArrowRight") {
         stepGwRecap(1);
       } else if (ev.key === "ArrowLeft") {
@@ -7567,7 +7587,9 @@
     if (!forced && gwRecapHasSeen()) return;
     if (state.page === "league") {
       gwRecapForcedShown = true;
+      if (forced) gwRecapAutoOpened = true;
       markGwRecapSeen();
+      syncGwRecapCloseBtn();
       return;
     }
     gwRecapAutoTimer = setTimeout(() => {
@@ -8442,9 +8464,6 @@
 
   function graphicsAllTeams() {
     const teams = Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : [];
-    const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : null;
-    const homeGw = HOME && HOME.gw != null ? Number(HOME.gw) : null;
-    if (gw != null && homeGw != null && gw !== homeGw) return [];
     return teams.filter((t) => t && t.localPath);
   }
 
@@ -10972,6 +10991,7 @@
     }
     if (homePitchStripMode === "imp") syncHomePitchImpLabels();
     applyHomeBadgePreviewPitch();
+    paintHomePitchFlashes();
   }
 
   function homeSquadAutosubPairs(squad) {
@@ -12223,6 +12243,564 @@
     }
   }
 
+  const HOME_PITCH_FLASH_KEY = "fpl-explorer-home-pitch-flash";
+  const HOME_PITCH_FLASH_STYLES = ["both", "cards", "toast", "off"];
+  const HOME_PITCH_FLASH_CYCLE = ["both", "cards", "toast"];
+  const HOME_PITCH_FLASH_HOLD_MS = 6500;
+  const HOME_PITCH_FLASH_IN_MS = 480;
+  const HOME_PITCH_FLASH_PREVIEW_MS = 4200;
+  const HOME_PITCH_FLASH_TOAST_MS = 7000;
+  const HOME_PITCH_FLASH_TOAST_MAX = 3;
+  const HOME_PITCH_FLASH_STYLE_LABEL = {
+    both: "Both",
+    cards: "Cards",
+    toast: "Toast",
+    off: "Off",
+  };
+  const HOME_PITCH_FLASH_LEGACY = { chip: "cards", ring: "cards" };
+
+  function homePitchFlashUsesCards(style) {
+    return style === "cards" || style === "both";
+  }
+
+  function homePitchFlashUsesToast(style) {
+    return style === "toast" || style === "both";
+  }
+  let homePitchFlashByElement = new Map();
+  let homePitchPtsPrev = new Map();
+  let homePitchFlashViewEntry = null;
+  let homePitchFlashGw = null;
+  let homePitchFlashPreviewTimer = null;
+  let homePitchFlashPreviewKickTimer = null;
+  let homePitchFlashPreviewIdx = 0;
+  let homePitchFlashPruneTimer = null;
+  let homePitchFlashToastEl = null;
+  let homePitchFlashToastTimer = null;
+  let homePitchFlashToastSig = "";
+  let homePitchFlashToastDismissed = "";
+
+  function homePitchFlashStyle() {
+    const raw = document.documentElement.getAttribute("data-home-pitch-flash");
+    return homePitchFlashNormalizeStyle(raw);
+  }
+
+  function homePitchFlashPreviewOn() {
+    return document.documentElement.classList.contains("home-pitch-flash-preview");
+  }
+
+  function homePitchFlashNormalizeStyle(raw) {
+    const mapped = HOME_PITCH_FLASH_LEGACY[raw] || raw;
+    return HOME_PITCH_FLASH_STYLES.includes(mapped) ? mapped : "both";
+  }
+
+  function syncHomePitchFlashPrefsUI() {
+    const style = homePitchFlashStyle();
+    if (el.homePitchFlashSeg) {
+      el.homePitchFlashSeg.querySelectorAll("[data-home-pitch-flash]").forEach((btn) => {
+        const on = btn.getAttribute("data-home-pitch-flash") === style;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+    if (el.prefsHomePitchFlashPreview) {
+      el.prefsHomePitchFlashPreview.checked = homePitchFlashPreviewOn();
+    }
+    if (el.prefsHomePitchFlashHint && !homePitchFlashPreviewOn()) {
+      el.prefsHomePitchFlashHint.textContent =
+        "Test the selected highlight. Switch Both, Cards, or Toast.";
+    }
+  }
+
+  function applyHomePitchFlashPrefs({ persist = false, previewTick = false } = {}) {
+    let style = homePitchFlashStyle();
+    if (el.homePitchFlashSeg) {
+      const active = el.homePitchFlashSeg.querySelector("[data-home-pitch-flash].active");
+      const next = active && active.getAttribute("data-home-pitch-flash");
+      style = homePitchFlashNormalizeStyle(next || style);
+    }
+    const preview = el.prefsHomePitchFlashPreview
+      ? !!el.prefsHomePitchFlashPreview.checked
+      : homePitchFlashPreviewOn();
+    if (style === "both") document.documentElement.removeAttribute("data-home-pitch-flash");
+    else document.documentElement.setAttribute("data-home-pitch-flash", style);
+    document.documentElement.classList.toggle("home-pitch-flash-preview", preview);
+    if (persist) {
+      try {
+        if (style === "both") localStorage.removeItem(HOME_PITCH_FLASH_KEY);
+        else localStorage.setItem(HOME_PITCH_FLASH_KEY, style);
+      } catch {
+        /* private browsing */
+      }
+    }
+    syncHomePitchFlashPrefsUI();
+    if (preview) startHomePitchFlashPreview({ jumpTo: style });
+    else stopHomePitchFlashPreview();
+  }
+
+  function loadHomePitchFlashPrefs() {
+    let style = "both";
+    try {
+      const saved = localStorage.getItem(HOME_PITCH_FLASH_KEY);
+      style = homePitchFlashNormalizeStyle(saved || "both");
+    } catch {
+      /* ignore */
+    }
+    if (style === "both") document.documentElement.removeAttribute("data-home-pitch-flash");
+    else document.documentElement.setAttribute("data-home-pitch-flash", style);
+    document.documentElement.classList.remove("home-pitch-flash-preview");
+    if (el.prefsHomePitchFlashPreview) el.prefsHomePitchFlashPreview.checked = false;
+    hideHomePitchFlashToast({ immediate: true });
+    syncHomePitchFlashPrefsUI();
+  }
+
+  function homePitchFlashRecord(eid, delta, style, { preview = false, name = "", event = "" } = {}) {
+    const id = Number(eid);
+    if (!Number.isFinite(id) || !delta) return;
+    homePitchFlashByElement.set(id, {
+      delta: Number(delta),
+      style: homePitchFlashNormalizeStyle(style),
+      preview: !!preview,
+      name: String(name || "").trim(),
+      event: String(event || "").trim(),
+      at: Date.now(),
+    });
+    ensureHomePitchFlashPruneTimer();
+  }
+
+  function homePitchFlashPrune() {
+    const now = Date.now();
+    let dirty = false;
+    for (const [eid, rec] of homePitchFlashByElement) {
+      if (now - rec.at > HOME_PITCH_FLASH_HOLD_MS) {
+        homePitchFlashByElement.delete(eid);
+        dirty = true;
+      }
+    }
+    return dirty;
+  }
+
+  function ensureHomePitchFlashPruneTimer() {
+    if (homePitchFlashPruneTimer) return;
+    homePitchFlashPruneTimer = setInterval(() => {
+      const dirty = homePitchFlashPrune();
+      if (dirty) paintHomePitchFlashes();
+      if (![...homePitchFlashByElement.values()].some((rec) => homePitchFlashUsesToast(rec.style))) {
+        hideHomePitchFlashToast();
+      }
+      if (!homePitchFlashByElement.size && homePitchFlashPruneTimer) {
+        clearInterval(homePitchFlashPruneTimer);
+        homePitchFlashPruneTimer = null;
+      }
+    }, 400);
+  }
+
+  function homePitchFlashClearCard(card) {
+    if (!card) return;
+    card.classList.remove(
+      "is-pitch-flash",
+      "is-pitch-flash-up",
+      "is-pitch-flash-down",
+      "is-pitch-flash-ring",
+      "is-pitch-flash-chip",
+      "is-pitch-flash-in"
+    );
+    card.querySelectorAll(".home-pitch-flash-delta").forEach((n) => n.remove());
+    const pts = card.querySelector(".home-pitch-pts");
+    if (pts) pts.classList.remove("is-pitch-flash-pop", "is-up", "is-down");
+  }
+
+  function paintHomePitchFlashOnCard(card, rec) {
+    homePitchFlashClearCard(card);
+    const up = rec.delta > 0;
+    const just = Date.now() - rec.at < HOME_PITCH_FLASH_IN_MS;
+    const style = rec.style === "off" ? "both" : rec.style;
+    if (!homePitchFlashUsesCards(style)) return;
+    const sign = rec.delta > 0 ? `+${rec.delta}` : String(rec.delta);
+    card.classList.add(
+      "is-pitch-flash",
+      "is-pitch-flash-ring",
+      "is-pitch-flash-chip",
+      up ? "is-pitch-flash-up" : "is-pitch-flash-down"
+    );
+    if (just) card.classList.add("is-pitch-flash-in");
+    card.insertAdjacentHTML(
+      "beforeend",
+      `<span class="home-pitch-flash-delta ${up ? "is-up" : "is-down"}">${escapeHtml(sign)}</span>`
+    );
+  }
+
+  function paintHomePitchFlashes() {
+    homePitchFlashPrune();
+    const roots = [el.homeSquadPitchXi, el.homeSquadPitchBench].filter(Boolean);
+    const hasFocus = [...homePitchFlashByElement.values()].some((rec) => rec.style !== "off");
+    for (const root of roots) {
+      root.querySelectorAll(".home-pitch-card").forEach((card) => {
+        const eid = Number(card.getAttribute("data-element"));
+        const rec = homePitchFlashByElement.get(eid);
+        const updating = !!(rec && rec.style !== "off");
+        card.classList.toggle("is-pitch-flash-dim", hasFocus && !updating);
+        card.classList.toggle("is-pitch-flash-focus", updating);
+        if (!updating) {
+          if (card.classList.contains("is-pitch-flash")) homePitchFlashClearCard(card);
+          return;
+        }
+        paintHomePitchFlashOnCard(card, rec);
+      });
+    }
+  }
+
+  function homePitchFlashAppearancePts(row) {
+    const m = Number(row && row.multiplier);
+    if (Number.isFinite(m) && m > 0) return m;
+    if (row && row.isCaptain) return 2;
+    return 1;
+  }
+
+  function homePitchFlashShouldSkip(row, prev, nextPts, nextMins) {
+    if (!prev || !Number.isFinite(nextPts)) return true;
+    const oldPts = Number(prev.pts);
+    if (!Number.isFinite(oldPts) || nextPts === oldPts) return true;
+    const oldMins = Number(prev.mins) || 0;
+    const appear = homePitchFlashAppearancePts(row);
+    if (
+      oldPts === 0 &&
+      nextPts === appear &&
+      oldMins <= 0 &&
+      nextMins > 0 &&
+      nextMins < 60
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  function homePitchFlashSnapStats(row) {
+    const eg = homeElementGwRecord(row && row.element);
+    return {
+      goals: Number(eg.goals) || 0,
+      assists: Number(eg.assists) || 0,
+      cleanSheets: Number(eg.cleanSheets) || 0,
+      goalsConceded: Number(eg.goalsConceded) || 0,
+      saves: Number(eg.saves) || 0,
+      penaltiesSaved: Number(eg.penaltiesSaved) || 0,
+      penaltiesMissed: Number(eg.penaltiesMissed) || 0,
+      yellowCards: Number(eg.yellowCards) || 0,
+      redCards: Number(eg.redCards) || 0,
+      ownGoals: Number(eg.ownGoals) || 0,
+      bonus: Number(eg.bonus) || 0,
+      defConHit: eg.defConHit ? 1 : 0,
+      minutes: Math.max(Number(eg.minutes) || 0, Number(row && row.minutes) || 0),
+    };
+  }
+
+  function homePitchFlashEventLabel(prevStats, nextStats) {
+    const prev = prevStats || {};
+    const next = nextStats || {};
+    const events = [];
+    const bump = (key, label) => {
+      const a = Number(prev[key]) || 0;
+      const b = Number(next[key]) || 0;
+      if (b <= a) return;
+      events.push(b - a > 1 ? `${label} ×${b - a}` : label);
+    };
+    bump("goals", "Goal");
+    bump("assists", "Assist");
+    bump("penaltiesSaved", "Pen save");
+    bump("cleanSheets", "Clean sheet");
+    if ((Number(next.defConHit) || 0) > (Number(prev.defConHit) || 0)) events.push("DefCon");
+    bump("bonus", "Bonus");
+    if ((Number(prev.minutes) || 0) < 60 && (Number(next.minutes) || 0) >= 60) events.push("60′");
+    const saveDelta =
+      Math.floor((Number(next.saves) || 0) / 3) - Math.floor((Number(prev.saves) || 0) / 3);
+    if (saveDelta > 0) events.push(saveDelta > 1 ? `Saves ×${saveDelta}` : "Saves");
+    bump("goalsConceded", "Goal conceded");
+    bump("yellowCards", "Yellow");
+    bump("redCards", "Red");
+    bump("ownGoals", "Own goal");
+    bump("penaltiesMissed", "Pen miss");
+    if (!events.length) return "Points";
+    return events.slice(0, 2).join(" · ");
+  }
+
+  function homePitchFlashIngestSquad(rows) {
+    const gw = Number(HOME && HOME.gw);
+    const view = homeActiveViewEntryId();
+    if (gw !== homePitchFlashGw || view !== homePitchFlashViewEntry) {
+      homePitchFlashGw = gw;
+      homePitchFlashViewEntry = view;
+      homePitchPtsPrev = new Map();
+    }
+    const preview = homePitchFlashPreviewOn();
+    const style = homePitchFlashStyle();
+    const batch = [];
+    for (const row of rows || []) {
+      const eid = Number(row && row.element);
+      if (!Number.isFinite(eid)) continue;
+      const ptsRaw = homeSquadRowGwPoints(row);
+      const pts = ptsRaw != null && Number.isFinite(Number(ptsRaw)) ? Number(ptsRaw) : null;
+      const mins = Number(row.minutes) || 0;
+      const stats = homePitchFlashSnapStats(row);
+      const prev = homePitchPtsPrev.get(eid);
+      if (pts == null) {
+        homePitchPtsPrev.set(eid, { pts: prev ? prev.pts : 0, mins, stats });
+        continue;
+      }
+      homePitchPtsPrev.set(eid, { pts, mins, stats });
+      if (preview || style === "off" || !prev) continue;
+      if (homePitchFlashShouldSkip(row, prev, pts, mins)) continue;
+      const delta = pts - prev.pts;
+      const event = homePitchFlashEventLabel(prev.stats, stats);
+      homePitchFlashRecord(eid, delta, style, { name: row.name || "", event });
+      batch.push({ eid, delta, name: row.name || "", event });
+    }
+    if (homePitchFlashUsesToast(style) && batch.length) showHomePitchFlashToast(batch);
+  }
+
+  function homePitchFlashCardName(card) {
+    const text = card && card.querySelector(".home-pitch-nameplate-text");
+    return text ? String(text.textContent || "").trim() : "";
+  }
+
+  function homePitchFlashToastSignature(items) {
+    return (items || [])
+      .map((item) => `${item.eid}:${item.delta}`)
+      .sort()
+      .join("|");
+  }
+
+  function homePitchFlashToastItemsHTML(items) {
+    const rows = [...(items || [])].sort((a, b) => {
+      if (b.delta !== a.delta) return b.delta - a.delta;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+    const shown = rows.slice(0, HOME_PITCH_FLASH_TOAST_MAX);
+    const extra = rows.length - shown.length;
+    const body = shown
+      .map((item) => {
+        const up = item.delta > 0;
+        const sign = up ? `+${item.delta}` : String(item.delta);
+        const name = item.name || "Player";
+        const event = item.event || "Points";
+        return `<div class="home-pitch-flash-toast-row"><span class="home-pitch-flash-toast-name">${escapeHtml(name)}</span><span class="home-pitch-flash-toast-event">${escapeHtml(event)}</span><span class="home-pitch-flash-toast-delta ${up ? "is-up" : "is-down"}">${escapeHtml(sign)}</span></div>`;
+      })
+      .join("");
+    const more = extra > 0
+      ? `<div class="home-pitch-flash-toast-more">+${extra} more</div>`
+      : "";
+    return body + more;
+  }
+
+  function hideHomePitchFlashToast({ immediate = false } = {}) {
+    if (homePitchFlashToastTimer) {
+      clearTimeout(homePitchFlashToastTimer);
+      homePitchFlashToastTimer = null;
+    }
+    const node = homePitchFlashToastEl;
+    homePitchFlashToastEl = null;
+    if (!node) return;
+    if (immediate) {
+      node.remove();
+      return;
+    }
+    node.classList.remove("is-open", "is-dragging");
+    node.classList.add("is-leaving");
+    window.setTimeout(() => node.remove(), 260);
+  }
+
+  function bindHomePitchFlashToastSwipe(node) {
+    let startX = 0;
+    let startY = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let dragging = false;
+    const dismiss = () => {
+      homePitchFlashToastDismissed = homePitchFlashToastSig;
+      hideHomePitchFlashToast();
+    };
+    const onDown = (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      dragging = true;
+      startX = lastX = e.clientX;
+      startY = lastY = e.clientY;
+      node.classList.add("is-dragging");
+      node.setPointerCapture?.(e.pointerId);
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      const dx = lastX - startX;
+      const dy = lastY - startY;
+      node.style.setProperty("--flash-toast-x", `${dx}px`);
+      node.style.setProperty("--flash-toast-y", `${Math.max(0, dy)}px`);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      node.classList.remove("is-dragging");
+      const dx = lastX - startX;
+      const dy = lastY - startY;
+      if (Math.hypot(dx, dy) < 8) {
+        dismiss();
+        return;
+      }
+      if (dy > 48 || Math.abs(dx) > 64) {
+        dismiss();
+        return;
+      }
+      node.style.setProperty("--flash-toast-x", "0px");
+      node.style.setProperty("--flash-toast-y", "0px");
+    };
+    node.addEventListener("pointerdown", onDown);
+    node.addEventListener("pointermove", onMove);
+    node.addEventListener("pointerup", onUp);
+    node.addEventListener("pointercancel", onUp);
+  }
+
+  function showHomePitchFlashToast(items) {
+    const list = (items || []).filter((item) => item && item.delta);
+    if (!list.length || !el.homePitchFlashToastRoot) return;
+    const sig = homePitchFlashToastSignature(list);
+    if (sig && sig === homePitchFlashToastDismissed) return;
+    if (sig && sig === homePitchFlashToastSig && homePitchFlashToastEl) {
+      if (homePitchFlashToastTimer) clearTimeout(homePitchFlashToastTimer);
+      homePitchFlashToastTimer = window.setTimeout(() => hideHomePitchFlashToast(), HOME_PITCH_FLASH_TOAST_MS);
+      return;
+    }
+    hideHomePitchFlashToast({ immediate: true });
+    homePitchFlashToastSig = sig;
+    homePitchFlashToastDismissed = "";
+    const ups = list.filter((item) => item.delta > 0).length;
+    const downs = list.filter((item) => item.delta < 0).length;
+    const tone = ups && !downs ? "is-up" : downs && !ups ? "is-down" : "is-mixed";
+    const node = document.createElement("div");
+    node.className = `home-pitch-flash-toast ${tone}`;
+    node.setAttribute("role", "status");
+    node.setAttribute("aria-label", "Point updates. Swipe to dismiss.");
+    node.innerHTML = homePitchFlashToastItemsHTML(list);
+    el.homePitchFlashToastRoot.appendChild(node);
+    homePitchFlashToastEl = node;
+    bindHomePitchFlashToastSwipe(node);
+    const open = () => {
+      if (homePitchFlashToastEl === node) node.classList.add("is-open");
+    };
+    requestAnimationFrame(() => requestAnimationFrame(open));
+    window.setTimeout(open, 40);
+    homePitchFlashToastTimer = window.setTimeout(() => hideHomePitchFlashToast(), HOME_PITCH_FLASH_TOAST_MS);
+  }
+
+  function homePitchFlashPreviewCards() {
+    const xi = el.homeSquadPitchXi
+      ? [...el.homeSquadPitchXi.querySelectorAll(".home-pitch-card")]
+      : [];
+    if (xi.length < 2) return xi;
+    const badged = xi.find((card) =>
+      card.querySelector(".home-role-tag, .home-autosub-tag, .home-unused-tag, .home-pitch-mp-badge")
+    );
+    if (badged && badged !== xi[0]) return [xi[0], badged];
+    return [xi[0], xi[1]];
+  }
+
+  function homePitchFlashRestorePreviewStrips() {
+    if (typeof syncHomePitchCardStrips !== "function") return;
+    const rows =
+      typeof homeSquadForEntry === "function"
+        ? homeSquadForEntry(homeActiveViewEntryId()) || []
+        : [];
+    syncHomePitchCardStrips(rows);
+  }
+
+  function homePitchFlashEnsureStage() {
+    if (state.page !== "home") setPage("home");
+    if (typeof setHomeSquadPage === "function") {
+      setHomeSquadPage(HOME_SQUAD_PITCH_PAGE, { smooth: false });
+    }
+    if (homePitchStripMode !== "gw" && typeof setHomePitchStripMode === "function") {
+      setHomePitchStripMode("gw");
+    }
+  }
+
+  function homePitchFlashPreviewTick(styleOverride) {
+    if (!homePitchFlashPreviewOn()) return;
+    homePitchFlashEnsureStage();
+    const cards = homePitchFlashPreviewCards();
+    if (!cards.length) {
+      if (el.prefsHomePitchFlashHint) {
+        el.prefsHomePitchFlashHint.textContent = "Open Home pitch to preview updates";
+      }
+      return;
+    }
+    const cycleStyle = HOME_PITCH_FLASH_CYCLE.includes(styleOverride)
+      ? styleOverride
+      : HOME_PITCH_FLASH_CYCLE.includes(homePitchFlashStyle())
+        ? homePitchFlashStyle()
+        : "both";
+    homePitchFlashByElement.clear();
+    const upCard = cards[0];
+    const downCard = cards[Math.min(1, cards.length - 1)];
+    homePitchFlashRestorePreviewStrips();
+    const upEid = Number(upCard.getAttribute("data-element"));
+    const downEid = Number(downCard.getAttribute("data-element"));
+    const upName = homePitchFlashCardName(upCard);
+    const downName = homePitchFlashCardName(downCard);
+    homePitchFlashRecord(upEid, 4, cycleStyle, { preview: true, name: upName, event: "Goal" });
+    const batch = [{ eid: upEid, delta: 4, name: upName, event: "Goal" }];
+    if (Number.isFinite(downEid) && downEid !== upEid) {
+      homePitchFlashRecord(downEid, -1, cycleStyle, { preview: true, name: downName, event: "Yellow" });
+      batch.push({ eid: downEid, delta: -1, name: downName, event: "Yellow" });
+    }
+    paintHomePitchFlashes();
+    if (homePitchFlashUsesToast(cycleStyle)) showHomePitchFlashToast(batch);
+    else hideHomePitchFlashToast();
+    if (el.prefsHomePitchFlashHint) {
+      const label = HOME_PITCH_FLASH_STYLE_LABEL[cycleStyle] || cycleStyle;
+      el.prefsHomePitchFlashHint.textContent =
+        downEid !== upEid ? `Testing ${label} · Goal +4 / Yellow −1` : `Testing ${label} · Goal +4`;
+    }
+  }
+
+  function startHomePitchFlashPreview({ jumpTo = "" } = {}) {
+    stopHomePitchFlashPreview({ keepClass: true });
+    document.documentElement.classList.add("home-pitch-flash-preview");
+    const style = HOME_PITCH_FLASH_CYCLE.includes(jumpTo) ? jumpTo : homePitchFlashStyle();
+    if (style === "off") {
+      homePitchFlashByElement.clear();
+      paintHomePitchFlashes();
+      hideHomePitchFlashToast();
+      if (el.prefsHomePitchFlashHint) {
+        el.prefsHomePitchFlashHint.textContent =
+          "Highlight is Off — pick Both, Cards, or Toast";
+      }
+      return;
+    }
+    homePitchFlashEnsureStage();
+    homePitchFlashPreviewKickTimer = setTimeout(() => homePitchFlashPreviewTick(style), 80);
+  }
+
+  function stopHomePitchFlashPreview({ keepClass = false } = {}) {
+    if (homePitchFlashPreviewKickTimer) {
+      clearTimeout(homePitchFlashPreviewKickTimer);
+      homePitchFlashPreviewKickTimer = null;
+    }
+    if (homePitchFlashPreviewTimer) {
+      clearInterval(homePitchFlashPreviewTimer);
+      homePitchFlashPreviewTimer = null;
+    }
+    if (!keepClass) document.documentElement.classList.remove("home-pitch-flash-preview");
+    for (const [eid, rec] of [...homePitchFlashByElement]) {
+      if (rec.preview) homePitchFlashByElement.delete(eid);
+    }
+    paintHomePitchFlashes();
+    if (!keepClass) {
+      hideHomePitchFlashToast();
+      homePitchFlashRestorePreviewStrips();
+    }
+    if (el.prefsHomePitchFlashHint && !keepClass) {
+      el.prefsHomePitchFlashHint.textContent =
+        "Test the selected highlight. Switch Both, Cards, or Toast.";
+    }
+  }
+
   function clearHomeBadgePreviewNodes(root = document) {
     root.querySelectorAll("[data-badge-preview]").forEach((node) => node.remove());
   }
@@ -12660,6 +13238,7 @@
       syncHomePitchNameplates();
       syncHomePitchLineAspect();
     });
+    paintHomePitchFlashes();
   }
 
   function homeSquadRowHTML(row, opts = {}) {
@@ -18451,6 +19030,7 @@
             ? homeSquadLoadingHTML(5)
             : homeSquadEmptyHTML(5));
       }
+      homePitchFlashIngestSquad(rows);
       renderHomeSquadPitch(rows);
       const gws = homeSquadFixtureGwList();
       if (el.homeSquadFixturesCols) {
@@ -22323,6 +22903,10 @@
           spitKeyRow(
             `<span class="spit-pitch-chip is-dc-hit spit-home-swatch" aria-hidden="true">12</span>`,
             "Threshold hit (+2) — DEF 10 CBIT · MID/FWD 12 CBIRT"
+          ),
+          spitKeyRow(
+            `<span class="home-pitch-flash-delta is-up spit-home-swatch" aria-hidden="true">+4</span>`,
+            "Point update chip — replaces C / V / minutes in the corner. Skips kickoff appearance"
           ),
         ])}
         ${spitKeySection("Gameweek", [
@@ -33550,6 +34134,10 @@
     hidePageInfoTooltip();
     closeMobileSheet();
     if (prev !== page) {
+      if (prev === "league" && page !== "league") {
+        gwRecapAutoOpened = false;
+        syncGwRecapCloseBtn();
+      }
       if (prev === "live" && page !== "live") {
         resetLiveMotionState(el.livePage);
       }
@@ -36230,9 +36818,28 @@
 
   applyTheme(currentThemeMode());
   loadHomeBadgePrefs();
+  loadHomePitchFlashPrefs();
   applyHomeBadgePreview();
   if (el.prefsHomeBadgePreview) {
     el.prefsHomeBadgePreview.addEventListener("change", () => applyHomeBadgePrefs({ persist: true }));
+  }
+  if (el.prefsHomePitchFlashPreview) {
+    el.prefsHomePitchFlashPreview.addEventListener("change", () => {
+      applyHomePitchFlashPrefs({ persist: true });
+    });
+  }
+  if (el.homePitchFlashSeg) {
+    el.homePitchFlashSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-home-pitch-flash]");
+      if (!btn || !el.homePitchFlashSeg.contains(btn)) return;
+      el.homePitchFlashSeg.querySelectorAll("[data-home-pitch-flash]").forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      applyHomePitchFlashPrefs({ persist: true, previewTick: true });
+      btn.blur();
+    });
   }
   if (el.homeStatLogPanel) {
     el.homeStatLogPanel.addEventListener("click", (e) => {
