@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" />
-<link rel="stylesheet" href="styles.css?v=1728" />
+<link rel="stylesheet" href="styles.css?v=1735" />
 <link rel="stylesheet" href="motion-enhanced.css?v=16" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -654,6 +654,16 @@
       </div>
     </div>
   </div>
+  <div id="home-view-bar" class="home-view-bar" hidden role="status">
+    <p class="home-view-bar-label">
+      <svg class="icon home-view-bar-eye" aria-hidden="true"><use href="#i-eye"/></svg>
+      <strong class="home-view-bar-name" id="home-view-bar-name"></strong>
+    </p>
+    <button type="button" class="home-view-bar-clear" id="home-view-bar-clear"
+      aria-label="Back to your team" title="Back to your team">
+      <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
 </div>
 
 <div class="topbar" id="subtoolbar">
@@ -1235,6 +1245,52 @@
           </div>
         </article>
 
+        <article class="home-panel home-rank-chart-panel" id="home-rank-chart-panel" hidden>
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker">Overall Rank</span>
+              <span class="home-panel-heading-view" id="home-rank-chart-stage"></span>
+            </span>
+            <span class="home-panel-heading-meta" id="home-rank-chart-meta"></span>
+          </h3>
+          <div class="home-rank-chart-legend" aria-hidden="true">
+            <span class="home-rank-chart-legend-item is-rank"><span class="home-rank-chart-legend-swatch"></span>Rank</span>
+            <span class="home-rank-chart-legend-item is-pts"><span class="home-rank-chart-legend-swatch"></span>GW pts</span>
+          </div>
+          <div class="home-rank-chart" id="home-rank-chart">
+            <div class="home-rank-chart-y is-left" id="home-rank-chart-y-rank" aria-hidden="true"></div>
+            <div class="home-rank-chart-scroller" id="home-rank-chart-scroller">
+              <div class="home-rank-chart-track" id="home-rank-chart-track"></div>
+            </div>
+            <div class="home-rank-chart-y is-right" id="home-rank-chart-y-pts" aria-hidden="true"></div>
+          </div>
+        </article>
+
+        <article class="home-panel home-stat-log-panel" id="home-stat-log-panel" hidden>
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker" id="home-stat-log-kicker">Adjustments</span>
+              <span class="home-panel-heading-view" id="home-stat-log-stage"></span>
+            </span>
+            <span class="home-squad-heading-end">
+              <span class="home-panel-heading-meta" id="home-stat-log-meta" hidden></span>
+              <button type="button" class="home-pitch-mode-btn" id="home-stat-log-mode-btn"
+                aria-haspopup="listbox" aria-expanded="false"
+                aria-controls="home-stat-log-mode-menu" aria-label="Adjustment filter, League">
+                <span class="home-pitch-mode-current">
+                  <span id="home-stat-log-mode-label">League</span>
+                  <svg class="icon page-tab-caret" aria-hidden="true"><use href="#i-chevrons-up-down"/></svg>
+                </span>
+              </button>
+              <div id="home-stat-log-mode-menu" class="home-pitch-mode-menu" hidden role="listbox" aria-label="Adjustment filter">
+                <button type="button" role="option" class="home-pitch-mode-option active" data-stat-log-filter="league" aria-selected="true">League</button>
+                <button type="button" role="option" class="home-pitch-mode-option" data-stat-log-filter="all" aria-selected="false">All</button>
+              </div>
+            </span>
+          </h3>
+          <div class="home-stat-log-body" id="home-stat-log-body"></div>
+        </article>
+
         <article class="home-panel home-gw-progress-panel" id="home-gw-progress-panel" hidden>
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
@@ -1253,23 +1309,6 @@
             </div>
             <p class="home-gw-prog-copy" id="home-gw-prog-copy"></p>
           </div>
-        </article>
-
-        <article class="home-panel home-stat-log-panel" id="home-stat-log-panel" hidden>
-          <h3 class="home-panel-heading">
-            <span class="home-panel-heading-left">
-              <span class="home-panel-heading-kicker" id="home-stat-log-kicker">Adjustments</span>
-              <span class="home-panel-heading-view" id="home-stat-log-stage"></span>
-            </span>
-            <span class="home-panel-heading-meta">
-              <span class="home-stat-log-filters" role="group" aria-label="Adjustment filter">
-                <button type="button" class="home-stat-log-filter is-active" data-stat-log-filter="league" aria-pressed="true">League</button>
-                <button type="button" class="home-stat-log-filter" data-stat-log-filter="all" aria-pressed="false">All</button>
-              </span>
-              <span id="home-stat-log-meta"></span>
-            </span>
-          </h3>
-          <div class="home-stat-log-body" id="home-stat-log-body"></div>
         </article>
 
         <article class="home-panel home-table-panel" id="home-feed-panel">
@@ -2059,7 +2098,7 @@
 <script src="ownership_data.js?v=284"></script>
 <script src="price_changes_data.js?v=342"></script>
 <script src="leagues_data.js?v=6"></script>
-<script src="home_data.js?v=51"></script>
+<script src="home_data.js?v=52"></script>
 <script src="team_news_data.js?v=32"></script>
 <script src="report_data.js?v=2"></script>
 <!-- Stamp hero red/green before app.js so refresh doesn't flash zinc. -->
@@ -2083,7 +2122,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1604"></script>
+<script src="app.js?v=1608"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

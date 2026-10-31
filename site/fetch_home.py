@@ -983,9 +983,47 @@ def slim_history_gws(history_payload: dict | None) -> list[dict]:
             hits = int(hist.get("event_transfers_cost") or 0)
         except (TypeError, ValueError):
             hits = 0
-        rows.append({"gw": gw, "points": points, "hits": max(0, hits), "chip": chips.get(gw)})
+        try:
+            overall_rank = positive_rank(hist.get("overall_rank"))
+        except (TypeError, ValueError):
+            overall_rank = None
+        rows.append({
+            "gw": gw,
+            "points": points,
+            "hits": max(0, hits),
+            "chip": chips.get(gw),
+            "overallRank": overall_rank,
+        })
     rows.sort(key=lambda row: row["gw"])
     return rows
+
+
+def slim_rank_history_rows(history_payload: dict | None) -> list[dict]:
+    """GW pts + overall rank for the Home rank chart (one row per finished GW)."""
+    rows: list[dict] = []
+    for hist in slim_history_gws(history_payload):
+        rank = hist.get("overallRank")
+        if not rank:
+            continue
+        rows.append({
+            "gw": int(hist["gw"]),
+            "points": int(hist.get("points") or 0),
+            "overallRank": int(rank),
+        })
+    return rows
+
+
+def rank_history_by_entry(history_by_entry: dict[int, dict] | None) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {}
+    for eid, hist in (history_by_entry or {}).items():
+        try:
+            key = str(int(eid))
+        except (TypeError, ValueError):
+            continue
+        rows = slim_rank_history_rows(hist)
+        if rows:
+            out[key] = rows
+    return out
 
 
 def fetch_entry_history(entry_id: int) -> dict:
@@ -2729,6 +2767,11 @@ def main() -> int:
             # v2 = official/same-position pairing with elementType on moves.
             "transfersSchemaVersion": 2,
             "transfersByEntry": transfers_by_entry,
+            "rankHistoryByEntry": rank_history_by_entry(history_by_entry) or (
+                cached.get("rankHistoryByEntry")
+                if cached and isinstance(cached.get("rankHistoryByEntry"), dict)
+                else {}
+            ),
             "error": error_msg,
         }
 
