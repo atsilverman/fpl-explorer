@@ -57,6 +57,15 @@
     HOME.rankHistoryByEntry = {};
   }
   window.FPL_HOME = HOME;
+  const HOME_STAT_LOG_BAKED =
+    HOME.statLog && typeof HOME.statLog === "object"
+      ? {
+          gw: HOME.statLog.gw,
+          gen: HOME.statLog.gen,
+          updatedAt: HOME.statLog.updatedAt || null,
+          entries: Array.isArray(HOME.statLog.entries) ? HOME.statLog.entries.slice() : [],
+        }
+      : null;
   const REPORT = window.FPL_REPORT || {
     generatedAt: null,
     sourceGw: null,
@@ -3384,7 +3393,10 @@
       HOME.gwProgress = null;
     }
     if (payload.statLog && typeof payload.statLog === "object") {
-      HOME.statLog = homeStatLogSanitize(payload.statLog);
+      HOME.statLog = homeStatLogPrefer(
+        homeStatLogPrefer(HOME.statLog, HOME_STAT_LOG_BAKED),
+        payload.statLog
+      );
     } else if (gwChanged) {
       HOME.statLog = null;
     }
@@ -11719,7 +11731,56 @@
     if (!Number.isFinite(gen) || gen < HOME_STAT_LOG_GEN) {
       return { gw: log.gw, gen: HOME_STAT_LOG_GEN, updatedAt: null, entries: [] };
     }
-    return log;
+    const entries = Array.isArray(log.entries) ? log.entries.filter((row) => row && typeof row === "object") : [];
+    return { gw: log.gw, gen: log.gen, updatedAt: log.updatedAt || null, entries };
+  }
+
+  function homeStatLogEntryKey(row) {
+    const changes = Array.isArray(row && row.changes) ? row.changes : [];
+    return [
+      row && row.at,
+      row && row.element,
+      row && row.ptsFrom,
+      row && row.ptsTo,
+      changes.map((c) => `${c && c.stat}:${c && c.from}:${c && c.to}`).join(","),
+    ].join("|");
+  }
+
+  function homeStatLogUnion(primary, secondary) {
+    const seen = new Set();
+    const out = [];
+    for (const row of [...(primary || []), ...(secondary || [])]) {
+      if (!row || typeof row !== "object") continue;
+      const key = homeStatLogEntryKey(row);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+    }
+    out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    return out.slice(0, 40);
+  }
+
+  /** Keep a same-GW recap if a live poll / session snapshot arrives empty. */
+  function homeStatLogPrefer(prev, incoming) {
+    const a = homeStatLogSanitize(prev);
+    const b = homeStatLogSanitize(incoming);
+    const gw = Number(HOME && HOME.gw);
+    const aGw = Number(a.gw);
+    const bGw = Number(b.gw);
+    const aN = a.entries.length;
+    const bN = b.entries.length;
+    if (Number.isFinite(gw)) {
+      if (Number.isFinite(aGw) && aGw === gw && Number.isFinite(bGw) && bGw !== gw) return a;
+      if (Number.isFinite(bGw) && bGw === gw && Number.isFinite(aGw) && aGw !== gw) return b;
+    }
+    if (bN === 0) return aN ? a : b;
+    if (aN === 0) return b;
+    return {
+      gw: Number.isFinite(bGw) ? b.gw : a.gw,
+      gen: Math.max(Number(a.gen) || 0, Number(b.gen) || 0),
+      updatedAt: b.updatedAt || a.updatedAt,
+      entries: homeStatLogUnion(b.entries, a.entries),
+    };
   }
 
   function homeStatLogRowStillLive(row) {
@@ -11743,6 +11804,9 @@
   }
 
   function homeStatLogEntries() {
+    if (HOME) {
+      HOME.statLog = homeStatLogPrefer(HOME.statLog, HOME_STAT_LOG_BAKED);
+    }
     const log = homeStatLogSanitize(HOME && HOME.statLog && typeof HOME.statLog === "object" ? HOME.statLog : null);
     const rows = Array.isArray(log.entries) ? log.entries : [];
     return rows.filter((row) => row && typeof row === "object" && !homeStatLogRowStillLive(row));
@@ -13160,10 +13224,9 @@
       const mins = Number(row.minutes) || 0;
       const stats = homePitchFlashSnapStats(row);
       const prev = homePitchPtsPrev.get(eid);
-      if (pts == null) {
-        homePitchPtsPrev.set(eid, { pts: prev ? prev.pts : 0, mins, stats });
-        continue;
-      }
+      // Pending bootstrap (reopen before the first live/session snapshot) has
+      // no readable GW pts — do not seed 0 or the next poll replays the whole score.
+      if (pts == null) continue;
       homePitchPtsPrev.set(eid, { pts, mins, stats });
       if (preview || style === "off" || !prev) continue;
       if (homePitchFlashShouldSkip(row, prev, pts, mins)) continue;
