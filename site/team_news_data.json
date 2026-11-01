@@ -1,6 +1,68 @@
 {
-  "generatedAt": "2026-11-01T18:20:00Z",
+  "generatedAt": "2026-11-01T19:05:34Z",
   "gw": 9,
+  "fixtures": [
+    {
+      "home": "CHE",
+      "away": "MUN",
+      "kickoff": "2026-10-31T12:30:00Z",
+      "id": 84
+    },
+    {
+      "home": "BOU",
+      "away": "LEE",
+      "kickoff": "2026-10-31T15:00:00Z",
+      "id": 82
+    },
+    {
+      "home": "BRE",
+      "away": "NFO",
+      "kickoff": "2026-10-31T15:00:00Z",
+      "id": 83
+    },
+    {
+      "home": "COV",
+      "away": "SUN",
+      "kickoff": "2026-10-31T15:00:00Z",
+      "id": 85
+    },
+    {
+      "home": "HUL",
+      "away": "IPS",
+      "kickoff": "2026-10-31T15:00:00Z",
+      "id": 86
+    },
+    {
+      "home": "MCI",
+      "away": "BHA",
+      "kickoff": "2026-10-31T15:00:00Z",
+      "id": 88
+    },
+    {
+      "home": "TOT",
+      "away": "CRY",
+      "kickoff": "2026-10-31T17:30:00Z",
+      "id": 90
+    },
+    {
+      "home": "AVL",
+      "away": "FUL",
+      "kickoff": "2026-10-31T20:00:00Z",
+      "id": 81
+    },
+    {
+      "home": "LIV",
+      "away": "ARS",
+      "kickoff": "2026-11-01T16:30:00Z",
+      "id": 87
+    },
+    {
+      "home": "NEW",
+      "away": "EVE",
+      "kickoff": "2026-11-02T20:00:00Z",
+      "id": 89
+    }
+  ],
   "teams": [
     {
       "code": "ARS",
