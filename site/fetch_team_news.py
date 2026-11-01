@@ -54,7 +54,7 @@ HINT = re.compile(
     rf"(team\s*news|teamnews|line[\s-]?up|starting\s*xi|\bXI\b|team\s*sheet|"
     rf"here.?s\s+(our|the)\s+team|confirmed\s*(line|xi|team)|matchday\s*(squad|xi)|"
     rf"your\s+.{{0,48}}\b({_CLUB_WORDS})\b|"
-    rf"(our|the)\s+.{{0,48}}\b(xi|side|team|gunners)\b|"
+    rf"(our|the)\s+.{{0,48}}\b(xi|side|team|gunners|tigers|bees|tractor)\b|"
     rf"to\s+(face|take\s+on)\s+@?\w+|starting\s+(at|xi)\b|📋)",
     re.I,
 )
@@ -63,7 +63,7 @@ STRONG = re.compile(
     rf"team\s*news\s*graphic|here.?s\s+(our|the)\s+(starting\s*)?(xi|team)|"
     rf"your\s+.{{0,48}}\bXI\b|"
     rf"your\s+.{{0,48}}\b({_CLUB_WORDS})\b\s+to\s+(face|take\s+on)|"
-    rf"(our|the)\s+.{{0,48}}\b(side|team|xi|gunners)\b|"
+    rf"(our|the)\s+.{{0,48}}\b(side|team|xi|gunners|tigers|bees|tractor)\b|"
     rf"to\s+(face|take\s+on)\s+@?\w+|"
     rf"your\s+.{{0,48}}\b({_CLUB_WORDS})\b.{{0,40}}📋)",
     re.I,
@@ -132,7 +132,7 @@ def x_search(
 ) -> dict:
     params: dict[str, str] = {
         "query": query,
-        "max_results": str(max(10, min(100, max_results))),
+        "max_results": str(max(SEARCH_MAX_RESULTS, min(100, max_results))),
         "tweet.fields": "created_at,attachments,entities,text",
         "expansions": "attachments.media_keys",
         "media.fields": "url,preview_image_url,alt_text,width,height,type",
@@ -449,6 +449,13 @@ def ocr_lineup_score(image_url: str) -> float:
     return float(ocr_lineup_stats(image_url).get("score") or 0.0)
 
 
+def collect_search_media(payload: dict, media_by_key: dict[str, dict]) -> list[dict]:
+    for media in (payload.get("includes") or {}).get("media") or []:
+        if media.get("media_key"):
+            media_by_key[media["media_key"]] = media
+    return list(payload.get("data") or [])
+
+
 def merge_tweets(*groups: list[dict]) -> list[dict]:
     out: list[dict] = []
     seen: set[str] = set()
@@ -616,6 +623,44 @@ def save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
+def fixtures_payload(club_fixtures: dict | None, teams: list[dict] | None = None) -> list[dict]:
+    """Unique GW fixtures for the Lineups page (pending cards + chips)."""
+    seen: dict[tuple, dict] = {}
+    for fx in (club_fixtures or {}).values():
+        home, away, ko = fx.get("home"), fx.get("away"), fx.get("ko")
+        if not home or not away:
+            continue
+        key = (home, away, ko)
+        if key in seen:
+            continue
+        seen[key] = {
+            "home": home,
+            "away": away,
+            "kickoff": ko,
+            "id": fx.get("fixtureId"),
+        }
+    if not seen:
+        for row in teams or []:
+            home = row.get("ha") == "A" and row.get("opp") or row.get("code")
+            away = row.get("ha") == "A" and row.get("code") or row.get("opp")
+            match = str(row.get("match") or "")
+            m = re.match(r"^([A-Za-z]{2,3})\s+v\s+([A-Za-z]{2,3})$", match)
+            if m:
+                home, away = m.group(1), m.group(2)
+            if not home or not away:
+                continue
+            key = (home, away, row.get("kickoff"))
+            if key in seen:
+                continue
+            seen[key] = {
+                "home": home,
+                "away": away,
+                "kickoff": row.get("kickoff"),
+                "id": None,
+            }
+    return sorted(seen.values(), key=lambda f: (f.get("kickoff") or "", f.get("home") or ""))
+
+
 def write_bundle(
     gw: int,
     teams: list[dict],
@@ -623,6 +668,7 @@ def write_bundle(
     bootstrap: dict | None = None,
     *,
     force_annotate: bool = False,
+    fixtures: list[dict] | None = None,
 ) -> list[dict]:
     # Most recent left-most for the UI swipe track
     annotated = (
@@ -634,6 +680,7 @@ def write_bundle(
     payload = {
         "generatedAt": generated,
         "gw": gw,
+        "fixtures": fixtures if fixtures is not None else fixtures_payload(None, ordered),
         "teams": ordered,
     }
     OUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -646,27 +693,51 @@ def write_bundle(
     return annotated
 
 
-ACTIVE_BEFORE_KO = timedelta(minutes=120)
-# Searches stay capped at KO+30; the long tail only lets a late run catch up.
-ACTIVE_AFTER_KO = timedelta(minutes=120)
-# XI graphics land ~KO-75, so poll densely just after that, then sparse catch-ups.
-POLL_OFFSETS_MIN = (-90, -70, -64, -58, -50, -40, -25, -5, 30, 110)
-# A stored graphic at/above this score stops further polling for that club.
-DONE_MIN_SCORE = 120.0
+ACTIVE_BEFORE_KO = timedelta(minutes=110)
+ACTIVE_AFTER_KO = timedelta(minutes=90)
+SEARCH_BEFORE_KO = timedelta(minutes=110)
+# Missed clubs get a few after-KO retries, not a 15-min loop for 36h.
+CATCHUP_AFTER_KO = timedelta(hours=8)
+# XI lands ~KO-75. Three looks in that slot + two sparse catch-ups.
+POLL_OFFSETS_MIN = (-82, -70, -58, 25, 100)
 NEXT_POLL_HORIZON = timedelta(hours=6)
+# Recent-search floor is 10 posts; keep every query at the floor.
+SEARCH_MAX_RESULTS = 10
+XI_QUERY = (
+    '("team news" OR TEAMNEWS OR lineup OR "line-up" OR "starting XI" OR "team sheet")'
+)
 
 
 def club_is_done(state: dict, gw: int, code: str) -> bool:
+    """Stop spending once we have a named XI sheet — caption strength does not matter."""
     if state.get("gw") != gw:
         return False
     row = (state.get("teams") or {}).get(code) or {}
-    if row.get("evidence") in ("weak", "ocr"):
+    if not row.get("localPath"):
         return False
-    # Stadium teasers can score on timing alone — require a named XI sheet.
     named_n = int(row.get("namedCount") or 0)
-    if not (row.get("namedReady") or named_n >= 8):
+    return bool(row.get("namedReady") or named_n >= 8)
+
+
+def club_should_scan(
+    state: dict,
+    gw: int,
+    code: str,
+    ko: datetime | None,
+    now: datetime,
+    *,
+    active_only: bool,
+) -> bool:
+    """Scan when the XI window is open, or catch up a miss after KO."""
+    if not ko or club_is_done(state, gw, code):
         return False
-    return bool(row.get("localPath")) and float(row.get("score") or 0) >= DONE_MIN_SCORE
+    if now < ko - SEARCH_BEFORE_KO:
+        return False
+    if not active_only:
+        return True
+    if now > ko + CATCHUP_AFTER_KO:
+        return False
+    return True
 
 
 def next_poll_seconds(club_fixtures: dict, state: dict, gw: int) -> int | None:
@@ -682,6 +753,11 @@ def next_poll_seconds(club_fixtures: dict, state: dict, gw: int) -> int | None:
             if at <= now + timedelta(seconds=30) or at > now + NEXT_POLL_HORIZON:
                 continue
             if best is None or at < best:
+                best = at
+        last_off = max(POLL_OFFSETS_MIN)
+        if now > ko + timedelta(minutes=last_off) and now <= ko + CATCHUP_AFTER_KO:
+            at = now + timedelta(minutes=45)
+            if at <= now + NEXT_POLL_HORIZON and (best is None or at < best):
                 best = at
     if best is None:
         return None
@@ -822,6 +898,7 @@ def main() -> int:
                 "ha": "H" if side == "team_h" else "A",
             }
 
+    fixtures_list = fixtures_payload(club_fixtures)
     state = load_state()
     if next_poll:
         secs = next_poll_seconds(club_fixtures, state, gw)
@@ -842,6 +919,7 @@ def main() -> int:
     now = generated_at()
     updated = 0
     errors = 0
+    x_search_blocked = False
 
     if ingest_specs:
         for code, tweet_id in ingest_specs:
@@ -870,7 +948,7 @@ def main() -> int:
                 print(f"  · {code}: ingest download failed: {e}")
                 errors += 1
         teams = [t for t in (state.get("teams") or {}).values() if t.get("code") in club_fixtures]
-        annotated = write_bundle(gw, teams, now, bootstrap)
+        annotated = write_bundle(gw, teams, now, bootstrap, fixtures=fixtures_list)
         state["gw"] = gw
         state["teams"] = {t["code"]: t for t in annotated if t.get("code")}
         state["generatedAt"] = now
@@ -887,22 +965,20 @@ def main() -> int:
         ko = parse_iso(fxinfo["ko"])
         if not ko:
             continue
-        if active_only:
-            now_check = datetime.now(timezone.utc)
-            if not (ko - ACTIVE_BEFORE_KO <= now_check <= ko + ACTIVE_AFTER_KO):
-                continue
+        now_check = datetime.now(timezone.utc)
+        if not club_should_scan(state, gw, code, ko, now_check, active_only=active_only):
             if club_is_done(state, gw, code):
                 print(f"  ✓ {code} @{handle}: already have graphic — skip")
-                continue
-        # Anchor on FPL KO (~75 min pre-KO). Some clubs' XI posts are NOT
-        # indexed under has:media (ARS/MUN), so also search by XI keywords
-        # in the same window without the media operator.
+            elif not active_only and now_check < ko - SEARCH_BEFORE_KO:
+                print(f"  · {code} @{handle}: too early (KO {fxinfo['ko']})")
+            continue
+        # Tight XI-wording search first (cheap). Photo sweep only if that misses.
         now_dt = datetime.now(timezone.utc)
         end_cap = now_dt - timedelta(seconds=15)
-        start_dt = ko - timedelta(minutes=150)
-        end_dt = min(ko + timedelta(minutes=30), end_cap)
+        start_dt = ko - SEARCH_BEFORE_KO
+        end_dt = min(ko + timedelta(minutes=20), end_cap)
         if start_dt >= end_dt:
-            if ko > now_dt + timedelta(minutes=150):
+            if ko > now_dt + SEARCH_BEFORE_KO:
                 print(f"  · {code} @{handle}: too early (KO {fxinfo['ko']})")
                 continue
             end_dt = end_cap
@@ -912,44 +988,46 @@ def main() -> int:
         end_s = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         tweets: list[dict] = []
         media_by_key: dict[str, dict] = {}
+        queries_used = 0
+        if x_search_blocked:
+            print(f"  · {code} @{handle}: X search skipped (credits depleted)")
+            prev = (state.get("teams") or {}).get(code)
+            print(f"  · {code} @{handle}: no graphic ({'kept' if prev else 'miss'})")
+            continue
+
+        def run_search(query: str) -> None:
+            nonlocal tweets, queries_used
+            payload = x_search(
+                query,
+                bearer,
+                max_results=SEARCH_MAX_RESULTS,
+                start_time=start_s,
+                end_time=end_s,
+            )
+            queries_used += 1
+            tweets = merge_tweets(tweets, collect_search_media(payload, media_by_key))
+            time.sleep(0.2)
+
+        best = None
         try:
-            media_payload = x_search(
-                f"from:{handle} has:media -is:retweet",
-                bearer,
-                max_results=15,
-                start_time=start_s,
-                end_time=end_s,
-            )
-            time.sleep(0.3)
-            # Keyword pass catches XI posts X does not tag as has:media
-            kw_payload = x_search(
-                (
-                    f'from:{handle} ("team news" OR TEAMNEWS OR lineup OR "line-up" OR '
-                    f'"starting XI" OR "to face" OR "to take on" OR "Your" OR Gunners OR '
-                    f'Tigers) -is:retweet'
-                ),
-                bearer,
-                max_results=15,
-                start_time=start_s,
-                end_time=end_s,
-            )
-            time.sleep(0.3)
-            tweets = merge_tweets(media_payload.get("data"), kw_payload.get("data"))
-            for m in (media_payload.get("includes") or {}).get("media") or []:
-                if m.get("media_key"):
-                    media_by_key[m["media_key"]] = m
-            for m in (kw_payload.get("includes") or {}).get("media") or []:
-                if m.get("media_key"):
-                    media_by_key[m["media_key"]] = m
+            run_search(f"from:{handle} {XI_QUERY} -is:retweet")
+            best = pick_best(tweets, media_by_key, ko)
+            if not best:
+                run_search(f"from:{handle} has:media -is:retweet")
+                best = pick_best(tweets, media_by_key, ko)
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "replace")[:200]
             print(f"  · {code} @{handle}: HTTP {e.code} {body}")
             errors += 1
+            if e.code == 402 or "credits-depleted" in body:
+                x_search_blocked = True
+                print("  · X recent-search credits depleted — skipping remaining clubs this run.")
         except Exception as e:
             print(f"  · {code} @{handle}: {type(e).__name__}: {e}")
             errors += 1
 
-        best = pick_best(tweets, media_by_key, ko)
+        if best:
+            print(f"  · {code} @{handle}: {queries_used} search(es), {len(tweets)} posts")
         if not best:
             prev = (state.get("teams") or {}).get(code)
             mark = "kept" if prev else "miss"
@@ -976,13 +1054,10 @@ def main() -> int:
     # Only keep clubs still in this GW fixture list
     teams = [t for t in teams if t.get("code") in club_fixtures]
     if gw_changed and not teams:
-        prev_gw = previous_state.get("gw")
-        print(
-            f"\nGW{gw}: no graphics yet — keeping GW{prev_gw} bundle "
-            f"(X search missed or rate-limited)."
-        )
+        write_bundle(gw, [], now, bootstrap, fixtures=fixtures_list)
+        print(f"\nGW{gw}: no graphics yet — wrote {len(fixtures_list)} fixture placeholders.")
         return 0 if errors == 0 else 1
-    annotated = write_bundle(gw, teams, now, bootstrap)
+    annotated = write_bundle(gw, teams, now, bootstrap, fixtures=fixtures_list)
     state["gw"] = gw
     state["teams"] = {t["code"]: t for t in annotated if t.get("code")}
     state["generatedAt"] = now

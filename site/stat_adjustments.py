@@ -1,4 +1,4 @@
-"""Rolling FPL live-stat diffs after full-time (BPS / DefCon / scoring tweaks).
+"""Rolling FPL live-stat diffs after stoppage (BPS / DefCon / scoring tweaks).
 
 Polls piggyback `fetch_home.py`'s existing `/event/{gw}/live/` fetch. First
 sighting of a completed-match player is the baseline (not a log event); later
@@ -11,23 +11,27 @@ import json
 from pathlib import Path
 
 from gw_element_stats import DEFCON_THRESHOLD_BY_TYPE, defcon_hit, normalize_element_gw_record
-from live_scoring import fixture_is_full_time, fixture_is_live, fixtures_for_element
+from live_scoring import fixture_is_adjustment_ready, fixture_is_live, fixtures_for_element
 
 SITE = Path(__file__).resolve().parent
 CACHE_PATH = SITE / "stat_adjustments_cache.json"
-CACHE_GEN = 3
+CACHE_GEN = 5
 LOG_CAP = 150
-PUBLIC_CAP = 40
+PUBLIC_CAP = 80
+IMPACT_STATS = frozenset(
+    ("pts", "goals", "assists", "bonus", "cs", "saves", "gc", "yc", "rc", "og", "pm", "ps")
+)
 
 POS_LABEL = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
 # Slim snapshot fields we diff. `defCon` is the position-relevant action count.
+# BPS is stored on the player snapshot but not logged unless bonus actually
+# moves — raw BPS ticks drown the recap.
 DIFF_FIELDS = (
     ("pts", "Pts"),
     ("goals", "Goals"),
     ("assists", "Assists"),
     ("bonus", "Bonus"),
-    ("bps", "BPS"),
     ("defCon", "DefCon"),
     ("cs", "CS"),
     ("saves", "Saves"),
@@ -49,19 +53,20 @@ def _inum(v) -> int:
 
 
 def _player_watchable(element: dict, fixtures: list[dict]) -> bool:
-    """True once FPL has marked this player's started fixtures full-time.
+    """True once this player's started fixtures are past stoppage.
 
-    Uses official ``finished`` / ``finished_provisional`` only — not minutes ≥ 90.
+    ``finished_provisional`` can flip at 90' while added time is still running,
+    so we wait for official ``finished`` or kickoff + 130 minutes.
     """
     fxs = fixtures_for_element(element, fixtures)
     started = [
         fx
         for fx in fxs
-        if fixture_is_full_time(fx) or fixture_is_live(fx) or fx.get("started")
+        if fixture_is_adjustment_ready(fx) or fixture_is_live(fx) or fx.get("started")
     ]
     if not started:
         return False
-    return all(fixture_is_full_time(fx) for fx in started)
+    return all(fixture_is_adjustment_ready(fx) for fx in started)
 
 
 def _defcon_actions(etype: int, cbit: int, cbitr: int) -> int:
@@ -155,7 +160,7 @@ def diff_player(prev: dict, curr: dict) -> list[dict]:
         if flag:
             row["threshold"] = flag
         changes.append(row)
-    return changes
+    return prune_bps_changes(changes)
 
 
 def load_cache(path: Path | None = None) -> dict:
@@ -176,13 +181,100 @@ def save_cache(cache: dict, path: Path | None = None) -> None:
     tmp.replace(target)
 
 
+def prune_bps_changes(changes: list) -> list:
+    """Drop raw BPS ticks. Bonus gain / loss is the row that matters."""
+    return [
+        change
+        for change in changes
+        if isinstance(change, dict) and change.get("stat") != "bps"
+    ]
+
+
+def prune_entry_bps(entry: dict) -> dict | None:
+    if not isinstance(entry, dict):
+        return None
+    changes = prune_bps_changes(entry.get("changes") or [])
+    if not changes:
+        return None
+    if changes == (entry.get("changes") or []):
+        return entry
+    out = dict(entry)
+    out["changes"] = changes
+    return out
+
+
+def entry_is_impact(entry: dict) -> bool:
+    """True when the row moved FPL points or crossed a scoring / threshold rule."""
+    if not isinstance(entry, dict):
+        return False
+    if _inum(entry.get("ptsFrom")) != _inum(entry.get("ptsTo")):
+        return True
+    for change in entry.get("changes") or []:
+        if not isinstance(change, dict):
+            continue
+        if change.get("threshold") in ("hit", "lost"):
+            return True
+        if change.get("stat") in IMPACT_STATS:
+            return True
+    return False
+
+
+def entry_identity(entry: dict) -> tuple:
+    changes = prune_bps_changes(entry.get("changes") or [])
+    fp = tuple(
+        sorted(
+            (
+                change.get("stat"),
+                change.get("from"),
+                change.get("to"),
+                change.get("threshold"),
+            )
+            for change in changes
+            if isinstance(change, dict)
+        )
+    )
+    return (entry.get("element"), entry.get("ptsFrom"), entry.get("ptsTo"), fp)
+
+
+def dedupe_log(log: list) -> list:
+    """Collapse restated player events from separate caches / timestamps."""
+    seen: dict[tuple, dict] = {}
+    out: list[dict] = []
+    for item in log:
+        row = prune_entry_bps(item) if isinstance(item, dict) else None
+        if not row:
+            continue
+        key = entry_identity(row)
+        prev = seen.get(key)
+        if prev is None:
+            seen[key] = row
+            out.append(row)
+            continue
+        prev_at = str(prev.get("at") or "")
+        row_at = str(row.get("at") or "")
+        if row_at and (not prev_at or row_at < prev_at):
+            out[out.index(prev)] = row
+            seen[key] = row
+    return out
+
+
+def cap_log(log: list, cap: int) -> list:
+    """Keep every points-impact row; fill the rest with newest DefCon ticks."""
+    rows = dedupe_log(log)
+    impact = [row for row in rows if entry_is_impact(row)]
+    noise = [row for row in rows if not entry_is_impact(row)]
+    if len(impact) >= cap:
+        return impact[:cap]
+    return impact + noise[: cap - len(impact)]
+
+
 def public_stat_log(cache: dict) -> dict:
     log = cache.get("log") if isinstance(cache.get("log"), list) else []
     return {
         "gw": cache.get("gw"),
         "gen": _inum(cache.get("gen")) or CACHE_GEN,
         "updatedAt": cache.get("updatedAt"),
-        "entries": log[:PUBLIC_CAP],
+        "entries": cap_log(log, PUBLIC_CAP),
     }
 
 
@@ -279,7 +371,7 @@ def update_stat_log(
     if new_events:
         log = new_events[::-1] + log
         if len(log) > LOG_CAP:
-            log = log[:LOG_CAP]
+            log = cap_log(log, LOG_CAP)
 
     cache = {
         "gw": int(gw),

@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Libre+Franklin:wght@400;500;600;700&family=Roboto:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" />
-<link rel="stylesheet" href="styles.css?v=1763" />
+<link rel="stylesheet" href="styles.css?v=1788" />
 <link rel="stylesheet" href="motion-enhanced.css?v=17" />
 <link rel="stylesheet" href="odometer-sfi.css?v=3" />
 <script>
@@ -1166,8 +1166,9 @@
                         <th scope="col" class="home-col-left" title="Still to play this gameweek (captain counts double)">
                           <span class="home-left-head-short">Left</span>
                           <span class="home-left-head-long">Left to play</span>
+                          <span class="home-left-head-abbr">LET</span>
                         </th>
-                        <th scope="col" class="home-col-play" title="Active picks in play / still to play this gameweek (captain counts double in Left)"><span class="home-play-head"><span class="home-play-head-live">Live</span><span class="home-play-head-sep" aria-hidden="true">/</span><span class="home-play-head-left"><span class="home-left-head-short">Left</span><span class="home-left-head-long">Left to play</span></span></span></th>
+                        <th scope="col" class="home-col-play" title="Active picks in play / still to play this gameweek (captain counts double in Left)"><span class="home-play-head"><span class="home-play-head-live">Live</span><span class="home-play-head-sep" aria-hidden="true">/</span><span class="home-play-head-left"><span class="home-left-head-short">Left</span><span class="home-left-head-long">Left to play</span><span class="home-left-head-abbr">LET</span></span></span></th>
                         <th scope="col" class="home-col-gw">GW</th>
                         <th scope="col" class="home-col-total">Total</th>
                       </tr>
@@ -1270,6 +1271,40 @@
           </div>
         </article>
 
+        <article class="home-panel home-table-panel" id="home-feed-panel">
+          <h3 class="home-panel-heading">
+            <span class="home-panel-heading-left">
+              <span class="home-panel-heading-kicker">Feed</span>
+              <span class="home-panel-heading-view" id="home-feed-view-label">League</span>
+            </span>
+            <span class="home-panel-heading-meta" id="home-feed-count-label"></span>
+          </h3>
+          <div class="home-feed-pager">
+            <div class="home-feed-track" id="home-feed-track">
+              <div class="home-feed-page">
+                <div class="home-feed-scroll home-table-wrap">
+                  <table class="home-data-table home-feed-table live-feed-table">
+                    <thead id="home-feed-head"></thead>
+                    <tbody id="home-feed-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="home-feed-page">
+                <div class="home-feed-scroll home-table-wrap">
+                  <table class="home-data-table home-feed-table live-feed-table">
+                    <thead id="home-feed-all-head"></thead>
+                    <tbody id="home-feed-all-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="home-feed-dots" id="home-feed-dots" role="tablist" aria-label="Feed views">
+              <button type="button" class="home-feed-dot is-active" role="tab" aria-selected="true" aria-label="League" data-page="0"></button>
+              <button type="button" class="home-feed-dot" role="tab" aria-selected="false" aria-label="All players" data-page="1"></button>
+            </div>
+          </div>
+        </article>
+
         <article class="home-panel home-rank-chart-panel" id="home-rank-chart-panel" hidden>
           <h3 class="home-panel-heading">
             <span class="home-panel-heading-left">
@@ -1336,6 +1371,10 @@
             </span>
             <span class="home-squad-heading-end">
               <span class="home-panel-heading-meta" id="home-stat-log-meta" hidden></span>
+              <button type="button" class="home-pitch-mode-btn home-stat-log-points-btn" id="home-stat-log-points-btn"
+                aria-pressed="false" aria-label="Points impact only, off">
+                Points
+              </button>
               <button type="button" class="home-pitch-mode-btn" id="home-stat-log-mode-btn"
                 aria-haspopup="listbox" aria-expanded="false"
                 aria-controls="home-stat-log-mode-menu" aria-label="Adjustment filter, Owned">
@@ -1351,7 +1390,10 @@
               </div>
             </span>
           </h3>
-          <div class="home-stat-log-body" id="home-stat-log-body"></div>
+          <div class="home-stat-log-scroll" id="home-stat-log-scroll">
+            <div class="home-stat-log-body" id="home-stat-log-body"></div>
+          </div>
+          <div class="home-stat-log-fade" id="home-stat-log-fade" aria-hidden="true"></div>
         </article>
 
         <article class="home-panel home-gw-progress-panel" id="home-gw-progress-panel" hidden>
@@ -1373,40 +1415,6 @@
             <p class="home-gw-prog-copy" id="home-gw-prog-copy"></p>
           </div>
         </article>
-
-        <article class="home-panel home-table-panel" id="home-feed-panel">
-          <h3 class="home-panel-heading">
-            <span class="home-panel-heading-left">
-              <span class="home-panel-heading-kicker">Feed</span>
-              <span class="home-panel-heading-view" id="home-feed-view-label">League</span>
-            </span>
-            <span class="home-panel-heading-meta" id="home-feed-count-label"></span>
-          </h3>
-          <div class="home-feed-pager">
-            <div class="home-feed-track" id="home-feed-track">
-              <div class="home-feed-page">
-                <div class="home-feed-scroll home-table-wrap">
-                  <table class="home-data-table home-feed-table live-feed-table">
-                    <thead id="home-feed-head"></thead>
-                    <tbody id="home-feed-body"></tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="home-feed-page">
-                <div class="home-feed-scroll home-table-wrap">
-                  <table class="home-data-table home-feed-table live-feed-table">
-                    <thead id="home-feed-all-head"></thead>
-                    <tbody id="home-feed-all-body"></tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <div class="home-feed-dots" id="home-feed-dots" role="tablist" aria-label="Feed views">
-              <button type="button" class="home-feed-dot is-active" role="tab" aria-selected="true" aria-label="League" data-page="0"></button>
-              <button type="button" class="home-feed-dot" role="tab" aria-selected="false" aria-label="All players" data-page="1"></button>
-            </div>
-          </div>
-        </article>
         </div>
       </div>
       <p id="home-updated-footer" class="home-updated-footer" hidden></p>
@@ -1417,7 +1425,7 @@
         <div class="opta-header-top">
           <div class="opta-header-text">
             <h2><svg class="icon page-title-icon" aria-hidden="true"><use href="#i-images"/></svg>Lineups<button type="button" class="page-live-badge" hidden aria-hidden="true" aria-label="Open Gameweek live"><span class="page-live-badge-dot" aria-hidden="true"><span class="page-live-badge-dot-ping"></span></span>Live</button><button class="page-info-btn" type="button" aria-label="How Lineups works" aria-controls="page-info-tooltip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button></h2>
-            <p class="page-subtitle">Official club team-news lineups for the current gameweek, polled from X around kickoff (~75 minutes before).</p>
+            <p class="page-subtitle">Official club team-news lineups for every current-GW fixture, polled from X around kickoff (~75 minutes before) and caught up after.</p>
           </div>
           <div class="page-header-meta">
             <span class="count-label" id="graphics-count-label"></span>
@@ -1427,7 +1435,7 @@
       <div class="graphics-chips chip-row" id="graphics-chips" role="group" aria-label="Matchups"></div>
       <div class="graphics-body" id="graphics-body">
         <div class="graphics-track" id="graphics-track"></div>
-        <p class="graphics-empty" id="graphics-empty" hidden>No team-news lineups for this gameweek yet.</p>
+        <p class="graphics-empty" id="graphics-empty" hidden>No current-gameweek fixtures to show yet.</p>
       </div>
       <p class="page-updated-text page-data-footer" id="graphics-updated-footer" hidden></p>
     </div>
@@ -2185,7 +2193,7 @@
 </script>
 <!-- Optional: direct live origin if not using Vercel /api/home proxy (needs HTTPS) -->
 <script>window.FPL_LIVE_API = "";</script>
-<script src="app.js?v=1633"></script>
+<script src="app.js?v=1652"></script>
 <!-- Vercel Web Analytics (static HTML — no @vercel/analytics npm package needed) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

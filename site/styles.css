@@ -14749,7 +14749,17 @@ html.mobile-sheet-active body {
 .home-manager-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: hsl(var(--foreground) / 0.34);
+  background: hsl(240 10% 3% / 0.52);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+html[data-theme="light"] .home-manager-modal-backdrop {
+  background: hsl(220 25% 12% / 0.3);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-manager-modal-backdrop {
+    background: hsl(220 25% 12% / 0.3);
+  }
 }
 .home-manager-modal-panel {
   position: relative;
@@ -14840,7 +14850,18 @@ html.mobile-sheet-active body {
 .home-player-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: hsl(var(--foreground) / 0.34);
+  /* Dim with page background, not --foreground (near-white in dark). */
+  background: hsl(240 10% 3% / 0.52);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+html[data-theme="light"] .home-player-modal-backdrop {
+  background: hsl(220 25% 12% / 0.3);
+}
+@media (prefers-color-scheme: light) {
+  html:not([data-theme="dark"]) .home-player-modal-backdrop {
+    background: hsl(220 25% 12% / 0.3);
+  }
 }
 .home-player-modal-panel {
   position: relative;
@@ -14855,20 +14876,6 @@ html.mobile-sheet-active body {
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-}
-/* Dark scrim (not foreground-tinted) so dark mode dims instead of washing out. */
-.home-player-modal.is-compact-overlay .home-player-modal-backdrop {
-  background: hsl(240 10% 3% / 0.52);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-}
-html[data-theme="light"] .home-player-modal.is-compact-overlay .home-player-modal-backdrop {
-  background: hsl(220 25% 12% / 0.3);
-}
-@media (prefers-color-scheme: light) {
-  html:not([data-theme="dark"]) .home-player-modal.is-compact-overlay .home-player-modal-backdrop {
-    background: hsl(220 25% 12% / 0.3);
-  }
 }
 .home-player-modal.is-compact-overlay .home-player-modal-panel {
   position: relative;
@@ -15336,25 +15343,11 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
 .home-gw-pts-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
-}
-.home-gw-pts-pin-btn {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  color: var(--text-dim);
-}
-.home-gw-pts-pin-btn:hover {
-  color: hsl(var(--blue-hsl));
-}
-.home-gw-pts-pin-btn .icon {
-  width: 15px;
-  height: 15px;
 }
 .home-gw-pts-details-btn {
   flex: 1 1 auto;
-  width: auto;
+  width: 100%;
   min-width: 0;
   height: 40px;
   justify-content: space-between;
@@ -15379,11 +15372,6 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
 }
 .home-gw-pts-details-btn:hover .icon {
   transform: translateX(2px);
-}
-.home-gw-pts-pin-btn {
-  border-radius: 12px;
-  height: 40px;
-  width: 40px;
 }
 /* Underlying match metrics — visually split from FPL scoring rows above. */
 .home-gw-match {
@@ -15575,7 +15563,7 @@ html:not([data-theme="light"]) .home-autosub-bd-role {
     height: auto;
     max-height: 100%;
     min-height: 0;
-    aspect-ratio: 320 / 132;
+    aspect-ratio: 320 / 176;
   }
   .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-form-head,
   .home-player-modal-body > .home-player-detail .home-player-detail-ownership .home-own-trend-row,
@@ -16059,8 +16047,15 @@ html[data-theme="dark"] .home-player-flag-banner-chance.is-chance-75 {
 }
 .home-own-chart {
   position: relative;
-  min-height: 132px;
+  min-height: 176px;
   margin: 0 0 2px;
+}
+@media (max-width: 720px) {
+  .home-player-detail-ownership .home-own-chart,
+  .home-player-detail-price .home-own-chart,
+  .mobile-sheet-body .home-own-chart {
+    min-height: 196px;
+  }
 }
 .home-own-chart.is-swap-out {
   opacity: 0;
@@ -17311,23 +17306,31 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
   .home-dashboard:not(.is-player-lookup) #home-standings-panel {
     grid-column: span 2;
   }
-  .home-dashboard:not(.is-player-lookup) #home-gw-progress-panel,
-  .home-dashboard:not(.is-player-lookup) #home-stat-log-panel,
   .home-dashboard:not(.is-player-lookup) #home-rank-chart-panel {
-    grid-column: 3 / span 2;
+    grid-column: 1 / 3;
   }
-  .home-dashboard:not(.is-player-lookup) #home-rank-chart-panel {
-    grid-column: 1 / -1;
+  .home-dashboard:not(.is-player-lookup) #home-stat-log-panel {
+    grid-column: 3 / 5;
+    grid-row: span 2;
+    align-self: stretch;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .home-dashboard:not(.is-player-lookup) #home-stat-log-panel > .home-panel-heading {
+    position: relative;
+    z-index: 3;
+    margin-bottom: 0;
+    padding-bottom: 10px;
+    background: var(--home-glass-bg-strong, hsl(var(--card)));
+  }
+  .home-dashboard:not(.is-player-lookup) #home-gw-progress-panel {
+    grid-column: 1 / 3;
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
   }
   html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-standings-panel {
     grid-column: span 1;
-  }
-  html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-gw-progress-panel,
-  html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-stat-log-panel {
-    grid-column: 3 / span 1;
-  }
-  html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-rank-chart-panel {
-    grid-column: 1 / -1;
   }
   html.home-squad-wide .home-dashboard:not(.is-player-lookup) #home-feed-panel {
     grid-column: span 1;
@@ -19619,7 +19622,7 @@ html[data-theme="dark"] .home-dashboard {
 .home-pitch-mode-menu.is-open {
   display: flex;
   position: fixed;
-  z-index: 80;
+  z-index: 240;
 }
 .home-pitch-mode-menu[hidden]:not(.mobile-sheet-hosted) {
   display: none !important;
@@ -20135,6 +20138,24 @@ html[data-page="league"] #league-page {
   outline: 2px solid hsl(var(--primary) / 0.55);
   outline-offset: 2px;
 }
+.graphics-matchup-chip.is-pending,
+.graphics-matchup-chip.is-pending:hover,
+.graphics-matchup-chip.is-pending:disabled {
+  opacity: 0.46;
+  color: var(--text-faint);
+  background: hsl(var(--muted) / 0.18);
+  border-color: hsl(var(--border) / 0.65);
+  box-shadow: none;
+  cursor: default;
+  pointer-events: none;
+}
+.graphics-matchup-chip.is-pending .graphics-matchup-badge {
+  filter: grayscale(0.4);
+}
+.graphics-matchup-chip:not(.is-pending) .graphics-matchup-side.is-missing {
+  opacity: 0.4;
+  filter: grayscale(0.3);
+}
 @media (min-width: 721px) {
   .graphics-chips {
     grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
@@ -20195,6 +20216,32 @@ html[data-page="league"] #league-page {
   color: hsl(var(--muted-foreground));
   font-size: 0.92rem;
 }
+.graphics-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  padding: 22px 18px;
+  border-radius: 12px;
+  background: hsl(var(--muted) / 0.32);
+  border: 1px dashed hsl(var(--border) / 0.9);
+  box-sizing: border-box;
+}
+.graphics-pending p {
+  margin: 0;
+  max-width: 22rem;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+@media (min-width: 901px) {
+  .graphics-pending {
+    max-width: min(100%, 640px);
+    margin-inline: auto;
+    min-height: 16rem;
+  }
+}
 @media (min-width: 901px) {
   .graphics-img {
     max-width: min(100%, 640px);
@@ -20244,7 +20291,8 @@ html:not(.is-mobile-layout) #home-squad-panel .home-squad-page-pitch,
 html:not(.is-mobile-layout) #home-standings-panel .home-table-wrap,
 html:not(.is-mobile-layout) .home-transfers-table-wrap,
 html:not(.is-mobile-layout) .home-captains-table-wrap,
-html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll {
+html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll,
+html:not(.is-mobile-layout) .home-stat-log-scroll {
   scrollbar-width: none;
 }
 html:not(.is-mobile-layout) .home-squad-split::-webkit-scrollbar,
@@ -20253,7 +20301,8 @@ html:not(.is-mobile-layout) #home-squad-panel .home-squad-page-pitch::-webkit-sc
 html:not(.is-mobile-layout) #home-standings-panel .home-table-wrap::-webkit-scrollbar,
 html:not(.is-mobile-layout) .home-transfers-table-wrap::-webkit-scrollbar,
 html:not(.is-mobile-layout) .home-captains-table-wrap::-webkit-scrollbar,
-html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll::-webkit-scrollbar {
+html:not(.is-mobile-layout) .home-feed-page > .home-feed-scroll::-webkit-scrollbar,
+html:not(.is-mobile-layout) .home-stat-log-scroll::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
@@ -20383,10 +20432,16 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
 .home-tables-grid > #home-gw-progress-panel,
 .home-tables-grid > #home-stat-log-panel,
 .home-tables-grid > #home-rank-chart-panel {
-  grid-column: 1 / -1;
-  align-self: start;
-  height: auto;
   z-index: 2;
+}
+@media (max-width: 1399px) {
+  .home-tables-grid > #home-gw-progress-panel,
+  .home-tables-grid > #home-stat-log-panel,
+  .home-tables-grid > #home-rank-chart-panel {
+    grid-column: 1 / -1;
+    align-self: start;
+    height: auto;
+  }
 }
 .home-dashboard.is-player-lookup #home-gw-progress-panel,
 .home-dashboard.is-player-lookup #home-stat-log-panel,
@@ -20533,11 +20588,26 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   }
 }
 .home-stat-log-panel {
+  position: relative;
   padding: 14px 14px 14px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .home-stat-log-panel .home-squad-heading-end {
-  max-width: min(48%, 9.5rem);
+  max-width: min(70%, 15rem);
+  gap: 6px;
+}
+.home-stat-log-points-btn {
+  padding: 0 9px;
+  flex: none;
+}
+.home-stat-log-points-btn.active,
+.home-stat-log-points-btn[aria-pressed="true"] {
+  background: hsl(var(--blue-hsl) / 0.12);
+  border-color: hsl(var(--blue-hsl) / 0.28);
+  color: hsl(var(--blue-hsl));
 }
 .home-rank-chart-panel {
   padding: 14px 14px 14px;
@@ -21018,11 +21088,57 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
     transition: none !important;
   }
 }
-.home-stat-log-body {
+.home-stat-log-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: 10px;
   max-height: min(56vh, 28rem);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+.home-stat-log-body {
+  min-width: 0;
+}
+.home-stat-log-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  height: 72px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    to top,
+    hsl(var(--card)) 0%,
+    color-mix(in srgb, hsl(var(--card)) 86%, transparent) 36%,
+    color-mix(in srgb, hsl(var(--card)) 28%, transparent) 70%,
+    transparent 100%
+  );
+  transition: opacity 180ms ease;
+}
+.home-stat-log-panel.has-more-below .home-stat-log-fade {
+  opacity: 1;
+}
+@media (min-width: 1400px) {
+  .home-dashboard:not(.is-player-lookup) #home-stat-log-panel .home-stat-log-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .home-dashboard:not(.is-player-lookup) #home-gw-progress-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .home-dashboard:not(.is-player-lookup) #home-gw-progress-panel .home-gw-prog {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 .home-stat-log-empty {
   margin: 4px 0 2px;
@@ -21041,13 +21157,31 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
 .home-stat-log-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 4.5rem;
   padding: 12px 12px;
   border: 1px solid hsl(var(--border) / 0.7);
   border-radius: 10px;
   background: hsl(var(--muted) / 0.32);
   box-sizing: border-box;
+}
+.home-stat-log-row.is-hit,
+.home-stat-log-row.is-pos {
+  border: 1.5px solid hsl(var(--home-rank-up));
+  box-shadow: none;
+}
+.home-stat-log-row.is-lost,
+.home-stat-log-row.is-neg {
+  border: 1.5px solid hsl(var(--home-rank-down));
+  box-shadow: none;
+}
+.home-stat-log-row.is-hit .home-stat-log-vals .is-to,
+.home-stat-log-row.is-pos .home-stat-log-vals .is-to {
+  color: hsl(var(--home-rank-up));
+}
+.home-stat-log-row.is-lost .home-stat-log-vals .is-to,
+.home-stat-log-row.is-neg .home-stat-log-vals .is-to {
+  color: hsl(var(--home-rank-down));
 }
 .home-stat-log-row-head {
   display: flex;
@@ -21076,10 +21210,34 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
   color: hsl(var(--muted-foreground));
 }
 .home-stat-log-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 11px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   flex: 0 0 auto;
+}
+.home-stat-log-pts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2em;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.home-stat-log-pts.is-pos {
+  color: hsl(var(--home-rank-up));
+}
+.home-stat-log-pts.is-neg {
+  color: hsl(var(--home-rank-down));
 }
 .home-stat-log-change {
   display: flex;
@@ -21108,23 +21266,42 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
   color: hsl(var(--muted-foreground));
 }
 .home-stat-log-flag {
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: lowercase;
-  background: hsl(var(--muted) / 0.8);
-  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  line-height: 0;
 }
-.home-stat-log-change.is-hit .home-stat-log-flag {
-  background: hsl(var(--positive) / 0.16);
-  color: hsl(var(--positive));
+.home-stat-log-flag .icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: none;
 }
-.home-stat-log-change.is-lost .home-stat-log-flag {
-  --autosub-amber: 34 78% 46%;
-  background: hsl(var(--autosub-amber) / 0.18);
-  color: hsl(var(--autosub-amber));
+.home-stat-log-flag.is-up,
+.home-stat-log-change.is-hit .home-stat-log-flag,
+.home-stat-log-change.is-pos .home-stat-log-flag {
+  color: color-mix(
+    in srgb,
+    hsl(var(--home-rank-up)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--muted-foreground))
+  );
+  background: none;
+}
+.home-stat-log-flag.is-down,
+.home-stat-log-change.is-lost .home-stat-log-flag,
+.home-stat-log-change.is-neg .home-stat-log-flag {
+  color: color-mix(
+    in srgb,
+    hsl(var(--home-rank-down)) calc(var(--home-rank-sat, 1) * 100%),
+    hsl(var(--muted-foreground))
+  );
+  background: none;
 }
 .home-stat-log-vals {
   display: inline-flex;
@@ -21169,13 +21346,15 @@ html:not([data-theme="light"]) .home-rank-chart-bar.is-live.is-down {
   line-height: 1.3;
   color: hsl(var(--foreground));
 }
-.home-stat-log-chip.is-hit {
-  background: hsl(var(--positive) / 0.16);
-  color: hsl(var(--positive));
+.home-stat-log-chip.is-hit,
+.home-stat-log-chip.is-pos {
+  background: hsl(var(--home-rank-up) / 0.16);
+  color: hsl(var(--home-rank-up));
 }
-.home-stat-log-chip.is-lost {
-  background: hsl(var(--autosub-amber) / 0.18);
-  color: hsl(var(--autosub-amber));
+.home-stat-log-chip.is-lost,
+.home-stat-log-chip.is-neg {
+  background: hsl(var(--home-rank-down) / 0.16);
+  color: hsl(var(--home-rank-down));
 }
 html[data-theme="dark"] .home-gw-prog {
   --autosub-amber: 34 72% 58%;
@@ -22911,6 +23090,27 @@ html[data-theme="dark"] .home-pitch-flash-toast:not(.is-up):not(.is-down) {
   font-weight: 600;
   color: var(--flash-toast-muted);
 }
+.home-pitch-flash-toast-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding-bottom: 2px;
+}
+.home-pitch-flash-toast-total {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--flash-toast-fg);
+}
+.home-pitch-flash-toast-sub {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--flash-toast-muted);
+}
 @media (prefers-reduced-motion: reduce) {
   .home-pitch-card.is-pitch-flash-in.is-pitch-flash-ring::before,
   .home-pitch-card.is-pitch-flash-in .home-pitch-flash-delta {
@@ -23888,6 +24088,13 @@ html[data-theme="dark"] .home-squad-ownership-table .ownership-pill.is-live {
 .home-standings-live-table .home-rank-cell {
   gap: 4px;
 }
+html.home-squad-wide .home-standings-live-table .home-rank-cell {
+  gap: 7px;
+}
+html.home-squad-wide .home-standings-live-table th.home-col-rank,
+html.home-squad-wide .home-standings-live-table td.home-col-rank {
+  padding-right: 10px;
+}
 .home-standings-table th.home-col-manager,
 .home-standings-table td.home-col-manager {
   padding-left: 4px;
@@ -24780,7 +24987,11 @@ html[data-theme="dark"] .home-standings-autosub-mark {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-/* Non-live: "LEFT TO PLAY". While fixtures are live: short "LEFT". */
+/* Non-live: "LEFT TO PLAY". While fixtures are live: short "LEFT".
+   Widest 3-card desktop (home-squad-wide) uses LET instead. */
+.home-left-head-abbr {
+  display: none;
+}
 .home-standings-live-table .home-left-head-long {
   display: none;
 }
@@ -24809,8 +25020,15 @@ html.home-squad-wide .home-standings-live-table .home-col-left {
 html.home-squad-wide .home-standings-live-table .home-col-play {
   display: table-cell;
 }
+html.home-squad-wide .home-standings-live-table .home-left-head-short,
+html.home-squad-wide .home-standings-live-table .home-left-head-long {
+  display: none;
+}
+html.home-squad-wide .home-standings-live-table .home-left-head-abbr {
+  display: inline;
+}
 html.home-squad-wide .home-standings-live-table .home-col-manager {
-  width: 28%;
+  width: 38%;
   max-width: 0;
   min-width: 0;
   overflow: hidden;
@@ -24825,10 +25043,10 @@ html.home-squad-wide .home-standings-live-table .home-standings-entry {
   white-space: nowrap;
 }
 html.home-squad-wide .home-standings-live-table .home-col-play {
-  width: 24%;
-  min-width: 5.4em;
-  padding-left: 2px;
-  padding-right: 2px;
+  width: 10%;
+  min-width: 2.6em;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 html.home-squad-wide .home-standings-live-table th.home-col-play {
   font-size: 10.5px;

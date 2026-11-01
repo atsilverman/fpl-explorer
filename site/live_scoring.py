@@ -13,7 +13,15 @@ engine so standings match FPL while autosubs/BPS settle.
 """
 from __future__ import annotations
 
+import time
+from datetime import datetime, timezone
 from typing import Any
+
+# Wall clock after kickoff before provisional FT counts as past stoppage.
+# 90' play + 15' half-time + 25' added-time buffer (both halves). The old
+# 90+12 gate elapsed during the second half, so BPS ticks in added time
+# looked like "adjustments". Official `finished` always qualifies.
+ADJUSTMENT_POST_KO_SEC = (90 + 15 + 25) * 60
 
 
 def _minutes(stats: dict | None) -> int:
@@ -211,6 +219,23 @@ def project_graphic_auto_subs(
     return auto_subs
 
 
+def parse_fixture_kickoff_unix(iso: str | None) -> float | None:
+    if not iso or not isinstance(iso, str):
+        return None
+    raw = iso.strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
 def fixture_is_full_time(fx: dict | None) -> bool:
     """True only when FPL has marked the match over.
 
@@ -222,6 +247,26 @@ def fixture_is_full_time(fx: dict | None) -> bool:
     if not fx:
         return False
     return bool(fx.get("finished") or fx.get("finished_provisional"))
+
+
+def fixture_is_adjustment_ready(fx: dict | None, now: float | None = None) -> bool:
+    """True once stoppage is over and FPL has at least provisional full-time.
+
+    ``finished_provisional`` can flip at 90' while added time is still running,
+    so we also require kickoff + 130 minutes (90' + HT + added-time buffer).
+    Official ``finished`` always qualifies. No kickoff → wait for official lock.
+    """
+    if not fx:
+        return False
+    if fixture_is_final(fx):
+        return True
+    if not fx.get("finished_provisional"):
+        return False
+    ko = parse_fixture_kickoff_unix(fx.get("kickoff_time"))
+    if ko is None:
+        return False
+    now_ts = time.time() if now is None else now
+    return now_ts >= ko + ADJUSTMENT_POST_KO_SEC
 
 
 def fixture_is_finished(fx: dict | None) -> bool:

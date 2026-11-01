@@ -1366,6 +1366,8 @@
     homeStatLogModeBtn: $("#home-stat-log-mode-btn"),
     homeStatLogModeLabel: $("#home-stat-log-mode-label"),
     homeStatLogModeMenu: $("#home-stat-log-mode-menu"),
+    homeStatLogPointsBtn: $("#home-stat-log-points-btn"),
+    homeStatLogScroll: $("#home-stat-log-scroll"),
     homeStatLogBody: $("#home-stat-log-body"),
     homeRankChartPanel: $("#home-rank-chart-panel"),
     homeRankChartStage: $("#home-rank-chart-stage"),
@@ -4303,6 +4305,7 @@
       clearTimeout(fetchTimer);
       homeLivePollInFlight = false;
       homeLivePollAttempted = true;
+      if (homeLiveLastPollOk) maybeShowHomeAwayPtsToast();
     }
   }
 
@@ -5802,12 +5805,19 @@
     return out;
   }
 
+  function homeHighlightOwnerElementId() {
+    const row = homeGwPtsLookupRow || homeLookupPlayer;
+    const eid = Number(homeLookupElementId(row));
+    return Number.isFinite(eid) ? eid : null;
+  }
+
   function syncHomeOwnerHighlights() {
     const configuredEntry = homeConfiguredEntryId();
     const viewingEntry = homeActiveViewEntryId();
     const viewingOther = homeIsViewingOtherManager();
     const elementPin = homeOwnerPin && homeOwnerPin.type === "element" ? homeOwnerPin : null;
-    const ownerEntries = elementPin ? homeOwnersForElement(elementPin.id) : null;
+    const highlightEid = homeHighlightOwnerElementId();
+    const ownerEntries = highlightEid != null ? homeOwnersForElement(highlightEid) : null;
 
     if (el.homeSquadBody) {
       el.homeSquadBody.classList.remove("has-owner-filter");
@@ -5856,18 +5866,17 @@
     forEachHomeStandingsRow((tr) => {
       const entry = Number(tr.dataset.entry);
       const ownerSlot =
-        elementPin && ownerEntries ? homeOwnerSlotForElement(entry, elementPin.id) : null;
-      const ownsPinned = !!ownerSlot;
-      // Unowned lookup: empty message replaces the list — don't keep demoted rows.
-      const hideForEmptyLookup =
-        !!(elementPin && ownerEntries && ownerEntries.size === 0);
-      tr.hidden = hideForEmptyLookup;
+        highlightEid != null && ownerEntries
+          ? homeOwnerSlotForElement(entry, highlightEid)
+          : null;
+      const ownsHighlighted = !!ownerSlot;
+      tr.hidden = false;
       tr.classList.remove("is-owner-source", "is-owner-pinned");
       tr.classList.toggle("is-owner-match", ownerSlot === "starter");
       tr.classList.toggle("is-owner-bench", ownerSlot === "bench");
       tr.classList.toggle(
         "is-owner-demote",
-        !!(elementPin && ownerEntries && ownerEntries.size > 0 && !ownsPinned)
+        !!(highlightEid != null && ownerEntries && ownerEntries.size > 0 && !ownsHighlighted)
       );
       tr.classList.toggle(
         "is-view-active",
@@ -7912,6 +7921,7 @@
     // Panel height is known — stretch standings rows to fill the card.
     syncHomeStandingsRowHeights();
     syncHomeSquadTrackHeight(undefined, { animate: false });
+    syncHomeStatLogPanelHeight();
     if (homeSquadIsWideLayout()) {
       document.documentElement.classList.add("home-squad-layout-ready");
     }
@@ -7988,6 +7998,66 @@
       p.style.minHeight = "0";
       p.style.alignSelf = "start";
     });
+    syncHomeStatLogPanelHeight();
+  }
+
+  function syncHomeStatLogPanelHeight() {
+    const panel = el.homeStatLogPanel;
+    const rank = el.homeRankChartPanel;
+    const gw = el.homeGwProgressPanel;
+    if (!panel) return;
+    const clear = () => {
+      panel.style.height = "";
+      panel.style.maxHeight = "";
+      panel.style.minHeight = "";
+      panel.style.removeProperty("align-self");
+    };
+    if (
+      !homeSquadIsWideLayout()
+      || panel.hidden
+      || !rank
+      || !gw
+      || rank.hidden
+      || gw.hidden
+    ) {
+      clear();
+      return;
+    }
+    const rankPrev = {
+      height: rank.style.height,
+      maxHeight: rank.style.maxHeight,
+      alignSelf: rank.style.alignSelf,
+    };
+    const gwPrev = {
+      height: gw.style.height,
+      maxHeight: gw.style.maxHeight,
+      alignSelf: gw.style.alignSelf,
+    };
+    rank.style.height = "auto";
+    rank.style.maxHeight = "none";
+    rank.style.alignSelf = "start";
+    gw.style.height = "auto";
+    gw.style.maxHeight = "none";
+    gw.style.alignSelf = "start";
+    void rank.offsetHeight;
+    const gap = 12;
+    const cap = Math.max(
+      200,
+      Math.ceil(rank.getBoundingClientRect().height)
+        + Math.ceil(gw.getBoundingClientRect().height)
+        + gap
+    );
+    rank.style.height = rankPrev.height;
+    rank.style.maxHeight = rankPrev.maxHeight;
+    rank.style.alignSelf = rankPrev.alignSelf;
+    gw.style.height = gwPrev.height;
+    gw.style.maxHeight = gwPrev.maxHeight;
+    gw.style.alignSelf = gwPrev.alignSelf;
+    panel.style.height = `${cap}px`;
+    panel.style.maxHeight = `${cap}px`;
+    panel.style.minHeight = "0";
+    panel.style.alignSelf = "stretch";
+    requestAnimationFrame(() => syncHomeStatLogOverflow());
   }
 
   function syncHomeStandingsLayout(activeIndex, opts) {
@@ -8579,9 +8649,51 @@
   let graphicsChipsReady = false;
   let graphicsRenderKey = "";
 
+  function graphicsTeamName(code) {
+    return TEAM_NAMES[code] || code;
+  }
+
   function graphicsAllTeams() {
-    const teams = Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : [];
-    return teams.filter((t) => t && t.localPath);
+    const found = new Map();
+    for (const team of Array.isArray(TEAM_NEWS.teams) ? TEAM_NEWS.teams : []) {
+      if (!team || !team.code || !team.localPath) continue;
+      found.set(String(team.code).toUpperCase(), team);
+    }
+    const fixtures = Array.isArray(TEAM_NEWS.fixtures) ? TEAM_NEWS.fixtures : [];
+    if (!fixtures.length) return [...found.values()];
+    const out = [];
+    const seen = new Set();
+    for (const fx of fixtures) {
+      const home = String(fx.home || "").toUpperCase();
+      const away = String(fx.away || "").toUpperCase();
+      const match = home && away ? `${home} v ${away}` : "";
+      for (const [code, ha, opp] of [
+        [home, "H", away],
+        [away, "A", home],
+      ]) {
+        if (!code || seen.has(code)) continue;
+        seen.add(code);
+        const have = found.get(code);
+        if (have) {
+          out.push(have);
+          continue;
+        }
+        out.push({
+          code,
+          name: graphicsTeamName(code),
+          match,
+          opp,
+          ha,
+          kickoff: fx.kickoff || "",
+          localPath: "",
+          pending: true,
+        });
+      }
+    }
+    for (const [code, team] of found) {
+      if (!seen.has(code)) out.push(team);
+    }
+    return out;
   }
 
   function graphicsParseMatch(team) {
@@ -8608,16 +8720,27 @@
   }
 
   function graphicsMatchups() {
+    const ready = new Set();
+    const all = graphicsAllTeams();
+    for (const team of all) {
+      if (team && team.localPath) ready.add(String(team.code).toUpperCase());
+    }
     const byId = new Map();
-    for (const team of graphicsAllTeams()) {
+    for (const team of all) {
       const parsed = graphicsParseMatch(team);
       if (!parsed) continue;
       if (!byId.has(parsed.id)) {
+        const homeReady = ready.has(parsed.home);
+        const awayReady = !parsed.away || ready.has(parsed.away);
         byId.set(parsed.id, {
           id: parsed.id,
           home: parsed.home,
           away: parsed.away,
           label: parsed.away ? `${parsed.home} v ${parsed.away}` : parsed.home,
+          homeReady,
+          awayReady,
+          ready: homeReady && awayReady,
+          selectable: homeReady || awayReady,
         });
       }
     }
@@ -8633,10 +8756,16 @@
 
   function graphicsWhenLabel(team) {
     const mins = team && team.minsBeforeKo != null ? Number(team.minsBeforeKo) : null;
-    if (!Number.isFinite(mins)) return "";
-    return mins >= 0
-      ? `${mins.toFixed(mins % 1 ? 1 : 0)}m before KO`
-      : `${Math.abs(mins).toFixed(0)}m after KO`;
+    if (Number.isFinite(mins)) {
+      return mins >= 0
+        ? `${mins.toFixed(mins % 1 ? 1 : 0)}m before KO`
+        : `${Math.abs(mins).toFixed(0)}m after KO`;
+    }
+    const iso = team && team.kickoff;
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
   }
 
   function syncGraphicsMatchupChips() {
@@ -8648,6 +8777,19 @@
     });
   }
 
+  function graphicsPendingCopy(team) {
+    const ko = team && team.kickoff ? new Date(team.kickoff).getTime() : NaN;
+    if (!Number.isFinite(ko)) return "Waiting for the official club team-news graphic.";
+    const minsToKo = (ko - Date.now()) / 60000;
+    if (minsToKo > 90) {
+      return "Official team news usually posts about 75 minutes before kickoff.";
+    }
+    if (minsToKo > -20) {
+      return "Checking the club’s X account for the team sheet.";
+    }
+    return "No official lineup graphic found yet — still checking.";
+  }
+
   function graphicsSlideHTML(team) {
     const code = escapeHtml(String(team.code || ""));
     const src = escapeHtml(String(team.localPath || ""));
@@ -8655,15 +8797,20 @@
     const name = escapeHtml(String(team.name || team.code || "Team"));
     const match = escapeHtml(String(team.match || graphicsMatchupId(team) || ""));
     const when = escapeHtml(graphicsWhenLabel(team));
-    const alt = escapeHtml(
-      String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
-    );
-    const img = `<img class="graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
-    const inner = href
-      ? `<a class="graphics-link" href="${href}" target="_blank" rel="noopener noreferrer">${img}</a>`
-      : img;
     const meta = [match, when].filter(Boolean).join(" · ");
-    return `<article class="graphics-slide" data-team="${code}">
+    let inner;
+    if (src) {
+      const alt = escapeHtml(
+        String(team.altText || `${team.name || team.code || "Team"} team news`).slice(0, 280)
+      );
+      const img = `<img class="graphics-img" src="${src}" alt="${alt}" loading="lazy" decoding="async" />`;
+      inner = href
+        ? `<a class="graphics-link" href="${href}" target="_blank" rel="noopener noreferrer">${img}</a>`
+        : img;
+    } else {
+      inner = `<div class="graphics-pending"><p>${escapeHtml(graphicsPendingCopy(team))}</p></div>`;
+    }
+    return `<article class="graphics-slide${src ? "" : " is-pending"}" data-team="${code}">
       <header class="graphics-slide-head">
         <span class="graphics-slide-team">${name}</span>
         ${meta ? `<span class="graphics-slide-meta">${meta}</span>` : ""}
@@ -8675,20 +8822,27 @@
   function renderGraphicsMatchupChips() {
     if (!el.graphicsChips) return;
     const matchups = graphicsMatchups();
-    const valid = new Set(matchups.map((m) => m.id));
-    if (state.graphicsMatchup && !valid.has(state.graphicsMatchup)) state.graphicsMatchup = "";
+    const selectable = new Set(matchups.filter((m) => m.selectable).map((m) => m.id));
+    if (state.graphicsMatchup && !selectable.has(state.graphicsMatchup)) state.graphicsMatchup = "";
     el.graphicsChips.innerHTML = matchups
       .map((m) => {
         const on = state.graphicsMatchup === m.id;
         const home = escapeHtml(m.home);
         const away = escapeHtml(m.away);
+        const pending = !m.selectable;
+        const waiting = [!m.homeReady && m.home, !m.awayReady && m.away].filter(Boolean);
+        const tip = pending
+          ? waiting.length === 2
+            ? `${m.label} — lineup graphics not posted yet`
+            : `${m.label} — waiting on ${waiting.join(" & ")}`
+          : m.label;
         const awaySide = m.away
           ? `<span class="graphics-matchup-vs">v</span>
-            <span class="graphics-matchup-side">${badgeHTML(m.away, "graphics-matchup-badge")}<span class="graphics-matchup-abbr">${away}</span></span>`
+            <span class="graphics-matchup-side${m.awayReady ? "" : " is-missing"}">${badgeHTML(m.away, "graphics-matchup-badge")}<span class="graphics-matchup-abbr">${away}</span></span>`
           : "";
-        return `<button type="button" class="chip graphics-matchup-chip${on ? " active" : ""}" data-graphics-matchup="${escapeHtml(m.id)}"${tipAttr(m.label)} aria-pressed="${on ? "true" : "false"}">
+        return `<button type="button" class="chip graphics-matchup-chip${on ? " active" : ""}${pending ? " is-pending" : ""}" data-graphics-matchup="${escapeHtml(m.id)}"${pending ? " disabled" : ""}${tipAttr(tip)} aria-pressed="${on ? "true" : "false"}">
           <span class="graphics-matchup-badges">
-            <span class="graphics-matchup-side">${badgeHTML(m.home, "graphics-matchup-badge")}<span class="graphics-matchup-abbr">${home}</span></span>
+            <span class="graphics-matchup-side${m.homeReady ? "" : " is-missing"}">${badgeHTML(m.home, "graphics-matchup-badge")}<span class="graphics-matchup-abbr">${home}</span></span>
             ${awaySide}
           </span>
         </button>`;
@@ -8703,8 +8857,10 @@
     const teams = graphicsTeams();
     const gw = TEAM_NEWS.gw != null ? Number(TEAM_NEWS.gw) : (HOME && HOME.gw);
     if (el.graphicsCountLabel) {
-      el.graphicsCountLabel.textContent = allTeams.length
-        ? `${allTeams.length} club${allTeams.length === 1 ? "" : "s"}${Number.isFinite(gw) ? ` · GW${gw}` : ""}`
+      const foundN = allTeams.filter((t) => t.localPath).length;
+      const totalN = allTeams.length;
+      el.graphicsCountLabel.textContent = totalN
+        ? `${foundN} of ${totalN} club${totalN === 1 ? "" : "s"}${Number.isFinite(gw) ? ` · GW${gw}` : ""}`
         : Number.isFinite(gw) ? `GW${gw}` : "";
     }
     syncPageUpdatedFooter(el.graphicsUpdatedFooter, pageDataUpdatedIso("graphics"));
@@ -8716,7 +8872,7 @@
       return;
     }
     if (el.graphicsEmpty) el.graphicsEmpty.hidden = true;
-    const key = `${TEAM_NEWS.gw || ""}:${state.graphicsMatchup}:${teams.map((t) => t.tweetId || t.localPath).join(",")}`;
+    const key = `${TEAM_NEWS.gw || ""}:${state.graphicsMatchup}:${teams.map((t) => t.tweetId || t.localPath || `pending:${t.code}`).join(",")}`;
     if (key === graphicsRenderKey && el.graphicsTrack.children.length === teams.length) {
       syncGraphicsMatchupChips();
       return;
@@ -8730,7 +8886,7 @@
     graphicsChipsReady = true;
     el.graphicsChips.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-graphics-matchup]");
-      if (!btn || !el.graphicsChips.contains(btn)) return;
+      if (!btn || !el.graphicsChips.contains(btn) || btn.disabled || btn.classList.contains("is-pending")) return;
       const id = btn.dataset.graphicsMatchup;
       if (!id) return;
       state.graphicsMatchup = state.graphicsMatchup === id ? "" : id;
@@ -8893,6 +9049,29 @@
       || !!(el.homeStatLogModeMenu && el.homeStatLogModeMenu.classList.contains("is-open"));
   }
 
+  function parkHomeStatLogModeMenu() {
+    const menu = el.homeStatLogModeMenu;
+    if (!menu || menu.dataset.homeMenuParked === "1") return;
+    menu.dataset.homeMenuParked = "1";
+    menu._homeMenuParkParent = menu.parentElement;
+    menu._homeMenuParkNext = menu.nextSibling;
+    document.body.appendChild(menu);
+  }
+
+  function restoreHomeStatLogModeMenu() {
+    const menu = el.homeStatLogModeMenu;
+    if (!menu || menu.dataset.homeMenuParked !== "1") return;
+    const parent = menu._homeMenuParkParent;
+    const next = menu._homeMenuParkNext;
+    if (parent) {
+      if (next && next.parentNode === parent) parent.insertBefore(menu, next);
+      else parent.appendChild(menu);
+    }
+    delete menu.dataset.homeMenuParked;
+    menu._homeMenuParkParent = null;
+    menu._homeMenuParkNext = null;
+  }
+
   function closeHomeStatLogModePicker() {
     if (mobileSheetOpen && mobileSheetKey === "home-stat-log-mode") {
       closeMobileSheet();
@@ -8903,6 +9082,7 @@
       el.homeStatLogModeMenu.style.top = "";
       el.homeStatLogModeMenu.style.right = "";
       el.homeStatLogModeMenu.style.left = "";
+      restoreHomeStatLogModeMenu();
     }
     if (el.homeStatLogModeBtn) {
       el.homeStatLogModeBtn.setAttribute("aria-expanded", "false");
@@ -8914,6 +9094,14 @@
     if (el.homeStatLogModeLabel) el.homeStatLogModeLabel.textContent = label;
     if (el.homeStatLogModeBtn) {
       el.homeStatLogModeBtn.setAttribute("aria-label", `Adjustment filter, ${label}`);
+    }
+    if (el.homeStatLogPointsBtn) {
+      el.homeStatLogPointsBtn.classList.toggle("active", homeStatLogPointsOnly);
+      el.homeStatLogPointsBtn.setAttribute("aria-pressed", homeStatLogPointsOnly ? "true" : "false");
+      el.homeStatLogPointsBtn.setAttribute(
+        "aria-label",
+        homeStatLogPointsOnly ? "Points impact only, on" : "Points impact only, off"
+      );
     }
     const menu = el.homeStatLogModeMenu;
     if (!menu) return;
@@ -8952,8 +9140,12 @@
       );
       return;
     }
+    // Desktop: park on body. The Adjustments card uses backdrop-filter +
+    // overflow:hidden, which makes position:fixed resolve inside the panel
+    // and clips the menu.
     const rect = el.homeStatLogModeBtn.getBoundingClientRect();
     const menu = el.homeStatLogModeMenu;
+    parkHomeStatLogModeMenu();
     menu.hidden = false;
     menu.classList.add("is-open");
     menu.style.top = `${Math.round(rect.bottom + 6)}px`;
@@ -9880,6 +10072,16 @@
     }
     if (el.homeStatLogPanel) {
       el.homeStatLogPanel.addEventListener("click", (e) => {
+        const pointsBtn = e.target.closest("#home-stat-log-points-btn");
+        if (pointsBtn && el.homeStatLogPanel.contains(pointsBtn)) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeHomeStatLogModePicker();
+          homeStatLogPointsOnly = !homeStatLogPointsOnly;
+          syncHomeStatLogModeUI();
+          paintHomeStatLog();
+          return;
+        }
         const modeBtn = e.target.closest("#home-stat-log-mode-btn");
         if (!modeBtn || !el.homeStatLogPanel.contains(modeBtn)) return;
         e.preventDefault();
@@ -10686,15 +10888,6 @@
       `<ul class="home-gw-pts-list">${rows}</ul>` +
       homePlayerGwMatchStatsHTML(row) +
       `<div class="home-gw-pts-actions">` +
-      (homeGwPtsPinAvailable(row)
-        ? (
-          `<button type="button" class="ghost-btn icon-only-btn home-gw-pts-pin-btn" data-home-gw-pts-pin` +
-          ` aria-label="Pin owners of ${escapeHtml(row.name || "player")}"` +
-          ` title="Pin owners in league">` +
-          `<svg class="icon" aria-hidden="true"><use href="#i-map-pin"></use></svg>` +
-          `</button>`
-        )
-        : "") +
       `<button type="button" class="ghost-btn home-gw-pts-details-btn" data-home-gw-pts-details>` +
       `<span>Player details</span>` +
       `<svg class="icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg>` +
@@ -10702,12 +10895,6 @@
       `</div>` +
       `</div>`
     );
-  }
-
-  /** Desktop only — pin owners from the GW points popup (before full details). */
-  function homeGwPtsPinAvailable(row) {
-    if (!row || preferMobileSheet()) return false;
-    return Number.isFinite(Number(homeLookupElementId(row)));
   }
 
   function homeSquadPitchOppMeta(row) {
@@ -11825,10 +12012,15 @@
 
   let homeStatLogFilter = "owned";
   let homeStatLogFilterChosen = false;
-  const HOME_STAT_LOG_GEN = 3;
+  let homeStatLogPointsOnly = false;
+  const HOME_STAT_LOG_GEN = 4;
+  const HOME_STAT_LOG_POST_KO_MS = (90 + 15 + 25) * 60 * 1000;
 
   function hideHomeStatLogPanel() {
-    if (el.homeStatLogPanel) el.homeStatLogPanel.hidden = true;
+    if (el.homeStatLogPanel) {
+      el.homeStatLogPanel.hidden = true;
+      el.homeStatLogPanel.classList.remove("has-more-below");
+    }
   }
 
   function homeStatLogSanitize(log) {
@@ -11850,28 +12042,66 @@
   }
 
   function homeStatLogEntryKey(row) {
-    const changes = Array.isArray(row && row.changes) ? row.changes : [];
+    const changes = (Array.isArray(row && row.changes) ? row.changes : [])
+      .filter(homeStatLogChangeIsKept)
+      .map((c) => `${c && c.stat}:${c && c.from}:${c && c.to}:${(c && c.threshold) || ""}`)
+      .sort();
     return [
-      row && row.at,
       row && row.element,
       row && row.ptsFrom,
       row && row.ptsTo,
-      changes.map((c) => `${c && c.stat}:${c && c.from}:${c && c.to}`).join(","),
+      changes.join(","),
     ].join("|");
   }
 
+  function homeStatLogChangeIdentity(row, change) {
+    return [
+      row && row.element,
+      change && change.stat,
+      change && change.from,
+      change && change.to,
+      (change && change.threshold) || "",
+    ].join("|");
+  }
+
+  function homeStatLogKeepEarlier(prev, next) {
+    if (!prev) return next;
+    if (!next) return prev;
+    const a = String(prev.at || "");
+    const b = String(next.at || "");
+    if (b && (!a || b < a)) return next;
+    return prev;
+  }
+
+  function homeStatLogEntryIsImpact(row) {
+    if (homeStatLogPtsDelta(row)) return true;
+    const changes = Array.isArray(row && row.changes) ? row.changes : [];
+    return changes.some((change) => !!homeStatLogChangeImpact(change));
+  }
+
   function homeStatLogUnion(primary, secondary) {
-    const seen = new Set();
+    const seen = new Map();
     const out = [];
     for (const row of [...(primary || []), ...(secondary || [])]) {
       if (!row || typeof row !== "object") continue;
       const key = homeStatLogEntryKey(row);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(row);
+      const prev = seen.get(key);
+      if (!prev) {
+        seen.set(key, row);
+        out.push(row);
+        continue;
+      }
+      const keep = homeStatLogKeepEarlier(prev, row);
+      if (keep !== prev) {
+        const idx = out.indexOf(prev);
+        if (idx >= 0) out[idx] = keep;
+        seen.set(key, keep);
+      }
     }
     out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
-    return out.slice(0, 40);
+    const impact = out.filter(homeStatLogEntryIsImpact);
+    const noise = out.filter((row) => !homeStatLogEntryIsImpact(row));
+    return impact.concat(noise).slice(0, 80);
   }
 
   /** Keep a same-GW recap if a live poll / session snapshot arrives empty. */
@@ -11897,6 +12127,28 @@
     };
   }
 
+  function homeStatLogKickoffMs(fx) {
+    const raw = fx && (fx.kickoff || fx.kickoff_time);
+    const ms = raw ? Date.parse(raw) : NaN;
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  function homeStatLogFixtureReady(fx) {
+    if (!fx) return false;
+    if (fx.final) return true;
+    if (!fx.finished) return false;
+    const ko = homeStatLogKickoffMs(fx);
+    if (ko == null) return false;
+    return Date.now() >= ko + HOME_STAT_LOG_POST_KO_MS;
+  }
+
+  function homeStatLogFixtureStillOpen(fx) {
+    if (!fx || homeStatLogFixtureReady(fx)) return false;
+    if (fx.live || (fx.finished && !fx.final)) return true;
+    const ko = homeStatLogKickoffMs(fx);
+    return ko != null && ko <= Date.now() && !fx.final;
+  }
+
   function homeStatLogRowStillLive(row) {
     const eid = Number(row && row.element);
     const eg = Number.isFinite(eid) ? homeElementGwRecord(eid) : {};
@@ -11913,6 +12165,50 @@
       if (fxs.some((fx) => homeSquadFixtureIsInPlay(fx) || (fx && fx.live && !fx.finished))) {
         return true;
       }
+      if (fxs.some((fx) => homeStatLogFixtureStillOpen(fx))) return true;
+    }
+    const team = String(row && row.team || "").toUpperCase();
+    if (!team) return false;
+    for (const list of lists) {
+      if (!Array.isArray(list)) continue;
+      for (const p of list) {
+        if (!p) continue;
+        const fxs = homeSquadFixtures(p);
+        for (const fx of fxs) {
+          if (!homeSquadFixtureIsInPlay(fx) && !homeStatLogFixtureStillOpen(fx)) continue;
+          const pTeam = String(p.team || "").toUpperCase();
+          const opp = String(fx.opp || "").toUpperCase();
+          if (team === pTeam || team === opp) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function homeStatLogRowPremature(row) {
+    const at = row && row.at ? Date.parse(row.at) : NaN;
+    if (!Number.isFinite(at)) return false;
+    const eid = Number(row.element);
+    const team = String(row.team || "").toUpperCase();
+    const lists = [HOME && HOME.squad].concat(
+      HOME && HOME.squadsByEntry ? Object.values(HOME.squadsByEntry) : []
+    );
+    for (const list of lists) {
+      if (!Array.isArray(list)) continue;
+      for (const p of list) {
+        if (!p) continue;
+        const fxs = homeSquadFixtures(p);
+        const pTeam = String(p.team || "").toUpperCase();
+        for (const fx of fxs) {
+          if (fx && fx.final) continue;
+          const opp = String(fx.opp || "").toUpperCase();
+          const samePlayer = Number.isFinite(eid) && Number(p.element) === eid;
+          if (!samePlayer && team !== pTeam && team !== opp) continue;
+          const ko = homeStatLogKickoffMs(fx);
+          if (ko == null || ko > at) continue;
+          if (at < ko + HOME_STAT_LOG_POST_KO_MS) return true;
+        }
+      }
     }
     return false;
   }
@@ -11923,7 +12219,54 @@
     }
     const log = homeStatLogSanitize(HOME && HOME.statLog && typeof HOME.statLog === "object" ? HOME.statLog : null);
     const rows = Array.isArray(log.entries) ? log.entries : [];
-    return rows.filter((row) => row && typeof row === "object" && !homeStatLogRowStillLive(row));
+    return rows.filter((row) => (
+      row && typeof row === "object"
+      && !homeStatLogRowStillLive(row)
+      && !homeStatLogRowPremature(row)
+    ));
+  }
+
+  const HOME_STAT_LOG_POS_STATS = new Set(["goals", "assists", "bonus", "cs", "ps", "saves", "pts"]);
+  const HOME_STAT_LOG_NEG_STATS = new Set(["yc", "rc", "og", "pm", "gc"]);
+
+  function homeStatLogChangeImpact(change) {
+    if (!change || typeof change !== "object") return "";
+    if (change.threshold === "hit") return "hit";
+    if (change.threshold === "lost") return "lost";
+    const stat = String(change.stat || "");
+    const from = Number(change.from);
+    const to = Number(change.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from === to) return "";
+    const up = to > from;
+    if (HOME_STAT_LOG_POS_STATS.has(stat)) return up ? "pos" : "neg";
+    if (HOME_STAT_LOG_NEG_STATS.has(stat)) return up ? "neg" : "pos";
+    return "";
+  }
+
+  function homeStatLogPtsDelta(row) {
+    const from = Number(row && row.ptsFrom);
+    const to = Number(row && row.ptsTo);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from === to) return 0;
+    return to - from;
+  }
+
+  function homeStatLogPtsPillHTML(delta) {
+    if (!delta) return "";
+    const cls = delta > 0 ? " is-pos" : " is-neg";
+    const text = delta > 0 ? `+${delta}` : `${delta}`;
+    return `<span class="home-stat-log-pts${cls}">${escapeHtml(text)} pts</span>`;
+  }
+
+  function homeStatLogFlagHTML(change) {
+    const impact = homeStatLogChangeImpact(change);
+    if (impact !== "hit" && impact !== "lost") return "";
+    const up = impact === "hit";
+    const label = up ? "Threshold hit" : "Threshold lost";
+    return (
+      `<span class="home-stat-log-flag ${up ? "is-up" : "is-down"}"${tipAttr(label)} aria-label="${escapeHtml(label)}">` +
+      `${iconHTML(up ? "caret-up" : "caret-down")}` +
+      `</span>`
+    );
   }
 
   function homeStatLogChipHTML(change) {
@@ -11931,12 +12274,12 @@
     const label = String(change.label || change.stat || "");
     const from = change.from;
     const to = change.to;
-    const flag = change.threshold === "hit" || change.threshold === "lost" ? change.threshold : "";
-    const flagText = flag === "hit" ? " · hit" : flag === "lost" ? " · lost" : "";
-    const cls = flag === "hit" ? " is-hit" : flag === "lost" ? " is-lost" : "";
+    const impact = homeStatLogChangeImpact(change);
+    const cls = impact ? ` is-${impact}` : "";
     return (
       `<span class="home-stat-log-chip${cls}">` +
-      `${escapeHtml(label)} ${escapeHtml(String(from))}→${escapeHtml(String(to))}${flagText}` +
+      `${escapeHtml(label)} ${escapeHtml(String(from))}→${escapeHtml(String(to))}` +
+      homeStatLogFlagHTML(change) +
       `</span>`
     );
   }
@@ -11946,14 +12289,13 @@
     const label = String(change.label || change.stat || "");
     const from = change.from;
     const to = change.to;
-    const flag = change.threshold === "hit" || change.threshold === "lost" ? change.threshold : "";
-    const flagText = flag === "hit" ? "hit" : flag === "lost" ? "lost" : "";
-    const cls = flag === "hit" ? " is-hit" : flag === "lost" ? " is-lost" : "";
+    const impact = homeStatLogChangeImpact(change);
+    const cls = impact ? ` is-${impact}` : "";
     return (
       `<div class="home-stat-log-change${cls}">` +
       `<span class="home-stat-log-stat">` +
       `${escapeHtml(label)}` +
-      (flagText ? `<span class="home-stat-log-flag">${escapeHtml(flagText)}</span>` : "") +
+      homeStatLogFlagHTML(change) +
       `</span>` +
       `<span class="home-stat-log-vals">` +
       `<span class="is-from">${escapeHtml(String(from))}</span>` +
@@ -11964,34 +12306,82 @@
     );
   }
 
-  function homeStatLogFlatRows(rows) {
-    const out = [];
-    (rows || []).forEach((row) => {
-      if (!row || typeof row !== "object") return;
-      const changes = (Array.isArray(row.changes) ? row.changes : []).filter(
-        (change) => change && typeof change === "object"
-      );
-      if (!changes.length) {
-        out.push({ row, change: null });
-        return;
-      }
-      changes.forEach((change) => out.push({ row, change }));
-    });
-    return out;
+  function homeStatLogChangeIsKept(change) {
+    return !!(change && typeof change === "object" && change.stat !== "bps");
   }
 
-  function homeStatLogRowHTML(row, change) {
+  function homeStatLogDisplayChanges(row, changes) {
+    const kept = (changes || []).filter(homeStatLogChangeIsKept);
+    const others = kept.filter((change) => change.stat !== "pts");
+    if (others.length && homeStatLogPtsDelta(row)) return others;
+    return kept;
+  }
+
+  function homeStatLogRowImpact(row, changes) {
+    const delta = homeStatLogPtsDelta(row);
+    if (delta > 0) return "pos";
+    if (delta < 0) return "neg";
+    let fallback = "";
+    for (const change of changes || []) {
+      const impact = homeStatLogChangeImpact(change);
+      if (impact === "lost" || impact === "neg") return impact;
+      if (impact && !fallback) fallback = impact;
+    }
+    return fallback;
+  }
+
+  function homeStatLogCards(rows) {
+    const best = new Map();
+    for (const row of rows || []) {
+      if (!row || typeof row !== "object") continue;
+      const changes = (Array.isArray(row.changes) ? row.changes : []).filter(homeStatLogChangeIsKept);
+      for (const change of changes) {
+        const key = homeStatLogChangeIdentity(row, change);
+        const prev = best.get(key);
+        if (!prev || homeStatLogKeepEarlier(prev.row, row) === row) {
+          best.set(key, { row, change });
+        }
+      }
+    }
+    const groups = new Map();
+    for (const { row, change } of best.values()) {
+      const gk = [row.element, row.ptsFrom, row.ptsTo].join("|");
+      let group = groups.get(gk);
+      if (!group) {
+        group = { row, changes: [] };
+        groups.set(gk, group);
+      } else if (homeStatLogKeepEarlier(group.row, row) === row) {
+        group.row = row;
+      }
+      group.changes.push(change);
+    }
+    const cards = Array.from(groups.values());
+    cards.sort((a, b) => String((b.row && b.row.at) || "").localeCompare(String((a.row && a.row.at) || "")));
+    for (const card of cards) {
+      card.changes.sort((a, b) => {
+        if (a.stat === "pts" && b.stat !== "pts") return -1;
+        if (b.stat === "pts" && a.stat !== "pts") return 1;
+        const ia = homeStatLogChangeImpact(a) ? 0 : 1;
+        const ib = homeStatLogChangeImpact(b) ? 0 : 1;
+        if (ia !== ib) return ia - ib;
+        return String(a.label || a.stat || "").localeCompare(String(b.label || b.stat || ""));
+      });
+    }
+    return cards;
+  }
+
+  function homeStatLogRowHTML(row, changes) {
     const team = row.team || "";
     const teamBadge = badgeHTML(team, "home-crest") ||
       teamCrestFallbackHTML(team, "home-crest-fallback");
     const name = row.name || "—";
     const pos = row.pos || "";
     const when = formatHomeLocalWhen(row.at, { includeDate: true }) || "";
-    const flag = change && (change.threshold === "hit" || change.threshold === "lost")
-      ? change.threshold
-      : "";
-    const rowCls = flag === "hit" ? " is-hit" : flag === "lost" ? " is-lost" : "";
-    const changeHTML = homeStatLogChangeHTML(change)
+    const display = homeStatLogDisplayChanges(row, changes);
+    const impact = homeStatLogRowImpact(row, display);
+    const rowCls = impact ? ` is-${impact}` : "";
+    const ptsDelta = homeStatLogPtsDelta(row);
+    const changeHTML = display.map(homeStatLogChangeHTML).join("")
       || `<div class="home-stat-log-change is-empty">—</div>`;
     return (
       `<li class="home-stat-log-row${rowCls}">` +
@@ -12002,7 +12392,10 @@
       `<span class="home-player-name-text">${escapeHtml(name)}</span>` +
       (pos ? `<span class="home-stat-log-pos">${escapeHtml(pos)}</span>` : "") +
       `</div></div></div>` +
-      `<span class="home-stat-log-when">${escapeHtml(when)}</span>` +
+      `<span class="home-stat-log-when">` +
+      `${homeStatLogPtsPillHTML(ptsDelta)}` +
+      `${when ? `<span>${escapeHtml(when)}</span>` : ""}` +
+      `</span>` +
       `</div>` +
       changeHTML +
       `</li>`
@@ -12072,7 +12465,13 @@
     if (el.homeStatLogKicker) el.homeStatLogKicker.textContent = "Adjustments";
     if (el.homeStatLogStage) el.homeStatLogStage.textContent = gw;
     syncHomeStatLogModeUI();
-    const cards = homeStatLogFlatRows(rows);
+    let cards = homeStatLogCards(rows);
+    if (homeStatLogPointsOnly) {
+      cards = cards.filter(({ row, changes }) => (
+        !!homeStatLogPtsDelta(row)
+        || changes.some((change) => !!homeStatLogChangeImpact(change))
+      ));
+    }
     if (el.homeStatLogMeta) {
       el.homeStatLogMeta.textContent = cards.length ? String(cards.length) : "";
       el.homeStatLogMeta.hidden = true;
@@ -12080,15 +12479,63 @@
     if (!el.homeStatLogBody) return;
     if (!cards.length) {
       let empty = "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
-      if (all.length && homeStatLogFilter === "owned") {
+      if (homeStatLogPointsOnly && homeStatLogCards(rows).length) {
+        empty = "No points-impact adjustments — turn Points off for DefCon ticks.";
+      } else if (all.length && homeStatLogFilter === "owned") {
         empty = "No owned players in the log — switch to League or All.";
       } else if (all.length && homeStatLogFilter === "league") {
         empty = "No league players in the log — switch to All.";
       }
       el.homeStatLogBody.innerHTML = `<p class="home-stat-log-empty">${empty}</p>`;
+      bindHomeStatLogOverflow();
+      syncHomeStatLogOverflow();
       return;
     }
-    el.homeStatLogBody.innerHTML = `<ul class="home-stat-log-list">${cards.map(({ row, change }) => homeStatLogRowHTML(row, change)).join("")}</ul>`;
+    el.homeStatLogBody.innerHTML = `<ul class="home-stat-log-list">${cards.map(({ row, changes }) => homeStatLogRowHTML(row, changes)).join("")}</ul>`;
+    bindHomeStatLogOverflow();
+    if (homeSquadIsWideLayout()) {
+      requestAnimationFrame(() => {
+        syncHomeStatLogPanelHeight();
+        syncHomeStatLogOverflow();
+      });
+    } else {
+      requestAnimationFrame(() => syncHomeStatLogOverflow());
+    }
+  }
+
+  let homeStatLogOverflowBound = false;
+  let homeStatLogOverflowObserved = false;
+
+  function homeStatLogScrollport() {
+    return el.homeStatLogScroll || el.homeStatLogBody;
+  }
+
+  function syncHomeStatLogOverflow() {
+    const panel = el.homeStatLogPanel;
+    const port = homeStatLogScrollport();
+    if (!panel) return;
+    const more = !!(
+      !panel.hidden
+      && port
+      && port.scrollHeight - port.clientHeight - port.scrollTop > 10
+    );
+    panel.classList.toggle("has-more-below", more);
+  }
+
+  function bindHomeStatLogOverflow() {
+    const port = homeStatLogScrollport();
+    if (!port) return;
+    if (!homeStatLogOverflowBound) {
+      homeStatLogOverflowBound = true;
+      port.addEventListener("scroll", syncHomeStatLogOverflow, { passive: true });
+    }
+    if (!homeStatLogOverflowObserved && typeof ResizeObserver === "function") {
+      homeStatLogOverflowObserved = true;
+      const ro = new ResizeObserver(() => syncHomeStatLogOverflow());
+      ro.observe(port);
+      if (el.homeStatLogBody && el.homeStatLogBody !== port) ro.observe(el.homeStatLogBody);
+    }
+    syncHomeStatLogOverflow();
   }
 
   const HOME_RANK_CHART_WINDOW = 6;
@@ -12343,6 +12790,9 @@
     if (el.homeRankChartPanel) el.homeRankChartPanel.classList.toggle("is-pts-open", next);
     if (next && !was && NARROW_MQ.matches) {
       requestAnimationFrame(() => homeScrollPanelIntoView(el.homeRankChartPanel));
+    }
+    if (homeSquadIsWideLayout()) {
+      requestAnimationFrame(() => syncHomeStatLogPanelHeight());
     }
   }
 
@@ -13584,6 +14034,11 @@
   const HOME_PITCH_FLASH_PREVIEW_MS = 4200;
   const HOME_PITCH_FLASH_TOAST_MS = 7000;
   const HOME_PITCH_FLASH_TOAST_MAX = 3;
+  const HOME_AWAY_PTS_KEY = "fpl.homeAwayPts";
+  const HOME_AWAY_MIN_MS = 12000;
+  const HOME_AWAY_MAX_MS = 8 * 60 * 60 * 1000;
+  let homeAwaySnap = null;
+  let homeAwayCatchup = false;
   const HOME_PITCH_FLASH_STYLE_LABEL = {
     both: "Both",
     cards: "Cards",
@@ -13888,7 +14343,7 @@
       // no readable GW pts — do not seed 0 or the next poll replays the whole score.
       if (pts == null) continue;
       homePitchPtsPrev.set(eid, { pts, mins, stats });
-      if (preview || style === "off" || !prev) continue;
+      if (homeAwayCatchup || document.hidden || preview || style === "off" || !prev) continue;
       if (homePitchFlashShouldSkip(row, prev, pts, mins)) continue;
       const delta = pts - prev.pts;
       if (homePitchFlashShouldHoldBonus(row, prev.stats, stats, delta, mins)) continue;
@@ -14030,6 +14485,148 @@
     requestAnimationFrame(() => requestAnimationFrame(open));
     window.setTimeout(open, 40);
     homePitchFlashToastTimer = window.setTimeout(() => hideHomePitchFlashToast(), HOME_PITCH_FLASH_TOAST_MS);
+  }
+
+  function homeViewGwPts(entryId = homeActiveViewEntryId()) {
+    const standing = homeStandingForEntry(entryId);
+    if (standing) {
+      const n = homeStandingsGwPoints(standing);
+      if (n != null && Number.isFinite(Number(n))) return Math.round(Number(n));
+    }
+    const summary = homeSummaryForView(entryId) || {};
+    const n = Number(summary.gwPoints);
+    return Number.isFinite(n) ? Math.round(n) : null;
+  }
+
+  function homeViewPlayerPtsMap(entryId = homeActiveViewEntryId()) {
+    const out = {};
+    for (const row of homeSquadForEntry(entryId) || []) {
+      const eid = Number(row && row.element);
+      if (!Number.isFinite(eid)) continue;
+      const ptsRaw = typeof homeSquadRowGwPoints === "function" ? homeSquadRowGwPoints(row) : row.gwPoints;
+      const pts = ptsRaw != null && Number.isFinite(Number(ptsRaw)) ? Number(ptsRaw) : null;
+      if (pts == null) continue;
+      out[String(eid)] = {
+        pts,
+        name: row.name || "",
+        stats: typeof homePitchFlashSnapStats === "function" ? homePitchFlashSnapStats(row) : null,
+      };
+    }
+    return out;
+  }
+
+  function homeAwaySnapNow() {
+    const entryId = homeActiveViewEntryId();
+    const gw = Number(HOME && HOME.gw);
+    const pts = homeViewGwPts(entryId);
+    if (!Number.isFinite(Number(entryId)) || !Number.isFinite(gw) || pts == null) return null;
+    return { entryId: Number(entryId), gw, pts, players: homeViewPlayerPtsMap(entryId), hiddenAt: Date.now() };
+  }
+
+  function homeAwayLoadSnap() {
+    try {
+      const raw = sessionStorage.getItem(HOME_AWAY_PTS_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return data && typeof data === "object" ? data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function homeAwaySaveSnap(snap) {
+    homeAwaySnap = snap;
+    try {
+      if (snap) sessionStorage.setItem(HOME_AWAY_PTS_KEY, JSON.stringify(snap));
+      else sessionStorage.removeItem(HOME_AWAY_PTS_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function homeAwayShouldCatchup(snap = homeAwaySnap || homeAwayLoadSnap()) {
+    if (!snap || snap.hiddenAt == null) return false;
+    const away = Date.now() - Number(snap.hiddenAt);
+    if (!Number.isFinite(away) || away < HOME_AWAY_MIN_MS || away > HOME_AWAY_MAX_MS) return false;
+    if (Number(snap.gw) !== Number(HOME && HOME.gw)) return false;
+    if (Number(snap.entryId) !== Number(homeActiveViewEntryId())) return false;
+    return true;
+  }
+
+  function homeAwayMarkHidden() {
+    const snap = homeAwaySnapNow();
+    if (!snap) return;
+    homeAwaySaveSnap(snap);
+  }
+
+  function homeAwayMarkVisible() {
+    const snap = homeAwaySnap || homeAwayLoadSnap();
+    if (homeAwayShouldCatchup(snap)) {
+      homeAwaySnap = snap;
+      homeAwayCatchup = true;
+    }
+  }
+
+  function showHomeAwayPtsToast(totalDelta, players) {
+    const items = (players || []).filter((item) => item && item.delta);
+    if (!totalDelta && !items.length) return;
+    if (!el.homePitchFlashToastRoot) return;
+    hideHomePitchFlashToast({ immediate: true });
+    const tone = totalDelta > 0 ? "is-up" : totalDelta < 0 ? "is-down" : "is-mixed";
+    const sign = totalDelta > 0 ? `+${totalDelta}` : String(totalDelta);
+    const node = document.createElement("div");
+    node.className = `home-pitch-flash-toast ${tone}`;
+    node.setAttribute("role", "status");
+    node.setAttribute("aria-label", `${sign} points since you left. Swipe to dismiss.`);
+    node.innerHTML =
+      `<div class="home-pitch-flash-toast-summary">` +
+      `<span class="home-pitch-flash-toast-total">${escapeHtml(sign)} pts</span>` +
+      `<span class="home-pitch-flash-toast-sub">since you left</span>` +
+      `</div>` +
+      homePitchFlashToastItemsHTML(items);
+    el.homePitchFlashToastRoot.appendChild(node);
+    homePitchFlashToastEl = node;
+    homePitchFlashToastSig = `away:${sign}:${homePitchFlashToastSignature(items)}`;
+    homePitchFlashToastDismissed = "";
+    bindHomePitchFlashToastSwipe(node);
+    const open = () => {
+      if (homePitchFlashToastEl === node) node.classList.add("is-open");
+    };
+    requestAnimationFrame(() => requestAnimationFrame(open));
+    window.setTimeout(open, 40);
+    homePitchFlashToastTimer = window.setTimeout(() => hideHomePitchFlashToast(), HOME_PITCH_FLASH_TOAST_MS);
+  }
+
+  function maybeShowHomeAwayPtsToast() {
+    if (!homeAwayCatchup) return;
+    const snap = homeAwaySnap || homeAwayLoadSnap();
+    homeAwayCatchup = false;
+    homeAwaySaveSnap(null);
+    if (!snap || state.page !== "home") return;
+    if (Number(snap.entryId) !== Number(homeActiveViewEntryId())) return;
+    const nowPts = homeViewGwPts(snap.entryId);
+    if (nowPts == null || !Number.isFinite(Number(snap.pts))) return;
+    const totalDelta = nowPts - Number(snap.pts);
+    const cur = homeViewPlayerPtsMap(snap.entryId);
+    const prevPlayers = snap.players && typeof snap.players === "object" ? snap.players : {};
+    const players = [];
+    for (const [eid, now] of Object.entries(cur)) {
+      const prev = prevPlayers[eid];
+      const prevPts = prev && Number(prev.pts);
+      if (!Number.isFinite(prevPts) || now.pts === prevPts) continue;
+      const event =
+        typeof homePitchFlashEventLabel === "function"
+          ? homePitchFlashEventLabel(prev && prev.stats, now.stats)
+          : "Points";
+      players.push({
+        eid: Number(eid),
+        name: now.name || (prev && prev.name) || "Player",
+        delta: now.pts - prevPts,
+        event,
+      });
+    }
+    if (!totalDelta && !players.length) return;
+    showHomeAwayPtsToast(totalDelta, players);
   }
 
   function homePitchFlashPreviewCards() {
@@ -16103,18 +16700,24 @@
 
   let homeOwnChartSeq = 0;
 
-  /** Round gridline values (≤4 lines) bracketing the data, clamped to 0–100%. */
+  const HOME_OWN_CHART_H = 176;
+
+  /** Gridlines bracketing the data (~5–6 ticks) so the TSB scale is readable. */
   function homeOwnChartNiceTicks(vals) {
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
     const raw = Math.max(hi - lo, 0.3);
     const steps = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25];
-    const step = steps.find((s) => raw / s <= 3) || 25;
-    let yLo = Math.floor((lo - raw * 0.04) / step) * step;
-    let yHi = Math.ceil((hi + raw * 0.04) / step) * step;
-    if (yHi - yLo < step) yHi = yLo + step;
+    const step = steps.find((s) => raw / s <= 4) || 25;
+    let yLo = Math.floor((lo - step * 0.75) / step) * step;
+    let yHi = Math.ceil((hi + step * 0.75) / step) * step;
+    if (yHi - yLo < step * 4) {
+      const mid = (lo + hi) / 2;
+      yLo = Math.floor((mid - step * 2) / step) * step;
+      yHi = yLo + step * 4;
+    }
     yLo = Math.max(0, yLo);
-    yHi = Math.min(100, yHi);
+    yHi = Math.min(100, Math.max(yHi, yLo + step));
     const ticks = [];
     for (let v = yLo; v <= yHi + step * 0.01; v += step) ticks.push(Math.round(v * 100) / 100);
     const decimals = step < 1 ? (step < 0.25 ? 1 : String(step).split(".")[1].length) : 0;
@@ -16139,8 +16742,8 @@
     const points = (series && series.points) || [];
     if (points.length < 2) return "";
     const w = 320;
-    const h = 132;
-    const padL = 30;
+    const h = HOME_OWN_CHART_H;
+    const padL = 34;
     const padR = 14;
     const padT = 12;
     const padB = 26;
@@ -16530,10 +17133,14 @@
     const hi = Math.max(...nums);
     const raw = Math.max(hi - lo, 0.3);
     const steps = [0.1, 0.2, 0.5, 1, 2];
-    const step = steps.find((s) => raw / s <= 4) || 2;
-    let yLo = Math.round((lo - step * 0.4) / step) * step;
-    let yHi = Math.round((hi + step * 0.4) / step) * step;
-    if (yHi - yLo < step) yHi = yLo + step;
+    const step = steps.find((s) => raw / s <= 5) || 2;
+    let yLo = Math.round((lo - step * 1.2) / step) * step;
+    let yHi = Math.round((hi + step * 1.2) / step) * step;
+    if (yHi - yLo < step * 4) {
+      const mid = (lo + hi) / 2;
+      yLo = Math.round((mid - step * 2) / step) * step;
+      yHi = yLo + step * 4;
+    }
     yLo = Math.max(0, Math.round(yLo * 10) / 10);
     yHi = Math.round(yHi * 10) / 10;
     const ticks = [];
@@ -16547,8 +17154,8 @@
     const points = (series && series.points) || [];
     if (points.length < 2) return "";
     const w = 320;
-    const h = 132;
-    const padL = 32;
+    const h = HOME_OWN_CHART_H;
+    const padL = 34;
     const padR = 14;
     const padT = 12;
     const padB = 26;
@@ -18928,6 +19535,7 @@
       el.homePlayerModal.classList.remove("is-gw-pts");
       closeHomePlayerModal();
     }
+    if (!keepRow) syncHomeOwnerHighlights();
   }
 
   function bindHomeGwPtsEvents(root) {
@@ -18935,13 +19543,6 @@
     if (!card || card.dataset.homeGwPtsBound === "1") return;
     card.dataset.homeGwPtsBound = "1";
     card.addEventListener("click", (e) => {
-      const pinBtn = e.target.closest("[data-home-gw-pts-pin]");
-      if (pinBtn && card.contains(pinBtn)) {
-        e.preventDefault();
-        e.stopPropagation();
-        pinHomePlayerOwnership(homeGwPtsLookupRow);
-        return;
-      }
       const btn = e.target.closest("[data-home-gw-pts-details]");
       if (!btn || !card.contains(btn)) return;
       e.preventDefault();
@@ -18982,6 +19583,7 @@
     syncHomePlayerOpenXBtn(null);
     bindHomeGwPtsEvents(el.homePlayerModalBody);
     bindOwnershipPhotoFallback(el.homePlayerModalBody);
+    syncHomeOwnerHighlights();
   }
 
   function closeHomePlayerDetailOverlay({ clearState = false } = {}) {
@@ -24297,8 +24899,8 @@
             "Lock is 09:00 UK the morning after the last match — times show on your device"
           ),
           spitKeyRow(
-            `<span class="home-stat-log-chip is-hit" aria-hidden="true">DefCon · hit</span>`,
-            "Adjustments — FPL API diffs after full-time (BPS, DefCon, bonus, scoring). Hit / lost marks a threshold cross",
+            `<span class="home-stat-log-chip is-hit" aria-hidden="true">DefCon <span class="home-stat-log-flag is-up">${iconHTML("caret-up")}</span></span>`,
+            "Adjustments — FPL API diffs after full-time (DefCon, bonus, scoring). Raw BPS ticks are dropped; bonus gain / loss is kept. Green / red carets mark a threshold cross. Points toggle keeps only scoring / threshold rows",
             "is-wide"
           ),
         ])}`;
@@ -24314,6 +24916,10 @@
           spitKeyRow(
             `${iconHTML("x-logo", "spit-home-swatch")}`,
             "Official X post"
+          ),
+          spitKeyRow(
+            `${iconHTML("images", "spit-home-swatch")}`,
+            "Every GW fixture — pending if the graphic is still landing"
           ),
         ])}`;
     }
@@ -38881,9 +39487,17 @@
     bindPricesActualColumnsObserver();
     bindMobileChromeScrollHide();
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) return;
+      if (document.hidden) {
+        homeAwayMarkHidden();
+        return;
+      }
+      homeAwayMarkVisible();
       if (!homeLivePollReady()) return;
       pollHomeFromLiveServer();
+    });
+    window.addEventListener("pagehide", () => homeAwayMarkHidden());
+    window.addEventListener("pageshow", (e) => {
+      if (e && e.persisted) homeAwayMarkVisible();
     });
     // Manager prefs first so the initial Home paint already has the linked ID.
     try {
