@@ -12201,7 +12201,7 @@
         const fxs = homeSquadFixtures(p);
         const pTeam = String(p.team || "").toUpperCase();
         for (const fx of fxs) {
-          if (fx && fx.final) continue;
+          if (fx && (fx.final || fx.finished)) continue;
           const opp = String(fx.opp || "").toUpperCase();
           const samePlayer = Number.isFinite(eid) && Number(p.element) === eid;
           if (!samePlayer && team !== pTeam && team !== opp) continue;
