@@ -12101,7 +12101,8 @@
     out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
     const impact = out.filter(homeStatLogEntryIsImpact);
     const noise = out.filter((row) => !homeStatLogEntryIsImpact(row));
-    return impact.concat(noise).slice(0, 80);
+    const room = Math.max(0, 80 - impact.length);
+    return impact.concat(noise.slice(0, room));
   }
 
   /** Keep a same-GW recap if a live poll / session snapshot arrives empty. */
@@ -12307,7 +12308,12 @@
   }
 
   function homeStatLogChangeIsKept(change) {
-    return !!(change && typeof change === "object" && change.stat !== "bps");
+    if (!change || typeof change !== "object") return false;
+    if (change.stat === "bps") return false;
+    if (change.stat === "defCon" && change.threshold !== "hit" && change.threshold !== "lost") {
+      return false;
+    }
+    return true;
   }
 
   function homeStatLogDisplayChanges(row, changes) {
@@ -12480,7 +12486,7 @@
     if (!cards.length) {
       let empty = "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
       if (homeStatLogPointsOnly && homeStatLogCards(rows).length) {
-        empty = "No points-impact adjustments — turn Points off for DefCon ticks.";
+        empty = "No points-impact adjustments — turn Points off for other post-match tweaks.";
       } else if (all.length && homeStatLogFilter === "owned") {
         empty = "No owned players in the log — switch to League or All.";
       } else if (all.length && homeStatLogFilter === "league") {

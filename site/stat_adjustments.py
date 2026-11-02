@@ -1,9 +1,11 @@
-"""Rolling FPL live-stat diffs after stoppage (BPS / DefCon / scoring tweaks).
+"""Rolling FPL live-stat diffs after stoppage (scoring / threshold reviews).
 
 Polls piggyback `fetch_home.py`'s existing `/event/{gw}/live/` fetch. First
 sighting of a completed-match player is the baseline (not a log event); later
-snapshots append only real field changes. Cache lives on disk for the droplet
-and is not part of the static git bundle.
+snapshots append only real field changes. Raw BPS ticks and raw DefCon action
+counts are dropped — bonus awards and DefCon threshold hit/lost stay. Cache
+lives on disk for the droplet and is not part of the static git bundle.
+Same-GW schema bumps migrate in place; only a new gameweek blanks the log.
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ from live_scoring import fixture_is_adjustment_ready, fixture_is_live, fixtures_
 
 SITE = Path(__file__).resolve().parent
 CACHE_PATH = SITE / "stat_adjustments_cache.json"
-CACHE_GEN = 5
+CACHE_GEN = 6
 LOG_CAP = 150
 PUBLIC_CAP = 80
 IMPACT_STATS = frozenset(
@@ -25,8 +27,9 @@ IMPACT_STATS = frozenset(
 POS_LABEL = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
 # Slim snapshot fields we diff. `defCon` is the position-relevant action count.
-# BPS is stored on the player snapshot but not logged unless bonus actually
-# moves — raw BPS ticks drown the recap.
+# BPS is stored on the player snapshot but never logged (bonus 0→N / N→0 is
+# the row that matters). Raw DefCon action ticks are also dropped unless the
+# player crossed or fell off the scoring threshold.
 DIFF_FIELDS = (
     ("pts", "Pts"),
     ("goals", "Goals"),
@@ -160,7 +163,7 @@ def diff_player(prev: dict, curr: dict) -> list[dict]:
         if flag:
             row["threshold"] = flag
         changes.append(row)
-    return prune_bps_changes(changes)
+    return prune_logged_changes(changes)
 
 
 def load_cache(path: Path | None = None) -> dict:
@@ -181,19 +184,28 @@ def save_cache(cache: dict, path: Path | None = None) -> None:
     tmp.replace(target)
 
 
-def prune_bps_changes(changes: list) -> list:
-    """Drop raw BPS ticks. Bonus gain / loss is the row that matters."""
+def _change_is_logged(change: dict) -> bool:
+    stat = change.get("stat")
+    if stat == "bps":
+        return False
+    if stat == "defCon" and change.get("threshold") not in ("hit", "lost"):
+        return False
+    return True
+
+
+def prune_logged_changes(changes: list) -> list:
+    """Drop raw BPS ticks and DefCon action counts without a threshold cross."""
     return [
         change
         for change in changes
-        if isinstance(change, dict) and change.get("stat") != "bps"
+        if isinstance(change, dict) and _change_is_logged(change)
     ]
 
 
-def prune_entry_bps(entry: dict) -> dict | None:
+def prune_entry_logged(entry: dict) -> dict | None:
     if not isinstance(entry, dict):
         return None
-    changes = prune_bps_changes(entry.get("changes") or [])
+    changes = prune_logged_changes(entry.get("changes") or [])
     if not changes:
         return None
     if changes == (entry.get("changes") or []):
@@ -201,6 +213,15 @@ def prune_entry_bps(entry: dict) -> dict | None:
     out = dict(entry)
     out["changes"] = changes
     return out
+
+
+def prune_bps_changes(changes: list) -> list:
+    """Back-compat alias — BPS + raw DefCon prune."""
+    return prune_logged_changes(changes)
+
+
+def prune_entry_bps(entry: dict) -> dict | None:
+    return prune_entry_logged(entry)
 
 
 def entry_is_impact(entry: dict) -> bool:
@@ -220,7 +241,7 @@ def entry_is_impact(entry: dict) -> bool:
 
 
 def entry_identity(entry: dict) -> tuple:
-    changes = prune_bps_changes(entry.get("changes") or [])
+    changes = prune_logged_changes(entry.get("changes") or [])
     fp = tuple(
         sorted(
             (
@@ -241,7 +262,7 @@ def dedupe_log(log: list) -> list:
     seen: dict[tuple, dict] = {}
     out: list[dict] = []
     for item in log:
-        row = prune_entry_bps(item) if isinstance(item, dict) else None
+        row = prune_entry_logged(item) if isinstance(item, dict) else None
         if not row:
             continue
         key = entry_identity(row)
@@ -259,13 +280,38 @@ def dedupe_log(log: list) -> list:
 
 
 def cap_log(log: list, cap: int) -> list:
-    """Keep every points-impact row; fill the rest with newest DefCon ticks."""
+    """Never drop points-impact rows; fill leftover slots with newest noise."""
     rows = dedupe_log(log)
     impact = [row for row in rows if entry_is_impact(row)]
     noise = [row for row in rows if not entry_is_impact(row)]
-    if len(impact) >= cap:
-        return impact[:cap]
-    return impact + noise[: cap - len(impact)]
+    room = max(0, cap - len(impact))
+    return impact + noise[:room]
+
+
+def empty_cache(gw: int, checked_at: str | None = None) -> dict:
+    return {
+        "gw": int(gw),
+        "gen": CACHE_GEN,
+        "updatedAt": checked_at,
+        "players": {},
+        "log": [],
+        "frozen": False,
+    }
+
+
+def migrate_cache(cache: dict, gw: int, checked_at: str | None = None) -> dict:
+    """Keep same-GW snapshots + recap across schema gens. Blank only on a new GW."""
+    if not isinstance(cache, dict) or _inum(cache.get("gw")) != int(gw):
+        return empty_cache(gw, checked_at)
+    players = cache.get("players") if isinstance(cache.get("players"), dict) else {}
+    return {
+        "gw": int(gw),
+        "gen": CACHE_GEN,
+        "updatedAt": cache.get("updatedAt") or checked_at,
+        "players": players,
+        "log": cap_log(cache.get("log") or [], LOG_CAP),
+        "frozen": bool(cache.get("frozen")),
+    }
 
 
 def public_stat_log(cache: dict) -> dict:
@@ -296,8 +342,10 @@ def update_stat_log(
 ) -> dict:
     """Diff completed-match players vs last snapshot; persist + return public log."""
     cache = load_cache(cache_path)
-    if _inum(cache.get("gw")) != int(gw) or _inum(cache.get("gen")) != CACHE_GEN:
-        cache = {"gw": int(gw), "gen": CACHE_GEN, "updatedAt": checked_at, "players": {}, "log": []}
+    if _inum(cache.get("gw")) != int(gw):
+        cache = empty_cache(gw, checked_at)
+    elif _inum(cache.get("gen")) != CACHE_GEN:
+        cache = migrate_cache(cache, gw, checked_at)
 
     if gw_settled and cache.get("frozen"):
         # Already captured the lock snapshot — keep the recap.
@@ -370,14 +418,16 @@ def update_stat_log(
 
     if new_events:
         log = new_events[::-1] + log
-        if len(log) > LOG_CAP:
-            log = cap_log(log, LOG_CAP)
+    log = cap_log(log, LOG_CAP)
+
+    players = dict(prev_players)
+    players.update(next_players)
 
     cache = {
         "gw": int(gw),
         "gen": CACHE_GEN,
         "updatedAt": checked_at,
-        "players": next_players or prev_players,
+        "players": players,
         "log": log,
         "frozen": bool(gw_settled),
     }
