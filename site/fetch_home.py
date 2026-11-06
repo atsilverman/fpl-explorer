@@ -1961,11 +1961,12 @@ def main() -> int:
         if bootstrap_err or not isinstance(bootstrap, dict):
             raise RuntimeError(bootstrap_err or "bootstrap-static failed")
         gws = extract_gameweeks(bootstrap, source="bootstrap")
-        display_gw = args.gw or display_gameweek_id(gws)
+        # After the next deadline, Home follows that GW even if FPL is slow to
+        # flip ``is_current`` (picks unlock at deadline, not at the flag).
+        display_gw = args.gw or picks_gameweek_id(gws) or display_gameweek_id(gws)
         picks_gw = picks_gameweek_id(gws) or display_gw
         if not display_gw:
             raise RuntimeError("Could not resolve active gameweek")
-        # Scoring/UI follow FPL current; league polling may target next GW during blackout.
         gw = display_gw
         transfer_poll_gw = picks_gw if picks_gw > display_gw else None
         compare_gw = display_gw if transfer_poll_gw else max(0, display_gw - 1)

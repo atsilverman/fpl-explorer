@@ -29,11 +29,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from fpl_gameweeks import (
+    DEADLINE_POLL_LEAD_SEC,
     DEADLINE_POLL_TAIL_SEC,
     active_gameweek_id,
     deadline_poll_window_active,
     extract_gameweeks,
     next_deadline_unix,
+    picks_gameweek_id,
 )
 from live_scoring import fixture_is_finished
 
@@ -47,10 +49,15 @@ UA = "Mozilla/5.0 (compatible; FPL-Explorer/1.0; +live-server)"
 # Wake this many seconds before the next kickoff so the first live poll
 # lands near KO instead of sleeping a blind idle hour past it.
 KICKOFF_LEAD_SEC = 120
-BOOTSTRAP_CACHE_SEC = 120
+BOOTSTRAP_CACHE_SEC = 30
+FIXTURES_CACHE_SEC = 30
+# Re-evaluate FPL current / deadlines this often even during a long idle.
+SLEEP_SLICE_SEC = 20
+FIXTURE_FETCH_RETRY_SEC = 60
 
 _bootstrap_cache: dict | None = None
 _bootstrap_cache_at: float = 0.0
+_fixtures_cache: dict[int, tuple[float, list]] = {}
 
 
 class LiveState:
@@ -61,6 +68,9 @@ class LiveState:
         self.last_fetch_sec: float | None = None
         self.interval_sec = 3600
         self.fetching = False
+        self.poll_reason: str | None = None
+        self.fpl_gw: int | None = None
+        self.cache_gw: int | None = None
 
 
 STATE = LiveState()
@@ -111,11 +121,47 @@ def load_prefs() -> tuple[int | None, int | None]:
 def load_gw_fixtures(gw: int | None) -> list[dict]:
     if not gw:
         return []
+    now = time.time()
+    cached = _fixtures_cache.get(int(gw))
+    if cached and now - cached[0] < FIXTURES_CACHE_SEC:
+        return cached[1]
     try:
         fixtures_raw = fpl_get(f"/fixtures/?event={gw}")
-        return fixtures_raw if isinstance(fixtures_raw, list) else []
+        fixtures = fixtures_raw if isinstance(fixtures_raw, list) else []
+        if fixtures:
+            _fixtures_cache[int(gw)] = (now, fixtures)
+            return fixtures
+        return cached[1] if cached else []
     except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError):
-        return []
+        return cached[1] if cached else []
+
+
+def load_timing_fixtures(gw: int | None) -> list[dict]:
+    """Fixtures for poll timing: active GW plus the next GW if it is distinct.
+
+    Loading the next event means we still wake for its deadline / first kickoff
+    even if Home cache is sitting on a settled previous GW.
+    """
+    seen: set[int] = set()
+    out: list[dict] = []
+    gws = load_bootstrap_gameweeks()
+    ids: list[int] = []
+    if gw:
+        ids.append(int(gw))
+    for key in ("current", "next"):
+        row = gws.get(key) or {}
+        try:
+            eid = int(row.get("id"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if eid > 0:
+            ids.append(eid)
+    for eid in ids:
+        if eid in seen:
+            continue
+        seen.add(eid)
+        out.extend(load_gw_fixtures(eid))
+    return out
 
 
 def fixture_in_play_for_poll(fx: dict | None) -> bool:
@@ -140,9 +186,27 @@ def fixtures_have_completed(fixtures: list[dict]) -> bool:
     return any(fixture_is_finished(fx) for fx in fixtures)
 
 
-def home_gw_settled_cached() -> bool:
+def cached_home_gw() -> int | None:
     payload = read_home_payload()
-    return bool(payload and payload.get("gwSettled") is True)
+    if not payload:
+        return None
+    try:
+        gw = int(payload.get("gw"))
+    except (TypeError, ValueError):
+        return None
+    return gw if gw > 0 else None
+
+
+def home_gw_settled_cached(active_gw: int | None = None) -> bool:
+    payload = read_home_payload()
+    if not payload or payload.get("gwSettled") is not True:
+        return False
+    if active_gw is None:
+        return True
+    try:
+        return int(payload.get("gw") or 0) == int(active_gw)
+    except (TypeError, ValueError):
+        return False
 
 
 def newest_full_time_age_sec(fixtures: list[dict], now: float | None = None) -> float | None:
@@ -168,9 +232,9 @@ def newest_full_time_age_sec(fixtures: list[dict], now: float | None = None) -> 
     return max(0.0, now_ts - newest)
 
 
-def review_interval_sec(fixtures: list[dict]) -> int | None:
+def review_interval_sec(fixtures: list[dict], active_gw: int | None = None) -> int | None:
     """Poll cadence from first full-time through FPL lock; None if not in that window."""
-    if home_gw_settled_cached():
+    if home_gw_settled_cached(active_gw):
         return None
     if not fixtures_have_completed(fixtures):
         return None
@@ -251,31 +315,21 @@ def league_picks_need_poll() -> bool:
 
 
 def resolve_active_gw() -> int | None:
-    """FPL current/next GW for poll timing. Do not pin to a stale Home cache."""
+    """GW Home should track now. Uses next-GW picks after deadline, not a stale cache."""
     gws = load_bootstrap_gameweeks()
-    boot_gw = active_gameweek_id(gws)
+    boot_gw = picks_gameweek_id(gws) or active_gameweek_id(gws)
     if boot_gw:
         return boot_gw
-    cached = read_home_payload()
-    if cached and cached.get("gw") is not None:
-        try:
-            return int(cached["gw"])
-        except (TypeError, ValueError):
-            pass
-    return None
+    return cached_home_gw()
 
 
 def cache_gw_stale() -> bool:
-    """True when the on-disk Home payload is a different GW than FPL current."""
-    gws = load_bootstrap_gameweeks()
-    boot_gw = active_gameweek_id(gws)
-    payload = read_home_payload()
-    if not boot_gw or not payload:
+    """True when the on-disk Home payload is a different GW than FPL current/picks."""
+    boot_gw = resolve_active_gw()
+    cache_gw = cached_home_gw()
+    if not boot_gw or not cache_gw:
         return False
-    try:
-        return int(payload.get("gw") or 0) != int(boot_gw)
-    except (TypeError, ValueError):
-        return False
+    return int(cache_gw) != int(boot_gw)
 
 
 def read_home_payload() -> dict | None:
@@ -335,25 +389,21 @@ def run_fetch_home(manager_id: int, league_id: int) -> tuple[bool, str | None]:
 
 
 def maybe_trigger_refresh_if_stale() -> None:
-    """Kick off a background fetch when clients hit stale cache during live/review."""
+    """Kick off a background fetch when clients hit a payload that should already be live."""
     with STATE.lock:
         if STATE.fetching:
             return
-    gws = load_bootstrap_gameweeks()
-    gw = resolve_active_gw()
-    fixtures = load_gw_fixtures(gw)
-    live = fixtures_have_live_action(fixtures)
-    review = review_interval_sec(fixtures) if not live else None
-    deadline = deadline_poll_window_active(gws)
-    rollover = cache_gw_stale()
-    if not live and review is None and not deadline and not rollover:
-        return
-    min_age = INTERVAL_LIVE_SEC if (live or deadline or rollover) else review
+    interval, reason = compute_interval(INTERVAL_LIVE_SEC, INTERVAL_IDLE_SEC)
     with STATE.lock:
+        STATE.interval_sec = interval
+        STATE.poll_reason = reason
         if STATE.fetching:
             return
         last = STATE.last_fetch_sec
-        if last is not None and time.time() - last < min_age:
+        # Idle page views must not hammer FPL; urgent windows may catch a stuck daemon.
+        if interval > 120 and not cache_gw_stale():
+            return
+        if last is not None and time.time() - last < interval:
             return
     threading.Thread(
         target=refresh_once,
@@ -363,38 +413,68 @@ def maybe_trigger_refresh_if_stale() -> None:
     ).start()
 
 
-def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOFF_LEAD_SEC) -> int:
+def compute_interval(
+    live_sec: int,
+    idle_sec: int,
+    kickoff_lead_sec: int = KICKOFF_LEAD_SEC,
+) -> tuple[int, str]:
+    """Return (seconds until next fetch, reason). Never rely on a settled cache GW."""
     gws = load_bootstrap_gameweeks()
     now = time.time()
-    if deadline_poll_window_active(gws, now, DEADLINE_POLL_TAIL_SEC):
-        return max(15, live_sec)
-    if league_picks_need_poll():
-        return max(15, live_sec)
+    live = max(15, int(live_sec))
+    idle = max(live, int(idle_sec))
     gw = resolve_active_gw()
-    fixtures = load_gw_fixtures(gw)
+    cache_gw = cached_home_gw()
+    with STATE.lock:
+        STATE.fpl_gw = gw
+        STATE.cache_gw = cache_gw
+
+    if cache_gw_stale():
+        return live, f"cache-gw-{cache_gw}-behind-fpl-{gw}"
+    if deadline_poll_window_active(
+        gws, now, tail_sec=DEADLINE_POLL_TAIL_SEC, lead_sec=DEADLINE_POLL_LEAD_SEC
+    ):
+        return live, "deadline-window"
+    if league_picks_need_poll():
+        return live, "league-picks"
+
+    fixtures = load_timing_fixtures(gw)
     if fixtures_have_live_action(fixtures):
-        return max(15, live_sec)
+        return live, "live-fixtures"
     until = seconds_until_next_kickoff(fixtures)
     if until is not None and until <= kickoff_lead_sec:
-        return max(15, live_sec)
+        return live, "kickoff-lead"
     nxt_dl = next_deadline_unix(gws, now)
     if nxt_dl is not None and (nxt_dl - now) <= kickoff_lead_sec:
-        return max(15, live_sec)
-    review = review_interval_sec(fixtures)
+        return live, "deadline-lead"
+
+    review = review_interval_sec(fixtures, active_gw=gw)
     if review is not None:
-        interval = max(15, review)
-    elif until is None:
-        interval = max(15, idle_sec)
+        interval = max(live, int(review))
+        reason = "review"
+    elif not fixtures and gw:
+        interval = min(idle, FIXTURE_FETCH_RETRY_SEC)
+        reason = "fixtures-missing"
     else:
-        interval = max(15, idle_sec)
-    # Wake before next KO / deadline; never sleep a blind idle hour through rollover.
-    wakes: list[int] = []
+        interval = idle
+        reason = "idle"
+
+    wakes: list[tuple[int, str]] = []
     if until is not None:
-        wakes.append(max(15, int(until) - kickoff_lead_sec))
+        wakes.append((max(live, int(until) - kickoff_lead_sec), "until-kickoff"))
     if nxt_dl is not None:
-        wakes.append(max(15, int(nxt_dl - now) - kickoff_lead_sec))
-    for wake in wakes:
-        interval = min(interval, wake)
+        wakes.append((max(live, int(nxt_dl - now) - kickoff_lead_sec), "until-deadline"))
+    for wake, wake_reason in wakes:
+        if wake < interval:
+            interval = wake
+            reason = wake_reason
+    return interval, reason
+
+
+def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOFF_LEAD_SEC) -> int:
+    interval, reason = compute_interval(live_sec, idle_sec, kickoff_lead_sec)
+    with STATE.lock:
+        STATE.poll_reason = reason
     return interval
 
 
@@ -417,11 +497,12 @@ def refresh_once(live_sec: int, idle_sec: int) -> None:
         ok, err = run_fetch_home(manager_id, league_id)
     finally:
         payload = read_home_payload()
-        interval = choose_interval(live_sec, idle_sec)
+        interval, reason = compute_interval(live_sec, idle_sec)
         with STATE.lock:
             STATE.fetching = False
             STATE.last_fetch_sec = time.time()
             STATE.interval_sec = interval
+            STATE.poll_reason = reason
             if ok and payload:
                 STATE.generated_at = payload.get("generatedAt")
                 STATE.last_error = payload.get("error")
@@ -429,12 +510,25 @@ def refresh_once(live_sec: int, idle_sec: int) -> None:
                 STATE.last_error = err or "fetch failed"
 
 
+def wait_until_next_fetch(live_sec: int, idle_sec: int) -> None:
+    """Sleep in short slices so a GW flip / deadline can interrupt a long idle."""
+    while True:
+        interval, reason = compute_interval(live_sec, idle_sec)
+        with STATE.lock:
+            STATE.interval_sec = interval
+            STATE.poll_reason = reason
+            last = STATE.last_fetch_sec
+        now = time.time()
+        due = (last or 0) + max(15, interval)
+        if now >= due:
+            return
+        time.sleep(min(float(SLEEP_SLICE_SEC), max(1.0, due - now)))
+
+
 def daemon_loop(live_sec: int, idle_sec: int) -> None:
     while True:
         refresh_once(live_sec, idle_sec)
-        with STATE.lock:
-            wait = max(15, STATE.interval_sec)
-        time.sleep(wait)
+        wait_until_next_fetch(live_sec, idle_sec)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -469,10 +563,17 @@ class Handler(BaseHTTPRequestHandler):
         route = self.path.split("?", 1)[0].rstrip("/")
         if route == "/health":
             with STATE.lock:
+                last = STATE.last_fetch_sec
                 body = {
                     "ok": True,
                     "generatedAt": STATE.generated_at,
                     "intervalSec": STATE.interval_sec,
+                    "pollReason": STATE.poll_reason,
+                    "fplGw": STATE.fpl_gw,
+                    "cacheGw": STATE.cache_gw,
+                    "lastFetchAgeSec": (
+                        None if last is None else max(0, int(time.time() - last))
+                    ),
                     "lastError": STATE.last_error,
                     "fetching": STATE.fetching,
                 }

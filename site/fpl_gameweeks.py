@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+DEADLINE_POLL_LEAD_SEC = 10 * 60
 DEADLINE_POLL_TAIL_SEC = 45 * 60
 
 
@@ -136,11 +137,13 @@ def deadline_poll_window_active(
     gameweeks: dict | None,
     now_ts: float | None = None,
     tail_sec: int = DEADLINE_POLL_TAIL_SEC,
+    lead_sec: int = DEADLINE_POLL_LEAD_SEC,
 ) -> bool:
-    """True during the post-deadline window when FPL may still be locking picks."""
+    """True from shortly before a GW deadline through FPL's pick-lock window."""
     if not gameweeks or tail_sec <= 0:
         return False
     now = now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp()
+    lead = max(0, int(lead_sec or 0))
     for key in ("previous", "current", "next"):
         row = gameweeks.get(key)
         if not row:
@@ -148,6 +151,6 @@ def deadline_poll_window_active(
         dl = parse_deadline_unix(row.get("deadlineTime"))
         if dl is None:
             continue
-        if dl <= now <= dl + tail_sec:
+        if dl - lead <= now <= dl + tail_sec:
             return True
     return False
