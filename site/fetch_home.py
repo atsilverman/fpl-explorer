@@ -2540,7 +2540,6 @@ def main() -> int:
             )
 
         top_ids = top_third_entry_ids(results)
-        top_third_mult_maps = [mults_by_entry.get(eid, {}) for eid in top_ids]
         squads_by_entry: dict[str, list] = {}
         for eid, ed in entry_data.items():
             picks = ed.get("picks") or []
@@ -2549,6 +2548,9 @@ def main() -> int:
             active = ed.get("active") or []
             subs = ed.get("subs") or []
             active_ids = {int(p["element"]) for p in active}
+            # Leave the viewed manager out of the rival average so a unique XI
+            # is +100% (not 80% when they themselves are 1 of 5 in the top third).
+            peer_maps = [mults_by_entry.get(tid, {}) for tid in top_ids if tid != eid]
             squads_by_entry[str(eid)] = build_squad_rows(
                 picks,
                 active_ids,
@@ -2559,7 +2561,7 @@ def main() -> int:
                 teams,
                 fixtures,
                 ed.get("mults") or {},
-                top_third_mult_maps,
+                peer_maps,
                 ui_auto_subs=ed.get("ui_subs"),
             )
         squad = squads_by_entry.get(str(manager_id), [])

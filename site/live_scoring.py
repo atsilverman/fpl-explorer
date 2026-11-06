@@ -513,10 +513,11 @@ def top_third_entry_ids(standings_results: list[dict]) -> list[int]:
 
 
 def importance_pct(our_mult: int, top_third_mults: list[int]) -> int:
-    """Defcon Importance: (our mult×100) − mean(top-third mult×100).
+    """Defcon Importance: (our mult×100) − mean(rival top-third mult×100).
 
-    100% ≈ unique XI vs top third; 200% captain; 300% triple captain.
-    Positive = you gain more share than the top third average.
+    Rivals = top third of classic standings, excluding the viewed manager.
+    100% = unique XI vs that group; 200% unique captain; 300% unique TC.
+    Positive = you gain more share than the rival average.
     """
     our = int(our_mult or 0) * 100
     if not top_third_mults:
