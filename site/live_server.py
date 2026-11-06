@@ -33,6 +33,7 @@ from fpl_gameweeks import (
     active_gameweek_id,
     deadline_poll_window_active,
     extract_gameweeks,
+    next_deadline_unix,
 )
 from live_scoring import fixture_is_finished
 
@@ -250,20 +251,31 @@ def league_picks_need_poll() -> bool:
 
 
 def resolve_active_gw() -> int | None:
+    """FPL current/next GW for poll timing. Do not pin to a stale Home cache."""
+    gws = load_bootstrap_gameweeks()
+    boot_gw = active_gameweek_id(gws)
+    if boot_gw:
+        return boot_gw
     cached = read_home_payload()
     if cached and cached.get("gw") is not None:
         try:
             return int(cached["gw"])
         except (TypeError, ValueError):
             pass
+    return None
+
+
+def cache_gw_stale() -> bool:
+    """True when the on-disk Home payload is a different GW than FPL current."""
+    gws = load_bootstrap_gameweeks()
+    boot_gw = active_gameweek_id(gws)
+    payload = read_home_payload()
+    if not boot_gw or not payload:
+        return False
     try:
-        bootstrap = fpl_get("/bootstrap-static/")
-        if not isinstance(bootstrap, dict):
-            return None
-        gws = extract_gameweeks(bootstrap, source="bootstrap")
-        return active_gameweek_id(gws)
-    except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError):
-        return None
+        return int(payload.get("gw") or 0) != int(boot_gw)
+    except (TypeError, ValueError):
+        return False
 
 
 def read_home_payload() -> dict | None:
@@ -327,13 +339,16 @@ def maybe_trigger_refresh_if_stale() -> None:
     with STATE.lock:
         if STATE.fetching:
             return
+    gws = load_bootstrap_gameweeks()
     gw = resolve_active_gw()
     fixtures = load_gw_fixtures(gw)
     live = fixtures_have_live_action(fixtures)
     review = review_interval_sec(fixtures) if not live else None
-    if not live and review is None:
+    deadline = deadline_poll_window_active(gws)
+    rollover = cache_gw_stale()
+    if not live and review is None and not deadline and not rollover:
         return
-    min_age = INTERVAL_LIVE_SEC if live else review
+    min_age = INTERVAL_LIVE_SEC if (live or deadline or rollover) else review
     with STATE.lock:
         if STATE.fetching:
             return
@@ -362,17 +377,25 @@ def choose_interval(live_sec: int, idle_sec: int, kickoff_lead_sec: int = KICKOF
     until = seconds_until_next_kickoff(fixtures)
     if until is not None and until <= kickoff_lead_sec:
         return max(15, live_sec)
+    nxt_dl = next_deadline_unix(gws, now)
+    if nxt_dl is not None and (nxt_dl - now) <= kickoff_lead_sec:
+        return max(15, live_sec)
     review = review_interval_sec(fixtures)
     if review is not None:
-        if until is None:
-            return max(15, review)
-        wake = max(15, int(until) - kickoff_lead_sec)
-        return min(max(15, review), wake)
-    if until is None:
-        return max(15, idle_sec)
-    # Wake ~kickoff_lead_sec before KO; never sleep longer than idle_sec.
-    wake = max(15, int(until) - kickoff_lead_sec)
-    return min(max(15, idle_sec), wake)
+        interval = max(15, review)
+    elif until is None:
+        interval = max(15, idle_sec)
+    else:
+        interval = max(15, idle_sec)
+    # Wake before next KO / deadline; never sleep a blind idle hour through rollover.
+    wakes: list[int] = []
+    if until is not None:
+        wakes.append(max(15, int(until) - kickoff_lead_sec))
+    if nxt_dl is not None:
+        wakes.append(max(15, int(nxt_dl - now) - kickoff_lead_sec))
+    for wake in wakes:
+        interval = min(interval, wake)
+    return interval
 
 
 def refresh_once(live_sec: int, idle_sec: int) -> None:
