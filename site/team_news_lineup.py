@@ -1,7 +1,7 @@
 """OCR club XI graphics and match tokens to that club's FPL players.
 
-Used so Home can project auto-sub UI as soon as the team-news graphic lands,
-before FPL live stats show 0′ / FT.
+Used so Home can mark unused starters from the team-news graphic after
+kickoff, before FPL live stats show 0′ / FT. Pre-kickoff sheets are news only.
 """
 from __future__ import annotations
 

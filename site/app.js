@@ -4100,41 +4100,31 @@
     }
   }
 
-  function homeLiveBonusHeld(row) {
+  /** Live FPL bonus is still moving — show it, but label the tap card as provisional. */
+  function homePlayerGwBonusProvisional(row) {
     if (!row) return false;
     if (row.matchStatus === "finished") return false;
     const fxs = typeof homeSquadFixtures === "function" ? homeSquadFixtures(row) : [];
-    const inPlay = fxs.some((fx) =>
-      (typeof homeSquadFixtureIsInPlay === "function" && homeSquadFixtureIsInPlay(fx))
-      || (fx && fx.live && !fx.finished)
-    );
-    if (!inPlay && fxs.some((fx) => fx && (fx.finished || fx.final))) return false;
-    return homePitchFlashMatchMins(row, row.minutes) < 60;
+    if (fxs.length) {
+      if (fxs.every((fx) => fx && (fx.finished || fx.final))) return false;
+      return fxs.some((fx) =>
+        (fx && fx.live && !fx.finished)
+        || (typeof homeSquadFixtureIsInPlay === "function" && homeSquadFixtureIsInPlay(fx))
+      );
+    }
+    return row.live === true || row.matchStatus === "live";
   }
 
   function homeSquadRowGwPoints(row, eg) {
     if (!homeCanShowVolatileStats()) return null;
     if (homeGwAwaitingKickoff()) return 0;
-    let pts = null;
-    let multiplied = false;
     if (row && row.gwPoints != null && Number.isFinite(Number(row.gwPoints))) {
-      pts = Number(row.gwPoints);
-      multiplied = true;
-    } else if (eg && eg.pts != null && Number.isFinite(Number(eg.pts))) {
-      pts = Number(eg.pts);
-    } else {
-      return null;
+      return Number(row.gwPoints);
     }
-    if (homeLiveBonusHeld(row)) {
-      const rec = eg && typeof eg === "object" ? eg : homeElementGwRecord(row && row.element);
-      const bonus = Number(rec && rec.bonus) || 0;
-      if (bonus) {
-        const m = Number(row && row.multiplier);
-        const mult = multiplied && Number.isFinite(m) && m > 0 ? m : 1;
-        pts -= bonus * mult;
-      }
+    if (eg && eg.pts != null && Number.isFinite(Number(eg.pts))) {
+      return Number(eg.pts);
     }
-    return pts;
+    return null;
   }
 
   function homeDisplayGwPoints({ surface, row, squadRow, eg } = {}) {
@@ -5297,6 +5287,22 @@
     return counts[1] >= 1 && counts[2] >= 3 && counts[3] >= 2 && counts[4] >= 1;
   }
 
+  /** True once FPL has this player's fixture live or finished — not merely a published XI. */
+  function homeSquadRowMatchStarted(row) {
+    if (!row) return false;
+    if ((Number(row.minutes) || 0) > 0) return true;
+    const st = String(row.matchStatus || "");
+    if (st === "live" || st === "finished") return true;
+    if (row.live) return true;
+    for (const fx of homeSquadFixtures(row) || []) {
+      if (!fx) continue;
+      if (fx.live || fx.finished || fx.final) return true;
+      if ((Number(fx.minutes) || 0) > 0) return true;
+      if (typeof homeSquadFixtureIsInPlay === "function" && homeSquadFixtureIsInPlay(fx)) return true;
+    }
+    return false;
+  }
+
   function homeTeamNewsAutosubPairs(squad) {
     const named = homeTeamNewsNamedByTeam();
     if (!named.size) return [];
@@ -5316,7 +5322,12 @@
     const used = new Set();
     const pairs = [];
     starting.forEach((starter, idx) => {
-      if (!sheetReady(starter) || onSheet(starter) || (Number(starter.minutes) || 0) > 0) {
+      if (
+        !sheetReady(starter)
+        || onSheet(starter)
+        || (Number(starter.minutes) || 0) > 0
+        || !homeSquadRowMatchStarted(starter)
+      ) {
         active.push(starter);
         return;
       }
@@ -5699,10 +5710,6 @@
     if (banner) {
     if (viewingOther) {
       hideHomeOwnerBannerToast();
-      if (mobileSheetOpen && mobileSheetKey === "home-search") {
-        closeMobileSheet();
-      }
-      hideHomeDesktopSearchResults();
     }
       banner.hidden = true;
     banner.classList.remove("is-visible", "is-leaving");
@@ -10702,31 +10709,12 @@
     }
 
     const bps = Number(eg.bps) || 0;
-    let bonusPts = Number(eg.bonus) || 0;
-    if (bonusPts <= 0 && bps > 0) {
-      try {
-        const gw = Number(HOME && HOME.gw);
-        const egMap = homeElementGwMap();
-        const matchups = liveMatchupsForGw(gw);
-        const byElement = livePlayerByElement();
-        const matchupByTeam = new Map();
-        for (const m of matchups || []) {
-          matchupByTeam.set(m.home, m.id);
-          matchupByTeam.set(m.away, m.id);
-        }
-        const eligible = liveFeedMatchupBonusEligibleMap(matchups, egMap, byElement);
-        const ranks = liveFeedBonusRankByFixture(egMap, byElement, matchupByTeam, eligible);
-        const eid = homeLookupElementId(row) ?? row.element;
-        const meta = ranks.get(String(eid)) || ranks.get(eid);
-        if (meta && meta.effectiveBonus > 0) bonusPts = meta.effectiveBonus;
-      } catch (_) {
-        /* keep api bonus */
-      }
-    }
-    if (!homeLiveBonusHeld(row) && (bonusPts > 0 || bps !== 0)) {
-      push("Bonus points", `${bps} BPS`, bonusPts);
-    } else if (homeLiveBonusHeld(row) && bps !== 0) {
-      push("Bonus points", `${bps} BPS · after 60′`, 0);
+    const bonusPts = Number(eg.bonus) || 0;
+    if (bonusPts > 0 || bps !== 0) {
+      const detail = homePlayerGwBonusProvisional(row)
+        ? `${bps} BPS · provisional`
+        : `${bps} BPS`;
+      push("Bonus points", detail, bonusPts);
     }
 
     const totalRaw = homeSquadRowGwPoints(row, eg);
@@ -14979,6 +14967,7 @@
     if (!row || row.onBench || Number(row.position) > 11) return false;
     if (row.autoSubOut || row.autoSubIn) return false;
     if (Math.max(Number(row.minutes) || 0) > 0) return false;
+    if (!homeSquadRowMatchStarted(row)) return false;
     const named = homeTeamNewsNamedByTeam();
     const set = named.get(String(row.team || ""));
     if (!set) return false;
@@ -19816,12 +19805,87 @@
     openPlayerDetailsFromRow(row);
   }
 
+  /** Empty-search shortcuts: biggest GW scores first, then live, then interest. */
+  function homeSearchHeroPlayers(limit = 3) {
+    const catalog = homeSearchCatalog();
+    if (!catalog.length) return [];
+    const scorers = [];
+    const live = [];
+    const rest = [];
+    for (const row of catalog) {
+      const gw = homeElementGwStats(homeLookupElementId(row));
+      if ((gw.pts || 0) > 0) scorers.push(row);
+      else if (gw.live) live.push(row);
+      else rest.push(row);
+    }
+    const byGwPts = (a, b) => {
+      const ga = homeElementGwStats(homeLookupElementId(a));
+      const gb = homeElementGwStats(homeLookupElementId(b));
+      if ((gb.pts || 0) !== (ga.pts || 0)) return (gb.pts || 0) - (ga.pts || 0);
+      if (!!gb.live !== !!ga.live) return ga.live ? -1 : 1;
+      return homeSearchInterestCompare(a, b);
+    };
+    return scorers.sort(byGwPts)
+      .concat(homeSearchSortRows(live), homeSearchSortRows(rest))
+      .slice(0, limit);
+  }
+
+  function homeSearchHeroBadgeHTML(row) {
+    const team = row.team || "";
+    return badgeHTML(team, "home-search-hero-badge") || teamCrestFallbackHTML(team, "home-search-hero-badge");
+  }
+
+  function homeSearchHeroCardHTML(row) {
+    const id = homeLookupElementId(row);
+    const gw = homeElementGwStats(id);
+    const gwPts = Number(gw.pts) || 0;
+    const name = row.name || "—";
+    const liveCls = gw.live ? " is-live" : "";
+    return `<button type="button" class="home-search-hero${liveCls}" data-home-search-id="${escapeHtml(String(id ?? ""))}" data-home-search-code="${escapeHtml(String(row.code ?? ""))}" aria-label="${escapeHtml(`${name}, ${gwPts} gameweek points`)}">
+      <span class="home-search-hero-pts">${escapeHtml(String(gwPts))}</span>
+      <span class="home-search-hero-crest">${homeSearchHeroBadgeHTML(row)}</span>
+      <span class="home-search-hero-name">${escapeHtml(name)}</span>
+    </button>`;
+  }
+
+  function homeSearchHeroesHTML() {
+    const rows = homeSearchHeroPlayers(3);
+    if (rows.length < 3) return "";
+    return `<div class="home-search-heroes" id="home-search-heroes">${rows.map(homeSearchHeroCardHTML).join("")}</div>`;
+  }
+
+  function homeSearchBindHeroes() {}
+
+  function homeSearchSyncHeroes(sheet, query) {
+    if (!sheet) return;
+    const hasQ = !!String(query || "").trim();
+    let heroes = sheet.querySelector("#home-search-heroes");
+    if (hasQ) {
+      if (heroes) heroes.hidden = true;
+      return;
+    }
+    if (!heroes) {
+      const html = homeSearchHeroesHTML();
+      if (!html) return;
+      const wrap = sheet.querySelector(".home-search-input-wrap");
+      if (wrap) wrap.insertAdjacentHTML("afterend", html);
+      else sheet.insertAdjacentHTML("afterbegin", html);
+      heroes = sheet.querySelector("#home-search-heroes");
+      homeSearchBindHeroes(heroes);
+      return;
+    }
+    heroes.hidden = false;
+  }
+
   function homeSearchSheetHTML(query = "") {
+    const q = String(query || "").trim();
+    const heroes = q ? "" : homeSearchHeroesHTML();
     return `<div class="home-search-sheet">
       <div class="home-search-input-wrap">
         <input id="home-search-input" class="home-search-input" type="search" enterkeyhint="search"
           placeholder="Search players or teams" value="${escapeHtml(query)}" autocomplete="off" />
       </div>
+      ${heroes}
       <div class="home-search-results" id="home-search-results">${homeSearchResultsListHTML(query)}</div>
     </div>`;
   }
@@ -19829,6 +19893,8 @@
   function bindHomeSearchSheetEvents() {
     const input = document.getElementById("home-search-input");
     const results = document.getElementById("home-search-results");
+    const sheet = input && input.closest(".home-search-sheet");
+    homeSearchBindHeroes(sheet && sheet.querySelector("#home-search-heroes"));
     if (input) {
       const refreshSheetViewport = () => {
         syncVisualViewportInsets();
@@ -19839,6 +19905,7 @@
       };
       input.addEventListener("input", () => {
         if (!results) return;
+        homeSearchSyncHeroes(sheet, input.value);
         results.innerHTML = homeSearchResultsListHTML(input.value);
         refreshSheetViewport();
       });
@@ -19853,17 +19920,16 @@
         window.setTimeout(refreshSheetViewport, 320);
       });
     }
-    if (results) {
-      results.addEventListener("click", (e) => {
-        const btn = e.target.closest(".home-search-row");
-        if (!btn || !results.contains(btn)) return;
+    if (sheet) {
+      sheet.addEventListener("click", (e) => {
+        const btn = e.target.closest(".home-search-hero, .home-search-row");
+        if (!btn || !sheet.contains(btn)) return;
         homeSearchActivateRow(btn);
       });
     }
   }
 
   function openHomeSearchSheet() {
-    if (homeIsViewingOtherManager()) return;
     if (homeLookupPlayer) clearHomePlayerLookup({ rerender: true });
     if (NARROW_MQ.matches && el.homeBento) el.homeBento.classList.add("is-search-open");
     openMobileSheet({
@@ -19883,16 +19949,15 @@
     const cluster = el.homeNavCluster;
     const onHome = state.page === "home";
     const desktop = !NARROW_MQ.matches;
-    const viewingOther = homeIsViewingOtherManager();
     if (cluster) cluster.hidden = !(onHome && desktop);
     if (!wrap) return;
-    wrap.hidden = !(onHome && desktop && !viewingOther);
-    if (!onHome || !desktop || viewingOther) {
+    wrap.hidden = !(onHome && desktop);
+    if (!onHome || !desktop) {
       if (results) {
         results.hidden = true;
         results.innerHTML = "";
       }
-      wrap.classList.remove("is-open");
+      wrap.classList.remove("is-open", "has-heroes");
       return;
     }
     if (clearBtn) clearBtn.hidden = !homeLookupPlayer && !(input && String(input.value || "").trim());
@@ -19923,16 +19988,27 @@
     if (!results) return;
     const q = String(query || "").trim();
     if (!q) {
-      results.hidden = true;
-      results.innerHTML = "";
-      if (wrap) wrap.classList.remove("is-open");
+      const heroes = homeSearchHeroesHTML();
+      if (!heroes) {
+        results.hidden = true;
+        results.innerHTML = "";
+        if (wrap) wrap.classList.remove("is-open", "has-heroes");
+        return;
+      }
+      results.innerHTML = heroes;
+      homeSearchBindHeroes(results);
+      results.hidden = false;
+      if (wrap) wrap.classList.add("is-open", "has-heroes");
       return;
     }
     results.innerHTML = homeSearchResultsListHTML(q);
     // Ensure panel lives under the field (undo any prior body portal).
     if (wrap && results.parentElement !== wrap) wrap.appendChild(results);
     results.hidden = false;
-    if (wrap) wrap.classList.add("is-open");
+    if (wrap) {
+      wrap.classList.add("is-open");
+      wrap.classList.remove("has-heroes");
+    }
   }
 
   function hideHomeDesktopSearchResults() {
@@ -19942,7 +20018,7 @@
     results.hidden = true;
     results.innerHTML = "";
     if (wrap) {
-      wrap.classList.remove("is-open");
+      wrap.classList.remove("is-open", "has-heroes");
       if (results.parentElement !== wrap) wrap.appendChild(results);
     }
     document.documentElement.classList.remove("home-desktop-search-open");
@@ -22301,8 +22377,7 @@
     const showHomeSearch =
       mobileDocksActive() &&
       state.page === "home" &&
-      !!el.homeSearchBtn &&
-      !homeIsViewingOtherManager();
+      !!el.homeSearchBtn;
     if (!mobileDocksActive()) {
       restoreAllMobileFilterButtons();
       dock.hidden = true;
@@ -36466,8 +36541,7 @@
     });
     el.homeDesktopSearchInput.addEventListener("focus", () => {
       if (state.page !== "home" || NARROW_MQ.matches) return;
-      const q = el.homeDesktopSearchInput.value;
-      if (String(q || "").trim()) renderHomeDesktopSearchResults(q);
+      renderHomeDesktopSearchResults(el.homeDesktopSearchInput.value);
     });
     el.homeDesktopSearchInput.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -36492,7 +36566,7 @@
   }
   if (el.homeDesktopSearchResults) {
     el.homeDesktopSearchResults.addEventListener("click", (e) => {
-      const btn = e.target.closest(".home-search-row");
+      const btn = e.target.closest(".home-search-hero, .home-search-row");
       if (!btn || !el.homeDesktopSearchResults.contains(btn)) return;
       homeSearchActivateRow(btn);
     });

@@ -143,10 +143,12 @@ def project_graphic_auto_subs(
     named_ids_by_team: dict[str, set[int]],
     active_chip: str | None = None,
     live_stats: dict | None = None,
+    match_status: dict[int, str] | None = None,
 ) -> list[dict]:
     """UI-only auto-subs from team-news graphics (starter not named on the sheet).
 
-    Does not require FT or minutes. Only teams with a ready named list take part.
+    Only after that starter's fixture has kicked off (live or finished). A
+    published XI before kickoff is not an auto-sub — lineups can still change.
     Bench players whose own club sheet also omits them are skipped.
     """
     chip = (active_chip or "").lower()
@@ -180,9 +182,16 @@ def project_graphic_auto_subs(
         starter_id = int(starter["element"])
         starter_etype = element_types.get(starter_id)
         starter_mins = _minutes((live_stats or {}).get(starter_id))
+        starter_status = (match_status or {}).get(starter_id) or "scheduled"
         # Minutes already recorded → this starter played; graphics must not
         # mark them off (named-ID misses like Groß / Thomas).
-        if not sheet_ready(starter_id) or on_sheet(starter_id) or starter_mins > 0:
+        # Pre-kickoff sheets are news, not substitutions.
+        if (
+            not sheet_ready(starter_id)
+            or on_sheet(starter_id)
+            or starter_mins > 0
+            or starter_status not in {"live", "finished"}
+        ):
             active.append(starter)
             continue
 

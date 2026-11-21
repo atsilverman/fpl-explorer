@@ -1664,9 +1664,9 @@ def resolve_ui_auto_subs(
 
     Official FPL ``automatic_subs`` wins as soon as it exists — including after
     lock, when the bodies have already moved (IN sits in the XI, OUT on the
-    bench). Preview (0′ + FT, then graphics) only runs before that stamp.
-    Once the GW is settled with no official pairs, return empty so leftover
-    graphic projections cannot invent a second swap.
+    bench). Preview (0′ + FT, then graphics after kickoff) only runs before
+    that stamp. Once the GW is settled with no official pairs, return empty so
+    leftover graphic projections cannot invent a second swap.
     """
     official = _with_sub_source(official_subs, "official")
     if official:
@@ -1677,7 +1677,13 @@ def resolve_ui_auto_subs(
     if ui:
         return _with_sub_source(ui, "minutes")
     return project_graphic_auto_subs(
-        picks, etypes, team_codes, graphic_named, chip, live_stats=stats
+        picks,
+        etypes,
+        team_codes,
+        graphic_named,
+        chip,
+        live_stats=stats,
+        match_status=match_status,
     )
 
 
