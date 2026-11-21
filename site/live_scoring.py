@@ -147,9 +147,10 @@ def project_graphic_auto_subs(
 ) -> list[dict]:
     """UI-only auto-subs from team-news graphics (starter not named on the sheet).
 
-    Only after that starter's fixture has kicked off (live or finished). A
-    published XI before kickoff is not an auto-sub — lineups can still change.
-    Bench players whose own club sheet also omits them are skipped.
+    Only after that starter's fixture has kicked off *and* FPL has recorded
+    minutes for someone on the club. ``started`` flips at KO before the live
+    feed has minutes, which is not an auto-sub. A published XI before then is
+    news only. Bench players whose own club sheet also omits them are skipped.
     """
     chip = (active_chip or "").lower()
     if chip in {"bboost", "benchboost", "bench_boost"}:
@@ -165,6 +166,15 @@ def project_graphic_auto_subs(
         code = team_code_by_element.get(int(eid))
         named = named_ids_by_team.get(code) if code else None
         return bool(named and int(eid) in named)
+
+    minutes_by_team: set[str] = set()
+    for eid, code in (team_code_by_element or {}).items():
+        if code and _minutes((live_stats or {}).get(int(eid))) > 0:
+            minutes_by_team.add(code)
+
+    def team_has_minutes(eid: int) -> bool:
+        code = team_code_by_element.get(int(eid))
+        return bool(code and code in minutes_by_team)
 
     starting = sorted(
         [p for p in picks if int(p.get("position") or 0) <= 11],
@@ -185,12 +195,14 @@ def project_graphic_auto_subs(
         starter_status = (match_status or {}).get(starter_id) or "scheduled"
         # Minutes already recorded → this starter played; graphics must not
         # mark them off (named-ID misses like Groß / Thomas).
-        # Pre-kickoff sheets are news, not substitutions.
+        # Pre-kickoff sheets, and live matches before anyone has minutes,
+        # are news, not substitutions.
         if (
             not sheet_ready(starter_id)
             or on_sheet(starter_id)
             or starter_mins > 0
             or starter_status not in {"live", "finished"}
+            or (starter_status == "live" and not team_has_minutes(starter_id))
         ):
             active.append(starter)
             continue

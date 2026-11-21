@@ -5303,6 +5303,31 @@
     return false;
   }
 
+  /** True once FPL live stats have minutes for anyone on this club this GW. */
+  function homeTeamHasRecordedMinutes(row) {
+    if (!row) return false;
+    if ((Number(row.minutes) || 0) > 0) return true;
+    const selfEg = homeElementGwRecord(row.element);
+    if ((Number(selfEg && selfEg.minutes) || 0) > 0) return true;
+    const team = String(row.team || "");
+    const teamId = Number(selfEg && selfEg.teamId);
+    const egMap = homeElementGwMap();
+    const byElement = typeof livePlayerByElement === "function" ? livePlayerByElement() : null;
+    for (const [eidStr, rec] of Object.entries(egMap || {})) {
+      if (!rec || (Number(rec.minutes) || 0) <= 0) continue;
+      if (Number.isFinite(teamId) && teamId > 0 && Number(rec.teamId) === teamId) return true;
+      if (team && byElement) {
+        const player = byElement.get(Number(eidStr));
+        const code =
+          (player && player.team) ||
+          (player && typeof currentTeamCode === "function" && currentTeamCode(player)) ||
+          "";
+        if (code && String(code) === team) return true;
+      }
+    }
+    return false;
+  }
+
   function homeTeamNewsAutosubPairs(squad) {
     const named = homeTeamNewsNamedByTeam();
     if (!named.size) return [];
@@ -5327,6 +5352,7 @@
         || onSheet(starter)
         || (Number(starter.minutes) || 0) > 0
         || !homeSquadRowMatchStarted(starter)
+        || !homeTeamHasRecordedMinutes(starter)
       ) {
         active.push(starter);
         return;
@@ -5390,6 +5416,18 @@
     if (homeGwSettled()) return rows;
     if (rows.some((row) => row && row.autoSubSource === "official")) return rows;
     const pairs = homeTeamNewsAutosubPairs(rows);
+    const allowed = new Set();
+    for (const pair of pairs) {
+      allowed.add(Number(pair.out && pair.out.element));
+      allowed.add(Number(pair.inn && pair.inn.element));
+    }
+    rows = rows.map((row) => {
+      if (!row || row.autoSubSource === "official") return row;
+      if (!(row.autoSubIn || row.autoSubOut)) return row;
+      if (row.autoSubSource !== "graphic" && row.autoSubSource != null) return row;
+      if (allowed.has(Number(row.element))) return row;
+      return homeClearAutosubFlagRow(row);
+    });
     if (!pairs.length) return rows;
     const flagged = new Set();
     for (const row of rows) {
@@ -14968,6 +15006,7 @@
     if (row.autoSubOut || row.autoSubIn) return false;
     if (Math.max(Number(row.minutes) || 0) > 0) return false;
     if (!homeSquadRowMatchStarted(row)) return false;
+    if (!homeTeamHasRecordedMinutes(row)) return false;
     const named = homeTeamNewsNamedByTeam();
     const set = named.get(String(row.team || ""));
     if (!set) return false;
