@@ -1089,6 +1089,7 @@
     pageGraphics: $("#page-graphics"),
     pageLeague: $("#page-league"),
     pageLive: $("#page-live"),
+    pageAdjustments: $("#page-adjustments"),
     pageOpta: $("#page-opta"),
     pageRankings: $("#page-rankings"),
     pageOwnership: $("#page-ownership"),
@@ -1123,6 +1124,18 @@
     leagueEmpty: $("#league-empty"),
     leagueUpdatedFooter: $("#league-updated-footer"),
     livePage: $("#live-page"),
+    adjustmentsPage: $("#adjustments-page"),
+    adjStatLogPanel: $("#adj-stat-log-panel"),
+    adjStatLogKicker: $("#adj-stat-log-kicker"),
+    adjStatLogStage: $("#adj-stat-log-stage"),
+    adjStatLogMeta: $("#adj-stat-log-meta"),
+    adjStatLogModeBtn: $("#adj-stat-log-mode-btn"),
+    adjStatLogModeLabel: $("#adj-stat-log-mode-label"),
+    adjStatLogModeMenu: $("#adj-stat-log-mode-menu"),
+    adjStatLogPointsBtn: $("#adj-stat-log-points-btn"),
+    adjStatLogScroll: $("#adj-stat-log-scroll"),
+    adjStatLogBody: $("#adj-stat-log-body"),
+    adjUpdatedFooter: $("#adj-updated-footer"),
     livePageSubtitle: $("#live-page-subtitle"),
     liveCountLabel: $("#live-count-label"),
     liveTable: $("#live-table"),
@@ -1360,13 +1373,14 @@
     homeGwProgTicks: $("#home-gw-prog-ticks"),
     homeGwProgCopy: $("#home-gw-prog-copy"),
     homeStatLogPanel: $("#home-stat-log-panel"),
+    homeStatLogOpenBtn: $("#home-stat-log-open-btn"),
     homeStatLogKicker: $("#home-stat-log-kicker"),
     homeStatLogStage: $("#home-stat-log-stage"),
     homeStatLogMeta: $("#home-stat-log-meta"),
-    homeStatLogModeBtn: $("#home-stat-log-mode-btn"),
-    homeStatLogModeLabel: $("#home-stat-log-mode-label"),
-    homeStatLogModeMenu: $("#home-stat-log-mode-menu"),
-    homeStatLogPointsBtn: $("#home-stat-log-points-btn"),
+    homeStatLogModeBtn: $("#adj-stat-log-mode-btn"),
+    homeStatLogModeLabel: $("#adj-stat-log-mode-label"),
+    homeStatLogModeMenu: $("#adj-stat-log-mode-menu"),
+    homeStatLogPointsBtn: $("#adj-stat-log-points-btn"),
     homeStatLogScroll: $("#home-stat-log-scroll"),
     homeStatLogBody: $("#home-stat-log-body"),
     homeRankChartPanel: $("#home-rank-chart-panel"),
@@ -2684,7 +2698,10 @@
     } else if (state.page === "live") {
       renderLive({ quiet: true });
       syncHomeLivePolling();
-    }     else if (state.page === "rankings") renderRankings({ animateBars: false });
+    } else if (state.page === "adjustments") {
+      paintHomeStatLog();
+      syncHomeLivePolling();
+    } else if (state.page === "rankings") renderRankings({ animateBars: false });
     else if (state.page === "opta") renderTable();
     else renderTable();
   }
@@ -4372,6 +4389,9 @@
           renderLive({ quiet: true });
           livePollRefreshMotion();
         }
+      } else if (state.page === "adjustments") {
+        paintHomeStatLog();
+        syncLiveNavChrome();
       } else syncLiveNavChrome();
     } catch {
       homeLiveLastPollOk = false;
@@ -10200,10 +10220,10 @@
         setHomePitchStripMode(option.getAttribute("data-pitch-mode"));
       });
     }
-    if (el.homeStatLogPanel) {
-      el.homeStatLogPanel.addEventListener("click", (e) => {
-        const pointsBtn = e.target.closest("#home-stat-log-points-btn");
-        if (pointsBtn && el.homeStatLogPanel.contains(pointsBtn)) {
+    if (el.adjStatLogPanel) {
+      el.adjStatLogPanel.addEventListener("click", (e) => {
+        const pointsBtn = e.target.closest("#adj-stat-log-points-btn");
+        if (pointsBtn && el.adjStatLogPanel.contains(pointsBtn)) {
           e.preventDefault();
           e.stopPropagation();
           closeHomeStatLogModePicker();
@@ -10212,8 +10232,8 @@
           paintHomeStatLog();
           return;
         }
-        const modeBtn = e.target.closest("#home-stat-log-mode-btn");
-        if (!modeBtn || !el.homeStatLogPanel.contains(modeBtn)) return;
+        const modeBtn = e.target.closest("#adj-stat-log-mode-btn");
+        if (!modeBtn || !el.adjStatLogPanel.contains(modeBtn)) return;
         e.preventDefault();
         e.stopPropagation();
         toggleHomeStatLogModePicker();
@@ -10240,7 +10260,7 @@
     });
     document.addEventListener("click", (e) => {
       if (!el.homeStatLogModeMenu || !el.homeStatLogModeMenu.classList.contains("is-open")) return;
-      if (e.target.closest("#home-stat-log-mode-btn, #home-stat-log-mode-menu")) return;
+      if (e.target.closest("#adj-stat-log-mode-btn, #adj-stat-log-mode-menu")) return;
       closeHomeStatLogModePicker();
     });
     document.addEventListener("keydown", (e) => {
@@ -12132,6 +12152,7 @@
       el.homeStatLogPanel.hidden = true;
       el.homeStatLogPanel.classList.remove("has-more-below");
     }
+    if (el.homeStatLogBody) el.homeStatLogBody.innerHTML = "";
   }
 
   function homeStatLogSanitize(log) {
@@ -12447,6 +12468,10 @@
     return fallback;
   }
 
+  function homeStatLogScoreImpactCards(rows) {
+    return homeStatLogCards(rows).filter(({ row }) => !!homeStatLogPtsDelta(row));
+  }
+
   function homeStatLogCards(rows) {
     const best = new Map();
     for (const row of rows || []) {
@@ -12554,7 +12579,48 @@
     return "all";
   }
 
-  function paintHomeStatLog() {
+  function homeStatLogGwLabel() {
+    return HOME && HOME.gw != null ? `GW${HOME.gw}` : "";
+  }
+
+  function homeStatLogBucketedEntries() {
+    const all = homeStatLogEntries();
+    const keys = homeStatLogOwnedKeys();
+    const owned = all.filter((row) => homeStatLogRowIsOwned(row, keys));
+    const league = all.filter((row) => row.owned);
+    return { all, owned, league };
+  }
+
+  function homeStatLogRowsForFilter(buckets, filter) {
+    if (filter === "owned") return buckets.owned;
+    if (filter === "league") return buckets.league;
+    return buckets.all;
+  }
+
+  function homeStatLogCardsForFilter(rows, { pointsOnly = false } = {}) {
+    let cards = homeStatLogCards(rows);
+    if (pointsOnly) {
+      cards = cards.filter(({ row, changes }) => (
+        !!homeStatLogPtsDelta(row)
+        || changes.some((change) => !!homeStatLogChangeImpact(change))
+      ));
+    }
+    return cards;
+  }
+
+  function homeStatLogEmptyCopy(buckets, rows, filter, pointsOnly) {
+    let empty = "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
+    if (pointsOnly && homeStatLogCards(rows).length) {
+      empty = "No points-impact adjustments — turn Points off for other post-match tweaks.";
+    } else if (buckets.all.length && filter === "owned") {
+      empty = "No owned players in the log — switch to League or All.";
+    } else if (buckets.all.length && filter === "league") {
+      empty = "No league players in the log — switch to All.";
+    }
+    return empty;
+  }
+
+  function paintHomeStatLogTeaser() {
     const panel = el.homeStatLogPanel;
     if (!panel) return;
     const onHome =
@@ -12567,47 +12633,16 @@
       hideHomeStatLogPanel();
       return;
     }
-    const all = homeStatLogEntries();
-    const keys = homeStatLogOwnedKeys();
-    const owned = all.filter((row) => homeStatLogRowIsOwned(row, keys));
-    const league = all.filter((row) => row.owned);
-    homeStatLogFilter = resolveHomeStatLogFilter(owned, league);
-    const rows = homeStatLogFilter === "owned"
-      ? owned
-      : homeStatLogFilter === "league"
-        ? league
-        : all;
-    const gw = HOME && HOME.gw != null ? `GW${HOME.gw}` : "";
-    panel.hidden = false;
-    if (el.homeStatLogKicker) el.homeStatLogKicker.textContent = "Adjustments";
-    if (el.homeStatLogStage) el.homeStatLogStage.textContent = gw;
-    syncHomeStatLogModeUI();
-    let cards = homeStatLogCards(rows);
-    if (homeStatLogPointsOnly) {
-      cards = cards.filter(({ row, changes }) => (
-        !!homeStatLogPtsDelta(row)
-        || changes.some((change) => !!homeStatLogChangeImpact(change))
-      ));
-    }
-    if (el.homeStatLogMeta) {
-      el.homeStatLogMeta.textContent = cards.length ? String(cards.length) : "";
-      el.homeStatLogMeta.hidden = true;
-    }
-    if (!el.homeStatLogBody) return;
+    const buckets = homeStatLogBucketedEntries();
+    const cards = homeStatLogScoreImpactCards(buckets.owned);
     if (!cards.length) {
-      let empty = "No FPL stat changes since full-time. Check-ins start after the first match finishes and run through lock.";
-      if (homeStatLogPointsOnly && homeStatLogCards(rows).length) {
-        empty = "No points-impact adjustments — turn Points off for other post-match tweaks.";
-      } else if (all.length && homeStatLogFilter === "owned") {
-        empty = "No owned players in the log — switch to League or All.";
-      } else if (all.length && homeStatLogFilter === "league") {
-        empty = "No league players in the log — switch to All.";
-      }
-      el.homeStatLogBody.innerHTML = `<p class="home-stat-log-empty">${empty}</p>`;
-      bindHomeStatLogOverflow();
-      syncHomeStatLogOverflow();
+      hideHomeStatLogPanel();
       return;
     }
+    panel.hidden = false;
+    if (el.homeStatLogKicker) el.homeStatLogKicker.textContent = "Adjustments";
+    if (el.homeStatLogStage) el.homeStatLogStage.textContent = homeStatLogGwLabel();
+    if (!el.homeStatLogBody) return;
     el.homeStatLogBody.innerHTML = `<ul class="home-stat-log-list">${cards.map(({ row, changes }) => homeStatLogRowHTML(row, changes)).join("")}</ul>`;
     bindHomeStatLogOverflow();
     if (homeSquadIsWideLayout()) {
@@ -12618,6 +12653,40 @@
     } else {
       requestAnimationFrame(() => syncHomeStatLogOverflow());
     }
+  }
+
+  function paintAdjustmentsPage() {
+    const panel = el.adjStatLogPanel;
+    if (!panel) return;
+    if (state.page !== "adjustments") return;
+    const buckets = homeStatLogBucketedEntries();
+    homeStatLogFilter = resolveHomeStatLogFilter(buckets.owned, buckets.league);
+    const rows = homeStatLogRowsForFilter(buckets, homeStatLogFilter);
+    const cards = homeStatLogCardsForFilter(rows, { pointsOnly: homeStatLogPointsOnly });
+    const gw = homeStatLogGwLabel();
+    if (el.adjStatLogKicker) el.adjStatLogKicker.textContent = "Adjustments";
+    if (el.adjStatLogStage) el.adjStatLogStage.textContent = gw;
+    syncHomeStatLogModeUI();
+    if (el.adjStatLogMeta) {
+      el.adjStatLogMeta.textContent = cards.length ? String(cards.length) : "";
+      el.adjStatLogMeta.hidden = true;
+    }
+    if (el.adjUpdatedFooter) {
+      syncPageUpdatedFooter(el.adjUpdatedFooter, pageDataUpdatedIso("adjustments"));
+    }
+    if (!el.adjStatLogBody) return;
+    if (!cards.length) {
+      el.adjStatLogBody.innerHTML = `<p class="home-stat-log-empty">${homeStatLogEmptyCopy(buckets, rows, homeStatLogFilter, homeStatLogPointsOnly)}</p>`;
+    } else {
+      el.adjStatLogBody.innerHTML = `<ul class="home-stat-log-list">${cards.map(({ row, changes }) => homeStatLogRowHTML(row, changes)).join("")}</ul>`;
+    }
+    bindAdjStatLogOverflow();
+    requestAnimationFrame(() => syncAdjStatLogOverflow());
+  }
+
+  function paintHomeStatLog() {
+    paintHomeStatLogTeaser();
+    paintAdjustmentsPage();
   }
 
   let homeStatLogOverflowBound = false;
@@ -12653,6 +12722,40 @@
       if (el.homeStatLogBody && el.homeStatLogBody !== port) ro.observe(el.homeStatLogBody);
     }
     syncHomeStatLogOverflow();
+  }
+
+  let adjStatLogOverflowBound = false;
+  let adjStatLogOverflowObserved = false;
+
+  function adjStatLogScrollport() {
+    return el.adjStatLogScroll || el.adjStatLogBody;
+  }
+
+  function syncAdjStatLogOverflow() {
+    const panel = el.adjStatLogPanel;
+    const port = adjStatLogScrollport();
+    if (!panel) return;
+    const more = !!(
+      port
+      && port.scrollHeight - port.clientHeight - port.scrollTop > 10
+    );
+    panel.classList.toggle("has-more-below", more);
+  }
+
+  function bindAdjStatLogOverflow() {
+    const port = adjStatLogScrollport();
+    if (!port) return;
+    if (!adjStatLogOverflowBound) {
+      adjStatLogOverflowBound = true;
+      port.addEventListener("scroll", syncAdjStatLogOverflow, { passive: true });
+    }
+    if (!adjStatLogOverflowObserved && typeof ResizeObserver === "function") {
+      adjStatLogOverflowObserved = true;
+      const ro = new ResizeObserver(() => syncAdjStatLogOverflow());
+      ro.observe(port);
+      if (el.adjStatLogBody && el.adjStatLogBody !== port) ro.observe(el.adjStatLogBody);
+    }
+    syncAdjStatLogOverflow();
   }
 
   const HOME_RANK_CHART_WINDOW = 6;
@@ -21538,7 +21641,7 @@
         await syncPromise;
       } else {
         syncPromise.then(() => {
-          if (state.page === "home" || state.page === "live") {
+          if (state.page === "home" || state.page === "live" || state.page === "adjustments") {
             refreshManagerDependentUI();
           }
         });
@@ -22374,6 +22477,7 @@
     if (page === "home") return null;
     if (page === "graphics") return null;
     if (page === "league") return null;
+    if (page === "adjustments") return null;
     if (page === "report") return null;
     if (page === "markets") return el.marketsSlidersToggle || null;
     if (page === "schedule") return el.scheduleSlidersToggle || null;
@@ -22392,6 +22496,7 @@
       page === "home" ||
       page === "graphics" ||
       page === "league" ||
+      page === "adjustments" ||
       page === "report" ||
       page === "prices" ||
       (page === "live" && state.liveMode === "bonus")
@@ -22429,6 +22534,7 @@
       page === "home" ||
       page === "graphics" ||
       page === "league" ||
+      page === "adjustments" ||
       page === "report" ||
       page === "markets" ||
       page === "schedule" ||
@@ -22568,6 +22674,7 @@
       isHome ||
       page === "graphics" ||
       page === "league" ||
+      page === "adjustments" ||
       page === "report" ||
       (preferMobileSheet() && page === "rankings");
     el.subtoolbar.style.display = hideSubtoolbar ? "none" : "";
@@ -25143,6 +25250,35 @@
           spitKeyRow(
             `${iconHTML("house", "spit-home-swatch")}`,
             "Opens once after the deadline, then from Pages"
+          ),
+        ])}`;
+    }
+
+    if (state.page === "adjustments") {
+      return `${spitHead("activity", "How Adjustments works")}
+        ${spitKeySection("Log", [
+          spitKeyRow(
+            `<span class="home-stat-log-chip is-hit" aria-hidden="true">DefCon <span class="home-stat-log-flag is-up">${iconHTML("caret-up")}</span></span>`,
+            "FPL API diffs after full-time — DefCon, bonus, scoring. Raw BPS ticks are dropped; bonus gain / loss is kept. Green / red carets mark a threshold cross",
+            "is-wide"
+          ),
+        ])}
+        ${spitKeySection("Filters", [
+          spitKeyRow(
+            `<span class="home-pitch-mode-btn home-stat-log-points-btn active spit-home-swatch" aria-hidden="true">Points</span>`,
+            "On: scoring and threshold hits only. Off: every kept post-match tweak"
+          ),
+          spitKeyRow(
+            `<span class="spit-home-swatch" aria-hidden="true">Owned</span>`,
+            "Viewed manager’s squad"
+          ),
+          spitKeyRow(
+            `<span class="spit-home-swatch" aria-hidden="true">League</span>`,
+            "Anyone in the linked league"
+          ),
+          spitKeyRow(
+            `<span class="spit-home-swatch" aria-hidden="true">All</span>`,
+            "Every player in the log"
           ),
         ])}`;
     }
@@ -29089,6 +29225,8 @@
         return HOME.generatedAt || null;
       case "live":
         return latestDataIso(HOME.generatedAt, DATA.generatedAt);
+      case "adjustments":
+        return HOME.generatedAt || (HOME.statLog && HOME.statLog.updatedAt) || null;
       case "report":
         return REPORT.generatedAt || null;
       case "ownership":
@@ -35849,7 +35987,7 @@
   const PAGE_KEY = "fpl-explorer-page";
   // Flip to true when Weekly Report is ready to show in nav again.
   const REPORT_NAV_ENABLED = false;
-  const PAGES = ["home", "opta", "live", "report", "rankings", "graphics", "league", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
+  const PAGES = ["home", "opta", "live", "adjustments", "report", "rankings", "graphics", "league", "ownership", "defcon", "prices", "expected", "schedule", "fixtures", "markets"];
 
   function normalizeStoredPage(page) {
     if (page === "notes") return "opta";
@@ -35897,6 +36035,7 @@
     if (page === "graphics") return el.graphicsPage;
     if (page === "league") return el.leaguePage;
     if (page === "live") return el.livePage;
+    if (page === "adjustments") return el.adjustmentsPage;
     if (page === "report") return el.reportPage;
     if (page === "opta") return el.optaPage;
     if (page === "rankings") return el.rankingsPage;
@@ -36372,6 +36511,7 @@
     if (el.pageGraphics) el.pageGraphics.classList.toggle("active", page === "graphics");
     if (el.pageLeague) el.pageLeague.classList.toggle("active", page === "league");
     if (el.pageLive) el.pageLive.classList.toggle("active", page === "live");
+    if (el.pageAdjustments) el.pageAdjustments.classList.toggle("active", page === "adjustments");
     if (el.pageReport) el.pageReport.classList.toggle("active", page === "report");
     if (el.pageOwnership) el.pageOwnership.classList.toggle("active", page === "ownership");
     if (el.pageDefcon) el.pageDefcon.classList.toggle("active", page === "defcon");
@@ -36388,6 +36528,7 @@
     if (el.graphicsPage) el.graphicsPage.style.display = page === "graphics" ? "" : "none";
     if (el.leaguePage) el.leaguePage.style.display = page === "league" ? "" : "none";
     if (el.livePage) el.livePage.style.display = page === "live" ? "" : "none";
+    if (el.adjustmentsPage) el.adjustmentsPage.style.display = page === "adjustments" ? "" : "none";
     if (el.reportPage) el.reportPage.style.display = page === "report" ? "" : "none";
     el.optaPage.style.display = page === "opta" ? "" : "none";
     el.rankingsPage.style.display = page === "rankings" ? "" : "none";
@@ -36403,16 +36544,17 @@
     const isGraphics = page === "graphics";
     const isLeague = page === "league";
     const isLive = page === "live";
+    const isAdjustments = page === "adjustments";
     const isReport = page === "report";
     // Schedule hides the subtoolbar. Markets desktop uses it for card view + compare.
     syncSubtoolbarViewport(page);
     syncFiltersChrome();
-    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isGraphics || isLeague || isReport || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarStart) el.statsToolbarStart.style.display = isMarkets || isHome || isGraphics || isLeague || isAdjustments || isReport || page === "fixtures" ? "none" : "";
     if (el.liveModeSeg) {
       el.liveModeSeg.hidden = !isLive;
       el.liveModeSeg.setAttribute("aria-hidden", isLive ? "false" : "true");
     }
-    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isGraphics || isLeague || isReport || page === "fixtures" ? "none" : "";
+    if (el.statsToolbarActions) el.statsToolbarActions.style.display = isHome || isGraphics || isLeague || isAdjustments || isReport || page === "fixtures" ? "none" : "";
     if (el.columnsSidebar) {
       el.columnsSidebar.style.display = "none";
     }
@@ -36550,6 +36692,9 @@
       renderGraphicsPage();
     } else if (page === "league") {
       renderLeagueReport();
+    } else if (page === "adjustments") {
+      syncHomeLivePolling({ skipImmediate: false });
+      paintHomeStatLog();
     } else if (page === "live") {
       // Mark busy before render so we do not double-start motion before playLiveEnter.
       liveEnterAwaitingPlay = true;
@@ -36608,6 +36753,7 @@
   if (el.pageGraphics) el.pageGraphics.addEventListener("click", () => setPage("graphics"));
   if (el.pageLeague) el.pageLeague.addEventListener("click", () => setPage("league"));
   if (el.pageLive) el.pageLive.addEventListener("click", () => setPage("live"));
+  if (el.pageAdjustments) el.pageAdjustments.addEventListener("click", () => setPage("adjustments"));
   document.addEventListener("click", openLiveFromBadge);
   if (el.pageReport) {
     el.pageReport.addEventListener("click", () => {
@@ -37208,6 +37354,7 @@
     if (id === "page-fixtures") return "fixtures";
     if (id === "page-markets") return "markets";
     if (id === "page-live") return "live";
+    if (id === "page-adjustments") return "adjustments";
     if (id === "page-report") return "report";
     const host = btn.closest("[data-page-clone]");
     return host ? host.getAttribute("data-page-clone") : null;
@@ -37249,6 +37396,9 @@
     const idByPage = {
       home: "page-home",
       live: "page-live",
+      adjustments: "page-adjustments",
+      graphics: "page-graphics",
+      league: "page-league",
       opta: "page-opta",
       rankings: "page-rankings",
       ownership: "page-ownership",
@@ -37718,7 +37868,8 @@
       state.page === "live" ||
       state.page === "prices" ||
       state.page === "ownership" ||
-      state.page === "league";
+      state.page === "league" ||
+      state.page === "adjustments";
     el.searchWrap.style.display = hideSearch ? "none" : "";
     el.searchWrap.classList.toggle("stats-search-always-open", mainSearchAlwaysOpen());
     el.searchWrap.classList.toggle("mobile-search-always-open", mobileSearchAlwaysOpen());
@@ -39049,14 +39200,10 @@
   }
   if (el.homeStatLogPanel) {
     el.homeStatLogPanel.addEventListener("click", (e) => {
-      if (e.target.closest("#home-stat-log-mode-btn, #home-stat-log-mode-menu")) return;
-      const btn = e.target.closest("[data-stat-log-filter]");
-      if (!btn || !el.homeStatLogPanel.contains(btn)) return;
-      const next = homeStatLogFilterFromValue(btn.getAttribute("data-stat-log-filter"));
-      if (next === homeStatLogFilter) return;
-      homeStatLogFilter = next;
-      homeStatLogFilterChosen = true;
-      paintHomeStatLog();
+      const openBtn = e.target.closest("#home-stat-log-open-btn");
+      if (!openBtn || !el.homeStatLogPanel.contains(openBtn)) return;
+      e.preventDefault();
+      setPage("adjustments");
     });
   }
   if (el.homeBadgeStyleSeg) {

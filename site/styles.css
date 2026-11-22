@@ -2811,6 +2811,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   #expected-page .page-header,
   #graphics-page .page-header,
   #league-page .page-header,
+  #adjustments-page .page-header,
   #prices-page .page-header,
   #report-page .page-header {
     display: none;
@@ -3322,7 +3323,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
 .page-pane.is-enter-pending > .home-dashboard,
 .page-pane.is-enter-pending > .home-empty,
 .page-pane.is-enter-pending > .report-article,
-.page-pane.is-enter-pending > .ownership-mover-bar {
+.page-pane.is-enter-pending > .ownership-mover-bar,
+.page-pane.is-enter-pending > .adjustments-page-panel {
   opacity: 0;
 }
 
@@ -3505,7 +3507,8 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .page-pane.is-enter-pending > .ownership-mover-bar,
   .page-pane.is-enter-pending > .home-dashboard,
   .page-pane.is-enter-pending > .home-empty,
-  .page-pane.is-enter-pending > .report-article {
+  .page-pane.is-enter-pending > .report-article,
+  .page-pane.is-enter-pending > .adjustments-page-panel {
     opacity: 1;
   }
   .page-pane.is-entering > .page-header,
@@ -3525,6 +3528,7 @@ html:not([data-page="opta"]) #enhance-relative-btn {
   .page-pane.is-entering .markets-grid > .markets-card,
   .page-pane.is-entering .markets-divider,
   .page-pane.is-entering .barbell-track,
+  .page-pane.is-entering > .adjustments-page-panel,
   #expected-page.is-entering .barbell-track,
   #home-page.is-entering .home-deadline,
   #home-page.is-entering .home-view-banner,
@@ -17316,6 +17320,13 @@ html[data-theme="dark"][data-home-surface="solid"] .home-summary-hero .home-summ
     min-height: 0;
     overflow: hidden;
   }
+  .home-dashboard:not(.is-player-lookup) #home-stat-log-panel[hidden] {
+    display: none;
+  }
+  .home-dashboard:not(.is-player-lookup):not(:has(#home-stat-log-panel:not([hidden]))) #home-rank-chart-panel,
+  .home-dashboard:not(.is-player-lookup):not(:has(#home-stat-log-panel:not([hidden]))) #home-gw-progress-panel {
+    grid-column: 1 / -1;
+  }
   .home-dashboard:not(.is-player-lookup) #home-stat-log-panel > .home-panel-heading {
     position: relative;
     z-index: 3;
@@ -20175,6 +20186,37 @@ html[data-page="graphics"] #graphics-page {
 html[data-page="league"] #league-page {
   display: flex;
 }
+#adjustments-page {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+html[data-page="adjustments"] #adjustments-page {
+  display: flex;
+}
+.adjustments-page-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 0 8px;
+}
+.adjustments-page-panel .home-stat-log-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+.page-pane.is-entering > .adjustments-page-panel {
+  animation: page-enter-item 0.42s var(--ease-out) both;
+  animation-delay: 0.08s;
+}
+.home-stat-log-open-btn {
+  gap: 2px;
+  padding: 0 8px 0 10px;
+}
+.home-stat-log-open-btn .page-tab-caret {
+  width: 14px;
+  height: 14px;
+}
 .league-report-empty {
   margin: 8px 2px 16px;
   font-size: 14px;
@@ -20687,6 +20729,11 @@ html.home-squad-wide #home-squad-panel .home-squad-split {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+/* Author `display:flex` above beats the UA [hidden] rule, so an empty Home
+   teaser still painted as a blank card. Force it out of layout. */
+#home-stat-log-panel[hidden] {
+  display: none !important;
 }
 .home-stat-log-panel .home-squad-heading-end {
   max-width: min(70%, 15rem);
@@ -26272,7 +26319,9 @@ html[data-theme="dark"] .home-bench-gw-pill:not(.is-empty):not(.is-zero) {
   }
 }
 html[data-page="home"] .filters,
-html[data-page="home"] #subtoolbar {
+html[data-page="home"] #subtoolbar,
+html[data-page="adjustments"] .filters,
+html[data-page="adjustments"] #subtoolbar {
   display: none !important;
 }
 
@@ -27107,6 +27156,7 @@ html[data-page="live"] #topbar-end-cluster {
 }
 /* Pages that hide the whole subtoolbar until JS — avoid empty/wrong chrome flash */
 html[data-page="home"] #subtoolbar,
+html[data-page="adjustments"] #subtoolbar,
 html[data-page="schedule"] #subtoolbar {
   display: none !important;
 }
