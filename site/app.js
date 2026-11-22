@@ -3592,6 +3592,7 @@
   const HOME_LIVE_POLL_LIVE_MS = 15_000;
   const HOME_LIVE_POLL_IDLE_MS = 60_000;
   const HOME_SESSION_SNAPSHOT_KEY = "fpl_home_live_v3";
+  const HOME_LIVE_SNAPSHOT_KEY = "fpl_home_live_v4";
   let homeLivePollTimer = null;
   let homeLivePollIntervalMs = HOME_LIVE_POLL_IDLE_MS;
   let homeLiveLastPollAt = 0;
@@ -4000,17 +4001,56 @@
     return homeCanShowVolatileStats();
   }
 
-  function homeSessionSnapshotKey(home) {
-    if (!home || home.managerId == null || home.leagueId == null || home.gw == null) return "";
-    return `${home.managerId}:${home.leagueId}:${home.gw}`;
+  function homeStaticCurrentGw() {
+    const cur = Number(GAMEWEEKS && GAMEWEEKS.current && GAMEWEEKS.current.id);
+    if (Number.isFinite(cur) && cur > 0) return cur;
+    const nxt = Number(GAMEWEEKS && GAMEWEEKS.next && GAMEWEEKS.next.id);
+    if (Number.isFinite(nxt) && nxt > 0) return nxt;
+    const meta = (DATA && DATA.fixturesMeta) || {};
+    const active = Number(meta.activeGw != null ? meta.activeGw : meta.currentGw);
+    return Number.isFinite(active) && active > 0 ? active : null;
   }
 
-  function homeSessionSnapshotPrefsKey() {
+  function homeLiveSnapshotPrefsKey() {
     const mid = savedManagerId || (HOME && HOME.managerId);
     const lid = HOME_LEAGUE_ID;
-    const gw = HOME && HOME.gw;
-    if (!mid || !lid || gw == null) return "";
-    return `${mid}:${lid}:${gw}`;
+    if (!mid || !lid) return "";
+    return `${mid}:${lid}`;
+  }
+
+  function homeLiveSnapshotKeyMatches(snapKey, prefsKey) {
+    const key = String(snapKey || "");
+    const pref = String(prefsKey || "");
+    if (!key || !pref) return false;
+    return key === pref || key.startsWith(`${pref}:`);
+  }
+
+  function homeLiveSnapshotMatchesPrefs(snap) {
+    if (!snap || !snap.payload) return false;
+    if (!homeLivePayloadMatchesPrefs(snap.payload)) return false;
+    const prefsKey = homeLiveSnapshotPrefsKey();
+    if (!prefsKey) return false;
+    if (snap.key && !homeLiveSnapshotKeyMatches(snap.key, prefsKey)) return false;
+    const bakedGw = Number(HOME && HOME.gw);
+    const snapGw = Number(snap.payload.gw);
+    if (Number.isFinite(bakedGw) && bakedGw > 0 && Number.isFinite(snapGw) && snapGw < bakedGw) {
+      return false;
+    }
+    return true;
+  }
+
+  function readHomeLiveSnapshotRaw() {
+    try {
+      const local = localStorage.getItem(HOME_LIVE_SNAPSHOT_KEY);
+      if (local) return local;
+    } catch {
+      /* private browsing */
+    }
+    try {
+      return sessionStorage.getItem(HOME_SESSION_SNAPSHOT_KEY);
+    } catch {
+      return null;
+    }
   }
 
   function homeSessionSnapshotPayload(home) {
@@ -4049,12 +4089,24 @@
   function persistHomeSessionSnapshot(home) {
     try {
       if (!home || !homeLivePayloadMatchesPrefs(home)) return;
-      const key = homeSessionSnapshotKey(home);
+      const key = homeLiveSnapshotPrefsKey();
       if (!key) return;
-      sessionStorage.setItem(
-        HOME_SESSION_SNAPSHOT_KEY,
-        JSON.stringify({ key, savedAt: Date.now(), payload: homeSessionSnapshotPayload(home) })
-      );
+      const body = JSON.stringify({
+        key,
+        savedAt: Date.now(),
+        payload: homeSessionSnapshotPayload(home),
+      });
+      try {
+        localStorage.setItem(HOME_LIVE_SNAPSHOT_KEY, body);
+      } catch {
+        sessionStorage.setItem(HOME_SESSION_SNAPSHOT_KEY, body);
+        return;
+      }
+      try {
+        sessionStorage.removeItem(HOME_SESSION_SNAPSHOT_KEY);
+      } catch {
+        /* ignore */
+      }
     } catch {
       /* private browsing */
     }
@@ -4062,15 +4114,14 @@
 
   function hydrateHomeFromSessionSnapshot() {
     try {
-      const prefsKey = homeSessionSnapshotPrefsKey();
-      if (!prefsKey) return false;
-      const raw = sessionStorage.getItem(HOME_SESSION_SNAPSHOT_KEY);
+      const raw = readHomeLiveSnapshotRaw();
       if (!raw) return false;
       const snap = JSON.parse(raw);
-      if (!snap || snap.key !== prefsKey || !snap.payload) return false;
-      if (!homeLivePayloadMatchesPrefs(snap.payload)) return false;
+      if (!homeLiveSnapshotMatchesPrefs(snap)) return false;
       // Keep baked static transfers until a canonical live payload arrives — session
       // copies are the main source of wrong-then-right flashes on the transfers card.
+      // Do not keep them across GWs: production's committed home_data.js can lag weeks.
+      const priorGw = Number(HOME && HOME.gw);
       const bakedTransfers = HOME.transfersByEntry && typeof HOME.transfersByEntry === "object"
         ? HOME.transfersByEntry
         : {};
@@ -4088,7 +4139,11 @@
       }
       applyHomePayload(payload, { skipFeedIngest: true, fromSessionSnapshot: true });
       ensureLiveFeedFromHome();
-      if (homeTransfersAreCanonical(bakedTransfers, bakedSchema)) {
+      if (
+        homeTransfersAreCanonical(bakedTransfers, bakedSchema)
+        && Number.isFinite(priorGw)
+        && Number(HOME.gw) === priorGw
+      ) {
         HOME.transfersByEntry = bakedTransfers;
         HOME.transfersSchemaVersion = Math.max(2, bakedSchema || 0);
         HOME.standings = homeSyncStandingsTransfers(HOME.standings, HOME.transfersByEntry);
@@ -4098,6 +4153,36 @@
     } catch {
       return false;
     }
+  }
+
+  /** Production Vercel often ships a weeks-old home_data.js. Don't paint it as now. */
+  function homeParkStaleBakedDashboard() {
+    if (!homeLivePollReady()) return false;
+    if (homeBootstrapSource === "session" || homeBootstrapSource === "live") return false;
+    if (homeLiveLastSuccessAt > 0) return false;
+    const bakedGw = Number(HOME && HOME.gw);
+    const staticGw = homeStaticCurrentGw();
+    if (!(Number.isFinite(bakedGw) && Number.isFinite(staticGw) && bakedGw < staticGw)) {
+      return false;
+    }
+    HOME.generatedAt = null;
+    HOME.gw = null;
+    HOME.summary = null;
+    HOME.squad = [];
+    HOME.squadsByEntry = {};
+    HOME.standings = [];
+    HOME.chipWindow = null;
+    HOME.ownersByElement = {};
+    HOME.elementGw = {};
+    HOME.leaguePicksStatus = null;
+    HOME.transfersByEntry = {};
+    HOME.gwAwaitingKickoff = null;
+    HOME.gwSettled = null;
+    HOME.gwProgress = null;
+    HOME.statLog = null;
+    HOME.rankHistoryByEntry = {};
+    homeBootstrapSource = null;
+    return true;
   }
 
   /** Live FPL bonus is still moving — show it, but label the tap card as provisional. */
@@ -14548,7 +14633,8 @@
   }
 
   function homeAwaySnapNow() {
-    const entryId = homeActiveViewEntryId();
+    if (homeIsViewingOtherManager()) return null;
+    const entryId = homeConfiguredEntryId();
     const gw = Number(HOME && HOME.gw);
     const pts = homeViewGwPts(entryId);
     if (!Number.isFinite(Number(entryId)) || !Number.isFinite(gw) || pts == null) return null;
@@ -14581,7 +14667,8 @@
     const away = Date.now() - Number(snap.hiddenAt);
     if (!Number.isFinite(away) || away < HOME_AWAY_MIN_MS || away > HOME_AWAY_MAX_MS) return false;
     if (Number(snap.gw) !== Number(HOME && HOME.gw)) return false;
-    if (Number(snap.entryId) !== Number(homeActiveViewEntryId())) return false;
+    if (homeIsViewingOtherManager()) return false;
+    if (Number(snap.entryId) !== Number(homeConfiguredEntryId())) return false;
     return true;
   }
 
@@ -14635,7 +14722,8 @@
     homeAwayCatchup = false;
     homeAwaySaveSnap(null);
     if (!snap || state.page !== "home") return;
-    if (Number(snap.entryId) !== Number(homeActiveViewEntryId())) return;
+    if (homeIsViewingOtherManager()) return;
+    if (Number(snap.entryId) !== Number(homeConfiguredEntryId())) return;
     const nowPts = homeViewGwPts(snap.entryId);
     if (nowPts == null || !Number.isFinite(Number(snap.pts))) return;
     const totalDelta = nowPts - Number(snap.pts);
@@ -20986,11 +21074,12 @@
     const noManager = !savedManagerId;
     const linked = !!(savedManagerId && savedLeagueId);
     const hasPayload = !!(HOME && HOME.summary && HOME.managerId && HOME.leagueId);
+    const waitingLive = linked && homeLivePollReady() && !hasPayload;
     const prefsMatch =
       hasPayload
       && String(HOME.leagueId) === HOME_LEAGUE_ID
       && isTrackedManagerId(savedManagerId);
-    const showEmpty = !linked || !hasPayload;
+    const showEmpty = !linked || (!hasPayload && !waitingLive);
     if (noManager) {
       renderHomeUnlinked();
       if (el.homeCountLabel) syncHomeCountLabel();
@@ -39630,10 +39719,13 @@
       await restoreManagerId({ deferHome: true });
     } catch {
     }
+    if (homeLivePollReady()) {
+      hydrateHomeFromSessionSnapshot();
+      homeParkStaleBakedDashboard();
+    }
     const page = storedPage();
     if (homeLivePollReady() && page === "home") {
       homeLivePrefetchStarted = true;
-      hydrateHomeFromSessionSnapshot();
       homeLiveApplyAfterEnter = true;
       syncHomeLivePolling({ skipImmediate: false });
     } else {
