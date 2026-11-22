@@ -137,19 +137,25 @@
       "gw": 11,
       "matchday": "2026-11-21",
       "wave": "2026-11-21T12:30",
-      "rebuiltAt": "2026-11-21T21:42:08Z"
+      "rebuiltAt": "2026-11-22T17:22:17Z"
     },
     {
       "gw": 11,
       "matchday": "2026-11-21",
       "wave": "2026-11-21T15:00",
-      "rebuiltAt": "2026-11-21T21:42:08Z"
+      "rebuiltAt": "2026-11-22T17:22:17Z"
     },
     {
       "gw": 11,
       "matchday": "2026-11-21",
       "wave": "2026-11-21T17:30",
-      "rebuiltAt": "2026-11-21T21:42:08Z"
+      "rebuiltAt": "2026-11-22T17:22:17Z"
+    },
+    {
+      "gw": 11,
+      "matchday": "2026-11-22",
+      "wave": "2026-11-22T14:00",
+      "rebuiltAt": "2026-11-22T17:22:17Z"
     }
   ],
   "note": "GW1 matchdays seeded as whole-day marks. From GW2, automation rebuilds per kickoff wave ({gw, matchday, wave}); legacy {gw, matchday} rows still mean the whole UK day is done."
