@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-23T12:49:14Z",
+  "generatedAt": "2026-11-24T00:26:23Z",
   "gw": 11,
   "fixtures": [
     {
@@ -64,6 +64,62 @@
     }
   ],
   "teams": [
+    {
+      "code": "EVE",
+      "name": "Everton",
+      "handle": "Everton",
+      "tweetId": "2124937274198732866",
+      "tweetUrl": "https://x.com/Everton/status/2124937274198732866",
+      "postedAt": "2026-11-23T18:45:00Z",
+      "kickoff": "2026-11-23T20:00:00Z",
+      "minsBeforeKo": 75.0,
+      "match": "BRE v EVE",
+      "opp": "BRE",
+      "ha": "A",
+      "text": "Your Monday night Toffees to face @BrentfordFC! 🔵\n\n#BREEVE https://t.co/rbo7xRW3iu",
+      "altText": "",
+      "localPath": "team-news/gw11/EVE.jpg",
+      "mediaUrl": "https://pbs.twimg.com/media/HX1J0NNXoAAbYmH.jpg",
+      "width": 1080,
+      "height": 1350,
+      "score": 228.0,
+      "evidence": "strong",
+      "fetchedAt": "2026-11-24T00:26:23Z",
+      "named": [
+        21,
+        209,
+        227,
+        229,
+        231,
+        232,
+        236,
+        238,
+        239,
+        243,
+        244,
+        245,
+        247,
+        649
+      ],
+      "namedNames": [
+        "Nørgaard",
+        "Johnson",
+        "Travers",
+        "Tarkowski",
+        "Keane",
+        "O'Brien",
+        "Dewsbury-Hall",
+        "Grealish",
+        "Garner",
+        "Alcaraz",
+        "Armstrong",
+        "Dibling",
+        "Hackney",
+        "Maitland-Niles"
+      ],
+      "namedReady": true,
+      "namedCount": 14
+    },
     {
       "code": "MUN",
       "name": "Man Utd",
