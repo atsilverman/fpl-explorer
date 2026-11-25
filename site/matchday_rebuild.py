@@ -7,12 +7,15 @@ gameweek has finished, wait a short settling buffer, then run build.py once per
 (gw, matchday, wave). Simultaneous kickoffs share one wave so we do not rebuild
 once per fixture.
 
-Designed for GitHub Actions polling (cheap no-op when nothing to do).
+Designed for GitHub Actions. Scheduled runs are often dropped, so --watch
+stays up on a matchday and rechecks every 20 minutes instead of depending on
+the next cron. A quiet poll still exits immediately.
 
 Run:
     python3 site/matchday_rebuild.py              # check + rebuild if ready
     python3 site/matchday_rebuild.py --dry-run    # print decision only
     python3 site/matchday_rebuild.py --commit     # rebuild + git commit/push
+    python3 site/matchday_rebuild.py --commit --watch  # stay up through a matchday
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -45,6 +49,16 @@ DEFAULT_MATCH_DURATION_MINUTES = 105
 WAVE_GAP_MINUTES = 15
 # First GW where post-match GHA rebuilds run (GW1 handled manually).
 AUTOMATION_START_GW = 2
+FETCH_ATTEMPTS = 3
+FETCH_BACKOFF_SECONDS = (5, 15)
+PUSH_ATTEMPTS = 3
+# Stay awake when an unrebuilt wave kicks off inside this window.
+WATCH_HORIZON_HOURS = 6
+# Kickoff this long ago and still not FT: postponed or a missing status.
+STUCK_FIXTURE_HOURS = 3
+# Just under the workflow job cap (355 min) so the last check can finish.
+DEFAULT_WATCH_MINUTES = 330
+DEFAULT_INTERVAL_MINUTES = 20
 
 sys.path.insert(0, str(SITE))
 from fpl_gameweeks import active_gameweek_id, extract_gameweeks  # noqa: E402
@@ -65,7 +79,7 @@ def generated_at() -> str:
     return utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def fpl_get(path: str) -> dict | list:
+def _fpl_get_once(path: str) -> dict | list:
     url = f"{FPL_BASE}{path}"
     req = urllib.request.Request(
         url,
@@ -77,6 +91,31 @@ def fpl_get(path: str) -> dict | list:
     if data is None:
         raise RuntimeError(f"empty payload from {path}")
     return data
+
+
+def _fetch_detail(exc: BaseException) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"HTTP {exc.code} {exc.reason}"
+    return str(exc)
+
+
+def fpl_get(path: str) -> dict | list:
+    """GET an FPL path, retrying transient HTTP and network failures."""
+    last_exc: BaseException | None = None
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            return _fpl_get_once(path)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                exc.close()
+            last_exc = exc
+            print(
+                f"FPL {path} attempt {attempt}/{FETCH_ATTEMPTS} failed: {_fetch_detail(exc)}",
+                file=sys.stderr,
+            )
+            if attempt < FETCH_ATTEMPTS:
+                time.sleep(FETCH_BACKOFF_SECONDS[attempt - 1])
+    raise RuntimeError(f"FPL {path} failed after {FETCH_ATTEMPTS} attempts: {last_exc}")
 
 
 def parse_kickoff_utc(iso: str | None) -> datetime | None:
@@ -341,16 +380,67 @@ def find_pending_wave(
     return pending
 
 
+def wave_kickoff_utc(wave: KickoffWave) -> datetime | None:
+    kickoffs = [parse_kickoff_utc(fx.get("kickoff_time")) for fx in wave["fixtures"]]
+    kickoffs = [t for t in kickoffs if t is not None]
+    if not kickoffs:
+        return None
+    return min(kickoffs)
+
+
+def should_keep_watching(
+    waves: list[KickoffWave],
+    gw: int,
+    state: dict,
+    *,
+    now: datetime,
+    horizon_hours: float = WATCH_HORIZON_HOURS,
+    stuck_hours: float = STUCK_FIXTURE_HOURS,
+) -> bool:
+    """True when an unrebuilt wave has started or kicks off within the horizon.
+
+    A fixture that kicked off long ago and is still not finished is treated as
+    stuck (postponed, or a missing full-time flag) so a runner is not held open.
+    """
+    horizon = now + timedelta(hours=horizon_hours)
+    stuck_after = timedelta(hours=stuck_hours)
+    for wave in waves:
+        if already_rebuilt(state, gw, wave["matchday"], wave["wave"]):
+            continue
+        kickoff = wave_kickoff_utc(wave)
+        if kickoff is None or kickoff > horizon:
+            continue
+        if not wave_all_finished(wave["fixtures"]) and now > kickoff + stuck_after:
+            print(
+                f"GW{gw} wave {wave['wave']} still unfinished "
+                f"{stuck_hours:g}h after kickoff — not holding the runner."
+            )
+            continue
+        return True
+    return False
+
+
 def run_fetch_fixtures() -> None:
-    proc = subprocess.run(
-        [sys.executable, str(FETCH_FIXTURES)],
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "fetch_fixtures failed").strip()
-        raise RuntimeError(detail[-800:])
+    last = "fetch_fixtures failed"
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        proc = subprocess.run(
+            [sys.executable, str(FETCH_FIXTURES)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0:
+            if proc.stdout:
+                print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
+            return
+        last = (proc.stderr or proc.stdout or last).strip()[-800:]
+        print(
+            f"fixtures snapshot attempt {attempt}/{FETCH_ATTEMPTS} failed: {last}",
+            file=sys.stderr,
+        )
+        if attempt < FETCH_ATTEMPTS:
+            time.sleep(FETCH_BACKOFF_SECONDS[attempt - 1])
+    raise RuntimeError(last)
 
 
 def run_build() -> None:
@@ -393,62 +483,93 @@ def git_commit_push(gw: int, wave: str) -> bool:
     if subprocess.run(["git", "diff", "--staged", "--quiet"]).returncode == 0:
         print("No file changes to commit.")
         return False
+    before = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     msg = f"Rebuild Statistics after GW{gw} kickoff wave {wave}.\n"
     subprocess.run(["git", "commit", "-m", msg], check=True)
-    subprocess.run(["git", "push"], check=True)
+    try:
+        _push_with_rebase()
+    except subprocess.CalledProcessError:
+        subprocess.run(["git", "reset", "--hard", before], check=False)
+        raise
     return True
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Rebuild Statistics after a GW kickoff wave completes."
-    )
-    parser.add_argument("--dry-run", action="store_true", help="Print decision only; no build or writes.")
-    parser.add_argument("--commit", action="store_true", help="Git commit and push after rebuild.")
-    parser.add_argument(
-        "--settle-minutes",
-        type=int,
-        default=DEFAULT_SETTLE_MINUTES,
-        help=f"Wait this long after last FT in the wave before rebuild (default {DEFAULT_SETTLE_MINUTES}).",
-    )
-    args = parser.parse_args()
+def _push_with_rebase() -> None:
+    """Push, rebasing onto origin/main when another workflow moved the branch."""
+    last_code = 1
+    for attempt in range(1, PUSH_ATTEMPTS + 1):
+        proc = subprocess.run(["git", "push"])
+        if proc.returncode == 0:
+            return
+        last_code = proc.returncode
+        print(
+            f"Push rejected (attempt {attempt}/{PUSH_ATTEMPTS}) — rebasing onto origin/main.",
+            file=sys.stderr,
+        )
+        pull = subprocess.run(["git", "pull", "--rebase", "origin", "main"])
+        if pull.returncode != 0:
+            print("Rebase failed — aborting rebase.", file=sys.stderr)
+            subprocess.run(["git", "rebase", "--abort"], check=False)
+            raise subprocess.CalledProcessError(pull.returncode, pull.args)
+    raise subprocess.CalledProcessError(last_code, ["git", "push"])
 
+
+class Poll(TypedDict):
+    status: str  # ok, transient, error
+    watch: bool
+    message: str
+
+
+def _poll(status: str, watch: bool, message: str) -> Poll:
+    return {"status": status, "watch": watch, "message": message}
+
+
+def _state_text() -> str | None:
+    if not STATE_PATH.exists():
+        return None
+    return STATE_PATH.read_text(encoding="utf-8")
+
+
+def _restore_state(text: str | None) -> None:
+    if text is None:
+        if STATE_PATH.exists():
+            STATE_PATH.unlink()
+        return
+    STATE_PATH.write_text(text, encoding="utf-8")
+
+
+def one_pass(args: argparse.Namespace) -> Poll:
+    """One check. Rebuilds a settled wave when one is waiting."""
     try:
         bootstrap = fpl_get("/bootstrap-static/")
-    except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError) as exc:
-        print(f"bootstrap fetch failed: {exc}", file=sys.stderr)
-        return 1
+    except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError, TimeoutError) as exc:
+        return _poll("transient", False, f"bootstrap fetch failed: {exc}")
     if not isinstance(bootstrap, dict):
-        print("unexpected bootstrap payload", file=sys.stderr)
-        return 1
+        return _poll("error", False, "unexpected bootstrap payload")
 
     gws = extract_gameweeks(bootstrap, source="bootstrap")
     gw = active_gameweek_id(gws)
     if gw is None:
-        print("No active gameweek — skip.")
-        return 0
+        return _poll("ok", False, "No active gameweek — skip.")
 
     state = load_state()
     start_gw = int(state.get("automationStartGw") or AUTOMATION_START_GW)
     if gw < start_gw:
-        print(f"GW{gw} is before automation start (GW{start_gw}) — skip.")
-        return 0
+        return _poll("ok", False, f"GW{gw} is before automation start (GW{start_gw}) — skip.")
 
-    if args.dry_run:
+    try:
+        if not args.dry_run:
+            run_fetch_fixtures()
         fixtures = fpl_get("/fixtures/")
-        if not isinstance(fixtures, list):
-            print("unexpected fixtures payload", file=sys.stderr)
-            return 1
-    else:
-        run_fetch_fixtures()
-        fixtures = fpl_get("/fixtures/")
-        if not isinstance(fixtures, list):
-            print("unexpected fixtures payload", file=sys.stderr)
-            return 1
+    except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError, TimeoutError) as exc:
+        return _poll("transient", False, f"fixtures fetch failed: {exc}")
+    if not isinstance(fixtures, list):
+        return _poll("error", False, "unexpected fixtures payload")
 
     now = utc_now()
     settle_minutes = max(5, args.settle_minutes)
     waves = group_gw_fixtures_by_kickoff_wave(fixtures, gw)
+    watch = should_keep_watching(waves, gw, state, now=now)
     pending = find_pending_wave(
         waves,
         gw,
@@ -457,8 +578,7 @@ def main() -> int:
         now=now,
     )
     if not pending:
-        print(f"GW{gw}: no settled kickoff wave pending rebuild.")
-        return 0
+        return _poll("ok", watch, f"GW{gw}: no settled kickoff wave pending rebuild.")
 
     wave_fixtures = pending["fixtures"]
     ids = sorted(int(fx["id"]) for fx in wave_fixtures if fx.get("id") is not None)
@@ -468,33 +588,106 @@ def main() -> int:
     )
 
     if args.dry_run:
-        print("Dry run — skip build.")
-        return 0
+        return _poll("ok", False, "Dry run — skip build.")
 
-    run_build()
+    try:
+        run_build()
+    except RuntimeError as exc:
+        return _poll("error", watch, f"build failed: {exc}")
     bump_data_js_cache()
 
     if args.commit:
         # Record the wave before committing so the state file ships in the same
         # commit — otherwise CI never sees it and rebuilds this wave every poll.
+        previous_state = _state_text()
         mark_rebuilt_for_gw_through_wave(
             state, gw, pending, waves, settle_minutes=settle_minutes, now=now
         )
+        watch_after = should_keep_watching(waves, gw, state, now=now)
         try:
             if git_commit_push(gw, pending["wave"]):
-                print("Committed and pushed.")
-            else:
-                print("No file changes to commit.")
+                return _poll("ok", watch_after, "Committed and pushed.")
+            return _poll("ok", watch_after, "No file changes to commit.")
         except subprocess.CalledProcessError:
-            print("Git commit/push failed.", file=sys.stderr)
-            return 1
-    else:
-        mark_rebuilt_for_gw_through_wave(
-            state, gw, pending, waves, settle_minutes=settle_minutes, now=now
-        )
-        print("Rebuild complete (local only — pass --commit to push).")
+            _restore_state(previous_state)
+            return _poll("error", watch, "Git commit/push failed.")
 
-    return 0
+    mark_rebuilt_for_gw_through_wave(
+        state, gw, pending, waves, settle_minutes=settle_minutes, now=now
+    )
+    watch_after = should_keep_watching(waves, gw, state, now=now)
+    return _poll("ok", watch_after, "Rebuild complete (local only — pass --commit to push).")
+
+
+def _report(poll: Poll) -> None:
+    stream = sys.stderr if poll["status"] != "ok" else sys.stdout
+    print(poll["message"], file=stream)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Rebuild Statistics after a GW kickoff wave completes."
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Print decision only; no build or writes.")
+    parser.add_argument("--commit", action="store_true", help="Git commit and push after rebuild.")
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="On a matchday, recheck until the watch window ends or nothing is left ahead.",
+    )
+    parser.add_argument(
+        "--watch-minutes",
+        type=int,
+        default=DEFAULT_WATCH_MINUTES,
+        help=f"Max minutes to stay up with --watch (default {DEFAULT_WATCH_MINUTES}).",
+    )
+    parser.add_argument(
+        "--interval-minutes",
+        type=int,
+        default=DEFAULT_INTERVAL_MINUTES,
+        help=f"Minutes between --watch checks (default {DEFAULT_INTERVAL_MINUTES}).",
+    )
+    parser.add_argument(
+        "--settle-minutes",
+        type=int,
+        default=DEFAULT_SETTLE_MINUTES,
+        help=f"Wait this long after last FT in the wave before rebuild (default {DEFAULT_SETTLE_MINUTES}).",
+    )
+    args = parser.parse_args()
+
+    if not args.watch or args.dry_run:
+        poll = one_pass(args)
+        _report(poll)
+        return 0 if poll["status"] == "ok" else 1
+
+    deadline = time.monotonic() + max(1, args.watch_minutes) * 60
+    interval = max(1, args.interval_minutes) * 60
+    watching = False
+    consecutive_failures = 0
+    while True:
+        poll = one_pass(args)
+        _report(poll)
+        if poll["status"] == "ok":
+            consecutive_failures = 0
+            if not poll["watch"]:
+                print("No unrebuilt wave inside the watch horizon — done.")
+                return 0
+        else:
+            consecutive_failures += 1
+            if poll["status"] == "transient" and not watching:
+                print("::warning::FPL fetch failed after retries — skipping this run.")
+                return 0
+            if consecutive_failures >= 3 or (poll["status"] == "error" and not poll["watch"]):
+                return 1
+        watching = True
+        remaining = deadline - time.monotonic()
+        if remaining < interval:
+            print("Watch window ended with a kickoff wave still ahead.")
+            print("WATCH_CONTINUE=1")
+            return 0
+        sleep_s = int(min(interval, remaining))
+        print(f"Sleeping {sleep_s}s until the next check.")
+        time.sleep(sleep_s)
 
 
 if __name__ == "__main__":

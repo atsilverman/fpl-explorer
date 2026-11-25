@@ -1,5 +1,7 @@
 # Rebuild site/data.js after each GW kickoff wave settles (same-time fixture set).
-# Polls every 20 minutes; no-op when no wave is settled yet.
+# GitHub drops most of the */20 crons, so a run that starts within 6h of an
+# unrebuilt wave stays up and rechecks every 20 minutes (job cap ~5.5h), then
+# dispatches a follow-up run if a wave is still ahead. Quiet polls exit immediately.
 name: Rebuild after matchday
 
 on:
@@ -14,28 +16,48 @@ on:
 
 permissions:
   contents: write
+  actions: write
+
+concurrency:
+  group: rebuild-after-matchday
+  cancel-in-progress: false
 
 jobs:
   rebuild:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Kickoff-wave rebuild
+        id: rebuild
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          ARGS=""
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
-            ARGS="--dry-run"
-          else
-            ARGS="--commit"
+            python3 -u site/matchday_rebuild.py --dry-run
+            exit 0
           fi
-          python3 site/matchday_rebuild.py $ARGS
+          log=$(mktemp)
+          python3 -u site/matchday_rebuild.py --commit --watch 2>&1 | tee "$log"
+          if grep -q '^WATCH_CONTINUE=1$' "$log"; then
+            echo "continue=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Continue on a fresh runner
+        if: steps.rebuild.outputs.continue == 'true'
+        run: |
+          curl -sS -f -X POST \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/rebuild-after-matchday.yml/dispatches" \
+            -d '{"ref":"${{ github.ref_name }}","inputs":{"dry_run":"false"}}'
