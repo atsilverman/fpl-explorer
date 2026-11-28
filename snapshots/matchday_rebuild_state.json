@@ -168,6 +168,12 @@
       "matchday": "2026-11-23",
       "wave": "2026-11-23T20:00",
       "rebuiltAt": "2026-11-24T11:04:05Z"
+    },
+    {
+      "gw": 12,
+      "matchday": "2026-11-27",
+      "wave": "2026-11-27T20:00",
+      "rebuiltAt": "2026-11-28T01:46:35Z"
     }
   ],
   "note": "GW1 matchdays seeded as whole-day marks. From GW2, automation rebuilds per kickoff wave ({gw, matchday, wave}); legacy {gw, matchday} rows still mean the whole UK day is done."
